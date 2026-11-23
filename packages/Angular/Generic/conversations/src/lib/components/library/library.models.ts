@@ -1,5 +1,7 @@
 import { CompositeKey } from '@memberjunction/core';
 import {
+  ArtifactPreviewSnapshot,
+  type ArtifactTypeThumbnailMode,
   MJArtifactEntity,
   MJArtifactVersionEntity,
   MJCollectionEntity,
@@ -14,14 +16,44 @@ import {
 export type LibrarySurfaceMode = 'hub' | 'navigator';
 
 /**
+ * Unified scope in the single-shell Library UX.
+ */
+export type LibraryUnifiedScope =
+  | 'home'
+  | 'all'
+  | 'shared'
+  | 'shared-by-me'
+  | 'starred'
+  | 'collection'
+  | 'drive';
+
+/**
+ * Unified layout mode (`Grid | List | Split`) that preserves the active scope.
+ */
+export type LibraryUnifiedLayout = 'grid' | 'list' | 'split';
+
+export interface LibraryBreadcrumbSegment {
+  Label: string;
+  Scope: LibraryUnifiedScope;
+  CollectionId?: string | null;
+}
+
+/**
  * Top-level tabs displayed in `Hub` mode.
  */
-export type LibraryHubTab = 'overview' | 'collections' | 'all' | 'shared' | 'drives';
+export type LibraryHubTab = 'overview' | 'collections' | 'all' | 'shared' | 'shared-by-me' | 'drives';
 
 /**
  * Active navigation view inside `Navigator` mode.
  */
-export type LibraryNavigatorSection = 'all' | 'collections' | 'shared' | 'starred' | 'collection' | 'drive';
+export type LibraryNavigatorSection =
+  | 'all'
+  | 'collections'
+  | 'shared'
+  | 'shared-by-me'
+  | 'starred'
+  | 'collection'
+  | 'drive';
 
 /**
  * Item layout style in item grids/tables.
@@ -65,6 +97,9 @@ export interface LibraryItemSummary {
   MimeType: string | null;
   FileName: string | null;
   ContentSnippet: string;
+  PreviewSnapshot?: ArtifactPreviewSnapshot | null;
+  ThumbnailDataUrl?: string | null;
+  ThumbnailPolicyMode?: ArtifactTypeThumbnailMode;
   UpdatedAt: Date;
   OwnerUserId: string;
   OwnerName: string;
@@ -165,4 +200,37 @@ export interface LibraryHostNavigationEvent {
   CollectionId?: string;
   ArtifactId?: string;
   VersionNumber?: number;
+}
+
+/**
+ * Item kind surfaced inside the Library sharing views (`Shared with Me` / `Shared by Me`).
+ */
+export type LibrarySharedItemKind = 'conversation' | 'artifact';
+
+/**
+ * Permission level displayed in the Library sharing views.
+ */
+export type LibrarySharedPermissionLevel = 'View' | 'Edit';
+
+/**
+ * Unified row model for shared conversations (including explicit `ParentID` side threads) and
+ * shared artifacts shown in the Library `Shared with Me` and `Shared by Me` views.
+ */
+export interface LibrarySharedEntry {
+  /** Stable UI track key (`<kind>:<permissionOrResourceId>`). */
+  Id: string;
+  ItemKind: LibrarySharedItemKind;
+  ResourceId: string;
+  Title: string;
+  Description: string;
+  Icon: string;
+  SharerName: string;
+  RecipientName: string;
+  ShareDate: Date;
+  PermissionLevel: LibrarySharedPermissionLevel;
+  IsSideThread: boolean;
+  ParentConversationId: string | null;
+  PermissionRecordId: string | null;
+  CanRevoke: boolean;
+  IsRevoking?: boolean;
 }

@@ -3,7 +3,7 @@
  */
 import '@angular/compiler';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Injector, runInInjectionContext, ChangeDetectorRef, SimpleChange } from '@angular/core';
+import { Injector, runInInjectionContext, ChangeDetectorRef } from '@angular/core';
 import {
   SpreadsheetEngine,
   type WorkbookSpec,
@@ -393,7 +393,7 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       expect(component.SyntheticAgentPresence).not.toBeNull();
       expect(component.SyntheticAgentPresence?.IsAgent).toBe(true);
       expect(component.SyntheticAgentPresence?.Name).toBe('Sheets AI Agent');
-      expect(component.SyntheticAgentPresence?.Color).toBe('#8b5cf6');
+      expect(component.SyntheticAgentPresence?.Color).toBe('var(--mj-brand-primary)');
       expect(component.SyntheticAgentPresence?.ClientID).toBe(-999);
 
       // Appears in remote collaborators
@@ -401,7 +401,7 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       expect(remotes.some((r) => r.ClientID === -999)).toBe(true);
 
       // Appears at top-left cell B2 (2, 2)
-      expect(component.GetCellCollaboratorBorderColor(2, 2)).toBe('#8b5cf6');
+      expect(component.GetCellCollaboratorBorderColor(2, 2)).toBe('var(--mj-brand-primary)');
       const badge = component.GetCellPrimaryCollaboratorBadge(2, 2);
       expect(badge?.IsAgent).toBe(true);
       expect(badge?.Name).toBe('Sheets AI Agent');
@@ -566,11 +566,8 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       component.ConnectionStatus = 'readonly';
       expect(component.CanEdit).toBe(false);
 
-      // Host finishes loading permissions and sets [readonly] = false
+      // Host finishes loading permissions and sets [readonly] = false (reactive setter, no ngOnChanges needed)
       component.readonly = false;
-      component.ngOnChanges({
-        readonly: new SimpleChange(true, false, false),
-      });
 
       expect(component.ConnectionStatus).toBe('local');
       expect(component.CanEdit).toBe(true);
@@ -583,6 +580,85 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
 
       expect(component.InlineEditingAddress).toBeNull();
       expect(component.ActiveSheet.Cells['B2']?.RawValue).toBe(42000);
+    });
+
+    it('memoizes HasUnsavedChanges within a microtask and skips hover work when not dragging', async () => {
+      // Seed baseline saved state
+      component.Workbook = SpreadsheetEngine.Instance.CreateEmptyWorkbook('MemoTest');
+      const internal = component as unknown as {
+        lastSavedComparableJson: string;
+        getComparableWorkbookJson: (wb: typeof component.Workbook) => string;
+      };
+      internal.lastSavedComparableJson = internal.getComparableWorkbookJson(component.Workbook);
+
+      const stringifySpy = vi.spyOn(JSON, 'stringify');
+      expect(component.HasUnsavedChanges).toBe(false);
+      expect(component.HasUnsavedChanges).toBe(false);
+      expect(component.HasUnsavedChanges).toBe(false);
+      expect(stringifySpy).toHaveBeenCalledTimes(1);
+
+      // Next microtask invalidates the memoized value
+      await Promise.resolve();
+      component.Workbook.Title = 'Modified Title';
+      expect(component.HasUnsavedChanges).toBe(true);
+      expect(stringifySpy).toHaveBeenCalledTimes(2);
+      stringifySpy.mockRestore();
+
+      // OnCellMouseEnter does nothing when not dragging selection
+      component.IsDraggingSelection = false;
+      component.SelectedRange = 'A1';
+      component.OnCellMouseEnter(4, 4);
+      expect(component.SelectedRange).toBe('A1');
+    });
+
+    it('supports Freeze Panes menu, Formula Bar autocomplete (=MJ. / =SP), and SVG Sparkline view model', () => {
+      const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('SheetsPolishWB');
+      const sheet = wb.Worksheets[0];
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'A1', { Value: 10 }, false);
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'B1', { Value: 30 }, false);
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'C1', { Value: 20 }, false);
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'D1', { Formula: '=SPARKLINE(A1:C1)' }, true);
+      component.Workbook = wb;
+
+      // Read access to read-only check works cleanly
+      component.readonly = false;
+      (component as unknown as { activeSheetID: string }).activeSheetID = sheet.SheetID;
+
+      // Freeze Panes operations
+      component.ActiveRowIndex = 3;
+      component.ActiveColumnIndex = 2;
+      component.FreezeToActiveCell();
+      expect(component.ActiveSheet.FrozenRows).toBe(2);
+      expect(component.ActiveSheet.FrozenColumns).toBe(1);
+
+      component.FreezeFirstColumn();
+      expect(component.ActiveSheet.FrozenColumns).toBe(1);
+      component.FreezeTopRow();
+      expect(component.ActiveSheet.FrozenRows).toBe(1);
+      component.UnfreezePanes();
+      expect(component.ActiveSheet.FrozenRows).toBe(0);
+      expect(component.ActiveSheet.FrozenColumns).toBe(0);
+
+      // Formula Autocomplete suggestions on `=MJ.` and `=SP` + Tab acceptance
+      component.FormulaBarInput = '=MJ.';
+      component.OnFormulaBarInputChange('=MJ.');
+      expect(component.ShowFormulaAutocomplete).toBe(true);
+      expect(component.FormulaAutocompleteSuggestions.some((s) => s.Name === 'MJ.QUERY')).toBe(true);
+
+      component.FormulaBarInput = '=SP';
+      component.OnFormulaBarInputChange('=SP');
+      expect(component.FormulaAutocompleteSuggestions[0]?.Name).toBe('SPARKLINE');
+      component.OnFormulaBarKeyDown(new KeyboardEvent('keydown', { key: 'Tab' }));
+      expect(component.FormulaBarInput).toBe('=SPARKLINE(');
+      expect(component.ShowFormulaAutocomplete).toBe(false);
+
+      // Sparkline SVG view model for cell D1
+      const d1 = component.ActiveSheet.Cells['D1'];
+      const spark = component.TryParseSparklineCell(d1);
+      expect(spark).not.toBeNull();
+      expect(spark?.Count).toBe(3);
+      expect(spark?.Type).toBe('line');
+      expect(spark?.PolylinePoints).toContain(' ');
     });
   });
 });

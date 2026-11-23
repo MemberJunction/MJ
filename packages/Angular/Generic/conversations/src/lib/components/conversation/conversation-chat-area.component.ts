@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
+import { BaseEntity, BaseEntityEvent, UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
+import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type WorkflowSaveInput, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type ExecuteAgentResult, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -35,7 +35,7 @@ import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunctio
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
 import { ConfirmMoveIntoFolder } from '../../utils/folder-move';
 import { Subject, firstValueFrom } from 'rxjs';
-import { map, takeUntil } from 'rxjs/operators';
+import { debounceTime, filter, map, takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
@@ -106,7 +106,7 @@ import {
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { GetThreadReplyRoots, type ThreadReplyRevealRequest } from '../../utils/thread-replies';
-import { NormalizeUUID, UUIDsEqual, UUIDSet, UUIDMap, IndexByUUID, IsValidUUID } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, UUIDMap, IndexByUUID, IsValidUUID, MJGlobal, MJEventType, type MJEvent } from '@memberjunction/global';
 import { AgentAccentVar, type MessageHandoffInfo } from '../message/agent-handoff-card.component';
 import {
   BuildHandoffsByDetailId,
@@ -211,6 +211,19 @@ const NO_DETAILS: MJConversationDetailEntity[] = [];
 /** No fork rows; one shared instance for the same reason. */
 const NO_BRANCHES: ConversationBranchRow[] = [];
 
+/** What {@link ConversationChatAreaComponent.StoppableDetailIds} depends on; compared by reference. */
+interface StoppableDetailIdsKey {
+  inFlight: string[];
+  runs: Map<string, MJAIAgentRunEntityExtended>;
+  messages: MJConversationDetailEntity[];
+  messageCount: number;
+  userId: string | null;
+  ownerId: string | null;
+  conversationId: string | null;
+  canStopAnyRun: boolean;
+  gated: boolean;
+}
+
 @Component({
   standalone: false,
   selector: 'mj-conversation-chat-area',
@@ -256,6 +269,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Trigger change handler after initialization is complete
       // Only skip during Angular's initial binding before ngOnInit completes
       if (this.isInitialized) {
+        this.prepareStandbyRemoteBrowser(value);
         this.onConversationChanged(value);
       }
     }
@@ -302,6 +316,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * MessageInputComponent and triggers conversationCreated as usual.
    */
   @Input() SuppressNewConversationEmptyState = false;
+
+  /**
+   * When set by the host wrapper (for example after deep-link permission verification fails
+   * or a share is revoked), displays a clean access-denied state without rendering messages.
+   */
+  @Input() AccessDeniedMessage: string | null = null;
 
   /** @deprecated Use {@link SuppressNewConversationEmptyState}. */
   @Input() set suppressNewConversationEmptyState(value: ConversationChatAreaComponent['SuppressNewConversationEmptyState']) {
@@ -426,12 +446,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() AllowForking = true;
 
+  private _allowRemoteBrowser = false;
   /**
    * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
    * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
    * that wants an agent-driven browser beside the chat sets true.
    */
-  private _allowRemoteBrowser = false;
   @Input()
   set AllowRemoteBrowser(value: boolean) {
     this._allowRemoteBrowser = value;
@@ -439,6 +459,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.standbyPreparedConversationId = null;
       this.CloseRemoteBrowserPanel();
       void this.remoteBrowser?.Close();
+    } else if (this.isInitialized) {
+      this.prepareStandbyRemoteBrowser(this.ConversationId);
     }
   }
   get AllowRemoteBrowser(): boolean {
@@ -847,7 +869,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** Font Awesome class(es) for the header Export button's icon. */
-  @Input() ExportButtonIcon: string = 'fas fa-download';
+  @Input() ExportButtonIcon: string = 'fa-solid fa-download';
 
   /** @deprecated Use {@link ExportButtonIcon}. */
   @Input() set exportButtonIcon(value: string) {
@@ -987,17 +1009,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Whether an untagged message asks one fast typed decision which agent in the conversation
    * should answer it, instead of always going back to the last agent that answered. It replaces
    * that agent only when the answer is confident and arrives within `DECISION_ROUTING_TIMEOUT_MS`
-   * (250 ms). False (the default)
-   * changes nothing: no decision call, and today's routing. See
+   * (350 ms). On by default; false makes no decision call and keeps today's routing. See
    * `MessageInputComponent.EnableDecisionRouting`.
    *
-   * Turning it on sends conversation text to the model behind the `Default Decision` prompt, which
+   * While it is on, each qualifying message sends conversation text to the model behind the `Default Decision` prompt, which
    * can be a different vendor from the agents' own: the first 1,000 characters of the new message,
    * the last 6 turns (150 characters each), each participant's name, description and last reply,
    * and the names of their artifact versions. Each call writes an `MJ: AI Prompt Runs` row, even
    * when the answer comes too late to be used.
    */
-  @Input() EnableDecisionRouting: boolean = false;
+  @Input() EnableDecisionRouting: boolean = true;
+
+  /**
+   * Opt-in Stage 6C.1 client-side Edge AI Pre-Discovery (`bge-small-en-v1.5` Top-5 ->
+   * `ms-marco-MiniLM-L-6-v2` in a lazy WASM Web Worker). Forwarded to
+   * `MessageInputComponent.EnableEdgePreDiscovery`.
+   */
+  @Input() EnableEdgePreDiscovery: boolean = false;
 
   /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
@@ -1261,6 +1289,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.markForCheck();
   }
 
+  private async handleAgentCatalogInvalidated(): Promise<void> {
+    try {
+      const user = this.CurrentUser ?? this.ProviderToUse.CurrentUser;
+      // AIEngineBase auto-refreshes _agents/_agentPersonas/_agentPermissions in-memory on
+      // BaseEntity events; only reload the active conversation's DefaultAgentID if needed.
+      if (this.Conversation?.ID && user) {
+        const refreshed = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+        const loaded = await refreshed.InnerLoad(CompositeKey.FromID(this.Conversation.ID));
+        if (loaded && refreshed.DefaultAgentID !== this.Conversation.DefaultAgentID) {
+          this.Conversation.DefaultAgentID = refreshed.DefaultAgentID;
+        }
+      }
+      this.cdr.markForCheck();
+    } catch {
+      // Best-effort live refresh — never disrupt active chat
+    }
+  }
+
   /** Greeting message shown in the empty state when no conversation is active */
   @Input() EmptyStateGreeting: string = 'How can I help you?';
 
@@ -1441,6 +1487,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() beforeAgentTurn = this.BeforeAgentTurn;
   /** Fired AFTER a successful agent turn completes, on every route. */
   @Output() AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+
+  /**
+   * Emitted after an agent response message has been committed to the active conversation.
+   */
+  @Output() AgentMessageReceived = new EventEmitter<{
+    message: MJConversationDetailEntity;
+    agentResult: ExecuteAgentResult;
+  }>();
 
   /**
    * @deprecated Use {@link AfterAgentTurn}.
@@ -1691,11 +1745,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() pendingMessageRequested = this.PendingMessageRequested;
 
   private scrollContainer?: ElementRef<HTMLElement>;
+  private messageScrollRootEl: HTMLElement | null = null;
 
   /** The transcript scroller; watched so the scroll-to-bottom arrow follows content that grows or shrinks without a scroll. */
   @ViewChild('scrollContainer') private set scrollContainerRef(ref: ElementRef<HTMLElement> | undefined) {
     this.scrollContainer = ref;
-    this.watchScrollContent(ref?.nativeElement ?? null);
+    const nextEl = ref?.nativeElement ?? null;
+    if (nextEl !== this.messageScrollRootEl) {
+      // Defer updating the template-bound [ScrollRoot] reference past ViewChild resolution so
+      // Angular does not observe null -> HTMLDivElement within the same change-detection pass (NG0100).
+      Promise.resolve().then(() => {
+        if (!this.destroy$?.closed && (this.scrollContainer?.nativeElement ?? null) === nextEl && this.messageScrollRootEl !== nextEl) {
+          this.messageScrollRootEl = nextEl;
+          this.cdr?.markForCheck?.();
+        }
+      });
+    }
+    this.watchScrollContent(nextEl);
   }
 
   /** Re-checks the scroll state when the transcript or its content changes size; null when nothing is watched. */
@@ -2476,56 +2542,160 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.InProgressMessageIds.length;
   }
 
-  /** What the composer's send slot is: Stop while replies are in flight and the viewer may stop them. */
+  /**
+   * Whether the viewer may stop every run in this conversation: they own it, or hold an
+   * Owner-level grant on it. The same rule as the Share action. Everyone else stops only the
+   * runs they started (see {@link CanStopDetail}).
+   */
+  public get CanStopAnyRun(): boolean {
+    if (!this.Conversation || !this.CurrentUser) {
+      return false;
+    }
+    return this.engine?.CanShareConversation?.(this.Conversation, this.CurrentUser.ID) ?? false;
+  }
+
+  /**
+   * Whether the viewer may stop this in-flight reply. Read-only views and hosts that turned
+   * stopping off stop nothing; the conversation's owner stops anything; anyone else stops only
+   * a run they started. A run whose starter cannot be told (no run row yet, no user on the
+   * reply or its request) is treated as the viewer's own, so a reply the viewer just sent is
+   * stoppable before its run is known. The run entity enforces the same rule on the server when
+   * the stop is saved (`MJAIAgentRunEntityExtended.StopPermitted`); this decides what the controls offer.
+   */
+  public CanStopDetail(detailId: string): boolean {
+    return this.StoppableDetailIds.some((id) => UUIDsEqual(id, detailId));
+  }
+
+  /**
+   * The in-flight replies the viewer may stop, in flight order. Computed once per change of
+   * what it depends on (the in-flight set, the run rows, the messages, the viewer, the
+   * conversation and the read-only and allow gates) and otherwise the same array, so the
+   * template binding that hands it to the message list is stable between passes.
+   */
+  public get StoppableDetailIds(): string[] {
+    const key: StoppableDetailIdsKey = {
+      inFlight: this.InProgressMessageIds,
+      runs: this.AgentRunsByDetailId,
+      messages: this.messages,
+      messageCount: this.messages?.length ?? 0,
+      userId: this.CurrentUser?.ID ?? null,
+      ownerId: this.Conversation?.UserID ?? null,
+      conversationId: this.Conversation?.ID ?? null,
+      canStopAnyRun: this.CanStopAnyRun,
+      gated: this.EffectiveReadOnly || !this.AllowStopRun,
+    };
+    const memo = this._stoppableDetailIdsMemo;
+    if (memo && (Object.keys(key) as Array<keyof StoppableDetailIdsKey>).every((k) => memo.key[k] === key[k])) {
+      return memo.ids;
+    }
+    const ids = this.computeStoppableDetailIds(key);
+    this._stoppableDetailIdsMemo = { key, ids };
+    return ids;
+  }
+  private _stoppableDetailIdsMemo: { key: StoppableDetailIdsKey; ids: string[] } | null = null;
+
+  /** The rule behind {@link CanStopDetail}, over the whole in-flight set with one message index. */
+  private computeStoppableDetailIds(key: StoppableDetailIdsKey): string[] {
+    if (key.gated) {
+      return [];
+    }
+    if (!this.CurrentUser || key.canStopAnyRun) {
+      return [...key.inFlight];
+    }
+    const byId = IndexByUUID(key.messages ?? []);
+    const viewerId = this.CurrentUser.ID;
+    // The same rule the run entity enforces on the server when the stop is saved.
+    return key.inFlight.filter((id) => MJAIAgentRunEntityExtended.StopPermitted(viewerId, this.runStarterIdFor(id, byId), false));
+  }
+
+  /** How many in-flight replies the viewer may stop. */
+  public get StoppableCount(): number {
+    return this.StoppableDetailIds.length;
+  }
+
+  /** How many in-flight replies belong to other users, which the viewer may not stop. */
+  public get OthersInFlightCount(): number {
+    return this.InFlightCount - this.StoppableCount;
+  }
+
+  /** What the composer's send slot is: Stop while there are in-flight replies the viewer may stop. */
   public get SendSlotMode(): SendSlotMode {
-    if (this.InFlightCount === 0 || this.EffectiveReadOnly || !this.AllowStopRun) {
+    if (this.InFlightCount === 0 || this.StoppableCount === 0) {
       return 'send';
     }
     return this.isAnyStopping() ? 'stopping' : 'stop';
   }
 
-  /** The count the slot shows: the in-flight replies, or none when the slot is Send. */
+  /** The count the slot shows: the in-flight replies the viewer may stop, or none when the slot is Send. */
   public get StopCount(): number {
-    return this.SendSlotMode === 'send' ? 0 : this.InFlightCount;
+    return this.SendSlotMode === 'send' ? 0 : this.StoppableCount;
   }
 
   /** The slot's tooltip and accessible name: "Stop {agent}", or "Stop all N runs". */
   public get StopLabel(): string {
-    const count = this.InFlightCount;
+    const count = this.StoppableCount;
     if (count > 1) {
       return `Stop all ${count} runs`;
     }
-    const agent = this.inFlightAgentName();
+    const agent = this.inFlightAgentName(this.StoppableDetailIds);
     return agent ? `Stop ${agent}` : 'Stop';
   }
 
   /**
    * The composer's status line: who is working, or what is being stopped. Null with nothing in
-   * flight. It is information, not a control, so it shows whenever a reply is in flight, whether
-   * or not the viewer may stop it (a read-only viewer, or a host with {@link AllowStopRun} off);
-   * only the send slot is gated. The stopping text likewise reads the stopping state itself, not
-   * the slot's mode.
+   * flight. It is information, not a control, so when the host gates stopping (a read-only viewer
+   * or a host with {@link AllowStopRun} off) it still shows the in-flight runs and stopping state.
+   * When stopping is enabled and only other users' runs are in flight, the slot stays Send and the
+   * line says whose work it is, so the viewer knows why there is nothing to stop.
    */
   public get StatusText(): string | null {
-    const count = this.InFlightCount;
-    if (count === 0) {
+    if (this.InFlightCount === 0) {
       return null;
     }
-    const agent = this.inFlightAgentName();
-    if (this.isAnyStopping()) {
+    if (this.EffectiveReadOnly || !this.AllowStopRun) {
+      const count = this.InFlightCount;
+      const agent = this.inFlightAgentName(this.InProgressMessageIds);
+      if (this.isAnyStopping(this.InProgressMessageIds)) {
+        return count > 1 ? `Stopping ${count} runs…` : `Stopping ${agent ?? 'the run'}…`;
+      }
+      return count > 1 ? `${count} agents working` : `${agent ?? 'The agent'} is working`;
+    }
+    const mode = this.SendSlotMode;
+    if (mode === 'send') {
+      return this.othersWorkingText();
+    }
+    const count = this.StoppableCount;
+    const agent = this.inFlightAgentName(this.StoppableDetailIds);
+    if (mode === 'stopping') {
       return count > 1 ? `Stopping ${count} runs…` : `Stopping ${agent ?? 'the run'}…`;
     }
     return count > 1 ? `${count} agents working` : `${agent ?? 'The agent'} is working`;
   }
 
+  /** The status line while only other users' runs are in flight, else null. */
+  private othersWorkingText(): string | null {
+    const others = this.OthersInFlightCount;
+    if (others <= 0) {
+      return null;
+    }
+    if (others > 1) {
+      return `${others} agents working for other users`;
+    }
+    const agent = this.inFlightAgentName(this.InProgressMessageIds);
+    return `${agent ?? 'An agent'} is working for another user`;
+  }
+
   /** The elapsed time after the status line, for a single run that is working (not one being stopped). */
   public get StatusElapsed(): string | null {
-    return this.InFlightCount === 1 && !this.isAnyStopping() ? this.SendSlotElapsed : null;
+    if (this.EffectiveReadOnly || !this.AllowStopRun) {
+      return this.InFlightCount === 1 && !this.isAnyStopping(this.InProgressMessageIds) ? this.SendSlotElapsed : null;
+    }
+    return this.SendSlotMode === 'stop' && this.StoppableCount === 1 ? this.SendSlotElapsed : null;
   }
 
   /**
-   * The composer's stop control. Every in-flight reply is stopped through the same path as the
-   * per-reply pill: `BeforeStopClicked` first (a listener that cancels keeps that run going),
+   * The composer's stop control. Every in-flight reply the viewer may stop (see
+   * {@link CanStopDetail}) is stopped through the same path as the per-reply pill: `BeforeStopClicked` first (a listener that cancels keeps that run going),
    * then {@link OnStopMessage}, which fires `AfterStopClicked` with the outcome. Each reply asked
    * to stop reads as stopping until it leaves In-Progress, or until the retry window passes,
    * when the slot offers Stop again and a toast says the stop did not take.
@@ -2535,7 +2705,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const byId = IndexByUUID(this.messages);
-    for (const id of [...this.InProgressMessageIds]) {
+    for (const id of this.StoppableDetailIds) {
       const detail = byId.Get(id);
       if (!detail) {
         continue;
@@ -2558,13 +2728,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return run?.Agent ?? detail?.Agent ?? this.assistantDisplayName ?? null;
   }
 
-  private inFlightAgentName(): string | null {
-    const id = this.InProgressMessageIds[0];
+  /** The agent name of the first of `ids`, or null when there is none. */
+  private inFlightAgentName(ids: string[]): string | null {
+    const id = ids[0];
     return id ? this.agentNameFor(id) : null;
   }
 
-  private isAnyStopping(): boolean {
-    const inFlight = new UUIDSet(this.InProgressMessageIds);
+  /**
+   * The user who started an in-flight reply's run: the run's user, else the user on the reply,
+   * else the user on the request the reply answers. Null when none of those is known.
+   */
+  private runStarterIdFor(detailId: string, byId: ReturnType<typeof IndexByUUID<MJConversationDetailEntity>>): string | null {
+    const run = this.AgentRunsByDetailId?.get(detailId);
+    if (run?.UserID) {
+      return run.UserID;
+    }
+    const detail = byId.Get(detailId);
+    if (detail?.UserID) {
+      return detail.UserID;
+    }
+    const request = detail?.ParentID ? byId.Get(detail.ParentID) : undefined;
+    return request?.UserID ?? null;
+  }
+
+  private isAnyStopping(ids: string[] = this.StoppableDetailIds): boolean {
+    const inFlight = new UUIDSet(ids);
     for (const id of this.StoppingDetailIds ?? []) {
       if (inFlight.Has(id)) {
         return true;
@@ -2626,7 +2814,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private updateSendSlotElapsed(): void {
-    const id = this.InProgressMessageIds[0];
+    const id = (this.EffectiveReadOnly || !this.AllowStopRun)
+      ? this.InProgressMessageIds[0]
+      : this.StoppableDetailIds[0];
     const detail = id ? this.messages.find((m) => UUIDsEqual(m.ID, id)) : undefined;
     const started = detail?.__mj_CreatedAt ? new Date(detail.__mj_CreatedAt).getTime() : NaN;
     this.SendSlotElapsed = Number.isFinite(started) ? ConversationChatAreaComponent.FormatElapsed(Date.now() - started) : null;
@@ -2851,7 +3041,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * discover it, which depends on layout having settled.
    */
   public get MessageScrollRoot(): HTMLElement | null {
-    return this.scrollContainer?.nativeElement ?? null;
+    return this.messageScrollRootEl;
   }
 
   /** @deprecated Use {@link MessageScrollRoot}. */
@@ -3379,6 +3569,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.attachmentService.Provider = p;
     this.analyzeArtifactService.Provider = p;
 
+    // Live-refresh AIEngineBase, @mention autocomplete, and active conversation's DefaultAgentID
+    // when personal agent instances are created/updated (e.g., conversational onboarding morphing
+    // the thread from Chief of Staff template into the user's new @Pepper instance).
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(
+        filter((event: MJEvent) => {
+          if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode || !event.args) {
+            return false;
+          }
+          const args = event.args as BaseEntityEvent;
+          const entityName = args.type === 'remote-invalidate' ? args.entityName : args.baseEntity?.EntityInfo?.Name;
+          const norm = entityName?.trim().toLowerCase() ?? '';
+          return (
+            norm === 'mj: ai agents' ||
+            norm === 'mj: ai agent personas' ||
+            norm === 'mj: ai agent permissions' ||
+            norm === 'mj: user settings'
+          );
+        }),
+        debounceTime(150),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        void this.handleAgentCatalogInvalidated();
+      });
+
     // Subscribe to actionable commands from UICommandHandlerService so we can
     // intercept and locally handle commands that depend on the conversation
     // surface (e.g. `client:capture-data-snapshot`, which needs access to the
@@ -3816,7 +4032,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
-    return UUIDsEqual(conversationId, this.ConversationId);
+    return !this.destroy$?.closed && UUIDsEqual(conversationId, this.ConversationId);
   }
 
   private isActiveConversationLoad(conversationId: string | null | undefined, loadToken: number): boolean {
@@ -3841,6 +4057,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.standbyPreparedConversationId = null;
       void this.remoteBrowser?.Close();
     }
+    this.prepareStandbyRemoteBrowser(this._conversationId);
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.hostInterceptedArtifactId = null;
@@ -6794,6 +7011,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // the shown artifact when it gained a version, and switch to a retargeted one.
     await this.decideAndApplyArtifactPanel(artifactBaseline, event.message.ConversationID);
 
+    this.AgentMessageReceived?.emit({
+      message: event.message,
+      agentResult: event.agentResult as ExecuteAgentResult,
+    });
+
     // Force change detection to update the UI
     this.cdr.detectChanges();
   }
@@ -7084,7 +7306,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
         this.SelectedArtifactId = action.artifactId;
         this.SelectedVersionNumber = action.versionNumber;
+        this.SelectedTaskGraphPanel = null;
+        this.ShowRemoteBrowserPanel = false;
         this.ShowArtifactPanel = true;
+        this.cdr?.markForCheck?.();
         this.AfterArtifactPanelOpen?.emit(
           new AfterArtifactPanelOpenEventArgs(action.artifactId, action.versionNumber)
         );
@@ -7094,6 +7319,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, action.artifactId)) {
           return;
         }
+        this.cdr?.detectChanges?.();
         LogStatusEx({
           message: `🎨 Opening artifact ${action.artifactId} v${action.versionNumber} after agent run (decided from the conversation-wide version diff, so no single detail id applies)`,
           verboseOnly: true
@@ -7380,7 +7606,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   ShareConversation(): void {
-    if (!this.Conversation) return;
+    if (!this.Conversation || !this.CanShareConversation) return;
     this.ShareContext = {
       ResourceID: this.Conversation.ID,
       ResourceName: this.Conversation.Name ?? 'Conversation',
@@ -7389,6 +7615,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       CurrentUserID: this.CurrentUser?.ID ?? null
     };
     this.ShowShareModal = true;
+  }
+
+  /** True when the open conversation is a child `ParentID` side thread. */
+  public get IsSideThread(): boolean {
+    return Boolean(this.Conversation?.ParentID);
+  }
+
+  /**
+   * True when a `ParentID` side thread has been explicitly shared rather than remaining
+   * private to the owner (side threads never inherit parent/folder access implicitly).
+   */
+  public get IsSideThreadExplicitlyShared(): boolean {
+    if (!this.Conversation?.ParentID) {
+      return false;
+    }
+    if (this.SharedByBadge !== null) {
+      return true;
+    }
+    return this.engine?.IsConversationExplicitlyShared?.(this.Conversation.ID) ?? false;
   }
 
   /** @deprecated Use {@link ShareConversation}. */
@@ -8133,7 +8378,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   public ToggleRemoteBrowserPanel(): void {
     if (this.ShowRemoteBrowserPanel) {
-      this.CloseRemoteBrowserPanel();
+      this.HideRemoteBrowserPanel();
     } else {
       this.OpenRemoteBrowserPanel();
     }
@@ -8152,7 +8397,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  /** Closing the drawer ends the browser (hiding it behind an artifact does not). */
+  /** Hides the browser drawer while keeping the current browser session and page alive. */
+  public HideRemoteBrowserPanel(): void {
+    if (!this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowRemoteBrowserPanel = false;
+    this.resetArtifactPaneSizing();
+    this.cdr.detectChanges();
+  }
+
+  /** Closing the drawer ends the browser and returns the conversation to standby (hiding it does not). */
   public CloseRemoteBrowserPanel(): void {
     if (!this.ShowRemoteBrowserPanel) {
       return;
@@ -8160,6 +8415,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ShowRemoteBrowserPanel = false;
     this.resetArtifactPaneSizing();
     void this.remoteBrowser?.Close();
+    this.standbyPreparedConversationId = null;
+    this.prepareStandbyRemoteBrowser(this.ConversationId);
     this.cdr.detectChanges();
   }
 
@@ -8183,19 +8440,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
-   * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
+   * Prepares the standby remote browser controller for a conversation outside of template checking
+   * so `OnStateChange` (`cdr.detectChanges()`) never fires during change detection.
    */
-  public get EffectiveAppContext(): Record<string, unknown> | null {
+  private prepareStandbyRemoteBrowser(conversationId: string | null): void {
     if (
-      this.AllowRemoteBrowser &&
-      this.ConversationId &&
-      this.agentClientService &&
-      !UUIDsEqual(this.standbyPreparedConversationId, this.ConversationId)
+      !this.AllowRemoteBrowser ||
+      !conversationId ||
+      !this.agentClientService ||
+      UUIDsEqual(this.standbyPreparedConversationId, conversationId)
     ) {
-      this.standbyPreparedConversationId = this.ConversationId;
-      this.ensureRemoteBrowser().SetConversation(this.ConversationId);
+      return;
     }
+    this.standbyPreparedConversationId = conversationId;
+    this.ensureRemoteBrowser().SetConversation(conversationId);
+  }
+
+  /**
+   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
+   * chat area owns them). Pure & cached: it is bound to an input, so it never mutates state or fires CD.
+   */
+  public get EffectiveAppContext(): ConversationChatAreaComponent['AppContext'] {
     const controller = this.remoteBrowser;
     if (!controller) {
       return this.AppContext;
@@ -8209,7 +8474,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return memo.Value;
   }
   private standbyPreparedConversationId: string | null = null;
-  private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
+  private effectiveAppContextMemo: { Base: ConversationChatAreaComponent['AppContext']; Version: number; Owns: boolean; Value: ConversationChatAreaComponent['AppContext'] } | null = null;
 
   /**
    * Persists the currently displayed Task Graph in the chat side-panel as a reusable
@@ -8227,11 +8492,35 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         spec.workflowName?.trim() ||
         this.SelectedTaskGraphPanel?.workflowTitle?.trim() ||
         'Saved Workflow';
-      const workflowSpec: WorkflowSpec = {
+      type SaveableTask = WorkflowSaveInput['spec']['graph']['tasks'][number];
+      const saveableTasks: SaveableTask[] = [];
+      for (const task of spec.tasks) {
+        if (task.kind === 'Enqueue') {
+          MJNotificationService.Instance.CreateSimpleNotification(
+            'Workflows containing Enqueue steps cannot yet be saved from this panel.',
+            'warning',
+            5000,
+          );
+          return;
+        }
+        const kind: SaveableTask['kind'] = task.kind;
+        saveableTasks.push({
+          tempId: task.tempId,
+          name: task.name,
+          description: task.description,
+          kind,
+          configuration: task.configuration as SaveableTask['configuration'],
+          dependsOn: task.dependsOn,
+          policy: task.policy,
+          layout: task.layout,
+          inputPayload: task.inputPayload,
+        });
+      }
+      const workflowSpec: WorkflowSaveInput['spec'] = {
         name,
         description: `Saved from Conversation ${this.Conversation?.Name || this.ConversationId || ''}`.trim(),
         status: 'Draft',
-        graph: { ...spec, workflowName: name },
+        graph: { ...spec, workflowName: name, tasks: saveableTasks },
         triggers: [],
       };
       const op = new WorkflowSaveOperation();
@@ -9016,13 +9305,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const agentName = this.RealtimeReview?.AgentName ?? null;
+    const preferredModelId = this.RealtimeReview?.ModelID ?? null;
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
         request.ConversationId ?? this.ConversationId,
         request.LastSessionId,
         agentName,
-        null, // preferredModelId
+        preferredModelId,
         null, // clientTools
         null, // coAgentId
         null, // configOverridesJson

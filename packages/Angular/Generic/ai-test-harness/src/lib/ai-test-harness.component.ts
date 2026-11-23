@@ -229,6 +229,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     /** The mode of operation - either 'agent' or 'prompt' */
     @Input() Mode: TestHarnessMode = 'agent';
 
+    /** When true, workflow mode initializes with Debug (Start Paused) emphasized as the primary action. */
+    @Input() InitialDebugMode: boolean = false;
+
     /** @deprecated Use {@link Mode}. */
     @Input() set mode(value: TestHarnessMode) {
       this.Mode = value;

@@ -24,7 +24,7 @@ import { Metadata } from "./metadata";
 import { RunView, RunViewParams, IsMaterializedDataSource, ExtractRunViewParameterNames } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { Observable, Subscription } from "rxjs";
-import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
+import { GetDataHooks, IsPostRunViewProtectedEntity, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
 import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 import { ContextToken, GetLocalTimeZone } from "./contextTokens";
@@ -214,6 +214,57 @@ export type OrganicKeyMetadataRow = BaseMetadataRow & {
 export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
 
 /**
+ * Options controlling mutability vs. frozen-reference preservation in {@link ProjectRowsToFields}.
+ */
+export interface ProjectRowsToFieldsOptions {
+    /**
+     * When `true`, callers that treat returned rows as read-only (e.g. server GraphQL wire
+     * serialization) allow frozen cached inputs (including L1 CoW cached arrays) to be returned
+     * untouched when `requestedFields` covers 100% of row keys, and allow subset projections of
+     * frozen rows to be memoized as frozen objects so downstream serialization caches
+     * (`FrozenRowSerializationCache`) stay warm. Defaults to `false` so direct callers receive
+     * mutable unfrozen copies.
+     */
+    PreserveFrozen?: boolean;
+}
+
+/**
+ * Produces a canonical, order- and case-insensitive key for a requested `Fields` list, suitable
+ * for keying memoized row projections and wire-serialization caches. Returns `''` when no field
+ * list is provided.
+ */
+export function CanonicalFieldsKey(fields: string[] | null | undefined): string {
+    if (!fields || fields.length === 0) {
+        return '';
+    }
+    const unique = new Set<string>();
+    for (const f of fields) {
+        const normalized = f.trim().toLowerCase();
+        if (normalized.length > 0) {
+            unique.add(normalized);
+        }
+    }
+    if (unique.size === 0) {
+        return '';
+    }
+    return Array.from(unique).sort().join(',');
+}
+
+/**
+ * Memoizes frozen subset-projected row objects per `(sourceRow, canonicalFieldsKey)` when
+ * `ProjectRowsToFields` runs with `{ PreserveFrozen: true }` on frozen L1/cache rows. Weakly
+ * keyed on the source row so entries are automatically garbage-collected when cache slots evict.
+ */
+const FrozenProjectedRowCache = new WeakMap<object, Map<string, Record<string, unknown>>>();
+
+/**
+ * Memoizes the entire frozen projected result array per `(frozenSourceArray, canonicalFieldsKey)`
+ * when `ProjectRowsToFields` runs with `{ PreserveFrozen: true }` on a frozen cached array.
+ * Turns repeat N-row subset projections into a single O(1) WeakMap lookup.
+ */
+const FrozenProjectedArrayCache = new WeakMap<object, Map<string, unknown[]>>();
+
+/**
  * Projects plain-object rows down to a caller-requested field subset, matching
  * field names case-insensitively (and ignoring surrounding whitespace).
  *
@@ -229,14 +280,28 @@ export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrgan
  *
  * @param rows - Plain-object result rows (NOT BaseEntity objects)
  * @param requestedFields - The caller's original Fields list, or null for "all fields"
+ * @param options - Optional mutability/freeze preservation controls
  */
 export function ProjectRowsToFields<T = Record<string, unknown>>(
     rows: T[],
-    requestedFields: string[] | null | undefined
+    requestedFields: string[] | null | undefined,
+    options?: ProjectRowsToFieldsOptions
 ): T[] {
     if (!requestedFields || requestedFields.length === 0 || !rows || rows.length === 0) {
         return rows;
     }
+    const preserveFrozen = Boolean(options?.PreserveFrozen);
+    const rowsAreFrozen = Object.isFrozen(rows);
+    const canonicalKey = preserveFrozen ? CanonicalFieldsKey(requestedFields) : '';
+
+    // O(1) array-level hit for repeat subset projections over the same frozen cached array.
+    if (preserveFrozen && rowsAreFrozen && canonicalKey.length > 0) {
+        const cachedArray = FrozenProjectedArrayCache.get(rows)?.get(canonicalKey);
+        if (cachedArray) {
+            return cachedArray as T[];
+        }
+    }
+
     const requestedFieldSet = new Set(requestedFields.map(f => f.trim().toLowerCase()));
 
     // No-op probe: SQL result rows are uniform (same SELECT list), so if every key of
@@ -257,10 +322,9 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
             // to yield a per-caller row set the caller may mutate, and full coverage is not a
             // narrower promise than partial coverage — it just happens to project to the same
             // shape. Frozen input means `rows` is the cache's shared array, so returning it here
-            // would quietly hand a Fields caller immutable rows and break that contract for the
-            // one field list that covers everything. Fall through to the copy path in that case;
-            // unfrozen input (the DB-miss path) keeps the allocation-free fast path.
-            if (!Object.isFrozen(rows)) {
+            // would quietly hand a Fields caller immutable rows and break that contract unless
+            // the caller explicitly opts into `PreserveFrozen: true` (read-only wire transport).
+            if (preserveFrozen || !rowsAreFrozen) {
                 return rows;
             }
         }
@@ -268,8 +332,22 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
 
     // Cache lowercase key→keep decisions across rows to avoid repeated allocations
     const keyCache = new Map<string, boolean>();
-    return rows.map((row) => {
+    const projected = rows.map((row) => {
         const source = row as Record<string, unknown>;
+        const canMemoizeFrozen =
+            preserveFrozen &&
+            canonicalKey.length > 0 &&
+            source !== null &&
+            typeof source === 'object' &&
+            Object.isFrozen(source);
+
+        if (canMemoizeFrozen) {
+            const cachedProjected = FrozenProjectedRowCache.get(source)?.get(canonicalKey);
+            if (cachedProjected) {
+                return cachedProjected as T;
+            }
+        }
+
         const filtered: Record<string, unknown> = {};
         for (const key of Object.keys(source)) {
             let keep = keyCache.get(key);
@@ -281,8 +359,31 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
                 filtered[key] = source[key];
             }
         }
+
+        if (canMemoizeFrozen) {
+            Object.freeze(filtered);
+            let fieldMap = FrozenProjectedRowCache.get(source);
+            if (!fieldMap) {
+                fieldMap = new Map<string, Record<string, unknown>>();
+                FrozenProjectedRowCache.set(source, fieldMap);
+            }
+            fieldMap.set(canonicalKey, filtered);
+        }
+
         return filtered as T;
     });
+
+    if (preserveFrozen && rowsAreFrozen && canonicalKey.length > 0) {
+        Object.freeze(projected);
+        let arrayMap = FrozenProjectedArrayCache.get(rows);
+        if (!arrayMap) {
+            arrayMap = new Map<string, unknown[]>();
+            FrozenProjectedArrayCache.set(rows, arrayMap);
+        }
+        arrayMap.set(canonicalKey, projected);
+    }
+
+    return projected;
 }
 
 /**
@@ -920,6 +1021,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 names.add(n);
             }
         }
+        for (const skipped of this.skippedMetadataEntityNames(dataset.Results ?? [])) {
+            names.delete(skipped);
+        }
         if (names.size === 0) {
             return; // a failed/empty load must not erase a previously recorded set
         }
@@ -934,6 +1038,106 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 LatestUpdateDate: item.LatestUpdateDate
             }));
         this.ensureInflightViewInvalidation();
+    }
+
+    /**
+     * The MJ_Metadata item codes that hold the saved-query metadata: the saved-query family (see
+     * {@link PartialRefreshMetadataItemCodes}) and the SQL dialects. They are read only when the
+     * provider is configured with {@link ProviderConfigDataBase.LoadQueryMetadata}.
+     */
+    public static get QueryMetadataItemCodes(): ReadonlyArray<string> {
+        return [...ProviderBase._queryFamilyItemCodes, 'SQLDialects'];
+    }
+
+    /**
+     * Whether this provider loads the saved-query metadata into its metadata object (see
+     * {@link ProviderConfigDataBase.LoadQueryMetadata}). False unless the configuration says true.
+     * A provider that adopted the global provider's metadata reports the global provider's
+     * setting instead, since that is what decided whether the adopted metadata holds queries.
+     */
+    public get LoadsQueryMetadata(): boolean {
+        return this._adoptedLoadsQueryMetadata ?? this._ConfigData?.LoadQueryMetadata === true;
+    }
+
+    /**
+     * The global provider's {@link LoadsQueryMetadata}, recorded when this provider adopts its
+     * metadata; undefined while this provider's metadata is its own.
+     */
+    private _adoptedLoadsQueryMetadata: boolean | undefined;
+
+    /**
+     * The item filters every read of the MJ_Metadata dataset uses — the data, its status, and the
+     * local dataset cache — so all of them describe the same row set. Null when every item is read.
+     * Otherwise each item this provider does not load gets a `1=0` filter: the server runs no SQL
+     * for it, and its status is constant, so writes to it never make the metadata look stale.
+     */
+    protected get MetadataDatasetItemFilters(): DatasetItemFilterType[] | null {
+        if (this.LoadsQueryMetadata) {
+            return null;
+        }
+        return ProviderBase.QueryMetadataItemCodes.map(code => ({ ItemCode: code, Filter: '1=0' }));
+    }
+
+    /**
+     * The MJ_Metadata item codes THIS provider builds its metadata from: {@link MetadataBuildItemCodes}
+     * without the items it does not read (see {@link MetadataDatasetItemFilters}). A change only to
+     * the others needs no reload, as for any item the build never reads.
+     */
+    protected get BuiltMetadataItemCodes(): ReadonlySet<string> {
+        if (this.LoadsQueryMetadata) {
+            return ProviderBase.MetadataBuildItemCodes;
+        }
+        const built = new Set(ProviderBase.MetadataBuildItemCodes);
+        for (const code of ProviderBase.QueryMetadataItemCodes) {
+            built.delete(code);
+        }
+        return built;
+    }
+
+    /**
+     * Empties the query-metadata arrays of `metadata` when this provider does not load them. A stored
+     * snapshot written by a process that did load them would otherwise hold those rows in memory for
+     * the life of this process, behind getters that return nothing.
+     */
+    private dropUnloadedQueryMetadata(metadata: AllMetadata): void {
+        if (this.LoadsQueryMetadata) {
+            return;
+        }
+        metadata.AllQueryCategories = [];
+        metadata.AllQueries = [];
+        metadata.AllQueryFields = [];
+        metadata.AllQueryPermissions = [];
+        metadata.AllQueryEntities = [];
+        metadata.AllQueryParameters = [];
+        metadata.AllQueryDependencies = [];
+        metadata.AllSQLDialects = [];
+        metadata.AllQuerySQLs = [];
+    }
+
+    /** Whether `code` is an MJ_Metadata item this provider does not read (see {@link MetadataDatasetItemFilters}). */
+    private isSkippedMetadataItem(code: string | undefined): boolean {
+        return !!code && !this.LoadsQueryMetadata && ProviderBase.QueryMetadataItemCodes.includes(code);
+    }
+
+    /**
+     * Lowercased names of the entities that back only items this provider does not read. A write to
+     * one of them cannot change this provider's metadata, so they are left out of the membership set
+     * — otherwise each such write would schedule a refresh that finds no timestamp moved and falls
+     * back to a full reload.
+     */
+    private skippedMetadataEntityNames(items: ReadonlyArray<{ Code?: string; EntityName?: string }>): Set<string> {
+        const skipped = new Set<string>();
+        const read = new Set<string>();
+        for (const item of items) {
+            const name = item.EntityName?.trim().toLowerCase();
+            if (name) {
+                (this.isSkippedMetadataItem(item.Code) ? skipped : read).add(name);
+            }
+        }
+        for (const name of read) {
+            skipped.delete(name);
+        }
+        return skipped;
     }
 
     /**
@@ -1158,12 +1362,29 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * True while a peer metadata notice check must wait rather than run immediately.
+     * Defaults to {@link MetadataMemberRefreshMustWait} for providers whose metadata reads
+     * cannot bypass an open transaction. Database providers whose `MJ_Metadata` reads run on
+     * the connection pool regardless of unrelated ambient transactions (#4514) override this
+     * to `false` unless {@link MetadataReadsJoinTransaction} is set, so unrelated background
+     * writes on the global provider (such as scheduled jobs) do not defer peer metadata sync.
+     */
+    protected get PeerMetadataNoticeMustWait(): boolean {
+        return this.MetadataMemberRefreshMustWait;
+    }
+
+    /**
      * Reacts to another server saving its metadata snapshot: after a short debounce, runs the
      * normal staleness check ({@link RefreshIfNeeded}, bypassing the check throttle). The check
      * compares this process's timestamps with the database and adopts the shared snapshot, so a
      * metadata change made on one server reaches the others in seconds instead of at the next
      * poll. A server that is already current does no refresh and saves nothing, so notices do not
      * echo around the fleet.
+     *
+     * Random thundering-herd jitter ({@link PeerMetadataNoticeJitterMs}) applies only to `removed`
+     * notices (e.g. `mj migrate` clearing the shared snapshot so every server would otherwise query
+     * the database together). On a `set` notice the peer's updated snapshot is already in shared
+     * storage, so only {@link MetadataDatasetRefreshDebounceMs} is waited.
      *
      * @returns true when the event was a metadata notice (and a check was scheduled)
      */
@@ -1181,21 +1402,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (this._peerMetadataNoticeTimer) {
             clearTimeout(this._peerMetadataNoticeTimer);
         }
+        const jitterMs = event.Action === 'removed'
+            ? Math.floor(Math.random() * ProviderBase.PeerMetadataNoticeJitterMs)
+            : 0;
         const timer = setTimeout(() => {
             this._peerMetadataNoticeTimer = null;
-            // A provider inside a transaction cannot run the check now (its reads would see the
-            // transaction's own uncommitted world, and SQL Server's RefreshIfNeeded refuses
-            // outright). Re-arm instead of dropping the notice, which used to lose it entirely.
+            // A provider whose metadata reads would join an open transaction cannot run the check
+            // now (its reads would see the transaction's own uncommitted world). Re-arm instead of
+            // dropping the notice, which used to lose it entirely.
             // The deferral budget is deliberately NOT cleared here: it bounds how long one check
             // may be put off, and the check has not run yet. Clearing it as the timer fires ended
             // the budget exactly when deferral began, leaving the retry count as the only real
             // bound.
-            if (this.MetadataMemberRefreshMustWait) {
+            if (this.PeerMetadataNoticeMustWait) {
                 this.handlePeerMetadataNoticeRetry();
                 return;
             }
             this.runPeerMetadataCheck();
-        }, ProviderBase.MetadataDatasetRefreshDebounceMs + Math.floor(Math.random() * ProviderBase.PeerMetadataNoticeJitterMs));
+        }, ProviderBase.MetadataDatasetRefreshDebounceMs + jitterMs);
         if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
             (timer as { unref(): void }).unref();
         }
@@ -1236,7 +1460,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         const timer = setTimeout(() => {
             this._peerMetadataNoticeTimer = null;
-            if (this.MetadataMemberRefreshMustWait) {
+            if (this.PeerMetadataNoticeMustWait) {
                 this.handlePeerMetadataNoticeRetry();
                 return;
             }
@@ -1329,8 +1553,23 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return this.ReloadMetadata(true, undefined, true, true);
         }
         LogStatus(`[Metadata] Full reload needed: ${scope.Reason}`);
-        return this.Refresh();
+        // RefreshRemoteMetadataTimestamps() just succeeded above, so let the first ReloadMetadata
+        // pass triggered by Refresh() reuse those timestamps instead of issuing a second full
+        // metadata-status SQL batch back-to-back.
+        this._metadataRefreshStampsFresh = true;
+        try {
+            return await this.Refresh();
+        } finally {
+            this._metadataRefreshStampsFresh = false;
+        }
     }
+
+    /**
+     * One-shot handoff from {@link RefreshAfterMetadataMemberChange} to {@link ReloadMetadata}
+     * (via {@link Refresh}) indicating that `_latestRemoteMetadataTimestamps` was just read from
+     * the authoritative status query and need not be re-queried on the first pass.
+     */
+    private _metadataRefreshStampsFresh = false;
 
     /**
      * Set by a write-event refresh that found a reload in flight and queued a follow-up pass; that
@@ -1459,6 +1698,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * This helps avoid metadata refreshes during critical operations.
      */
     protected abstract get AllowRefresh(): boolean;
+
+    /**
+     * Whether {@link CheckToSeeIfRefreshNeeded} may inspect remote timestamps and adopt a newer
+     * snapshot from shared storage. Defaults to {@link AllowRefresh}.
+     *
+     * Providers that transiently suspend {@link AllowRefresh} while a save is running SQL
+     * (such as `SQLServerDataProvider`) can override this to `true`: metadata status queries run
+     * on the connection pool (`ignoreAmbientTransaction`), and adopting a peer's snapshot from
+     * shared storage atomically replaces `_localMetadata` without mutating any `EntityInfo` held
+     * by an in-flight save. Suspending checks on in-flight saves caused peer metadata notices
+     * arriving during background writes (e.g. scheduled jobs) to be silently dropped.
+     */
+    protected get AllowRefreshCheck(): boolean {
+        return this.AllowRefresh;
+    }
 
     /**
      * Returns the provider type for the instance.
@@ -1698,34 +1952,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // BypassCache skips this entirely — used by maintenance actions that need
             // to see the true DB state after direct SQL inserts.
             const preResult = await this.PreRunView(params, contextUser);
+            const effectiveParams = preResult.effectiveParams ?? params;
 
             if (preResult.cachedResult) {
                 // Cache hit — transform and return directly
-                LogStatusEx({ message: `  ✅ [Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`, verboseOnly: true });
-                await this.TransformSimpleObjectToEntityObject(params, preResult.cachedResult, contextUser);
-                await this.ApplyPostRunViewHooksToCacheHit(params, preResult.cachedResult, contextUser);
+                LogStatusEx({ message: `  ✅ [Cache HIT] RunView "${effectiveParams.EntityName || effectiveParams.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`, verboseOnly: true });
+                await this.TransformSimpleObjectToEntityObject(effectiveParams, preResult.cachedResult, contextUser);
+                await this.ApplyPostRunViewHooksToCacheHit(effectiveParams, preResult.cachedResult, contextUser);
                 TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                     cacheHit: true,
                     cacheStatus: preResult.cacheStatus,
                     resultCount: preResult.cachedResult.Results?.length ?? 0
                 });
-                if (params.OnDataChanged && preResult.fingerprint) {
+                if (effectiveParams.OnDataChanged && preResult.fingerprint) {
                     preResult.cachedResult.Unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
                         preResult.fingerprint,
-                        params.OnDataChanged
+                        effectiveParams.OnDataChanged
                     );
                 }
-                ProviderBase.clearSkippedTotalRowCount(params, preResult.cachedResult);
+                ProviderBase.clearSkippedTotalRowCount(effectiveParams, preResult.cachedResult);
                 return preResult.cachedResult;
             }
 
             // Cache miss — execute query, then post-process (stores in cache)
-            LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
-            const result = await this.InternalRunView<T>(params, contextUser);
+            LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${effectiveParams.EntityName || effectiveParams.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
+            const result = await this.InternalRunView<T>(effectiveParams, contextUser);
             // PostRunView copies any hook-supplied replacement onto `result` in place, so this
             // reference reflects the hook chain's output.
-            await this.PostRunView(result, params, preResult, contextUser);
-            ProviderBase.clearSkippedTotalRowCount(params, result);
+            await this.PostRunView(result, effectiveParams, preResult, contextUser);
+            ProviderBase.clearSkippedTotalRowCount(effectiveParams, result);
             return result;
         }
 
@@ -1774,6 +2029,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         const key = this.generateDedupKey(params, contextUser);
+        if (key === null) {
+            return this.executeRunViewsPipeline<T>(params, contextUser);
+        }
         const existing = this._inflightViews.get(key);
 
         // ── Linger hit: resolved result still within the linger window ──
@@ -2062,6 +2320,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entryIndices: number[] = [];
             for (const param of entry.params) {
                 const key = this.generateDedupKey([param], contextUser);
+                if (key === null) {
+                    entryIndices.push(uniqueParams.length);
+                    uniqueParams.push(param);
+                    continue;
+                }
                 let idx = uniqueKeys.get(key);
                 if (idx === undefined) {
                     idx = uniqueParams.length;
@@ -2245,6 +2508,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     private async runViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         const key = this.generateDedupKey(params, contextUser);
+        if (key === null) {
+            return this.executeRunViewsPipeline<T>(params, contextUser);
+        }
         const existing = this._inflightViews.get(key);
 
         // ── Linger hit ──
@@ -2507,7 +2773,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return result;
     }
 
-    private generateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
+    private static readonly UUID_VALUE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    private static normalizeDedupScalarString(value: string): string {
+        const trimmed = value.trim();
+        return ProviderBase.UUID_VALUE_REGEX.test(trimmed) ? NormalizeUUID(trimmed) : trimmed;
+    }
+
+    private generateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string | null {
+        const effectiveUser = contextUser ?? this.CurrentUser;
+        const contextScope = this.ComputeRunViewDedupContextScope(effectiveUser);
+        if (contextScope === null) {
+            return null;
+        }
+        const userIdSegment = contextUser?.ID ? NormalizeUUID(contextUser.ID) : '';
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
             const extras = [
@@ -2518,11 +2797,106 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 p.ViewName ?? '',
                 IsExplicitBaseViewOverride(p) ? 'abv_override:base' : '',
                 p.TimeZone ?? '',
-                contextUser?.ID ?? ''
+                userIdSegment
             ].join('|');
             return `${base}|${extras}`;
         });
-        return `${parts.join('||')}|||${this.RunViewDedupScope}`;
+        const baseScope = this.RunViewDedupScope;
+        const combinedScope = contextScope
+            ? (baseScope ? `${baseScope}|${contextScope}` : contextScope)
+            : baseScope;
+        return `${parts.join('||')}|||${combinedScope}`;
+    }
+
+    /**
+     * Per-call security and tenant scope appended to the RunView dedup key alongside
+     * {@link RunViewDedupScope}. Because request deduplication and the linger window run
+     * before `PreRunView` hooks (which inject tenant filters from `contextUser.TenantContext`)
+     * and before RLS evaluation, two callers sharing the same `contextUser.ID` under different
+     * tenant, magic-link, widget-guest, or API-key scopes must never share an in-flight or
+     * lingering dedup slot.
+     *
+     * Returns `''` when the user carries no per-request isolation context, keeping unscoped
+     * dedup keys unchanged. Returns `null` to bypass deduplication for the call when an
+     * unknown / non-primitive `TenantContext` field shape (e.g. a nested object or array of
+     * objects) is present so isolation is never silently weakened. Subclasses may override
+     * this (calling `super`) to fold in additional per-call scope such as async-local tenant state.
+     */
+    protected ComputeRunViewDedupContextScope(contextUser?: UserInfo): string | null {
+        if (!contextUser) return '';
+        const segments: string[] = [];
+
+        if (contextUser.TenantContext) {
+            const scalarEntries: string[] = [];
+            for (const [key, value] of Object.entries(contextUser.TenantContext)) {
+                if (value === undefined || value === null) {
+                    continue;
+                }
+                if (typeof value === 'string') {
+                    // Only lower-case genuine UUIDs; non-UUID tenant IDs can be case-sensitive (e.g. PostgreSQL)
+                    scalarEntries.push(`${key}=${ProviderBase.normalizeDedupScalarString(value)}`);
+                } else if (typeof value === 'number' || typeof value === 'boolean') {
+                    scalarEntries.push(`${key}=${String(value)}`);
+                } else if (Array.isArray(value) && value.every(v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) {
+                    const serialized = value
+                        .map(v => (typeof v === 'string' ? ProviderBase.normalizeDedupScalarString(v) : String(v)))
+                        .sort()
+                        .join(',');
+                    scalarEntries.push(`${key}=[${serialized}]`);
+                } else {
+                    // Fail closed: nested objects or arrays of objects cannot be safely folded
+                    // into a flat scalar key, so bypass dedup for this call.
+                    return null;
+                }
+            }
+            scalarEntries.sort();
+            segments.push(`tc:${scalarEntries.join(',')}`);
+        }
+
+        if (contextUser.MagicLinkScope) {
+            const rt = (contextUser.MagicLinkScope.ResourceType ?? '').trim().toLowerCase();
+            const rid = contextUser.MagicLinkScope.ResourceID ? NormalizeUUID(contextUser.MagicLinkScope.ResourceID) : '';
+            segments.push(`ml:${rt}:${rid}`);
+        }
+
+        if (contextUser.APIKeyActingContext) {
+            const ak = contextUser.APIKeyActingContext;
+            const orgId = ak.ActingOrganizationID ? NormalizeUUID(ak.ActingOrganizationID) : '';
+            const personId = ak.ActingPersonID ? NormalizeUUID(ak.ActingPersonID) : '';
+            const scopeId = (ak.ActingScopeID ?? '').trim().toLowerCase();
+            const companies = (ak.ActingCompanyIDs ?? []).map(id => NormalizeUUID(id)).sort().join(',');
+            segments.push(`ak:${orgId}:${personId}:${scopeId}:${companies}`);
+        }
+
+        if (contextUser.APIKeyRowFilters && contextUser.APIKeyRowFilters.length > 0) {
+            const filters = contextUser.APIKeyRowFilters
+                .map(f => `${NormalizeUUID(f.EntityID)}:${f.PermissionType}:${NormalizeUUID(f.FilterID)}`)
+                .sort()
+                .join(',');
+            segments.push(`akf:${filters}`);
+        }
+
+        if (contextUser.WidgetGuestContext) {
+            const widgetId = contextUser.WidgetGuestContext.WidgetID
+                ? NormalizeUUID(contextUser.WidgetGuestContext.WidgetID)
+                : '';
+            segments.push(`wg:${widgetId}`);
+        }
+
+        if (contextUser.AnonymousVisitorID) {
+            segments.push(`av:${contextUser.AnonymousVisitorID.trim().toLowerCase()}`);
+        }
+
+        if (contextUser.IsMagicLinkAnonymous) {
+            const roles = (contextUser.UserRoles ?? [])
+                .map(r => (r.RoleID ? NormalizeUUID(r.RoleID) : ''))
+                .filter(Boolean)
+                .sort()
+                .join(',');
+            segments.push(`mla:1:${roles}`);
+        }
+
+        return segments.join('|');
     }
 
     /**
@@ -3020,7 +3394,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *    `resolvable` is true.
      *
      * The BASE implementation resolves from the metadata `Queries` cache and enforces the
-     * ROLES-ONLY `QueryInfo.UserCanRun` — the strongest check available at this layer.
+     * ROLES-ONLY `QueryInfo.UserCanRun` — the strongest check available at this layer. That cache
+     * is loaded only when the provider is configured with `LoadQueryMetadata`; otherwise every
+     * request is unresolvable here, so a provider that executes or caches saved queries overrides
+     * this to resolve from `QueryEngine`.
      * Providers with richer query metadata MUST override this to enforce the SAME authorization
      * their miss path enforces (`GenericDatabaseProvider` overrides with
      * `MJQueryEntityExtended.UserCanRun`, which adds entity CanRead + recursive composition
@@ -3030,6 +3407,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * the miss path also checked entity read permissions).
      */
     protected ResolveQueryCacheAuthorization(params: RunQueryParams, user?: UserInfo): QueryCacheAuthorization {
+        if (!this.LoadsQueryMetadata) {
+            return { resolvable: false, authorized: false };
+        }
         const requestedPath = params.CategoryPath?.trim().toLowerCase();
         const qInfo = this.Queries.find(q =>
             (params.QueryID && UUIDsEqual(q.ID, params.QueryID))
@@ -3436,6 +3816,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * projection eligible to populate the Fields-agnostic cache slot in PostRunView.
          */
         populateCache?: boolean;
+        /**
+         * The effective RunViewParams after PreRunView hooks (which may return a shallow-copied
+         * replacement object) so RunView passes hook mutations to InternalRunView and PostRunView.
+         */
+        effectiveParams?: RunViewParams;
     };
 
     /**
@@ -4250,6 +4635,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // PostRunView to project cache-miss DB results back to the caller's shape
             callerRequestedFields: callerRequestedFieldsForPost,
             populateCache: willPopulateCache,
+            effectiveParams: params,
         };
     }
 
@@ -5452,6 +5838,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // wasted `Fields` widening and futile cache lookups.
         if (entity.ExternalDataSourceID) return false;
 
+        // PostRunView-protected entities enforce per-caller ACL filtering inside PostRunView hooks
+        // from sibling permission tables whose mutations never change this entity's table timestamps.
+        if (IsPostRunViewProtectedEntity(entity.Name)) return false;
+
         return entity.TrustServerCacheCompletely !== false;
     }
 
@@ -6066,12 +6456,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return false;
         }
         this._ConfigData = data;
+        this._adoptedLoadsQueryMetadata = undefined;
         this._configLoadedFromServer = false;
         return this.CopyMetadataFromGlobalProvider();
     }
 
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
+        this._adoptedLoadsQueryMetadata = undefined;
         // Describes THIS Config only: a flag left by an earlier Refresh() must not make the
         // pre-validation that follows a Config which loaded nothing skip its check.
         this._configLoadedFromServer = false;
@@ -6197,10 +6589,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             await this._metadataReloadInFlight;
             return true;
         }
+        const initialStampsFresh = stampsFresh || this._metadataRefreshStampsFresh;
+        this._metadataRefreshStampsFresh = false;
         this._metadataReloadInFlight = (async () => {
             let effectiveHardRefresh = hardRefresh;
             let tryScoped = scopedFirst;
-            let timestampsFresh = stampsFresh;
+            let timestampsFresh = initialStampsFresh;
             do {
                 this._metadataReloadQueued = false;
 
@@ -6343,7 +6737,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const rollup = norm(ProviderBase._allMetadataTypeName);
         const prevLocal = this._latestLocalMetadataTimestamps ?? [];
         const datasetItems = this._metadataDatasetItems;
-        const built = ProviderBase.MetadataBuildItemCodes;
+        const built = this.BuiltMetadataItemCodes;
         const resRecord = res as unknown as Record<string, unknown> | undefined;
 
         let hasMismatch = false;
@@ -6437,7 +6831,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return remote;
         }
 
-        this.ClearDatasetCache(ProviderBase._mjMetadataDatasetName).catch(() => {});
+        this.ClearDatasetCache(ProviderBase._mjMetadataDatasetName, this.MetadataDatasetItemFilters).catch(() => {});
 
         const remoteRollup = remote.find(r => norm(r.Type) === rollup);
         if (remoteRollup) {
@@ -6481,7 +6875,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return { Kind: 'full', Reason: 'the metadata timestamps are not known' };
         }
         const family = new Set(ProviderBase.PartialRefreshMetadataItemCodes);
-        const built = ProviderBase.MetadataBuildItemCodes;
+        const built = this.BuiltMetadataItemCodes;
         const norm = (v: string | null | undefined) => (v ?? '').trim().toLowerCase();
         const rollup = norm(ProviderBase._allMetadataTypeName);
         let anyItemChanged = false;
@@ -6567,8 +6961,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         try {
             const keep = new Set(codes);
+            // Items this provider does not load stay unread even when they are in the family.
             const skipOthers: DatasetItemFilterType[] = items
-                .filter(item => !keep.has(item.Code))
+                .filter(item => !keep.has(item.Code) || this.isSkippedMetadataItem(item.Code))
                 .map(item => ({ ItemCode: item.Code, Filter: '1=0' }));
             const start = Date.now();
             const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, skipOthers, this.CurrentUser, providerToUse, true);
@@ -6835,6 +7230,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 } else {
                     this.UpdateLocalMetadata(adopted);
                 }
+                if (globalProvider instanceof ProviderBase) {
+                    this._adoptedLoadsQueryMetadata = globalProvider.LoadsQueryMetadata;
+                }
                 return true;
             }
             return false;
@@ -6942,10 +7340,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // metadata loading. We always load all schemas — there are no sys/staging entities in metadata anyway.
 
             const mutationSeqAtStart = this._metadataMemberMutationSeq;
+            const itemFilters = this.MetadataDatasetItemFilters;
 
             // Get the dataset and cache it for anyone else who wants to use it
             // When forceRefresh is true (from a hard Refresh() call), bypass LocalCacheManager
-            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse, forceRefresh);
+            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, itemFilters, this.CurrentUser, providerToUse, forceRefresh);
             // A dataset with no entities is a failed read, whatever its Success flag says: there
             // is no deployment in which MJ_Metadata legitimately holds zero entities. Returning
             // undefined here keeps the metadata already loaded (Config() treats undefined as
@@ -6972,16 +7371,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     this._metadataMemberMutationSeq !== mutationSeqAtStart ||
                     this.hasDatasetRemoteRowCountMismatch(d);
                 if (!mutatedDuringLoad) {
-                    await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
+                    await this.CacheDataset(ProviderBase._mjMetadataDatasetName, itemFilters, d);
                 } else {
-                    await this.ClearDatasetCache(ProviderBase._mjMetadataDatasetName);
+                    await this.ClearDatasetCache(ProviderBase._mjMetadataDatasetName, itemFilters);
                 }
 
-                // got the results, let's build our response in the format we need
-                const simpleMetadata: any = {};
-                for (let r of d.Results) {
-                    simpleMetadata[r.Code] = r.Results
-                }
+                // got the results, let's build our response in the format we need. The assembly
+                // below attaches child collections to rows, so it works on copies of those rows:
+                // the dataset's own rows stay exactly as read (see metadataAssemblyInput).
+                const simpleMetadata: any = ProviderBase.metadataAssemblyInput(d);
 
                 // Post Process Entities because there's some special handling of the sub-objects
                 simpleMetadata.AllEntities = this.PostProcessEntityMetadata(
@@ -7024,6 +7422,34 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogError(e);
             this._lastMetadataLoadError = e instanceof Error ? e : new Error(String(e));
         }
+    }
+
+    /**
+     * The MJ_Metadata item codes whose rows the metadata assembly writes to: entity rows get their
+     * fields, permissions, relationships, settings, organic keys, alternate views and unique keys;
+     * field rows their values and field permissions; organic keys their related entities;
+     * applications their entities and settings. The entity array is also sorted.
+     */
+    private static readonly _assemblyWrittenItemCodes: ReadonlySet<string> =
+        new Set(['Entities', 'EntityFields', 'EntityOrganicKeys', 'Applications']);
+
+    /**
+     * The MJ_Metadata rows keyed by item code, as {@link GetAllMetadata} assembles them: the items
+     * the assembly writes to are shallow copies (a new array of new row objects), the rest are the
+     * dataset's own arrays. The dataset's rows are the ones the dataset cache holds and serves to
+     * every later reader — on a server, every client's metadata request — so writing child
+     * collections onto them would send each entity's fields, permissions and relationships a second
+     * time, nested inside the entity rows, with every response.
+     */
+    private static metadataAssemblyInput(dataset: DatasetResultType): Record<string, unknown[]> {
+        const input: Record<string, unknown[]> = {};
+        for (const item of dataset.Results ?? []) {
+            const rows: unknown[] = Array.isArray(item.Results) ? item.Results : [];
+            input[item.Code] = ProviderBase._assemblyWrittenItemCodes.has(item.Code)
+                ? rows.map(row => ({ ...(row as Record<string, unknown>) }))
+                : rows;
+        }
+        return input;
     }
 
     /** Logs a failed metadata download and keeps it for {@link LastMetadataLoadError}. */
@@ -7289,41 +7715,92 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public get AuthorizationRoles(): AuthorizationRoleInfo[] {
         return this._localMetadata.AllAuthorizationRoles;
     }
-    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /** Whether {@link deprecatedQueryMetadata} has logged its warning in this process. */
+    private static _queryMetadataWarningLogged = false;
+
+    /**
+     * What a deprecated query-metadata getter returns: the loaded array when the provider loads query
+     * metadata, otherwise an empty array and a warning, logged once per process, naming the
+     * replacement.
+     */
+    private deprecatedQueryMetadata<T>(items: T[], getterName: string): T[] {
+        if (this.LoadsQueryMetadata) {
+            return items;
+        }
+        if (!ProviderBase._queryMetadataWarningLogged) {
+            ProviderBase._queryMetadataWarningLogged = true;
+            LogWarning(
+                `Metadata.${getterName} and the other query-metadata getters are empty: query metadata is not loaded into the ` +
+                `metadata object. Use QueryEngine from @memberjunction/core-entities, or set LoadQueryMetadata ` +
+                `(databaseSettings.loadQueryMetadata on MJAPI) until the code is migrated.`,
+                'Metadata'
+            );
+        }
+        return [];
+    }
+
+    /**
+     * @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get Queries(): QueryInfo[] {
-        return this._localMetadata.AllQueries;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllQueries, 'Queries');
     }
-    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /**
+     * @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get QueryCategories(): QueryCategoryInfo[] {
-        return this._localMetadata.AllQueryCategories;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllQueryCategories, 'QueryCategories');
     }
-    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /**
+     * @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get QueryFields(): QueryFieldInfo[] {
-        return this._localMetadata.AllQueryFields;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllQueryFields, 'QueryFields');
     }
-    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /**
+     * @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get QueryPermissions(): QueryPermissionInfo[] {
-        return this._localMetadata.AllQueryPermissions;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllQueryPermissions, 'QueryPermissions');
     }
-    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /**
+     * @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get QueryEntities(): QueryEntityInfo[] {
-        return this._localMetadata.AllQueryEntities;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllQueryEntities, 'QueryEntities');
     }
-    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /**
+     * @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get QueryParameters(): QueryParameterInfo[] {
-        return this._localMetadata.AllQueryParameters;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllQueryParameters, 'QueryParameters');
     }
-    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /**
+     * @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get QueryDependencies(): QueryDependencyInfo[] {
-        return this._localMetadata.AllQueryDependencies;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllQueryDependencies, 'QueryDependencies');
     }
-    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /**
+     * @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get SQLDialects(): SQLDialectInfo[] {
-        return this._localMetadata.AllSQLDialects;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllSQLDialects, 'SQLDialects');
     }
-    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities`. Will be removed in v6.x. */
+    /**
+     * @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities`. Empty unless the
+     * provider is configured with `LoadQueryMetadata`; removed in 7.0.
+     */
     public get QuerySQLs(): QuerySQLInfo[] {
-        return this._localMetadata.AllQuerySQLs;
+        return this.deprecatedQueryMetadata(this._localMetadata.AllQuerySQLs, 'QuerySQLs');
     }
     /**
      * Gets all library definitions in the system.
@@ -7429,7 +7906,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * {@link preValidateAndRefresh}) already caught it; {@link Config} did not.
      */
     public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
-        if (!this.AllowRefresh) return false;
+        if (!this.AllowRefreshCheck) return false;
 
         if (!bypassMinCheckInterval && this._refreshCheckInFlight) {
             LogStatusEx({ message: `[RefreshCheck] Skipped — a check is already in flight; its caller acts on the answer`, verboseOnly: true });
@@ -8190,7 +8667,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let d: DatasetStatusResultType;
         try {
             // No schema filters for metadata — see comment in GetAllMetadata
-            d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse)
+            d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, this.MetadataDatasetItemFilters, this.CurrentUser, providerToUse)
         }
         catch (e) {
             if (!IsTransportError(e)) {
@@ -8389,14 +8866,51 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const itemsKey = this.LocalStoragePrefix + ProviderBase.localStorageDatasetItemsKey;
 
             const readStart = Date.now();
-            const all = await ls.GetItems<string>([tsKey, fmtKey, dataKey, membershipKey, itemsKey]);
-            const readMs = Date.now() - readStart;
+            let raw: unknown = null;
+            let tsRaw: string | null = null;
+            let format: string | null = null;
+            let membershipRaw: string | null = null;
+            let itemsRaw: string | null = null;
 
-            const tsRaw = all.get(tsKey) ?? null;
-            const format = all.get(fmtKey) ?? null;
-            const raw = all.get(dataKey) ?? null;
-            const membershipRaw = all.get(membershipKey) ?? null;
-            const itemsRaw = all.get(itemsKey) ?? null;
+            if (typeof ls.GetObject === 'function') {
+                const otherKeys = [tsKey, fmtKey, membershipKey, itemsKey];
+                const [metadataObj, otherItems] = await Promise.all([
+                    ls.GetObject(dataKey),
+                    typeof ls.GetItems === 'function' ? ls.GetItems<string>(otherKeys) : null
+                ]);
+                raw = metadataObj !== null && metadataObj !== undefined
+                    ? metadataObj
+                    : await ls.GetItem<string>(dataKey);
+                if (otherItems) {
+                    tsRaw = otherItems.get(tsKey) ?? null;
+                    format = otherItems.get(fmtKey) ?? null;
+                    membershipRaw = otherItems.get(membershipKey) ?? null;
+                    itemsRaw = otherItems.get(itemsKey) ?? null;
+                } else {
+                    tsRaw = await ls.GetItem<string>(tsKey);
+                    format = await ls.GetItem<string>(fmtKey);
+                    membershipRaw = await ls.GetItem<string>(membershipKey);
+                    itemsRaw = await ls.GetItem<string>(itemsKey);
+                }
+            } else {
+                const all = typeof ls.GetItems === 'function'
+                    ? await ls.GetItems<string>([tsKey, fmtKey, dataKey, membershipKey, itemsKey])
+                    : null;
+                if (all) {
+                    tsRaw = all.get(tsKey) ?? null;
+                    format = all.get(fmtKey) ?? null;
+                    raw = all.get(dataKey) ?? null;
+                    membershipRaw = all.get(membershipKey) ?? null;
+                    itemsRaw = all.get(itemsKey) ?? null;
+                } else {
+                    tsRaw = await ls.GetItem<string>(tsKey);
+                    format = await ls.GetItem<string>(fmtKey);
+                    raw = await ls.GetItem<string>(dataKey);
+                    membershipRaw = await ls.GetItem<string>(membershipKey);
+                    itemsRaw = await ls.GetItem<string>(itemsKey);
+                }
+            }
+            const readMs = Date.now() - readStart;
 
             // The timestamps are a freshness claim FOR THE PAYLOAD, so they are only adopted when the
             // payload is there to adopt with them. Timestamps without a payload happen whenever the
@@ -8423,28 +8937,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // boot that never calls GetAllMetadata (the stale-while-revalidate fast start). The
             // set is only stored after a successful dataset load, so restoring it is exactly as
             // trustworthy as restoring the metadata itself.
-            if (membershipRaw) {
-                try {
-                    const names: string[] = JSON.parse(membershipRaw);
-                    if (Array.isArray(names) && names.length > 0) {
-                        this._metadataDatasetEntityNames = new Set(names);
-                        this.ensureInflightViewInvalidation();
-                    }
-                } catch (membershipErr) {
-                    LogError(`[Metadata Cache] Failed to restore dataset membership: ${membershipErr instanceof Error ? membershipErr.message : String(membershipErr)}`);
-                }
-            }
-
             // Restore the dataset item list the same way, so a warm boot can attribute a change to
             // its item and reload only what changed (see MetadataRefreshScope). Without it, every
-            // change seen by a process that started from the snapshot was a full reload.
+            // change seen by a process that started from the snapshot was a full reload. Restored
+            // first: the membership below is narrowed by it.
             if (itemsRaw) {
                 this.restoreMetadataDatasetItems(itemsRaw);
+            }
+            if (membershipRaw) {
+                this.restoreMetadataDatasetMembership(membershipRaw);
             }
 
             if (!raw) return;
 
-            // Decompress if stored in compressed format, otherwise parse directly
+            // Decompress if stored in compressed format, otherwise parse directly or adopt object directly
             const parseStart = Date.now();
             let temp: any;
             if (format === 'gzip' && typeof raw === 'string') {
@@ -8455,9 +8961,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const decompressedStream = blob.stream().pipeThrough(ds);
                 const jsonString = await new Response(decompressedStream).text();
                 temp = JSON.parse(jsonString);
-            } else {
-                // Legacy uncompressed path
-                temp = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } else if (typeof raw === 'string') {
+                // Legacy uncompressed string path
+                temp = JSON.parse(raw);
+            } else if (typeof raw === 'object' && raw !== null) {
+                // Structured clone object path: directly adopt the cloned object
+                temp = raw;
             }
             const parseMs = Date.now() - parseStart;
 
@@ -8469,6 +8978,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const deserializeMs = Date.now() - deserializeStart;
 
             if (metadata) {
+                this.dropUnloadedQueryMetadata(metadata);
                 this.UpdateLocalMetadata(metadata);
                 const totalMs = Date.now() - overallStart;
                 LogStatusEx({
@@ -8499,6 +9009,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         ProviderBase.localStorageDatasetMembershipKey,
         ProviderBase.localStorageDatasetItemsKey,
     ];
+
+    /**
+     * Adopts a stored metadata-member entity set. The entities that back only items this provider
+     * does not read are removed, so a snapshot saved by a process configured to read them cannot
+     * make writes to them schedule refreshes here.
+     */
+    private restoreMetadataDatasetMembership(membershipRaw: string): void {
+        try {
+            const names: unknown = JSON.parse(membershipRaw);
+            if (!Array.isArray(names) || names.length === 0) {
+                return;
+            }
+            const restored = new Set(names.filter((n): n is string => typeof n === 'string'));
+            for (const skipped of this.skippedMetadataEntityNames(this._metadataDatasetItems ?? [])) {
+                restored.delete(skipped);
+            }
+            if (restored.size > 0) {
+                this._metadataDatasetEntityNames = restored;
+                this.ensureInflightViewInvalidation();
+            }
+        } catch (membershipErr) {
+            LogError(`[Metadata Cache] Failed to restore dataset membership: ${membershipErr instanceof Error ? membershipErr.message : String(membershipErr)}`);
+        }
+    }
 
     /**
      * Adopts a stored dataset item list. Only a well-formed list replaces the one held: a damaged or
@@ -8718,6 +9252,37 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Converts BaseInfo instances and nested objects into plain structured-cloneable
+     * objects without JSON.stringify/JSON.parse, stripping functions and WeakRefs.
+     */
+    private static toCloneableValue(val: unknown): unknown {
+        if (val == null || typeof val !== 'object') {
+            return val;
+        }
+        if (val instanceof Date || val instanceof RegExp || val instanceof ArrayBuffer || ArrayBuffer.isView(val)) {
+            return val;
+        }
+        if (Array.isArray(val)) {
+            const out = new Array(val.length);
+            for (let i = 0; i < val.length; i++) {
+                out[i] = ProviderBase.toCloneableValue(val[i]);
+            }
+            return out;
+        }
+        const maybeToJson = val as { toJSON?: () => unknown };
+        if (typeof maybeToJson.toJSON === 'function') {
+            return ProviderBase.toCloneableValue(maybeToJson.toJSON());
+        }
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(val)) {
+            if (typeof v !== 'function' && !(typeof WeakRef !== 'undefined' && v instanceof WeakRef)) {
+                out[k] = ProviderBase.toCloneableValue(v);
+            }
+        }
+        return out;
+    }
+
+    /**
      * Saves current metadata to local storage for caching.
      * Serializes both timestamps and full metadata collections.
      */
@@ -8734,15 +9299,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             const start = Date.now();
+            const dataKey = this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey;
+            const formatKey = this.LocalStoragePrefix + ProviderBase.localStorageFormatKey;
 
-            // Serialize the AllMetadata object FIRST. If this throws (or the payload write below
-            // fails), nothing else has been written yet, so the previously stored timestamps still
-            // describe the previously stored payload and LocalMetadataObsolete() will report
-            // obsolete on the next boot — which is what makes the save retry. Writing timestamps
-            // before the payload left the cache claiming freshness with no payload behind it, and
-            // that state was never retried.
-            const jsonString = JSON.stringify(this._localMetadata);
-            const snapshot = await this.writeMetadataSnapshot(ls, jsonString);
+            let snapshot: { compressed: boolean; storedLength: number };
+            if (typeof ls.SetObject === 'function') {
+                // Structured-clone path: convert BaseInfo instances to plain cloneable objects (stripping
+                // WeakRef/provider back-references without JSON.stringify/gzip/JSON.parse or lazy field hydration)
+                const cloneableMetadata = ProviderBase.toCloneableValue(this._localMetadata) as AllMetadata;
+                await ls.SetObject<AllMetadata>(dataKey, cloneableMetadata);
+                await ls.SetItem<string>(formatKey, 'structured-clone');
+                snapshot = { compressed: false, storedLength: 0 };
+            } else {
+                // Serialized string path (JSON.stringify + gzip/base64 when CompressionStream is available)
+                const jsonString = JSON.stringify(this._localMetadata);
+                snapshot = await this.writeMetadataSnapshot(ls, jsonString);
+            }
 
             // Persist the metadata-member entity set beside the snapshot it belongs to, so the
             // event-driven refresh survives a warm boot (see LoadLocalMetadataFromStorage).
@@ -8760,7 +9332,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, timestampsRaw);
             this._storedTimestampsRaw = timestampsRaw;
 
-            this.logMetadataSaveComplete(Date.now() - start, jsonString.length, snapshot);
+            this.logMetadataSaveComplete(Date.now() - start, snapshot.storedLength, snapshot);
         }
         catch (e) {
             LogError(`[Metadata Cache] SaveLocalMetadataToStorage failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -8809,6 +9381,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const ratio = rawLength > 0 ? (snapshot.storedLength / rawLength * 100).toFixed(1) : '?';
             LogStatusEx({
                 message: `[Metadata Cache] Save complete: ${elapsedMs}ms, raw=${mb(rawLength)}MB, compressed=${mb(snapshot.storedLength)}MB (${ratio}%)`,
+                verboseOnly: true
+            });
+        }
+        else if (snapshot.storedLength === 0) {
+            LogStatusEx({
+                message: `[Metadata Cache] Save complete (structured-clone): ${elapsedMs}ms`,
                 verboseOnly: true
             });
         }

@@ -62,6 +62,7 @@ import { ConversationMessageRatingComponent } from './components/message/convers
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
 import { ConversationSidebarComponent } from './components/sidebar/conversation-sidebar.component';
+import { MyAgentsSectionComponent } from './components/sidebar/my-agents-section.component';
 import { RoutinesSectionComponent } from './components/sidebar/routines-section.component';
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
@@ -88,6 +89,7 @@ import { TasksDropdownComponent } from './components/tasks/tasks-dropdown.compon
 import { TaskWidgetComponent } from './components/tasks/task-widget.component';
 import { AgentProcessPanelComponent } from './components/agent/agent-process-panel.component';
 import { ActiveAgentIndicatorComponent } from './components/agent/active-agent-indicator.component';
+import { AgentInstanceEditorModalComponent } from './components/agent/agent-instance-editor-modal.component';
 import { ActiveTasksPanelComponent } from './components/active-tasks/active-tasks-panel.component';
 import { ShareModalComponent } from './components/share/share-modal.component';
 import { MembersModalComponent } from './components/members/members-modal.component';
@@ -122,6 +124,8 @@ import { LoadRealtimeAvatarChannel } from './components/realtime/avatar/realtime
 import { RealtimeMediaSurfaceComponent } from './components/realtime/media/realtime-media-surface.component';
 import { LoadRealtimeInteractiveComponentChannel } from './components/realtime/interactive-component/interactive-component-channel';
 import { RealtimeInteractiveComponentSurfaceComponent } from './components/realtime/interactive-component/realtime-interactive-component-surface.component';
+import { LoadRealtimeArtifactWorkspaceChannel } from './components/realtime/artifact-workspace/artifact-workspace-channel';
+import { RealtimeArtifactWorkspaceSurfaceComponent } from './components/realtime/artifact-workspace/realtime-artifact-workspace-surface.component';
 import { RealtimeEvidencePlaybackComponent } from './components/realtime/evidence-playback/realtime-evidence-playback.component';
 
 // Directives
@@ -150,6 +154,8 @@ LoadRealtimeRemoteBrowserChannel();
 LoadRealtimeMediaChannel();
 // Interactive Component channel plugin — ClientPluginClass 'RealtimeInteractiveComponentChannel'.
 LoadRealtimeInteractiveComponentChannel();
+// Artifact Workspace channel plugin — ClientPluginClass 'RealtimeArtifactWorkspaceChannel'.
+LoadRealtimeArtifactWorkspaceChannel();
 LoadClientContextChannel();
 LoadIdentityVerificationChannel();
 // The Camera and Screen Share channel plugins (ClientPluginClass 'RealtimeCameraChannel' / 'RealtimeScreenShareChannel').
@@ -176,6 +182,7 @@ const COMPONENTS = [
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
   ConversationSidebarComponent,
+  MyAgentsSectionComponent,
   RoutinesSectionComponent,
   ConversationListComponent,
   ConversationChatAreaComponent,
@@ -200,6 +207,7 @@ const COMPONENTS = [
   TaskWidgetComponent,
   AgentProcessPanelComponent,
   ActiveAgentIndicatorComponent,
+  AgentInstanceEditorModalComponent,
   ActiveTasksPanelComponent,
   ShareModalComponent,
   MembersModalComponent,
@@ -280,6 +288,7 @@ const COMPONENTS = [
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
     RealtimeInteractiveComponentSurfaceComponent,
+    RealtimeArtifactWorkspaceSurfaceComponent,
     RealtimeEvidencePlaybackComponent,
     AgentHandoffCardComponent
   ],

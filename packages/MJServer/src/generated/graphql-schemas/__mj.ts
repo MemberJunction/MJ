@@ -18,7 +18,7 @@ import { mj_core_schema } from '../../config.js';
 
 
 
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionRecordingShardEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentUserPolicyEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactWorkingStateEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJBrandKitAssetEntity, MJBrandKitEntity, MJCalendarEventLinkEntity, MJCalendarSyncStateEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommentTypeEntity, MJCommentEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationObjectFieldEntity, MJCompanyIntegrationObjectEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationBranchEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationTypeEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDiagnosticBundleEntity, MJDiagnosticSenderRegistrationEntity, MJDiagnosticSessionChunkEntity, MJDiagnosticSessionEntity, MJDocumentSequenceCounterEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAlternateBaseViewEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEntityUniqueKeyEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFieldSuggestionEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJGraphAuthorityTierEntity, MJGraphConceptTypeEntity, MJGraphConceptEntity, MJGraphEdgeProviderEntity, MJGraphEdgeTypeEndpointEntity, MJGraphEdgeTypeEntity, MJGraphEdgeEntity, MJGraphTypeEntity, MJGraphEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJInteractionEventEntity, MJInteractionLinkEntity, MJInteractionOfferEntity, MJInteractionEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLPredictionUnitEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMeetingParticipantEntity, MJMeetingEntity, MJNumberPoolEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJPhoneNumberEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedNotificationConfigEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJVideoArchetypeEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkQueueDeduplicationEntity, MJWorkQueueDeliveryEntity, MJWorkQueueMessageEntity, MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRhythmTemplateEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionRecordingShardEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentSuggestionEntity, MJAIAgentTypeEntity, MJAIAgentUserPolicyEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAgentChannelParticipantEntity, MJAgentChannelEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactGuestShareLinkEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactWorkingStateEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJBrandKitAssetEntity, MJBrandKitEntity, MJCalendarEventLinkEntity, MJCalendarSyncStateEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommentTypeEntity, MJCommentEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationObjectFieldEntity, MJCompanyIntegrationObjectEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationBranchEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationTypeEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDiagnosticBundleEntity, MJDiagnosticSenderRegistrationEntity, MJDiagnosticSessionChunkEntity, MJDiagnosticSessionEntity, MJDocumentSequenceCounterEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAlternateBaseViewEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEntityUniqueKeyEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFieldSuggestionEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJGraphAuthorityTierEntity, MJGraphConceptTypeEntity, MJGraphConceptEntity, MJGraphEdgeProviderEntity, MJGraphEdgeTypeEndpointEntity, MJGraphEdgeTypeEntity, MJGraphEdgeEntity, MJGraphTypeEntity, MJGraphEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJInteractionEventEntity, MJInteractionLinkEntity, MJInteractionOfferEntity, MJInteractionEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLPredictionUnitEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMeetingParticipantEntity, MJMeetingEntity, MJNumberPoolEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJPhoneNumberEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedNotificationConfigEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJVideoArchetypeEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkQueueDeduplicationEntity, MJWorkQueueDeliveryEntity, MJWorkQueueMessageEntity, MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -5156,6 +5156,14 @@ export class MJAIAgentRequest_ {
     @MaxLength(36)
     OriginatingTaskID?: string;
         
+    @Field({nullable: true, description: "The registration key of the human-task provider that also put this request in front of a person, when the install routes agent requests to one (humanTasks.defaultProvider). NULL when only the built-in inbox holds the request. Only that provider may answer the request through the provider path, and an answer given elsewhere asks it to withdraw its own ask."}) 
+    @MaxLength(100)
+    HumanTaskProvider?: string;
+        
+    @Field({nullable: true, description: "The reference the human-task provider returned for its own record of this request (for example a task ID in another app), handed back to the provider when it is asked to withdraw. NULL when no provider took the request or it returned none."}) 
+    @MaxLength(500)
+    HumanTaskExternalReference?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -5258,6 +5266,12 @@ export class CreateMJAIAgentRequestInput {
     @Field({ nullable: true })
     OriginatingTaskID: string | null;
 
+    @Field({ nullable: true })
+    HumanTaskProvider: string | null;
+
+    @Field({ nullable: true })
+    HumanTaskExternalReference: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -5327,6 +5341,12 @@ export class UpdateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     OriginatingTaskID?: string | null;
+
+    @Field({ nullable: true })
+    HumanTaskProvider?: string | null;
+
+    @Field({ nullable: true })
+    HumanTaskExternalReference?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5417,6 +5437,260 @@ export class MJAIAgentRequestResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Agent Requests', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Rhythm Templates
+//****************************************************************************
+@ObjectType({ description: "Catalog of recurring wake rhythm templates offered by core agents or installed Open App skills. Users opt in to materialize a template into an MJ: User Routines row." })
+export class MJAIAgentRhythmTemplate_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The always-on AI agent (for example Chief of Staff) to which this rhythm template applies."}) 
+    @MaxLength(36)
+    AgentID?: string;
+        
+    @Field({nullable: true, description: "Optional AI Skill that contributes this rhythm template; NULL for core agent rhythms."}) 
+    @MaxLength(36)
+    SkillID?: string;
+        
+    @Field({nullable: true, description: "Human-readable title of the offered rhythm shown to the user during onboarding or capability reviews."}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: "Stable programmatic workstream key (for example tasks-daily-triage, calendar-daily-review) used to upsert the user routine cleanly."}) 
+    @MaxLength(150)
+    WorkstreamKey?: string;
+        
+    @Field({nullable: true, description: "Plain-language explanation of what this rhythm checks and delivers to the user."}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: "Default 5-field cron expression evaluated in the user's local timezone when enabled."}) 
+    @MaxLength(100)
+    DefaultCronExpression?: string;
+        
+    @Field({nullable: true, description: "Optional default 3-Tier Wake Gate JSON (watchedEntities, skipIfUnchanged, tier1Expression, tier2Decision) copied onto the created AgentWake routine."}) 
+    DefaultWakeGate?: string;
+        
+    @Field({nullable: true, description: "Concise wake reason stored on the created AgentWake routine and passed to the agent when the rhythm fires."}) 
+    @MaxLength(500)
+    WakeReason?: string;
+        
+    @Field({nullable: true, description: "Lifecycle moment when this rhythm should be suggested to the user: Onboarding, Install, or Both."}) 
+    @MaxLength(20)
+    OfferAt?: string;
+        
+    @Field({nullable: true, description: "Whether this rhythm template is currently Active or Inactive."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true, description: "Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake."}) 
+    @MaxLength(36)
+    DefaultAgentConfigurationID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Skill?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    DefaultAgentConfiguration?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Rhythm Templates
+//****************************************************************************
+@InputType()
+export class CreateMJAIAgentRhythmTemplateInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    SkillID: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    WorkstreamKey?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DefaultCronExpression?: string;
+
+    @Field({ nullable: true })
+    DefaultWakeGate: string | null;
+
+    @Field({ nullable: true })
+    WakeReason?: string;
+
+    @Field({ nullable: true })
+    OfferAt?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    DefaultAgentConfigurationID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Rhythm Templates
+//****************************************************************************
+@InputType()
+export class UpdateMJAIAgentRhythmTemplateInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    SkillID?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    WorkstreamKey?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DefaultCronExpression?: string;
+
+    @Field({ nullable: true })
+    DefaultWakeGate?: string | null;
+
+    @Field({ nullable: true })
+    WakeReason?: string;
+
+    @Field({ nullable: true })
+    OfferAt?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    DefaultAgentConfigurationID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Rhythm Templates
+//****************************************************************************
+@ObjectType()
+export class RunMJAIAgentRhythmTemplateViewResult {
+    @Field(() => [MJAIAgentRhythmTemplate_])
+    Results: MJAIAgentRhythmTemplate_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIAgentRhythmTemplate_)
+export class MJAIAgentRhythmTemplateResolver extends ResolverBase {
+    @Query(() => RunMJAIAgentRhythmTemplateViewResult)
+    async RunMJAIAgentRhythmTemplateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentRhythmTemplateViewResult)
+    async RunMJAIAgentRhythmTemplateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentRhythmTemplateViewResult)
+    async RunMJAIAgentRhythmTemplateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Rhythm Templates';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIAgentRhythmTemplate_, { nullable: true })
+    async MJAIAgentRhythmTemplate(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIAgentRhythmTemplate_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Rhythm Templates', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRhythmTemplates')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Rhythm Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Agent Rhythm Templates', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIAgentRhythmTemplate_)
+    async CreateMJAIAgentRhythmTemplate(
+        @Arg('input', () => CreateMJAIAgentRhythmTemplateInput) input: CreateMJAIAgentRhythmTemplateInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Agent Rhythm Templates', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIAgentRhythmTemplate_)
+    async UpdateMJAIAgentRhythmTemplate(
+        @Arg('input', () => UpdateMJAIAgentRhythmTemplateInput) input: UpdateMJAIAgentRhythmTemplateInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Agent Rhythm Templates', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIAgentRhythmTemplate_)
+    async DeleteMJAIAgentRhythmTemplate(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Rhythm Templates', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -8563,6 +8837,9 @@ export class MJAIAgentSkill_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {nullable: true, description: "When 1 (default), metadata sync and app upgrades may update this agent-skill grant. Set to 0 when an administrator locally overrides or disables an app-shipped skill grant."}) 
+    AllowMetadataSyncUpdate?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -8593,6 +8870,9 @@ export class CreateMJAIAgentSkillInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    AllowMetadataSyncUpdate?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -8614,6 +8894,9 @@ export class UpdateMJAIAgentSkillInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowMetadataSyncUpdate?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9242,6 +9525,225 @@ export class MJAIAgentStepResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Agent Steps', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Suggestions
+//****************************************************************************
+@ObjectType({ description: "Log of proactive capability, skill, or rhythm suggestions offered by an agent to a specific user so declined suggestions are not repeated." })
+export class MJAIAgentSuggestion_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The AI agent that made the suggestion."}) 
+    @MaxLength(36)
+    AgentID?: string;
+        
+    @Field({nullable: true, description: "The user to whom the suggestion was offered."}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field({nullable: true, description: "Category of suggestion: Rhythm, Skill, Behavior, or Integration."}) 
+    @MaxLength(30)
+    Kind?: string;
+        
+    @Field({nullable: true, description: "Stable deduplication key (such as a rhythm WorkstreamKey or skill name) preventing repeated offers of the same declined suggestion."}) 
+    @MaxLength(200)
+    TargetKey?: string;
+        
+    @Field({nullable: true, description: "Concise description of the proposed capability or rhythm shown to the user."}) 
+    Summary?: string;
+        
+    @Field({nullable: true, description: "Outcome of the suggestion: Offered, Accepted, Declined, or Expired."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "UTC timestamp when the suggestion was first presented to the user."}) 
+    OfferedAt?: Date;
+        
+    @Field({nullable: true, description: "UTC timestamp when the user accepted, declined, or let the suggestion expire."}) 
+    RespondedAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Suggestions
+//****************************************************************************
+@InputType()
+export class CreateMJAIAgentSuggestionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    Kind?: string;
+
+    @Field({ nullable: true })
+    TargetKey?: string;
+
+    @Field({ nullable: true })
+    Summary?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    OfferedAt?: Date;
+
+    @Field({ nullable: true })
+    RespondedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Suggestions
+//****************************************************************************
+@InputType()
+export class UpdateMJAIAgentSuggestionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    Kind?: string;
+
+    @Field({ nullable: true })
+    TargetKey?: string;
+
+    @Field({ nullable: true })
+    Summary?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    OfferedAt?: Date;
+
+    @Field({ nullable: true })
+    RespondedAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Suggestions
+//****************************************************************************
+@ObjectType()
+export class RunMJAIAgentSuggestionViewResult {
+    @Field(() => [MJAIAgentSuggestion_])
+    Results: MJAIAgentSuggestion_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIAgentSuggestion_)
+export class MJAIAgentSuggestionResolver extends ResolverBase {
+    @Query(() => RunMJAIAgentSuggestionViewResult)
+    async RunMJAIAgentSuggestionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentSuggestionViewResult)
+    async RunMJAIAgentSuggestionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentSuggestionViewResult)
+    async RunMJAIAgentSuggestionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Suggestions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIAgentSuggestion_, { nullable: true })
+    async MJAIAgentSuggestion(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIAgentSuggestion_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Suggestions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSuggestions')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Suggestions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Agent Suggestions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIAgentSuggestion_)
+    async CreateMJAIAgentSuggestion(
+        @Arg('input', () => CreateMJAIAgentSuggestionInput) input: CreateMJAIAgentSuggestionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Agent Suggestions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIAgentSuggestion_)
+    async UpdateMJAIAgentSuggestion(
+        @Arg('input', () => UpdateMJAIAgentSuggestionInput) input: UpdateMJAIAgentSuggestionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Agent Suggestions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIAgentSuggestion_)
+    async DeleteMJAIAgentSuggestion(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Suggestions', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -9957,8 +10459,7 @@ export class MJAIAgent_ {
     @Field({nullable: true, description: "A detailed description of the AI agent."}) 
     Description?: string;
         
-    @Field({nullable: true, description: "URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display."}) 
-    @MaxLength(255)
+    @Field({nullable: true, description: "URL to an image file, presigned asset URL, or base64 data URI (e.g., data:image/png;base64,...) for the agent logo or custom instance avatar. Takes precedence over IconClass in UI display."}) 
     LogoURL?: string;
         
     @Field() 
@@ -10225,6 +10726,24 @@ export class MJAIAgent_ {
     @Field(() => Int, {nullable: true, description: "Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3)."}) 
     MaxSubAgentConsultRounds?: number;
         
+    @Field({nullable: true, description: "Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation)."}) 
+    @MaxLength(20)
+    Isolation?: string;
+        
+    @Field({nullable: true, description: "Optional prototype/base agent ID for multi-level capability inheritance (instance-of), distinct from ParentID (structural sub-agent composition). Derived agents inherit prompts, actions, sub-agents, skills, configurations, modalities, and rhythm templates live from their BaseAgentID chain (up to MaxDepth 5)."}) 
+    @MaxLength(36)
+    BaseAgentID?: string;
+        
+    @Field({nullable: true, description: "Controls whether users can create tailored derived instances from this agent via BaseAgentID: None (direct-use only; default for catalog agents, sub-agents, and personal leaf instances), Optional (directly runnable and instantiable as a template), or Required (template/onboarding factory only; excluded from direct ad-hoc delegation)."}) 
+    @MaxLength(20)
+    InstantiationMode?: string;
+        
+    @Field({nullable: true, description: "Optional standing instructions appended to this agent's prompt context and stacked down the BaseAgentID inheritance chain from root template to personal leaf instance."}) 
+    AdditionalInstructions?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When true, marks this derived agent as the owner's primary instance among multiple instances sharing the same RootBaseAgentID for deterministic routing (e.g., inbound mailbox wakes, inter-agent requests, default dashboard selection)."}) 
+    IsPrimaryInstance?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -10274,6 +10793,10 @@ export class MJAIAgent_ {
     ConversationSummaryPrompt?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(255)
+    BaseAgent?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
         
@@ -10288,6 +10811,22 @@ export class MJAIAgent_ {
         
     @Field(() => Int, {nullable: true}) 
     ParentIDChildCount?: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootBaseAgentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    BaseAgentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    BaseAgentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    BaseAgentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    BaseAgentIDChildCount?: number;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -10539,6 +11078,21 @@ export class CreateMJAIAgentInput {
     @Field(() => Int, { nullable: true })
     MaxSubAgentConsultRounds: number | null;
 
+    @Field({ nullable: true })
+    Isolation?: string;
+
+    @Field({ nullable: true })
+    BaseAgentID: string | null;
+
+    @Field({ nullable: true })
+    InstantiationMode?: string;
+
+    @Field({ nullable: true })
+    AdditionalInstructions: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsPrimaryInstance?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -10788,6 +11342,21 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     MaxSubAgentConsultRounds?: number | null;
+
+    @Field({ nullable: true })
+    Isolation?: string;
+
+    @Field({ nullable: true })
+    BaseAgentID?: string | null;
+
+    @Field({ nullable: true })
+    InstantiationMode?: string;
+
+    @Field({ nullable: true })
+    AdditionalInstructions?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsPrimaryInstance?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18649,6 +19218,10 @@ export class MJAISkillAction_ {
     @Field(() => Boolean, {nullable: true, description: "Whether activating the skill puts this action into the agent's run. 1 (default): the action is described to the model and callable during the run, today's behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill's reply."}) 
     ExposeToModel?: boolean;
         
+    @Field({nullable: true, description: "Role this action plays within the skill: Tool (normal tool invoked by the model), Briefing (deterministic briefing contributor invoked by Assemble My Briefing), or Both."}) 
+    @MaxLength(20)
+    Role?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Skill?: string;
@@ -18679,6 +19252,9 @@ export class CreateMJAISkillActionInput {
     @Field(() => Boolean, { nullable: true })
     ExposeToModel?: boolean;
 
+    @Field({ nullable: true })
+    Role?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -18700,6 +19276,9 @@ export class UpdateMJAISkillActionInput {
 
     @Field(() => Boolean, { nullable: true })
     ExposeToModel?: boolean;
+
+    @Field({ nullable: true })
+    Role?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24176,6 +24755,715 @@ export class MJActionResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Agent Channel Participants
+//****************************************************************************
+@ObjectType({ description: "Participants (each a User + their AI Agent pair) enrolled in an Agent Channel conversation." })
+export class MJAgentChannelParticipant_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The Agent Channel (and Conversation ID) to which this participant belongs."}) 
+    @MaxLength(36)
+    AgentChannelID?: string;
+        
+    @Field({nullable: true, description: "The human user represented by this participant entry."}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field({nullable: true, description: "The AI agent acting on behalf of UserID in this channel."}) 
+    @MaxLength(36)
+    AgentID?: string;
+        
+    @Field({nullable: true, description: "Participant role in the channel: Initiator or Participant."}) 
+    @MaxLength(20)
+    Role?: string;
+        
+    @Field({nullable: true, description: "Optional ConversationDetail ID of the last message read by this participant."}) 
+    @MaxLength(36)
+    LastSeenDetailID?: string;
+        
+    @Field({nullable: true, description: "UTC timestamp when this participant joined the channel."}) 
+    JoinedAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentChannel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    LastSeenDetail?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Agent Channel Participants
+//****************************************************************************
+@InputType()
+export class CreateMJAgentChannelParticipantInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentChannelID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    LastSeenDetailID: string | null;
+
+    @Field({ nullable: true })
+    JoinedAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Agent Channel Participants
+//****************************************************************************
+@InputType()
+export class UpdateMJAgentChannelParticipantInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentChannelID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    LastSeenDetailID?: string | null;
+
+    @Field({ nullable: true })
+    JoinedAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Agent Channel Participants
+//****************************************************************************
+@ObjectType()
+export class RunMJAgentChannelParticipantViewResult {
+    @Field(() => [MJAgentChannelParticipant_])
+    Results: MJAgentChannelParticipant_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAgentChannelParticipant_)
+export class MJAgentChannelParticipantResolver extends ResolverBase {
+    @Query(() => RunMJAgentChannelParticipantViewResult)
+    async RunMJAgentChannelParticipantViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAgentChannelParticipantViewResult)
+    async RunMJAgentChannelParticipantViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAgentChannelParticipantViewResult)
+    async RunMJAgentChannelParticipantDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Agent Channel Participants';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAgentChannelParticipant_, { nullable: true })
+    async MJAgentChannelParticipant(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAgentChannelParticipant_ | null> {
+        this.CheckUserReadPermissions('MJ: Agent Channel Participants', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAgentChannelParticipants')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Agent Channel Participants', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Agent Channel Participants', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAgentChannelParticipant_)
+    async CreateMJAgentChannelParticipant(
+        @Arg('input', () => CreateMJAgentChannelParticipantInput) input: CreateMJAgentChannelParticipantInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Agent Channel Participants', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAgentChannelParticipant_)
+    async UpdateMJAgentChannelParticipant(
+        @Arg('input', () => UpdateMJAgentChannelParticipantInput) input: UpdateMJAgentChannelParticipantInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Agent Channel Participants', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAgentChannelParticipant_)
+    async DeleteMJAgentChannelParticipant(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Agent Channel Participants', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Agent Channels
+//****************************************************************************
+@ObjectType({ description: "IS-A extension of MJ: Conversations for shared, observable agent-to-agent coordination channels, storing topic, lifecycle status, and loop-guard/rate-limit counters." })
+export class MJAgentChannel_ {
+    @Field({description: "Shared primary key referencing MJ: Conversations(ID) for this IS-A Agent Channel conversation."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Short executive topic describing what the participating agents are coordinating on."}) 
+    @MaxLength(500)
+    Topic?: string;
+        
+    @Field({nullable: true, description: "Operational state of the channel: Open, Paused For Human (loop or wake limit reached), or Resolved."}) 
+    @MaxLength(30)
+    ChannelStatus?: string;
+        
+    @Field({nullable: true, description: "Optional deadline by which participants should respond or resolve the coordination topic."}) 
+    ReplyBy?: Date;
+        
+    @Field(() => Int, {nullable: true, description: "Number of consecutive agent messages posted since the last human message; resets to 0 when any human posts."}) 
+    ConsecutiveAgentTurns?: number;
+        
+    @Field(() => Int, {nullable: true, description: "Maximum consecutive agent turns permitted without human intervention before the channel automatically pauses (default 10)."}) 
+    MaxConsecutiveAgentTurns?: number;
+        
+    @Field({nullable: true, description: "UTC timestamp of the most recent message posted directly by a human participant."}) 
+    LastHumanMessageAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: "Count of peer agent wakes dispatched for this channel within the current rolling 1-hour window."}) 
+    HourlyWakeCount?: number;
+        
+    @Field({nullable: true, description: "UTC start timestamp of the current 1-hour wake rate-limit window."}) 
+    HourlyWakeWindowStart?: Date;
+        
+    @Field(() => Int, {nullable: true, description: "Maximum peer wakes allowed per hour for this channel before pausing for human review (default 6)."}) 
+    MaxHourlyWakes?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    ExternalID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    IsArchived?: boolean;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    LinkedEntityID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    LinkedRecordID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    DataContextID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    EnvironmentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ProjectID?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    IsPinned?: boolean;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    TestRunID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    ApplicationScope?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ApplicationID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    DefaultAgentID?: string;
+        
+    @Field({nullable: true}) 
+    AdditionalData?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RecordingFileID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    EgressID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    VisitorKey?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    LastConversationID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(30)
+    AnchorType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AnchorKey?: string;
+        
+    @Field({nullable: true}) 
+    AnchorMetadata?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    IsResolved?: boolean;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ResolvedByUserID?: string;
+        
+    @Field({nullable: true}) 
+    ResolvedAt?: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    TypeID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Agent Channels
+//****************************************************************************
+@InputType()
+export class CreateMJAgentChannelInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Topic?: string;
+
+    @Field({ nullable: true })
+    ChannelStatus?: string;
+
+    @Field({ nullable: true })
+    ReplyBy: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    ConsecutiveAgentTurns?: number;
+
+    @Field(() => Int, { nullable: true })
+    MaxConsecutiveAgentTurns?: number;
+
+    @Field({ nullable: true })
+    LastHumanMessageAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    HourlyWakeCount?: number;
+
+    @Field({ nullable: true })
+    HourlyWakeWindowStart: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxHourlyWakes?: number;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    ExternalID: string | null;
+
+    @Field({ nullable: true })
+    Name: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsArchived?: boolean;
+
+    @Field({ nullable: true })
+    LinkedEntityID: string | null;
+
+    @Field({ nullable: true })
+    LinkedRecordID: string | null;
+
+    @Field({ nullable: true })
+    DataContextID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    EnvironmentID?: string;
+
+    @Field({ nullable: true })
+    ProjectID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsPinned?: boolean;
+
+    @Field({ nullable: true })
+    TestRunID: string | null;
+
+    @Field({ nullable: true })
+    ApplicationScope?: string;
+
+    @Field({ nullable: true })
+    ApplicationID: string | null;
+
+    @Field({ nullable: true })
+    DefaultAgentID: string | null;
+
+    @Field({ nullable: true })
+    AdditionalData: string | null;
+
+    @Field({ nullable: true })
+    RecordingFileID: string | null;
+
+    @Field({ nullable: true })
+    EgressID: string | null;
+
+    @Field({ nullable: true })
+    VisitorKey: string | null;
+
+    @Field({ nullable: true })
+    LastConversationID: string | null;
+
+    @Field({ nullable: true })
+    AnchorType: string | null;
+
+    @Field({ nullable: true })
+    AnchorKey: string | null;
+
+    @Field({ nullable: true })
+    AnchorMetadata: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsResolved?: boolean;
+
+    @Field({ nullable: true })
+    ResolvedByUserID: string | null;
+
+    @Field({ nullable: true })
+    ResolvedAt: Date | null;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Agent Channels
+//****************************************************************************
+@InputType()
+export class UpdateMJAgentChannelInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Topic?: string;
+
+    @Field({ nullable: true })
+    ChannelStatus?: string;
+
+    @Field({ nullable: true })
+    ReplyBy?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    ConsecutiveAgentTurns?: number;
+
+    @Field(() => Int, { nullable: true })
+    MaxConsecutiveAgentTurns?: number;
+
+    @Field({ nullable: true })
+    LastHumanMessageAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    HourlyWakeCount?: number;
+
+    @Field({ nullable: true })
+    HourlyWakeWindowStart?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxHourlyWakes?: number;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    ExternalID?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsArchived?: boolean;
+
+    @Field({ nullable: true })
+    LinkedEntityID?: string | null;
+
+    @Field({ nullable: true })
+    LinkedRecordID?: string | null;
+
+    @Field({ nullable: true })
+    DataContextID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    EnvironmentID?: string;
+
+    @Field({ nullable: true })
+    ProjectID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsPinned?: boolean;
+
+    @Field({ nullable: true })
+    TestRunID?: string | null;
+
+    @Field({ nullable: true })
+    ApplicationScope?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultAgentID?: string | null;
+
+    @Field({ nullable: true })
+    AdditionalData?: string | null;
+
+    @Field({ nullable: true })
+    RecordingFileID?: string | null;
+
+    @Field({ nullable: true })
+    EgressID?: string | null;
+
+    @Field({ nullable: true })
+    VisitorKey?: string | null;
+
+    @Field({ nullable: true })
+    LastConversationID?: string | null;
+
+    @Field({ nullable: true })
+    AnchorType?: string | null;
+
+    @Field({ nullable: true })
+    AnchorKey?: string | null;
+
+    @Field({ nullable: true })
+    AnchorMetadata?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsResolved?: boolean;
+
+    @Field({ nullable: true })
+    ResolvedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    ResolvedAt?: Date | null;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Agent Channels
+//****************************************************************************
+@ObjectType()
+export class RunMJAgentChannelViewResult {
+    @Field(() => [MJAgentChannel_])
+    Results: MJAgentChannel_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAgentChannel_)
+export class MJAgentChannelResolver extends ResolverBase {
+    @Query(() => RunMJAgentChannelViewResult)
+    async RunMJAgentChannelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAgentChannelViewResult)
+    async RunMJAgentChannelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAgentChannelViewResult)
+    async RunMJAgentChannelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Agent Channels';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAgentChannel_, { nullable: true })
+    async MJAgentChannel(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAgentChannel_ | null> {
+        this.CheckUserReadPermissions('MJ: Agent Channels', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAgentChannels')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Agent Channels', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Agent Channels', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAgentChannel_)
+    async CreateMJAgentChannel(
+        @Arg('input', () => CreateMJAgentChannelInput) input: CreateMJAgentChannelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Agent Channels', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAgentChannel_)
+    async UpdateMJAgentChannel(
+        @Arg('input', () => UpdateMJAgentChannelInput) input: UpdateMJAgentChannelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Agent Channels', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAgentChannel_)
+    async DeleteMJAgentChannel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Agent Channels', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Application Entities
 //****************************************************************************
 @ObjectType({ description: "List of entities within each application. An application can have any number of entities and an entity can be part of any number of applications." })
@@ -26074,6 +27362,116 @@ export class MJArchiveRunResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Artifact Guest Share Links
+//****************************************************************************
+@ObjectType({ description: "Links an anonymous resource-share MagicLinkInvite to an immutable Frozen ArtifactVersion and optional recipient label for external guest sharing." })
+export class MJArtifactGuestShareLink_ {
+    @Field({description: "Primary key of the artifact guest share link binding record."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Foreign key to the MagicLinkInvite managing token hashing, expiry, revocation, usage limits, and redemption audit."}) 
+    @MaxLength(36)
+    MagicLinkInviteID?: string;
+        
+    @Field({nullable: true, description: "Foreign key to the shared Artifact record. Cascades on artifact deletion."}) 
+    @MaxLength(36)
+    ArtifactID?: string;
+        
+    @Field({nullable: true, description: "Foreign key to the specific pinned ArtifactVersion snapshot exposed by this guest link."}) 
+    @MaxLength(36)
+    ArtifactVersionID?: string;
+        
+    @Field({nullable: true, description: "Foreign key to the User who created this external guest share link."}) 
+    @MaxLength(36)
+    CreatedByUserID?: string;
+        
+    @Field({nullable: true, description: "Optional human-readable label identifying the external recipient or review purpose."}) 
+    @MaxLength(200)
+    Label?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Artifact?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    CreatedByUser?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+//****************************************************************************
+// RESOLVER for MJ: Artifact Guest Share Links
+//****************************************************************************
+@ObjectType()
+export class RunMJArtifactGuestShareLinkViewResult {
+    @Field(() => [MJArtifactGuestShareLink_])
+    Results: MJArtifactGuestShareLink_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJArtifactGuestShareLink_)
+export class MJArtifactGuestShareLinkResolver extends ResolverBase {
+    @Query(() => RunMJArtifactGuestShareLinkViewResult)
+    async RunMJArtifactGuestShareLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArtifactGuestShareLinkViewResult)
+    async RunMJArtifactGuestShareLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArtifactGuestShareLinkViewResult)
+    async RunMJArtifactGuestShareLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Artifact Guest Share Links';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJArtifactGuestShareLink_, { nullable: true })
+    async MJArtifactGuestShareLink(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJArtifactGuestShareLink_ | null> {
+        this.CheckUserReadPermissions('MJ: Artifact Guest Share Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArtifactGuestShareLinks')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Guest Share Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Artifact Guest Share Links', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Artifact Permissions
 //****************************************************************************
 @ObjectType({ description: "Manages user permissions for artifacts with granular access control (Read, Edit, Delete, Share)" })
@@ -26347,6 +27745,9 @@ export class MJArtifactType_ {
     @Field(() => Boolean, {nullable: true, description: "True for Artifact Types shipped as part of the MemberJunction default registry (JSON, PDF, Office variants, Image/Audio/Video, Generic Text, Generic Binary). False for user/org-supplied customizations. Used as a tiebreaker in MIME pattern resolution: user customizations win over shipped defaults at equal Priority."}) 
     SystemSupplied?: boolean;
         
+    @Field({nullable: true, description: "Optional JSON configuration bag for this artifact type (shape = IArtifactTypeConfiguration), including Library card thumbnail visibility and capture mode policies."}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -26419,6 +27820,9 @@ export class CreateMJArtifactTypeInput {
     @Field(() => Boolean, { nullable: true })
     SystemSupplied?: boolean;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -26470,6 +27874,9 @@ export class UpdateMJArtifactTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     SystemSupplied?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -30973,6 +32380,10 @@ export class MJComment_ {
     TypeID?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     CommentType?: string;
         
@@ -31076,6 +32487,9 @@ export class CreateMJCommentInput {
     @Field({ nullable: true })
     TypeID?: string;
 
+    @Field({ nullable: true })
+    ParentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -31175,6 +32589,9 @@ export class UpdateMJCommentInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37288,6 +38705,12 @@ export class MJContentItemChunk_ {
     @Field({nullable: true, description: "Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk."}) 
     Decorator?: string;
         
+    @Field(() => Int, {nullable: true, description: "Retry outcomes in a row since a content pipeline stage last settled this chunk. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the chunk."}) 
+    RetryCount?: number;
+        
+    @Field({nullable: true, description: "The earliest time a content pipeline stage may pick this chunk up again, after a Retry outcome. Every pipeline Record Process skips the chunk until then. NULL means no wait."}) 
+    RetryAfter?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     ContentItem?: string;
@@ -37394,6 +38817,12 @@ export class CreateMJContentItemChunkInput {
     @Field({ nullable: true })
     Decorator: string | null;
 
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -37475,6 +38904,12 @@ export class UpdateMJContentItemChunkInput {
 
     @Field({ nullable: true })
     Decorator?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -38117,6 +39552,12 @@ export class MJContentItem_ {
     @MaxLength(36)
     FileID?: string;
         
+    @Field(() => Int, {nullable: true, description: "Retry outcomes in a row since a content pipeline stage last settled this item. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the item, or when its content changes."}) 
+    RetryCount?: number;
+        
+    @Field({nullable: true, description: "The earliest time a content pipeline stage may pick this item up again, after a Retry outcome. Every pipeline Record Process skips the item until then. NULL means no wait."}) 
+    RetryAfter?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
@@ -38262,6 +39703,12 @@ export class CreateMJContentItemInput {
     @Field({ nullable: true })
     FileID: string | null;
 
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -38358,6 +39805,12 @@ export class UpdateMJContentItemInput {
 
     @Field({ nullable: true })
     FileID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -39752,6 +41205,9 @@ export class MJContentSource_ {
     @MaxLength(36)
     GraphID?: string;
         
+    @Field({nullable: true, description: "Where an unfinished Discover or Sync walk of this source stopped, as JSON: the driver's ResumeToken, WalkStartedAt (when the walk's first part started), Mode and ItemsFound. The next walk carries on from it; cleared when a walk finishes. NULL when no walk is in progress."}) 
+    DiscoverState?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentType?: string;
@@ -39855,6 +41311,9 @@ export class CreateMJContentSourceInput {
     @Field({ nullable: true })
     GraphID: string | null;
 
+    @Field({ nullable: true })
+    DiscoverState: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -39921,6 +41380,9 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     GraphID?: string | null;
+
+    @Field({ nullable: true })
+    DiscoverState?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43275,6 +44737,10 @@ export class MJConversation_ {
     @MaxLength(36)
     TypeID?: string;
         
+    @Field({nullable: true, description: "Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations."}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
@@ -43322,6 +44788,26 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     Type?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -43420,6 +44906,9 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     TypeID?: string;
 
+    @Field({ nullable: true })
+    ParentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -43516,6 +45005,9 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -60828,6 +62320,10 @@ export class MJFieldSuggestion_ {
     TypeID?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(255)
     AIPromptRun?: string;
         
@@ -60946,6 +62442,9 @@ export class CreateMJFieldSuggestionInput {
     @Field({ nullable: true })
     TypeID?: string;
 
+    @Field({ nullable: true })
+    ParentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -61060,6 +62559,9 @@ export class UpdateMJFieldSuggestionInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -63398,6 +64900,10 @@ export class MJGraphConcept_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph."}) 
+    @MaxLength(20)
+    Origin?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Graph?: string;
@@ -63454,6 +64960,9 @@ export class CreateMJGraphConceptInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Origin?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -63493,6 +65002,9 @@ export class UpdateMJGraphConceptInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Origin?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -64469,6 +65981,22 @@ export class MJGraphType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "Authority tier given to content sources that feed graphs of this type and name no tier of their own. NULL leaves such sources unranked, below every configured tier."}) 
+    @MaxLength(36)
+    DefaultAuthorityTierID?: string;
+        
+    @Field({nullable: true, description: "Concept taxonomy mode used when a content source feeding a graph of this type names none: Constrained links only to existing concepts, Propose Only creates new concepts and edges as Proposed for steward review, Auto Grow creates them as Approved."}) 
+    @MaxLength(30)
+    DefaultConceptTaxonomyMode?: string;
+        
+    @Field({nullable: true, description: "Grounding depth used when a content source feeding a graph of this type names none: None extracts document concepts only, Schema and Queries also links concepts to entities, alternate base views and queries, Full Canon additionally links actions, skills and workflows."}) 
+    @MaxLength(30)
+    DefaultGroundingMode?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    DefaultAuthorityTier?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -64500,6 +66028,15 @@ export class CreateMJGraphTypeInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    DefaultAuthorityTierID: string | null;
+
+    @Field({ nullable: true })
+    DefaultConceptTaxonomyMode?: string;
+
+    @Field({ nullable: true })
+    DefaultGroundingMode?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -64530,6 +66067,15 @@ export class UpdateMJGraphTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DefaultAuthorityTierID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultConceptTaxonomyMode?: string;
+
+    @Field({ nullable: true })
+    DefaultGroundingMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -69239,6 +70785,28 @@ export class MJList_ {
     @Field(() => Boolean, {nullable: true, description: "When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView."}) 
     UseSnapshot?: boolean;
         
+    @Field({nullable: true, description: "Optional ID of the saved query this list is refreshed from. A list has at most one source: this or SourceViewID."}) 
+    @MaxLength(36)
+    SourceQueryID?: string;
+        
+    @Field({nullable: true, description: "JSON object of the parameter values the source query runs with, keyed by parameter name. NULL when the query takes no parameters."}) 
+    SourceQueryParameters?: string;
+        
+    @Field({nullable: true, description: "Name of the source query's result column that holds the primary key of the list's entity. Required when SourceQueryID is set."}) 
+    @MaxLength(255)
+    SourceQueryKeyField?: string;
+        
+    @Field({nullable: true, description: "Definition fingerprint of the source query or view at the time the list was linked, or when the owner last approved a change to the source. A refresh compares it with the source's current DefinitionFingerprint and stops when they differ. NULL until the next successful refresh fills it."}) 
+    @MaxLength(100)
+    SourceFingerprint?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, the list refreshes from its source on a schedule through the User Routine in RefreshRoutineID. When 0 (default), it refreshes only when someone runs a refresh."}) 
+    AutoRefresh?: boolean;
+        
+    @Field({nullable: true, description: "The User Routine that refreshes this list on a schedule. Created when AutoRefresh is first turned on, and disabled (not deleted) when it is turned off, so its run history stays."}) 
+    @MaxLength(36)
+    RefreshRoutineID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Entity?: string;
@@ -69262,6 +70830,14 @@ export class MJList_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     LastRefreshedByUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SourceQuery?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    RefreshRoutine?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -69315,6 +70891,24 @@ export class CreateMJListInput {
     @Field(() => Boolean, { nullable: true })
     UseSnapshot?: boolean;
 
+    @Field({ nullable: true })
+    SourceQueryID: string | null;
+
+    @Field({ nullable: true })
+    SourceQueryParameters: string | null;
+
+    @Field({ nullable: true })
+    SourceQueryKeyField: string | null;
+
+    @Field({ nullable: true })
+    SourceFingerprint: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoRefresh?: boolean;
+
+    @Field({ nullable: true })
+    RefreshRoutineID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -69366,6 +70960,24 @@ export class UpdateMJListInput {
 
     @Field(() => Boolean, { nullable: true })
     UseSnapshot?: boolean;
+
+    @Field({ nullable: true })
+    SourceQueryID?: string | null;
+
+    @Field({ nullable: true })
+    SourceQueryParameters?: string | null;
+
+    @Field({ nullable: true })
+    SourceQueryKeyField?: string | null;
+
+    @Field({ nullable: true })
+    SourceFingerprint?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoRefresh?: boolean;
+
+    @Field({ nullable: true })
+    RefreshRoutineID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -79869,7 +81481,7 @@ export class MJProjectResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Public Links
 //****************************************************************************
-@ObjectType({ description: "Shareable links for external access to artifacts and other resources. Supports password protection and expiration." })
+@ObjectType({ description: "DEPRECATED: dormant v2 schema table never wired to server or UI runtime. Use MJ: Magic Link Invites (Kind='resource-share', IdentityMode='anonymous') paired with MJ: Artifact Guest Share Links for Frozen external guest sharing, or MJ: Artifact Permissions / MJ: Collection Permissions / MJ: Access Control Rules for authenticated sharing." })
 export class MJPublicLink_ {
     @Field() 
     @MaxLength(36)
@@ -80211,6 +81823,10 @@ export class MJQuery_ {
     @Field({nullable: true, description: "Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions."}) 
     ExtractionMessage?: string;
         
+    @Field({nullable: true, description: "Hash of this query's current definition: its SQL, template flag, external source, dialect SQL and parameter contract. Stamped on every save. A list linked to this query compares it with List.SourceFingerprint before each refresh. NULL until the query is next saved or checked."}) 
+    @MaxLength(100)
+    DefinitionFingerprint?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Category?: string;
@@ -80340,6 +81956,9 @@ export class CreateMJQueryInput {
     @Field({ nullable: true })
     ExtractionMessage: string | null;
 
+    @Field({ nullable: true })
+    DefinitionFingerprint: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -80448,6 +82067,9 @@ export class UpdateMJQueryInput {
 
     @Field({ nullable: true })
     ExtractionMessage?: string | null;
+
+    @Field({ nullable: true })
+    DefinitionFingerprint?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -87808,6 +89430,9 @@ export class MJRowLevelSecurityFilter_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "Optional JSON object mapping SQL field names (FilterText) to database-platform overrides (for example {\"FilterText\":{\"postgresql\":\"...\"}}) resolved by RowLevelSecurityFilterInfo.GetPlatformFilterText."}) 
+    PlatformVariants?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -87830,6 +89455,9 @@ export class CreateMJRowLevelSecurityFilterInput {
     @Field({ nullable: true })
     FilterText: string | null;
 
+    @Field({ nullable: true })
+    PlatformVariants: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -87851,6 +89479,9 @@ export class UpdateMJRowLevelSecurityFilterInput {
 
     @Field({ nullable: true })
     FilterText?: string | null;
+
+    @Field({ nullable: true })
+    PlatformVariants?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -98331,6 +99962,16 @@ export class MJTask_ {
     @MaxLength(36)
     CompensatesTaskID?: string;
         
+    @Field({nullable: true, description: "For an External workflow step: the key an outside caller signals it by when it does not hold the task ID, resolved from the step's configuration when the step is reached. Not unique: one signal completes every reached step waiting on the same key, which is how a single event (a sprint closing, a payment settling) releases many workflows at once. NULL for every other step."}) 
+    @MaxLength(400)
+    CorrelationKey?: string;
+        
+    @Field(() => Int, {nullable: true, description: "For a workflow step: how many of its runs ended in a scheduled retry. 0 for a step that has not been retried. The dispatcher compares it with the step's retry policy to decide whether a failure is retried or final; a person retrying the step resets it."}) 
+    AttemptCount?: number;
+        
+    @Field({nullable: true, description: "For a workflow step waiting to be retried: the earliest moment it may be claimed again, on the database clock. NULL when no retry is scheduled. Claiming skips the step until this moment has passed, so a retry survives a restart and runs on whichever instance is free."}) 
+    NextAttemptAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -98482,6 +100123,15 @@ export class CreateMJTaskInput {
     @Field({ nullable: true })
     CompensatesTaskID: string | null;
 
+    @Field({ nullable: true })
+    CorrelationKey: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AttemptCount?: number;
+
+    @Field({ nullable: true })
+    NextAttemptAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -98572,6 +100222,15 @@ export class UpdateMJTaskInput {
 
     @Field({ nullable: true })
     CompensatesTaskID?: string | null;
+
+    @Field({ nullable: true })
+    CorrelationKey?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AttemptCount?: number;
+
+    @Field({ nullable: true })
+    NextAttemptAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -104663,6 +106322,10 @@ export class MJUserRoutine_ {
     @Field({nullable: true, description: "Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions."}) 
     LastCheckedAt?: Date;
         
+    @Field({nullable: true, description: "Optional AI Configuration (model tier such as Fast, Standard, or High Power) used when executing this routine's Agent target. Seeded from the originating rhythm template's DefaultAgentConfigurationID on creation and changeable by the user or agent."}) 
+    @MaxLength(36)
+    AgentConfigurationID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
@@ -104678,6 +106341,10 @@ export class MJUserRoutine_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    AgentConfiguration?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -104773,6 +106440,9 @@ export class CreateMJUserRoutineInput {
     @Field({ nullable: true })
     LastCheckedAt: Date | null;
 
+    @Field({ nullable: true })
+    AgentConfigurationID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -104866,6 +106536,9 @@ export class UpdateMJUserRoutineInput {
 
     @Field({ nullable: true })
     LastCheckedAt?: Date | null;
+
+    @Field({ nullable: true })
+    AgentConfigurationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -105779,6 +107452,10 @@ export class MJUserView_ {
     @MaxLength(100)
     ApprovedFingerprint?: string;
         
+    @Field({nullable: true, description: "Hash of this view's current definition: its entity, filters and alternate base view. Stamped on every save. A list linked to this view compares it with List.SourceFingerprint before each refresh. NULL until the view is next saved or checked."}) 
+    @MaxLength(100)
+    DefinitionFingerprint?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     UserName?: string;
@@ -105897,6 +107574,9 @@ export class CreateMJUserViewInput {
     @Field({ nullable: true })
     ApprovedFingerprint: string | null;
 
+    @Field({ nullable: true })
+    DefinitionFingerprint: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -105990,6 +107670,9 @@ export class UpdateMJUserViewInput {
 
     @Field({ nullable: true })
     ApprovedFingerprint?: string | null;
+
+    @Field({ nullable: true })
+    DefinitionFingerprint?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

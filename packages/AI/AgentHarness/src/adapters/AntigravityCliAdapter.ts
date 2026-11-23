@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseCliHarnessAdapter, HarnessCliRawEvent } from './BaseCliHarnessAdapter.js';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
-import { NormalizeAntigravityEnvironment } from '../HarnessCredentialResolver.js';
+import { NormalizeAntigravityEnvironment, StripHarnessApiKeyEnvironment } from '../HarnessCredentialResolver.js';
 import { HarnessCapabilities, HarnessPermissionPolicy, HarnessTurnEvent } from '../types.js';
 import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
@@ -105,12 +105,17 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
 
     /**
      * Injects normalized `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `ANTIGRAVITY_API_KEY` environment
-     * conventions before delegating to the sandbox executor.
+     * conventions in `api-key` mode, or strips all API keys in `cli-login` mode so `agy` authenticates
+     * strictly via the user's logged-in subscription plan.
      */
     protected override startTurnProcess(input: string, isFirstTurn: boolean): HarnessProcess {
         const config = this.config!;
         const normalizedEnv: Record<string, string> = { ...config.Environment };
-        NormalizeAntigravityEnvironment(normalizedEnv);
+        if (config.AuthMode === 'cli-login') {
+            StripHarnessApiKeyEnvironment(normalizedEnv);
+        } else {
+            NormalizeAntigravityEnvironment(normalizedEnv);
+        }
 
         return config.Executor.Run({
             Command: this.ExecutablePath,
@@ -134,8 +139,17 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
 
         const args: string[] = ['-p', effectivePrompt, '--output-format', 'stream-json'];
 
+        const seenDirs = new Set<string>();
         if (this.config?.WorkspacePath && !this.config.WorkspacePath.startsWith('cloud://')) {
+            seenDirs.add(this.config.WorkspacePath);
             args.push('--add-dir', this.config.WorkspacePath);
+        }
+        for (const extraDir of this.config?.AdditionalDirectories ?? []) {
+            const trimmed = extraDir.trim();
+            if (trimmed && !trimmed.startsWith('cloud://') && !seenDirs.has(trimmed)) {
+                seenDirs.add(trimmed);
+                args.push('--add-dir', trimmed);
+            }
         }
 
         if (this.sessionId && (!isFirstTurn || this.didResume)) {
@@ -195,7 +209,10 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
                 const stepType = this.readString(stepUpdate, 'step_type');
                 const state = this.readString(stepUpdate, 'state');
                 const stepIndex = this.readNumber(stepUpdate, 'step_index') ?? 0;
-                const textDelta = this.readString(stepUpdate, 'text_delta');
+                const textDelta =
+                    this.readString(stepUpdate, 'text_delta') ??
+                    this.readString(stepUpdate, 'text') ??
+                    this.readString(stepUpdate, 'content');
                 if (stepType === 'agent_response' && textDelta) {
                     return { Type: 'assistant-text', Text: textDelta };
                 }
@@ -353,11 +370,22 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
     }
 
     protected override async *readEvents(proc: HarnessProcess): AsyncIterable<HarnessTurnEvent> {
+        let accumulatedAssistantText = '';
         for await (const event of super.readEvents(proc)) {
+            if (event.Type === 'assistant-text' && event.Text) {
+                accumulatedAssistantText += event.Text;
+            } else if (event.Type === 'turn-complete') {
+                if (!event.RawText.trim()) {
+                    event.RawText = accumulatedAssistantText.trim() || 'Turn completed successfully.';
+                }
+            }
             yield event;
             if (this.pendingTerminal) {
                 const terminal = this.pendingTerminal;
                 this.pendingTerminal = null;
+                if (terminal.Type === 'turn-complete' && !terminal.RawText.trim()) {
+                    terminal.RawText = accumulatedAssistantText.trim() || 'Turn completed successfully.';
+                }
                 yield terminal;
             }
         }
@@ -395,10 +423,11 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
         raw: HarnessCliRawEvent,
         resultObj?: HarnessCliRawEvent,
     ): HarnessTurnEvent {
+        const rawResponse = resultObj
+            ? this.readString(resultObj, 'response') ?? this.readString(resultObj, 'text')
+            : undefined;
         const text =
-            (resultObj
-                ? this.readString(resultObj, 'response') ?? this.readString(resultObj, 'text')
-                : undefined) ??
+            (rawResponse && rawResponse.trim() ? rawResponse : undefined) ??
             this.readString(raw, 'result') ??
             this.readString(raw, 'response') ??
             this.readString(raw, 'text') ??

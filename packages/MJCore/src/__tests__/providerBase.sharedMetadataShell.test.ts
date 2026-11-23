@@ -188,3 +188,45 @@ describe('ProviderBase shared metadata shell (reuse-global fast path)', () => {
         expect(customProvider.Entities[0]).not.toBe(globalProvider.Entities[0]);
     });
 });
+
+describe('ProviderBase shared metadata shell: LoadsQueryMetadata follows the adopted metadata', () => {
+    let previousGlobalProvider: IMetadataProvider;
+
+    afterEach(() => {
+        Metadata.Provider = previousGlobalProvider;
+    });
+
+    async function registerGlobal(loadQueryMetadata: boolean): Promise<void> {
+        previousGlobalProvider = Metadata.Provider;
+        const config = freshConfig();
+        config.LoadQueryMetadata = loadQueryMetadata;
+        const globalProvider = new TestMetadataProvider();
+        await globalProvider.Config(config);
+        Metadata.Provider = globalProvider;
+    }
+
+    test('a per-request config without the flag reports the global provider loading query metadata', async () => {
+        await registerGlobal(true);
+        const perRequestProvider = new TestMetadataProvider();
+        await perRequestProvider.Config(reuseGlobalConfig());
+        expect(perRequestProvider.LoadsQueryMetadata).toBe(true);
+    });
+
+    test('a per-request config with the flag reports false when the adopted metadata was loaded without it', async () => {
+        await registerGlobal(false);
+        const config = reuseGlobalConfig();
+        config.LoadQueryMetadata = true;
+        const perRequestProvider = new TestMetadataProvider();
+        await perRequestProvider.Config(config);
+        expect(perRequestProvider.LoadsQueryMetadata).toBe(false);
+    });
+
+    test('a later Config that loads its own metadata reports its own config again', async () => {
+        await registerGlobal(true);
+        const provider = new TestMetadataProvider();
+        await provider.Config(reuseGlobalConfig());
+        expect(provider.LoadsQueryMetadata).toBe(true);
+        await provider.Config(freshConfig());
+        expect(provider.LoadsQueryMetadata).toBe(false);
+    });
+});

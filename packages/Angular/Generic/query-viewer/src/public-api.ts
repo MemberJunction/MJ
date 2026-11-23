@@ -18,6 +18,7 @@ export * from './lib/query-refresh/query-refresh-dialog.component';
 
 // Types & Utilities
 export * from './lib/query-data-grid/models/query-grid-types';
+export * from './lib/query-data-grid/open-in-excel';
 export * from './lib/query-pivot/query-pivot.types';
 export * from './lib/query-pivot/query-pivot.compute';
 export * from './lib/query-refresh/query-refresh-model';

@@ -207,6 +207,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&Name=DelegateRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:23:13.107Z",
+            "checksum": "df35614b619dce98f4e829fda068f664a38d4c3681a5bd083c307b7890a5cab8"
           }
         }
       ]

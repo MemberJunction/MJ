@@ -102,8 +102,12 @@ export class GraphQLActionClient {
 
         return params.map(p => {
             let value = p.Value;
-            if (value !== null && value !== undefined && typeof value === 'object') {
-                value = JSON.stringify(value);
+            if (value !== null && value !== undefined) {
+                if (typeof value === 'object') {
+                    value = JSON.stringify(value);
+                } else if (typeof value !== 'string') {
+                    value = String(value);
+                }
             }
             return {
                 ...p,

@@ -26,7 +26,9 @@
         "includeScratchpadDocs": true,
         "includeMessageExpansionDocs": false,
         "enableTaskGraphs": true,
-        "enableHandoff": true
+        "enableHandoff": true,
+        "decisionsEnabled": true,
+        "decisionDiscovery": true
       },
       "RerankerConfiguration": {
         "enabled": true,
@@ -38,12 +40,12 @@
       "TypeConfiguration": {
         "realtime": {
           "video": {
-            "enabled": true,
+            "enabled": false,
             "avatarId": "Ben"
           },
           "directActions": {
             "enabled": true,
-            "timeoutMs": 8000,
+            "timeoutMs": 30000,
             "actionNames": [
               "Get Record",
               "Scoped Search",
@@ -54,7 +56,11 @@
               "Web Page Content",
               "URL Metadata Extractor",
               "Web Search",
-              "Preview Document"
+              "Preview Document",
+              "Create Governed Artifact",
+              "Inspect Governed Artifact",
+              "Mutate Governed Artifact",
+              "List Workspace Artifacts"
             ]
           }
         }
@@ -141,6 +147,16 @@
         }
       ],
       "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Manage My Agent Instance",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "22176029-CA01-4FC2-80DC-2450AE7752A1"
+          }
+        },
         {
           "fields": {
             "AgentID": "@parent:ID",
@@ -531,6 +547,62 @@
           "sync": {
             "lastModified": "2026-11-03T23:46:20.773Z",
             "checksum": "74ab806d6f221bda9360443ca3a310f4fd2c30ebcfe84a8f9f5b86967b98f0d4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D2AC0C24-0EEA-4355-AD3F-972870682DBF"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:47.365Z",
+            "checksum": "ec935fc6573efac0226117962fd8dd9ddf4f44733cf1dd077a3f07a1500b9c34"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Inspect Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B91508F2-4456-4178-B1D8-C33A302FF167"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:47.379Z",
+            "checksum": "aa7cb156da674a9ff36278666b5faf9c8d175c5c81d86f1609e993d6cc3d0bff"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Mutate Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "92CFA9CA-E688-48DD-BDCE-5F6C17FE31B0"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:47.393Z",
+            "checksum": "655b7653331c0a44aabc9282bf8b5fef41b9b209201b886702a691e885ef3511"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List Workspace Artifacts",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "38FF5C60-CE87-4F63-88B9-91255BE3490F"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:47.409Z",
+            "checksum": "cf5f1824bdcb573d9d4c437cf0a0345c0f94a23ced571c3791cba3780dad8c11"
           }
         }
       ],
@@ -928,7 +1000,7 @@
                   "AgentID": "@parent:ID",
                   "Name": "Draft",
                   "DisplayName": "Draft",
-                  "Description": "Fast / Lower Quality — GPT-OSS-120B @ Cerebras then Gemini 3.1 Flash-Lite. Best for quick iterations like color tweaks or single-field edits.",
+                  "Description": "Fast / Lower Quality — GPT-OSS-120B @ Cerebras then Gemini 3.5 Flash-Lite. Best for quick iterations like color tweaks or single-field edits.",
                   "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
                   "IsDefault": false,
                   "Priority": 1,
@@ -936,10 +1008,6 @@
                 },
                 "primaryKey": {
                   "ID": "B6987F12-DAE4-428F-B636-808E230B356E"
-                },
-                "sync": {
-                  "lastModified": "2026-05-29T19:49:21.666Z",
-                  "checksum": "642f2f13ef354c8f95ebcba97349f4243c991c6b874217226475a9ab2636bb93"
                 }
               },
               {
@@ -947,7 +1015,7 @@
                   "AgentID": "@parent:ID",
                   "Name": "Standard",
                   "DisplayName": "Standard",
-                  "Description": "Balanced Quality / Speed — Gemini 3.5 Flash. Default for most form authoring requests.",
+                  "Description": "Balanced Quality / Speed — Gemini 4 Hydrogen (Low effort). Default for most form authoring requests.",
                   "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard",
                   "IsDefault": true,
                   "Priority": 2,
@@ -955,10 +1023,6 @@
                 },
                 "primaryKey": {
                   "ID": "64835630-81E2-4938-BEE9-32553FF660E9"
-                },
-                "sync": {
-                  "lastModified": "2026-05-29T19:49:21.678Z",
-                  "checksum": "c915cf9f021826ebac162304ff6ecb913d6e38e5d90f58f4c88e5e448a525fcc"
                 }
               },
               {
@@ -966,7 +1030,7 @@
                   "AgentID": "@parent:ID",
                   "Name": "High",
                   "DisplayName": "High",
-                  "Description": "Highest Quality / Slower — falls through the prompt's full model lineup (Sonnet 4.6, Gemini 3 Flash, etc.). Use for complex multi-section redesigns or when Draft / Standard miss the mark.",
+                  "Description": "Highest Quality / Slower — falls through the prompt's full model lineup (Sonnet 5.5, Gemini 4 Hydrogen, etc.). Use for complex multi-section redesigns or when Draft / Standard miss the mark.",
                   "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
                   "IsDefault": false,
                   "Priority": 3,
@@ -974,10 +1038,6 @@
                 },
                 "primaryKey": {
                   "ID": "E310AB9B-45AA-46EF-BDF4-D9B59E419A29"
-                },
-                "sync": {
-                  "lastModified": "2026-05-29T19:49:21.699Z",
-                  "checksum": "6d6b9e736f4b14a2fa5493e682a7d042d05542b0cb4e99c4ee803f2ccb758d2a"
                 }
               }
             ]
@@ -1018,8 +1078,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-11-01T22:54:14.920Z",
-      "checksum": "7b03f2740a8fca65353f02488a5059f6b07661b9e17214646671d85bdeef6384"
+      "lastModified": "2026-11-18T00:24:47.343Z",
+      "checksum": "ccbb2da4321ec48e4e416a14df967b903bb4026562ce842e5ee9196a2c043c5e"
     }
   }
 ]

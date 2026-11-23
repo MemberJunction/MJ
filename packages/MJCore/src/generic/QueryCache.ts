@@ -1,4 +1,5 @@
 import { QueryCacheConfig, QueryCacheEntry } from './QueryCacheConfig';
+import { LimitsConfigResolver } from './limitsConfig';
 import { LogStatus } from './logging';
 
 /**
@@ -24,8 +25,14 @@ export class QueryCache {
     private cache = new Map<string, QueryCacheEntry>();
     private countCache = new Map<string, CountCacheEntry>();
     private accessOrder: string[] = [];
-    private readonly DEFAULT_MAX_SIZE = 1000;
-    private readonly DEFAULT_TTL_MINUTES = 60;
+
+    private get defaultMaxSize(): number {
+        return LimitsConfigResolver.Resolve().Limits.Tuning.QueryCacheDefaultMaxSize;
+    }
+
+    private get defaultTtlMinutes(): number {
+        return LimitsConfigResolver.Resolve().Limits.Tuning.QueryCacheDefaultTtlMinutes;
+    }
 
     /**
      * Performance statistics for cache monitoring
@@ -143,7 +150,7 @@ export class QueryCache {
         if (!config.enabled) return;
 
         const key = this.getCacheKey(queryId, params);
-        const maxSize = config.maxCacheSize || this.DEFAULT_MAX_SIZE;
+        const maxSize = config.maxCacheSize || this.defaultMaxSize;
         
         // Evict LRU entries if at capacity
         if (this.cache.size >= maxSize && !this.cache.has(key)) {
@@ -160,7 +167,7 @@ export class QueryCache {
             parameters: params as Record<string, unknown>,
             results,
             timestamp: Date.now(),
-            ttlMinutes: config.ttlMinutes || this.DEFAULT_TTL_MINUTES,
+            ttlMinutes: config.ttlMinutes || this.defaultTtlMinutes,
             hitCount: 0
         };
 
@@ -227,7 +234,7 @@ export class QueryCache {
         if (!config.enabled) return;
 
         const key = this.getCacheKey(queryId, params, startRow, maxRows);
-        const maxSize = config.maxCacheSize || this.DEFAULT_MAX_SIZE;
+        const maxSize = config.maxCacheSize || this.defaultMaxSize;
 
         if (this.cache.size >= maxSize && !this.cache.has(key)) {
             const lruKey = this.accessOrder.shift();
@@ -242,7 +249,7 @@ export class QueryCache {
             parameters: params,
             results,
             timestamp: Date.now(),
-            ttlMinutes: config.ttlMinutes || this.DEFAULT_TTL_MINUTES,
+            ttlMinutes: config.ttlMinutes || this.defaultTtlMinutes,
             hitCount: 0,
         });
         this.updateAccessOrder(key);
@@ -282,7 +289,7 @@ export class QueryCache {
         this.countCache.set(key, {
             count,
             timestamp: Date.now(),
-            ttlMinutes: config.ttlMinutes || this.DEFAULT_TTL_MINUTES,
+            ttlMinutes: config.ttlMinutes || this.defaultTtlMinutes,
         });
     }
 

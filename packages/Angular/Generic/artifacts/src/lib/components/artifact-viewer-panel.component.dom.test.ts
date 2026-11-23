@@ -1,13 +1,19 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import type { IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
-import { ConversationEngine, type ConversationScope, type MJArtifactEntity, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { FormsModule } from '@angular/forms';
+import type { CompositeKey, IEntityDataProvider, IMetadataProvider, IRunViewProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
+import { ConversationEngine, type ConversationScope, MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ArtifactFileService } from '../services/artifact-file.service';
 import { ArtifactIconService } from '../services/artifact-icon.service';
-import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent, overlayQuery, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective } from '@memberjunction/ng-ui-components';
 import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component';
+import type { ArtifactExportOption, ArtifactNavigationAnchor, ArtifactSelectionAnchor, ArtifactViewerTab, ArtifactViewerViewMode, NavigationRequest, PreVerifiedFrozenSnapshotEntry } from './base-artifact-viewer.component';
+import type { InteractiveFormApplyResult } from '../services/interactive-form-apply.service';
+import { DocumentCollaborationService, type LivingReportScheduleSummary } from '../services/document-collaboration.service';
 import { ArtifactVersionCompareComponent } from './version-diff/artifact-version-compare.component';
+import { OpenHtmlInSandboxedWindow, SanitizeHtmlForSandboxedFrame } from '../utils/html-sandbox.util';
 
 /**
  * DOM coverage for <mj-artifact-viewer-panel> — the artifact viewer with header, version selector and
@@ -19,29 +25,46 @@ import { ArtifactVersionCompareComponent } from './version-diff/artifact-version
 @Component({ standalone: true, selector: 'mj-artifact-type-plugin-viewer', template: '<div data-testid="plugin-viewer-stub" [attr.data-readonly]="readonly"></div>' })
 class PluginViewerStub {
   @Input() Provider: IMetadataProvider | null = null;
-  @Input() artifactTypeName = ''; @Input() artifactVersion: unknown; @Input() contentType = ''; @Input() readonly = false;
+  @Input() artifactTypeName = '';
+  @Input() DriverClass: string | null = null;
+  @Input() artifactVersion: MJArtifactVersionEntity | null = null;
+  @Input() contentType = '';
+  @Input() readonly = false;
   @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
-  @Output() applyFormRequested = new EventEmitter<unknown>(); @Output() navigationRequest = new EventEmitter<unknown>();
-  @Output() openEntityRecord = new EventEmitter<unknown>(); @Output() pluginLoaded = new EventEmitter<unknown>(); @Output() tabsChanged = new EventEmitter<unknown>();
+  @Input() PreVerifiedFrozenSnapshots: Record<string, PreVerifiedFrozenSnapshotEntry> | null = null;
+  @Input('ViewMode') SyncViewMode: ArtifactViewerViewMode | null = null;
+  @Input() NavigationAnchor: ArtifactNavigationAnchor | null = null;
+  @Output() applyFormRequested = new EventEmitter<InteractiveFormApplyResult>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+  @Output() pluginLoaded = new EventEmitter<boolean>();
+  @Output() tabsChanged = new EventEmitter<ArtifactViewerTab[]>();
   @Output() ContentCommitted = new EventEmitter<string>();
+  @Output() SelectionChanged = new EventEmitter<ArtifactSelectionAnchor>();
 }
 @Component({ standalone: true, selector: 'mj-code-editor', template: '' })
 class CodeEditorStub { @Input() language = ''; @Input() lineWrapping = false; @Input() readonly = false; @Input() value = ''; }
 @Component({ standalone: true, selector: 'mj-markdown', template: '' })
 class MarkdownStub { @Input() data = ''; @Input() enableCollapsibleHeadings = false; @Input() enableHtml = false; @Input() enableLineNumbers = false; @Input() enableSmartypants = false; }
 
-const CHILDREN = [PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent];
-const ARTIFACT = { Name: 'Q3 Report', Description: 'Quarterly numbers' } as unknown as MJArtifactEntity;
-const VERSION = { ID: 'v1', VersionNumber: 2 } as unknown as MJArtifactVersionEntity;
-type OnInitProto = { ngOnInit: () => Promise<void> };
+function stubEntity<T extends object>(fields: Partial<T>): T {
+  return Object.assign(Object.create(null) as T, fields);
+}
 
-interface State { isLoading?: boolean; error?: string | null; artifact?: MJArtifactEntity | null; allVersions?: MJArtifactVersionEntity[]; selectedVersionNumber?: number; artifactVersion?: MJArtifactVersionEntity | null; activeTab?: string; driverClass?: string | null; displayMarkdown?: string | null }
-function render(state: State = {}, inputs: Record<string, unknown> = {}) {
-  vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+const CHILDREN = [FormsModule, PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent, MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective];
+const ARTIFACT = stubEntity<MJArtifactEntity>({ Name: 'Q3 Report', Description: 'Quarterly numbers' });
+const VERSION = stubEntity<MJArtifactVersionEntity>({ ID: 'v1', VersionNumber: 2 });
+
+interface State { isLoading?: boolean; error?: string | null; artifact?: MJArtifactEntity | null; allVersions?: MJArtifactVersionEntity[]; selectedVersionNumber?: number; artifactVersion?: MJArtifactVersionEntity | null; activeTab?: string; driverClass?: string | null; displayMarkdown?: string | null; displayHtml?: string | null; activeLivingReportSchedule?: LivingReportScheduleSummary | null; showLivingReportModal?: boolean }
+function render(state: State = {}, inputs: Record<string, string | number | boolean | object | null | undefined> = {}) {
+  vi.spyOn(ArtifactViewerPanelComponent.prototype, 'ngOnInit').mockResolvedValue(undefined);
   return renderComponentFixture(ArtifactViewerPanelComponent, {
     imports: CHILDREN,
     declarations: [ArtifactViewerPanelComponent],
-    providers: [{ provide: MJNotificationService, useValue: {} }, { provide: ArtifactFileService, useValue: fileServiceStub }],
+    providers: [
+      { provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } },
+      { provide: ArtifactFileService, useValue: fileServiceStub },
+    ],
     inputs: { artifactId: 'a1', ...inputs },
     setup: (c) => {
       c.isLoading = state.isLoading ?? false;
@@ -51,13 +74,19 @@ function render(state: State = {}, inputs: Record<string, unknown> = {}) {
       c.selectedVersionNumber = state.selectedVersionNumber ?? 2;
       if (state.artifactVersion !== undefined) c.artifactVersion = state.artifactVersion;
       if (state.activeTab) c.activeTab = state.activeTab;
-      if (state.driverClass !== undefined) (c as unknown as { artifactTypeDriverClass: string | null }).artifactTypeDriverClass = state.driverClass;
+      if (state.driverClass !== undefined) {
+        (Object.assign(c) as { artifactTypeDriverClass: string | null }).artifactTypeDriverClass = state.driverClass;
+      }
       if (state.displayMarkdown !== undefined) c.displayMarkdown = state.displayMarkdown;
+      if (state.displayHtml !== undefined) c.DisplayHtml = state.displayHtml;
+      if (state.activeLivingReportSchedule !== undefined) c.ActiveLivingReportSchedule = state.activeLivingReportSchedule;
+      if (state.showLivingReportModal !== undefined) c.ShowLivingReportModal = state.showLivingReportModal;
     },
   });
 }
 
 const fileServiceStub = {
+  GetDownloadUrl: vi.fn(async () => 'https://storage.example/exam.csv'),
   getDownloadUrl: vi.fn(async () => 'https://storage.example/exam.csv'),
   dataUrlToArrayBuffer: (dataUrl: string) => Uint8Array.from(atob(dataUrl.slice(dataUrl.indexOf(',') + 1)), (c) => c.charCodeAt(0)).buffer,
   dataUrlToObjectUrl: () => 'blob:stub',
@@ -66,11 +95,11 @@ const fileServiceStub = {
 afterEach(() => vi.restoreAllMocks());
 
 describe('ArtifactViewerPanelComponent (DOM) — no viewer plugin fallback', () => {
-  const csvVersion = {
+  const csvVersion = stubEntity<MJArtifactVersionEntity>({
     ID: 'v-csv', VersionNumber: 1, ContentMode: 'Text', MimeType: 'text/csv', FileName: 'exam.csv',
     Content: `data:text/csv;base64,${btoa('Number,Question\n1,What is a quorum?')}`,
-  } as unknown as MJArtifactVersionEntity;
-  const csvArtifact = { Name: 'exam.csv', Type: 'CSV' } as unknown as MJArtifactEntity;
+  });
+  const csvArtifact = stubEntity<MJArtifactEntity>({ Name: 'exam.csv', Type: 'CSV' });
 
   it('shows a file card with a Download action for a type with no plugin, instead of an empty pane', () => {
     const f = render({ artifact: csvArtifact, allVersions: [csvVersion], selectedVersionNumber: 1, artifactVersion: csvVersion, activeTab: 'display', driverClass: null });
@@ -165,24 +194,29 @@ function versionsProvider(
 ): { Provider: IMetadataProvider; Batches: RunViewParams[][]; Singles: RunViewParams[] } {
   const batches: RunViewParams[][] = [];
   const singles: RunViewParams[] = [];
-  const toResult = (results: unknown[]): RunViewResult =>
-    ({ Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length }) as unknown as RunViewResult;
+  const toResult = <T>(results: T[]): RunViewResult<T> =>
+    Object.assign(Object.create(null) as RunViewResult<T>, {
+      Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length,
+    });
   const refused = (): RunViewResult =>
-    ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: "Invalid ExtraFilter: entity 'MJ: Artifact Versions' is row-level-security filtered for you" }) as unknown as RunViewResult;
-  const readsVersionsBaseView = (p: RunViewParams) => /vwArtifactVersions/i.test(String(p.ExtraFilter ?? ''));
-  const isIdOnlyRead = (p: RunViewParams) => p.Fields?.length === 1 && p.Fields[0] === 'ID';
-  const fake = {
+    Object.assign(Object.create(null) as RunViewResult, {
+      Success: false, Results: [], RowCount: 0, TotalRowCount: 0,
+      ErrorMessage: "Invalid ExtraFilter: entity 'MJ: Artifact Versions' is row-level-security filtered for you",
+    });
+  const readsProtectedBaseView = (p: RunViewParams) =>
+    /vwArtifactVersions|vwConversationDetails/i.test(String(p.ExtraFilter ?? ''));
+  const fakeProvider = Object.assign(Object.create(null) as IMetadataProvider, {
     CurrentUser: { ID: 'test-user-id' },
     Entities: [],
     Roles: [],
     EntityByName: () => undefined,
     RunView: async (p: RunViewParams) => {
       singles.push(p);
-      return options.ScreenBaseViewReads && readsVersionsBaseView(p) ? refused() : toResult([]);
+      return options.ScreenBaseViewReads && readsProtectedBaseView(p) ? refused() : toResult([]);
     },
     RunViews: async (list: RunViewParams[]) => {
       batches.push(list);
-      if (options.ScreenBaseViewReads && list.some(readsVersionsBaseView)) {
+      if (options.ScreenBaseViewReads && list.some(readsProtectedBaseView)) {
         return list.map(refused);
       }
       if (options.ThrowOnChildBatch && list.some((p) => p.EntityName === 'MJ: Collection Artifacts')) {
@@ -190,7 +224,10 @@ function versionsProvider(
       }
       return list.map((p) => {
         if (p.EntityName === 'MJ: Artifact Versions') {
-          return toResult(isIdOnlyRead(p) ? options.EveryVersion ?? rows : rows);
+          return toResult(options.EveryVersion ?? rows);
+        }
+        if (p.EntityName === 'MJ: Conversation Details') {
+          return toResult([{ ID: 'detail-1' }]);
         }
         return toResult(p.EntityName === 'MJ: Conversation Detail Artifacts' ? links : []);
       });
@@ -208,12 +245,18 @@ function versionsProvider(
       };
       return version;
     },
-  };
-  return { Provider: fake as unknown as IMetadataProvider, Batches: batches, Singles: singles };
+  });
+  return { Provider: fakeProvider, Batches: batches, Singles: singles };
 }
 
-async function renderLoaded(numbers: number[], inputs: Record<string, unknown>, targetVersionNumber?: number, links: LinkRow[] = [], options: ProviderOptions = {}) {
-  vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+async function renderLoaded(
+  numbers: number[],
+  inputs: Record<string, string | number | boolean | object | null | undefined>,
+  targetVersionNumber?: number,
+  links: LinkRow[] = [],
+  options: ProviderOptions = {},
+) {
+  vi.spyOn(ArtifactViewerPanelComponent.prototype, 'ngOnInit').mockResolvedValue(undefined);
   const { Provider, Batches, Singles } = versionsProvider(versionRows(numbers), links, options);
   const f = renderComponentFixture(ArtifactViewerPanelComponent, {
     imports: CHILDREN,
@@ -225,7 +268,7 @@ async function renderLoaded(numbers: number[], inputs: Record<string, unknown>, 
     ],
     inputs: { artifactId: 'a1', Provider, ...inputs },
   });
-  await (f.componentInstance as unknown as LoadSeam).loadArtifact(targetVersionNumber);
+  await (Object.assign(f.componentInstance) as LoadSeam).loadArtifact(targetVersionNumber);
   f.detectChanges();
   return { f, Batches, Singles };
 }
@@ -238,25 +281,40 @@ function dropdownLabels(f: ReturnType<typeof renderComponentFixture<ArtifactView
 }
 
 describe('ArtifactViewerPanelComponent — versions in a conversation scope', () => {
-  it('reads the version list with ArtifactVersionScopeFilter when a scope is set', async () => {
-    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' });
+  it('reads versions with ArtifactID and scopes via first-class MJ: Conversation Details RunView without base-view subqueries', async () => {
+    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, undefined, [], {
+      ScreenBaseViewReads: true,
+    });
     expect(Batches[0][0].EntityName).toBe('MJ: Artifact Versions');
-    expect(Batches[0][0].ExtraFilter).toBe(ConversationEngine.ArtifactVersionScopeFilter(SCOPE, 'a1'));
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(Batches[0][1].EntityName).toBe('MJ: Conversation Details');
+    expect(Batches[0][1].ExtraFilter).toBe(ConversationEngine.ScopeFilter(SCOPE));
+    expect(Batches[0][1].Fields).toEqual(['ID']);
   });
 
   it('reads every version of the artifact without a scope', async () => {
     const { Batches } = await renderLoaded([1, 2, 3], { viewContext: 'conversation' });
+    expect(Batches[0]).toHaveLength(1);
     expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
   });
 
-  it('reads the collection and link rows of every version of the artifact, not only those on the path', async () => {
-    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, undefined, [], { EveryVersion: versionRows([1, 2, 3, 4]) });
-    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions', 'MJ: Artifact Versions']);
-    expect(Batches[0][1].ExtraFilter).toBe("ArtifactID='a1'");
-    expect(Batches[0][1].Fields).toEqual(['ID']);
+  it('reads the collection and link rows of every version of the artifact, and filters out sibling-branch versions in memory', async () => {
+    const offBranchLink: LinkRow = {
+      ID: 'cda-off',
+      ConversationDetailID: 'other-branch-detail',
+      ArtifactVersionID: 'ver-3',
+      Direction: 'Output',
+    };
+    const { f, Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, undefined, [offBranchLink], {
+      EveryVersion: versionRows([1, 2, 3, 4]),
+    });
+    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions', 'MJ: Conversation Details']);
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(Batches[0][1].ExtraFilter).toBe(ConversationEngine.ScopeFilter(SCOPE));
     expect(Batches[1].map((p) => p.EntityName)).toEqual(['MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
     expect(Batches[1][0].ExtraFilter).toBe("ArtifactVersionID IN ('ver-4','ver-3','ver-2','ver-1')");
     expect(Batches[1][1].ExtraFilter).toBe("ArtifactVersionID IN ('ver-4','ver-3','ver-2','ver-1')");
+    expect(f.componentInstance.AllVersions.map((v) => v.ID)).toEqual(['ver-4', 'ver-2', 'ver-1']);
   });
 
   it('labels a version that follows a gap with the visible version before it', async () => {
@@ -292,7 +350,7 @@ describe('ArtifactViewerPanelComponent — versions in a conversation scope', ()
   it('clears the notice on the next load', async () => {
     const { f } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, 3);
     expect(f.componentInstance.ScopeNotice).not.toBeNull();
-    await (f.componentInstance as unknown as LoadSeam).loadArtifact(2);
+    await (Object.assign(f.componentInstance) as LoadSeam).loadArtifact(2);
     f.detectChanges();
     expect(f.componentInstance.ScopeNotice).toBeNull();
     expect(query(f, '.scope-notice')).toBeNull();
@@ -310,7 +368,8 @@ describe('ArtifactViewerPanelComponent — versions in a conversation scope', ()
     // An attachment's version is linked to its message with Direction='Input' only; the scoped read returns it.
     const inputLink: LinkRow = { ID: 'cda-1', ConversationDetailID: 'detail-1', ArtifactVersionID: 'ver-1', Direction: 'Input' };
     const { f, Batches } = await renderLoaded([1], { Scope: SCOPE, viewContext: 'conversation' }, 1, [inputLink]);
-    expect(Batches[0][0].ExtraFilter).toBe(ConversationEngine.ArtifactVersionScopeFilter(SCOPE, 'a1'));
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(Batches[0][1].EntityName).toBe('MJ: Conversation Details');
     expect(f.componentInstance.error).toBeNull();
     expect(f.componentInstance.ScopeNotice).toBeNull();
     expect(f.componentInstance.SelectedVersionNumber).toBe(1);
@@ -319,8 +378,14 @@ describe('ArtifactViewerPanelComponent — versions in a conversation scope', ()
     expect(queryAll(f, 'mj-empty-state').map((el) => el.getAttribute('title'))).not.toContain("Couldn't load artifact");
   });
 
-  it('reports that no version is on the current path when the scoped read is empty', async () => {
-    const { f } = await renderLoaded([], { Scope: SCOPE, viewContext: 'conversation' }, 3);
+  it('reports that no version is on the current path when all versions belong to sibling branches', async () => {
+    const offBranchLink: LinkRow = {
+      ID: 'cda-off',
+      ConversationDetailID: 'other-branch-detail',
+      ArtifactVersionID: 'ver-3',
+      Direction: 'Output',
+    };
+    const { f } = await renderLoaded([3], { Scope: SCOPE, viewContext: 'conversation' }, 3, [offBranchLink]);
     expect(f.componentInstance.error).toBe('No version of this artifact is on the current path.');
     expect(queryAll(f, 'mj-empty-state').map((el) => el.getAttribute('title'))).toContain("Couldn't load artifact");
   });
@@ -360,7 +425,7 @@ describe('ArtifactViewerPanelComponent — collection and link rows by version I
 
   it('reloads the collection and link rows by version ID', async () => {
     const { f, Singles } = await renderLoaded([1, 2, 3], { viewContext: 'collection' });
-    const reload = f.componentInstance as unknown as ReloadSeam;
+    const reload = Object.assign(f.componentInstance) as ReloadSeam;
     expect(childReads(Singles)).toEqual([]);
     await reload.loadCollectionAssociations();
     await reload.loadLinksData();
@@ -378,10 +443,16 @@ describe('ArtifactViewerPanelComponent — collection and link rows by version I
   });
 });
 
-describe('ArtifactViewerPanelComponent (DOM) — PDF export menu', () => {
-  type PluginViewerLike = { SupportsPDFExport: boolean; ExportPDF: (orientation: 'portrait' | 'landscape') => Promise<void> };
+describe('ArtifactViewerPanelComponent (DOM) — Export menu', () => {
+  afterEach(() => clearOverlayContainers());
+  type PluginViewerLike = { GetExportOptions: () => ArtifactExportOption[]; RunExport: (key: string) => Promise<void> };
+  const QUERY_OPTIONS: ArtifactExportOption[] = [
+    { Key: 'excel', Label: 'Excel (.xlsx)', Icon: 'fa-solid fa-file-excel', Group: 'Results' },
+    { Key: 'csv', Label: 'CSV (.csv)', Icon: 'fa-solid fa-file-csv', Group: 'Results' },
+    { Key: 'sql', Label: 'SQL (.sql)', Icon: 'fa-solid fa-database', Group: 'Query' },
+  ];
   function renderWithPlugin(plugin: PluginViewerLike, notification = { CreateSimpleNotification: vi.fn() }) {
-    vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+    vi.spyOn(ArtifactViewerPanelComponent.prototype, 'ngOnInit').mockResolvedValue(undefined);
     const f = renderComponentFixture(ArtifactViewerPanelComponent, {
       imports: CHILDREN,
       declarations: [ArtifactViewerPanelComponent],
@@ -397,37 +468,91 @@ describe('ArtifactViewerPanelComponent (DOM) — PDF export menu', () => {
     return { f, notification };
   }
 
-  it('shows no PDF button when the plugin does not support PDF export', () => {
-    const { f } = renderWithPlugin({ SupportsPDFExport: false, ExportPDF: vi.fn(async () => undefined) });
-    expect(query(f, '.export-pdf-btn')).toBeNull();
+  it('shows no Export button when the plugin offers no export options', () => {
+    const { f } = renderWithPlugin({ GetExportOptions: () => [], RunExport: vi.fn(async () => undefined) });
+    expect(query(f, '.export-btn')).toBeNull();
   });
 
-  it('shows the PDF button, with its menu closed, when the plugin supports PDF export', () => {
-    const { f } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: vi.fn(async () => undefined) });
-    expect(query(f, '.export-pdf-btn')).not.toBeNull();
-    expect(query(f, '.export-pdf-dropdown')).toBeNull();
+  it('shows the Export button, with its menu closed, when the plugin offers export options', () => {
+    const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: vi.fn(async () => undefined) });
+    expect(query(f, '.export-btn')).not.toBeNull();
+    expect(overlayQuery('mj-menu')).toBeNull();
   });
 
-  it('opens a Portrait / Landscape menu and exports in the chosen orientation', async () => {
-    const exportPDF = vi.fn(async () => undefined);
-    const { f } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: exportPDF });
-    (query(f, '.export-pdf-btn') as HTMLButtonElement).click();
+  it('lists the options under their group labels and runs the chosen one', async () => {
+    const runExport = vi.fn(async () => undefined);
+    const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: runExport });
+    (query(f, '.export-btn') as HTMLButtonElement).click();
     f.detectChanges();
-    const items = queryAll(f, '.export-pdf-dropdown button');
-    expect(items.map((item) => item.textContent?.trim())).toEqual(['PDF – Portrait', 'PDF – Landscape']);
-    (items[1] as HTMLButtonElement).click();
+    expect(overlayQueryAll('.export-group-label').map((label) => label.textContent?.trim())).toEqual(['Results', 'Query']);
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
+    expect(items.map((item) => item.querySelector('.export-option-label')?.textContent?.trim())).toEqual(['Excel (.xlsx)', 'CSV (.csv)', 'SQL (.sql)']);
+    items[1].click();
+    f.detectChanges();
     await f.whenStable();
-    expect(exportPDF).toHaveBeenCalledWith('landscape');
-    expect(f.componentInstance.ShowPDFMenu).toBe(false);
-    expect(f.componentInstance.IsExportingPDF).toBe(false);
+    expect(runExport).toHaveBeenCalledWith('csv');
+    expect(overlayQuery('mj-menu')).toBeNull();
+    expect(f.componentInstance.IsExporting).toBe(false);
+  });
+
+  it('does not run an unavailable option when the handler is called directly', async () => {
+    const runExport = vi.fn(async () => undefined);
+    const sheet: ArtifactExportOption = { Key: 'live-sheet', Label: 'Live Sheet', Icon: 'fa-solid fa-table-cells', Group: 'Save as', DisabledReason: 'Save the query first' };
+    const { f } = renderWithPlugin({ GetExportOptions: () => [...QUERY_OPTIONS, sheet], RunExport: runExport });
+    await f.componentInstance.OnExport(sheet);
+    expect(runExport).not.toHaveBeenCalled();
+  });
+
+  /** A keydown as a browser sends it: the CDK menu reads the legacy `keyCode`. */
+  function key(target: HTMLElement, name: 'ArrowDown'): void {
+    const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'keyCode', { value: 40 });
+    target.dispatchEvent(event);
+  }
+
+  it('moves between the export options with the arrow keys', () => {
+    const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: vi.fn(async () => undefined) });
+    const trigger = query(f, '.export-btn') as HTMLButtonElement;
+    trigger.focus();
+    key(trigger, 'ArrowDown');
+    f.detectChanges();
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
+    expect(document.activeElement).toBe(items[0]);
+    key(items[0], 'ArrowDown');
+    expect(document.activeElement).toBe(items[1]);
+  });
+
+  it('lets the keyboard reach an unavailable option and read its reason, but does not run it', async () => {
+    const runExport = vi.fn(async () => undefined);
+    const options: ArtifactExportOption[] = [
+      ...QUERY_OPTIONS,
+      { Key: 'live-sheet', Label: 'Live Sheet', Icon: 'fa-solid fa-table-cells', Description: 'Spreadsheet that stays current', Group: 'Save as', DisabledReason: 'Save the query first' },
+    ];
+    const { f } = renderWithPlugin({ GetExportOptions: () => options, RunExport: runExport });
+    const trigger = query(f, '.export-btn') as HTMLButtonElement;
+    trigger.focus();
+    key(trigger, 'ArrowDown');
+    f.detectChanges();
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
+    for (const item of items.slice(0, 3)) {
+      key(item, 'ArrowDown');
+    }
+    const sheet = items[3];
+    expect(document.activeElement).toBe(sheet);
+    expect(sheet.getAttribute('aria-disabled')).toBe('true');
+    expect(sheet.querySelector('.export-option-desc')?.textContent?.trim()).toBe('Save the query first');
+    sheet.click();
+    f.detectChanges();
+    await f.whenStable();
+    expect(runExport).not.toHaveBeenCalled();
   });
 
   it('reports a failed export and re-enables the button', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { f, notification } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: vi.fn(async () => { throw new Error('capture failed'); }) });
-    await f.componentInstance.OnExportPDF('portrait');
-    expect(notification.CreateSimpleNotification).toHaveBeenCalledWith(expect.stringContaining('Could not create the PDF'), 'error', 5000);
-    expect(f.componentInstance.IsExportingPDF).toBe(false);
+    const { f, notification } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: vi.fn(async () => { throw new Error('query failed'); }) });
+    await f.componentInstance.OnExport(QUERY_OPTIONS[0]);
+    expect(notification.CreateSimpleNotification).toHaveBeenCalledWith(expect.stringContaining('Could not export Excel (.xlsx)'), 'error', 5000);
+    expect(f.componentInstance.IsExporting).toBe(false);
   });
 });
 
@@ -466,7 +591,7 @@ describe('ArtifactViewerPanelComponent (DOM) — Version Compare entry in versio
 
 describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3) & MAX(VersionNumber) commit (B5)', () => {
   it('defaults canEdit to false, passes readonly=true to plugin viewer, and blocks OnPluginContentCommitted when canEdit is omitted', async () => {
-    const markdownArtifact = { Name: 'Q3 Report', Description: 'Quarterly numbers', Type: 'Markdown' } as unknown as MJArtifactEntity;
+    const markdownArtifact = stubEntity<MJArtifactEntity>({ Name: 'Q3 Report', Description: 'Quarterly numbers', Type: 'Markdown' });
     const f = render({
       isLoading: false,
       artifact: markdownArtifact,
@@ -482,10 +607,10 @@ describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3)
     expect(stubEl?.getAttribute('data-readonly')).toBe('true');
 
     const saveSpy = vi.fn();
-    f.componentInstance.CurrentUser = { ID: 'u-1' } as NonNullable<ArtifactViewerPanelComponent['CurrentUser']>;
-    f.componentInstance.Provider = {
+    f.componentInstance.CurrentUser = stubEntity<NonNullable<ArtifactViewerPanelComponent['CurrentUser']>>({ ID: 'u-1' });
+    f.componentInstance.Provider = stubEntity<IMetadataProvider>({
       GetEntityObject: saveSpy,
-    } as unknown as IMetadataProvider;
+    });
 
     await f.componentInstance.OnPluginContentCommitted('# Blocked edit');
     expect(saveSpy).not.toHaveBeenCalled();
@@ -495,26 +620,26 @@ describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3)
     const savedRecords: Array<{ VersionNumber: number; Name: string; Content: string }> = [];
     let shouldSaveSucceed = false;
 
-    const mockProvider = {
-      CurrentUser: { ID: 'u-1' },
+    const mockProvider = stubEntity<IMetadataProvider & IRunViewProvider & IEntityDataProvider>({
+      CurrentUser: stubEntity<IMetadataProvider['CurrentUser']>({ ID: 'u-1' }),
       Entities: [],
       Roles: [],
       EntityByName: () => undefined,
-      RunView: async (params: RunViewParams) => {
+      RunView: async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
         if (params.EntityName === 'MJ: Artifact Versions' && params.MaxRows === 1) {
-          return {
+          return stubEntity<RunViewResult<T>>({
             Success: true,
-            Results: [{ ID: 'ver-unscoped-5', VersionNumber: 5 }],
+            Results: [Object.assign(Object.create(null), { ID: 'ver-unscoped-5', VersionNumber: 5 })],
             RowCount: 1,
             TotalRowCount: 1,
-          } as unknown as RunViewResult;
+          });
         }
-        return {
+        return stubEntity<RunViewResult<T>>({
           Success: true,
-          Results: [{ ID: 'v1', VersionNumber: 2 }],
+          Results: [Object.assign(Object.create(null), { ID: 'v1', VersionNumber: 2 })],
           RowCount: 1,
           TotalRowCount: 1,
-        } as unknown as RunViewResult;
+        });
       },
       GetEntityObject: async () => {
         const rec = {
@@ -540,10 +665,10 @@ describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3)
         };
         return rec;
       },
-    } as unknown as IMetadataProvider;
+    });
 
     const notification = { CreateSimpleNotification: vi.fn() };
-    vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+    vi.spyOn(ArtifactViewerPanelComponent.prototype, 'ngOnInit').mockResolvedValue(undefined);
     const f = renderComponentFixture(ArtifactViewerPanelComponent, {
       imports: CHILDREN,
       declarations: [ArtifactViewerPanelComponent],
@@ -555,11 +680,11 @@ describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3)
       setup: (c) => {
         c.isLoading = false;
         c.error = null;
-        c.artifact = { ID: 'a1', Name: 'Q3 Report' } as unknown as MJArtifactEntity;
+        c.artifact = stubEntity<MJArtifactEntity>({ ID: 'a1', Name: 'Q3 Report' });
         c.allVersions = [VERSION];
         c.selectedVersionNumber = 2;
-        c.artifactVersion = { ID: 'v1', VersionNumber: 2, Name: 'Q3 Report' } as unknown as MJArtifactVersionEntity;
-        c.CurrentUser = { ID: 'u-1' } as NonNullable<ArtifactViewerPanelComponent['CurrentUser']>;
+        c.artifactVersion = stubEntity<MJArtifactVersionEntity>({ ID: 'v1', VersionNumber: 2, Name: 'Q3 Report' });
+        c.CurrentUser = stubEntity<NonNullable<ArtifactViewerPanelComponent['CurrentUser']>>({ ID: 'u-1' });
       },
     });
 
@@ -575,5 +700,257 @@ describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3)
     expect(savedRecords).toHaveLength(1);
     expect(savedRecords[0].VersionNumber).toBe(6);
     expect(f.componentInstance.SelectedVersionNumber).toBe(6);
+  });
+
+  it('P0-19: OnPrintDisplayContent isolates DisplayMarkdown in sandbox="allow-modals allow-scripts" iframe with CSP nonce and without document.write or window.open', () => {
+    const windowOpenSpy = vi.spyOn(window, 'open');
+    const f = render({
+      displayHtml: null,
+      displayMarkdown: '<script>alert(1)</script><img src=x onerror=alert(2)>',
+      activeTab: 'display',
+    });
+
+    f.componentInstance.OnPrintDisplayContent();
+
+    expect(windowOpenSpy).not.toHaveBeenCalled();
+    const iframe = document.body.querySelector('iframe[sandbox="allow-modals allow-scripts"]') as HTMLIFrameElement | null;
+    expect(iframe).not.toBeNull();
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-modals allow-scripts');
+    expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    expect(iframe?.srcdoc).toContain('Content-Security-Policy');
+    expect(iframe?.srcdoc).toContain("script-src 'nonce-");
+    expect(iframe?.srcdoc).toContain("connect-src 'none'");
+    expect(iframe?.srcdoc).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(iframe?.srcdoc).not.toContain('<script>alert(1)</script>');
+    iframe?.remove();
+  });
+
+  it('P0-19: SanitizeHtmlForSandboxedFrame strips scripts, meta refresh, base, style, SVG set/animate, and active URIs; OpenHtmlInSandboxedWindow uses noopener,noreferrer', () => {
+    const malicious =
+      '<meta http-equiv="refresh" content="0;url=https://evil.test">' +
+      '<base href="https://evil.test">' +
+      '<style>body{background:url(javascript:alert(1))}</style>' +
+      '<svg><set attributeName="onmouseover" to="alert(1)"/><animate href="javascript:alert(1)"/></svg>' +
+      '<img src="data:image/svg+xml;base64,PHN2Zz4=" onclick="alert(1)" />' +
+      '<a href="javascript:alert(1)">Click</a><p>Safe text</p>';
+
+    const clean = SanitizeHtmlForSandboxedFrame(malicious);
+    expect(clean).not.toMatch(/<meta/i);
+    expect(clean).not.toMatch(/<base/i);
+    expect(clean).not.toMatch(/<style/i);
+    expect(clean).not.toMatch(/<set\b/i);
+    expect(clean).not.toMatch(/<animate/i);
+    expect(clean).not.toMatch(/onclick=/i);
+    expect(clean).not.toContain('data:image/svg+xml');
+    expect(clean).not.toContain('javascript:');
+    expect(clean).toContain('<p>Safe text</p>');
+
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:sandbox-preview');
+    expect(OpenHtmlInSandboxedWindow('<p>Hi</p>', 'Preview')).toBe(true);
+    expect(openSpy).toHaveBeenCalledWith('blob:sandbox-preview', '_blank', 'noopener,noreferrer');
+    expect(createUrlSpy).toHaveBeenCalled();
+  });
+
+  it('CopyGuestShareUrl awaits clipboard promise and notifies error on rejection', async () => {
+    const notification = { CreateSimpleNotification: vi.fn() };
+    vi.spyOn(ArtifactViewerPanelComponent.prototype, 'ngOnInit').mockResolvedValue(undefined);
+    const f = renderComponentFixture(ArtifactViewerPanelComponent, {
+      imports: CHILDREN,
+      declarations: [ArtifactViewerPanelComponent],
+      providers: [
+        { provide: MJNotificationService, useValue: notification },
+        { provide: ArtifactFileService, useValue: fileServiceStub },
+      ],
+      inputs: { artifactId: 'a1' },
+    });
+
+    const writeText = vi.fn().mockRejectedValueOnce(new Error('NotAllowedError'));
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    await f.componentInstance.CopyGuestShareUrl('https://app.example.com/share/tkt-1');
+    expect(writeText).toHaveBeenCalledWith('https://app.example.com/share/tkt-1');
+    expect(notification.CreateSimpleNotification).toHaveBeenCalledWith(
+      expect.stringContaining('permission denied'),
+      'error',
+      3500,
+    );
+  });
+
+  it('resolves guest plugin via explicit [DriverClass] and passes PreVerifiedFrozenSnapshots, ViewMode, NavigationAnchor, and SelectionChanged', () => {
+    const snapshots: Record<string, PreVerifiedFrozenSnapshotEntry> = {
+      'tbl-1': { Verified: true, FrozenByUserName: 'Alice Reviewer', FrozenAt: '2026-11-15T12:00:00Z' },
+    };
+    const anchor: ArtifactNavigationAnchor = { Sheet: 'sheet-1', Range: 'B2:C5' };
+    const f = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-guest-1', Name: 'Shared Model' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 2,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: null,
+      },
+      {
+        DriverClass: 'SpreadsheetArtifactViewerPlugin',
+        PreVerifiedFrozenSnapshots: snapshots,
+        ViewMode: 'diff',
+        NavigationAnchor: anchor,
+      },
+    );
+
+    expect(f.componentInstance.HasPlugin).toBe(true);
+    expect(query(f, '[data-testid="file-fallback"]')).toBeNull();
+    const pluginStubEl = f.debugElement.query((el) => el.componentInstance instanceof PluginViewerStub);
+    expect(pluginStubEl).not.toBeNull();
+    const stub = pluginStubEl.componentInstance as PluginViewerStub;
+    expect(stub.DriverClass).toBe('SpreadsheetArtifactViewerPlugin');
+    expect(stub.PreVerifiedFrozenSnapshots).toEqual(snapshots);
+    expect(stub.SyncViewMode).toBe('diff');
+    expect(stub.NavigationAnchor).toEqual(anchor);
+
+    const emittedSelections = capture(f.componentInstance.SelectionChanged);
+    stub.SelectionChanged.emit({ domain: 'spreadsheet', sheet: 'sheet-1', range: 'D10' });
+    expect(emittedSelections).toEqual([{ domain: 'spreadsheet', sheet: 'sheet-1', range: 'D10' }]);
+  });
+
+  it('hides Living Report refresh & schedule controls on read-only views', () => {
+    const readOnly = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-lr-ro', Name: 'Quarterly Brief' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 1,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: 'MarkdownArtifactViewerPlugin',
+      },
+      { canEdit: false, DriverClass: 'MarkdownArtifactViewerPlugin' },
+    );
+    expect(query(readOnly, '[data-testid="living-report-refresh-btn"]')).toBeNull();
+    expect(query(readOnly, '[data-testid="living-report-schedule-btn"]')).toBeNull();
+  });
+
+  it('shows Living Report refresh, badge, and schedule modal on editable Docs/Slides/Sheets', () => {
+    const editable = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-lr-edit', Name: 'Quarterly Brief' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 1,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: 'MarkdownArtifactViewerPlugin',
+        activeLivingReportSchedule: {
+          ScheduleID: 'sched-99',
+          Name: 'Daily Executive Brief',
+          CronExpression: '0 0 8 * * *',
+          Timezone: 'Asia/Tokyo',
+          Status: 'Active',
+          Enabled: true,
+          ForceSaveIfUnchanged: false,
+          RunCount: 2,
+          SuccessCount: 2,
+          FailureCount: 0,
+          IsCallerScheduleOwner: true,
+          CanDelete: true,
+        },
+        showLivingReportModal: true,
+      },
+      { canEdit: true, DriverClass: 'MarkdownArtifactViewerPlugin' },
+    );
+    expect(query(editable, '[data-testid="living-report-refresh-btn"]')).not.toBeNull();
+    expect(query(editable, '[data-testid="living-report-schedule-btn"]')).not.toBeNull();
+    expect(text(editable, '[data-testid="living-report-status-badge"]')).toContain('Scheduled');
+    expect(query(editable, '[data-testid="living-report-schedule-modal"]')).not.toBeNull();
+    expect(query(editable, '[data-testid="living-report-remove-btn"]')).not.toBeNull();
+    expect(editable.componentInstance.LivingReportTimezoneOptions).toContain('Asia/Tokyo');
+  });
+
+  it('hides Living Report controls on Frozen guest snapshot views even if canEdit=true', () => {
+    const guestView = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-lr-guest', Name: 'Quarterly Brief' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 1,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: 'MarkdownArtifactViewerPlugin',
+      },
+      {
+        canEdit: true,
+        DriverClass: 'MarkdownArtifactViewerPlugin',
+        PreVerifiedFrozenSnapshots: { b1: { Verified: true } },
+      },
+    );
+    expect(query(guestView, '[data-testid="living-report-refresh-btn"]')).toBeNull();
+    expect(query(guestView, '[data-testid="living-report-schedule-btn"]')).toBeNull();
+  });
+
+  it('OnRefreshLivingArtifactNow reloads target version, advances token, and emits VersionSaved', async () => {
+    const refreshSpy = vi
+      .spyOn(DocumentCollaborationService.prototype, 'RefreshLivingArtifactNow')
+      .mockResolvedValue({
+        HandledByServer: true,
+        Success: true,
+        Changed: true,
+        SavedNewVersion: true,
+        ArtifactVersionID: 'ver-2',
+        VersionNumber: 2,
+        DiffSummary: 'ARR updated 500 -> 750',
+        HighlightLines: ['ARR -> 750'],
+      });
+
+    const fixture = render(
+      {
+        isLoading: false,
+        artifact: stubEntity<MJArtifactEntity>({ ID: 'art-lr-emit', Name: 'ARR Report' }),
+        allVersions: [VERSION],
+        selectedVersionNumber: 1,
+        artifactVersion: VERSION,
+        activeTab: 'display',
+        driverClass: 'MarkdownArtifactViewerPlugin',
+      },
+      { canEdit: true, DriverClass: 'MarkdownArtifactViewerPlugin' },
+    );
+    const comp = fixture.componentInstance;
+    comp.artifactId = 'art-lr-emit';
+
+    const emitted: Array<{ ArtifactID: string; VersionID?: string; VersionNumber?: number }> = [];
+    const sub = comp.VersionSaved.subscribe((evt) => emitted.push(evt));
+
+    const internal = Object.assign(comp) as {
+      artifactLoadToken: number;
+      loadArtifact: (versionNumber?: number) => Promise<void>;
+    };
+    vi.spyOn(internal, 'loadArtifact').mockImplementation(async (versionNumber?: number) => {
+      // Simulate real loadArtifact incrementing the private artifactLoadToken once
+      internal.artifactLoadToken += 1;
+      comp.selectedVersionNumber = versionNumber ?? 2;
+      comp.artifactVersion = stubEntity<MJArtifactVersionEntity>({ ID: 'ver-2', VersionNumber: 2 });
+    });
+
+    await comp.OnRefreshLivingArtifactNow();
+    sub.unsubscribe();
+
+    expect(refreshSpy).toHaveBeenCalledWith(
+      'art-lr-emit',
+      expect.objectContaining({ ForceSaveIfUnchanged: false }),
+      undefined,
+    );
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toEqual(
+      expect.objectContaining({
+        ArtifactID: 'art-lr-emit',
+        VersionID: 'ver-2',
+        VersionNumber: 2,
+      }),
+    );
+    expect(comp.LivingReportRefreshing).toBe(false);
   });
 });

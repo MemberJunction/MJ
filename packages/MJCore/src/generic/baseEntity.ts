@@ -773,6 +773,48 @@ export function SerializeCloneChangeContext(context: CloneContext): string {
 }
 
 /**
+ * Context captured when an entity is saved or deleted by MJ Peer Sync.
+ *
+ * When set on an entity instance via {@link BaseEntity.SetSyncContext}, the subsequent
+ * `Save()` or `Delete()` call records `Source = 'Sync'`, populates `IntegrationID`
+ * (when provided), and writes structured `ChangeContext` JSON provenance (`IRecordChangeContext`,
+ * Kind `'Sync'`) on the resulting RecordChange row.
+ */
+export interface SyncContext {
+    /** `MJ_DEPLOYMENT_ID` of the origin deployment where the change originated. */
+    OriginDeploymentID: string;
+    /** Deterministic pairing ID between the local and peer deployments. */
+    PairingID: string;
+    /** `MJ: Company Integration Runs` ID that applied this sync change. */
+    RunID: string;
+    /** `MJ: Record Changes` IDs from the origin deployment that coalesced into this write. */
+    OriginChangeIDs: string[];
+    /** Email address of the user who authored the latest change on the origin deployment (optional for service accounts). */
+    OriginUserEmail?: string;
+    /** Optional `MJ: Integrations` ID to record on `RecordChange.IntegrationID`. */
+    IntegrationID?: string | null;
+}
+
+/**
+ * The `ChangeContext` JSON a peer sync operation writes on its Record Change rows
+ * (`IRecordChangeContext`, Kind 'Sync'). The one serializer every provider path uses,
+ * so the shape can't drift.
+ */
+export function SerializeSyncChangeContext(context: SyncContext): string {
+    return JSON.stringify({
+        Version: 1,
+        Kind: 'Sync',
+        Sync: {
+            OriginDeploymentID: context.OriginDeploymentID,
+            PairingID: context.PairingID,
+            RunID: context.RunID,
+            OriginChangeIDs: [...context.OriginChangeIDs],
+            ...(context.OriginUserEmail ? { OriginUserEmail: context.OriginUserEmail } : {}),
+        },
+    });
+}
+
+/**
  * Discriminator for the `Source` column of a RecordChange row.
  *
  * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call
@@ -782,8 +824,10 @@ export function SerializeCloneChangeContext(context: CloneContext): string {
  *   `RestoredFromID` and optional `RestoreReason` lineage columns
  * - `Clone`: produced by a record clone operation — paired with
  *   structured `ChangeContext` JSON provenance
+ * - `Sync`: produced by MJ Peer Sync — paired with structured
+ *   `ChangeContext` JSON provenance and optional `IntegrationID`
  */
-export type RecordChangeSource = 'Internal' | 'External' | 'Restore' | 'Clone';
+export type RecordChangeSource = 'Internal' | 'External' | 'Restore' | 'Clone' | 'Sync';
 
 /**
  * Dialect-agnostic payload for a RecordChange row.
@@ -842,10 +886,15 @@ export interface RecordChangePayload {
      */
     restoreReason: string | null;
     /**
-     * When `source === 'Clone'`, serialized JSON bag carrying structured provenance
-     * (shape = `IRecordChangeContext`). Null otherwise.
+     * When `source === 'Clone'` or `source === 'Sync'`, serialized JSON bag carrying
+     * structured provenance (shape = `IRecordChangeContext`). Null otherwise.
      */
     changeContext: string | null;
+    /**
+     * When `source === 'Sync'` and `SyncContext.IntegrationID` is supplied,
+     * persisted to `RecordChange.IntegrationID`. Null otherwise.
+     */
+    integrationID?: string | null;
 }
 
 export class DataObjectRelatedEntityParam {
@@ -4201,6 +4250,10 @@ export abstract class BaseEntity<T = unknown> {
                 Visited: visited,
                 SaveSelfOnly: (entity, opts) => entity.saveAsGraphNode(opts),
                 DeleteSelfOnly: (entity, opts) => entity.deleteAsGraphNode(opts),
+                CanBatchLeaf: (entity, op) =>
+                    op === 'Save'
+                        ? entity.Save === BaseEntity.prototype.Save
+                        : entity.Delete === BaseEntity.prototype.Delete,
             });
             if (!result.Success) {
                 await scope?.Rollback();
@@ -6041,6 +6094,50 @@ export abstract class BaseEntity<T = unknown> {
         this._cloneContext = null;
     }
 
+    private _syncContext: SyncContext | null = null;
+
+    /**
+     * Returns the active sync context for the next save or delete, if any.
+     *
+     * Read by the data provider when generating the RecordChange SQL: when
+     * non-null, the resulting RecordChange row is written with
+     * `Source='Sync'`, `IntegrationID` (when provided), and `ChangeContext`
+     * populated with structured JSON provenance. Returns null for ordinary saves.
+     */
+    public get SyncContext(): SyncContext | null {
+        return this._syncContext;
+    }
+
+    /**
+     * Marks the next Save() or Delete() as part of an MJ Peer Sync operation.
+     *
+     * The provider will write a new RecordChange entry with `Source='Sync'`
+     * and `ChangeContext` populated with structured JSON provenance.
+     *
+     * @param context Structured sync context. Throws if missing required fields.
+     */
+    public SetSyncContext(context: SyncContext): void {
+        if (
+            !context ||
+            !context.OriginDeploymentID ||
+            !context.PairingID ||
+            !context.RunID ||
+            !Array.isArray(context.OriginChangeIDs)
+        ) {
+            throw new Error(
+                'BaseEntity.SetSyncContext: context is required with OriginDeploymentID, PairingID, RunID, and OriginChangeIDs',
+            );
+        }
+        this._syncContext = context;
+    }
+
+    /**
+     * Clears any pending sync context. Safe to call when no context is set.
+     */
+    public ClearSyncContext(): void {
+        this._syncContext = null;
+    }
+
 
     // Holds the current pending save observable (if any)
     private _pendingSave$: Observable<boolean> | null = null;
@@ -7463,7 +7560,7 @@ export abstract class BaseEntity<T = unknown> {
                 this.init(); // wipe out current data if we're loading on top of existing record
             }
 
-            let data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
+            const data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
             this.discardJSONFieldObjects(); // a reload replaces the record's data
             if (!data) {
                 // A subtype-hint probe asks whether this row exists, so "no" is an answer, not an error
@@ -7472,71 +7569,116 @@ export abstract class BaseEntity<T = unknown> {
                 }
                 return false; // no data loaded, return false
             }
-            // Field security: denied values never enter this object, even from a provider that
-            // did not narrow its SELECT (see narrowHydrationSource).
-            data = this.narrowHydrationSource(data);
-
-            // IS-A: hydrate parent chain from loaded data before populating self when loading
-            // upward from a child/leaf instance. Skipped when an already-loaded parent links a
-            // child downward so the parent's virtual view columns are not cleared.
-            if (this._parentEntity && !this._skipParentChainHydration) {
-                this._parentEntity.Hydrate(data);
-            }
-
-            // Reset _NeverSet on all fields before SetMany so that ReadOnly/virtual fields
-            // (e.g. view-computed columns like PrimaryAddressLine1, PrimaryEmail) can be
-            // updated on reload. Without this, the EntityField Value setter silently drops
-            // writes to ReadOnly fields after the initial load, meaning InnerLoad called a
-            // second time (e.g. to refresh denormalized data after a related entity changed)
-            // would fail to update those fields even though the provider returned fresh data.
-            for (const f of this.Fields) {
-                f.ResetNeverSetFlag();
-            }
-
-            this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
-            // InnerLoad is a hydration entry point: any field the provider's row omitted (e.g.
-            // a client-side load whose server response stripped read-denied fields) is
-            // not-loaded, so its constructor state never masquerades as data on the next save.
-            this.markFieldsOmittedBySourceAsNotLoaded(data);
-            if (EntityRelationshipsToLoad) {
-                for (let relationship of EntityRelationshipsToLoad) {
-                    if (data[relationship]) {
-                        // we have some data, put into an array for ease of access
-                        this[relationship] = data[relationship]
-                    }
-                }
-            }
-            this._recordLoaded = true;
-            this._everSaved = true; // Mark as saved since we loaded from database
-            this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
-
-            // Cache the record name for faster lookups
-            this.cacheRecordName();
-
-            // IS-A: discover child entity records after load completes.
-            // This populates _childEntity so Save/Delete can delegate to the leaf.
-            // Only runs for parent-type entities; idempotent via _childEntityDiscoveryDone.
-            await this.InitializeChildEntity();
-
-            // Companions declared Load:'immediate' populate here — and ONLY here.
-            //
-            // Deliberately not in LoadFromData(): that is the per-row materialization path for
-            // RunView(ResultType:'entity_object'), so an eager child query there becomes one query
-            // per row of every view. That is a live N+1 in production accounting code today
-            // (JournalEntryEntityServer.LoadFromData → LoadLines), and excluding it here is the
-            // structural fix. Set-oriented eager loading is served by RunView's batched child
-            // loading, which issues one WHERE fk IN (...) for the whole result set.
-            await this.loadEagerCompanions();
-
-            // Raise load completion event
-            this.RaiseEvent('load_complete', { CompositeKey });
-
-            return true;
+            return await this.applyLoadedRowData(data, CompositeKey, EntityRelationshipsToLoad);
         }
         finally {
             // Always clear loading state when done, regardless of success or failure
             this._isLoading = false;
         }
+    }
+
+    /**
+     * Hydrates this entity from an already-fetched database row using the exact same permission,
+     * FLS-narrowing, IS-A parent/child, and eager-companion contract as {@link InnerLoad}.
+     * Used by batched loaders (e.g. `RelatedRecordCollection.Deserialize`) to avoid N individual queries.
+     */
+    public async HydrateFromRow(
+        data: Record<string, unknown>,
+        compositeKey: CompositeKey,
+        entityRelationshipsToLoad: string[] = null
+    ): Promise<boolean> {
+        if (!this.ProviderToUse) {
+            throw new Error('No provider set');
+        }
+
+        const valResult = compositeKey.Validate();
+        if (!valResult || !valResult.IsValid) {
+            throw new Error(`Invalid CompositeKey passed to BaseEntity.HydrateFromRow(${this.EntityInfo.Name}): ${valResult.ErrorMessage}`);
+        }
+
+        this.CheckPermissions(EntityPermissionType.Read, true);
+
+        this._isLoading = true;
+        this.RaiseEvent('load_started', { CompositeKey: compositeKey });
+
+        try {
+            if (!this.IsSaved) {
+                this.init();
+            }
+            this.discardJSONFieldObjects();
+            return await this.applyLoadedRowData(data, compositeKey, entityRelationshipsToLoad);
+        }
+        finally {
+            this._isLoading = false;
+        }
+    }
+
+    /** Shared post-read hydration used by both {@link InnerLoad} and {@link HydrateFromRow}. */
+    private async applyLoadedRowData(
+        rawData: Record<string, unknown>,
+        compositeKey: CompositeKey,
+        entityRelationshipsToLoad: string[] = null
+    ): Promise<boolean> {
+        // Field security: denied values never enter this object, even from a provider that
+        // did not narrow its SELECT (see narrowHydrationSource).
+        const data = this.narrowHydrationSource(rawData);
+
+        // IS-A: hydrate parent chain from loaded data before populating self when loading
+        // upward from a child/leaf instance. Skipped when an already-loaded parent links a
+        // child downward so the parent's virtual view columns are not cleared.
+        if (this._parentEntity && !this._skipParentChainHydration) {
+            this._parentEntity.Hydrate(data);
+        }
+
+        // Reset _NeverSet on all fields before SetMany so that ReadOnly/virtual fields
+        // (e.g. view-computed columns like PrimaryAddressLine1, PrimaryEmail) can be
+        // updated on reload. Without this, the EntityField Value setter silently drops
+        // writes to ReadOnly fields after the initial load, meaning InnerLoad called a
+        // second time (e.g. to refresh denormalized data after a related entity changed)
+        // would fail to update those fields even though the provider returned fresh data.
+        for (const f of this.Fields) {
+            f.ResetNeverSetFlag();
+        }
+
+        this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
+        // InnerLoad is a hydration entry point: any field the provider's row omitted (e.g.
+        // a client-side load whose server response stripped read-denied fields) is
+        // not-loaded, so its constructor state never masquerades as data on the next save.
+        this.markFieldsOmittedBySourceAsNotLoaded(data);
+        if (entityRelationshipsToLoad) {
+            for (const relationship of entityRelationshipsToLoad) {
+                if (data[relationship]) {
+                    // we have some data, put into an array for ease of access
+                    this[relationship] = data[relationship];
+                }
+            }
+        }
+        this._recordLoaded = true;
+        this._everSaved = true; // Mark as saved since we loaded from database
+        this._compositeKey = compositeKey; // set the composite key to the one we just loaded
+
+        // Cache the record name for faster lookups
+        this.cacheRecordName();
+
+        // IS-A: discover child entity records after load completes.
+        // This populates _childEntity so Save/Delete can delegate to the leaf.
+        // Only runs for parent-type entities; idempotent via _childEntityDiscoveryDone.
+        await this.InitializeChildEntity();
+
+        // Companions declared Load:'immediate' populate here — and ONLY here.
+        //
+        // Deliberately not in LoadFromData(): that is the per-row materialization path for
+        // RunView(ResultType:'entity_object'), so an eager child query there becomes one query
+        // per row of every view. That is a live N+1 in production accounting code today
+        // (JournalEntryEntityServer.LoadFromData → LoadLines), and excluding it here is the
+        // structural fix. Set-oriented eager loading is served by RunView's batched child
+        // loading, which issues one WHERE fk IN (...) for the whole result set.
+        await this.loadEagerCompanions();
+
+        // Raise load completion event
+        this.RaiseEvent('load_complete', { CompositeKey: compositeKey });
+
+        return true;
     }
 
     /**

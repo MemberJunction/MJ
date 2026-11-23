@@ -14,7 +14,7 @@ export * from './lib/models/navigation-request.model';
 export * from './lib/models/agent-turn.model';
 export * from './lib/utils/agent-turn-routing';
 export * from './lib/utils/agent-handoff-map';
-// Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
+// Decision routing for an unmentioned message (EnableDecisionRouting, on by default)
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
 export * from './lib/utils/decision-routing';
@@ -61,11 +61,16 @@ export * from './lib/services/realtime-pairing';
 export * from './lib/services/user-authorization';
 export * from './lib/services/realtime-sessions-adapter';
 export * from './lib/services/realtime-session-review.service';
+// Shared lazy ONNX/WASM Edge AI worker host + Stage 6C.1 pre-discovery service
+export * from './lib/services/edge-ai/edge-ai-protocol';
+export * from './lib/services/edge-ai/edge-ai-worker-host';
+export * from './lib/services/edge-ai/edge-agent-pre-discovery.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
 export * from './lib/components/navigation/conversation-navigation.component';
 export * from './lib/components/sidebar/conversation-sidebar.component';
+export * from './lib/components/sidebar/my-agents-section.component';
 export * from './lib/components/sidebar/routines-section.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
@@ -101,6 +106,7 @@ export * from './lib/components/task/tasks-full-view.component';
 export * from './lib/components/tasks/task-widget.component';
 export * from './lib/components/agent/agent-process-panel.component';
 export * from './lib/components/agent/active-agent-indicator.component';
+export * from './lib/components/agent/agent-instance-editor-modal.component';
 export * from './lib/components/active-tasks/active-tasks-panel.component';
 export * from './lib/components/share/share-modal.component';
 export * from './lib/components/notification/notification-badge.component';
@@ -219,6 +225,10 @@ export * from './lib/components/realtime/interactive-component/component-spec-co
 export * from './lib/components/realtime/interactive-component/run-view-component-artifact-source';
 export * from './lib/components/realtime/interactive-component/interactive-component-channel';
 export * from './lib/components/realtime/interactive-component/realtime-interactive-component-surface.component';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-types';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-engine';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-channel';
+export * from './lib/components/realtime/artifact-workspace/realtime-artifact-workspace-surface.component';
 // Time-aligned Evidence Playback component (recorded session audio synced to the transcript).
 export * from './lib/components/realtime/evidence-playback/realtime-evidence-playback.component';
 export * from './lib/services/composer-draft-store';

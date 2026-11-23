@@ -222,3 +222,143 @@ describe('AgentRunStatusPublisher — a widget guest elevated to the system user
         }
     });
 });
+
+describe('AgentRunStatusPublisher — streaming chunk coalescing', () => {
+    it('coalesces high-frequency OnStreaming tokens over the 25ms window with ordered concatenation', () => {
+        vi.useFakeTimers();
+        try {
+            const publish = vi.fn().mockResolvedValue(undefined);
+            const pubSub = { publish } as unknown as PubSubEngine;
+            const userPayload = { sessionId: 'session-1', userRecord: { ID: 'user-1' } } as UserPayload;
+            const made = new AgentRunStatusPublisher(pubSub, userPayload, 'session-1');
+
+            made.OnProgress({ step: 'initialization', message: 'init', metadata: { agentRun: run } });
+            publish.mockClear();
+
+            // Rapid burst of 10 tokens inside <25ms: leading token publishes immediately, next 9 coalesce into 1 publish
+            const tokens = ['T0 ', 'T1 ', 'T2 ', 'T3 ', 'T4 ', 'T5 ', 'T6 ', 'T7 ', 'T8 ', 'T9'];
+            for (const token of tokens) {
+                made.OnStreaming({ content: token, isComplete: false, stepType: 'prompt', kind: 'final-response' });
+                vi.advanceTimersByTime(2);
+            }
+
+            // Before 25ms window expires, only the leading-edge token was published
+            expect(publish).toHaveBeenCalledTimes(1);
+
+            // Advance past the 25ms window -> buffered 9 tokens flush as a single message
+            vi.advanceTimersByTime(10);
+            expect(publish).toHaveBeenCalledTimes(2);
+
+            const sent = envelopes(publish);
+            const firstChunk = (sent[0].data as { streaming: { content: string; isPartial: boolean } }).streaming;
+            const secondChunk = (sent[1].data as { streaming: { content: string; isPartial: boolean } }).streaming;
+            expect(firstChunk.content).toBe('T0 ');
+            expect(firstChunk.isPartial).toBe(true);
+            expect(secondChunk.content).toBe('T1 T2 T3 T4 T5 T6 T7 T8 T9');
+            expect(secondChunk.isPartial).toBe(true);
+            expect(firstChunk.content + secondChunk.content).toBe(tokens.join(''));
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('flushes buffered tokens immediately on isComplete=true, metadata/step change, OnProgress, and Dispose', () => {
+        vi.useFakeTimers();
+        try {
+            const publish = vi.fn().mockResolvedValue(undefined);
+            const pubSub = { publish } as unknown as PubSubEngine;
+            const userPayload = { sessionId: 'session-1', userRecord: { ID: 'user-1' } } as UserPayload;
+            const made = new AgentRunStatusPublisher(pubSub, userPayload, 'session-1');
+
+            made.OnProgress({ step: 'initialization', message: 'init', metadata: { agentRun: run } });
+            publish.mockClear();
+
+            // 1. Metadata change (kind/stepType) flushes pending buffer synchronously before publishing new segment
+            made.OnStreaming({ content: 'A', isComplete: false, stepType: 'prompt', kind: 'thinking' });
+            made.OnStreaming({ content: 'B', isComplete: false, stepType: 'prompt', kind: 'thinking' });
+            made.OnStreaming({ content: 'C', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+            expect(publish).toHaveBeenCalledTimes(2); // 'A' (leading) + 'B' (flushed on kind change)
+            expect(envelopes(publish).map((e) => (e.data as { streaming: { content: string; kind?: string } }).streaming)).toEqual([
+                expect.objectContaining({ content: 'A', kind: 'thinking' }),
+                expect.objectContaining({ content: 'B', kind: 'thinking' }),
+            ]);
+
+            // 2. isComplete=true flushes immediately with isPartial=false
+            made.OnStreaming({ content: 'D', isComplete: true, stepType: 'prompt', kind: 'final-response' });
+            expect(publish).toHaveBeenCalledTimes(3);
+            const completed = envelopes(publish)[2].data as { streaming: { content: string; isPartial: boolean } };
+            expect(completed.streaming.content).toBe('CD');
+            expect(completed.streaming.isPartial).toBe(false);
+
+            // 3. Significant OnProgress flushes any buffered tokens first
+            vi.advanceTimersByTime(30);
+            made.OnStreaming({ content: 'X', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+            made.OnStreaming({ content: 'Y', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+            made.OnProgress({ step: 'action_execution', message: 'Tool', metadata: { agentRun: run } });
+            const afterProgress = envelopes(publish).slice(3);
+            expect(afterProgress.map((e) => (e.data as { type: string }).type)).toEqual(['streaming', 'streaming', 'progress']);
+            expect((afterProgress[1].data as { streaming: { content: string } }).streaming.content).toBe('Y');
+
+            // 4. Dispose flushes buffered tokens and clears timers safely (disconnect safety)
+            vi.advanceTimersByTime(30);
+            made.OnStreaming({ content: 'Z1', isComplete: false, stepType: 'prompt' });
+            made.OnStreaming({ content: 'Z2', isComplete: false, stepType: 'prompt' });
+            expect(vi.getTimerCount()).toBe(1);
+            made.Dispose();
+            const finalSent = envelopes(publish);
+            expect((finalSent[finalSent.length - 1].data as { streaming: { content: string } }).streaming.content).toBe('Z2');
+            expect(vi.getTimerCount()).toBe(0);
+
+            // Advancing timers after Dispose fires zero extra ghost publishes
+            const countAtDispose = publish.mock.calls.length;
+            vi.advanceTimersByTime(1000);
+            expect(publish).toHaveBeenCalledTimes(countAtDispose);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('isolates interleaved runs and preserves monotonic flush ordering on model/step changes', () => {
+        vi.useFakeTimers();
+        try {
+            const publish = vi.fn().mockResolvedValue(undefined);
+            const pubSub = { publish } as unknown as PubSubEngine;
+            const userPayload = { sessionId: 'session-1', userRecord: { ID: 'user-1' } } as UserPayload;
+            const made = new AgentRunStatusPublisher(pubSub, userPayload, 'session-1');
+
+            const runA = { ...run, ID: 'run-A' };
+            const runB = { ...run, ID: 'run-B' };
+
+            made.OnProgress({ step: 'initialization', message: 'init A', metadata: { agentRun: runA } });
+            publish.mockClear();
+
+            // Run A leading chunk + buffered chunk
+            made.OnStreaming({ content: 'A1-', isComplete: false, stepType: 'prompt', modelName: 'model-1' });
+            made.OnStreaming({ content: 'A2-', isComplete: false, stepType: 'prompt', modelName: 'model-1' });
+            // Model change inside same run flushes 'A2-' before buffering 'A3'
+            made.OnStreaming({ content: 'A3', isComplete: false, stepType: 'prompt', modelName: 'model-2' });
+            // Switching to Run B via OnProgress flushes Run A's buffered 'A3' under run-A before Run B emits
+            made.OnProgress({ step: 'prompt_execution', message: 'run B starts', metadata: { agentRun: runB } });
+            made.OnStreaming({ content: 'B1', isComplete: false, stepType: 'prompt', modelName: 'model-2' });
+            made.Dispose();
+
+            const events = envelopes(publish).map((e) => e.data as {
+                type: string;
+                agentRunId: string;
+                streaming?: { content: string; modelName?: string };
+                progress?: { currentStep: string };
+            });
+
+            expect(events.map((e) => [e.type, e.agentRunId, e.streaming?.content ?? e.progress?.currentStep])).toEqual([
+                ['streaming', 'run-A', 'A1-'],
+                ['streaming', 'run-A', 'A2-'],
+                ['streaming', 'run-A', 'A3'],
+                ['progress', 'run-B', 'prompt_execution'],
+                ['streaming', 'run-B', 'B1'],
+            ]);
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});

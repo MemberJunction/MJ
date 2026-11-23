@@ -1,14 +1,34 @@
 import { Injectable } from '@angular/core';
 import type * as DocxModule from 'docx';
 import type TurndownService from 'turndown';
-import { DocumentLiveBlockEngine, type DocumentBlockSpec } from '@memberjunction/core-entities';
+import {
+  DocumentLiveBlockEngine,
+  ValidateFrozenBlockSnapshot,
+  type DocumentBlockExecutionResult,
+  type DocumentBlockSpec,
+} from '@memberjunction/core-entities';
 import { ConvertDocxToHtml, type MammothModuleShim } from '../components/previews/office-preview.logic';
+import { IsVisualDiagramOrChartBlock, RasterizeBlockDiagramToPng } from '../utils/diagram-png-encoder';
+import { PrintHtmlInSandboxedIframe, SanitizeHtmlForSandboxedFrame } from '../utils/html-sandbox.util';
+
+/** Options controlling optional `.docx` visual rasterization, live block rows, and snapshot verification (`§ 3.4`). */
+export interface DocxExportOptions {
+  /** Optional caller override supplying custom PNG bytes for an embedded chart or Whiteboard block. */
+  RasterizeBlockToPng?: (block: DocumentBlockSpec) => Promise<Uint8Array | null>;
+  /** Optional live execution results keyed by `BlockID` so Live blocks include current tabular data in DOCX exports. */
+  LiveBlockResults?: ReadonlyMap<string, DocumentBlockExecutionResult>;
+  /** Optional verifier callback returning whether a frozen block's snapshot signature/hash is verified. */
+  VerifyFrozenSnapshot?: (block: DocumentBlockSpec) => boolean;
+}
 
 // dynamic-import: docx (~250KB OOXML archive builder) is deferred until .docx export is invoked to avoid eager bundle cost (Rule 8 #3)
 let docxModulePromise: Promise<typeof DocxModule> | null = null;
 function loadDocxModule(): Promise<typeof DocxModule> {
   if (!docxModulePromise) {
-    docxModulePromise = import('docx');
+    docxModulePromise = import('docx').catch((err) => {
+      docxModulePromise = null;
+      throw err;
+    });
   }
   return docxModulePromise;
 }
@@ -19,9 +39,12 @@ type TurndownServiceConstructor = typeof TurndownService;
 let turndownServicePromise: Promise<TurndownServiceConstructor> | null = null;
 function loadTurndownService(): Promise<TurndownServiceConstructor> {
   if (!turndownServicePromise) {
-    turndownServicePromise = import('turndown').then((mod) =>
-      typeof mod === 'function' ? mod : mod.default,
-    );
+    turndownServicePromise = import('turndown')
+      .then((mod) => (typeof mod === 'function' ? mod : mod.default))
+      .catch((err) => {
+        turndownServicePromise = null;
+        throw err;
+      });
   }
   return turndownServicePromise;
 }
@@ -30,41 +53,26 @@ function loadTurndownService(): Promise<TurndownServiceConstructor> {
 let mammothModulePromise: Promise<MammothModuleShim> | null = null;
 function loadMammothModule(): Promise<MammothModuleShim> {
   if (!mammothModulePromise) {
-    mammothModulePromise = import('mammoth').then((mod) => ({
-      convertToHtml: (input) => mod.convertToHtml(input),
-    }));
+    mammothModulePromise = import('mammoth')
+      .then((mod) => ({
+        convertToHtml: (input) => mod.convertToHtml(input),
+      }))
+      .catch((err) => {
+        mammothModulePromise = null;
+        throw err;
+      });
   }
   return mammothModulePromise;
 }
 
-const BLOCKED_PRINT_TAGS = 'script, iframe, object, embed, link';
-const DANGEROUS_URI_PATTERN = /^(?:javascript:|vbscript:|data:text\/html)/i;
-
 /**
- * Sanitizes a parsed HTML fragment for printable PDF export by removing active content tags,
- * `on*` inline event attributes, and `javascript:` / `data:text/html` URL attributes.
+ * Sanitizes a printable HTML fragment using the shared DOMPurify sandbox sanitizer and additionally
+ * removes `<link>` and `<form>` tags before printing inside a sandboxed iframe.
  */
-function sanitizePrintBodyFragment(rawHtml: string): Document {
-  const parser = new DOMParser();
-  const parsed = parser.parseFromString(rawHtml ?? '', 'text/html');
-
-  parsed.querySelectorAll(BLOCKED_PRINT_TAGS).forEach((el) => el.remove());
-
-  parsed.querySelectorAll('*').forEach((el) => {
-    for (const attr of Array.from(el.attributes)) {
-      const lowerName = attr.name.toLowerCase();
-      if (lowerName.startsWith('on')) {
-        el.removeAttribute(attr.name);
-        continue;
-      }
-      const normalizedVal = attr.value.replace(/[\u0000-\u0020]+/g, '');
-      if (DANGEROUS_URI_PATTERN.test(normalizedVal)) {
-        el.removeAttribute(attr.name);
-      }
-    }
+function sanitizePrintableHtmlFragment(rawHtml: string): string {
+  return SanitizeHtmlForSandboxedFrame(rawHtml ?? '', {
+    AdditionalForbidTags: ['link', 'form'],
   });
-
-  return parsed;
 }
 
 /**
@@ -172,12 +180,17 @@ export class DocumentImportExportService {
    * @param title Document display title
    * @returns `Uint8Array` containing the `.docx` archive bytes
    */
-  public async ConvertMarkdownToDocxBytes(markdown: string, title = 'Document'): Promise<Uint8Array> {
+  public async ConvertMarkdownToDocxBytes(
+    markdown: string,
+    title = 'Document',
+    options?: DocxExportOptions,
+  ): Promise<Uint8Array> {
     const docx = await loadDocxModule();
-    const { Document: DocxDocument, Packer, Paragraph, TextRun } = docx;
+    const { Document: DocxDocument, ImageRun, Packer, Paragraph, TextRun } = docx;
     const children: Array<DocxModule.Paragraph | DocxModule.Table> = [];
-    const lines = markdown.replace(/\r\n/g, '\n').split('\n');
-    const parsedSegments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown);
+    const normalizedMarkdown = (markdown ?? '').replace(/\r\n?/g, '\n');
+    const lines = normalizedMarkdown.split('\n');
+    const parsedSegments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(normalizedMarkdown);
     const blockByStartLine = new Map(
       parsedSegments.filter((s) => s.Type === 'mj-block' && s.BlockSpec).map((s) => [s.StartLine, s]),
     );
@@ -188,10 +201,22 @@ export class DocumentImportExportService {
       const blockSeg = blockByStartLine.get(oneBasedLine);
       if (blockSeg && blockSeg.BlockSpec) {
         const block = blockSeg.BlockSpec;
-        const modeText =
-          block.Mode === 'Frozen'
-            ? `Frozen snapshot (${block.FrozenSnapshot?.FrozenAt ?? 'recorded'})`
-            : 'Live MJ Block';
+        const isFrozen = block.Mode === 'Frozen';
+        const isFrozenVerified = isFrozen
+          ? (options?.VerifyFrozenSnapshot
+              ? options.VerifyFrozenSnapshot(block)
+              : (ValidateFrozenBlockSnapshot(block.FrozenSnapshot).Valid &&
+                  Boolean(block.FrozenSnapshot?.SnapshotContentHash?.startsWith('hmac-sha256:'))))
+          : false;
+        const frozenAttribution =
+          isFrozenVerified && (block.FrozenSnapshot?.FrozenByUserName || block.FrozenSnapshot?.FrozenByUserID)
+            ? ` by ${block.FrozenSnapshot?.FrozenByUserName || block.FrozenSnapshot?.FrozenByUserID}`
+            : '';
+        const modeText = isFrozen
+          ? isFrozenVerified
+            ? `Frozen snapshot (${block.FrozenSnapshot?.FrozenAt ?? 'recorded'}${frozenAttribution})`
+            : `Frozen snapshot (${block.FrozenSnapshot?.FrozenAt ?? 'recorded'}) — Unverified Snapshot (signature missing or invalid)`
+          : 'Live MJ Block';
         children.push(
           new Paragraph({
             children: [
@@ -203,9 +228,37 @@ export class DocumentImportExportService {
             spacing: { before: 160, after: 80 },
           }),
         );
+        if (IsVisualDiagramOrChartBlock(block)) {
+          let pngBytes = (await options?.RasterizeBlockToPng?.(block)) ?? null;
+          if (!pngBytes || pngBytes.byteLength === 0) {
+            pngBytes = RasterizeBlockDiagramToPng(block);
+          }
+          if (pngBytes && pngBytes.byteLength > 0 && ImageRun) {
+            children.push(
+              new Paragraph({
+                children: [
+                  new ImageRun({
+                    type: 'png',
+                    data: pngBytes,
+                    transformation: { width: 520, height: 260 },
+                  }),
+                ],
+                spacing: { before: 80, after: 120 },
+              }),
+            );
+          }
+        }
+        const liveExecResult = !isFrozen ? options?.LiveBlockResults?.get(block.BlockID) : undefined;
         if (block.FrozenSnapshot && block.FrozenSnapshot.Columns.length > 0) {
           const colNames = block.FrozenSnapshot.Columns.map((c) => c.Name);
           children.push(this.buildDocxTable(docx, colNames, block.FrozenSnapshot.Rows));
+        } else if (
+          liveExecResult?.Success &&
+          liveExecResult.Columns.length > 0 &&
+          liveExecResult.Rows.length > 0
+        ) {
+          const colNames = liveExecResult.Columns.map((c) => c.Name);
+          children.push(this.buildDocxTable(docx, colNames, liveExecResult.Rows));
         }
         lineIdx = blockSeg.EndLine;
         continue;
@@ -219,6 +272,18 @@ export class DocumentImportExportService {
         continue;
       }
 
+      // Horizontal rule
+      if (/^(?:[-*_]\s*){3,}$/.test(trimmed)) {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: '────────────────────────────────────────', color: '999999' })],
+            spacing: { before: 120, after: 120 },
+          }),
+        );
+        lineIdx++;
+        continue;
+      }
+
       // Heading
       const headingMatch = /^(#{1,6})\s+(.+)$/.exec(trimmed);
       if (headingMatch) {
@@ -226,7 +291,7 @@ export class DocumentImportExportService {
         const text = headingMatch[2].trim();
         children.push(
           new Paragraph({
-            text,
+            children: this.parseInlineTextRuns(docx, text),
             heading: this.mapHeadingLevel(docx, level),
             spacing: { before: 200, after: 100 },
           }),
@@ -236,7 +301,13 @@ export class DocumentImportExportService {
       }
 
       // Markdown table
-      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      if (
+        trimmed.startsWith('|') &&
+        trimmed.includes('|', 1) &&
+        (trimmed.endsWith('|') ||
+          (lineIdx + 1 < lines.length &&
+            this.isMarkdownTableSeparatorLine(lines[lineIdx + 1].trim())))
+      ) {
         const tableLines: string[] = [];
         while (lineIdx < lines.length && lines[lineIdx].trim().startsWith('|')) {
           tableLines.push(lines[lineIdx].trim());
@@ -289,12 +360,29 @@ export class DocumentImportExportService {
         continue;
       }
 
+      // Ordered list
+      const orderedMatch = /^(\d+)\.\s+(.+)$/.exec(trimmed);
+      if (orderedMatch) {
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: `${orderedMatch[1]}. `, bold: true }),
+              ...this.parseInlineTextRuns(docx, orderedMatch[2]),
+            ],
+            indent: { left: 360 },
+            spacing: { after: 60 },
+          }),
+        );
+        lineIdx++;
+        continue;
+      }
+
       // Blockquote / callout
       if (trimmed.startsWith('>')) {
         const quoteText = trimmed.replace(/^>\s*/, '');
         children.push(
           new Paragraph({
-            children: [new TextRun({ text: quoteText, italics: true })],
+            children: this.parseInlineTextRuns(docx, quoteText),
             indent: { left: 480 },
             spacing: { before: 80, after: 80 },
           }),
@@ -323,8 +411,7 @@ export class DocumentImportExportService {
       ],
     });
 
-    const buffer = await Packer.toBuffer(doc);
-    return new Uint8Array(buffer);
+    return new Uint8Array(await Packer.toArrayBuffer(doc));
   }
 
   /**
@@ -339,9 +426,14 @@ export class DocumentImportExportService {
   /**
    * Generates a `.docx` file from the Markdown document and triggers a browser download.
    */
-  public async DownloadDocxFile(markdown: string, fileName = 'document.docx', title = 'Document'): Promise<void> {
+  public async DownloadDocxFile(
+    markdown: string,
+    fileName = 'document.docx',
+    title = 'Document',
+    options?: DocxExportOptions,
+  ): Promise<void> {
     const normalizedName = fileName.endsWith('.docx') ? fileName : `${fileName}.docx`;
-    const bytes = await this.ConvertMarkdownToDocxBytes(markdown, title);
+    const bytes = await this.ConvertMarkdownToDocxBytes(markdown, title, options);
     const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     const blob = new Blob([arrayBuffer], {
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -350,36 +442,22 @@ export class DocumentImportExportService {
   }
 
   /**
-   * Opens a styled print / PDF export window for the document using sanitized DOM construction.
+   * Prints a sanitized HTML document inside an isolated `<iframe sandbox="allow-modals">`
+   * with strict CSP metadata and escaped title (P0-19).
    */
   public ExportPrintablePdf(
     renderedHtml: string,
     title: string,
     orientation: 'portrait' | 'landscape' = 'portrait',
   ): void {
-    if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
-      return;
-    }
-    const printWin = window.open('', '_blank', 'width=960,height=720');
-    if (!printWin || !printWin.document) {
+    if (typeof document === 'undefined') {
       return;
     }
     const safeOrientation: 'landscape' | 'portrait' = orientation === 'landscape' ? 'landscape' : 'portrait';
-    const sanitizedDoc = sanitizePrintBodyFragment(renderedHtml);
-
-    const printDoc = printWin.document;
-    printDoc.title = title || 'Document';
-
-    const metaEl = printDoc.createElement('meta');
-    metaEl.setAttribute('charset', 'utf-8');
-
-    const titleEl = printDoc.createElement('title');
-    titleEl.textContent = title || 'Document';
-
-    const styleEl = printDoc.createElement('style');
-    styleEl.textContent = [
+    const sanitizedBody = sanitizePrintableHtmlFragment(renderedHtml);
+    const trustedPrintCss = [
       `@page { size: A4 ${safeOrientation}; margin: 18mm; }`,
-      'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.65; font-size: 13px; }',
+      'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.65; font-size: 13px; color: #111; }',
       'h1, h2, h3, h4 { margin-top: 1.4em; margin-bottom: 0.45em; font-weight: 700; }',
       'table { border-collapse: collapse; width: 100%; margin: 12px 0; }',
       'th, td { border: 1px solid rgba(0, 0, 0, 0.25); padding: 6px 10px; text-align: left; }',
@@ -389,17 +467,11 @@ export class DocumentImportExportService {
       'blockquote { border-left: 3px solid rgba(0, 0, 0, 0.4); margin: 10px 0; padding: 6px 12px; background: rgba(0, 0, 0, 0.03); }',
     ].join('\n');
 
-    if (printDoc.head) {
-      printDoc.head.replaceChildren(metaEl, titleEl, styleEl);
-    }
-
-    if (printDoc.body) {
-      const adoptedNodes = Array.from(sanitizedDoc.body.childNodes).map((node) => printDoc.importNode(node, true));
-      printDoc.body.replaceChildren(...adoptedNodes);
-    }
-
-    printWin.focus();
-    printWin.print();
+    PrintHtmlInSandboxedIframe(sanitizedBody, {
+      Title: title || 'Document',
+      TrustedPrintCss: trustedPrintCss,
+      DocumentRef: document,
+    });
   }
 
   private mapHeadingLevel(
@@ -423,10 +495,13 @@ export class DocumentImportExportService {
     }
   }
 
-  private parseInlineTextRuns(docx: typeof DocxModule, text: string): DocxModule.TextRun[] {
-    const { TextRun } = docx;
-    const runs: DocxModule.TextRun[] = [];
-    const tokenRegex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
+  private parseInlineTextRuns(
+    docx: typeof DocxModule,
+    text: string,
+  ): Array<DocxModule.TextRun | DocxModule.ExternalHyperlink> {
+    const { TextRun, ExternalHyperlink } = docx;
+    const runs: Array<DocxModule.TextRun | DocxModule.ExternalHyperlink> = [];
+    const tokenRegex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|~~([^~]+)~~|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = tokenRegex.exec(text)) !== null) {
@@ -438,7 +513,18 @@ export class DocumentImportExportService {
       } else if (match[3] !== undefined) {
         runs.push(new TextRun({ text: match[3], italics: true }));
       } else if (match[4] !== undefined) {
-        runs.push(new TextRun({ text: match[4], font: 'Courier New' }));
+        runs.push(new TextRun({ text: match[4], strike: true }));
+      } else if (match[5] !== undefined) {
+        runs.push(new TextRun({ text: match[5], font: 'Courier New' }));
+      } else if (match[6] !== undefined && match[7] !== undefined && ExternalHyperlink) {
+        runs.push(
+          new ExternalHyperlink({
+            link: match[7],
+            children: [new TextRun({ text: match[6], style: 'Hyperlink' })],
+          }),
+        );
+      } else if (match[6] !== undefined) {
+        runs.push(new TextRun({ text: match[6] }));
       }
       lastIndex = tokenRegex.lastIndex;
     }
@@ -448,20 +534,46 @@ export class DocumentImportExportService {
     return runs.length > 0 ? runs : [new TextRun({ text })];
   }
 
-  private parseMarkdownTableLines(lines: string[]): { headers: string[]; rows: string[][] } {
-    const parseRow = (line: string): string[] =>
-      line
-        .replace(/^\|/, '')
-        .replace(/\|$/, '')
-        .split('|')
-        .map((c) => c.trim());
+  private isMarkdownTableSeparatorLine(line: string): boolean {
+    const cells = this.splitEscapedPipeRow(line);
+    return cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c));
+  }
 
+  private splitEscapedPipeRow(line: string): string[] {
+    let trimmed = line.trim();
+    if (trimmed.startsWith('|')) {
+      trimmed = trimmed.slice(1);
+    }
+    if (trimmed.endsWith('|') && !trimmed.endsWith('\\|')) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    const cells: string[] = [];
+    let current = '';
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (ch === '\\' && i + 1 < trimmed.length && trimmed[i + 1] === '|') {
+        current += '|';
+        i++;
+        continue;
+      }
+      if (ch === '|') {
+        cells.push(current.trim());
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+    cells.push(current.trim());
+    return cells;
+  }
+
+  private parseMarkdownTableLines(lines: string[]): { headers: string[]; rows: string[][] } {
     if (lines.length === 0) {
       return { headers: [], rows: [] };
     }
-    const headers = parseRow(lines[0]);
-    const bodyStart = lines.length > 1 && /^[\s|:-]+$/.test(lines[1]) ? 2 : 1;
-    const rows = lines.slice(bodyStart).map(parseRow);
+    const headers = this.splitEscapedPipeRow(lines[0]);
+    const bodyStart = lines.length > 1 && this.isMarkdownTableSeparatorLine(lines[1]) ? 2 : 1;
+    const rows = lines.slice(bodyStart).map((line) => this.splitEscapedPipeRow(line));
     return { headers, rows };
   }
 
@@ -504,7 +616,7 @@ export class DocumentImportExportService {
           children: headers.map(
             (_, idx) =>
               new DocxTableCell({
-                children: [new Paragraph({ text: r[idx] ?? '' })],
+                children: [new Paragraph({ children: this.parseInlineTextRuns(docx, r[idx] ?? '') })],
               }),
           ),
         }),

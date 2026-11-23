@@ -200,12 +200,12 @@ export class UserInfo extends BaseInfo {
     /**
      * Foreign key reference to the Entities table
      */
-    LinkedEntityID: number = null
+    LinkedEntityID: string = null
     
     /**
      * ID of the specific record this user is linked to
      */
-    LinkedEntityRecordID: number = null
+    LinkedEntityRecordID: string = null
     
     /**
      * Timestamp when the user record was created
@@ -572,7 +572,8 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
      * @returns {string} The filter text with all user tokens replaced with actual values
      */
     public MarkupFilterText(user: UserInfo, options?: MarkupFilterOptions): string {
-        const ret = this.substituteTokens(this.FilterText, user);
+        const rawFilterText = options?.platform ? this.GetPlatformFilterText(options.platform) : this.FilterText;
+        const ret = this.substituteTokens(rawFilterText, user);
         const unresolvedMatch = ret.match(/\{\{(?:User|Acting)\w+\}\}/);
         if (unresolvedMatch) {
             if (options?.unresolvedBehavior === 'match-nothing') {
@@ -580,10 +581,10 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
                 // safe for equality shapes (Col <> '' or LIKE '%%' match everything), so an
                 // unresolved token collapses the ENTIRE filter to a predicate that matches
                 // nothing regardless of the expression's operators.
-                LogError('Row filter has unresolved token after markup — resolving filter to (1=0): ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
+                LogError('Row filter has unresolved token after markup — resolving filter to (1=0): ' + unresolvedMatch[0] + ' in filter: ' + rawFilterText);
                 return '(1=0)';
             }
-            LogError('RLS filter has unresolved token after markup: ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
+            LogError('RLS filter has unresolved token after markup: ' + unresolvedMatch[0] + ' in filter: ' + rawFilterText);
         }
         return ret;
     }
@@ -606,7 +607,8 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
         if (!user || (literal === '(1=0)' && options?.unresolvedBehavior === 'match-nothing')) {
             return literal;
         }
-        return this.substituteTokens(this.bindWholeLiteralTokens(this.FilterText, user, binder), user);
+        const rawFilterText = options?.platform ? this.GetPlatformFilterText(options.platform) : this.FilterText;
+        return this.substituteTokens(this.bindWholeLiteralTokens(rawFilterText, user, binder), user);
     }
 
     /** Substitutes every token the user resolves as escaped literal text; unresolved tokens are left in place. */
@@ -815,6 +817,13 @@ export interface MarkupFilterOptions {
      *   expression's operator shapes.
      */
     unresolvedBehavior?: 'legacy' | 'match-nothing';
+    /**
+     * Optional target database platform (`'sqlserver'` | `'postgresql'`).
+     * When provided, resolves `PlatformVariants.FilterText[platform]` via
+     * {@link RowLevelSecurityFilterInfo.GetPlatformFilterText} before token substitution,
+     * falling back to base `FilterText` when no platform variant is defined.
+     */
+    platform?: DatabasePlatform;
 }
 
 /**

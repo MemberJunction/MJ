@@ -71,7 +71,7 @@ export class TaskGraphFrameNotification {
   reason?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   // ── ClaimChanged ──────────────────────────────────────────────────────────
-  /** 'claimed' | 'heartbeat-lost' | 'reclaimed' */
+  /** 'claimed' | 'heartbeat-lost' | 'reclaimed' | 'retry-scheduled' */
   @Field(() => String, { nullable: true })
   claimEvent?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
@@ -80,6 +80,14 @@ export class TaskGraphFrameNotification {
 
   @Field(() => String, { nullable: true })
   claimExpiresAt?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+  /** On a 'retry-scheduled' claim event: which retry is coming, counting from 1. */
+  @Field(() => Number, { nullable: true })
+  attempt?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+  /** On a 'retry-scheduled' claim event: the earliest moment the retry may run, ISO 8601. */
+  @Field(() => String, { nullable: true })
+  nextAttemptAt?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   // ── PassCompleted ─────────────────────────────────────────────────────────
   @Field(() => Number, { nullable: true })
@@ -255,6 +263,8 @@ export class TaskGraphFrameResolver {
       claimEvent: payload.ClaimEvent,
       claimedBy: payload.ClaimedBy,
       claimExpiresAt: payload.ClaimExpiresAt,
+      attempt: payload.Attempt,
+      nextAttemptAt: payload.NextAttemptAt,
       passNumber: payload.PassNumber,
       eligibleCount: payload.EligibleCount,
       heldCount: payload.HeldCount,

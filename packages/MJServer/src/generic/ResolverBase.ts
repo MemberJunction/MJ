@@ -35,6 +35,7 @@ import {
   WellKnownUserSource,
 } from '@memberjunction/core';
 import { ArtifactPermissionEngine, MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
+import { IsValidUUID } from '@memberjunction/global';
 
 /**
  * Extended RunViewResult carrying a non-enumerable reference to the resolved view entity
@@ -62,7 +63,7 @@ import {
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { RefusalExtensions } from './refusalExtensions.js';
-import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { AssertAPIKeyScopeForRequest } from '../auth/APIKeyRequestScope.js';
 import sql from 'mssql';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
@@ -94,9 +95,10 @@ import { Subscription } from 'rxjs';
  * `mj: diagnostic sender registrations` is refused a change to its guarded fields by a rule that decides on
  * `Dirty`, so the baseline must be the stored row.
  *
- * `mj: graph edges` gates approval on the stored `Status`, on `Dirty` identity and content columns, and on the
- * stored review stamp in `Attributes` (`MJGraphEdgeEntityServer`), so it must hold even if a host stops
- * tracking the entity's changes.
+ * `mj: graph edges` and `mj: graph concepts` gate approval/deprecation on the stored `Status` and on `Dirty`
+ * governed columns (and `Attributes` review stamp on edges) in `MJGraphEdgeEntityServer` /
+ * `MJGraphConceptEntityServer`, so the baseline must always come from the stored row even if a host stops
+ * tracking changes.
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
@@ -108,6 +110,16 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: projects',
   'mj: diagnostic sender registrations',
   'mj: graph edges',
+  'mj: graph concepts',
+  'mj: artifacts',
+  'mj: artifact versions',
+  'mj: artifact permissions',
+  'mj: artifact version attributes',
+  'mj: collections',
+  'mj: collection permissions',
+  'mj: collection artifacts',
+  'mj: artifact working states',
+  'mj: artifact guest share links',
 ]);
 
 interface ActiveEntitySessionListener {
@@ -337,14 +349,32 @@ export class ResolverBase {
 
   private async canMapEntityRecordForUser(
     entityName: string,
-    dataObject: { ArtifactID?: string | null },
+    dataObject: {
+      ID?: string | null;
+      ArtifactID?: string | null;
+      CollectionID?: string | null;
+      ArtifactVersionID?: string | null;
+    },
     contextUser?: UserInfo,
     provider?: IMetadataProvider
   ): Promise<boolean> {
-    if (entityName === 'MJ: Artifact Working States') {
+    if (
+      entityName === 'MJ: Artifact Working States' ||
+      entityName === 'MJ: Artifact Guest Share Links'
+    ) {
       return false;
     }
-    if (entityName !== 'MJ: Artifact Versions') {
+
+    const gatedEntities = new Set<string>([
+      'MJ: Artifacts',
+      'MJ: Artifact Versions',
+      'MJ: Artifact Version Attributes',
+      'MJ: Artifact Permissions',
+      'MJ: Collections',
+      'MJ: Collection Permissions',
+      'MJ: Collection Artifacts',
+    ]);
+    if (!gatedEntities.has(entityName)) {
       return true;
     }
 
@@ -358,22 +388,149 @@ export class ResolverBase {
       return true;
     }
 
-    const artifactId = typeof dataObject.ArtifactID === 'string' ? dataObject.ArtifactID.trim() : '';
-    if (!contextUser || !artifactId) {
+    if (!contextUser) {
       return false;
     }
 
     const aclProvider = provider ?? contextUser.OwningProvider ?? Metadata.Provider;
+    if (!aclProvider) {
+      return false;
+    }
+
     try {
-      return await ArtifactPermissionEngine.Instance.CheckPermission(
-        aclProvider,
-        artifactId,
-        contextUser,
-        'Read'
-      );
+      if (entityName === 'MJ: Artifacts') {
+        const artifactId = typeof dataObject.ID === 'string' ? dataObject.ID.trim() : '';
+        if (!IsValidUUID(artifactId)) {
+          return false;
+        }
+        return await ArtifactPermissionEngine.Instance.CheckPermission(
+          aclProvider,
+          artifactId,
+          contextUser,
+          'Read'
+        );
+      }
+
+      if (entityName === 'MJ: Artifact Versions' || entityName === 'MJ: Artifact Permissions') {
+        const artifactId = typeof dataObject.ArtifactID === 'string' ? dataObject.ArtifactID.trim() : '';
+        if (!IsValidUUID(artifactId)) {
+          return false;
+        }
+        return await ArtifactPermissionEngine.Instance.CheckPermission(
+          aclProvider,
+          artifactId,
+          contextUser,
+          'Read'
+        );
+      }
+
+      if (entityName === 'MJ: Collections') {
+        const collectionId = typeof dataObject.ID === 'string' ? dataObject.ID.trim() : '';
+        if (!IsValidUUID(collectionId)) {
+          return false;
+        }
+        const perms = await ArtifactPermissionEngine.Instance.ResolveCollectionAncestryPermissions(
+          aclProvider,
+          collectionId,
+          contextUser
+        );
+        return perms.CanRead;
+      }
+
+      if (entityName === 'MJ: Collection Permissions') {
+        const collectionId = typeof dataObject.CollectionID === 'string' ? dataObject.CollectionID.trim() : '';
+        if (!IsValidUUID(collectionId)) {
+          return false;
+        }
+        const perms = await ArtifactPermissionEngine.Instance.ResolveCollectionAncestryPermissions(
+          aclProvider,
+          collectionId,
+          contextUser
+        );
+        return perms.CanRead;
+      }
+
+      if (entityName === 'MJ: Artifact Version Attributes') {
+        const versionId = typeof dataObject.ArtifactVersionID === 'string' ? dataObject.ArtifactVersionID.trim() : '';
+        if (!IsValidUUID(versionId)) {
+          return false;
+        }
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!systemUser) {
+          return false;
+        }
+        const rv = RunView.FromMetadataProvider(aclProvider);
+        const verParams: RunViewParams = {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID='${EscapeSQLString(versionId)}'`,
+          Fields: ['ID', 'ArtifactID'],
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        };
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(verParams);
+        const verRes = await rv.RunView<{ ID: string; ArtifactID: string }>(verParams, systemUser);
+        const artifactId =
+          verRes.Success && verRes.Results && verRes.Results.length > 0
+            ? verRes.Results[0].ArtifactID?.trim()
+            : '';
+        if (!artifactId || !IsValidUUID(artifactId)) {
+          return false;
+        }
+        return await ArtifactPermissionEngine.Instance.CheckPermission(
+          aclProvider,
+          artifactId,
+          contextUser,
+          'Read'
+        );
+      }
+
+      if (entityName === 'MJ: Collection Artifacts') {
+        const collectionId = typeof dataObject.CollectionID === 'string' ? dataObject.CollectionID.trim() : '';
+        const versionId = typeof dataObject.ArtifactVersionID === 'string' ? dataObject.ArtifactVersionID.trim() : '';
+        if (!IsValidUUID(collectionId) || !IsValidUUID(versionId)) {
+          return false;
+        }
+        const colPerms = await ArtifactPermissionEngine.Instance.ResolveCollectionAncestryPermissions(
+          aclProvider,
+          collectionId,
+          contextUser
+        );
+        if (!colPerms.CanRead) {
+          return false;
+        }
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!systemUser) {
+          return false;
+        }
+        const rv = RunView.FromMetadataProvider(aclProvider);
+        const verParams: RunViewParams = {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID='${EscapeSQLString(versionId)}'`,
+          Fields: ['ID', 'ArtifactID'],
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        };
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(verParams);
+        const verRes = await rv.RunView<{ ID: string; ArtifactID: string }>(verParams, systemUser);
+        const artifactId =
+          verRes.Success && verRes.Results && verRes.Results.length > 0
+            ? verRes.Results[0].ArtifactID?.trim()
+            : '';
+        if (!artifactId || !IsValidUUID(artifactId)) {
+          return false;
+        }
+        return await ArtifactPermissionEngine.Instance.CheckPermission(
+          aclProvider,
+          artifactId,
+          contextUser,
+          'Read'
+        );
+      }
+
+      return false;
     } catch (err) {
       LogError(
-        `ResolverBase.MapFieldNamesToCodeNames failed to verify Read permission on artifact '${artifactId}': ${
+        `ResolverBase.canMapEntityRecordForUser failed ACL check on ${entityName}: ${
           err instanceof Error ? err.message : String(err)
         }`
       );
@@ -463,15 +620,74 @@ export class ResolverBase {
     if (entityName === 'MJ: Artifact Working States') {
       return [];
     }
+    const isGuestShareLinks = entityName === 'MJ: Artifact Guest Share Links';
+    let isSystem = false;
+    let sourceRows = dataObjectArray;
+    if (isGuestShareLinks) {
+      const sysId = UserCache?.Instance?.GetSystemUser()?.ID;
+      isSystem = Boolean(
+        contextUser &&
+          ((sysId && UUIDsEqual(contextUser.ID, sysId)) ||
+            WellKnownUserSource?.Instance?.IsSystemUser(contextUser))
+      );
+      if (!isSystem) {
+        if (!contextUser) {
+          return [];
+        }
+        const aclProvider = provider ?? contextUser.OwningProvider ?? Metadata.Provider;
+        if (!aclProvider) {
+          return [];
+        }
+        const permCache = new Map<string, boolean>();
+        const permitted: typeof dataObjectArray = [];
+        for (let i = 0; i < dataObjectArray.length; i++) {
+          const candidate = dataObjectArray[i] as { ArtifactID?: string | null };
+          const artifactId = typeof candidate?.ArtifactID === 'string' ? candidate.ArtifactID.trim() : '';
+          if (!IsValidUUID(artifactId)) {
+            continue;
+          }
+          const cacheKey = artifactId.toLowerCase();
+          let allowed = permCache.get(cacheKey);
+          if (allowed === undefined) {
+            try {
+              const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                aclProvider,
+                artifactId,
+                contextUser
+              );
+              allowed = Boolean(perms.CanShare || perms.CanDelete);
+            } catch {
+              allowed = false;
+            }
+            permCache.set(cacheKey, allowed);
+          }
+          if (allowed) {
+            permitted.push(dataObjectArray[i]);
+          }
+        }
+        if (permitted.length === 0) {
+          return [];
+        }
+        sourceRows = permitted;
+      }
+    }
     // Precompute the entity lookup, FieldMapper plan, denied-fields set, readable-fields list,
     // and Record Changes projector ONCE for the whole array rather than per row.
     const plan = this.buildFieldMappingPlan(entityName, contextUser, provider);
     const hasEncryptedFields = plan.encryptedFields.length > 0;
-    const mapped: Array<Record<string, unknown> | null> = new Array(dataObjectArray.length);
-    for (let i = 0; i < dataObjectArray.length; i++) {
-      const row = this.mapRowSynchronously(dataObjectArray[i] as Record<string, unknown>, plan);
+    const mapped: Array<Record<string, unknown> | null> = new Array(sourceRows.length);
+    for (let i = 0; i < sourceRows.length; i++) {
+      const row = this.mapRowSynchronously(sourceRows[i] as Record<string, unknown>, plan);
       if (row && hasEncryptedFields) {
         await this.decryptRowEncryptedFields(row, plan.encryptedFields, contextUser);
+      }
+      if (row && isGuestShareLinks && !isSystem) {
+        if (Object.prototype.hasOwnProperty.call(row, 'TokenHash')) {
+          row['TokenHash'] = '';
+        }
+        if (Object.prototype.hasOwnProperty.call(row, 'tokenHash')) {
+          row['tokenHash'] = '';
+        }
       }
       mapped[i] = row;
     }
@@ -867,12 +1083,15 @@ export class ResolverBase {
       }
 
       const md = provider;
-      const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
+      const entity =
+        typeof md.EntityByName === 'function'
+          ? md.EntityByName(viewInput.EntityName)
+          : md.Entities?.find((e) => e.Name.trim().toLowerCase() === viewInput.EntityName.trim().toLowerCase());
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
       const viewInfo: MJUserViewEntityExtended = {
         ID: '',
-        Entity: viewInput.EntityName,
+        Entity: entity.Name,
         EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,
       } as MJUserViewEntityExtended; // only providing a few bits of data here, but it's enough to get the view to run
@@ -926,27 +1145,39 @@ export class ResolverBase {
 
         if (viewInput.ViewName) {
           viewInfo = await this.resolveUserViewByName(viewInput.ViewName, provider, userPayload.userRecord);
-          // Populate EntityName on the input so callers (e.g. RunViews resolver) can
-          // look up the entity without re-querying the view
-          if (viewInfo && !viewInput.EntityName) {
+          if (viewInfo) {
+            if (viewInput.EntityName && viewInput.EntityName.trim().toLowerCase() !== (viewInfo.Entity ?? '').trim().toLowerCase()) {
+              throw new Error(
+                `EntityName '${viewInput.EntityName}' does not match resolved User View entity '${viewInfo.Entity}'`
+              );
+            }
             viewInput.EntityName = viewInfo.Entity;
           }
         } else if (viewInput.ViewID) {
           viewInfo = await this.resolveUserViewByID(viewInput.ViewID, provider, contextUser);
-          // Populate EntityName on the input so callers can look up the entity
-          if (viewInfo && !viewInput.EntityName) {
+          if (viewInfo) {
+            if (viewInput.EntityName && viewInput.EntityName.trim().toLowerCase() !== (viewInfo.Entity ?? '').trim().toLowerCase()) {
+              throw new Error(
+                `EntityName '${viewInput.EntityName}' does not match resolved User View entity '${viewInfo.Entity}'`
+              );
+            }
             viewInput.EntityName = viewInfo.Entity;
           }
         } else if (viewInput.EntityName) {
-          const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
+          const requestedEntityName = viewInput.EntityName;
+          const entity =
+            typeof md.EntityByName === 'function'
+              ? md.EntityByName(requestedEntityName)
+              : md.Entities?.find((e) => e.Name.trim().toLowerCase() === requestedEntityName.trim().toLowerCase());
           if (!entity) {
-            throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
+            throw new Error(`Entity ${requestedEntityName} not found in metadata`);
           }
+          viewInput.EntityName = entity.Name;
 
           // only providing a few bits of data here, but it's enough to get the view to run
           viewInfo = {
             ID: '',
-            Entity: viewInput.EntityName,
+            Entity: entity.Name,
             EntityID: entity.ID,
             EntityBaseView: entity.BaseView,
           } as MJUserViewEntityExtended;
@@ -1116,68 +1347,14 @@ export class ResolverBase {
     if (!userPayload.apiKeyHash) {
       return;
     }
-
-    // Get system user for authorization call
-    // NOTE: We use system user here because Authorize() needs to run internal
-    // database queries (loading scope rules, logging decisions). The system user
-    // ensures these queries work regardless of what permissions the API key's
-    // user has. The API key's associated user (in userPayload.userRecord) is
-    // used later when the actual operation executes - their permissions are
-    // the ultimate ceiling that scopes can only narrow, never expand.
-    const systemUser = UserCache.Instance.GetSystemUser();
-    if (!systemUser) {
-      throw new Error('System user not found');
-    }
-
-    const apiKeyEngine = GetAPIKeyEngine();
-
-    // Check for full_access scope first (god power - bypasses all other checks).
-    // Use skipLogging to avoid polluting the usage log with expected denials —
-    // this is a fast-path optimization, not the real authorization decision.
-    const fullAccessResult = await apiKeyEngine.Authorize(
+    // One implementation for every transport: the REST routes run the same check.
+    await AssertAPIKeyScopeForRequest(
       userPayload.apiKeyHash,
-      'MJAPI',
-      'full_access',
-      '*',
-      systemUser,
-      { endpoint: '/graphql', method: 'POST' },
-      { skipLogging: true }
-    );
-
-    if (fullAccessResult.Allowed) {
-      // full_access granted - skip specific scope check
-      return;
-    }
-
-    // Check specific scope. The acting context stamped on the session user (set
-    // server-side in context.ts, never client-supplied) rides along so filtered
-    // rules with {{Acting*}} tokens can validate their required values — without
-    // it, a filtered rule fails closed even for a session carrying valid context.
-    const sessionUser = this.GetUserFromPayload(userPayload);
-    const result = await apiKeyEngine.Authorize(
-      userPayload.apiKeyHash,
-      'MJAPI',
       scopePath,
       resource,
-      systemUser,
-      {
-        endpoint: '/graphql',
-        method: 'POST'
-      },
-      {
-        actingContext: sessionUser?.APIKeyActingContext
-      }
+      this.GetUserFromPayload(userPayload),
+      { endpoint: '/graphql', method: 'POST' }
     );
-
-    if (!result.Allowed) {
-      // Provide specific, actionable error message
-      throw new AuthorizationError(
-        `Access denied. This API key requires the '${scopePath}' scope ` +
-        `for resource '${resource}' to perform this operation. ` +
-        `Please update the API key's scopes or use an API key with appropriate permissions. ` +
-        `Denial reason: ${result.Reason}`
-      );
-    }
   }
 
   /**

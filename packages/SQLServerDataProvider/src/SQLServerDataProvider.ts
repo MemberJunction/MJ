@@ -57,6 +57,7 @@ import {
   SaveContext,
   RestoreContext,
   CloneContext,
+  SyncContext,
   RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
@@ -95,6 +96,7 @@ import { BehaviorSubject, Observable, Subject, concatMap, from, catchError, of }
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import {
   EXECUTED_VARIABLE_SUFFIX,
+  IsKeptAsInlineLiteral,
   IsSaveParameterList,
   RenderSaveSQL,
   SaveParameterCollector,
@@ -791,6 +793,7 @@ export class SQLServerDataProvider
     );
     cfg.ConcurrencyCheck = this.ConcurrencyCheck;
     cfg.DeltaUpdates = this.DeltaUpdates;
+    cfg.LoadQueryMetadata = this.LoadsQueryMetadata;
     await child.Config(cfg, this);
     return child;
   }
@@ -1084,6 +1087,17 @@ export class SQLServerDataProvider
    */
   protected get AllowRefresh(): boolean {
     return this._refreshSuspendCount === 0;
+  }
+
+  /**
+   * Staleness checks and shared-storage snapshot adoption stay enabled while saves are in flight:
+   * `GetDatasetStatusByName('MJ_Metadata')` runs on the connection pool (`ignoreAmbientTransaction`),
+   * and adopting a peer's snapshot atomically swaps `_localMetadata` without mutating any
+   * `EntityInfo` held by an in-flight save. If a full DB reload is still required, `Refresh()`
+   * waits for in-flight saves via {@link waitForSavesToFinish}.
+   */
+  protected override get AllowRefreshCheck(): boolean {
+    return true;
   }
 
   /**
@@ -2075,7 +2089,6 @@ export class SQLServerDataProvider
   ): SaveSQLFragment {
     const saveBinding = this.asSaveBinding(binding, 'WrapSaveCallWithRecordChange');
     const params = new SaveParameterCollector(saveBinding.parameters);
-    const recordChangesEntityInfo = this.EntityByName('MJ: Record Changes');
     const spName = this.GetCreateUpdateSPName(entity, payload.type === 'Create');
     const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys
       .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',[${pk.Name}]`)
@@ -2120,13 +2133,8 @@ export class SQLServerDataProvider
 
                     IF @ID IS NOT NULL
                     BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        );
-
                         ${snapshotDeclareSQL}
 
-                        INSERT INTO @ResultChangesTable
                         ${recordChangeEXEC};
                     END;
 
@@ -2157,8 +2165,14 @@ export class SQLServerDataProvider
       ? `,
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}`
+      : payload.source === 'Sync'
+      ? `,
+                                                                                        @Source='Sync',
+                                                                                        @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}${payload.integrationID ? `,
+                                                                                        @IntegrationID=${bind('IntegrationID', `'${payload.integrationID}'`)}` : ''}`
       : '';
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
+                                                                                        @EntityID='${payload.entityID}',
                                                                                         @RecordID=${recordIDSQL},
                                                                                         @UserID=${bind('UserID', `'${payload.userID}'`)},
                                                                                         @Type='${payload.type}',
@@ -2166,7 +2180,8 @@ export class SQLServerDataProvider
                                                                                         @ChangesDescription=${bind('ChangesDescription', `N'${payload.changesDescription}'`)},
                                                                                         @FullRecordJSON=${fullRecordJSONSQL ?? bind('FullRecordJSON', `N'${payload.fullRecordJSON}'`)},
                                                                                         @Status='Complete',
-                                                                                        @Comments=null${lineageClause}`;
+                                                                                        @Comments=null,
+                                                                                        @SuppressReturn=1${lineageClause}`;
   }
 
   /** The batch variable a save's Record Change snapshot is built into from `@ResultTable`. */
@@ -2262,6 +2277,19 @@ export class SQLServerDataProvider
    * @param value The value to set
    * @returns SQL value string
    */
+  /**
+   * Renders a value for a numeric field as a SQL number literal, keeping the caller's digits so a
+   * high-precision decimal isn't rounded through a JS number. Throws for anything else: this text
+   * goes into the save statement as written, and a value that isn't a number must not reach it.
+   */
+  protected static RenderNumberLiteral(value: unknown, fieldName: string): string {
+    const raw = String(value).trim();
+    if (!/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw)) {
+      throw new Error(`Invalid non-numeric value provided for numeric field ${fieldName}`);
+    }
+    return raw;
+  }
+
   private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
     if (f.IsBinaryFieldType) return this.FormatBinaryLiteral(f, value);
     let val: any = value;
@@ -2301,7 +2329,10 @@ export class SQLServerDataProvider
         return `'${val}'`;
         
       case EntityFieldTSType.Number:
-        return val.toString();
+        if (f.Type && (IsKeptAsInlineLiteral(f) || f.Type.trim().toLowerCase() === 'sysname')) {
+          return val.toString();
+        }
+        return SQLServerDataProvider.RenderNumberLiteral(val, f.Name);
         
       default:
         // For other types, convert to string and quote if needed
@@ -2361,9 +2392,12 @@ export class SQLServerDataProvider
   /**
    * Renders a binary field value as a T-SQL hexadecimal literal (`0x…`).
    *
-   * A binary field's value in a `BaseEntity` is a base64 string. SQL Server has no implicit
-   * conversion from a quoted string to `varbinary` — a quoted base64 value would either fail or be
-   * stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
+   * A binary field's value in a `BaseEntity` is a base64 string. Outside a transaction group, a save
+   * sends a binary value to SQL Server as a typed parameter (see `saveParameters.ts`). This literal is
+   * used where the value appears in SQL text: the statement a transaction group executes, and the
+   * rendered statement that is logged, captured into migrations and shown in errors. SQL Server has no
+   * implicit conversion from a quoted string to `varbinary` — a quoted base64 value would either fail
+   * or be stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
    * which is unambiguous, needs no escaping and works on every SQL Server version. A byte array
    * (e.g. a Buffer set by server code) is accepted as well.
    *
@@ -2374,14 +2408,16 @@ export class SQLServerDataProvider
    *   the save instead of being stored as garbage.
    */
   /**
-   * Largest binary value, in decoded bytes, that a save will inline as a `0x…` hex literal.
+   * Largest binary value, in decoded bytes, that a save accepts.
    *
-   * A save is one T-SQL batch, and SQL Server caps a batch at 65,536 × the network packet size
-   * (256 MB at the default 4 KB). The batch is UTF-16, so the literal costs 4 bytes per blob byte,
-   * and with Record Changes on an update the same bytes travel again as base64 in `ChangesJSON`
-   * (old and new) and `FullRecordJSON` — about 12 bytes per blob byte, a ceiling near 20 MB. Node
-   * also holds the hex, the batch and those JSON strings at once. Above this limit the save fails
-   * here with a message that says so, instead of a batch-size error from the server.
+   * Every binary value a save writes is decoded and checked against this limit. Outside a
+   * transaction group the value reaches SQL Server as a typed parameter (see `saveParameters.ts`).
+   * A transaction group executes the rendered statement text, where the value is a `0x…` hex literal:
+   * that batch is UTF-16, so the literal costs 4 bytes per blob byte, and SQL Server caps a batch at
+   * 65,536 × the network packet size (256 MB at the default 4 KB). With Record Changes on an update
+   * the same bytes also travel as base64 in `ChangesJSON` (old and new) and `FullRecordJSON`, and Node
+   * holds the bytes and those strings at once. Above this limit the save fails here with a message
+   * that says so, instead of a batch-size or memory error.
    */
   public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
 
@@ -2446,8 +2482,9 @@ export class SQLServerDataProvider
     wrapRecordIdInQuotes: boolean,
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
+    syncContext?: SyncContext | null,
   ) {
-    return this.renderLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext);
+    return this.renderLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext, undefined, syncContext);
   }
 
   /**
@@ -2466,6 +2503,7 @@ export class SQLServerDataProvider
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
     params?: SaveParameterCollector,
+    syncContext?: SyncContext | null,
   ): string | null {
     // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
     // so SQL Server and PostgreSQL share one implementation. We only render
@@ -2480,6 +2518,8 @@ export class SQLServerDataProvider
       restoreContext,
       "'",
       cloneContext,
+      false,
+      syncContext,
     );
     if (!payload) return null;
 
@@ -2501,8 +2541,9 @@ export class SQLServerDataProvider
     user: UserInfo,
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
+    syncContext?: SyncContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext, syncContext);
     if (sql) return { sql };
     return null;
   }
@@ -2548,7 +2589,6 @@ export class SQLServerDataProvider
     });
     const sParams = pkRefs.map((pk) => `@${pk.Field.CodeName}=${pk.Ref}`).join(', ');
     const sSimpleSQL = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
-    const recordChangesEntityInfo = this.EntityByName('MJ: Record Changes');
 
     let sSQL: string;
     if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
@@ -2582,6 +2622,7 @@ export class SQLServerDataProvider
         entity.RestoreContext,
         entity.CloneContext,
         params,
+        entity.SyncContext,
       );
       if (entity.EntityInfo.CascadeDeletes) {
         // A cascading spDelete EXECs other procs (spUpdate* to null references, spDelete* for
@@ -2596,48 +2637,38 @@ export class SQLServerDataProvider
         const sWhere = pkRefs.map((pk) => `[${pk.Field.Name}]=${pk.Ref}`).join(' AND ');
         const sKeyWhen = (flag: string) => pkRefs.map((pk) => `CASE WHEN ${flag} = 1 THEN ${pk.Ref} END AS [${pk.Field.Name}]`).join(', ');
         sSQL = `
-                    DECLARE @MJDeleteRowExisted BIT = CASE WHEN EXISTS (SELECT 1 FROM ${sView} WHERE ${sWhere}) THEN 1 ELSE 0 END
-                    SELECT ${sKeyWhen('@MJDeleteRowExisted')}
+                    DECLARE @MJDeleteRowExisted BIT = CASE WHEN EXISTS (SELECT 1 FROM ${sView} WHERE ${sWhere}) THEN 1 ELSE 0 END;
+                    SELECT ${sKeyWhen('@MJDeleteRowExisted')};
 
                     IF @MJDeleteRowExisted = 1
-                        ${sSimpleSQL}
+                        ${sSimpleSQL};
 
-                    DECLARE @MJDeleteRowDeleted BIT = CASE WHEN @MJDeleteRowExisted = 1 AND NOT EXISTS (SELECT 1 FROM ${sView} WHERE ${sWhere}) THEN 1 ELSE 0 END
+                    DECLARE @MJDeleteRowDeleted BIT = CASE WHEN @MJDeleteRowExisted = 1 AND NOT EXISTS (SELECT 1 FROM ${sView} WHERE ${sWhere}) THEN 1 ELSE 0 END;
                     IF @MJDeleteRowDeleted = 1
                     BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        )
-
-                        INSERT INTO @ResultChangesTable
-                        ${recordChangeSQL}
-                    END
+                        ${recordChangeSQL};
+                    END;
 
                     SELECT ${sKeyWhen('@MJDeleteRowDeleted')}`;
         return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
       }
       sSQL = `
                     IF OBJECT_ID('tempdb..#ResultTable') IS NOT NULL
-                        DROP TABLE #ResultTable
+                        DROP TABLE #ResultTable;
 
                     DECLARE @ResultTable TABLE (
                         ${sTableDeclare}
-                    )
+                    );
 
                     INSERT INTO @ResultTable
-                    ${sSimpleSQL}
+                    ${sSimpleSQL};
 
-                    DECLARE ${sVariableDeclare}
-                    SELECT ${sSelectDeclare} FROM @ResultTable
+                    DECLARE ${sVariableDeclare};
+                    SELECT ${sSelectDeclare} FROM @ResultTable;
                     IF ${sIF}
                     BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        )
-
-                        INSERT INTO @ResultChangesTable
-                        ${recordChangeSQL}
-                    END
+                        ${recordChangeSQL};
+                    END;
 
                     SELECT ${sReturnList}`;
     } else {
@@ -3613,6 +3644,7 @@ export class SQLServerDataProvider
     safeUserId: string,
     source?: RecordChangeSource,
     changeContext?: string | null,
+    integrationID?: string | null,
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
@@ -3627,6 +3659,11 @@ export class SQLServerDataProvider
       ? `,
         @Source='Clone',
         @ChangeContext=N'${EscapeSQLString(changeContext)}'`
+      : source === 'Sync'
+      ? `,
+        @Source='Sync',
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'${integrationID ? `,
+        @IntegrationID='${EscapeSQLString(integrationID)}'` : ''}`
       : '';
 
     return `
@@ -3637,6 +3674,7 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
         @EntityName=N'${safeEntityName}',
+        @EntityID='${entityInfo.ID}',
         @RecordID=N'${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
@@ -3644,7 +3682,8 @@ IF ${varName} IS NOT NULL
         @ChangesDescription=N'${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
-        @Comments=NULL${lineageClause};`;
+        @Comments=NULL,
+        @SuppressReturn=1${lineageClause};`;
   }
 
   protected override get HasPhysicalTransaction(): boolean {
@@ -3785,13 +3824,16 @@ IF ${varName} IS NOT NULL
    * @returns Promise<boolean> - true if refresh was performed, false if skipped or no refresh needed
    */
   public async RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
-    // Skip refresh if a transaction is active
-    if (this.IsTransactionActive) {
+    // Only skip for an active transaction when metadata reads would join it. Since #4514,
+    // `datasetReadsOnPool('MJ_Metadata')` routes status and metadata reads onto the connection
+    // pool (`ignoreAmbientTransaction: true`) whenever `!this.MetadataReadsJoinTransaction`, so an
+    // unrelated ambient transaction on the global provider (e.g. a scheduled job writing rows)
+    // must not drop a peer metadata notice or scheduled check.
+    if (this.IsTransactionActive && this.MetadataReadsJoinTransaction) {
       LogStatus('Skipping metadata refresh - transaction is active');
       return false;
     }
 
-    // Call parent implementation if no transaction
     return super.RefreshIfNeeded(providerToUse, bypassMinCheckInterval);
   }
 

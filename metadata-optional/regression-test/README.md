@@ -18,11 +18,14 @@ The `Computer Use` TestType row itself stays in the normal `metadata/test-types/
 # Run the full suite via Docker
 mj test regression up
 
+# Run only some tests of the suite via Docker (exact names; repeat --test)
+mj test regression up --test "T001 - Login Smoke" --test "T002 - Data Explorer Open Record"
+
 # Compare the two most recent runs
 mj test regression compare
 
-# Validate test definitions without executing
-mj test validate --dir=metadata-optional/regression-test/tests
+# Check the test files and suite members (no database)
+pnpm run check:regression-suite
 
 # Run a single test (against your local DB / dev stack)
 mj test run --name "T001 - Login Smoke"
@@ -160,23 +163,24 @@ Always add `regression` as a tag too. Other useful tags: `smoke`, `crud`, `auth`
 
 ## Adding a New Test
 
-1. **Pick the next free test number** (T001–T155 are taken; start at T156).
-2. **Copy the closest existing test** that does something similar — it's almost always faster than starting from scratch.
+The `author-regression-test` Claude skill runs these steps from your branch's UI changes: it lists
+the related tests, proposes new ones, and scaffolds them.
+
+A PR does not run the regression suite. A test runs only when you invoke a skill:
+`/author-regression-test` can run the new test and record its first replay script, and
+`/regression-replay-pr` runs the suite for a branch. Without either, the next harvest records the
+new test's script.
+
+1. **Scaffold it.** The command picks the next free number, writes the test file, adds the suite member, and runs the parity check. It does not touch a database.
    ```bash
-   cp metadata-optional/regression-test/tests/regression/.T041-entity-form-edit-mode-dirty-field-banner.json \
-      metadata-optional/regression-test/tests/regression/.T156-my-new-test.json
+   pnpm mj test regression new --name "My new test" --priority P1 --tags my-area \
+     --start-path /app/my-app --goal "What success looks like on screen." \
+     --criteria "First visible proof" --criteria "Second visible proof"
    ```
-3. **Edit the new file**:
-   - Change `Name` (must be unique across all tests).
-   - Rewrite `Description`, `InputDefinition.goal`, and `ExpectedOutcomes.judgeValidationCriteria`.
-   - Update `finalUrlPattern` to match where the test should end up.
-   - Tune `maxSteps` based on a manual estimate (5 for a simple click, 15+ for multi-step workflows).
-   - Update `Tags` (priority + workflow area).
-   - Remove any copied `primaryKey` / `sync` blocks — `mj sync push` assigns them.
-4. **Add to the suite** — open `test-suites/.regression-suite.json` and append a `MJ: Test Suite Tests` entry under `relatedEntities` with the new `Sequence` number and `TestID`.
-5. **Validate locally**: `mj test validate --dir=metadata-optional/regression-test/tests`
-6. **Smoke test single-run**: `mj test run --name "T156 - My New Test"`
-7. **Push to DB**: `mj sync push --dir=metadata-optional/regression-test`
+   Add `--from T041` to copy the `Configuration` of a similar test (its replay scripts are not copied), and `--dry-run` to preview.
+2. **Read the new file** and sharpen `goal`, `judgeValidationCriteria`, `finalUrlPattern`, and `maxSteps` (5 for a simple click, 15+ for multi-step workflows). Keep the generated `primaryKey`: every record needs one.
+3. **Check the suite**: `pnpm run check:regression-suite`. CI runs the same check on every PR.
+4. **If another PR takes the same number first**, the parity check fails after you rebase. Renumber the file, its `Name`, and its suite member.
 
 ## Replay Scripts
 
@@ -222,10 +226,17 @@ Three things worth knowing:
 - **A re-derived script lands in `PendingReplayScript`, not `ReplayScript`.** Once a test has a
   promoted script, a run that produces a different one parks it in the review slot rather than
   silently rewriting how the suite drives the app. Use `mj test scripts` to see the drift, then
-  `--promote` or `--discard`.
+  `--promote` or `--discard`. `mj test scripts --format=md --output=drift.md` writes the drift
+  report as markdown for a PR body (`--format=json` for scripts).
 - **Pulling without those `externalizeFields` entries inlines every script.** Externalization is
   driven by the config, not by what the file already contains — so a pull with the entries removed
   writes the scripts into the test JSONs and orphans the files.
+
+**Getting scripts into git.** The `regression-replay-pr` Claude skill (type `/regression-replay-pr`;
+an agent does not start it on its own) runs the suite on your machine for any branch (usually `next`), pulls the scripts back into these files, checks that only script
+files and their `ReplayScript`/`PendingReplayScript` references changed, and opens a PR. It does not
+promote a pending script by itself: the PR body lists each pending script with its drift report,
+for a person to promote or discard.
 
 ## Tuning Failing Tests
 

@@ -379,10 +379,15 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
         // `SELECT @ID = [ID] FROM @ResultTable` is an ASSIGNMENT to the local and must be renamed.
         // So only argument lists count — spans running from an EXEC/EXECUTE to the statement end.
         const protectedStarts = new Set<number>();
+        // An EXEC/EXECUTE argument list ends at `;` or at the next top-level T-SQL statement
+        // keyword (in case a wrapper omits trailing semicolons after EXEC). Ignore `@` parameters,
+        // bracketed identifiers, or dot-qualified members like `@Set`, `[End]`, or `t.Select`.
+        const execEndPattern = /;|(?<![@.\[])\b(?:DECLARE|SELECT|INSERT|UPDATE|DELETE|SET|IF|ELSE|BEGIN|END|WHILE|RETURN|DROP|CREATE|ALTER|TRUNCATE|THROW|RAISERROR|PRINT|EXEC|EXECUTE)\b/gi;
         for (const execMatch of masked.matchAll(/\bEXEC(?:UTE)?\b/gi)) {
             const spanStart = execMatch.index! + execMatch[0].length;
-            const semicolon = masked.indexOf(';', spanStart);
-            const spanEnd = semicolon === -1 ? masked.length : semicolon;
+            execEndPattern.lastIndex = spanStart;
+            const endMatch = execEndPattern.exec(masked);
+            const spanEnd = endMatch ? endMatch.index : masked.length;
             const span = masked.slice(spanStart, spanEnd);
             for (const arg of span.matchAll(/@([A-Za-z_][A-Za-z0-9_$#@]*)\s*=/g)) {
                 protectedStarts.add(spanStart + arg.index!);

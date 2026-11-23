@@ -84,6 +84,14 @@ export abstract class BasePipelineStage {
     public Finalize?(records: readonly WorkingRecord[], context: StageContext): Promise<FinalizeResult[]>;
 
     /**
+     * Optional bulk step ahead of a page: gets the page's records before any `Run`, for work far cheaper done for
+     * all of them at once (fetching a page of locators in one driver session). It leaves what it gathered on
+     * each record for `Run` to use; a record it could not help is run as usual. Used only when the stage is
+     * first in the run's list. A failure here is logged and never fails a record.
+     */
+    public Prepare?(records: readonly WorkingRecord[], context: StageContext): Promise<void>;
+
+    /**
      * Resolve a registered stage, or `null`. Uses `TryCreateInstance` because `CreateInstance` falls back to a
      * hollow base instance on an unknown key, which would make a typo in a Record Process silently do nothing.
      */

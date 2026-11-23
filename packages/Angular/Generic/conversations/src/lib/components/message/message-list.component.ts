@@ -20,9 +20,11 @@ import {
   TemplateRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
-import { Subscription } from 'rxjs';
-import { UserInfo, CompositeKey } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { Observable, Subscription, merge } from 'rxjs';
+import { debounceTime, filter, map, skip } from 'rxjs/operators';
+import { BaseEntity, BaseEntityEvent, UserInfo, CompositeKey } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePendingArtifactRef } from './message-item.component';
 import {
@@ -311,6 +313,33 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return this._inFlightCount;
   }
   private _inFlightCount = 0;
+
+  /**
+   * The in-flight replies the viewer may stop (the host decides: its own runs, or every run when
+   * it owns the conversation). An in-flight reply outside this set shows no Stop. Changes as runs
+   * start and finish, so it is restamped onto rendered items.
+   */
+  @Input()
+  public set StoppableDetailIds(value: string[] | null | undefined) {
+    const next = value ? new UUIDSet(value) : null;
+    const prev = this._stoppableDetailIds;
+    const same = prev === next || (!!prev && !!next && prev.Size === next.Size && value!.every((id) => prev.Has(id)));
+    if (same) {
+      return;
+    }
+    this._stoppableDetailIds = next;
+    this.restampAssistantIdentity();
+  }
+  public get StoppableDetailIds(): string[] {
+    return this._stoppableDetailIds ? [...this._stoppableDetailIds] : [];
+  }
+  /** Null until the host binds the input: then every in-flight reply is stoppable, as before. */
+  private _stoppableDetailIds: UUIDSet | null = null;
+
+  /** Whether the host lets the viewer stop this reply's run. */
+  private stopAllowedFor(detailId: string): boolean {
+    return this._stoppableDetailIds?.Has(detailId) ?? true;
+  }
 
   /**
    * Whether inline markdown links in messages open in a new browser tab (`target="_blank"`).
@@ -1105,9 +1134,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   // Track whether initial render has happened
   private _initialRenderComplete = false;
+  private _agentAvatarChangesSub: Subscription | null = null;
 
   ngOnInit() {
     // Initial render will happen in ngAfterViewInit when ViewContainerRef is available
+    this.subscribeToAgentAvatarChanges();
   }
 
   ngAfterViewInit() {
@@ -1308,6 +1339,52 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         entry.ref.changeDetectorRef.markForCheck();
       }
     }
+  }
+
+  private subscribeToAgentAvatarChanges(): void {
+    const entityEvents$ = MJGlobal.Instance.GetEventListener(false).pipe(
+      filter((event: MJEvent) => {
+        if (
+          event.event !== MJEventType.ComponentEvent ||
+          event.eventCode !== BaseEntity.BaseEventCode ||
+          !event.args
+        ) {
+          return false;
+        }
+        const args = event.args as BaseEntityEvent;
+        const entityName =
+          args.type === 'remote-invalidate'
+            ? args.entityName
+            : args.baseEntity?.EntityInfo?.Name;
+        const norm = entityName?.trim().toLowerCase() ?? '';
+        return norm === 'mj: ai agents' || norm === 'mj: ai agent personas';
+      })
+    );
+
+    const engine = AIEngineBase.Instance;
+    const streams: Observable<void>[] = [entityEvents$.pipe(map(() => undefined))];
+    if (typeof engine?.ObserveProperty === 'function') {
+      streams.push(
+        engine.ObserveProperty('_agents').pipe(skip(1), map(() => undefined)),
+        engine.ObserveProperty('_agentPersonas').pipe(skip(1), map(() => undefined))
+      );
+    }
+
+    this._agentAvatarChangesSub = merge(...streams)
+      .pipe(debounceTime(40))
+      .subscribe(() => {
+        this.refreshRenderedAgentAvatars();
+      });
+  }
+
+  private refreshRenderedAgentAvatars(): void {
+    for (const entry of this._renderedMessages.values()) {
+      if (entry.kind === 'component') {
+        entry.ref.instance.AssistantAvatarFailed = false;
+        entry.ref.changeDetectorRef.markForCheck();
+      }
+    }
+    this.cdRef.markForCheck();
   }
 
   ngAfterViewChecked() {
@@ -1555,6 +1632,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   ngOnDestroy() {
+    this._agentAvatarChangesSub?.unsubscribe();
+    this._agentAvatarChangesSub = null;
     this.detachScrollListener();
     this._olderObserver?.disconnect();
     this._olderObserver = undefined;
@@ -2124,6 +2203,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
+    instance.IsLatestMessage = (index === messages.length - 1);
     instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
@@ -2199,6 +2279,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.ReadOnly = this.ReadOnly;
     instance.AllowStopRun = this.AllowStopRun;
     instance.InFlightCount = this.InFlightCount;
+    // `message` is set after the flags on the create path (and absent in prototype-built specs).
+    instance.StopAllowed = instance.message ? this.stopAllowedFor(instance.message.ID) : true;
     instance.OpenLinksInNewTab = this.OpenLinksInNewTab;
     instance.CanFork = this.CanFork;
     instance.assistantDisplayName = this.AssistantDisplayName;
@@ -2245,6 +2327,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
+    instance.IsLatestMessage = (index === messages.length - 1);
     instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 

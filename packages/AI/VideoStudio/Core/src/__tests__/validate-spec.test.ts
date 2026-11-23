@@ -11,7 +11,6 @@ import {
     GATE_STATUSES,
     IsNumericLiteralToken,
     MOTION_OBJECT_CLASSES,
-    RestoreStrippedFormatKeys,
     STAGE_REQUIRED_SECTIONS,
     ValidateVideoGenerationSpec,
     VIDEO_ASSET_KINDS,
@@ -829,6 +828,21 @@ describe('One fixture per VideoSpecErrorCode (each proving that code and ONLY th
             spec.Audio.Cues[0].TimestampSeconds = 12;
             return { spec, expectedPath: 'Audio.Cues[0].TimestampSeconds' };
         })(),
+        InvalidNarrationPause: (() => {
+            const spec = makeStoryboardedSpec();
+            spec.Audio.Narration!.Script[1].PauseBeforeSeconds = 4;
+            return { spec, expectedPath: 'Audio.Narration.Script[1].PauseBeforeSeconds' };
+        })(),
+        InvalidMusicSpec: (() => {
+            const spec = makeStoryboardedSpec();
+            spec.Audio.Music = { Synthesized: { Mood: 'Calm', Bpm: 200 } };
+            return { spec, expectedPath: 'Audio.Music.Synthesized.Bpm' };
+        })(),
+        InvalidAudioCue: (() => {
+            const spec = makeStoryboardedSpec();
+            delete spec.Audio.Cues[0].AssetKey;
+            return { spec, expectedPath: 'Audio.Cues[0]' };
+        })(),
         MissingDataSnapshot: (() => {
             const spec = makePreProducedSpec();
             delete spec.DataSnapshot;
@@ -1136,135 +1150,7 @@ describe('Cross-references, review round 1 regressions, and multi-error collecti
     });
 });
 
-describe('RestoreStrippedFormatKeys', () => {
-    it('restores stripped keys 16 -> 16:9, 9 -> 9:16, and 1 -> 1:1 across Style.Typography[].SizeByFormat, Beats[].LayoutNotes, and Output.Source', () => {
-        const spec = makeStoryboardedSpec();
-        spec.Style.Typography = [
-            {
-                Role: 'Display',
-                FontFamily: 'Inter',
-                Weight: 700,
-                SizeByFormat: {
-                    '16': '64px',
-                    '9': '52px',
-                    '1': '48px',
-                    customKey: 'keep-me',
-                } as unknown as Record<VideoFormat, string>,
-            },
-        ];
-        spec.Beats[0].LayoutNotes = {
-            '16': 'Landscape layout',
-            '9': 'Vertical layout',
-            '1': 'Square layout',
-            extraNote: 'untouched',
-        } as unknown as Record<VideoFormat, string>;
-        spec.Output = {
-            Videos: {},
-            RenderMetadata: {
-                Renderer: 'HyperFrames',
-                RendererVersion: '0.1.8',
-                Seed: 42,
-                Fps: 30,
-                DurationByFormat: {},
-                RenderedAt: '',
-            },
-            Source: {
-                '16': {
-                    Format: '16:9',
-                    EntryFile: 'index.html',
-                    Files: { 'index.html': '<html>16x9</html>' },
-                    AssetKeys: [],
-                },
-                '9': {
-                    Format: '9:16',
-                    EntryFile: 'index.html',
-                    Files: { 'index.html': '<html>9x16</html>' },
-                    AssetKeys: [],
-                },
-                '1': {
-                    Format: '1:1',
-                    EntryFile: 'index.html',
-                    Files: { 'index.html': '<html>1x1</html>' },
-                    AssetKeys: [],
-                },
-            } as unknown as NonNullable<VideoGenerationSpec['Output']>['Source'],
-        };
-
-        const restored = RestoreStrippedFormatKeys(spec);
-        expect(restored).toBe(spec);
-        expect(restored.Style.Typography[0].SizeByFormat).toEqual({
-            '16:9': '64px',
-            '9:16': '52px',
-            '1:1': '48px',
-            customKey: 'keep-me',
-        });
-        expect(restored.Beats[0].LayoutNotes).toEqual({
-            '16:9': 'Landscape layout',
-            '9:16': 'Vertical layout',
-            '1:1': 'Square layout',
-            extraNote: 'untouched',
-        });
-        expect(Object.keys(restored.Output!.Source!).sort()).toEqual(['16:9', '1:1', '9:16']);
-        expect(restored.Output!.Source!['16:9']?.Files['index.html']).toBe('<html>16x9</html>');
-        expect(restored.Output!.Source!['9:16']?.Files['index.html']).toBe('<html>9x16</html>');
-        expect(restored.Output!.Source!['1:1']?.Files['index.html']).toBe('<html>1x1</html>');
-    });
-
-    it('lets a stripped key overwrite an existing full key (stripped key wins) while leaving full-only and unrelated keys untouched', () => {
-        const spec = makeStoryboardedSpec();
-        spec.Style.Typography[0].SizeByFormat = {
-            '16:9': '64px-full',
-            '16': '64px-stripped',
-            '9:16': '52px-only-full',
-            other: 'untouched',
-        } as unknown as Record<VideoFormat, string>;
-        spec.Beats[0].LayoutNotes = {
-            '16:9': 'Full landscape note',
-            '16': 'Stripped landscape note',
-            '1:1': 'Full square note',
-            custom: 'untouched-note',
-        } as unknown as Record<VideoFormat, string>;
-
-        RestoreStrippedFormatKeys(spec);
-
-        expect(spec.Style.Typography[0].SizeByFormat).toEqual({
-            '16:9': '64px-stripped',
-            '9:16': '52px-only-full',
-            other: 'untouched',
-        });
-        expect(spec.Beats[0].LayoutNotes).toEqual({
-            '16:9': 'Stripped landscape note',
-            '1:1': 'Full square note',
-            custom: 'untouched-note',
-        });
-    });
-
-    it('converts sparse arrays produced by lodash _.set on numeric stripped keys back to plain objects with full format keys', () => {
-        const spec = makeStoryboardedSpec();
-        const sparseSizes: unknown[] = [];
-        sparseSizes[16] = '64px';
-        sparseSizes[9] = '52px';
-        spec.Style.Typography[0].SizeByFormat = sparseSizes as unknown as Record<VideoFormat, string>;
-
-        const sparseNotes: unknown[] = [];
-        sparseNotes[16] = 'Two-column hero header';
-        sparseNotes[1] = 'Square hero header';
-        spec.Beats[0].LayoutNotes = sparseNotes as unknown as Record<VideoFormat, string>;
-
-        RestoreStrippedFormatKeys(spec);
-
-        expect(Array.isArray(spec.Style.Typography[0].SizeByFormat)).toBe(false);
-        expect(spec.Style.Typography[0].SizeByFormat).toEqual({
-            '16:9': '64px',
-            '9:16': '52px',
-        });
-        expect(Array.isArray(spec.Beats[0].LayoutNotes)).toBe(false);
-        expect(spec.Beats[0].LayoutNotes).toEqual({
-            '16:9': 'Two-column hero header',
-            '1:1': 'Square hero header',
-        });
-    });
-
+describe('Optional Narration (Audio.Narration.Enabled === false)', () => {
     it('allows Storyboarded specs with Audio.Narration.Enabled === false and empty Script to pass validation', () => {
         const spec = makeStoryboardedSpec();
         delete spec.Beats[0].NarrationKey;
@@ -1282,4 +1168,5 @@ describe('RestoreStrippedFormatKeys', () => {
         expect(result.Valid).toBe(true);
     });
 });
+
 

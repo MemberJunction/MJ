@@ -16,7 +16,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 // Generic media player — embedded by the audio/video artifact viewer plugins (standalone component).
 import { MJMediaPlayerComponent, MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
-import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective } from '@memberjunction/ng-ui-components';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -30,6 +30,7 @@ import { ComponentArtifactViewerComponent } from './components/plugins/component
 import { DataArtifactViewerComponent } from './components/plugins/data-artifact-viewer.component';
 import { MLExperimentResultsViewerComponent } from './components/plugins/ml-experiment-results-viewer.component';
 import { SaveQueryPanelComponent } from './components/plugins/save-query-dialog.component';
+import { SaveAsListDialogComponent } from './components/plugins/save-as-list-dialog.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 import { ComponentFeedbackPanelComponent } from './components/plugins/component-feedback-panel/component-feedback-panel.component';
 
@@ -56,6 +57,7 @@ import { VideoArtifactPreviewComponent } from './components/previews/video-artif
 import { AudioArtifactPreviewComponent } from './components/previews/audio-artifact-preview.component';
 import { VideoProductionArtifactPreviewComponent } from './components/previews/video-production-artifact-preview.component';
 import { MJGlobal } from '@memberjunction/global';
+import { RegisterClientArtifactFileBytesLoader } from './services/artifact-file.service';
 import { BaseArtifactViewerPluginComponent } from './components/base-artifact-viewer.component';
 import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewer-plugin.interface';
 
@@ -63,7 +65,12 @@ import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewe
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
 import { ArtifactVersionHistoryComponent } from './components/artifact-version-history.component';
 import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
+import { ArtifactRelatedPanelComponent } from './components/artifact-related-panel.component';
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
+import { ArtifactAgentPresenceBarComponent } from './components/presence/artifact-agent-presence-bar.component';
+import { ArtifactAgentRegionIndicatorComponent } from './components/presence/artifact-agent-region-indicator.component';
+import { ArtifactCommandPaletteComponent } from './components/plugins/artifact-command-palette.component';
+import { MjContextMenuComponent } from './components/context-menu/mj-context-menu.component';
 
 // Git-style Version History & Diff components (standalone)
 import { ArtifactVersionCompareComponent } from './components/version-diff/artifact-version-compare.component';
@@ -90,6 +97,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    MjContextMenuComponent,
 
     // Plugin components
     JsonArtifactViewerComponent,
@@ -128,6 +136,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     VideoProductionArtifactPreviewComponent,
   ],
   imports: [
+    ArtifactRelatedPanelComponent,
     CommonModule,
     FormsModule,
     MarkdownModule,
@@ -139,12 +148,16 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     NgTreesModule,
     BaseFormsModule,
     ComponentFeedbackPanelComponent,
+    SaveAsListDialogComponent,
     MJMediaPlayerComponent,
     MJStorageMediaPlayerComponent,
     AgGridModule,
     MJEmptyStateComponent,
     MJAlertComponent,
     MJButtonDirective,
+    MJMenuComponent,
+    MJMenuItemComponent,
+    MJMenuTriggerDirective,
     MJVideoBadgeComponent,
     MJVideoFormatGlyphComponent,
     MJVideoBeatStripComponent,
@@ -155,8 +168,12 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     SpreadsheetVersionDiffComponent,
     ComponentVersionDiffComponent,
     QueryVersionDiffComponent,
+    ArtifactAgentPresenceBarComponent,
+    ArtifactAgentRegionIndicatorComponent,
+    ArtifactCommandPaletteComponent,
   ],
   exports: [
+    ArtifactRelatedPanelComponent,
     // Export artifact type plugin viewer
     ArtifactTypePluginViewerComponent,
 
@@ -164,6 +181,10 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    MjContextMenuComponent,
+    ArtifactAgentPresenceBarComponent,
+    ArtifactAgentRegionIndicatorComponent,
+    ArtifactCommandPaletteComponent,
     ArtifactVersionCompareComponent,
     GitDiffLinesViewComponent,
     DocsVersionDiffComponent,
@@ -242,6 +263,9 @@ export class ArtifactsModule {
       AudioArtifactPreviewComponent,
       VideoProductionArtifactPreviewComponent,
     ];
+
+    // Ensure the client-side file-bytes loader is wired before live blocks inspect File-backed embeds
+    RegisterClientArtifactFileBytesLoader();
 
     // Registration-time guard: every registered artifact-viewer plugin must expose at least one of
     // componentType / previewComponentType. `componentType` is required by the interface (so this is

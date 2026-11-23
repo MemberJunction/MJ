@@ -23,6 +23,7 @@ import {
 import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
+import { CONVERSATION_DELETE_REFUSED_REASON, ConversationDeleteAllowed } from "../custom/ConversationWriteAccess";
 import {
     ConversationAnchorMetadata,
     ConversationAnchorType,
@@ -56,6 +57,7 @@ export const CONVERSATION_TYPE_CODES = {
     ROUTINE: 'ROUTINE',
     MEETING_ROOM: 'MEETING_ROOM',
     COMMENT: 'COMMENT',
+    AGENT_CHANNEL: 'AGENT_CHANNEL',
 } as const;
 
 export type BuiltInConversationTypeCode =
@@ -71,6 +73,7 @@ export const BUILT_IN_CONVERSATION_TYPE_IDS: Readonly<Record<BuiltInConversation
     ROUTINE: '18D12ABA-BE8C-4087-B440-835B6D077DD7',
     MEETING_ROOM: '2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926',
     COMMENT: '17E6A105-AE51-43A2-9D56-290BC8D1D6BB',
+    AGENT_CHANNEL: '09E7A069-DB29-4329-BB29-4DF8CB998D94',
 };
 
 const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversationTypeCode>> = {
@@ -80,6 +83,8 @@ const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversat
     'meeting room': 'MEETING_ROOM',
     meeting_room: 'MEETING_ROOM',
     comment: 'COMMENT',
+    'agent channel': 'AGENT_CHANNEL',
+    agent_channel: 'AGENT_CHANNEL',
 };
 
 /**
@@ -1446,16 +1451,31 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * True when the user may grant others access to the conversation: they own it,
-     * or hold an Owner-level grant on it. Mirrors the server's share gate in
-     * `MJResourcePermissionEntityExtended`, so the UI never offers a share the save
-     * would refuse.
+     * True when this conversation has an explicit `MJ: Resource Permissions` share record
+     * granting the current user access (distinct from implicit folder inheritance).
+     */
+    public IsConversationExplicitlyShared(conversationId: string): boolean {
+        return this._explicitSharedConversationIds.has(NormalizeUUID(conversationId));
+    }
+
+    /**
+     * True only when the user owns the conversation (`conversation.UserID === userId`).
+     * Mirrors the server's owner-only sharing gate in `MJResourcePermissionEntityServer`:
+     * non-owner recipients—even with an `'Owner'`-level grant—cannot reshare or revoke
+     * shares on a conversation (including private `ParentID` side threads).
      */
     public CanShareConversation(conversation: MJConversationEntity, userId: string): boolean {
-        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
-            return true;
-        }
-        return this.GetSharedByInfo(conversation.ID)?.Level === 'Owner';
+        return Boolean(conversation?.UserID && userId && UUIDsEqual(conversation.UserID, userId));
+    }
+
+    /**
+     * True when the user may delete the conversation for everyone: they own it, hold an
+     * Owner-level grant on it, or are in the Developer or Integration role. An Edit grant
+     * is not enough. Mirrors the server's delete gate in `MJConversationEntityServer`, so
+     * the UI never offers a delete the server would refuse.
+     */
+    public CanDeleteConversation(conversation: MJConversationEntity, user: UserInfo): boolean {
+        return ConversationDeleteAllowed(conversation.UserID, user, this.GetSharedByInfo(conversation.ID)?.Level ?? null);
     }
 
     /**
@@ -1651,7 +1671,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false,
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
+        options?: {
+            includeApplicationScoped?: boolean;
+            includeAnchored?: boolean;
+            includeRecordLinked?: boolean;
+            includeAgentChannels?: boolean;
+        }
     ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
         if (!forceRefresh && this._lastEnvironmentId === environmentId && this._conversations$.value.length > 0) {
@@ -1847,6 +1872,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 continue;
             }
             if (
+                !conv.ParentID &&
                 conv.ProjectID &&
                 IsInheritingFolderAccess(conv) &&
                 sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))
@@ -1892,7 +1918,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public async GetVisibleConversationsFilter(
         environmentId: string,
         contextUser: UserInfo,
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
+        options?: {
+            includeApplicationScoped?: boolean;
+            includeAnchored?: boolean;
+            includeRecordLinked?: boolean;
+            includeAgentChannels?: boolean;
+        }
     ): Promise<string> {
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
         const sharedProjectIds = this.getSharedProjectIds(environmentId);
@@ -2123,11 +2154,26 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return ResourcePermissionEngine.Instance.GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
     }
 
+    private isAgentChannelTypeId(typeId: string | null | undefined): boolean {
+        if (!typeId) {
+            return false;
+        }
+        const agentChannelTypeId =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.AGENT_CHANNEL) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL;
+        return UUIDsEqual(typeId, agentChannelTypeId);
+    }
+
     private buildVisibleConversationsFilter(
         environmentId: string,
         userId: string,
         sharedConversationIds: string[],
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean },
+        options?: {
+            includeApplicationScoped?: boolean;
+            includeAnchored?: boolean;
+            includeRecordLinked?: boolean;
+            includeAgentChannels?: boolean;
+        },
         sharedProjectIds: string[] = []
     ): string {
         const ownershipClause = `UserID='${userId}'`;
@@ -2137,7 +2183,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 : '';
         const sharedFolderClause =
             sharedProjectIds.length > 0
-                ? ` OR (ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')}) AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
+                ? ` OR (ParentID IS NULL AND ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')}) AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
                 : '';
         // The main chat view shows Global and Both. App-scoped conversations live inside
         // their owning Application's embedded surface.
@@ -2154,7 +2200,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const recordLinkedClause = options?.includeRecordLinked
             ? ''
             : ` AND LinkedEntityID IS NULL`;
-        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}`;
+        // Agent-to-agent coordination channels live in My Agents -> Agent Channels rather than
+        // the human Chat sidebar list unless explicitly requested.
+        const agentChannelTypeId =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.AGENT_CHANNEL) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL;
+        const agentChannelClause = options?.includeAgentChannels
+            ? ''
+            : ` AND (TypeID IS NULL OR TypeID <> '${EscapeSQLString(agentChannelTypeId)}')`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}${agentChannelClause}`;
     }
 
     /**
@@ -2652,6 +2706,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             conversation.ApplicationScope !== 'Application' &&
             conversation.AnchorType == null &&
             conversation.LinkedEntityID == null &&
+            !this.isAgentChannelTypeId(conversation.TypeID) &&
             !this.GetConversation(conversation.ID)
         ) {
             const updated = [conversation, ...this._conversations$.value];
@@ -3231,7 +3286,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (
             conversation.ApplicationScope === 'Application' ||
             conversation.AnchorType != null ||
-            conversation.LinkedEntityID != null
+            conversation.LinkedEntityID != null ||
+            this.isAgentChannelTypeId(conversation.TypeID)
         ) {
             return conversation;
         }
@@ -3246,12 +3302,37 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Verifies current server readability for a conversation deep link by performing a fresh
+     * single-row `Load(id)`. Unlike {@link EnsureConversationLoaded}, this never trusts a
+     * stale client cache entry for non-owned conversations; if access was revoked server-side,
+     * the cached entry is evicted and `null` is returned so the UI denies access cleanly.
+     */
+    public async VerifyConversationAccess(
+        id: string,
+        contextUser: UserInfo
+    ): Promise<MJConversationEntity | null> {
+        const md = this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const loaded = await conversation.Load(id);
+        if (!loaded) {
+            const existing = this.GetConversation(id);
+            if (existing) {
+                this._conversations$.next(
+                    this._conversations$.value.filter((c) => !UUIDsEqual(c.ID, id))
+                );
+            }
+            return null;
+        }
+        return conversation;
+    }
+
+    /**
      * Deletes a conversation from the database and removes it from the cached list.
      *
      * @param id - The conversation ID to delete
      * @param contextUser - The current user context
      * @returns true if successful
-     * @throws Error if conversation not found or delete fails
+     * @throws Error if conversation not found, the user may not delete it ({@link CanDeleteConversation}), or delete fails
      */
     public async DeleteConversation(id: string, contextUser: UserInfo): Promise<boolean> {
         // Try to use the cached entity object first to avoid a DB round-trip
@@ -3264,6 +3345,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (!loaded) {
                 throw new Error('Conversation not found');
             }
+        }
+
+        // Refuse before the optimistic removal below, so a refused conversation never leaves the list.
+        if (!this.CanDeleteConversation(conversation, contextUser)) {
+            throw new Error(CONVERSATION_DELETE_REFUSED_REASON);
         }
 
         // Remove from the list and cache BEFORE calling Delete(), because
@@ -3400,6 +3486,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /**
      * Deletes multiple conversations in a batch operation with per-item error tracking.
+     * Conversations the user may not delete ({@link CanDeleteConversation}) are reported
+     * as failed, by name, without a delete.
      *
      * @param ids - Array of conversation IDs to delete
      * @param contextUser - The current user context
@@ -3452,6 +3540,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             for (const entity of entitiesToDelete) {
                 const name = entity.Name || 'Unknown';
+                if (!this.CanDeleteConversation(entity, contextUser)) {
+                    failed.push({ ID: entity.ID, Name: name, Error: CONVERSATION_DELETE_REFUSED_REASON });
+                    continue;
+                }
                 try {
                     // Use DeleteConversation which handles Load + Delete properly
                     // and removes from list/cache on success
@@ -4706,9 +4798,101 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Client-safe query descriptor loading `MJ: Conversation Details.ID` values visible in `scope`,
+     * optionally narrowed to `candidateDetailIds`. Runs directly against `MJ: Conversation Details`
+     * so server `PostRunView` security hooks apply and `ClientClauseScreen` never rejects a base-view subquery.
+     */
+    public static BuildScopedDetailIdsQuery(
+        scope: ConversationScope,
+        candidateDetailIds?: ReadonlyArray<string>
+    ): RunViewParams {
+        let filter = ConversationEngine.ScopeFilter(scope);
+        if (candidateDetailIds && candidateDetailIds.length > 0) {
+            const uniqueEscaped = [...new Set(candidateDetailIds.map((id) => id.trim()).filter(Boolean))]
+                .map((id) => `'${EscapeSQLString(id)}'`);
+            if (uniqueEscaped.length > 0) {
+                filter = `(${filter}) AND [ID] IN (${uniqueEscaped.join(',')})`;
+            }
+        }
+        return {
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: filter,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            IgnoreMaxRows: true
+        };
+    }
+
+    /**
+     * Loads lowercased `MJ: Conversation Details.ID` values visible in `scope` via `RunView`, returning
+     * `null` if the read fails so callers can fail closed. Avoids emitting `[__mj].[vwConversationDetails]`
+     * subqueries from GraphQL client filters.
+     */
+    public static async LoadScopedDetailIds(
+        scope: ConversationScope,
+        provider: IMetadataProvider,
+        contextUser?: UserInfo,
+        candidateDetailIds?: ReadonlyArray<string>
+    ): Promise<Set<string> | null> {
+        if (candidateDetailIds) {
+            const unique = candidateDetailIds.map((id) => id.trim()).filter(Boolean);
+            if (unique.length === 0) {
+                return new Set<string>();
+            }
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ ID: string }>(
+            ConversationEngine.BuildScopedDetailIdsQuery(scope, candidateDetailIds),
+            contextUser
+        );
+        if (!res?.Success || !Array.isArray(res.Results)) {
+            return null;
+        }
+        const ids = new Set<string>();
+        for (const row of res.Results) {
+            const id = typeof row.ID === 'string' ? row.ID.trim().toLowerCase() : '';
+            if (id) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Filters artifact versions to those visible in `scope` (`{@link ArtifactVersionScopeFilter}` semantics):
+     * keeps versions linked in any direction to a detail in `scopedDetailIds`, plus versions that have
+     * no `MJ: Conversation Detail Artifacts` link at all.
+     */
+    public static FilterArtifactVersionsByScope<T extends { ID: string }>(
+        versions: readonly T[],
+        links: ReadonlyArray<{ ConversationDetailID?: string | null; ArtifactVersionID?: string | null }>,
+        scopedDetailIds: ReadonlySet<string>
+    ): T[] {
+        const allLinkedVersionIds = new Set<string>();
+        const scopedLinkedVersionIds = new Set<string>();
+        for (const link of links) {
+            const versionId = typeof link.ArtifactVersionID === 'string' ? link.ArtifactVersionID.trim().toLowerCase() : '';
+            if (!versionId) continue;
+            allLinkedVersionIds.add(versionId);
+            const detailId = typeof link.ConversationDetailID === 'string' ? link.ConversationDetailID.trim().toLowerCase() : '';
+            if (detailId && scopedDetailIds.has(detailId)) {
+                scopedLinkedVersionIds.add(versionId);
+            }
+        }
+        return versions.filter((v) => {
+            const id = typeof v.ID === 'string' ? v.ID.trim().toLowerCase() : '';
+            return id ? (!allLinkedVersionIds.has(id) || scopedLinkedVersionIds.has(id)) : false;
+        });
+    }
+
+    /**
      * Filter over MJ: Artifact Versions for the versions of one artifact visible in scope: versions
      * linked (in any direction) from a message on the path, and versions with no conversation link
      * at all.
+     *
+     * Note: server/internal callers only — GraphQL clients must use {@link BuildScopedDetailIdsQuery} +
+     * {@link FilterArtifactVersionsByScope} because `ClientClauseScreen` blocks `[__mj].[vwConversationDetails]`
+     * subqueries in client-supplied `ExtraFilter`s.
      */
     public static ArtifactVersionScopeFilter(scope: ConversationScope, artifactId: string): string {
         const path = ConversationEngine.ScopeFilter(scope);
@@ -5619,6 +5803,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 const scope = data['ApplicationScope'] as string | undefined;
                 const anchorType = data['AnchorType'] as string | null | undefined;
                 const linkedEntityId = data['LinkedEntityID'] as string | null | undefined;
+                const typeId =
+                    (data['TypeID'] as string | null | undefined) ??
+                    (event.baseEntity as MJConversationEntity | null)?.TypeID ??
+                    null;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
                 const inLoadedEnvironment =
@@ -5628,6 +5816,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                     scope !== 'Application' &&
                     anchorType == null &&
                     linkedEntityId == null &&
+                    !this.isAgentChannelTypeId(typeId) &&
                     !isArchived &&
                     inLoadedEnvironment
                 ) {

@@ -481,6 +481,8 @@ sequenceDiagram
 
 `/healthcheck` keeps meaning "serve traffic", so load balancers, the Explorer reconnect poll and the MJAPI image's `HEALTHCHECK` work unchanged. Platforms that restart a container which is not live within a time limit can point their liveness probe at `/healthcheck/live`. A port already in use now fails at the start of boot rather than the end. A boot that throws logs the phase it failed in; the error text is not served.
 
+A boot that loads no entity metadata fails too, in the `Checking entity metadata` phase. Metadata loading logs a failed read and carries on, so without this check such a server reported ready and then failed every request that needs metadata. The log line names the cause (the last metadata load error, or that the `MJ_Metadata` dataset held no entities).
+
 ### Per-Request Provider Isolation
 
 Each GraphQL request receives its own `SQLServerDataProvider` instance, ensuring complete transaction isolation between concurrent requests. Metadata is cached and reused across providers for efficiency.
@@ -544,6 +546,26 @@ Providers are registered via `@RegisterClass(BaseAuthProvider, 'type-key')` and 
 - `matchesIssuer()` -- Matches JWT `iss` claim to the provider
 
 Configure providers in `mj.config.cjs` under `authProviders` or via environment variables (see Configuration section).
+
+#### Invite-Only External Authentication (`userHandling.inviteOnly`)
+
+By default, MJServer enables `autoCreateNewUsers: true` and assigns `'UI'` via `newUserRoles` so newly authenticated users can access MJExplorer immediately. For closed / invite-only external deployments, set `userHandling.inviteOnly: true` in `mj.config.cjs`:
+
+```javascript
+userHandling: {
+  inviteOnly: true,
+  // Optional: allow enterprise Entra ID / MSAL tenants whose tokens omit OIDC `email_verified`
+  // verifiedEmailOptionalProviders: ['azure'],
+}
+```
+
+When `userHandling.inviteOnly` is `true`, MJServer enforces three fail-closed invariants regardless of inherited `DEFAULT_SERVER_CONFIG` defaults:
+
+1. **Uninvited sign-ins are refused**: `autoCreateNewUsers` is forced to `false`. External IdP users who do not already have an active, pre-provisioned `MJ: Users` record are rejected with a 401 `InviteOnlyAuthenticationError`.
+2. **Unverified email claims are refused**: `requireVerifiedEmail` is forced to `true`. External JWTs must carry `email_verified: true` (or `xms_edov: true` when `email_verified` is omitted). Tokens with `email_verified: false`, `xms_edov: false`, or a missing verification claim are refused fail-closed. For enterprise IdPs (such as Microsoft Entra ID tenants) whose tokens omit `email_verified`, list the provider name (`'azure'`) or issuer URL in `verifiedEmailOptionalProviders` — even then, an explicit `email_verified: false` claim is always refused.
+3. **No auto-granted UI roles**: `newUserRoles` is forced empty so `'UI'` or any default UI role is never auto-granted to newly authenticated external users; an invited user receives only the roles explicitly assigned on their pre-provisioned `MJ: Users` record.
+
+Non-invite-only deployments (`inviteOnly: false`, the default) retain existing behavior unchanged. Standalone `requireVerifiedEmail: true` can also be enabled independently of `inviteOnly`.
 
 ### API Key Authentication
 
@@ -917,6 +939,26 @@ mutation {
 
 All AI operations have system-user variants (e.g., `RunAIPromptSystemUser`) that use the `@RequireSystemUser` directive for server-to-server operations.
 
+### Decision-model modes
+
+Some closed-set calls MJServer makes can be answered by a decision model instead of a chat prompt (`RunDecisionUse` in `@memberjunction/ai-prompts`). Each has a mode: `Prompt` (the existing path only), `Shadow` (the existing path answers; the decision runs beside it, and its prompt run, named `Shadow: <use>`, records whether the two agreed) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). Values are case-insensitive; anything else reads as the use's default.
+
+| Use | Setting | Env var | Default | Why that default |
+|---|---|---|---|---|
+| `feedback-classifier`: `ClassifyFeedback`'s category and severity | `feedbackSettings.decisionMode` | `MJ_FEEDBACK_DECISION_MODE` | `Decision` | Two Choice questions; the most likely option needs no calibration. The chat-completion classifier is the fallback. |
+| `restricted-field-classifier`: the semantic stage of the anchored-comment field-security check | `decisions.restrictedFieldClassifier` | `MJ_RESTRICTED_FIELD_CLASSIFIER_DECISION_MODE` | `Shadow` | One Likelihood per restricted field, flagged at a calibrated 0.2. No calibration is fitted yet; the shadow runs are its data. |
+| `tag-match`: a tag keyword in `TagEngine`'s suggestion band, just under the match threshold | `decisions.tagMatch` | `MJ_TAG_MATCH_DECISION_MODE` | `Shadow` | One Likelihood ("same concept?"); the tag is applied at a calibrated 0.8, otherwise the keyword is queued for review as before. No calibration is fitted yet. |
+
+```javascript
+// mj.config.cjs
+module.exports = {
+  feedbackSettings: { decisionMode: 'Decision' },
+  decisions: { restrictedFieldClassifier: 'Shadow', tagMatch: 'Shadow' },
+};
+```
+
+Each decision runs as the requesting user, through the `Default Decision` prompt.
+
 ## API Reference
 
 ### Core Exports
@@ -1060,6 +1102,8 @@ databaseSettings: {
   metadataCacheRefreshInterval: 180000,  // 3 minutes
 }
 ```
+
+Saved-query metadata is not part of that cache. `QueryEngine` (`@memberjunction/core-entities`) loads and caches it, so by default the server neither reads the query items of the `MJ_Metadata` dataset nor refreshes metadata when a query is saved. Set `databaseSettings.loadQueryMetadata: true` only while code still reads the deprecated `Metadata.Queries`, `QueryFields`, … getters, which are empty otherwise; the setting is removed with them in 7.0. Use the same value on every server that shares a metadata cache.
 
 ### Authentication Token Caching
 

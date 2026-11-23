@@ -4,6 +4,14 @@ import { SandboxExecutor } from './sandbox/SandboxExecutor.js';
 /** Sandbox execution provider kind. */
 export type HarnessSandboxProviderType = 'local' | 'docker' | 'cloud';
 
+/**
+ * Authentication mode for local CLI harness sessions.
+ * - `'auto'` — prefer local CLI subscription login on local CLI adapters when no explicit API-key grant is bound.
+ * - `'cli-login'` — strictly use the user's logged-in local CLI subscription (strips all API-key env vars).
+ * - `'api-key'` — use granted `MJ: AI Agent Credentials` or server fallback API keys.
+ */
+export type HarnessAuthMode = 'auto' | 'cli-login' | 'api-key';
+
 /** Outbound network posture inside a cloud agent sandbox. */
 export type CloudNetworkAccess = 'none' | 'restricted' | 'egress';
 
@@ -135,6 +143,10 @@ export interface HarnessSessionConfig {
     SandboxMetadata?: CloudSandboxMetadata;
     /** When true, instructs a resumed cloud session to harvest an already-submitted background turn without posting a duplicate turn. */
     ReattachPendingTurn?: boolean;
+    /** Extra host directories exposed to CLI harnesses via `--add-dir`. */
+    AdditionalDirectories?: string[];
+    /** Effective authentication mode resolved for this harness session. */
+    AuthMode?: HarnessAuthMode;
 }
 
 /** Alias for {@link HarnessSessionConfig} used by cloud session initialization callers. */
@@ -198,6 +210,8 @@ export interface HarnessTurnResult {
     CostUsd?: number;
     /** Set when the turn failed rather than completed. */
     ErrorMessage?: string;
+    /** True when the turn was stopped because it exceeded limits.maxWallClockSeconds. */
+    TimedOut?: boolean;
     /** Vendor session id, persisted to `AIAgentRun.ExternalSessionID` for resume and log correlation. */
     SessionId?: string;
     /**

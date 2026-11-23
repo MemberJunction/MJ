@@ -46,6 +46,189 @@ export interface AISkillImportMarkdownOutput {
     warnings: string[];
 }
 
+/** Input payload for `Artifact.CreateGuestShareLink`. */
+export interface CreateGuestShareLinkInput {
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Optional specific `MJ: Artifact Versions.ID` (defaults to latest version when omitted). */
+    VersionID?: string | null;
+    /** Lifetime in hours (`1` to `720`). */
+    ExpiresInHours: number;
+    /** Optional label identifying the external recipient or review purpose. */
+    Label?: string | null;
+}
+
+/** Output payload returned by `Artifact.CreateGuestShareLink`. */
+export interface CreateGuestShareLinkOutput {
+    /** Unique share link ID (`MJ: Artifact Guest Share Links.ID`). */
+    LinkID: string;
+    /** Backing `MJ: Magic Link Invites.ID` that governs redemption, expiration, revocation, and audit. */
+    MagicLinkInviteID?: string;
+    /** Raw opaque Magic Link token (high-entropy secret redeemed once at `/magic-link/redeem?token=...`). */
+    Token: string;
+    /** Full or relative Magic Link redemption URL (e.g. `'/magic-link/redeem?token=...'` or `'https://api.../magic-link/redeem?token=...'`). */
+    ShareUrlPath: string;
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Target `MJ: Artifact Versions.ID`. */
+    VersionID: string;
+    /** Target `MJ: Artifact Versions.VersionNumber`. */
+    VersionNumber: number;
+    /** Always `'Frozen'` — live data queries never execute externally. */
+    ShareMode: 'Frozen';
+    /** ISO 8601 UTC expiration timestamp. */
+    ExpiresAt: string;
+    /** Optional recipient label. */
+    Label?: string;
+}
+
+/** Single `=MJ.AI(...)` cell evaluation request entry. */
+export interface ArtifactAiFormulaCellRequest {
+    /** Worksheet identifier. */
+    SheetID: string;
+    /** Canonical A1 cell coordinate (e.g. `'C4'`). */
+    Address: string;
+    /** Prompt string extracted from `=MJ.AI(prompt, ...)`. */
+    Prompt: string;
+    /** Serialized resolved values of referenced cells/ranges. */
+    ContextValuesJSON: string;
+    /** Deterministic SHA/FNV input hash for cache deduplication. */
+    InputHash: string;
+}
+
+/** Input payload for `Artifact.EvaluateAiFormula`. */
+export interface ArtifactEvaluateAiFormulaInput {
+    /** Hosting `MJ: Artifacts` ID for mandatory permission & audit attribution. */
+    ArtifactID: string;
+    /** Batch of up to 50 `=MJ.AI(...)` cells explicitly triggered for evaluation. */
+    Cells: ArtifactAiFormulaCellRequest[];
+    /** Optional explicit AI model override name. */
+    ModelOverride?: string | null;
+}
+
+/** Result for a single evaluated `=MJ.AI(...)` cell. */
+export interface ArtifactAiFormulaCellResult {
+    /** Worksheet identifier. */
+    SheetID: string;
+    /** Canonical A1 coordinate. */
+    Address: string;
+    /** Input hash corresponding to this evaluated output. */
+    InputHash: string;
+    /** Evaluated text/scalar value from the LLM. */
+    Value: string;
+    /** Non-fatal cell-level error message if evaluation failed. */
+    ErrorMessage?: string | null;
+    /** True when permission or quota check refused execution. */
+    AccessDenied?: boolean;
+}
+
+/** Output payload for `Artifact.EvaluateAiFormula`. */
+export interface ArtifactEvaluateAiFormulaOutput {
+    /** Evaluated cell results matching requested `Cells`. */
+    Results: ArtifactAiFormulaCellResult[];
+}
+
+export type ArtifactComplianceAuditDetailPrimitive = string | number | boolean | null | undefined;
+
+export type ArtifactComplianceAuditDetails = Record<
+    string,
+    ArtifactComplianceAuditDetailPrimitive | ArtifactComplianceAuditDetailPrimitive[] | Record<string, ArtifactComplianceAuditDetailPrimitive>
+>;
+
+/** Canonical artifact compliance audit event names aligned with `metadata/audit-log-types/`. */
+export type ArtifactComplianceAuditEventName =
+    | 'Artifact Block Frozen'
+    | 'Artifact Connected Drive Sync'
+    | 'Artifact Exported'
+    | 'Artifact Permission Changed'
+    | 'Artifact Guest Share Link';
+
+/** Input payload for `Artifact.LogComplianceAudit`. */
+export interface ArtifactComplianceAuditInput {
+    /** Canonical audit log type name (`MJ: Audit Log Types.Name`). */
+    AuditLogTypeName: ArtifactComplianceAuditEventName | string;
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Optional `MJ: Artifact Versions.ID`. */
+    ArtifactVersionID?: string | null;
+    /** Concise human-readable description stored in `Description`. */
+    Summary: string;
+    /** Optional structured details serialized to `Details` JSON. */
+    Details?: ArtifactComplianceAuditDetails;
+}
+
+/** Output payload returned by `Artifact.LogComplianceAudit`. */
+export interface ArtifactComplianceAuditOutput {
+    /** True when the audit row persisted (false only if DB/metadata is unavailable). */
+    Recorded: boolean;
+    /** Persisted `MJ: Audit Logs.ID` when recorded. */
+    AuditLogID?: string | null;
+}
+
+/** Input payload for `Artifact.RevokeGuestShareLink`. */
+export interface RevokeGuestShareLinkInput {
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Target `MJ: Artifact Versions.ID`. */
+    VersionID: string;
+    /** `LinkID` (`jti`) to revoke. */
+    LinkID: string;
+}
+
+/** Output payload returned by `Artifact.RevokeGuestShareLink`. */
+export interface RevokeGuestShareLinkOutput {
+    /** True when the link was found and marked revoked. */
+    Revoked: boolean;
+    /** Revoked link ID. */
+    LinkID: string;
+    /** ISO 8601 revocation timestamp. */
+    RevokedAt?: string;
+}
+
+/** Input payload for `Artifact.SynthesizeFromSources`. */
+export interface SynthesizeArtifactFromSourcesInput {
+    /** Output artifact format (`'presentation'`, `'document'`, `'spreadsheet'`). */
+    TargetKind: 'presentation' | 'document' | 'spreadsheet' | (string & {});
+    /** Synthesis prompt / goal describing how sources should be combined. */
+    Goal: string;
+    /** Explicit source artifact IDs to read (`CanRead` required on each). */
+    SourceArtifactIds?: string[];
+    /** Optional collection to save the synthesized artifact into (`CanEdit` required). */
+    CollectionId?: string | null;
+    /** Optional title override for the newly created artifact. */
+    Title?: string | null;
+    /** Optional `@handle` of an active MJ AI Agent to author the synthesis. */
+    AgentHandle?: string | null;
+    /** When true (default), preserves live `Artifact` chart/range embeds from Spreadsheet sources. */
+    LinkChartsAndRanges?: boolean;
+}
+
+/** Output payload returned on successful execution of `Artifact.SynthesizeFromSources`. */
+export interface SynthesizeArtifactFromSourcesOutput {
+    /** Created `MJ: Artifacts` ID. */
+    ArtifactID: string;
+    /** Created initial `MJ: Artifact Versions` ID (`v1`). */
+    VersionID: string;
+    /** Version number created (`1`). */
+    VersionNumber: number;
+    /** Final resolved artifact title. */
+    Title: string;
+    /** Resolved `MJ: Artifact Types` name (`Presentation`, `Markdown Document`, or `Excel Spreadsheet`). */
+    ArtifactTypeName: string;
+    /** Count of verified live chart/range embeds included in the synthesized artifact. */
+    LinkedChartCount: number;
+    /** Number of source artifacts combined. */
+    SourceCount: number;
+    /** Non-fatal synthesis/sanitization warnings. */
+    Warnings: string[];
+    /** True when deterministic fallback synthesis was used instead of a structured LLM response. */
+    UsedFallback: boolean;
+    /** `MJ: AIAgentRuns` ID when authored via a named agent handle. */
+    AgentRunID?: string | null;
+    /** Agent name when authored via a named agent handle. */
+    AgentName?: string | null;
+}
+
 /** Input for `Authorization.Check`. */
 export interface AuthorizationCheckInput {
     /**
@@ -247,6 +430,97 @@ export interface DiagnosticsReactivateSenderOutput {
     RegistrationID: string;
     InstallID: string;
     Status: 'Active';
+}
+
+/**
+ * One end of a `Graph.FindPath` request: a record (`EntityName` + `RecordID`), or a concept
+ * (`Concept` = its name, a synonym, or its ID). A record reference wins when both are given.
+ */
+export interface GraphFindPathEndpoint {
+    /** Registered entity name of the record, e.g. "MJ: Queries" or "Invoices". */
+    EntityName?: string;
+    /** The record's key, in compact URL-segment form (the bare value for a single-column key). */
+    RecordID?: string;
+    /** A concept's name, synonym or ID in the graph. */
+    Concept?: string;
+}
+
+/** Input for `Graph.FindPath`. */
+export interface GraphFindPathInput {
+    /** Name or ID of an active graph. Default: "MJ Canon". */
+    GraphName?: string;
+    /** Start of the path. */
+    From: GraphFindPathEndpoint;
+    /** End of the path. */
+    To: GraphFindPathEndpoint;
+    /** Maximum hops, 1 to 4. Default: 4. */
+    Depth?: number;
+    /** Maximum nodes the search may visit, 1 to 200. Default: 200. */
+    MaxNodes?: number;
+    /** Optional allow-list of edge type names to follow. */
+    EdgeTypes?: string[];
+    /** Optional minimum edge weight to follow, 0 to 1. */
+    MinWeight?: number;
+    /** When true, also follow edges and match concepts still awaiting review. Default: false. */
+    IncludeProposed?: boolean;
+}
+
+/** A node on a `Graph.FindPath` path. */
+export interface GraphFindPathNode {
+    /** Canonical node key. */
+    Key: string;
+    EntityName: string;
+    RecordID: string;
+    Label: string;
+    Icon: string | null;
+    Description: string | null;
+}
+
+/** An edge on a `Graph.FindPath` path, in its own direction (a hop may run against it). */
+export interface GraphFindPathEdge {
+    /** Stored edge ID, or `derived:<provider>:<type>:<sourceKey>:<targetKey>`. */
+    ID: string;
+    TypeName: string;
+    SourceEntityName: string;
+    SourceRecordID: string;
+    TargetEntityName: string;
+    TargetRecordID: string;
+    IsDirected: boolean;
+    Weight: number;
+    Description: string | null;
+    Origin: 'Derived' | 'Declared' | 'Inferred';
+    Status: 'Proposed' | 'Approved' | 'Rejected';
+}
+
+/** A concept an ambiguous endpoint fits, for the caller to choose from. */
+export interface GraphFindPathCandidate {
+    Name: string;
+    RecordID: string;
+    Description: string | null;
+    Score: number;
+}
+
+/**
+ * Output of `Graph.FindPath`. `Status` says what kind of answer this is:
+ * - `Found`: `Nodes` run from From to To, and `Edges[i]` joins `Nodes[i]` and `Nodes[i + 1]`.
+ * - `NoPath`: the endpoints are not connected within the limits by anything the caller may see.
+ *   A record the caller cannot see gives this same answer.
+ * - `AmbiguousEndpoint`: `Endpoint` names the side and `Candidates` lists the concepts it fits.
+ * - `EndpointNotFound`: `Endpoint` names the side whose concept could not be found or seen by the caller.
+ * - `GraphNotFound`: the graph is unknown or not active.
+ */
+export interface GraphFindPathOutput {
+    Status: 'Found' | 'NoPath' | 'AmbiguousEndpoint' | 'EndpointNotFound' | 'GraphNotFound';
+    Nodes: GraphFindPathNode[];
+    Edges: GraphFindPathEdge[];
+    /** Product of the path's edge weights, decayed per hop (0 when none was found). */
+    PathWeight: number;
+    /** The path as compact Markdown, one line per hop. */
+    PromptText: string;
+    /** Which endpoint was ambiguous or not found, when that is the status. */
+    Endpoint?: 'From' | 'To';
+    Candidates: GraphFindPathCandidate[];
+    Message?: string;
 }
 
 /** The control action to apply to a running/paused experiment session. */
@@ -1166,6 +1440,24 @@ export interface TaskGraphControlOutput {
     errorMessage?: string;
 }
 
+/** Input for TaskGraph.CompleteWaitingStep. Exactly one of taskID / correlationKey. */
+export interface TaskGraphCompleteWaitingStepInput {
+    taskID?: string;
+    correlationKey?: string;
+    status?: 'Complete' | 'Failed';
+    payload?: Record<string, unknown> | null;
+    errorMessage?: string | null;
+}
+
+/** Output of TaskGraph.CompleteWaitingStep. */
+export interface TaskGraphCompleteWaitingStepOutput {
+    success: boolean;
+    completed: string[];
+    buffered: string[];
+    refused: Array<{ taskID: string; reason: string }>;
+    errorMessage?: string;
+}
+
 /** Input for the step-scoped intervention verbs. */
 export interface TaskGraphTaskInterventionInput {
     taskID: string;
@@ -1255,15 +1547,17 @@ export interface TaskGraphSubmitInput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
-                | { assignToUserID?: string; instructions?: string }
+                | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1665,15 +1959,17 @@ export interface WorkflowDraftOutput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
-                | { assignToUserID?: string; instructions?: string }
+                | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1684,6 +1980,8 @@ export interface WorkflowDraftOutput {
         durable?: boolean;
         /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
         failureSemantics?: 'block' | 'edges';
+        /** Per-graph execution isolation level ('Worker' default for newly drafted workflows). */
+        isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
     };
     /** Why drafting failed, or why the model's output was rejected. */
     errorMessage?: string;
@@ -1696,6 +1994,8 @@ export interface WorkflowSaveInput {
         name: string;
         description?: string;
         status: 'Active' | 'Paused' | 'Draft';
+        /** Optional workflow-level execution isolation override (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
+        isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
         graph: {
             workflowName: string;
             reasoning?: string;
@@ -1704,15 +2004,17 @@ export interface WorkflowSaveInput {
                 tempId: string;
                 name: string;
                 description: string;
-                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
                 configuration:
                     | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                     | { actionName: string; inputMapping?: string; outputMapping?: string }
-                    | { assignToUserID?: string; instructions?: string }
+                    | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                     | { promptName: string; templateParameters?: Record<string, string> }
                     | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                     | { condition: string; itemVariable?: string; maxIterations?: number }
-                    | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                    | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                    | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
                 dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
                 policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
                 /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1723,6 +2025,8 @@ export interface WorkflowSaveInput {
             durable?: boolean;
             /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
             failureSemantics?: 'block' | 'edges';
+            /** Per-graph execution isolation level override. */
+            isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
         };
         triggers: Array<
             | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }
@@ -1785,6 +2089,91 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
     public readonly RequiredScope = "aiskill:manage";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_7b52950236da4223";
+}
+
+// ============================================================
+// Artifact.CreateGuestShareLink — Create Artifact Guest Share Link
+// ============================================================
+/**
+ * Create Artifact Guest Share Link
+ * Issues a Frozen-only expiring read-only external guest share link for a governed artifact version and persists its hashed token record. Implemented by CreateGuestShareLinkServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.CreateGuestShareLink'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactCreateGuestShareLinkOperation extends BaseRemotableOperation<CreateGuestShareLinkInput, CreateGuestShareLinkOutput> {
+    public readonly OperationKey = "Artifact.CreateGuestShareLink";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:share";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_01caf3b2c1223715";
+}
+
+// ============================================================
+// Artifact.EvaluateAiFormula — Evaluate Spreadsheet AI Formulas
+// ============================================================
+/**
+ * Evaluate Spreadsheet AI Formulas
+ * Explicitly evaluates a bounded batch (up to 50 cells) of opt-in =MJ.AI(...) spreadsheet formulas for an authorized editable artifact. Implemented by ArtifactEvaluateAiFormulaServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.EvaluateAiFormula'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactEvaluateAiFormulaOperation extends BaseRemotableOperation<ArtifactEvaluateAiFormulaInput, ArtifactEvaluateAiFormulaOutput> {
+    public readonly OperationKey = "Artifact.EvaluateAiFormula";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:edit";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_cfa9c74da80db2e2";
+}
+
+// ============================================================
+// Artifact.LogComplianceAudit — Log Artifact Compliance Audit
+// ============================================================
+/**
+ * Log Artifact Compliance Audit
+ * Writes a structured compliance audit log entry (MJ: Audit Logs) for block freeze, connected drive sync, export, permission changes, and guest share link events. Implemented by ArtifactComplianceAuditServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.LogComplianceAudit'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactLogComplianceAuditOperation extends BaseRemotableOperation<ArtifactComplianceAuditInput, ArtifactComplianceAuditOutput> {
+    public readonly OperationKey = "Artifact.LogComplianceAudit";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:read";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_c53ebfd4d44baffa";
+}
+
+// ============================================================
+// Artifact.RevokeGuestShareLink — Revoke Artifact Guest Share Link
+// ============================================================
+/**
+ * Revoke Artifact Guest Share Link
+ * Revokes an active Frozen-only external guest share link by LinkID so subsequent resolution requests are rejected immediately. Implemented by RevokeGuestShareLinkServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.RevokeGuestShareLink'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactRevokeGuestShareLinkOperation extends BaseRemotableOperation<RevokeGuestShareLinkInput, RevokeGuestShareLinkOutput> {
+    public readonly OperationKey = "Artifact.RevokeGuestShareLink";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:share";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5b54645435f81738";
+}
+
+// ============================================================
+// Artifact.SynthesizeFromSources — Synthesize Artifact From Sources
+// ============================================================
+/**
+ * Synthesize Artifact From Sources
+ * Synthesizes a new governed collaborative artifact (Presentation, Markdown Document, or Excel Spreadsheet) from one or more authorized source artifacts, preserving live chart and range embeds. Implemented by SynthesizeArtifactFromSourcesServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.SynthesizeFromSources'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactSynthesizeFromSourcesOperation extends BaseRemotableOperation<SynthesizeArtifactFromSourcesInput, SynthesizeArtifactFromSourcesOutput> {
+    public readonly OperationKey = "Artifact.SynthesizeFromSources";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "artifact:edit";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_f742777b8e08370e";
 }
 
 // ============================================================
@@ -1987,6 +2376,22 @@ export class DiagnosticsUploadClientCaptureOperation extends BaseRemotableOperat
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_97adc6e3d5d0c6a6";
+}
+
+// ============================================================
+// Graph.FindPath — Find Graph Path
+// ============================================================
+/**
+ * Find Graph Path
+ * Find the fewest-hop path between two nodes of a semantic graph (default MJ Canon) that the caller may see. Each endpoint is a record or a concept name, synonym or ID; an endpoint that fits several concepts comes back AmbiguousEndpoint with the candidates. Read-only. Implemented by GraphFindPathServerOperation in @memberjunction/core-entities-server over GraphEngine.FindPath.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Graph.FindPath'. This generated base provides the typed contract only (client-safe).
+ */
+export class GraphFindPathOperation extends BaseRemotableOperation<GraphFindPathInput, GraphFindPathOutput> {
+    public readonly OperationKey = "Graph.FindPath";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_75cf012a87110c1f";
 }
 
 // ============================================================
@@ -2312,6 +2717,23 @@ export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphCo
 }
 
 // ============================================================
+// TaskGraph.CompleteWaitingStep — Complete Waiting Workflow Step
+// ============================================================
+/**
+ * Complete Waiting Workflow Step
+ * Complete (or fail) a waiting External or provider-Human workflow step, by task ID or by correlation key. The supplied payload is merged into the workflow payload, so downstream paths can branch on it. A signal for a step that has not been reached yet is held on the step and applied when it is. Wait steps (they complete on their own clock) and built-in inbox Human steps (they complete through their request) are refused. The caller must own the workflow run or be an Owner-type user; matched steps the caller may not complete are reported, not skipped. Implemented by TaskGraphCompleteWaitingStepServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.CompleteWaitingStep'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphCompleteWaitingStepOperation extends BaseRemotableOperation<TaskGraphCompleteWaitingStepInput, TaskGraphCompleteWaitingStepOutput> {
+    public readonly OperationKey = "TaskGraph.CompleteWaitingStep";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ce2fbcd9c8ab5e26";
+}
+
+// ============================================================
 // TaskGraph.ForceCompleteTask — Force Complete Workflow Step
 // ============================================================
 /**
@@ -2478,7 +2900,7 @@ export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSu
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_08cd68d5cfacf880";
+    public readonly ContractFingerprint = "ro_fp_8f1f452387b6790a";
 }
 
 // ============================================================
@@ -2681,7 +3103,7 @@ export class WorkflowDraftOperation extends BaseRemotableOperation<WorkflowDraft
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_7a54f25b89c43fef";
+    public readonly ContractFingerprint = "ro_fp_1453e143e70e1bae";
 }
 
 // ============================================================
@@ -2698,7 +3120,7 @@ export class WorkflowSaveOperation extends BaseRemotableOperation<WorkflowSaveIn
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:write";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_f8c19b5a79876f33";
+    public readonly ContractFingerprint = "ro_fp_4649d0191277725e";
 }
 
 // ============================================================
@@ -2715,6 +3137,6 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_2ebd29835c1d8b0c";
+    public readonly ContractFingerprint = "ro_fp_06d97b8424f9ad49";
 }
 

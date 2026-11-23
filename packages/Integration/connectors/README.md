@@ -105,9 +105,10 @@ connectors in this package and emit their action metadata.
    ```
 
 > **Note on class-registration keys.** In this package the `@RegisterClass` key was the bare class symbol
-> (`'SalesforceConnector'`). In the Integrations repo the key is the npm package name
-> (`'@memberjunction/connector-salesforce'`), enforced by that repo's four-way identity invariant
-> (registration key ≡ `Integration.ClassName` ≡ `ImportPath` ≡ package name). Step 2 above is what keeps
+> (`'SalesforceConnector'`). In the Integrations repo the key is, by convention, the npm package name
+> (`'@memberjunction/connector-salesforce'`). That repo's CI checks that `ImportPath` equals the package
+> name and that `Integration.ClassName` is a key the package registers (some connectors, such as
+> Impexium, still register a bare class name). Step 2 above is what keeps
 > resolution working: the Open App's own migration updates `ClassName` to match. **A deployment that
 > upgrades MJ to 6.x without installing the corresponding Open App will have catalog rows pointing at a
 > package that no longer contains those classes, and those integrations will fail to resolve.**

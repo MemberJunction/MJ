@@ -152,5 +152,29 @@
       "lastModified": "2026-11-01T22:54:28.653Z",
       "checksum": "9f321d4f98b9e6fdfdc7c5e731d983714303f3f5ebc1bcfa3952a4cfb79f2e67"
     }
+  },
+  {
+    "fields": {
+      "Name": "Artifacts",
+      "Description": "Governed collaborative artifact operations (synthesis, spreadsheet AI formulas, compliance auditing, and Frozen-only external guest share links).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "6EF20000-A2CF-4516-8003-7CEF32803326"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:24:52.146Z",
+      "checksum": "ab4e601c84e2fd75f6e8871b6dc27898521c18b7d90102aa146cb535960b9a74"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Semantic Graph",
+      "Description": "Semantic graph operations (paths and neighborhoods over named graphs such as MJ Canon), checked as the caller.",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "56D42C30-E17B-45B9-947C-AFBAC109414A"
+    }
   }
 ]

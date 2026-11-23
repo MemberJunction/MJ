@@ -12,9 +12,9 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { EntityInfo, EntityPermissionType, IMetadataProvider, IRunQueryProvider, IRunViewProvider, IsVerboseLoggingEnabled, LogError, LogStatusEx, Metadata, ProjectEntityValueRowsForUser, RunQuery, RunQueryParams, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, EntityInfo, EntityPermissionType, IMetadataProvider, IRunQueryProvider, IRunViewProvider, IsVerboseLoggingEnabled, LimitsConfigResolver, LogError, LogStatusEx, Metadata, ProjectEntityValueRowsForUser, RunQuery, RunQueryParams, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, BaseSingleton, UserScopedCacheKey, MJLruCache } from '@memberjunction/global';
-import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
+import { MJAIAgentDataSourceEntity, QueryEngine } from '@memberjunction/core-entities'; 
 import _ from 'lodash';
 
 /**
@@ -96,11 +96,11 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
      * expired-but-never-re-read keys cannot accumulate (one entry per user x agent x source).
      */
     private _perAgentCache: MJLruCache<string, CacheEntry> = new MJLruCache<string, CacheEntry>({
-        maxSize: AgentDataPreloader.MAX_PER_AGENT_CACHE_ENTRIES
+        maxSize: LimitsConfigResolver.Resolve().Limits.Tuning.MaxPerAgentCacheEntries
     });
 
     /** Upper bound on cached per-agent datasets before least-recently-used eviction. */
-    public static readonly MAX_PER_AGENT_CACHE_ENTRIES = 200;
+    public static readonly MAX_PER_AGENT_CACHE_ENTRIES = CODE_FALLBACK_LIMITS.Tuning.MaxPerAgentCacheEntries;
 
     /**
      * Per-run cache (scoped to a single run ID)
@@ -417,9 +417,9 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         }
 
         if (!fieldsParseFailed) {
-            const cachedEntitiesRows = this.tryExecuteCachedEntitiesView(source, params.Fields, contextUser, provider);
-            if (cachedEntitiesRows !== null) {
-                return cachedEntitiesRows;
+            const cachedRows = this.tryExecuteCachedMetadataView(source, params.Fields, contextUser, provider);
+            if (cachedRows !== null) {
+                return cachedRows;
             }
         }
 
@@ -434,18 +434,21 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     }
 
     /**
-     * Serves unfiltered, field-scoped `MJ: Entities` simple views directly from in-memory
-     * provider entity metadata when the user has read permission and no RLS filter applies,
-     * avoiding a SQL query over entity metadata that is already resident in memory.
-     * Returns `null` to fall back to standard `RunView` execution for any unsupported query shape.
+     * Serves unfiltered, field-scoped `MJ: Entities` and `MJ: Query Categories` simple views
+     * directly from in-memory metadata (`Metadata.Provider.Entities` or `QueryEngine.Instance.Categories`)
+     * when the user has read permission and no RLS filter applies, avoiding SQL round-trips for
+     * metadata already resident in memory. Returns `null` to fall back to standard `RunView`.
      */
-    private tryExecuteCachedEntitiesView(
+    private tryExecuteCachedMetadataView(
         source: MJAIAgentDataSourceEntity,
         requestedFields: string[] | undefined,
         contextUser: UserInfo,
         provider?: IMetadataProvider
     ): Record<string, string | number | boolean | Date | null | undefined>[] | null {
-        if (source.EntityName?.trim().toLowerCase() !== 'mj: entities') {
+        const entityKey = source.EntityName?.trim().toLowerCase();
+        const isEntities = entityKey === 'mj: entities';
+        const isQueryCategories = entityKey === 'mj: query categories';
+        if (!isEntities && !isQueryCategories) {
             return null;
         }
         if ((source.ResultType && source.ResultType !== 'simple') || source.ExtraFilter || source.MaxRows) {
@@ -463,28 +466,56 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         }
 
         const resolvedProvider = provider ?? Metadata.Provider;
-        const entities: EntityInfo[] | undefined = resolvedProvider?.Entities;
-        const entitiesMeta = resolvedProvider?.EntityByName('MJ: Entities');
-        if (!resolvedProvider || !entitiesMeta || !entities || entities.length === 0) {
+        if (!resolvedProvider) {
             return null;
         }
 
-        if (!entitiesMeta.GetUserPermisions(contextUser).CanRead) {
+        let targetMeta: EntityInfo | undefined;
+        let records: ReadonlyArray<object> | undefined;
+        if (isEntities) {
+            targetMeta = resolvedProvider.EntityByName('MJ: Entities');
+            records = resolvedProvider.Entities;
+            if (!records || records.length === 0) {
+                return null;
+            }
+        } else {
+            if (!QueryEngine?.Instance?.Loaded || QueryEngine.Instance.ProviderToUse !== resolvedProvider) {
+                return null;
+            }
+            targetMeta = resolvedProvider.EntityByName('MJ: Query Categories');
+            records = QueryEngine.Instance.Categories;
+        }
+
+        if (!targetMeta || !records) {
+            return null;
+        }
+        if (!targetMeta.GetUserPermisions(contextUser).CanRead) {
             return null;
         }
         if (
-            !entitiesMeta.UserExemptFromRowLevelSecurity(contextUser, EntityPermissionType.Read) &&
-            entitiesMeta.GetUserRowLevelSecurityInfo(contextUser, EntityPermissionType.Read).length > 0
+            !targetMeta.UserExemptFromRowLevelSecurity(contextUser, EntityPermissionType.Read) &&
+            targetMeta.GetUserRowLevelSecurityInfo(contextUser, EntityPermissionType.Read).length > 0
         ) {
             return null;
         }
 
-        const sampleEntity = entities[0];
-        for (const field of requestedFields) {
-            if (typeof field !== 'string' || !Reflect.has(sampleEntity, field)) {
+        if (isQueryCategories && Array.isArray(targetMeta.Fields) && targetMeta.Fields.length > 0) {
+            const validFields = new Set(targetMeta.Fields.map((f) => f.Name));
+            if (requestedFields.some((field) => typeof field !== 'string' || !validFields.has(field))) {
                 return null;
             }
-            const sampleValue = Reflect.get(sampleEntity, field);
+        }
+
+        if (records.length === 0) {
+            return [];
+        }
+
+        const sampleRecord = records[0];
+        for (const field of requestedFields) {
+            if (typeof field !== 'string' || !Reflect.has(sampleRecord, field)) {
+                return null;
+            }
+            const sampleValue = Reflect.get(sampleRecord, field);
             if (
                 sampleValue !== null &&
                 sampleValue !== undefined &&
@@ -497,23 +528,25 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
             }
         }
 
-        const sortedEntities = orderBy.length > 0
-            ? [...entities].sort((a, b) => {
-                const cmp = (a.Name ?? '').localeCompare(b.Name ?? '');
+        const sortedRecords = orderBy.length > 0
+            ? [...records].sort((a, b) => {
+                const aName = String(Reflect.get(a, 'Name') ?? '');
+                const bName = String(Reflect.get(b, 'Name') ?? '');
+                const cmp = aName.localeCompare(bName);
                 return /desc$/i.test(orderBy) ? -cmp : cmp;
             })
-            : entities;
+            : records;
 
-        const rows: Record<string, string | number | boolean | Date | null | undefined>[] = sortedEntities.map((entity) => {
+        const rows: Record<string, string | number | boolean | Date | null | undefined>[] = sortedRecords.map((record) => {
             const row: Record<string, string | number | boolean | Date | null | undefined> = {};
             for (const field of requestedFields) {
-                const value = Reflect.get(entity, field);
+                const value = Reflect.get(record, field);
                 row[field] = value as string | number | boolean | Date | null | undefined;
             }
             return row;
         });
 
-        return ProjectEntityValueRowsForUser(resolvedProvider, entitiesMeta, rows, contextUser) ?? rows;
+        return ProjectEntityValueRowsForUser(resolvedProvider, targetMeta, rows, contextUser) ?? rows;
     }
 
     /**

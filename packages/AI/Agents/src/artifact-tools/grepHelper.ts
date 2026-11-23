@@ -76,7 +76,8 @@ function looksLikeRegexPattern(pattern: string): boolean {
  */
 export async function ExecuteStructuredLineGrep(
     content: string,
-    input: GrepRawToolInput
+    input: GrepRawToolInput,
+    regexBudgetMs: number = GREP_REGEX_BUDGET_MS
 ): Promise<ArtifactToolResult> {
     const patternStr = String(input.pattern ?? '');
     if (!patternStr) {
@@ -162,7 +163,7 @@ export async function ExecuteStructuredLineGrep(
     let budgetSkippedCount = 0;
     let budgetExpired = false;
     let lastProcessedLine = 0;
-    const budgetMs = GREP_REGEX_BUDGET_MS;
+    const budgetMs = regexBudgetMs;
     let cpuElapsedMs = 0;
     let batchesSinceYield = 0;
 

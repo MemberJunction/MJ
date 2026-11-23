@@ -1,8 +1,9 @@
-import { Component, EventEmitter, Input, Type } from '@angular/core';
-import { DataSnapshot } from '@memberjunction/core';
+import { Component, ElementRef, EventEmitter, inject, Input, Output, Type } from '@angular/core';
+import { CompositeKey, DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
+import { CaptureRenderedElementThumbnail } from '../utils/artifact-dom-capture';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 
 /**
@@ -24,6 +25,12 @@ export interface NavigationRequest {
 
   /** Query parameters to pass to the navigation target (e.g., { queryId: 'xxx' }) */
   queryParams?: Record<string, string>;
+
+  /** An artifact to open in its own tab. When set, hosts open it and ignore the nav item. */
+  ArtifactID?: string;
+
+  /** Tab title for {@link ArtifactID}. */
+  ArtifactName?: string;
 }
 
 /**
@@ -65,9 +72,11 @@ export interface ArtifactViewerTab {
   /** Language hint for code highlighting (used with 'code' contentType) */
   language?: string;
   /** Angular component class to render (used with 'component' contentType) */
-  component?: Type<any>;
+  component?: Type<object>;
   /** Inputs to pass to the custom component */
-  componentInputs?: Record<string, any> | (() => Record<string, any>);
+  componentInputs?:
+    | Record<string, string | number | boolean | object | null | undefined>
+    | (() => Record<string, string | number | boolean | object | null | undefined>);
 }
 
 /**
@@ -78,7 +87,84 @@ export interface ArtifactViewerTab {
 export interface IArtifactVersionDiffViewer {
   BaseVersion: MJArtifactVersionEntity;
   TargetVersion: MJArtifactVersionEntity;
+  Provider?: IMetadataProvider | null;
 }
+
+/**
+ * Interactive viewing/editing mode accepted by unified artifact viewers (`NW-6`).
+ */
+export type ArtifactViewerViewMode = 'edit' | 'suggest' | 'diff' | 'present';
+
+/**
+ * Target location inside a document, spreadsheet, or slide deck for deep linking (`NW-6`).
+ */
+export interface ArtifactNavigationAnchor {
+  Sheet?: string;
+  Range?: string;
+  SlideNumber?: number;
+  SlideID?: string;
+  ElementID?: string;
+  Heading?: string;
+  BlockID?: string;
+  HighlightMs?: number;
+}
+
+export type ArtifactSelectionDomain = 'document' | 'spreadsheet' | 'slides' | 'whiteboard';
+
+/**
+ * User selection context emitted by artifact viewers (`NW-6`).
+ */
+export interface ArtifactSelectionAnchor {
+  domain: ArtifactSelectionDomain;
+  heading?: string;
+  blockId?: string;
+  quote?: string;
+  sheet?: string;
+  range?: string;
+  slideNumber?: number;
+  slideId?: string;
+  elementId?: string;
+}
+
+/**
+ * Server-verified frozen snapshot provenance entry passed in anonymous/guest share views (`NW-1`).
+ */
+export interface PreVerifiedFrozenSnapshotEntry {
+  Verified: boolean;
+  FrozenByUserName?: string;
+  FrozenAt?: string;
+}
+
+export type PreVerifiedFrozenSnapshotMap = Record<string, PreVerifiedFrozenSnapshotEntry>;
+
+/**
+ * One entry in the artifact viewer header's Export menu.
+ * A viewer lists its entries in {@link BaseArtifactViewerPluginComponent.GetExportOptions}
+ * and runs the chosen one in {@link BaseArtifactViewerPluginComponent.RunExport}.
+ */
+export interface ArtifactExportOption {
+  /** Key passed back to `RunExport`. Unique within one viewer. */
+  Key: string;
+  /** Menu label, e.g. "Excel (.xlsx)". */
+  Label: string;
+  /** Font Awesome icon classes, e.g. "fa-solid fa-file-excel". */
+  Icon: string;
+  /** Optional short hint shown under the label. */
+  Description?: string;
+  /** Optional heading. Options next to each other with the same group show under one heading. */
+  Group?: string;
+  /** When set, the option shows greyed out with this text in place of its description, and does not run. */
+  DisabledReason?: string;
+}
+
+/** The PDF entries every viewer that supports PDF export gets by default. */
+const PDF_EXPORT_OPTIONS: ReadonlyArray<ArtifactExportOption> = [
+  { Key: 'pdf-portrait', Label: 'PDF – Portrait', Icon: 'fa-solid fa-file-pdf' },
+  { Key: 'pdf-landscape', Label: 'PDF – Landscape', Icon: 'fa-solid fa-file-pdf fa-rotate-90' },
+];
+
+/** Export key for a viewer's one downloadable file: the uploaded file, or the source it shows. */
+export const FILE_EXPORT_KEY = 'file';
 
 /**
  * Abstract base component for all artifact viewer plugins.
@@ -90,10 +176,32 @@ export interface IArtifactVersionDiffViewer {
   template: ''
 })
 export abstract class BaseArtifactViewerPluginComponent extends BaseAngularComponent implements IArtifactViewerComponent {
+  private _artifactVersion!: MJArtifactVersionEntity;
+
   /**
    * The artifact version to display
    */
-  @Input() artifactVersion!: MJArtifactVersionEntity;
+  @Input()
+  public get artifactVersion(): MJArtifactVersionEntity {
+    return this._artifactVersion;
+  }
+  public set artifactVersion(value: MJArtifactVersionEntity) {
+    const previous = this._artifactVersion;
+    const isFirstChange = previous === undefined;
+    this._artifactVersion = value;
+    if (previous !== value) {
+      this.onArtifactVersionChanged(previous, value, isFirstChange);
+    }
+  }
+
+  /**
+   * Optional lifecycle hook invoked when {@link artifactVersion} is assigned a new reference.
+   */
+  protected onArtifactVersionChanged(
+    _previous: MJArtifactVersionEntity | undefined,
+    _current: MJArtifactVersionEntity,
+    _isFirstChange: boolean,
+  ): void {}
 
   /**
    * Inline-PREVIEW resolution does NOT live here.
@@ -127,6 +235,124 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    * scope. Null when the viewer has no scope, so every version of the artifact counts.
    */
   @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
+
+  private _preVerifiedFrozenSnapshots: PreVerifiedFrozenSnapshotMap | null = null;
+  private _guestSnapshotMode = false;
+  private _viewerViewMode: ArtifactViewerViewMode | undefined = undefined;
+  private _navigationAnchor: ArtifactNavigationAnchor | null = null;
+
+  /**
+   * Forces offline snapshot-only rendering without Yjs WebSocket connections, server permission lookups,
+   * or live query refreshes — even when the host browser has an authenticated `Metadata.Provider` (`P0-P3-4`).
+   */
+  @Input()
+  public get GuestSnapshotMode(): boolean {
+    return this._guestSnapshotMode;
+  }
+  public set GuestSnapshotMode(value: boolean | undefined) {
+    const next = Boolean(value);
+    if (this._guestSnapshotMode !== next) {
+      this._guestSnapshotMode = next;
+      this.onGuestSnapshotModeChanged(next);
+    }
+  }
+
+  /** CamelCase alias for {@link GuestSnapshotMode}. */
+  @Input()
+  public get guestSnapshotMode(): boolean {
+    return this.GuestSnapshotMode;
+  }
+  public set guestSnapshotMode(value: boolean | undefined) {
+    this.GuestSnapshotMode = value;
+  }
+
+  /**
+   * Effective guest snapshot isolation flag: explicit `[GuestSnapshotMode]="true"` OR
+   * an ephemeral guest snapshot version (empty `ArtifactID` paired with `PreVerifiedFrozenSnapshots !== null`).
+   */
+  protected get isGuestSnapshotMode(): boolean {
+    return (
+      this._guestSnapshotMode ||
+      (!this.artifactVersion?.ArtifactID && this._preVerifiedFrozenSnapshots !== null)
+    );
+  }
+
+  /** Optional lifecycle hook invoked when {@link GuestSnapshotMode} changes. */
+  protected onGuestSnapshotModeChanged(_guestMode: boolean): void {}
+
+  /**
+   * Server-verified frozen block/table/slide provenance passed for pre-auth guest share views (`NW-1`).
+   */
+  @Input()
+  public get PreVerifiedFrozenSnapshots(): PreVerifiedFrozenSnapshotMap | null {
+    return this._preVerifiedFrozenSnapshots;
+  }
+  public set PreVerifiedFrozenSnapshots(value: PreVerifiedFrozenSnapshotMap | null | undefined) {
+    this._preVerifiedFrozenSnapshots = value ?? null;
+    this.onPreVerifiedFrozenSnapshotsChanged(this._preVerifiedFrozenSnapshots);
+  }
+
+  /**
+   * Optional synchronized mode (`'edit' | 'suggest' | 'diff' | 'present'`) pushed from host containers (`NW-6`).
+   * Aliased to `'ViewMode'` / `'viewMode'` so plugin subclasses that define their own `ViewMode` property do not collide.
+   */
+  @Input('ViewMode')
+  public get SyncViewMode(): ArtifactViewerViewMode | undefined {
+    return this._viewerViewMode;
+  }
+  public set SyncViewMode(value: ArtifactViewerViewMode | undefined) {
+    if (value !== undefined && this._viewerViewMode !== value) {
+      this._viewerViewMode = value;
+      this.onViewerViewModeChanged(value);
+    }
+  }
+
+  /** CamelCase alias for {@link SyncViewMode}. */
+  @Input('viewMode')
+  public get syncViewMode(): ArtifactViewerViewMode | undefined {
+    return this.SyncViewMode;
+  }
+  public set syncViewMode(value: ArtifactViewerViewMode | undefined) {
+    this.SyncViewMode = value;
+  }
+
+  /**
+   * Optional target heading, block, sheet/range, or slide/element anchor to focus (`NW-6`).
+   */
+  @Input()
+  public get NavigationAnchor(): ArtifactNavigationAnchor | null {
+    return this._navigationAnchor;
+  }
+  public set NavigationAnchor(value: ArtifactNavigationAnchor | null | undefined) {
+    this._navigationAnchor = value ?? null;
+    if (this._navigationAnchor) {
+      this.onNavigationAnchorChanged(this._navigationAnchor);
+    }
+  }
+
+  /** CamelCase alias for {@link NavigationAnchor}. */
+  @Input()
+  public get navigationAnchor(): ArtifactNavigationAnchor | null {
+    return this.NavigationAnchor;
+  }
+  public set navigationAnchor(value: ArtifactNavigationAnchor | null | undefined) {
+    this.NavigationAnchor = value;
+  }
+
+  /** Emitted when the active selection (heading, block, cell range, or slide) changes (`NW-6`). */
+  @Output() public SelectionChanged = new EventEmitter<ArtifactSelectionAnchor>();
+
+  /** CamelCase alias for {@link SelectionChanged}. */
+  @Output() public selectionChanged = this.SelectionChanged;
+
+  /** Optional lifecycle hook invoked when {@link PreVerifiedFrozenSnapshots} changes. */
+  protected onPreVerifiedFrozenSnapshotsChanged(_snapshots: PreVerifiedFrozenSnapshotMap | null): void {}
+
+  /** Optional lifecycle hook invoked when {@link ViewMode} changes. */
+  protected onViewerViewModeChanged(_mode: ArtifactViewerViewMode): void {}
+
+  /** Optional lifecycle hook invoked when {@link NavigationAnchor} is assigned. */
+  protected onNavigationAnchorChanged(_anchor: ArtifactNavigationAnchor): void {}
 
   /**
    * Emitted when an inline-editable plugin (such as `MarkdownArtifactViewerComponent` or
@@ -206,7 +432,7 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
   /**
    * Parse JSON content safely
    */
-  protected parseJsonContent<T = any>(): T | null {
+  protected parseJsonContent<T = Record<string, string | number | boolean | object | null | undefined>>(): T | null {
     try {
       const content = this.getContent();
       return JSON.parse(content);
@@ -248,6 +474,16 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
   public navigationRequest?: EventEmitter<NavigationRequest>;
 
   /**
+   * Optional: Emitted when the plugin wants to open a MemberJunction entity record.
+   */
+  public OpenEntityRecord?: EventEmitter<{ entityName: string; compositeKey: CompositeKey }>;
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   */
+  public openEntityRecord?: EventEmitter<{ entityName: string; compositeKey: CompositeKey }>;
+
+  /**
    * Whether this plugin supports user feedback.
    * Plugins that return true will get a feedback button in the artifact viewer header.
    * Override this getter to return true when feedback is available.
@@ -286,6 +522,32 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    */
   public async ExportPDF(_orientation: PdfOrientation = 'portrait'): Promise<void> {
     // Subclasses override to export their content
+  }
+
+  /**
+   * The formats this viewer can export, shown in the artifact viewer header's Export menu.
+   * The header shows no Export button when this returns an empty list.
+   *
+   * Default: the portrait and landscape PDF entries when {@link SupportsPDFExport} is true.
+   * Subclasses override to list other formats, and may include the PDF entries too.
+   */
+  public GetExportOptions(): ArtifactExportOption[] {
+    return this.SupportsPDFExport ? [...PDF_EXPORT_OPTIONS] : [];
+  }
+
+  /**
+   * Runs the export option with the given key, which came from {@link GetExportOptions}.
+   * Throws when the export fails, so the header can tell the user.
+   *
+   * Default: runs the PDF entries through {@link ExportPDF}. Subclasses that add options
+   * handle their own keys and pass the rest to `super.RunExport`.
+   */
+  public async RunExport(key: string): Promise<void> {
+    if (key === 'pdf-portrait' || key === 'pdf-landscape') {
+      await this.ExportPDF(key === 'pdf-landscape' ? 'landscape' : 'portrait');
+      return;
+    }
+    throw new Error(`Unknown export option: ${key}`);
   }
 
   /**
@@ -341,6 +603,35 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    */
   public abstract GetCurrentStateSnapshot(): DataSnapshot | null;
 
+  protected readonly captureHostElementRef: ElementRef<HTMLElement> | null = (() => {
+    try {
+      return inject(ElementRef, { optional: true }) as ElementRef<HTMLElement> | null;
+    } catch {
+      return null;
+    }
+  })();
+
+  /**
+   * Captures a rendered visual thumbnail (`data:image/webp|jpeg|png|svg+xml;base64,...`) of this
+   * plugin's primary display surface, masking live data blocks when requested by the Artifact Type policy.
+   */
+  public async CaptureRenderedThumbnail(options?: { maskLiveDataBlocks?: boolean }): Promise<string | null> {
+    const target = this.resolveCaptureRootElement();
+    if (!target) {
+      return null;
+    }
+    return CaptureRenderedElementThumbnail(target, {
+      MaskLiveDataBlocks: options?.maskLiveDataBlocks !== false,
+    });
+  }
+
+  /**
+   * Returns the DOM element representing the visual canvas/stage to screenshot (excluding viewer chrome).
+   */
+  protected resolveCaptureRootElement(): HTMLElement | null {
+    return this.captureHostElementRef?.nativeElement ?? null;
+  }
+
   /**
    * Get the raw text content from the artifact version.
    * Returns null if no content is available.
@@ -366,6 +657,31 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
     const response = await fetch(url);
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  /** The Export menu entry for the viewer's one downloadable file. */
+  protected FileExportOption(label: string, icon: string, description: string): ArtifactExportOption {
+    return { Key: FILE_EXPORT_KEY, Label: label, Icon: icon, Description: description };
+  }
+
+  /** The uploaded file's name, else the artifact's name, else the fallback. */
+  protected OriginalFileName(fallback: string): string {
+    return this.artifactVersion?.FileName?.trim() || this.getDisplayTitle()?.trim() || fallback;
+  }
+
+  /** The artifact's name with the given extension, for a downloaded file. */
+  protected ExportFileName(extension: string): string {
+    return `${this.getDisplayTitle()?.trim() || 'artifact'}.${extension}`;
+  }
+
+  /** Saves text as a file in the browser. */
+  protected DownloadTextFile(text: string, fileName: string, mimeType: string): void {
+    const objectUrl = URL.createObjectURL(new Blob([text], { type: mimeType }));
     const anchor = document.createElement('a');
     anchor.href = objectUrl;
     anchor.download = fileName;

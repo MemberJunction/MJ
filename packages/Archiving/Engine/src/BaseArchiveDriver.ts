@@ -6,6 +6,7 @@ import {
     RestoreRecordResult,
     ArchiveDocument,
     ArchivePrimaryKeyField,
+    EligibilityFilterContext,
 } from './types';
 
 /**
@@ -42,6 +43,21 @@ export abstract class BaseArchiveDriver {
      * @returns True if the record should be archived, false to skip it
      */
     public abstract ShouldArchiveRecord(context: ArchiveRecordContext): boolean;
+
+    /**
+     * Returns a SQL WHERE fragment that matches only the records {@link ShouldArchiveRecord}
+     * would accept, so the engine never loads records the driver would skip (for example,
+     * records a previous StripFields run already cleared). The engine ANDs it with the
+     * retention cutoff and the configured FilterExpression. Column names must be written in
+     * square brackets, which every provider accepts in a view filter. Returns null when the
+     * driver cannot express its rule in SQL; every record in the cutoff is then loaded and
+     * {@link ShouldArchiveRecord} decides. A subclass that overrides
+     * {@link ShouldArchiveRecord} should override this to match, or return null.
+     * @param _context - The field configuration, entity metadata and configuration records
+     */
+    public BuildEligibilityFilter(_context: EligibilityFilterContext): string | null {
+        return null;
+    }
 
     /**
      * Archives a single record and applies the configured mode to the source record.

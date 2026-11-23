@@ -1,5 +1,7 @@
 export { ReactTestHarness, TestHarnessOptions } from './lib/test-harness';
 export { BrowserManager, BrowserContextOptions, ClassifyConnectEndpoint } from './lib/browser-context';
+export { NetworkAllowlist, NetworkAccessMode, HostOfUrl, RedactUrl, BROWSER_LAUNCH_ARGS, DISABLE_WEBRTC_SCRIPT } from './lib/network-policy';
+export { AllowlistProxy } from './lib/network-proxy';
 // Export the component runner that uses the real React runtime UMD bundle
 export {
   ComponentRunner,
@@ -16,6 +18,10 @@ export {
   ResolveQueryTarget,
   ResolveViewTarget,
   DataAccessIdentity,
+  // The page's network allowlist: which library URLs it allows, and the rule of a blocked request.
+  LibraryNetworkUrls,
+  CoreRuntimeNetworkUrls,
+  NETWORK_REQUEST_BLOCKED_RULE,
 } from './lib/component-runner';
 export { AssertionHelpers } from './lib/assertion-helpers';
 

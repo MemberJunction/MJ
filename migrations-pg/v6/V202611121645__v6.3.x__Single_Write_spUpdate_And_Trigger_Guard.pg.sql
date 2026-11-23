@@ -1,0 +1,24 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration
+-- Hand-authored counterpart (v6.3.0-edge.1 release build)
+-- ============================================================================
+
+-- PG-EMPTY-BY-DESIGN: PostgreSQL already does the single write this migration gives SQL Server.
+--
+-- The SQL Server migration (wave 4.3b, 74ba8f20d6) regenerates 454 spUpdate* procedures so they
+-- set [__mj_UpdatedAt] = GETUTCDATE() themselves, and wraps 455 trgUpdate* AFTER UPDATE triggers in
+-- IF NOT UPDATE([__mj_UpdatedAt]). On SQL Server the trigger is an AFTER trigger that issues a
+-- SECOND UPDATE of the row; the change removes that second write from every BaseEntity.Save().
+--
+-- PostgreSQL never had the second write. Its __mj_UpdatedAt trigger is a BEFORE UPDATE row
+-- trigger that assigns NEW."__mj_UpdatedAt" in place
+-- (PostgreSQLCodeGenProvider.generateTimestampTrigger: "NEW.__mj_UpdatedAt := NOW() AT TIME ZONE
+-- 'UTC'; RETURN NEW;"), so an UPDATE is already one write, with or without the column in SET.
+-- The JSON-arg spUpdate shape already sets "__mj_UpdatedAt" = NOW() (renderJsonArgUpdateSetClause).
+--
+-- The shared emitter change that came with it (2719736773: CodeGenDatabaseProvider
+-- .GenerateUpdateFieldString appends the __mj_UpdatedAt assignment for both dialects) makes PG's
+-- positional spUpdate functions carry the same SET item from the next PG CodeGen run or bake on.
+-- That item is overwritten by the BEFORE trigger, so regenerating ~450 functions here would change
+-- no behaviour. Migrations baked later in this release (e.g. V202611131724, V202611161546) already
+-- emit the new shape for the entities they regenerate.

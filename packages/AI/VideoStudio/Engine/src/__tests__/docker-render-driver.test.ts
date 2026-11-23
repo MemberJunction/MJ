@@ -45,6 +45,7 @@ import {
     MINIMAL_BUNDLE_WIDTH,
 } from './fixtures/minimal-bundle.js';
 import { DescribeRenderDriverContract } from './render-driver-contract.js';
+import { CheckCanRunRealDockerTests } from './render-test-gate.js';
 
 type SandboxOutcome = 'success' | 'failure' | 'cancelled';
 
@@ -765,6 +766,24 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         await expect(fs.stat(`${hostWorkspacePath}.out`)).rejects.toMatchObject({
             code: 'ENOENT',
         });
+    });
+
+    it('defaults the render capture worker count to the container CPU quota, and keeps an explicit request value', async () => {
+        const seenWorkers: Array<number | undefined> = [];
+        const baseProvider = createProvider();
+        const capturingProvider: DockerTestSandboxProvider = {
+            IsContainerRunning: async (handle) => baseProvider.IsContainerRunning(handle),
+            Provision: async (key, config) => baseProvider.Provision(key, config),
+            Finalize: async (handle, outcome) => {
+                const raw = await fs.readFile(path.join(handle.HostWorkspacePath ?? '', 'request.json'), 'utf8');
+                seenWorkers.push((JSON.parse(raw) as { Workers?: number }).Workers);
+                await baseProvider.Finalize(handle, outcome);
+            },
+        };
+        const driver = new DockerRenderDriver({ ...makeDockerSettings(), Docker: { ...makeDockerSettings().Docker, Cpus: 3.5 } }, capturingProvider);
+        await driver.Render(CreateMinimalRenderRequest());
+        await driver.Render({ ...CreateMinimalRenderRequest(), Workers: 1 });
+        expect(seenWorkers).toEqual([3, 1]);
     });
 
     it('rejects oversized video output and VideoSizeBytes mismatches with Code === "Internal" before reading file bytes', async () => {
@@ -1579,26 +1598,7 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
     });
 });
 
-function checkCanRunRealDockerTests(): boolean {
-    if (process.env.VIDEO_STUDIO_DOCKER_TESTS !== '1') {
-        console.info(
-            '[docker-render-driver.test] Skipping real-Docker contract suite: set VIDEO_STUDIO_DOCKER_TESTS=1 to enable.',
-        );
-        return false;
-    }
-    const res = spawnSync('docker', ['image', 'inspect', DEFAULT_DOCKER_RENDER_IMAGE], {
-        stdio: 'ignore',
-    });
-    if (res.status !== 0) {
-        console.info(
-            `[docker-render-driver.test] Skipping real-Docker contract suite: Docker image '${DEFAULT_DOCKER_RENDER_IMAGE}' is missing. Build it with: ${DOCKER_RENDER_IMAGE_BUILD_COMMAND}`,
-        );
-        return false;
-    }
-    return true;
-}
-
-const CAN_RUN_REAL_DOCKER_TESTS = checkCanRunRealDockerTests();
+const CAN_RUN_REAL_DOCKER_TESTS = CheckCanRunRealDockerTests('docker-render-driver.test');
 
 describe.skipIf(!CAN_RUN_REAL_DOCKER_TESTS)(
     'DockerRenderDriver (opt-in real Docker container via VIDEO_STUDIO_DOCKER_TESTS=1)',

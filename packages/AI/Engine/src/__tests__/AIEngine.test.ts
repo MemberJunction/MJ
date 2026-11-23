@@ -124,7 +124,7 @@ vi.mock('@memberjunction/core', async () => ({
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
-    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector } = await importOriginal<typeof import('@memberjunction/global')>();
+    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector, UUIDSet } = await importOriginal<typeof import('@memberjunction/global')>();
     // Minimal in-memory LRU stand-in — the real MJLruCache is in @memberjunction/global
     // but the mock above replaces the entire module export, so we re-implement just
     // the surface AIEngine uses.
@@ -200,6 +200,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         // nothing, and a hand-rolled copy would drift from the contract MJGlobal's own
         // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
         // singletons this mock replaces are created lazily, so none are instantiated.
+        UUIDSet,
         ToEpochMs,
         // Real binary-vector codecs — the stored-vector tests encode with one and
         // ReadStoredVector (real, below) decodes with the other.
@@ -317,6 +318,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
 // on what RefreshNoteEmbeddings / RefreshExampleEmbeddings handed to LoadVectors.
 const { createdVectorServices } = vi.hoisted(() => ({
     createdVectorServices: [] as Array<{
+        options: unknown;
         LoadVectors: ReturnType<typeof vi.fn>;
         AddOrUpdateVector: ReturnType<typeof vi.fn>;
         RemoveVector: ReturnType<typeof vi.fn>;
@@ -330,6 +332,7 @@ vi.mock('@memberjunction/ai-vectors-memory', async (importOriginal) => {
     return {
         ReadStoredVector,
         SimpleVectorService: class SimpleVectorService<T = unknown> {
+            options: unknown;
             LoadVectors = vi.fn();
             AddOrUpdateVector = vi.fn();
             RemoveVector = vi.fn().mockReturnValue(true);
@@ -337,7 +340,10 @@ vi.mock('@memberjunction/ai-vectors-memory', async (importOriginal) => {
             FindSimilar = vi.fn().mockReturnValue([]);
             Similarity = vi.fn().mockReturnValue(0);
             Has = vi.fn().mockReturnValue(false);
-            constructor() { createdVectorServices.push(this); }
+            constructor(options?: unknown) {
+                this.options = options;
+                createdVectorServices.push(this);
+            }
         },
         VectorEntry: class VectorEntry {},
     };
@@ -2218,6 +2224,17 @@ describe('AIEngine', () => {
                 expect(loaded.map(e => e.key)).toEqual(['current']);
                 expect(vi.mocked(LogWarning)).toHaveBeenCalledWith(expect.stringContaining('left out 2 agent note(s)'));
             });
+        });
+
+        it('constructs both _noteVectorService and _exampleVectorService with Precision: float32', async () => {
+            createdVectorServices.length = 0;
+            base.AgentNotes = [];
+            base.AgentExamples = [];
+            await engine.RefreshNoteEmbeddings();
+            await engine.RefreshExampleEmbeddings();
+            expect(createdVectorServices).toHaveLength(2);
+            expect(createdVectorServices[0].options).toEqual({ Precision: 'float32' });
+            expect(createdVectorServices[1].options).toEqual({ Precision: 'float32' });
         });
 
         it('drops a saved note embedded by another model instead of adding it to the index', () => {

@@ -73,6 +73,7 @@ import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overv
 import { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
 import { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
 import { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
+import { ChiefOfStaffAgentChannelsComponent, LoadChiefOfStaffAgentChannels } from './ChiefOfStaff/chief-of-staff-agent-channels.component';
 
 // Knowledge Hub components
 import {
@@ -178,6 +179,7 @@ import { GraphViewComponent } from '@memberjunction/ng-graph-view';
     AIOverviewHubComponent,
     ChiefOfStaffOverviewComponent,
     ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffAgentChannelsComponent,
     ChiefOfStaffGovernanceComponent
   ],
   imports: [
@@ -272,6 +274,7 @@ import { GraphViewComponent } from '@memberjunction/ng-graph-view';
     AIOverviewHubComponent,
     ChiefOfStaffOverviewComponent,
     ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffAgentChannelsComponent,
     ChiefOfStaffGovernanceComponent,
     SharedDashboardWidgetsModule
   ]
@@ -302,6 +305,7 @@ export class AIDashboardsModule {
         LoadAIOverviewHub();
         LoadChiefOfStaffOverview();
         LoadChiefOfStaffApprovals();
+        LoadChiefOfStaffAgentChannels();
         LoadChiefOfStaffGovernance();
     }
 }

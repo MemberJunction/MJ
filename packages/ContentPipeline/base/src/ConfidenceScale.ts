@@ -50,6 +50,8 @@ export const ConfidenceScale = {
     DiscoveredFileType: 3,
     /** A content type a source listing declared. */
     DiscoveredContentType: 3,
+    /** A decorator from a source listing (a manifest row's decorator column). */
+    DiscoveredDecorator: 4,
 } as const;
 
 /** The name of one entry on the scale. */

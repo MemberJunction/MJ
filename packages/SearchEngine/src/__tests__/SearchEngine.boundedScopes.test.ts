@@ -117,6 +117,8 @@ const AGENTS_ENTITY = {
     Icon: 'fa-solid fa-robot',
     FirstPrimaryKey: { Name: 'ID' },
     PrimaryKeys: [{ Name: 'ID' }],
+    GetUserPermisions: () => ({ CanRead: true }),
+    GetEffectiveRowFilterWhereClause: () => '',
 };
 
 class BoundedTestEngine extends SearchEngine {

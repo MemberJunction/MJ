@@ -1,5 +1,113 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- a9e640a: Lists: refresh from a saved view or query, safely and on a schedule.
+  - Queries and User Views store a `DefinitionFingerprint` on every save. A list stores the fingerprint of the source it was linked against (`SourceFingerprint`); a refresh whose source changed since then applies nothing, returns `SOURCE_CHANGED` and pauses the list's routine until the owner approves the change (`ApproveListSource`). Approving, and linking a source, fill the list straight away.
+  - A list can refresh from a saved query (`SourceQueryID`, `SourceQueryParameters`, `SourceQueryKeyField`).
+  - "Refresh automatically" (`List.AutoRefresh`) creates a User Routine that runs "Refresh List From Source" on the Lists app's default schedule (application settings `Lists.Refresh.DefaultCron` and `Lists.Refresh.DefaultTimezone`). Only the list's owner can link a source or turn it on.
+  - `RefreshFromSource` (and so linking, approving and scheduled refreshes) no longer signs a delta token, so it works on a server without `MJ_LIST_DELTA_SECRET`; previews and `ApplyDelta` still need the secret.
+  - New list operations `PreviewRefreshFromSource` / `ApplyRefreshPreview` (GraphQL `PreviewListRefresh` / `ApplyListRefresh`) preview a refresh from any source before applying it. Each refresh that changes a list writes a "List Refreshed" audit row; source changes and approvals write their own.
+  - The List form gains a Source & refresh card, a source-change review with a SQL or filter diff from Record Changes, a link-source dialog and a Refresh history section. The Lists app gains refresh status on the browse page and a Refreshes page.
+  - New deterministic integration test IT175 (`list-refresh` bundle, LR1–LR7) covers the fingerprint stamp, fill on link, the routine's lifecycle, a stopped refresh on a changed source, and approval.
+
+### Patch Changes
+
+- f53f828: Saved-query metadata is no longer loaded into the metadata object by default. Providers skip the query items of the `MJ_Metadata` dataset (no SQL runs for them, and their status stays constant), so saving a query no longer refreshes metadata on every server and client. The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters return empty arrays and log one warning; set `LoadQueryMetadata: true` on the provider configuration (`databaseSettings.loadQueryMetadata` on MJAPI) to restore them until 7.0. Use the same setting on every server that shares a metadata cache. Every MJ consumer of those getters now reads `QueryEngine`.
+
+  The typed-query API (`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode`, …) moved from `@memberjunction/core` to `@memberjunction/core-entities`, and signature drift is checked against `QueryEngine`. Projects that generated typed queries for their own schema on a 6.3.0 edge build must re-run CodeGen, which now emits the new import.
+
+  The server's metadata build no longer edits the `MJ_Metadata` dataset rows it reads: it assembles from copies, and the dataset cache freezes those rows like every other dataset's. The edited rows were being served to every client, so each cold boot downloaded every entity's fields, permissions and relationships twice (43 MB instead of 23 MB raw on a 455-entity schema). With a Redis cache configured, the two-tier cache froze those rows before the build edited them, so the server started with no metadata.
+
+- 0af123e: Check `TransactionGroup` updates for concurrent changes, as single-record saves already are. An update queued with `ConcurrencyCheck` of `'log'` or `'enforce'` (per save, or the provider-wide setting) now gets a locked read of its row inside the group's transaction, before any of the group's statements run; in `'enforce'` mode a conflict rolls back the whole group, `Submit()` returns `false`, and the conflicting entity's `LatestResult.ConcurrencyConflict` names the fields. Groups with checking off do no extra work, and batched submits stay batched. Grouped saves from the browser now send each update's old values, and `ExecuteTransactionGroup` checks them the way the single-record update mutation does, so a form that saves child records alongside its main record no longer silently overwrites another user's change. Adds integration test IT173.
+- fff3a52: Waves 5.4, 5.5, and 5.6 performance & bundle-splitting improvements:
+  - **Wave 5.4**: Lazy `EntityInfo.Fields` / `EntityFieldInfo` instantiation on first field access, native structured-clone IndexedDB metadata caching in `ProviderBase` / `BrowserIndexedDBStorageProvider`, and `IT128 PB20` hydration benchmarks.
+  - **Wave 5.5**: Added `@memberjunction/ng-bootstrap/types` secondary entry point to decouple `ng-explorer-app` from eager dashboard registrations, switched `MarkdownArtifactViewerComponent` to `ChangeDetectionStrategy.OnPush`, and extended `check-browser-manifest-leakage.mjs` with bundle-splitting regression guards.
+  - **Wave 5.6**: Added `@memberjunction/ng-auth-services/preload` lightweight entry point for `MJExplorer/src/main.ts` and decoupled `@memberjunction/core-entities/schemas` Zod schemas from entity classes (with CodeGen support).
+- 7231715: Add cross-tab `SharedWorker` kernel (`SharedTabKernelClient`, `SharedTabKernelHost`, `SharedTabKernelStorageProvider`) multiplexing a single origin `graphql-ws` WebSocket across open tabs for `cacheInvalidation`, per-session `PushStatusUpdates`, generic `Subscribe`, sequence catch-up, and single-flight JWT refresh sync, alongside a shared Worker L1 `RunView`/`RunViews` coalescing cache and single-owner IndexedDB L1 + write deduplication layer with automatic `BroadcastChannel` + Web Locks fallback when `SharedWorker` is unavailable. Wire the worker into `MJExplorer`, update service-worker `ngsw-config.json` and `verify-sw-cache-shape.js` for `worker-*.js` bundles, and add `performance-benchmark.PB22`.
+- 44f7869: Wave 4.2a Angular idle CPU, FK record-name microtask coalescing, `AngularGraphQLDataProvider` background transport hook, and O(1) streaming markdown:
+  - `@memberjunction/graphql-dataprovider`: coalesce concurrent `GetEntityRecordName` cache misses within a microtask tick into a single batched `GetEntityRecordNames` query, add framework-neutral `ExecuteInBackgroundScope` hook on `GraphQLDataProvider` around WebSocket setup/watchdogs/subscriptions/timers, and support pre-constructed or `ClassFactory`-registered provider subclasses in `SetupGraphQLClient` and `ConnectGraphQLClient`.
+  - `@memberjunction/ng-shared-generic`, `@memberjunction/ng-bootstrap`, `@memberjunction/ng-workspace-initializer`, `@memberjunction/ng-realtime-widget`: add `@RegisterClass(GraphQLDataProvider)` `AngularGraphQLDataProvider` + `SetupAngularGraphQLClient` / `ConnectAngularGraphQLClient` delegating `ExecuteInBackgroundScope` to `NgZone.runOutsideAngular` so WebSocket traffic never triggers spurious Angular change-detection ticks while keeping `@memberjunction/graphql-dataprovider` 100% framework-agnostic.
+  - `@memberjunction/ng-markdown`: memoize `Marked` configuration in `MarkdownService` and incrementally render only the uncommitted tail block in `MarkdownComponent` during streaming (`O(1)` per chunk instead of `O(N^2)` full-document re-parse and `innerHTML` replacement).
+  - `@memberjunction/ng-base-forms`: replace unconditional 200ms `NgZone` dirty-state `setInterval` polling in `MjRecordFormContainerComponent` with event-driven `FormFieldEditCoordinator` + `BaseEntity` listeners and an edit-mode-only `runOutsideAngular` fallback; normalize UUID case comparison and sequence-guard async FK name lookups in `MjFormFieldComponent`.
+  - `@memberjunction/ng-entity-viewer`: defer `RecycleBinChipComponent` deleted-record count queries via `IntersectionObserver` until the chip enters the viewport and project only `Fields: ['RecordID']` with `SkipTotalRowCount: true`.
+  - `@memberjunction/ng-explorer-core`: detach `ChangeDetectorRef` for hidden/stacked tabs, off-DOM cached components, and inactive dual-region layouts while keeping active and visible side-by-side Golden Layout split-pane tabs live.
+- 7747b73: Wave 4.4 two-tier L1 frozen CoW + L2 Redis HASH cache, Redis Stream cluster invalidation sequence, cross-replica GraphQL PubSub fan-out, multi-tab browser invalidation multiplexer, and coalesced metadata storage persistence:
+  - `@memberjunction/core`: cache per-slot PK array indices via `WeakMap` in `LocalCacheManager.ApplyRowChanges` for $O(\Delta)$ Copy-on-Write row updates, compute `maxUpdatedAt` incrementally on non-displacing updates, delegate in-place row deltas via `ILocalStorageProvider.ApplyRunViewRowDelta`, and add trailing-edge coalesced/serialized `ScheduleSaveLocalMetadataToStorage` on `ProviderBase`.
+  - `@memberjunction/redis-provider`: add `TwoTierCacheStorageProvider` (byte-bounded L1 deep-frozen LRU cache with $O(\Delta)$ peer `row_delta` patching in front of L2 Redis), per-row Redis `HASH` storage (`useHashForRunViewSlots`) with Lua `APPLY_RUNVIEW_ROW_DELTA_SCRIPT` (`HSET`/`HDEL`), and atomic cluster epoch + Redis Stream `INCR`/`XADD`/`XRANGE` helpers.
+  - `@memberjunction/server` & `@memberjunction/server-bootstrap`: wrap shared Redis cache in `TwoTierCacheStorageProvider` (`WrapSharedCacheWithL1`), register `RedisStreamBroadcastProvider` (`'RedisStream'`) for cluster-wide monotonic `X-MJ-Server-ID` / `X-MJ-Cache-Seq` watermarks and `XRANGE` catch-up, and bridge all non-bespoke TypeGraphQL `@Subscription` topics across pods via `AttachRedisClusterPubSub`.
+  - `@memberjunction/graphql-dataprovider`: add `ClientTabInvalidationMultiplexer` electing a single leader browser tab via Web Locks to hold the `CacheInvalidation` WebSocket and relay invalidations + deduplicated catch-up watermarks to follower tabs over `BroadcastChannel` / `SharedWorker`.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/interactive-component-types@6.3.0-edge.1
+  - @memberjunction/lists-base@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

@@ -779,3 +779,46 @@ describe('StatementClassifier — issue #5364', () => {
     expect(ClassifyBatch('CREATE OR ALTER VIEW app.vwX AS SELECT 1 AS A')).toBe('CREATE_VIEW');
   });
 });
+
+// Issues #5955 / #3166: index drops, bare and guarded.
+describe('StatementClassifier — DROP INDEX (issues #5955, #3166)', () => {
+  it('classifies DROP INDEX name ON table as DROP_INDEX', () => {
+    expect(ClassifyBatch('DROP INDEX [IX_Foo] ON [__mj].[Foo]')).toBe('DROP_INDEX');
+  });
+
+  it('classifies a sys.indexes-guarded DROP INDEX as CONDITIONAL_DDL instead of skipping it', () => {
+    const sql = "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Foo')\nBEGIN\n  DROP INDEX [IX_Foo] ON [__mj].[Foo];\nEND";
+    expect(ClassifyBatch(sql)).toBe('CONDITIONAL_DDL');
+  });
+});
+
+describe('StatementClassifier — guarded grants (issue #5567)', () => {
+  it('routes a principal-guarded sp_executesql GRANT to GRANT', () => {
+    const sql = `IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = 'cdp_UI')
+    EXEC sp_executesql N'GRANT SELECT ON [dbo].[vwFoo] TO [cdp_UI]'`;
+    expect(ClassifyBatch(sql)).toBe('GRANT');
+  });
+
+  it('routes CodeGen\'s OBJECT_ID-guarded layered-view grant to GRANT', () => {
+    const sql = `IF OBJECT_ID('[app].[vwOrganizations]', 'V') IS NOT NULL
+BEGIN
+    EXEC sp_executesql N'GRANT SELECT ON [app].[vwOrganizations] TO [cdp_UI]';
+END;`;
+    expect(ClassifyBatch(sql)).toBe('GRANT');
+  });
+
+  it('keeps skipping guarded batches without a grant', () => {
+    expect(ClassifyBatch(`IF OBJECT_ID('[__mj].[spFoo]', 'P') IS NOT NULL DROP PROCEDURE [__mj].[spFoo]`)).toBe('SKIP_SQLSERVER');
+    expect(ClassifyBatch(`IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'x') EXEC sp_dropextendedproperty 'MS_Description'`)).toBe('SKIP_SQLSERVER');
+    // "grant" in a comment is not a grant
+    expect(ClassifyBatch(`-- grant access below\nIF OBJECT_ID('[__mj].[spFoo]', 'P') IS NOT NULL DROP PROCEDURE [__mj].[spFoo]`)).toBe('SKIP_SQLSERVER');
+  });
+});
+
+describe('StatementClassifier — sp_refreshview (issue #5649)', () => {
+  it('classifies EXEC sp_refreshview as REFRESH_VIEW, not a silent skip', () => {
+    expect(ClassifyBatch("EXEC sp_refreshview '__mj.vwEntities'")).toBe('REFRESH_VIEW');
+    expect(ClassifyBatch("EXECUTE sys.sp_refreshview N'__mj.vwEntities';")).toBe('REFRESH_VIEW');
+    expect(ClassifyBatch("EXEC [__mj].[spDoThing] @x = 1")).toBe('SKIP_SQLSERVER');
+  });
+});

@@ -25,7 +25,7 @@ import {
 } from '@memberjunction/ng-auth-services';
 import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
-import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
+import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap/types';
 import { ValidateExplorerEnvironment } from './environment-validation';
 import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext, ThemeService } from '@memberjunction/ng-shared';
@@ -855,8 +855,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
   }
 
-  /** Handle app/nav-item navigation requests emitted from the floating chat overlay */
-  public async OnOverlayNavigationRequested(event: { navItemName: string; appName?: string; queryParams?: Record<string, string> }): Promise<void> {
+  /** Handle artifact and app/nav-item navigation requests emitted from the floating chat overlay */
+  public async OnOverlayNavigationRequested(event: {
+    navItemName: string;
+    appName?: string;
+    queryParams?: Record<string, string>;
+    ArtifactID?: string;
+    ArtifactName?: string;
+  }): Promise<void> {
+    if (event.ArtifactID) {
+      this.navigationService.OpenArtifact(event.ArtifactID, event.ArtifactName);
+      return;
+    }
     const normalize = (v: string | null | undefined): string =>
       String(v ?? '').toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
     const apps = this.ProviderToUse?.Applications || [];

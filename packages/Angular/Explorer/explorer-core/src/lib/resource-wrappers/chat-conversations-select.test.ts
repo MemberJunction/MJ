@@ -2,6 +2,7 @@
 // (same convention as the other component suites in this node test environment).
 import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
+import { UserInfo } from '@memberjunction/core';
 import { ChatConversationsResource } from './chat-conversations-resource.component';
 import type { MJConversationEntity } from '@memberjunction/core-entities';
 
@@ -27,7 +28,7 @@ function createComponent(listed: MJConversationEntity | undefined, loaded: MJCon
   open['cdr'] = { detectChanges: vi.fn() };
   open['skipUrlUpdate'] = true;
   open['updateTabTitle'] = vi.fn();
-  component.CurrentUser = { ID: 'user-1' };
+  component.CurrentUser = new UserInfo(undefined, { ID: 'user-1' });
   component.SelectedConversationId = null;
   component.SelectedConversation = null;
   return { component, ensure };

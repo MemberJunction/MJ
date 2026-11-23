@@ -180,6 +180,26 @@
             "lastModified": "2026-05-14T02:09:03.955Z",
             "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Graph Context",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7E8FB53D-9F7E-4214-BCFD-E7E327B88E3D"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Graph Path",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8C59879A-20E9-4118-9369-6B7FC8B01A5E"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -585,6 +605,7 @@
       "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research, Report Writer), and coordinates the research workflow. Uses iterative methodology with source validation and contradiction detection. Delegates final synthesis and report generation to the Report Writer sub-agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "InstantiationMode": "Optional",
       "AcceptsSkills": "All",
       "SkillActivationMode": "Auto",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
@@ -616,6 +637,27 @@
               "Scoped Search"
             ]
           }
+        },
+        "instantiation": {
+          "suggestedNames": [
+            "FDA Clinical Scout",
+            "Market Analyst",
+            "Competitor Radar",
+            "Policy Researcher"
+          ],
+          "suggestedIcons": [
+            "fa-solid fa-microscope",
+            "fa-solid fa-magnifying-glass-chart",
+            "fa-solid fa-flask",
+            "fa-solid fa-compass",
+            "fa-solid fa-globe"
+          ],
+          "suggestedPersonaNames": [
+            "Sage",
+            "Charon",
+            "Alloy",
+            "Kore"
+          ]
         }
       }
     },

@@ -397,4 +397,91 @@ describe('GitHubRestClient Policy Guardrails & Atomic Git Data API Commits', () 
         expect(issue.Number).toBe(55);
         expect(attempts).toBe(3);
     });
+
+    it('falls back to Git Blobs API when ReadFiles encounters a >1MB 403 too_large file and slices requested lines', async () => {
+        const migrationText = Array.from({ length: 10 }, (_, idx) => `-- line ${idx + 1}`).join('\n');
+        const mockFetch = (async (url: string | URL | Request) => {
+            const urlStr = String(url);
+            if (urlStr.includes('/contents/migrations/V1__big.sql')) {
+                return new Response(JSON.stringify({ message: 'too_large', errors: [{ code: 'too_large' }] }), {
+                    status: 403,
+                });
+            }
+            if (urlStr.includes('/contents/migrations?ref=next')) {
+                return new Response(
+                    JSON.stringify([{ name: 'V1__big.sql', path: 'migrations/V1__big.sql', sha: 'blob_sha_big_1', size: 1_500_000, type: 'file' }]),
+                    { status: 200 },
+                );
+            }
+            if (urlStr.includes('/git/blobs/blob_sha_big_1')) {
+                return new Response(
+                    JSON.stringify({
+                        sha: 'blob_sha_big_1',
+                        size: 1_500_000,
+                        encoding: 'base64',
+                        content: Buffer.from(migrationText, 'utf8').toString('base64'),
+                    }),
+                    { status: 200 },
+                );
+            }
+            return new Response('Not Found', { status: 404 });
+        }) as typeof fetch;
+
+        const client = new GitHubRestClient(createTestAuth(), { FetchImpl: mockFetch });
+        const entries = await client.ReadFiles('MemberJunction', 'MJ', ['migrations/V1__big.sql'], 'next', 2, 4);
+        expect(entries).toHaveLength(1);
+        expect(entries[0].Sha).toBe('blob_sha_big_1');
+        expect(entries[0].TotalLines).toBe(10);
+        expect(entries[0].StartLine).toBe(2);
+        expect(entries[0].EndLine).toBe(4);
+        expect(entries[0].Content).toBe('-- line 2\n-- line 3\n-- line 4');
+    });
+
+    it('paginates GetPullRequestContext changed files beyond 100 entries', async () => {
+        const makeFiles = (start: number, count: number) =>
+            Array.from({ length: count }, (_, idx) => ({
+                filename: `src/file-${start + idx}.ts`,
+                status: 'modified',
+                additions: 1,
+                deletions: 0,
+            }));
+
+        const mockFetch = (async (url: string | URL | Request) => {
+            const urlStr = String(url);
+            if (urlStr.endsWith('/pulls/4')) {
+                return new Response(
+                    JSON.stringify({
+                        id: 4,
+                        number: 4,
+                        title: 'Large PR',
+                        state: 'open',
+                        draft: false,
+                        head: { ref: 'feat/big', sha: 'head_sha_4' },
+                        base: { ref: 'next', sha: 'base_sha_4' },
+                        changed_files: 120,
+                    }),
+                    { status: 200 },
+                );
+            }
+            if (urlStr.includes('/pulls/4/files?per_page=100&page=1')) {
+                return new Response(JSON.stringify(makeFiles(1, 100)), { status: 200 });
+            }
+            if (urlStr.includes('/pulls/4/files?per_page=100&page=2')) {
+                return new Response(JSON.stringify(makeFiles(101, 20)), { status: 200 });
+            }
+            if (urlStr.includes('/pulls/4/reviews') || urlStr.includes('/pulls/4/comments')) {
+                return new Response(JSON.stringify([]), { status: 200 });
+            }
+            if (urlStr.includes('/check-runs')) {
+                return new Response(JSON.stringify({ check_runs: [] }), { status: 200 });
+            }
+            return new Response('Not Found', { status: 404 });
+        }) as typeof fetch;
+
+        const client = new GitHubRestClient(createTestAuth(), { FetchImpl: mockFetch });
+        const ctx = await client.GetPullRequestContext('MemberJunction', 'MJ', 4, false);
+        expect(ctx.Files).toHaveLength(120);
+        expect(ctx.Files[0].filename).toBe('src/file-1.ts');
+        expect(ctx.Files[119].filename).toBe('src/file-120.ts');
+    });
 });

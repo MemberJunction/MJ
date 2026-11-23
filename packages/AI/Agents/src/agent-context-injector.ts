@@ -1,5 +1,5 @@
 import { EntityInfo, IsVerboseLoggingEnabled, LogError, LogStatus, ProjectEntityValueRowsForUser, UserInfo } from "@memberjunction/core";
-import { ToEpochMs, UUIDsEqual } from "@memberjunction/global";
+import { ToEpochMs, UUIDsEqual, UUIDSet } from "@memberjunction/global";
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata, ExampleMatchResult } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
@@ -403,13 +403,35 @@ export class AgentContextInjector {
      * Multi-tenant secondary scoping reuses {@link matchesSecondaryScope} (the same matcher the examples path
      * already uses), so notes and examples share one in-memory scoping definition.
      */
-    private filterNotesByScoping(notes: MJAIAgentNoteEntity[], params: GetNotesParams): MJAIAgentNoteEntity[] {
+    protected filterNotesByScoping(notes: MJAIAgentNoteEntity[], params: GetNotesParams): MJAIAgentNoteEntity[] {
+        // Walk BaseAgentID prototype ancestors so org/agent-wide notes (UserID == null) authored on
+        // prototype templates flow down live to derived instances, while per-user notes
+        // (UserID != null) remain strictly isolated per instance (e.g., Pepper vs Cato).
+        const ancestorAgentIdSet = new UUIDSet(
+            params.agentId && typeof AIEngine.Instance.GetAgentInheritanceChain === 'function'
+                ? AIEngine.Instance.GetAgentInheritanceChain(params.agentId)
+                      .slice(0, -1)
+                      .map(a => a.ID)
+                : []
+        );
+
         return notes.filter(note => {
             // Same injectable set (Active + Provisional) the semantic path uses, so the two paths agree.
             if (!IsInjectableNoteStatus(note.Status)) {
                 return false;
             }
-            const agentOk = params.agentId ? (note.AgentID == null || UUIDsEqual(note.AgentID, params.agentId)) : note.AgentID == null;
+            let agentOk: boolean;
+            if (params.agentId) {
+                const isGlobal = note.AgentID == null;
+                const isDirect = note.AgentID != null && UUIDsEqual(note.AgentID, params.agentId);
+                const isInheritedOrgNote =
+                    note.AgentID != null &&
+                    note.UserID == null &&
+                    ancestorAgentIdSet.Has(note.AgentID);
+                agentOk = isGlobal || isDirect || isInheritedOrgNote;
+            } else {
+                agentOk = note.AgentID == null;
+            }
             // Under SharedOnly a user's own note is left out even for that user: the run's output is for a room.
             const userOk = params.userId && !params.SharedOnly ? (note.UserID == null || UUIDsEqual(note.UserID, params.userId)) : note.UserID == null;
             const companyOk = params.companyId ? (note.CompanyID == null || UUIDsEqual(note.CompanyID, params.companyId)) : note.CompanyID == null;
@@ -432,6 +454,9 @@ export class AgentContextInjector {
 
         // Filter examples matching our scoping criteria
         const filtered = this.filterExamplesByScoping(allExamples, params);
+        if (filtered.length === 0) {
+            return [];
+        }
 
         // Sort based on strategy
         const sorted = this.sortExamples(filtered, params.strategy);

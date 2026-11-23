@@ -5,6 +5,7 @@ import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { MarkupFilterOptions, RowFilterParameterBinder, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
+import type { DatabasePlatform } from "./platformSQL"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString, CanonicalPrimaryKeyValue } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
@@ -1570,8 +1571,8 @@ export class EntityFieldInfo extends BaseInfo {
 
 
     // These are not in the database view and are added in code
-    IsFloat: boolean
-    RelatedEntityTableAlias: string
+    IsFloat: boolean = false
+    RelatedEntityTableAlias: string = null
 
     /** @deprecated Use {@link RelatedEntityTableAlias}. */
     get _RelatedEntityTableAlias(): string {
@@ -4033,7 +4034,9 @@ export class EntityInfo extends BaseInfo {
     ParentBaseView: string = null 
 
     // These are not in the database view and are added in code
-    private _fields: EntityFieldInfo[]
+    private _fields: EntityFieldInfo[] = []
+    private _fieldsLoaded: boolean = false
+    private _rawFields: ReadonlyArray<Record<string, unknown> | EntityFieldInfo> | null = null
     private _relatedEntities: EntityRelationshipInfo[]
     private _permissions: EntityPermissionInfo[]
     private _settings: EntitySettingInfo[]
@@ -4041,7 +4044,98 @@ export class EntityInfo extends BaseInfo {
     private _organicKeys: EntityOrganicKeyInfo[] = []
     private _uniqueKeySets: EntityUniqueKeyInfo[] = []
     private _alternateBaseViews: EntityAlternateBaseViewInfo[] = []
-    HasIdField: boolean = false
+
+    /**
+     * Whether EntityFieldInfo instances have been materialized for this entity.
+     * True if .Fields or any field-derived getter has been accessed; false if still deferred.
+     */
+    public get IsFieldsLoaded(): boolean {
+        return this._fieldsLoaded;
+    }
+
+    /**
+     * Serializes EntityInfo to a plain object without forcing lazy EntityFieldInfo
+     * materialization when fields are still deferred.
+     */
+    public override toJSON(): Record<string, unknown> {
+        if (this._fieldsLoaded) {
+            return super.toJSON();
+        }
+        const savedRaw = this._rawFields;
+        this._fieldsLoaded = true;
+        this._fields = [];
+        let result: Record<string, unknown>;
+        try {
+            result = super.toJSON();
+        } finally {
+            this._fieldsLoaded = false;
+            this._rawFields = savedRaw;
+        }
+        result['Fields'] = savedRaw
+            ? savedRaw.map((item) => (item instanceof EntityFieldInfo ? item.toJSON() : item))
+            : [];
+        return result;
+    }
+
+    /**
+     * Ensures EntityFieldInfo instances are created for this entity.
+     * Deferring creation until .Fields or a field-derived getter is accessed
+     * saves allocating thousands of EntityFieldInfo objects at startup.
+     */
+    public EnsureFieldsLoaded(): void {
+        if (this._fieldsLoaded) {
+            return;
+        }
+        this._fieldsLoaded = true;
+        if (this._rawFields && this._rawFields.length > 0) {
+            const md = this.OwningProvider;
+            const fields: EntityFieldInfo[] = [];
+            for (let j = 0; j < this._rawFields.length; j++) {
+                const item = this._rawFields[j];
+                const field = item instanceof EntityFieldInfo ? item : new EntityFieldInfo(item);
+                if (md) {
+                    field.SetOwningProvider(md);
+                }
+                fields.push(field);
+            }
+            this._fields = fields;
+            this._rawFields = null;
+        } else if (!this._fields) {
+            this._fields = [];
+        }
+
+        let virtualCount: number = 0;
+        let floatCount: number = 0;
+        let hasIdField: boolean = false;
+
+        for (let j = 0; j < this._fields.length; ++j) {
+            const f = this._fields[j];
+            if (f.Name && f.Name.trim().toUpperCase() === 'ID') {
+                hasIdField = true;
+            }
+            virtualCount += f.IsVirtual ? 1 : 0;
+            floatCount += f.IsFloat ? 1 : 0;
+        }
+
+        if (this._lazyHasIdField === undefined) {
+            this._lazyHasIdField = hasIdField;
+        }
+        if (this._lazyVirtualCount === undefined) {
+            this._lazyVirtualCount = virtualCount;
+        }
+        if (this._lazyFloatCount === undefined) {
+            this._lazyFloatCount = floatCount;
+        }
+    }
+
+    private _lazyHasIdField: boolean | undefined = undefined;
+    get HasIdField(): boolean {
+        this.EnsureFieldsLoaded();
+        return this._lazyHasIdField ?? false;
+    }
+    set HasIdField(value: boolean) {
+        this._lazyHasIdField = value;
+    }
 
     /** @deprecated Use {@link HasIdField}. */
     get _hasIdField(): boolean {
@@ -4051,7 +4145,15 @@ export class EntityInfo extends BaseInfo {
     set _hasIdField(value: boolean) {
         this.HasIdField = value;
     }
-    VirtualCount: number = 0
+
+    private _lazyVirtualCount: number | undefined = undefined;
+    get VirtualCount(): number {
+        this.EnsureFieldsLoaded();
+        return this._lazyVirtualCount ?? 0;
+    }
+    set VirtualCount(value: number) {
+        this._lazyVirtualCount = value;
+    }
 
     /** @deprecated Use {@link VirtualCount}. */
     get _virtualCount(): number {
@@ -4081,7 +4183,15 @@ export class EntityInfo extends BaseInfo {
     set _oneToManyCount(value: number) {
         this.OneToManyCount = value;
     }
-    FloatCount: number = 0
+
+    private _lazyFloatCount: number | undefined = undefined;
+    get FloatCount(): number {
+        this.EnsureFieldsLoaded();
+        return this._lazyFloatCount ?? 0;
+    }
+    set FloatCount(value: number) {
+        this._lazyFloatCount = value;
+    }
 
     /** @deprecated Use {@link FloatCount}. */
     get _floatCount(): number {
@@ -4353,9 +4463,10 @@ export class EntityInfo extends BaseInfo {
             _entityDeniedFieldsCache.set(this, byUser);
         }
         let entry = byUser.get(user);
-        if (!entry || entry.fieldsRef !== this._fields || entry.generation !== generation
+        const fields = this.Fields;
+        if (!entry || entry.fieldsRef !== fields || entry.generation !== generation
             || !sameAncestors(entry.ancestors, ancestors) || entry.rolesKey !== rolesKey) {
-            entry = { fieldsRef: this._fields, generation, ancestors, rolesKey };
+            entry = { fieldsRef: fields, generation, ancestors, rolesKey };
             byUser.set(user, entry);
         }
         return entry;
@@ -4395,7 +4506,7 @@ export class EntityInfo extends BaseInfo {
     ): Set<string> {
         const denied = new Set<string>();
         if (this.EnableFieldLevelSecurity) {
-            for (const field of this._fields) {
+            for (const field of this.Fields) {
                 if (isDenied(field.GetUserFieldPermissions(user, true))) {
                     this.addDeniedField(denied, field);
                 }
@@ -4435,7 +4546,7 @@ export class EntityInfo extends BaseInfo {
         if (parentDenied.size === 0) {
             return;
         }
-        for (const field of this._fields) {
+        for (const field of this.Fields) {
             const parentField = parent.FieldByName(field.Name);
             if (parentField && parentDenied.has(parentField.Name.trim().toLowerCase())) {
                 this.addDeniedField(denied, field);
@@ -4463,7 +4574,7 @@ export class EntityInfo extends BaseInfo {
     public FieldByName(name: string): EntityFieldInfo | undefined {
         if (name == null) return undefined;
         if (this._fieldByNameMap === null) {
-            const fields = this._fields ?? this.Fields ?? [];
+            const fields = this.Fields ?? [];
             const map = new Map<string, EntityFieldInfo>();
             for (const f of fields) {
                 if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
@@ -4474,7 +4585,7 @@ export class EntityInfo extends BaseInfo {
     }
 
     private ensureFieldIndexEntry(): { byName: Map<string, number>; byCodeName: Map<string, number> } {
-        const fields = this._fields ?? this.Fields ?? [];
+        const fields = this.Fields ?? [];
         let entry = _entityFieldIndexCache.get(this);
         if (!entry || entry.fieldsRef !== fields || entry.fieldsLen !== fields.length) {
             const byName = new Map<string, number>();
@@ -4527,7 +4638,7 @@ export class EntityInfo extends BaseInfo {
      */
     public FieldByCodeName(codeName: string): EntityFieldInfo | undefined {
         const idx = this.FieldIndexByCodeName(codeName);
-        const fields = this._fields ?? this.Fields;
+        const fields = this.Fields;
         return idx >= 0 && fields ? fields[idx] : undefined;
     }
 
@@ -4637,6 +4748,7 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of all entity fields
      */
     get Fields(): EntityFieldInfo[] {
+        this.EnsureFieldsLoaded();
         return this._fields;
     }
 
@@ -4655,7 +4767,7 @@ export class EntityInfo extends BaseInfo {
      */
     get HasInactiveFields(): boolean {
         if (this._hasInactiveFields === undefined) {
-            this._hasInactiveFields = this._fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
+            this._hasInactiveFields = this.Fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
         }
         return this._hasInactiveFields;
     }
@@ -4682,7 +4794,7 @@ export class EntityInfo extends BaseInfo {
      */
     get HasSearchFields(): boolean {
         if (this._hasSearchFields === undefined) {
-            this._hasSearchFields = this._fields.some(f => f.IncludeInUserSearchAPI);
+            this._hasSearchFields = this.Fields.some(f => f.IncludeInUserSearchAPI);
         }
         return this._hasSearchFields;
     }
@@ -5467,14 +5579,14 @@ export class EntityInfo extends BaseInfo {
      * @param returnPrefix
      * @returns
      */
-    public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+    public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, platform?: DatabasePlatform): string {
         // Central exemption check: if the user holds any role that grants this
         // permission without an RLS filter, they are exempt — return no filter.
         if (this.UserExemptFromRowLevelSecurity(user, type)) {
             return '';
         }
 
-        const sRLSSQL = this.roleRowFilterClause(user, type, null);
+        const sRLSSQL = this.roleRowFilterClause(user, type, null, platform);
         if (sRLSSQL.length === 0) {
             return '';
         }
@@ -5482,20 +5594,35 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Resolves the database platform for RLS filter variant selection: uses an explicit
+     * caller-supplied platform when provided, otherwise reads `PlatformKey` from the
+     * entity's owning metadata provider when available.
+     */
+    private resolveRLSPlatform(explicitPlatform?: DatabasePlatform): DatabasePlatform | undefined {
+        if (explicitPlatform) {
+            return explicitPlatform;
+        }
+        const provider = MetadataProviderFor(this) as { PlatformKey?: DatabasePlatform } | undefined;
+        return provider?.PlatformKey;
+    }
+
+    /**
      * The role layer of the row filter, '' when no role filter applies. Callers check the
      * role-RLS exemption first. With a `binder`, user values bind as parameters
      * ({@link RowLevelSecurityFilterInfo.MarkupFilterParameterized}).
      */
-    private roleRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
+    private roleRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null, platform?: DatabasePlatform): string {
         const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
         if (!userRLS || userRLS.length === 0) {
             return '';
         }
+        const resolvedPlatform = this.resolveRLSPlatform(platform);
+        const options: MarkupFilterOptions | undefined = resolvedPlatform ? { platform: resolvedPlatform } : undefined;
         // The user is NOT exempt, so every filter that applies is OR'd together. Each filter is
         // parenthesized, and a group of two or more is parenthesized as a whole, so a predicate the
         // caller ANDs beside the clause (`WHERE ID = @p0 AND <clause>`) applies to every filter rather
         // than binding to the first one only. A single filter keeps its one pair of parentheses.
-        const terms = userRLS.map((rls) => `(${binder ? rls.MarkupFilterParameterized(user, binder) : rls.MarkupFilterText(user)})`);
+        const terms = userRLS.map((rls) => `(${binder ? rls.MarkupFilterParameterized(user, binder, options) : rls.MarkupFilterText(user, options)})`);
         return terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
     }
 
@@ -5526,8 +5653,8 @@ export class EntityInfo extends BaseInfo {
      * must call this without a binder: the literal clause is what keeps two users from sharing
      * a cached result.
      */
-    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, binder?: RowFilterParameterBinder): string {
-        const sql = this.effectiveRowFilterClause(user, type, binder ?? null);
+    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, binder?: RowFilterParameterBinder, platform?: DatabasePlatform): string {
+        const sql = this.effectiveRowFilterClause(user, type, binder ?? null, platform);
         if (sql.length === 0) {
             return '';
         }
@@ -5535,16 +5662,16 @@ export class EntityInfo extends BaseInfo {
     }
 
     /** The composed row-filter clause without a prefix; literal when `binder` is null. */
-    private effectiveRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
+    private effectiveRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null, platform?: DatabasePlatform): string {
         const layers: string[] = [];
         // The literal form goes through GetUserRowLevelSecurityWhereClause, which applies the exemption itself.
         const roleClause = binder === null
-            ? this.GetUserRowLevelSecurityWhereClause(user, type, '')
-            : (this.UserExemptFromRowLevelSecurity(user, type) ? '' : this.roleRowFilterClause(user, type, binder));
+            ? this.GetUserRowLevelSecurityWhereClause(user, type, '', platform)
+            : (this.UserExemptFromRowLevelSecurity(user, type) ? '' : this.roleRowFilterClause(user, type, binder, platform));
         if (roleClause && roleClause.length > 0) {
             layers.push(`(${roleClause})`);
         }
-        const keyClause = this.getAPIKeyRowFilterClause(user, type, binder);
+        const keyClause = this.getAPIKeyRowFilterClause(user, type, binder, platform);
         if (keyClause && keyClause.length > 0) {
             layers.push(`(${keyClause})`);
         }
@@ -5559,7 +5686,7 @@ export class EntityInfo extends BaseInfo {
      * or unloaded) contributes `(1=0)`, and unresolved tokens inside a filter collapse it
      * to `(1=0)` via the match-nothing markup mode.
      */
-    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
+    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null, platform?: DatabasePlatform): string {
         const bindings = user?.APIKeyRowFilters;
         if (!bindings || bindings.length === 0) {
             return '';
@@ -5568,6 +5695,7 @@ export class EntityInfo extends BaseInfo {
         if (mine.length === 0) {
             return '';
         }
+        const resolvedPlatform = this.resolveRLSPlatform(platform);
         const clauses = [...mine]
             .sort((a, b) => a.FilterID.localeCompare(b.FilterID)) // deterministic order for the cache fingerprint (INV-2)
             .map(b => {
@@ -5576,7 +5704,10 @@ export class EntityInfo extends BaseInfo {
                     LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
                     return '(1=0)';
                 }
-                const options: MarkupFilterOptions = { unresolvedBehavior: 'match-nothing' };
+                const options: MarkupFilterOptions = {
+                    unresolvedBehavior: 'match-nothing',
+                    ...(resolvedPlatform ? { platform: resolvedPlatform } : {}),
+                };
                 return `(${binder ? filter.MarkupFilterParameterized(user, binder, options) : filter.MarkupFilterText(user, options)})`;
             });
         return clauses.join(' AND ');
@@ -5962,6 +6093,7 @@ export class EntityInfo extends BaseInfo {
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._fields = [];
+            this._fieldsLoaded = false;
 
             // Reset every lazy field-derived memo cache whenever _Fields is (re)assigned.
             // `entityInfo.cacheReset.test.ts` mirrors this list in `runProductionCacheReset`;
@@ -5987,13 +6119,16 @@ export class EntityInfo extends BaseInfo {
             // Added late: HasInactiveFields (Jun 18) post-dates this block (Jun 15) and was never
             // listed here, so it carried exactly the staleness the block exists to prevent.
             this._hasInactiveFields = undefined;
+            this._lazyHasIdField = undefined;
+            this._lazyVirtualCount = undefined;
+            this._lazyFloatCount = undefined;
+
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
-            if (ef) {
-                for (let j = 0; j < ef.length; j++) {
-                    const field = new EntityFieldInfo(ef[j]);
-                    field.SetOwningProvider(md);
-                    this._fields.push(field);
-                }
+            if (ef && ef.length > 0) {
+                this._rawFields = ef;
+            } else {
+                this._rawFields = null;
+                this._fieldsLoaded = true;
             }
 
             // copy the Entity Permissions
@@ -6080,46 +6215,35 @@ export class EntityInfo extends BaseInfo {
                 EntityAlternateBaseViewInfo.LinkHierarchy(this._alternateBaseViews, this.SchemaName);
             }
 
-            this.prepareSpecialFields();
+            this.prepareRelationshipCounts();
         }
     }
 
-    private prepareSpecialFields() {
+    private prepareRelationshipCounts(): void {
         try {
-            let virtualCount: number = 0;
             let manyToManyCount: number = 0;
             let oneToManyCount: number = 0;
-            let floatCount: number = 0;
-            let hasIdField: boolean = false;
-            
-            for (let j:number = 0; j < this.Fields.length; ++j) {
-                const f = this.Fields[j]
-                if (f.Name.trim().toUpperCase() === 'ID')
-                    hasIdField = true;
-    
-                virtualCount += f.IsVirtual ? 1 : 0;
-                floatCount += f.IsFloat ? 1 : 0;
-            }
-            this.HasIdField = hasIdField
-            this.FloatCount = floatCount;
-            this.VirtualCount = virtualCount;
-    
-            // now see if there are any relationships and count the one to many and many to many
-            for (let j:number = 0; j < this.RelatedEntities.length; ++j) {
+
+            for (let j: number = 0; j < this.RelatedEntities.length; ++j) {
                 const r = this.RelatedEntities[j];
-                                   
-                if (r.Type.trim().toUpperCase() === 'ONE TO MANY')
+
+                if (r.Type && r.Type.trim().toUpperCase() === 'ONE TO MANY')
                     oneToManyCount++;
                 else    
                     manyToManyCount++;
             }
-                
+
             this.ManyToManyCount = manyToManyCount;
             this.OneToManyCount = oneToManyCount;
         }
         catch (e) {
             LogError(e);
         }
+    }
+
+    private prepareSpecialFields(): void {
+        this.prepareRelationshipCounts();
+        this.EnsureFieldsLoaded();
     }
 
     /**

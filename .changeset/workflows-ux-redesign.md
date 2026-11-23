@@ -1,0 +1,15 @@
+---
+"@memberjunction/ng-base-forms": patch
+"@memberjunction/ng-flow-editor": patch
+"@memberjunction/ng-task-graph-editor": patch
+"@memberjunction/ng-ai-test-harness": patch
+"@memberjunction/ng-dashboards": patch
+---
+
+Redesign the Workflows Explorer app and shared flow/task-graph editors (`@memberjunction/ng-flow-editor`, `@memberjunction/ng-task-graph-editor`) around a unified token-authentic spatial studio and live X-Ray debugger, and polish the custom-form switcher in `@memberjunction/ng-base-forms`:
+
+- **`@memberjunction/ng-base-forms`**: Move `Open standard form` / `Back to custom view` into `<mj-form-toolbar>`'s `More` (`...`) menu across all viewports and make `<mj-entity-form-host>`'s custom-view notice strip dismissible per user and per entity via `UserInfoEngine`.
+- **`@memberjunction/ng-flow-editor`**: Replace dead CSS tokens and hardcoded light colors with semantic `--mj-*` tokens; switch `FlowLayoutService` to static ESM `@dagrejs/dagre`; synchronize port sides with `LR`/`TB` orientation; cap fit-to-screen zoom (`<= 95%`) and persist per-workflow pan/zoom viewports via `UserInfoEngine`; fix `ForEachTask`/`WhileTask` loop detection and skipped-label strikethrough; add squircle icons, multi-output ports, breakpoint gutters, live `NodeProgress` bars, expandable X-Ray telemetry slots, and `+` quick-add ports; upgrade `<mj-flow-agent-editor>` to `Canvas | Split Playbook | Playbook` with searchable pickers, clickable `{{ step.output }}` mapping pills, structured loop fields, `Human` step support, and Saga rollback configuration.
+- **`@memberjunction/ng-task-graph-editor`**: Register all 8 renderable step types; preserve ghosted untaken paths alongside forced-verdict overrides; upgrade `<mj-task-graph-debug-toolbar>` to DAG-native `Continue` / `Step Next` / `Step Wave` controls plus `X-Ray`, Blast-Radius `Impact` preview, Engine Pulse, and targeted `Step(taskID)`; add plain-English diagnostic co-pilot banners, `Tree | Before ⇄ After` payload diffs with search and Copy JSON, docked interactive replay scrubbing, and adaptive 360px embedded layout.
+- **`@memberjunction/ng-ai-test-harness`**: Add optional `initialDebugMode` support when opening the workflow test/debug harness for an agent.
+- **`@memberjunction/ng-dashboards` (`Workflows`)**: Upgrade the Workflows catalog with Blueprint mini-SVG topology cards, Ops Table toggle with 10-run spark-barcodes and `p50` latency, reconciled trigger summaries, `Needs Your Decision` person-step inbox, and direct `Run`/`Debug` actions; upgrade `CreateWorkflowComponent` with starter recipes, iterative AI refinement, live spatial preview before saving, and past-run `TaskGraphSpec` projection; host an in-app Workflow Studio (`<mj-flow-agent-editor>`, `<mj-agent-invocations>`, and recent workflow runs) with query-param round-tripping; and upgrade `WorkflowRunsResourceComponent` with a collapsible run rail, fixed `In Progress` and `Waiting on Person` filters, inline person-step approvals, zero-clipping debugger layout, and a synchronized execution waterfall.

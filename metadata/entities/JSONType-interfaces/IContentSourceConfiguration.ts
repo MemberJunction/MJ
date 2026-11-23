@@ -11,6 +11,16 @@
  */
 export interface IContentSourceConfiguration {
     /**
+     * The entity this source's items are created, loaded and saved as: an IS-A extension of `MJ: Content Items`
+     * (for example a product's own `Content Items` entity), by name. Saving an item as its extension
+     * writes both rows under one ID, so no item exists without its extension row; an existing item that
+     * has none gets it added. Overrides the source type's, the content type's and the system default
+     * (`ContentPipeline.ItemEntity` on the default AI Configuration). Unset everywhere means plain
+     * `MJ: Content Items`. An entity that is not an extension of `MJ: Content Items` fails the item.
+     */
+    ItemEntity?: string;
+
+    /**
      * Options passed to the segmentation strategy named by SegmenterKey.
      *
      * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
@@ -153,6 +163,23 @@ export interface IContentSourceConfiguration {
      * - Website: { URL: "https://example.com" } — see Website sub-object below for crawl knobs
      */
     SourceSpecificConfiguration?: Record<string, unknown>;
+
+    /**
+     * Settings for individual extractors, keyed by extractor key, handed to that extractor as
+     * `ExtractRequest.Options`. Layered: the Content Source Type's, then the source's
+     * `SourceSpecificConfiguration`, then the source's own, then a run's `Options`. For example the
+     * `Manifest` extractor (a CSV or TSV listing documents) reads `{ "Manifest": { "LinkColumn": "Link",
+     * "TextColumn": "Body", "TitleColumn": "Title", "DateColumn": "Published", "DecoratorColumn": "Journal",
+     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`.
+     */
+    ExtractorOptions?: Record<string, Record<string, unknown>>;
+
+    /**
+     * The registered page renderer (`BasePageRenderer`) that loads this source's web pages, for sites
+     * built by script in the browser: `Headless` loads them in a headless Chromium (needs the
+     * `playwright` package). Used by the website crawler and by Extract. Unset: a plain HTTP GET.
+     */
+    PageRenderer?: string;
     /**
      * Website-crawler settings — only meaningful for content sources whose ContentSourceType is
      * "Website". Replaces the legacy per-key ContentSourceParam rows; AutotagWebsite reads from
@@ -169,9 +196,35 @@ export interface IContentSourceConfiguration {
      * (`@RegisterClass(BasePipelineStage, 'Graph')`). When enabled on a Content Source that
      * is linked to a `GraphID` (either a Canon graph or a shared/per-source Knowledge graph),
      * the pipeline clusters ingested chunks into higher-level `MJ: Graph Concepts` and emits
-     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
+     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `BroaderThan`, `Contradicts`, etc.).
      */
     GraphOverlay?: IContentSourceGraphOverlayConfig;
+    /**
+     * Optional artifact indexing for a push-only (`Upload`) source. When set, the Content Pipeline's
+     * `ArtifactGraphIndexer` pushes the latest version of every artifact of these types into this
+     * source as it is saved, one Content Item per artifact, linked to the `MJ: Artifacts` record
+     * so graph access follows the artifact's own permissions. Combine with `GraphOverlay` to put
+     * the documents into a graph.
+     */
+    Artifacts?: IContentSourceArtifactsConfiguration;
+}
+
+/**
+ * Which artifacts a push-only source indexes, and how eagerly.
+ */
+export interface IContentSourceArtifactsConfiguration {
+    /** `MJ: Artifact Types` names whose versions are indexed, e.g. `["Markdown Document"]`. Matched case-insensitively. */
+    ArtifactTypes?: string[];
+    /**
+     * Quiet period after the last save of an artifact before it is indexed, in milliseconds.
+     * Collaborative editing saves often; indexing waits for the edits to settle. Default 10000.
+     */
+    DebounceMs?: number;
+    /**
+     * When false, the source is skipped by the indexer while keeping what it already indexed.
+     * Default true.
+     */
+    Enabled?: boolean;
 }
 
 /**
@@ -265,6 +318,12 @@ export interface IContentSourceVectorMetadataFieldConfig {
      * SQL numeric column types store as numbers automatically without setting this.
      */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+    /**
+     * Write this field under a different metadata key (for example `Date` as `ContentDate`). Unset: the
+     * field's own name. The identity keys (`Entity`, `RecordID`, `ContentItemID`, `Sequence`) cannot be
+     * written this way.
+     */
+    MetadataKey?: string;
 }
 
 /**
@@ -300,6 +359,20 @@ export interface IContentSourceWebsiteConfiguration {
      * origin to crawl the whole site).
      */
     RootURL?: string;
+    /**
+     * Seed the crawl from the site's sitemaps: those in {@link SitemapURLs}, else the ones robots.txt
+     * names, else `/sitemap.xml`. Each in-scope page a sitemap lists is found (unless its `lastmod` is
+     * older than the walk's `Since`) and its links are followed like any other page's. Default false.
+     */
+    UseSitemaps?: boolean;
+    /** Sitemaps to read instead of looking in robots.txt. A sitemap index is followed. */
+    SitemapURLs?: string[];
+    /** Pause after reading each page, in ms, to be polite to the site. Default 1000. */
+    CrawlDelayMs?: number;
+    /** The most pages whose links one walk reads (across all its parts). Unset: no limit. */
+    MaxPages?: number;
+    /** How long the page renderer may take to load and settle a page, in ms. Default 30000. */
+    RenderTimeoutMs?: number;
 }
 
 /**

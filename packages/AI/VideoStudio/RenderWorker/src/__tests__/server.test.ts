@@ -255,6 +255,8 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         const videoId = resultEvent.Result.VideoID;
         expect(videoId).toBeTruthy();
         expect(resultEvent.Result.VideoSizeBytes).toBe(FAKE_MP4_BYTES.byteLength);
+        expect(resultEvent.Result.Audio?.Normalized).toBe(true);
+        expect(resultEvent.Result.Workers).toBeGreaterThanOrEqual(1);
 
         const videoUrl = `http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Video}/${encodeURIComponent(videoId)}`;
         const firstVideoRes = await fetch(videoUrl);

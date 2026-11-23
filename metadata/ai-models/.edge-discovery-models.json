@@ -1,0 +1,35 @@
+[
+  {
+    "fields": {
+      "Name": "ms-marco-MiniLM-L-6-v2 (Local)",
+      "Description": "Quantized MS MARCO MiniLM-L-6-v2 cross-encoder reranker running client-side via Transformers.js ONNX/WASM for Wave 6C edge agent pre-discovery.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 5,
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "Calibrations": [
+            {
+              "Use": "edge-agent-discovery",
+              "Question": "matches",
+              "ResolvedModel": "Xenova/ms-marco-MiniLM-L-6-v2@q8",
+              "A": 1,
+              "B": 3.8,
+              "FittedOn": "MJ Wave 6C Edge AI PoC (N=75 labelled requests): raw cross-encoder logit converted via sigmoid(logit) then Platt-scaled with ApplyPlattCalibration(sigmoid(logit), { A: 1.0, B: 3.8 }) = sigmoid(1.0 * logit + 3.8). At logit >= -2.0 (~0.8581 calibrated confidence), 100.0% precision (20/20) and 0.0% false triggers across 15 none cases."
+            }
+          ]
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "52977C3F-DAB4-480B-81BC-ABE0A6D2EF6C"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:28.004Z",
+      "checksum": "87332a92845b7e6447e76cee4aaa8f9f713d688a6bf3d16d6b9396915882c99c"
+    }
+  }
+]

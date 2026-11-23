@@ -205,6 +205,7 @@ export const ClientInputTransportKeys: readonly string[] = [
     ReadableFieldsTransportKey,
     'RestoreContext___',
     'CloneContext___',
+    'SyncContext___',
     // The companion payload key, spelled out rather than imported: the module that defines it
     // imports BaseEntity, which imports this module, and this array is built at load time.
     'Companions___',

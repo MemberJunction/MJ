@@ -5,15 +5,18 @@ vi.mock('../custom/ResourcePermissions/ResourcePermissionEngine', () => ({
         GetProviderInstance: () => ({
             Config: vi.fn().mockResolvedValue(undefined),
             GetUserAvailableResources: () => grants,
-            GetUserResourcePermissionLevel: (_typeId: string, recordId: string) => folderGrantLevels[recordId] ?? null,
+            // Conversation grants (the delete rule) answer from grantLevel; folder grants from folderGrantLevels.
+            GetUserResourcePermissionLevel: (typeId: string, recordId: string) =>
+                typeId === '81D4BC3D-9FEB-EF11-B01A-286B35C04427' ? grantLevel : folderGrantLevels[recordId] ?? null,
         }),
     },
 }));
 
 let grants: Array<{ ResourceRecordID: string; PermissionLevel: string }> = [];
+let grantLevel: 'View' | 'Edit' | 'Owner' | null = null;
 let folderGrantLevels: Record<string, 'View' | 'Edit' | 'Owner'> = {};
 
-import { UserMayWriteConversation } from '../custom/ConversationWriteAccess';
+import { ConversationDeleteAllowed, UserMayDeleteConversation, UserMayWriteConversation, UserOwnsConversation } from '../custom/ConversationWriteAccess';
 
 function provider(
     ownerId: string | null,
@@ -191,5 +194,126 @@ describe('UserMayWriteConversation', () => {
         expect(deniedRole.Allowed).toBe(false);
         expect(deniedRole.Reason).toMatch(/permission to post comments/i);
     });
+
+    it('allows enrolled participants and denies non-participants on AGENT_CHANNEL conversations', async () => {
+        const agentChannelTypeId = '09E7A069-DB29-4329-BB29-4DF8CB998D94';
+        const makeChannelProvider = (isParticipant: boolean) =>
+            ({
+                ProviderType: 'Database',
+                GetEntityObject: async () => ({
+                    UserID: 'other-owner',
+                    TypeID: agentChannelTypeId,
+                    Load: async () => true,
+                }),
+                RunView: async () => ({
+                    Success: true,
+                    Results: isParticipant ? [{ ID: 'part-1' }] : [],
+                }),
+            }) as never;
+
+        const allowed = await UserMayWriteConversation(makeChannelProvider(true), user, 'chan-1');
+        expect(allowed).toEqual({ Allowed: true, Reason: null, IsOwner: false, Loaded: true });
+
+        const denied = await UserMayWriteConversation(makeChannelProvider(false), user, 'chan-1');
+        expect(denied.Allowed).toBe(false);
+        expect(denied.Reason).toBe('You do not have access to this conversation.');
+    });
 });
 
+describe('UserMayDeleteConversation', () => {
+    const db = { ProviderType: 'Database' } as never;
+    const shared = { ID: 'c1', UserID: 'owner' };
+    const withRole = (role: string) => ({ ID: 'u1', UserRoles: [{ Role: role }] }) as never;
+
+    it('allows the owner', async () => {
+        grantLevel = null;
+        expect((await UserMayDeleteConversation(db, user, { ID: 'c1', UserID: 'U1' })).Allowed).toBe(true);
+    });
+    it('allows an Owner-level grantee', async () => {
+        grantLevel = 'Owner';
+        expect((await UserMayDeleteConversation(db, user, shared)).Allowed).toBe(true);
+    });
+    it('refuses a View or an Edit grantee, with a reason', async () => {
+        for (const level of ['View', 'Edit'] as const) {
+            grantLevel = level;
+            const decision = await UserMayDeleteConversation(db, user, shared);
+            expect(decision.Allowed).toBe(false);
+            expect(decision.Reason).toMatch(/Owner access/);
+        }
+    });
+    it('refuses a user with no grant', async () => {
+        grantLevel = null;
+        expect((await UserMayDeleteConversation(db, user, shared)).Allowed).toBe(false);
+    });
+    it('allows a Developer or Integration user with no grant', async () => {
+        grantLevel = null;
+        expect((await UserMayDeleteConversation(db, withRole('Developer'), shared)).Allowed).toBe(true);
+        expect((await UserMayDeleteConversation(db, withRole(' integration '), shared)).Allowed).toBe(true);
+        expect((await UserMayDeleteConversation(db, withRole('UI'), shared)).Allowed).toBe(false);
+    });
+    it('allows a non-database provider (client side) without a lookup', async () => {
+        grantLevel = null;
+        expect((await UserMayDeleteConversation({ ProviderType: 'Network' } as never, user, shared)).Allowed).toBe(true);
+    });
+});
+
+describe('ConversationDeleteAllowed', () => {
+    it('refuses when there is no user', () => {
+        expect(ConversationDeleteAllowed('owner', null, 'Owner')).toBe(false);
+    });
+});
+
+describe('UserOwnsConversation', () => {
+    beforeEach(() => {
+        grants = [];
+        grantLevel = null;
+        folderGrantLevels = {};
+    });
+
+    it('is true for the owner and for an Owner-level grant, not for Edit or View', async () => {
+        expect(await UserOwnsConversation(provider('u1'), user, 'c1')).toBe(true);
+        grantLevel = 'Owner';
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(true);
+        grantLevel = 'Edit';
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(false);
+        grantLevel = 'View';
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(false);
+    });
+
+    it('is true for an inherited Owner-level folder grant only when the conversation opts into folder inheritance', async () => {
+        folderGrantLevels = { 'proj-acl': 'Owner' };
+        expect(
+            await UserOwnsConversation(
+                provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other', additionalData: INHERITS }),
+                user,
+                'c1'
+            )
+        ).toBe(true);
+
+        // Folder inheritance off -> false
+        expect(
+            await UserOwnsConversation(
+                provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other', additionalData: null }),
+                user,
+                'c1'
+            )
+        ).toBe(false);
+
+        // Edit grant on inherited folder -> false (Owner required)
+        folderGrantLevels = { 'proj-acl': 'Edit' };
+        expect(
+            await UserOwnsConversation(
+                provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other', additionalData: INHERITS }),
+                user,
+                'c1'
+            )
+        ).toBe(false);
+    });
+
+    it('is false when nothing can be verified: no user, a client provider, or a conversation that does not load', async () => {
+        grantLevel = 'Owner';
+        expect(await UserOwnsConversation(provider('u1'), null, 'c1')).toBe(false);
+        expect(await UserOwnsConversation({ ProviderType: 'Network', GetEntityObject: vi.fn() } as never, user, 'c1')).toBe(false);
+        expect(await UserOwnsConversation(provider('u1', false), user, 'c1')).toBe(false);
+    });
+});

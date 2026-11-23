@@ -36,7 +36,8 @@ import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMet
 import { GraphQLDataProvider, GraphQLAIClient, type AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase, ResolveConversationAgentPreset } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility, agentFailureDisposition, agentFailureMessage, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, agentFailureDisposition, agentFailureMessage, ContinuationAnnouncementText, type EdgePreDiscoveryHint } from '@memberjunction/ai-core-plus';
+import { EdgeAgentPreDiscoveryService } from '../../services/edge-ai/edge-agent-pre-discovery.service';
 import { PendingAttachment, SendSlotMode } from '@memberjunction/ng-composer';
 import { AiComposerComponent } from '../composer/ai-composer.component';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -604,8 +605,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * answer it, instead of always going back to the last agent that answered. The same call can
    * name the artifact version the message modifies. The answer replaces continuity only when it
    * is confident and arrives in time; an error, a slow or unsure answer keeps today's routing, and
-   * a tagged message or a form response makes no call (see `decision-routing.ts`). False (the
-   * default) changes nothing: no call, and today's routing.
+   * a tagged message or a form response makes no call (see `decision-routing.ts`). On by default:
+   * the routing calibration is fitted for a chat's mix, so the decision leaves the last agent only
+   * when it is at least 70% likely the person moved on. False makes no call and keeps today's
+   * routing.
    *
    * What goes to the model: each qualifying message sends these to the model behind the
    * `Default Decision` prompt, which can be a different vendor from the agents' own: the first
@@ -613,7 +616,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * name, description and last reply, and the names of their artifact versions. Each call writes an
    * `MJ: AI Prompt Runs` row, even when the answer comes too late to be used.
    */
-  @Input() EnableDecisionRouting: boolean = false;
+  @Input() EnableDecisionRouting: boolean = true;
+
+  /**
+   * Opt-in Stage 6C.1 client-side Edge AI Pre-Discovery (`bge-small-en-v1.5` Top-5 ->
+   * `ms-marco-MiniLM-L-6-v2` in a lazy WASM Web Worker). When enabled (via this input or
+   * the `'mj.ai.edgePreDiscovery.enabled'` User Setting), warms up non-blockingly after mount
+   * and attaches an untrusted advisory `EdgePreDiscoveryHint` on opening conversation-manager
+   * turns. Server remains guard of truth; cold/offline workers fail open with zero delay.
+   */
+  @Input() EnableEdgePreDiscovery: boolean = false;
 
   /** The send slot was clicked in `stop` mode; the chat area stops the run(s). */
   @Output() StopClicked = new EventEmitter<void>();
@@ -1117,6 +1129,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.VoiceActive = value;
   }
   private realtimeActiveSub?: Subscription;
+  private edgeWarmUpTimer: ReturnType<typeof setTimeout> | null = null;
 
   async ngOnInit() {
     // Bind provider-aware services to this component's provider.
@@ -1146,6 +1159,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     // Reconnect to any in-progress messages for streaming updates (via global streaming service)
     this.ReconnectInProgressMessages();
+
+    // Non-blocking post-mount warm-up for opt-in Stage 6C.1 Edge AI pre-discovery
+    this.scheduleEdgePreDiscoveryWarmUp();
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -1215,6 +1231,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   ngOnDestroy() {
+    if (this.edgeWarmUpTimer !== null) {
+      clearTimeout(this.edgeWarmUpTimer);
+      this.edgeWarmUpTimer = null;
+    }
     // Unregister all streaming callbacks
     this.unregisterAllCallbacks();
     this.clearInFlightWatches();
@@ -1280,6 +1300,39 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   private _cachedRouteAgentKey?: string;
   private _cachedRouteAgent: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
+  private _inThreadAgentIdsKey = '';
+  private _inThreadAgentIds: string[] = [];
+
+  /**
+   * Distinct agent IDs participating in the current conversation thread (conversation's pinned
+   * `DefaultAgentID` plus any message `AgentID`s), memoized for Smart `@Mention` ranking.
+   */
+  public get InThreadAgentIDs(): readonly string[] {
+    const history = this.ConversationHistory ?? [];
+    const lastId = history.length > 0 ? (history[history.length - 1]?.ID ?? '') : '';
+    const key = `${history.length}|${lastId}|${this.ConversationDefaultAgentId ?? ''}`;
+    if (key === this._inThreadAgentIdsKey) {
+      return this._inThreadAgentIds;
+    }
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    if (this.ConversationDefaultAgentId) {
+      seen.add(this.ConversationDefaultAgentId.toLowerCase());
+      ids.push(this.ConversationDefaultAgentId);
+    }
+    for (const msg of history) {
+      if (msg.AgentID) {
+        const lower = msg.AgentID.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          ids.push(msg.AgentID);
+        }
+      }
+    }
+    this._inThreadAgentIdsKey = key;
+    this._inThreadAgentIds = ids;
+    return ids;
+  }
 
   /**
    * Agent that will receive the next turn based on an explicit `@agent` draft chip
@@ -2698,14 +2751,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ): Promise<void> {
     const mention = turn.Route === 'Mention' ? this.findAgentMention(mentionResult, turn.AgentId) : null;
     const targetArtifactVersionId = ArtifactVersionForTurn(routing, turn.AgentId);
+    const isManagerTurn = turn.Route === 'ConversationManager' || (turn.Route === 'Redirect' && this.isConversationManager(turn.AgentId));
+    const edgePreDiscoveryHint = isManagerTurn
+      ? await this.computeEdgePreDiscoveryHint(userMessage, mentionResult)
+      : null;
     if (this.AgentTurnHandler) {
-      await this.runHostAgentTurn(this.AgentTurnHandler, userMessage, turn, mention, targetArtifactVersionId, branchId);
+      await this.runHostAgentTurn(this.AgentTurnHandler, userMessage, turn, mention, targetArtifactVersionId, branchId, edgePreDiscoveryHint);
       return;
     }
     if (mention) {
       await this.invokeAgentDirectly(userMessage, mention, userMessage.ConversationID, branchId);
-    } else if (turn.Route === 'ConversationManager' || (turn.Route === 'Redirect' && this.isConversationManager(turn.AgentId))) {
-      await this.runConversationManagerTurn(userMessage, mentionResult, branchId);
+    } else if (isManagerTurn) {
+      await this.runConversationManagerTurn(userMessage, mentionResult, branchId, edgePreDiscoveryHint);
     } else {
       // Pinned and host defaults keep their direct call even when they name the manager, as before.
       await this.handleAgentContinuity(userMessage, turn.AgentId, branchId, targetArtifactVersionId);
@@ -2746,14 +2803,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * more predictable and eliminates a common source of confusion where the intent check
    * incorrectly rerouted messages away from the active agent.
    *
-   * The checkContinuityIntent() method and the underlying checkAgentContinuityIntent() service
-   * method are preserved (not deleted) so we can reintroduce intent checking in the future
-   * when browser-local inference is fast enough (~20-50ms) to do this without blocking the
-   * user. See PR #2309 for the full discussion.
-   *
-   * With {@link EnableDecisionRouting} on, a typed routing decision runs before routing instead
-   * ({@link decideAgentRouting}); the prompt-based check stays unused. A confident answer from it
-   * may name the artifact version this agent should continue from.
+   * Intent checking came back as a typed routing decision rather than an LLM call: with
+   * {@link EnableDecisionRouting} on (the default), {@link decideAgentRouting} runs before routing,
+   * in a few hundred milliseconds, and a confident answer may send the message to another agent or
+   * name the artifact version this agent should continue from. The old prompt-based check is gone
+   * from this component; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
    *
    * @param branchId The turn's branch (null is Main).
    * @param targetArtifactVersionId The artifact version the routing decision named, or null.
@@ -2783,7 +2837,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private async runConversationManagerTurn(
     messageDetail: MJConversationDetailEntity,
     mentionResult: MentionParseResult,
-    branchId: string | null
+    branchId: string | null,
+    edgePreDiscoveryHint: EdgePreDiscoveryHint | null = null
   ): Promise<void> {
     const manager = this.ConverationManagerAgent;
     const managerPreset = manager?.ID && messageDetail.ConversationID
@@ -2802,7 +2857,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       );
       return;
     }
-    await this.processMessageThroughAgent(messageDetail, mentionResult, branchId);
+    await this.processMessageThroughAgent(messageDetail, mentionResult, branchId, edgePreDiscoveryHint);
   }
 
   private _cachedContinuityReplyKey?: string;
@@ -2911,9 +2966,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     turn: AgentTurnTarget,
     mention: Mention | null,
     targetArtifactVersionId: string | null,
-    branchId: string | null
+    branchId: string | null,
+    edgePreDiscoveryHint: EdgePreDiscoveryHint | null = null
   ): Promise<void> {
-    const request = this.buildAgentTurnRequest(userMessage, turn, mention, targetArtifactVersionId, branchId);
+    const request = this.buildAgentTurnRequest(userMessage, turn, mention, targetArtifactVersionId, branchId, edgePreDiscoveryHint);
     const result = await this.callAgentTurnHandler(handler, request);
     if (!result.Success) {
       this.notifyAgentTurnProblem(result.ErrorMessage || 'The agent could not answer this message.', 'error');
@@ -2948,7 +3004,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     turn: AgentTurnTarget,
     mention: Mention | null,
     targetArtifactVersionId: string | null,
-    branchId: string | null
+    branchId: string | null,
+    edgePreDiscoveryHint: EdgePreDiscoveryHint | null = null
   ): AgentTurnRequest {
     return {
       ConversationId: userMessage.ConversationID,
@@ -2965,7 +3022,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       ConfigurationPresetId: turn.Route === 'Mention' ? (mention?.configurationId ?? null) : this.AgentConfigurationPresetId,
       RequestedSkillIDs: [...this._pendingRequestedSkillIDs],
       PlanMode: this.PlanModeEnabled,
-      TargetArtifactVersionId: targetArtifactVersionId
+      TargetArtifactVersionId: targetArtifactVersionId,
+      ...(edgePreDiscoveryHint ? { EdgePreDiscoveryHint: edgePreDiscoveryHint } : {})
     };
   }
 
@@ -2986,49 +3044,65 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.AfterAgentTurn.emit(new AfterAgentTurnEventArgs(conversationId, agentRunId ?? result.agentRun?.ID ?? '', result));
   }
 
-  /**
-   * Checks if message should continue with the previous agent, reading the path of `branchId`
-   * (null is Main). Emits events to show temporary intent checking message in conversation
-   */
-  private async checkContinuityIntent(agentId: string, message: string, branchId: string | null) {
-    // FAST PATH: If message contains form response syntax, skip the intent check entirely
-    // Form responses always continue with the agent that requested the form
-    // Don't show "Analyzing intent..." message for this obvious case
-    if (ConversationUtility.ContainsFormResponse(message)) {
-      LogStatusEx({ message: '✅ Form response detected, skipping intent check UI (fast path)', verboseOnly: true });
-      return {
-        decision: 'YES' as const,
-        reasoning: 'User submitted a form response to the previous agent'
-      };
+  /** Opt-in gate for Stage 6C.1 local Edge AI pre-discovery. */
+  private isEdgePreDiscoveryEnabled(): boolean {
+    if (this.EnableEdgePreDiscovery) {
+      return true;
     }
-
-    // Emit event to show temporary "Analyzing intent..." message in conversation
-    this.IntentCheckStarted.emit({ conversationId: this.ConversationId });
-
     try {
-      // The pre-loaded artifact/agent-run maps are no longer passed: they are scoped to the
-      // loaded transcript window, and the service now queries for this agent's artifacts so
-      // the classifier reasons over the whole conversation. A conversation id is what it
-      // needs instead, and without one there is nothing to query.
-      if (!this.ConversationId) {
-        console.warn('⚠️ No conversation id available for intent check');
-        return { decision: 'UNSURE' as const, reasoning: 'Conversation not available' };
-      }
+      return UserInfoEngine.Instance.GetSetting('mj.ai.edgePreDiscovery.enabled') === 'true';
+    } catch {
+      return false;
+    }
+  }
 
-      const intent = await this.agentService.checkAgentContinuityIntent(
-        this.ConversationId,
-        agentId,
-        message,
-        this.ConversationHistory,
-        branchId
+  /** Schedules non-blocking catalog embedding warm-up strictly after mount when opted in. */
+  private scheduleEdgePreDiscoveryWarmUp(): void {
+    if (!this.isEdgePreDiscoveryEnabled() || this.edgeWarmUpTimer !== null) {
+      return;
+    }
+    this.edgeWarmUpTimer = setTimeout(() => {
+      this.edgeWarmUpTimer = null;
+      const agents = AIEngineBase.Instance.ReadableAgents;
+      if (agents.length > 0) {
+        void EdgeAgentPreDiscoveryService.Instance.WarmUpCatalog(
+          agents,
+          this.CurrentUser?.ID ?? '__default__'
+        );
+      }
+    }, 1200);
+  }
+
+  /**
+   * Computes an untrusted advisory pre-discovery hint on opening turns with no `@Agent` mention.
+   * Never blocks message sending if the worker is cold, offline, or over its deadline.
+   */
+  private async computeEdgePreDiscoveryHint(
+    userMessage: MJConversationDetailEntity,
+    mentionResult: MentionParseResult
+  ): Promise<EdgePreDiscoveryHint | null> {
+    if (!this.isEdgePreDiscoveryEnabled()) {
+      return null;
+    }
+    if (mentionResult.mentions.some(m => m.type === 'agent')) {
+      return null;
+    }
+    const userTurns = (this.ConversationHistory ?? []).filter(m => m.Role === 'User').length;
+    if (userTurns > 1) {
+      return null;
+    }
+    try {
+      return await EdgeAgentPreDiscoveryService.Instance.PreDiscover(
+        userMessage.Message ?? '',
+        AIEngineBase.Instance.ReadableAgents,
+        {
+          UserId: this.CurrentUser?.ID ?? '__default__',
+          AllowedAgentIDs: this.AllowedAgentIDs,
+          ExcludedAgentID: this.ConverationManagerAgent?.ID ?? null,
+        }
       );
-      return intent;
-    } catch (error) {
-      console.error('❌ Intent check failed, defaulting to UNSURE:', error);
-      return { decision: 'UNSURE' as const, reasoning: 'Intent check failed with error' };
-    } finally {
-      // Emit event to remove temporary intent checking message
-      this.IntentCheckCompleted.emit({ conversationId: this.ConversationId });
+    } catch {
+      return null;
     }
   }
 
@@ -3151,7 +3225,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private async processMessageThroughAgent(
     userMessage: MJConversationDetailEntity,
     mentionResult: MentionParseResult,
-    branchId: string | null
+    branchId: string | null,
+    edgePreDiscoveryHint: EdgePreDiscoveryHint | null = null
   ): Promise<void> {
     let conversationManagerMessage: MJConversationDetailEntity | null = null;
 
@@ -3183,6 +3258,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.AllowedAgentIDs, // the agents the manager may delegate to
         this.AgentHistoryFrom, // the first moment of the conversation the run may read
         branchId,
+        ...(edgePreDiscoveryHint ? ([edgePreDiscoveryHint] as const) : ([] as const)),
       );
 
       // Emit afterAgentTurn on the happy path only — the error/failure branch

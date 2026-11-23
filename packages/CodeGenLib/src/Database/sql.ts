@@ -55,6 +55,18 @@ protected get dbProvider(): CodeGenDatabaseProvider {
 }
 
 /**
+ * The provider this utility executes SQL through. `SQLCodeGenBase` sets it to its own provider,
+ * so the object failures the provider records while executing files are the ones the SQL pass
+ * reads (#3975).
+ */
+public get DBProvider(): CodeGenDatabaseProvider {
+   return this.dbProvider;
+}
+public set DBProvider(value: CodeGenDatabaseProvider) {
+   this._dbProvider = value;
+}
+
+/**
  * Returns a file name for a given DB Object given a type, schema and object name.
  * The basic format is to have a directory for each schema, and within each directory
  * the file name for each object has this format: <type>.<objectName>.<permissions>.<generated>.sql

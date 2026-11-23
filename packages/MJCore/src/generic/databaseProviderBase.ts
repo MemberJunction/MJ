@@ -1,7 +1,7 @@
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
-import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext, SerializeCloneChangeContext } from "./baseEntity";
+import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext, SerializeCloneChangeContext, SerializeSyncChangeContext, SyncContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { EntitySaveReturnMode } from "./entityConfiguration";
 import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
@@ -139,6 +139,12 @@ export interface SaveContext {
 export type PostCommitTask = () => Promise<void>;
 
 /**
+ * Deduplication strategy used by {@link DatabaseProviderBase.ScheduleAfterCommit} when multiple
+ * tasks share the same `coalesceKey` within one commit batch (or detached microtask turn).
+ */
+export type PostCommitCoalesceMode = 'last-wins' | 'first-wins';
+
+/**
  * Identifies the transaction frames that were open at one moment, so work registered *later* with
  * {@link DatabaseProviderBase.RunAfterCommit} is tied to the transaction it came from rather than to
  * whatever transaction happens to be open when it registers.
@@ -173,6 +179,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     private static _nextProviderInstanceId = 1;
     private readonly _providerInstanceId = DatabaseProviderBase._nextProviderInstanceId++;
     private _transactionEpoch = 0;
+    private readonly _detachedCoalescedTasks = new Map<string, { Task: PostCommitTask; Description: string }>();
+    private _detachedCoalesceScheduled = false;
 
     /**
      * Whether the calling async scope is part of this provider's ambient transaction.
@@ -392,6 +400,58 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public CapturePostCommitToken(): PostCommitToken | undefined {
         return undefined;
+    }
+
+    /**
+     * Enqueues post-commit work coalesced by `coalesceKey`.
+     *
+     * Outside an open transaction (on transactional providers) or on non-transactional providers,
+     * registrations sharing a `coalesceKey` within the same microtask turn collapse per `mode`
+     * (`'last-wins'` by default) before flushing once on a microtask. Inside a transaction,
+     * transactional providers bind each registration to the caller's ambient frame (or `token`)
+     * so rolled-back savepoints drop their entries cleanly while surviving entries coalesce at commit.
+     */
+    public ScheduleAfterCommit(
+        coalesceKey: string,
+        task: PostCommitTask,
+        description: string = 'post-commit task',
+        token?: PostCommitToken,
+        mode: PostCommitCoalesceMode = 'last-wins',
+    ): void {
+        if (!coalesceKey) {
+            this.RunAfterCommit(task, description, token);
+            return;
+        }
+        this.EnqueueDetachedCoalescedTask(coalesceKey, task, description, mode);
+    }
+
+    /** Runs a detached post-commit task safely; transactional subclasses detach transaction affinity here. */
+    protected ExecuteDetachedPostCommitTask(task: PostCommitTask, description: string): void {
+        void this.RunPostCommitTaskSafely(task, description);
+    }
+
+    /** Coalesces detached post-commit registrations onto a single microtask flush per turn. */
+    protected EnqueueDetachedCoalescedTask(
+        coalesceKey: string,
+        task: PostCommitTask,
+        description: string,
+        mode: PostCommitCoalesceMode,
+    ): void {
+        if (mode !== 'first-wins' || !this._detachedCoalescedTasks.has(coalesceKey)) {
+            this._detachedCoalescedTasks.set(coalesceKey, { Task: task, Description: description });
+        }
+        if (this._detachedCoalesceScheduled) {
+            return;
+        }
+        this._detachedCoalesceScheduled = true;
+        queueMicrotask(() => {
+            const entries = [...this._detachedCoalescedTasks.values()];
+            this._detachedCoalescedTasks.clear();
+            this._detachedCoalesceScheduled = false;
+            for (const entry of entries) {
+                this.ExecuteDetachedPostCommitTask(entry.Task, entry.Description);
+            }
+        });
     }
 
     /**
@@ -1690,8 +1750,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
                 undefined,
-                entity.CloneContext ? 'Clone' : 'Internal',
-                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
+                entity.CloneContext ? 'Clone' : entity.SyncContext ? 'Sync' : 'Internal',
+                entity.CloneContext
+                    ? SerializeCloneChangeContext(entity.CloneContext)
+                    : entity.SyncContext
+                      ? SerializeSyncChangeContext(entity.SyncContext)
+                      : null,
+                entity.SyncContext?.IntegrationID ?? null,
             );
         }
         return null;
@@ -3171,8 +3236,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ): Promise<unknown[] | undefined> {
-        const sqlResult = this.BuildRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, restoreContext, cloneContext);
+        const sqlResult = this.BuildRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, restoreContext, cloneContext, syncContext);
         if (sqlResult) {
             return await this.ExecuteSQL(sqlResult.sql, sqlResult.parameters ?? undefined, undefined, user);
         }
@@ -3193,7 +3259,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Builds the dialect-agnostic payload for a RecordChange row from the
-     * entity's old/new data and an optional restore or clone context. Concrete
+     * entity's old/new data and an optional restore, clone, or sync context. Concrete
      * providers consume the returned payload to render their dialect-specific
      * SQL (SQL Server EXEC, PostgreSQL INSERT, etc.).
      *
@@ -3219,6 +3285,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      *   `DiffObjects`. Defaults to single quote.
      * @param cloneContext When non-null, populates `source='Clone'` and the
      *   structured `changeContext` JSON payload.
+     * @param skipFullRecordJSON When true (because the dialect builds `FullRecordJSON` in SQL
+     *   from the returned row), skips `EscapeQuotesInProperties` and `JSON.stringify` for
+     *   `fullRecordJSON`, returning `''`.
+     * @param syncContext When non-null, populates `source='Sync'`, `integrationID`,
+     *   and the structured `changeContext` JSON payload.
      */
     protected BuildRecordChangePayload(
         newData: Record<string, unknown> | null,
@@ -3230,9 +3301,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         restoreContext?: RestoreContext | null,
         quoteToEscape: string = "'",
         cloneContext?: CloneContext | null,
+        skipFullRecordJSON: boolean = false,
+        syncContext?: SyncContext | null,
     ): RecordChangePayload | null {
-        if (restoreContext && cloneContext) {
-            throw new Error('BuildRecordChangePayload: both restoreContext and cloneContext were provided; an operation cannot be both a restore and a clone');
+        const activeContexts = [restoreContext, cloneContext, syncContext].filter(Boolean).length;
+        if (activeContexts > 1) {
+            throw new Error('BuildRecordChangePayload: restoreContext, cloneContext, and syncContext are mutually exclusive; at most one may be provided');
         }
 
         const isCreateOrDelete = oldData === null || newData === null;
@@ -3245,15 +3319,28 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const changesKeys = changes ? Object.keys(changes) : [];
         if (changesKeys.length === 0 && !isCreateOrDelete) return null;
 
-        const dataForFullJSON = newData ?? oldData;
-        const fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
+        let fullRecordJSON = '';
+        if (!skipFullRecordJSON) {
+            const dataForFullJSON = newData ?? oldData;
+            fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
+        }
         const changesJSON = changes !== null ? JSON.stringify(changes) : '';
         const changesDescription = (oldData && newData)
             ? this.CreateUserDescriptionOfChanges(changes!)
             : (!oldData ? 'Record Created' : 'Record Deleted');
 
-        const source: RecordChangeSource = restoreContext ? 'Restore' : cloneContext ? 'Clone' : 'Internal';
-        const changeContext = cloneContext ? SerializeCloneChangeContext(cloneContext) : null;
+        const source: RecordChangeSource = restoreContext
+            ? 'Restore'
+            : cloneContext
+              ? 'Clone'
+              : syncContext
+                ? 'Sync'
+                : 'Internal';
+        const changeContext = cloneContext
+            ? SerializeCloneChangeContext(cloneContext)
+            : syncContext
+              ? SerializeSyncChangeContext(syncContext)
+              : null;
 
         return {
             entityID: entityInfo.ID,
@@ -3267,6 +3354,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             restoredFromID: restoreContext?.SourceChangeID ?? null,
             restoreReason: restoreContext?.Reason ?? null,
             changeContext,
+            integrationID: syncContext?.IntegrationID ?? null,
         };
     }
 
@@ -3288,6 +3376,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      *   `BaseEntity.RestoreContext` immediately before generating SQL.
      * @param cloneContext When non-null, the resulting RecordChange row is
      *   written with `Source='Clone'` and `ChangeContext` JSON provenance.
+     * @param syncContext When non-null, the resulting RecordChange row is
+     *   written with `Source='Sync'`, `IntegrationID`, and `ChangeContext` JSON provenance.
      */
     protected abstract BuildRecordChangeSQL(
         newData: Record<string, unknown> | null,
@@ -3299,6 +3389,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ): { sql: string; parameters?: unknown[] } | null;
 
     /**
@@ -3324,6 +3415,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         extraExecOptions?: Record<string, unknown>,
         source: RecordChangeSource = 'Internal',
         changeContext: string | null = null,
+        integrationID: string | null = null,
     ): Promise<void> {
         const sqlParts: string[] = [];
 
@@ -3355,6 +3447,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     safeUserId,
                     source,
                     changeContext,
+                    integrationID,
                 ));
             }
         }
@@ -3385,6 +3478,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         safeUserId: string,
         source?: RecordChangeSource,
         changeContext?: string | null,
+        integrationID?: string | null,
     ): string;
 
     /**************************************************************************/

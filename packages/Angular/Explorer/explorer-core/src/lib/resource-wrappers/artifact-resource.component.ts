@@ -1,5 +1,5 @@
-import { ChangeDetectorRef, Component, ViewEncapsulation, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, LogError, UserInfo } from '@memberjunction/core';
+import { ChangeDetectorRef, Component, OnDestroy, ViewEncapsulation, inject } from '@angular/core';
+import { CompositeKey, DataSnapshot, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
@@ -14,6 +14,22 @@ import type { ComponentSpec } from '@memberjunction/interactive-component-types'
 import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
+interface GqlArtifactPermissionsResult {
+  ResolveArtifactUserPermissions?: { CanRead?: boolean; CanEdit?: boolean; CanShare?: boolean };
+  ResolveArtifactPermissions?: { CanRead?: boolean; CanEdit?: boolean; CanShare?: boolean };
+}
+
+interface GqlCapableProvider {
+  ExecuteGQL(
+    query: string,
+    variables?: Record<string, string | number | boolean | null>,
+  ): Promise<GqlArtifactPermissionsResult>;
+}
+
+function isGqlCapableProvider(provider: IMetadataProvider | null | undefined): provider is IMetadataProvider & GqlCapableProvider {
+  return typeof (provider as Partial<GqlCapableProvider> | null | undefined)?.ExecuteGQL === 'function';
+}
+
 /**
  * Artifact Resource - displays versioned content artifacts
  * Wraps the artifact-viewer-panel component for tab-based display
@@ -25,11 +41,19 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   selector: 'mj-artifact-resource',
   template: `
     <div class="artifact-container">
-      @if (currentUser && artifactId) {
+      @if (AccessDeniedMessage) {
+        <div class="artifact-access-denied" data-testid="artifact-access-denied">
+          <mj-empty-state
+            Icon="fa-solid fa-lock"
+            Title="Access Denied"
+            [Message]="AccessDeniedMessage" />
+        </div>
+      } @else if (currentUser && artifactId && IsPermissionResolved && CanRead) {
         <mj-artifact-viewer-panel
           [artifactId]="artifactId"
           [currentUser]="currentUser"
           [environmentId]="environmentId"
+          [VersionNumber]="VersionNumber"
           [showSaveToCollection]="true"
           [canShare]="CanShare"
           [canEdit]="CanEdit"
@@ -48,14 +72,25 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
       height: 100%;
       overflow: hidden;
     }
+
+    .artifact-access-denied {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface);
+    }
   `],
   encapsulation: ViewEncapsulation.None
 })
-export class ArtifactResource extends BaseResourceComponent {
+export class ArtifactResource extends BaseResourceComponent implements OnDestroy {
   private readonly analyzeService = inject(AnalyzeArtifactService);
   private readonly applyService = inject(InteractiveFormApplyService);
   private readonly cdr = inject(ChangeDetectorRef, { optional: true });
   private permissionRequestSeq = 0;
+  private loadCompleteTimer: ReturnType<typeof setTimeout> | null = null;
+  public VersionNumber: number | undefined = undefined;
 
   /**
    * Apply-to-my-form handler — see InteractiveFormApplyService. Routes a whole form to
@@ -66,11 +101,11 @@ export class ArtifactResource extends BaseResourceComponent {
    * panel's placement and spot an installed contribution with the same key before writing
    * anything.
    */
-  async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+  async OnApplyFormRequested(event: { spec: ComponentSpec; entityName: string }): Promise<void> {
     const additional = (this.navigationService.AppContextSnapshot$.value?.AdditionalContext ?? null) as
       { Form?: FormAgentContext } | null;
     await this.applyService.ConfirmAndApply(
-      event.spec as ComponentSpec,
+      event.spec,
       event.entityName,
       this.ProviderToUse,
       additional?.Form ?? null,
@@ -78,7 +113,7 @@ export class ArtifactResource extends BaseResourceComponent {
   }
 
   /** @deprecated Use {@link OnApplyFormRequested}. */
-  async onApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+  async onApplyFormRequested(event: { spec: ComponentSpec; entityName: string }): Promise<void> {
     return this.OnApplyFormRequested(event);
   }
 
@@ -102,12 +137,17 @@ export class ArtifactResource extends BaseResourceComponent {
       this._artifactId = next;
       this.CanEdit = false;
       this.CanShare = false;
+      this.CanRead = false;
+      this.IsPermissionResolved = false;
+      this.AccessDeniedMessage = null;
       if (this.CurrentUser && this._artifactId) {
         void this.ResolveArtifactPermissions();
       }
     }
   }
 
+  public CanRead = false;
+  public IsPermissionResolved = false;
   public CanEdit = false;
   /** @deprecated Use {@link CanEdit}. */
   public get canEdit(): boolean {
@@ -119,6 +159,8 @@ export class ArtifactResource extends BaseResourceComponent {
   }
 
   public CanShare = false;
+  /** Non-null when the current user lacks read permission (e.g., revoked deep link). */
+  public AccessDeniedMessage: string | null = null;
   /** @deprecated Use {@link CanShare}. */
   public get canShare(): boolean {
     return this.CanShare;
@@ -151,6 +193,19 @@ export class ArtifactResource extends BaseResourceComponent {
     this.EnvironmentId = (this.Data?.Configuration?.['environmentId'] as string | undefined)
         || MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
+    // Get version number if explicitly configured or passed via query params ('latest' keeps undefined)
+    const rawVersion =
+      this.GetQueryParams()['version'] ??
+      this.GetQueryParams()['versionNumber'] ??
+      this.Data?.Configuration?.['version'] ??
+      this.Data?.Configuration?.['versionNumber'];
+    const parsedVersion = typeof rawVersion === 'number'
+      ? rawVersion
+      : typeof rawVersion === 'string' && rawVersion.trim().toLowerCase() !== 'latest'
+        ? Number.parseInt(rawVersion, 10)
+        : NaN;
+    this.VersionNumber = Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : undefined;
+
     // Get artifact ID from resource data (setter triggers ResolveArtifactPermissions)
     if (this.Data && this.Data.ResourceRecordID) {
       this.artifactId = this.Data.ResourceRecordID;
@@ -159,7 +214,18 @@ export class ArtifactResource extends BaseResourceComponent {
       this.CanShare = false;
     }
 
-    setTimeout(() => this.NotifyLoadComplete(), 100);
+    this.loadCompleteTimer = setTimeout(() => {
+      this.loadCompleteTimer = null;
+      this.NotifyLoadComplete();
+    }, 100);
+  }
+
+  override ngOnDestroy(): void {
+    if (this.loadCompleteTimer != null) {
+      clearTimeout(this.loadCompleteTimer);
+      this.loadCompleteTimer = null;
+    }
+    super.ngOnDestroy();
   }
 
   /**
@@ -173,24 +239,44 @@ export class ArtifactResource extends BaseResourceComponent {
     const user = this.CurrentUser;
     this.CanEdit = false;
     this.CanShare = false;
+    this.CanRead = false;
+    this.IsPermissionResolved = false;
 
     if (!targetArtifactId || !user) {
       this.cdr?.markForCheck();
       return;
     }
 
-    const reqId = ++this.permissionRequestSeq;
+    const reqId = (this.permissionRequestSeq ?? 0) + 1;
+    this.permissionRequestSeq = reqId;
+    this.AccessDeniedMessage = null;
     try {
       const perms = await this.fetchPermissionsFromServerOrFallback(targetArtifactId, user);
       if (reqId !== this.permissionRequestSeq || this._artifactId !== targetArtifactId) {
         return;
       }
+      if (perms.CanRead !== true) {
+        this.CanRead = false;
+        this.CanEdit = false;
+        this.CanShare = false;
+        this.IsPermissionResolved = true;
+        this.AccessDeniedMessage =
+          'You do not have permission to view this artifact. Access may have been revoked by the owner.';
+        return;
+      }
+      this.AccessDeniedMessage = null;
+      this.CanRead = true;
+      this.IsPermissionResolved = true;
       this.CanEdit = perms.CanEdit === true;
       this.CanShare = perms.CanShare === true;
     } catch {
       if (reqId === this.permissionRequestSeq) {
+        this.CanRead = false;
         this.CanEdit = false;
         this.CanShare = false;
+        this.IsPermissionResolved = true;
+        this.AccessDeniedMessage =
+          'Unable to verify your permission to view this artifact.';
       }
     } finally {
       if (reqId === this.permissionRequestSeq) {
@@ -202,18 +288,9 @@ export class ArtifactResource extends BaseResourceComponent {
   private async fetchPermissionsFromServerOrFallback(
     targetArtifactId: string,
     user: UserInfo,
-  ): Promise<{ CanEdit?: boolean; CanShare?: boolean }> {
-    const providerWithGql = this.ProviderToUse as unknown as {
-      ExecuteGQL?: (
-        query: string,
-        variables?: Record<string, unknown>,
-      ) => Promise<{
-        ResolveArtifactUserPermissions?: { CanEdit?: boolean; CanShare?: boolean };
-        ResolveArtifactPermissions?: { CanEdit?: boolean; CanShare?: boolean };
-      }>;
-    };
-
-    if (typeof providerWithGql?.ExecuteGQL === 'function') {
+  ): Promise<{ CanRead?: boolean; CanEdit?: boolean; CanShare?: boolean }> {
+    const provider = this.ProviderToUse;
+    if (isGqlCapableProvider(provider)) {
       try {
         const query = `
           query ResolveArtifactUserPermissions($artifactId: String!) {
@@ -228,10 +305,10 @@ export class ArtifactResource extends BaseResourceComponent {
             }
           }
         `;
-        const gqlResult = await providerWithGql.ExecuteGQL(query, { artifactId: targetArtifactId });
+        const gqlResult = await provider.ExecuteGQL(query, { artifactId: targetArtifactId });
         const resolved =
           gqlResult?.ResolveArtifactUserPermissions ?? gqlResult?.ResolveArtifactPermissions;
-        if (resolved && typeof resolved.CanEdit === 'boolean') {
+        if (resolved && (typeof resolved.CanRead === 'boolean' || typeof resolved.CanEdit === 'boolean')) {
           return resolved;
         }
       } catch (err) {
@@ -264,9 +341,12 @@ export class ArtifactResource extends BaseResourceComponent {
       });
 
       // Route to the new conversation in the Conversations nav item
-      await this.navigationService.OpenNavItemByName('Conversations', {
-        conversationId: result.conversationId,
-      });
+      await this.navigationService.OpenNavItemByName(
+        'Conversations',
+        { conversationId: result.conversationId },
+        undefined,
+        { queryParams: { conversationId: result.conversationId } },
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis conversation';
       MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 5000);
@@ -287,10 +367,14 @@ export class ArtifactResource extends BaseResourceComponent {
   }
 
   /**
-   * Handles app-level navigation requested by an artifact viewer plugin.
-   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   * Handles navigation requested by an artifact viewer plugin. Opens the requested artifact in its own
+   * tab, or the target nav item (switching apps if needed) with its query params.
    */
   async OnNavigationRequest(event: NavigationRequest): Promise<void> {
+    if (event.ArtifactID) {
+      this.navigationService.OpenArtifact(event.ArtifactID, event.ArtifactName);
+      return;
+    }
     const appId = event.appName ? this.resolveAppID(event.appName) : undefined;
     await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
       queryParams: event.queryParams

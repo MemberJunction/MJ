@@ -571,6 +571,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Agent Channel Participants Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAgentChannelParticipants"
+        SectionName="Agent Channel Participants"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAgentChannelParticipants')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Agent Channel Participants','LastSeenDetailID')"
+                [NewRecordValues]="NewRecordValues('MJ: Agent Channel Participants','LastSeenDetailID')"
+                [AllowLoad]="IsSectionExpanded('mJAgentChannelParticipants')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAgentChannelParticipants', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Conversation Compaction Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationCompactionRuns"

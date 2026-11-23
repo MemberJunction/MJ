@@ -44,12 +44,18 @@ export class EntityActionEngineServer extends BaseSingleton<EntityActionEngineSe
      */
     private _invocationInstanceCache: Map<string, EntityActionInvocationBase> = new Map();
 
-    /** Ensures the single EntityActionEngineBase cache is loaded. Delegates entirely to the base. */
+    /**
+     * Ensures the single EntityActionEngineBase cache is loaded. Delegates entirely to the base
+     * and preserves the system user resolved by `BaseEngine.ResolveContextUser()` so per-request
+     * `Config(false, uiUser)` calls never downgrade server-side engine context.
+     */
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        if (contextUser) {
+        await this.base.Config(forceRefresh, contextUser, provider);
+        if (this.base.ContextUser) {
+            this._contextUser = this.base.ContextUser;
+        } else if (contextUser && !this._contextUser) {
             this._contextUser = contextUser;
         }
-        await this.base.Config(forceRefresh, contextUser, provider);
     }
 
     /** True once the underlying EntityActionEngineBase cache has loaded. */

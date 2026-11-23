@@ -82,15 +82,21 @@ vi.mock('@memberjunction/ng-artifacts', () => ({
 }));
 vi.mock('@memberjunction/ai-engine-base', () => ({ AIEngineBase: { Instance: {} } }));
 
-import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { ApplicationInfo, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
-import type { LibraryWorkspaceState, SearchResult } from '@memberjunction/ng-conversations';
+import type { LibraryExternalRouteParams, LibraryWorkspaceState, SearchResult } from '@memberjunction/ng-conversations';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ArtifactResource } from '../lib/resource-wrappers/artifact-resource.component';
 import { ChatCollectionsResource } from '../lib/resource-wrappers/chat-collections-resource.component';
 import { ChatConversationsResource } from '../lib/resource-wrappers/chat-conversations-resource.component';
 import { ChatTasksResource } from '../lib/resource-wrappers/chat-tasks-resource.component';
 import { LibraryDriveResource, LibraryResource } from '../lib/resource-wrappers/library-resource.component';
+
+function createMockResourceProvider(
+  overrides: Partial<IMetadataProvider> & { ExecuteGQL?: ReturnType<typeof vi.fn> },
+): IMetadataProvider {
+  return overrides as Partial<IMetadataProvider> as IMetadataProvider;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -131,7 +137,7 @@ describe('LibraryResource, ChatCollectionsResource & FileBrowserResource isolati
     });
     Object.defineProperty(resource, 'ProviderToUse', {
       configurable: true,
-      get: () => ({ CurrentUser: { ID: 'u-1', Name: 'Tester' } }) as unknown as IMetadataProvider,
+      get: () => createMockResourceProvider({ CurrentUser: { ID: 'u-1', Name: 'Tester' } as UserInfo }),
     });
 
     resource.ngOnInit();
@@ -228,7 +234,7 @@ describe('ChatTasksResource (Agent Activity) filter & cold-mount URL handling', 
     });
     Object.defineProperty(resource, 'ProviderToUse', {
       configurable: true,
-      get: () => ({ CurrentUser: { ID: 'u-42' } }) as unknown as IMetadataProvider,
+      get: () => createMockResourceProvider({ CurrentUser: { ID: 'u-42' } as UserInfo }),
     });
 
     resource.ngOnInit();
@@ -264,7 +270,7 @@ describe('ChatConversationsResource — DriverClass-based routing across appMana
       navigationService: {
         SwitchToApp: switchToApp,
         OpenNavItemByName: vi.fn(async () => null),
-        appManager: {
+        AppManager: {
           GetAllApps: () => customApps,
           Applications: new BehaviorSubject(customApps),
         },
@@ -306,6 +312,32 @@ describe('ChatConversationsResource — DriverClass-based routing across appMana
   });
 });
 
+describe('Artifact navigation requests from artifact viewers', () => {
+  it('opens the requested artifact in its own tab from the conversations resource', async () => {
+    const resource = Object.create(ChatConversationsResource.prototype) as ChatConversationsResource;
+    const openArtifact = vi.fn(() => 'tab-9');
+    const openNavItem = vi.fn(async () => null);
+    Object.assign(resource as object, { navigationService: { OpenArtifact: openArtifact, OpenNavItemByName: openNavItem } });
+
+    await resource.OnNavigationRequest({ navItemName: '', ArtifactID: 'art-9', ArtifactName: 'Sales — Live Sheet' });
+
+    expect(openArtifact).toHaveBeenCalledWith('art-9', 'Sales — Live Sheet');
+    expect(openNavItem).not.toHaveBeenCalled();
+  });
+
+  it('opens the requested artifact in its own tab from an artifact tab', async () => {
+    const resource = Object.create(ArtifactResource.prototype) as ArtifactResource;
+    const openArtifact = vi.fn(() => 'tab-9');
+    const openNavItem = vi.fn(async () => null);
+    Object.assign(resource as object, { navigationService: { OpenArtifact: openArtifact, OpenNavItemByName: openNavItem } });
+
+    await resource.OnNavigationRequest({ navItemName: '', ArtifactID: 'art-9', ArtifactName: 'Sales — Live Sheet' });
+
+    expect(openArtifact).toHaveBeenCalledWith('art-9', 'Sales — Live Sheet');
+    expect(openNavItem).not.toHaveBeenCalled();
+  });
+});
+
 describe('ArtifactResource — viewer-scoped permission resolution', () => {
   it('consults server ResolveArtifactUserPermissions via ExecuteGQL first and falls back to ArtifactPermissionEngine', async () => {
     const resolveSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
@@ -338,10 +370,10 @@ describe('ArtifactResource — viewer-scoped permission resolution', () => {
     Object.defineProperty(gqlResource, 'ProviderToUse', {
       configurable: true,
       get: () =>
-        ({
-          CurrentUser: { ID: 'u-editor', Name: 'Editor' },
+        createMockResourceProvider({
+          CurrentUser: { ID: 'u-editor', Name: 'Editor' } as UserInfo,
           ExecuteGQL: executeGqlSpy,
-        }) as unknown as IMetadataProvider,
+        }),
     });
 
     gqlResource.ngOnInit();
@@ -367,9 +399,9 @@ describe('ArtifactResource — viewer-scoped permission resolution', () => {
     Object.defineProperty(resource, 'ProviderToUse', {
       configurable: true,
       get: () =>
-        ({
-          CurrentUser: { ID: 'u-reader', Name: 'Reader' },
-        }) as unknown as IMetadataProvider,
+        createMockResourceProvider({
+          CurrentUser: { ID: 'u-reader', Name: 'Reader' } as UserInfo,
+        }),
     });
 
     resource.ngOnInit();
@@ -382,5 +414,56 @@ describe('ArtifactResource — viewer-scoped permission resolution', () => {
     );
     expect(resource.CanEdit).toBe(false);
     expect(resource.CanShare).toBe(true);
+  });
+
+  it('treats version=latest as undefined VersionNumber and forwards queryParams on OnNavigationRequest', async () => {
+    const openNavItemSpy = vi.fn(async () => 'tab-1');
+    const latestRes = new ArtifactResource();
+    Object.assign(latestRes as object, {
+      Data: { ResourceRecordID: '', Configuration: { version: 'latest' } },
+      GetQueryParams: () => ({ version: 'latest' }),
+      NotifyLoadComplete: vi.fn(),
+      navigationService: {
+        OpenNavItemByName: openNavItemSpy,
+        OpenEntityRecord: vi.fn(),
+        AppContextSnapshot$: { value: null },
+      },
+    });
+    Object.defineProperty(latestRes, 'ProviderToUse', {
+      configurable: true,
+      get: () =>
+        createMockResourceProvider({
+          CurrentUser: { ID: 'u-1', Name: 'Tester' } as UserInfo,
+          Applications: [{ ID: 'app-chat', Name: 'Chat' }] as ApplicationInfo[],
+        }),
+    });
+
+    latestRes.ngOnInit();
+    expect(latestRes.VersionNumber).toBeUndefined();
+
+    await latestRes.OnNavigationRequest({
+      appName: 'Chat',
+      navItemName: 'Library',
+      queryParams: { collectionId: 'col-1', artifactId: 'art-1' },
+    });
+    expect(openNavItemSpy).toHaveBeenCalledWith(
+      'Library',
+      undefined,
+      'app-chat',
+      { queryParams: { collectionId: 'col-1', artifactId: 'art-1' } },
+    );
+
+    const pinnedRes = new ArtifactResource();
+    Object.assign(pinnedRes as object, {
+      Data: { ResourceRecordID: '', Configuration: {} },
+      GetQueryParams: () => ({ version: '3' }),
+      NotifyLoadComplete: vi.fn(),
+    });
+    Object.defineProperty(pinnedRes, 'ProviderToUse', {
+      configurable: true,
+      get: () => createMockResourceProvider({ CurrentUser: { ID: 'u-1', Name: 'Tester' } as UserInfo }),
+    });
+    pinnedRes.ngOnInit();
+    expect(pinnedRes.VersionNumber).toBe(3);
   });
 });
