@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, ServerOperationScopeManager } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine, ConversationWindowSourceRow, UserMayReadConversation } from '@memberjunction/core-entities';
+import { BUILT_IN_CONVERSATION_TYPE_IDS, CONVERSATION_TYPE_CODES, MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine, ConversationWindowSourceRow, UserMayReadConversation } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import {
     ActiveAgentRunSnapshotService,
@@ -55,15 +55,27 @@ const INLINE_SIZE_CAP = 100 * 1024;
 interface ConversationParentLink {
     ParentID: string | null;
     ParentBranchID: string | null;
+    IsSideQuestion: boolean;
 }
 
 /**
- * Bounded process-local cache of `(ConversationID -> { ParentID, ParentBranchID })`.
- * Safe across requests because `ParentID` and `ParentBranchID` are immutable after creation.
+ * Bounded process-local cache of `(ConversationID -> { ParentID, ParentBranchID, IsSideQuestion })`.
+ * Safe across requests because `SIDE_QUESTION` parent links are immutable after creation and
+ * non-side-question conversations never convert into `SIDE_QUESTION` rows.
  * Eliminates repeated DB round-trips on hot normal conversation turns.
  */
 const MAX_PARENT_LINK_CACHE_ENTRIES = 2048;
 const CONVERSATION_PARENT_LINK_CACHE = new UUIDMap<ConversationParentLink>();
+
+function isSideQuestionConversationType(typeId: string | null | undefined): boolean {
+    if (!typeId) {
+        return false;
+    }
+    const resolved =
+        ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SIDE_QUESTION) ??
+        BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
+    return UUIDsEqual(typeId, resolved) || UUIDsEqual(typeId, BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION);
+}
 
 /** Progress metadata is an untyped bag. A run is an object that carries an ID field. */
 function isAgentRunEntity(value: unknown): value is MJAIAgentRunEntityExtended {
@@ -1507,7 +1519,7 @@ export class RunAIAgentResolver extends ResolverBase {
         let sideQuestionContext: SideQuestionExecutionContext | undefined;
         let messages: ChatMessage[];
 
-        if (parentLink.ParentID) {
+        if (parentLink.IsSideQuestion && parentLink.ParentID) {
             const parentReadDecision = await UserMayReadConversation(p, user, parentLink.ParentID);
             if (!parentReadDecision.Loaded || !parentReadDecision.Allowed) {
                 throw new Error(parentReadDecision.Reason ?? 'Not authorized to read the parent conversation');
@@ -1564,8 +1576,10 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
-     * Resolves immutable `(ParentID, ParentBranchID)` metadata for a conversation via the process-local
-     * cache or a lightweight `simple` projection (`0ms` on repeat turns, no `BaseEntity` allocation).
+     * Resolves side-question `(ParentID, ParentBranchID, IsSideQuestion)` metadata for a conversation
+     * via the process-local cache or a lightweight `simple` projection (`0ms` on repeat turns, no
+     * `BaseEntity` allocation). Only conversations with `TypeID = SIDE_QUESTION` enter side-question
+     * read-only mode, preserving normal execution for generic `ParentID` child conversations.
      */
     private async resolveConversationParentLink(
         p: DatabaseProviderBase,
@@ -1577,11 +1591,11 @@ export class RunAIAgentResolver extends ResolverBase {
             if (cached) {
                 return cached;
             }
-            const res = await RunView.FromMetadataProvider(p).RunView<ConversationParentLink & { ID: string }>(
+            const res = await RunView.FromMetadataProvider(p).RunView<{ ID: string; ParentID?: string | null; ParentBranchID?: string | null; TypeID?: string | null }>(
                 {
                     EntityName: 'MJ: Conversations',
                     ExtraFilter: `ID='${EscapeSQLString(conversationId)}'`,
-                    Fields: ['ID', 'ParentID', 'ParentBranchID'],
+                    Fields: ['ID', 'ParentID', 'ParentBranchID', 'TypeID'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple',
@@ -1590,9 +1604,11 @@ export class RunAIAgentResolver extends ResolverBase {
             );
             if (res.Success && res.Results && res.Results.length > 0) {
                 const row = res.Results[0];
+                const isSideQuestion = Boolean(row.ParentID && isSideQuestionConversationType(row.TypeID));
                 const link: ConversationParentLink = {
-                    ParentID: row.ParentID ?? null,
-                    ParentBranchID: row.ParentBranchID ?? null,
+                    ParentID: isSideQuestion ? (row.ParentID ?? null) : null,
+                    ParentBranchID: isSideQuestion ? (row.ParentBranchID ?? null) : null,
+                    IsSideQuestion: isSideQuestion,
                 };
                 if (CONVERSATION_PARENT_LINK_CACHE.Size >= MAX_PARENT_LINK_CACHE_ENTRIES) {
                     CONVERSATION_PARENT_LINK_CACHE.Clear();
@@ -1600,19 +1616,21 @@ export class RunAIAgentResolver extends ResolverBase {
                 CONVERSATION_PARENT_LINK_CACHE.Set(conversationId, link);
                 return link;
             }
-            return { ParentID: null, ParentBranchID: null };
+            return { ParentID: null, ParentBranchID: null, IsSideQuestion: false };
         }
 
         if (typeof p.GetEntityObject === 'function') {
             const conv = await p.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
             if (await conv.Load(conversationId)) {
+                const isSideQuestion = Boolean(conv.ParentID && isSideQuestionConversationType(conv.TypeID));
                 return {
-                    ParentID: conv.ParentID ?? null,
-                    ParentBranchID: conv.ParentBranchID ?? null,
+                    ParentID: isSideQuestion ? (conv.ParentID ?? null) : null,
+                    ParentBranchID: isSideQuestion ? (conv.ParentBranchID ?? null) : null,
+                    IsSideQuestion: isSideQuestion,
                 };
             }
         }
-        return { ParentID: null, ParentBranchID: null };
+        return { ParentID: null, ParentBranchID: null, IsSideQuestion: false };
     }
 
     /** The conversation, branch (null is Main) and sequence of a message, read as `user`; throws when they can't read it. */

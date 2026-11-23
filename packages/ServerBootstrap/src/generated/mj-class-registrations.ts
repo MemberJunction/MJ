@@ -1494,9 +1494,8 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/messaging-adapters (3 classes)
+// @memberjunction/messaging-adapters (2 classes)
 import {
-    EmailUtilityMailboxExtension,
     SlackMessagingExtension,
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
@@ -1516,7 +1515,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (95 classes)
+// @memberjunction/core-entities-server (96 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1555,6 +1554,7 @@ import {
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
+    MJConversationBranchEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJConversationEntityServer,
@@ -3018,7 +3018,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
-    EmailUtilityMailboxExtension,
     SlackMessagingExtension,
     TeamsMessagingExtension,
     ActionLogRetentionScheduledJobDriver,
@@ -3069,6 +3068,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
+    MJConversationBranchEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJConversationEntityServer,

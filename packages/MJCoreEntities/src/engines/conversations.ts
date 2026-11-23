@@ -6126,6 +6126,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         provider?: IMetadataProvider
     ): Promise<MJConversationEntity[]> {
         const md = provider ?? this.ProviderToUse;
+        const sideQuestionTypeId =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SIDE_QUESTION) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
         const userIdClause = contextUser?.ID ? ` AND UserID='${EscapeSQLString(contextUser.ID)}'` : '';
         const branchClause = parentBranchId
             ? ` AND ParentBranchID='${EscapeSQLString(parentBranchId)}'`
@@ -6134,7 +6137,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const result = await rv.RunView<MJConversationEntity>(
             {
                 EntityName: 'MJ: Conversations',
-                ExtraFilter: `ParentID='${EscapeSQLString(parentConversationId)}'${branchClause}${userIdClause} AND (IsArchived IS NULL OR IsArchived=0)`,
+                ExtraFilter: `ParentID='${EscapeSQLString(parentConversationId)}' AND TypeID='${EscapeSQLString(sideQuestionTypeId)}'${branchClause}${userIdClause} AND (IsArchived IS NULL OR IsArchived=0)`,
                 OrderBy: '__mj_CreatedAt DESC',
                 BypassCache: true,
                 SkipTotalRowCount: true,
@@ -6242,6 +6245,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         provider?: IMetadataProvider
     ): Promise<{ SideConversationId: string | null; DefaultAgentID: string | null; TurnCount: number }> {
         const md = provider ?? this.ProviderToUse;
+        const sideQuestionTypeId =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SIDE_QUESTION) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
         const userIdClause = contextUser?.ID ? ` AND UserID='${EscapeSQLString(contextUser.ID)}'` : '';
         const branchClause = parentBranchId
             ? ` AND ParentBranchID='${EscapeSQLString(parentBranchId)}'`
@@ -6250,7 +6256,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const convResult = await rv.RunView<{ ID: string; DefaultAgentID?: string | null }>(
             {
                 EntityName: 'MJ: Conversations',
-                ExtraFilter: `ParentID='${EscapeSQLString(parentConversationId)}'${branchClause}${userIdClause} AND (IsArchived IS NULL OR IsArchived=0)`,
+                ExtraFilter: `ParentID='${EscapeSQLString(parentConversationId)}' AND TypeID='${EscapeSQLString(sideQuestionTypeId)}'${branchClause}${userIdClause} AND (IsArchived IS NULL OR IsArchived=0)`,
                 OrderBy: '__mj_CreatedAt DESC',
                 Fields: ['ID', 'DefaultAgentID'],
                 MaxRows: 1,

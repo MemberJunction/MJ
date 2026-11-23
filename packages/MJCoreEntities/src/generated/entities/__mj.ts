@@ -33226,6 +33226,20 @@ export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
     set ParentID(value: string | null) {
         this.Set('ParentID', value);
     }
+
+    /**
+    * * Field Name: ParentBranchID
+    * * Display Name: Parent Branch ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentBranchID(): string | null {
+        return this.Get('ParentBranchID');
+    }
+    set ParentBranchID(value: string | null) {
+        this.Set('ParentBranchID', value);
+    }
 }
 
 
@@ -40558,6 +40572,20 @@ export class MJCommentEntity extends BaseEntity<MJCommentEntityType> {
     }
     set ParentID(value: string | null) {
         this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: ParentBranchID
+    * * Display Name: Parent Branch ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentBranchID(): string | null {
+        return this.Get('ParentBranchID');
+    }
+    set ParentBranchID(value: string | null) {
+        this.Set('ParentBranchID', value);
     }
 
     /**
@@ -53472,6 +53500,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * Validate() method override for MJ: Conversations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * Table-Level: Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
     * * Table-Level: Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
+    * * Table-Level: A record cannot be its own parent, and specifying a parent branch requires a parent record to be set.
     * @public
     * @method
     * @override
@@ -53480,6 +53509,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
         const result = super.Validate();
         this.ValidateApplicationScopeAndIDConsistency(result);
         this.ValidateLinkedEntityAndRecordCoexistence(result);
+        this.ValidateParentAndParentBranchHierarchy(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -53526,6 +53556,32 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     			"LinkedEntityID",
     			"Both Linked Entity and Linked Record must be provided together, or both must be empty.",
     			this.LinkedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+/**
+    * A record cannot be its own parent, and specifying a parent branch requires a parent record to be set.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParentAndParentBranchHierarchy(result: ValidationResult): void {
+    	if (this.ParentBranchID != null && this.ParentID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ParentID",
+    			"A parent must be specified when a parent branch is set.",
+    			this.ParentID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.ParentID != null && this.ID != null && UUIDsEqual(this.ParentID, this.ID)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ParentID",
+    			"A record cannot be its own parent.",
+    			this.ParentID,
     			ValidationErrorType.Failure
     		));
     	}
@@ -53991,6 +54047,20 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: ParentBranchID
+    * * Display Name: Parent Branch
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+    * * Description: Optional ConversationBranch ID on the parent conversation identifying which fork path a child side-question thread is scoped to. NULL means the parent conversation's Main trunk.
+    */
+    get ParentBranchID(): string | null {
+        return this.Get('ParentBranchID');
+    }
+    set ParentBranchID(value: string | null) {
+        this.Set('ParentBranchID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -54150,6 +54220,15 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+
+    /**
+    * * Field Name: ParentBranch
+    * * Display Name: Parent Branch Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ParentBranch(): string | null {
+        return this.Get('ParentBranch');
     }
 }
 
@@ -73162,6 +73241,20 @@ export class MJFieldSuggestionEntity extends BaseEntity<MJFieldSuggestionEntityT
     }
     set ParentID(value: string | null) {
         this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: ParentBranchID
+    * * Display Name: Parent Branch ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentBranchID(): string | null {
+        return this.Get('ParentBranchID');
+    }
+    set ParentBranchID(value: string | null) {
+        this.Set('ParentBranchID', value);
     }
 
     /**

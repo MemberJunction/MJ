@@ -93,7 +93,7 @@ describe('Side Questions — ReadOnlyMode Action Guard & Sub-Agent Propagation',
         Reflect.set(agent, 'resolveSubAgentConfiguration', () => ({}));
         Reflect.set(agent, 'prepareSubAgentMessages', async () => [{ role: 'user', content: 'Inspect status' }]);
         Reflect.set(agent, 'activeSkillIDsForRun', () => []);
-        Reflect.set(agent, 'ensureTreeBudget', () => undefined);
+        Reflect.set(agent, 'ensureTreeBudget', () => ({}));
         Reflect.set(agent, 'subAgentTaint', () => ({}));
         Reflect.set(agent, 'absorbSubAgentTaint', () => undefined);
 

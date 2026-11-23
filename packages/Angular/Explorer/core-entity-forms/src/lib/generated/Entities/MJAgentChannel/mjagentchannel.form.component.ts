@@ -16,7 +16,10 @@ export class MJAgentChannelFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'channelDetails', sectionName: 'Channel Details', isExpanded: true },
+            { sectionKey: 'rateLimitsAndCounters', sectionName: 'Rate Limits and Counters', isExpanded: true },
+            { sectionKey: 'conversationsDetails', sectionName: 'Conversations Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAgentChannelParticipants', sectionName: 'Agent Channel Participants', isExpanded: false }
         ]);
     }

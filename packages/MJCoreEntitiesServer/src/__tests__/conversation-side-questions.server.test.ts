@@ -1,18 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const hoisted = vi.hoisted(() => ({
-    readDecision: vi.fn(),
+    canReadConv: vi.fn(),
     deleteDecision: vi.fn().mockResolvedValue({ Allowed: true, Reason: null }),
-    loadParentOk: true,
-    loadedParentId: null as string | null,
-    loadBranchOk: true,
-    loadedBranchConvId: 'parent-1',
+    parentRow: {
+        ID: 'parent-1',
+        UserID: 'user-1',
+        ParentID: null as string | null,
+        ProjectID: null,
+        AdditionalData: null,
+        AnchorType: null,
+        LinkedEntityID: null,
+        LinkedRecordID: null,
+        AnchorKey: null,
+        AnchorMetadata: null,
+        TypeID: '7F81FF57-C5A8-464D-B3B4-35A4FCF10717',
+        ExternalID: null,
+    } as Record<string, unknown> | null,
+    branchRow: {
+        ID: 'branch-1',
+        ConversationID: 'parent-1',
+    } as Record<string, unknown> | null,
     runViewMock: vi.fn(),
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return { ...actual, RegisterClass: () => (target: object) => target };
+});
+
+vi.mock('../custom/ConversationReadSecurityHook', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../custom/ConversationReadSecurityHook')>();
+    return {
+        ...actual,
+        UserCanReadConversation: hoisted.canReadConv,
+    };
 });
 
 vi.mock('@memberjunction/core-entities', async () => {
@@ -40,21 +62,17 @@ vi.mock('@memberjunction/core-entities', async () => {
         };
         public Fields = new Map<string, FieldStub>();
         public Results: Array<{ Success: boolean; Message: string; Type: string }> = [];
+        public RunViewProviderToUse = {
+            RunView: async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: Conversation Branches') {
+                    return { Success: true, Results: hoisted.branchRow ? [hoisted.branchRow] : [] };
+                }
+                return { Success: true, Results: hoisted.parentRow ? [hoisted.parentRow] : [] };
+            },
+        };
         public ProviderToUse = {
             ProviderType: 'Database',
             RunView: vi.fn(),
-            GetEntityObject: async (entityName: string) => {
-                if (entityName === 'MJ: Conversation Branches') {
-                    return {
-                        ConversationID: hoisted.loadedBranchConvId,
-                        Load: async () => hoisted.loadBranchOk,
-                    };
-                }
-                return {
-                    ParentID: hoisted.loadedParentId,
-                    Load: async () => hoisted.loadParentOk,
-                };
-            },
         };
 
         public Validate(): { Success: boolean; Errors: Array<{ Source: string; Message: string }> } {
@@ -111,7 +129,6 @@ vi.mock('@memberjunction/core-entities', async () => {
         ...actual,
         MJConversationEntity: StubConversationEntity,
         MJConversationBranchEntityExtended: StubConversationBranchEntityExtended,
-        UserMayReadConversation: hoisted.readDecision,
         UserMayDeleteConversation: hoisted.deleteDecision,
     };
 });
@@ -124,18 +141,34 @@ import { AnchoredConversationPostRunViewHook } from '../custom/AnchoredConversat
 
 describe('MJConversationEntityServer — Side Questions guards', () => {
     beforeEach(() => {
-        hoisted.readDecision.mockReset().mockResolvedValue({ Allowed: true, Loaded: true, Reason: null });
-        hoisted.loadParentOk = true;
-        hoisted.loadedParentId = null;
-        hoisted.loadBranchOk = true;
-        hoisted.loadedBranchConvId = 'parent-1';
+        hoisted.canReadConv.mockReset().mockResolvedValue(true);
+        hoisted.parentRow = {
+            ID: 'parent-1',
+            UserID: 'user-1',
+            ParentID: null,
+            ProjectID: null,
+            AdditionalData: null,
+            AnchorType: null,
+            LinkedEntityID: null,
+            LinkedRecordID: null,
+            AnchorKey: null,
+            AnchorMetadata: null,
+            TypeID: BUILT_IN_CONVERSATION_TYPE_IDS.CHAT,
+            ExternalID: null,
+        };
+        hoisted.branchRow = {
+            ID: 'branch-1',
+            ConversationID: 'parent-1',
+        };
     });
 
-    it('rejects changing ParentID or ParentBranchID after creation in Validate()', () => {
+    it('rejects changing ParentID or ParentBranchID after creation for SIDE_QUESTION conversations in Validate()', () => {
         const entity = new MJConversationEntityServer();
         entity.IsSaved = true;
+        entity.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
         entity.ParentID = 'parent-2';
         entity.Fields.set('ParentID', { Dirty: true, OldValue: 'parent-1', Value: 'parent-2' });
+        entity.Fields.set('UserID', { Dirty: false, OldValue: 'user-1', Value: 'user-1' });
 
         const result = entity.Validate();
         expect(result.Success).toBe(false);
@@ -156,7 +189,7 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
         expect(selfParent.Validate().Success).toBe(false);
     });
 
-    it('defaults TypeID to SIDE_QUESTION and allows saving when parent read access and branch match', async () => {
+    it('defaults TypeID to SIDE_QUESTION when ParentBranchID is set and allows saving when parent and branch match', async () => {
         const entity = new MJConversationEntityServer();
         entity.IsSaved = false;
         entity.ParentID = 'parent-1';
@@ -168,11 +201,39 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
         expect(entity.TypeID).toBe(BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION);
     });
 
+    it('allows a shared viewer to create their own private SIDE_QUESTION under a readable parent while keeping generic ParentID owner-only', async () => {
+        hoisted.parentRow = {
+            ...hoisted.parentRow,
+            UserID: 'owner-alice',
+        };
+        hoisted.canReadConv.mockResolvedValue(true);
+
+        const viewerSideQ = new MJConversationEntityServer();
+        viewerSideQ.IsSaved = false;
+        viewerSideQ.UserID = 'viewer-bob';
+        viewerSideQ.ContextCurrentUser = { ID: 'viewer-bob', UserRoles: [{ Role: 'UI' }] } as UserInfo;
+        viewerSideQ.ParentID = 'parent-1';
+        viewerSideQ.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
+        expect(await viewerSideQ.Save()).toBe(true);
+
+        const viewerGenericChild = new MJConversationEntityServer();
+        viewerGenericChild.IsSaved = false;
+        viewerGenericChild.UserID = 'viewer-bob';
+        viewerGenericChild.ContextCurrentUser = { ID: 'viewer-bob', UserRoles: [{ Role: 'UI' }] } as UserInfo;
+        viewerGenericChild.ParentID = 'parent-1';
+        viewerGenericChild.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
+        expect(await viewerGenericChild.Save()).toBe(false);
+    });
+
     it('refuses nesting a side question inside another child conversation', async () => {
-        hoisted.loadedParentId = 'grandparent-1';
+        hoisted.parentRow = {
+            ...hoisted.parentRow,
+            ParentID: 'grandparent-1',
+        };
         const entity = new MJConversationEntityServer();
         entity.IsSaved = false;
         entity.ParentID = 'side-parent-1';
+        entity.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
 
         const saved = await entity.Save();
         expect(saved).toBe(false);
@@ -180,41 +241,46 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
     });
 
     it('refuses creating a side question when user lacks read access on parent conversation', async () => {
-        hoisted.readDecision.mockResolvedValueOnce({
-            Allowed: false,
-            Loaded: true,
-            Reason: 'You do not have access to this conversation.',
-        });
+        hoisted.parentRow = {
+            ...hoisted.parentRow,
+            UserID: 'owner-alice',
+        };
+        hoisted.canReadConv.mockResolvedValueOnce(false);
         const entity = new MJConversationEntityServer();
         entity.IsSaved = false;
+        entity.UserID = 'outsider-charlie';
+        entity.ContextCurrentUser = { ID: 'outsider-charlie', UserRoles: [{ Role: 'UI' }] } as UserInfo;
         entity.ParentID = 'parent-1';
+        entity.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
 
         const saved = await entity.Save();
         expect(saved).toBe(false);
     });
 
     it('refuses ParentBranchID that belongs to a different conversation', async () => {
-        hoisted.loadedBranchConvId = 'other-conversation';
+        hoisted.branchRow = { ID: 'foreign-branch', ConversationID: 'other-conversation' };
         const entity = new MJConversationEntityServer();
         entity.IsSaved = false;
         entity.ParentID = 'parent-1';
         entity.ParentBranchID = 'foreign-branch';
+        entity.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
 
         const saved = await entity.Save();
         expect(saved).toBe(false);
     });
 
-    it('skips child lookup when deleting a child conversation and aborts parent delete if child delete fails', async () => {
+    it('skips child lookup when deleting a SIDE_QUESTION conversation and aborts parent delete if child delete fails', async () => {
         const rvSpy = vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: hoisted.runViewMock,
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
         vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue({ ID: 'sys' } as UserInfo);
 
-        // Child conversation fast-path: zero RunView calls
+        // Side-question conversation fast-path: zero RunView calls
         hoisted.runViewMock.mockClear();
         const childConv = new MJConversationEntityServer();
         childConv.ID = 'side-1';
         childConv.ParentID = 'parent-1';
+        childConv.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
         expect(await childConv.Delete()).toBe(true);
         expect(hoisted.runViewMock).not.toHaveBeenCalled();
 
@@ -227,6 +293,7 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
         const parentConv = new MJConversationEntityServer();
         parentConv.ID = 'parent-1';
         parentConv.ParentID = null;
+        parentConv.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
         expect(await parentConv.Delete()).toBe(false);
         expect(failingChild.Delete).toHaveBeenCalledTimes(1);
         expect(parentConv['Results'].some((r) => !r.Success && r.Message.includes('Child thread locked'))).toBe(true);
@@ -237,7 +304,7 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
     it('MJConversationBranchEntityServer deletes branch-scoped side questions before branch delete and aborts on failure', async () => {
         const rvSpy = vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: hoisted.runViewMock,
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
         vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue({ ID: 'sys' } as UserInfo);
 
         const branchChild = { Delete: vi.fn().mockResolvedValue(true) };
@@ -258,32 +325,27 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
         rvSpy.mockRestore();
     });
 
-    it('AnchoredConversationPostRunViewHook enforces parent read access on side-question conversations and their details', async () => {
+    it('AnchoredConversationPostRunViewHook enforces private child isolation on MJ: Conversation Details', async () => {
         vi.spyOn(WellKnownUserSource.Instance, 'IsSystemUser').mockReturnValue(false);
         vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue({ ID: 'sys' } as UserInfo);
 
-        const provider = { ProviderType: 'Database' } as unknown as IMetadataProvider;
-        const user = { ID: 'user-bob', OwningProvider: provider } as unknown as UserInfo;
+        const provider = { ProviderType: 'Database' } as Partial<IMetadataProvider> as IMetadataProvider;
+        const bob = { ID: 'user-bob', OwningProvider: provider } as Partial<UserInfo> as UserInfo;
 
-        hoisted.readDecision.mockImplementation(async (_p, _u, parentId: string) => {
-            if (parentId === 'parent-allowed') {
-                return { Allowed: true, Loaded: true, Reason: null };
-            }
-            return { Allowed: false, Loaded: true, Reason: 'Share revoked' };
-        });
-
-        const allowedSide = {
-            ID: 'side-allowed',
-            ParentID: 'parent-allowed',
+        const bobsOwnSide = {
+            ID: 'side-bob',
+            UserID: 'user-bob',
+            ParentID: 'shared-parent',
             AnchorType: null,
             LinkedEntityID: null,
             LinkedRecordID: null,
             AnchorKey: null,
             AnchorMetadata: null,
         };
-        const revokedSide = {
-            ID: 'side-revoked',
-            ParentID: 'parent-revoked',
+        const alicesPrivateSide = {
+            ID: 'side-alice',
+            UserID: 'user-alice',
+            ParentID: 'shared-parent',
             AnchorType: null,
             LinkedEntityID: null,
             LinkedRecordID: null,
@@ -291,31 +353,28 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
             AnchorMetadata: null,
         };
 
-        const convRes = await AnchoredConversationPostRunViewHook(
-            { EntityName: 'MJ: Conversations' },
-            { Success: true, Results: [allowedSide, revokedSide], RowCount: 2, TotalRowCount: 2 } as never,
-            user
+        hoisted.canReadConv.mockImplementation(async (_p, user: UserInfo, row: { UserID?: string }) =>
+            row.UserID === user.ID
         );
-        expect(convRes.Results.map((r: { ID: string }) => r.ID)).toEqual(['side-allowed']);
 
         const rvSpy = vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [allowedSide, revokedSide] }),
-        } as unknown as RunView);
+            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [bobsOwnSide, alicesPrivateSide] }),
+        } as Partial<RunView> as RunView);
 
         const detailRes = await AnchoredConversationPostRunViewHook(
             { EntityName: 'MJ: Conversation Details' },
             {
                 Success: true,
                 Results: [
-                    { ID: 'd-ok', ConversationID: 'side-allowed', Message: 'Allowed Q' },
-                    { ID: 'd-secret', ConversationID: 'side-revoked', Message: 'Leaked Q&A' },
+                    { ID: 'd-bob', ConversationID: 'side-bob', Message: 'Bob private Q' },
+                    { ID: 'd-alice', ConversationID: 'side-alice', Message: 'Alice private Q' },
                 ],
                 RowCount: 2,
                 TotalRowCount: 2,
             } as never,
-            user
+            bob
         );
-        expect(detailRes.Results.map((r: { ID: string }) => r.ID)).toEqual(['d-ok']);
+        expect(detailRes.Results.map((r: { ID: string }) => r.ID)).toEqual(['d-bob']);
         rvSpy.mockRestore();
     });
 });

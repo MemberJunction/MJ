@@ -23,7 +23,6 @@ export class MJConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'applicationIntegration', sectionName: 'Application Integration', isExpanded: true },
             { sectionKey: 'meetingMedia', sectionName: 'Meeting Media', isExpanded: true },
             { sectionKey: 'inlineCommentsAnchors', sectionName: 'Inline Comments & Anchors', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJConversationArtifacts', sectionName: 'Conversation Artifacts', isExpanded: false },

@@ -2,9 +2,11 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    IEntityDataProvider,
     IMetadataProvider,
     LogError,
     RunView,
+    RunViewParams,
     WellKnownUserSource,
 } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
@@ -12,6 +14,12 @@ import {
     MJConversationBranchEntityExtended,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { MarkInternalConversationSecurityQuery } from './ConversationReadSecurityHook';
+
+function toMetadataProvider(provider: IEntityDataProvider | null | undefined): IMetadataProvider | undefined {
+    return provider ? (provider as Partial<IMetadataProvider> as IMetadataProvider) : undefined;
+}
 
 /**
  * Server-side subclass for `MJ: Conversation Branches`.
@@ -25,24 +33,25 @@ import {
 @RegisterClass(BaseEntity, 'MJ: Conversation Branches')
 export class MJConversationBranchEntityServer extends MJConversationBranchEntityExtended {
     protected override async beforeBranchDelete(options?: EntityDeleteOptions): Promise<boolean> {
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const provider = toMetadataProvider(this.ProviderToUse);
         if (!this.ID || !provider || provider.ProviderType !== 'Database' || !('RunView' in provider) || typeof provider.RunView !== 'function') {
             return true;
         }
 
-        const systemUser = await WellKnownUserSource.Instance.GetSystemUser(provider);
+        const systemUser =
+            (await WellKnownUserSource.Instance.GetSystemUser(provider)) ??
+            UserCache.Instance.GetSystemUser();
         const actor = systemUser ?? this.ContextCurrentUser;
         const rv = RunView.FromMetadataProvider(provider);
-        const result = await rv.RunView<MJConversationEntity>(
-            {
-                EntityName: 'MJ: Conversations',
-                ExtraFilter: `ParentBranchID='${EscapeSQLString(this.ID)}'`,
-                SkipTotalRowCount: true,
-                BypassCache: true,
-                ResultType: 'entity_object',
-            },
-            actor
-        );
+        const queryParams: RunViewParams = {
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: `ParentBranchID='${EscapeSQLString(this.ID)}'`,
+            SkipTotalRowCount: true,
+            BypassCache: true,
+            ResultType: 'entity_object',
+        };
+        MarkInternalConversationSecurityQuery(queryParams);
+        const result = await rv.RunView<MJConversationEntity>(queryParams, actor);
         if (!result.Success) {
             LogError(
                 `MJConversationBranchEntityServer: failed to inspect side-question threads for branch ${this.ID}: ${result.ErrorMessage}`
