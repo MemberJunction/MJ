@@ -105,6 +105,51 @@
       "reason": "Nullable reference; cleared so the row survives without the entity."
     },
     {
+      "table": "CommunicationEndpointPrincipal",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "CommunicationLog",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared with RecordID (CK_CommunicationLog_PrincipalPair both-or-neither CHECK) so the send history survives without the entity.",
+      "alsoNull": [
+        "RecordID"
+      ]
+    },
+    {
+      "table": "CommunicationPrincipal",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "CommunicationPrincipalPreference",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; a preference is a choice made by a record of the entity and has no meaning without it."
+    },
+    {
+      "table": "CommunicationSenderType",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; the sender type survives unbound."
+    },
+    {
+      "table": "CommunicationSuppression",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Deleted, not cleared: a principal-scoped suppression records that a record of the entity opted out, and clearing the pair would violate CK_CommunicationSuppression_Target for principal-only rows."
+    },
+    {
       "table": "CompanyIntegrationEntityMap",
       "column": "EntityID",
       "nullable": false,
@@ -699,6 +744,22 @@
       "reason": "Nullable reference to a AIAgentNote row this proc deletes; cleared."
     },
     {
+      "table": "CommunicationConsentAuditLog",
+      "column": "CommunicationPrincipalPreferenceID",
+      "references": "CommunicationPrincipalPreference",
+      "nullable": true,
+      "action": "delete",
+      "reason": "An audit row references exactly one preference or suppression (CK_CommunicationConsentAuditLog_OneSubject), so it cannot be cleared; deleted with the preference."
+    },
+    {
+      "table": "CommunicationConsentAuditLog",
+      "column": "CommunicationSuppressionID",
+      "references": "CommunicationSuppression",
+      "nullable": true,
+      "action": "delete",
+      "reason": "An audit row references exactly one preference or suppression (CK_CommunicationConsentAuditLog_OneSubject), so it cannot be cleared; deleted with the suppression."
+    },
+    {
       "table": "CompanyIntegrationFieldMap",
       "column": "EntityMapID",
       "references": "CompanyIntegrationEntityMap",
@@ -713,6 +774,14 @@
       "nullable": false,
       "action": "delete",
       "reason": "NOT NULL reference to a CompanyIntegrationEntityMap row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityCommunicationMessageType",
+      "column": "CommunicationPrincipalID",
+      "references": "CommunicationPrincipal",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a CommunicationPrincipal row this proc deletes; cleared."
     },
     {
       "table": "ErrorLog",
