@@ -64,6 +64,19 @@ export class MJLayerTitleDirective {
     this.el.nativeElement.getAttribute('id') || `mj-layer-title-${++nextLayerTitleId}`;
 }
 
+/**
+ * Marks the consumer's own close control. Clicking it requests a close, and a phone sheet that has
+ * one does not get a generated Close button. Custom Element hosts use the `mj-layer-close` attribute.
+ */
+@Directive({
+  selector: '[mjLayerClose]',
+  standalone: true,
+  host: { class: 'mj-layer-close' },
+})
+export class MJLayerCloseDirective {}
+
+const LAYER_CLOSE_SELECTOR = '.mj-layer-close, [mj-layer-close]';
+
 @Directive({
   selector: '[mjLayerBody]',
   standalone: true,
@@ -97,11 +110,22 @@ export class MJLayerFooterDirective {}
         [attr.aria-modal]="ariaModal()"
         [attr.aria-label]="ariaLabel()"
         [attr.aria-labelledby]="ariaLabelledBy()"
+        (click)="onPanelClick($event)"
       >
         @if (showGeneratedTitle()) {
           <div class="mj-layer-sheet-title" aria-hidden="true">{{ sheetTitleText() }}</div>
         }
         <ng-content />
+        @if (showGeneratedClose()) {
+          <button
+            type="button"
+            class="mj-layer-sheet-close mj-layer-close"
+            [attr.role]="safeKind() === 'menu' ? 'menuitem' : null"
+            [attr.tabindex]="safeKind() === 'menu' ? -1 : null"
+          >
+            {{ CloseLabel() }}
+          </button>
+        }
       </div>
     </div>
   `,
@@ -133,6 +157,8 @@ export class MJLayerComponent implements OnDestroy {
   public readonly Anchor = input<string | HTMLElement | null>(null);
   public readonly Label = input<string>('');
   public readonly AnnounceOnOpen = input<string>('');
+  /** Text of the Close button a phone sheet generates when the consumer provides no close control. */
+  public readonly CloseLabel = input<string>('Close');
 
   public readonly BeforeOpen = output<MJBeforeEvent<'open'>>();
   public readonly BeforeClose = output<MJBeforeEvent<'escape' | 'backdrop' | 'programmatic'>>();
@@ -184,6 +210,23 @@ export class MJLayerComponent implements OnDestroy {
   protected readonly showGeneratedTitle = computed(
     () => this.activePhoneMode() !== null && !this.hasConsumerTitle() && this.sheetTitleText() !== ''
   );
+
+  private readonly hasConsumerClose = signal(false);
+
+  /**
+   * Phones have no Escape key, and a screen reader stays inside a modal, so the backdrop is out of
+   * reach. A closeable phone sheet or full-screen layer with no close control of its own gets one.
+   */
+  protected readonly showGeneratedClose = computed(
+    () => this.activePhoneMode() !== null && this.Closeable() && !this.hasConsumerClose()
+  );
+
+  protected onPanelClick(event: MouseEvent): void {
+    const target = event.target;
+    if (target instanceof Element && target.closest(LAYER_CLOSE_SELECTOR) && this.Closeable()) {
+      this.RequestClose('programmatic');
+    }
+  }
 
   protected readonly ariaLabel = computed(() => {
     if (this.Label()) {
@@ -264,6 +307,9 @@ export class MJLayerComponent implements OnDestroy {
       this.layerService.ResolvePhoneMode(this.safeKind(), this.PhonePresentation(), this.safePlacement())
     );
     this.sheetTitleText.set(this.Label() || this.layerService.AccessibleNameOf(this.Anchor()));
+    this.hasConsumerClose.set(
+      panelEl.querySelector(`:is(${LAYER_CLOSE_SELECTOR}):not(.mj-layer-sheet-close)`) !== null
+    );
 
     this.layerService.Open({
       Id: this.layerId,

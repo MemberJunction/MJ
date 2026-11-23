@@ -161,7 +161,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
 
     // Dark mode check on MJ Default
     await page.getByRole('button', { name: 'Look: MJ Default' }).click();
-    await page.getByRole('button', { name: 'Toggle Dark' }).click();
+    await page.getByRole('button', { name: 'Dark mode' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.waitForTimeout(250);
     await expect(page).toHaveScreenshot(`gate-mj-dark-${testInfo.project.name}.png`, {
@@ -274,10 +274,28 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
       expect(menuBox).not.toBeNull();
       expect(Math.round(menuBox!.width)).toBe(390);
       expect(Math.abs(menuBox!.y + menuBox!.height - 844)).toBeLessThanOrEqual(1);
+
+      // Phones have no Escape key and a screen reader cannot reach the backdrop, so the sheet
+      // generates a Close control. In a menu it is a menuitem the arrow keys reach.
+      const sheetClose = menu.getByRole('menuitem', { name: 'Close' });
+      await expect(sheetClose).toBeVisible();
+      expect((await sheetClose.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await sheetClose.click();
+      await expect(menu).toBeHidden();
+      await expect(openPopoverBtn).toBeFocused();
+      await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
+      await openPopoverBtn.click();
+      await expect(menu).toBeVisible();
     } else {
+      await expect(menu.locator('.mj-layer-sheet-close')).toHaveCount(0);
       await expect(menuPane).not.toHaveClass(/mj-layer-pane-phone-sheet/);
       await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
     }
+
+    // aria-controls points at the portaled panel while open, not at the empty <mj-layer> host
+    const controlsId = await openPopoverBtn.getAttribute('aria-controls');
+    expect(controlsId).toBeTruthy();
+    await expect(menu).toHaveAttribute('id', controlsId!);
 
     const mjItem = menu.locator('[role="menuitemradio"][data-popover-action="mj"]');
     const lxpItem = menu.locator('[role="menuitemradio"][data-popover-action="lxp"]');
@@ -295,8 +313,10 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
 
     await expect(menu).toBeHidden();
     await expect(openPopoverBtn).toHaveAttribute('aria-expanded', 'false');
+    await expect(openPopoverBtn).not.toHaveAttribute('aria-controls', /.+/);
     await expect(openPopoverBtn).toBeFocused();
     await expect(page.locator('html')).toHaveAttribute('data-look', 'lxp');
+    await expect(page.getByRole('button', { name: 'Look: LXP' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
   });
 
@@ -471,7 +491,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     }
 
     await page.getByRole('button', { name: 'Look: MJ Default' }).click();
-    await page.getByRole('button', { name: 'Toggle Dark' }).click();
+    await page.getByRole('button', { name: 'Dark mode' }).click();
     await page.waitForTimeout(250);
     const darkResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])

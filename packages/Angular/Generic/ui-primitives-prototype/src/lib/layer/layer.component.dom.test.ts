@@ -346,6 +346,20 @@ describe('MJLayerComponent phone presentation', () => {
     // No consumer title, so the sheet shows the trigger's name where the menu's anchor used to be.
     expect(panel?.querySelector('.mj-layer-sheet-title')?.textContent?.trim()).toBe('Open Popover');
 
+    // No consumer close control, so the sheet generates one; in a menu it is a menuitem.
+    const close = panel?.querySelector<HTMLButtonElement>('.mj-layer-sheet-close');
+    expect(close?.getAttribute('role')).toBe('menuitem');
+    expect(close?.textContent?.trim()).toBe('Close');
+    // aria-controls points at the portaled panel while open.
+    const trigger = document.getElementById('popover-trigger');
+    expect(trigger?.getAttribute('aria-controls')).toBe(panel?.id);
+    close?.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.menuOpen()).toBe(false);
+    expect(trigger?.hasAttribute('aria-controls')).toBe(false);
+    fixture.componentInstance.menuOpen.set(true);
+    fixture.detectChanges();
+
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
     expect(fixture.componentInstance.menuOpen()).toBe(false);
@@ -369,6 +383,7 @@ describe('MJLayerComponent phone presentation', () => {
 
     expect(pane?.classList.contains('mj-layer-pane-phone-sheet')).toBe(false);
     expect(panel?.className).not.toContain('phone');
+    expect(panel?.querySelector('.mj-layer-sheet-close')).toBeNull();
     expect(document.body.querySelector('.cdk-overlay-backdrop')).toBeNull();
   });
 

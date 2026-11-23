@@ -101,8 +101,20 @@ body {
 .gate-segmented .host-btn {
   border-color: transparent;
   background: transparent;
-  min-height: 34px;
-  padding: 0 12px;
+  /* The control-height step, so the buttons reach 44px on touch like every other control. */
+  min-height: var(--mj-control-height-sm, 32px);
+  padding: 4px 12px;
+}
+
+/* Redundant coding: a check mark shows the on state, not only the fill. It keeps its space when off. */
+.gate-check {
+  visibility: hidden;
+  font-weight: 700;
+}
+
+mj-row[selected='true'] > .gate-check,
+mj-row[pressed='true'] > .gate-check {
+  visibility: visible;
 }
 
 .gate-segmented .host-btn.is-active {

@@ -157,6 +157,12 @@
     border-top: 1px solid var(--mj-border-subtle);
   }
 
+  /* Reordered to the top, the footer divides from what follows instead, so any order looks intended. */
+  :is(.mj-surface-footer, [mj-surface-footer], [mjsurfacefooter]):first-child:not(:last-child) {
+    padding-bottom: var(--mj-space-3);
+    border-bottom: 1px solid var(--mj-border-subtle);
+  }
+
   /* ========================================
      mj-row
      ======================================== */
@@ -198,8 +204,8 @@
     border-color: var(--_mj-tone-border, var(--mj-row-border-selected, var(--mj-brand-primary)));
   }
 
+  /* Disabled uses the semantic text token only. Stacking opacity on top made the text unreadable. */
   .mj-row.mj-row-disabled {
-    opacity: 0.55;
     cursor: not-allowed;
     color: var(--mj-text-disabled);
   }
@@ -399,6 +405,30 @@
     animation: mj-sheet-in-end 220ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
+  /* Generated on a closeable phone sheet with no close control of its own. Full width, in thumb reach. */
+  .mj-layer-sheet-close {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    min-height: var(--mj-control-height-md);
+    width: 100%;
+    font: inherit;
+    font-weight: var(--mj-font-medium);
+    color: var(--mj-text-primary);
+    background: transparent;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-control);
+    cursor: pointer;
+  }
+
+  .mj-layer-sheet-close:hover {
+    background: var(--mj-bg-surface-hover);
+  }
+
+  .mj-layer-sheet-close:focus-visible {
+    outline: none;
+    box-shadow: var(--mj-focus-ring);
+  }
+
   /* Shown only on a sheet with no consumer title (the trigger's name or the layer's Label). */
   .mj-layer-sheet-title {
     margin: 0;
@@ -433,6 +463,11 @@
     flex: 1 1 auto;
     overflow-y: auto;
     line-height: var(--mj-leading-normal);
+    /* A scroll container clips its children's outward focus rings. This gutter gives the ring room
+       without moving the content: the padding is cancelled by an equal negative margin. */
+    --_mj-layer-ring-bleed: calc(var(--mj-ring-offset, 2px) + var(--mj-ring-width, 2px));
+    padding: var(--_mj-layer-ring-bleed);
+    margin: calc(-1 * var(--_mj-layer-ring-bleed));
   }
 
   :is(.mj-layer-footer, [mj-layer-footer], [mjlayerfooter]) {

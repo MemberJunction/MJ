@@ -70,6 +70,9 @@ export class MJLayerService {
 
     if (anchorEl) {
       anchorEl.setAttribute('aria-expanded', 'true');
+      // The panel is portaled out of its host, so point aria-controls at the panel itself while open.
+      request.PanelElement.id ||= `${request.Id}-panel`;
+      anchorEl.setAttribute('aria-controls', request.PanelElement.id);
     }
 
     const config = this.buildOverlayConfig(request, anchorEl);
@@ -159,6 +162,7 @@ export class MJLayerService {
     }
     if (removed.AnchorElement) {
       removed.AnchorElement.setAttribute('aria-expanded', 'false');
+      removed.AnchorElement.removeAttribute('aria-controls');
     }
     if (removed.OverlayRef.hasAttached()) {
       removed.OverlayRef.detach();

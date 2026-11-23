@@ -9,7 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyLook = (look) => {
     root.setAttribute('data-look', look);
     lookButtons.forEach((b) => {
-      b.classList.toggle('is-active', b.getAttribute('data-set-look') === look);
+      const active = b.getAttribute('data-set-look') === look;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-pressed', String(active));
     });
     menuItems.forEach((item) => {
       item.setAttribute('selected', item.getAttribute('data-popover-action') === look ? 'true' : 'false');
@@ -25,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('toggle-theme')?.addEventListener('click', () => {
     const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     root.setAttribute('data-theme', next);
+    document.getElementById('toggle-theme')?.setAttribute('aria-pressed', String(next === 'dark'));
   });
 
   const wireLayer = (openBtnId, layerEl, closeBtnId, toggle = false) => {
