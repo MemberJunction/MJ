@@ -750,6 +750,10 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       expect(mockState.runActionCalls[0].params.find((p) => p.Name === 'Prompt')?.Value).toBe(
         'Sleek chili mascot badge'
       );
+      expect(mockState.runActionCalls[0].params.find((p) => p.Name === 'NumberOfImages')?.Value).toBe('1');
+      for (const param of mockState.runActionCalls[0].params) {
+        expect(typeof param.Value).toBe('string');
+      }
       expect(mockState.runActionCalls[0].params.find((p) => p.Name === 'SourceImage')).toBeUndefined();
       // Downscaled to 128x128 WebP data URI
       expect(drawImageSpy).toHaveBeenCalledWith(expect.anything(), 0, 0, 1024, 1024, 0, 0, 128, 128);

@@ -23013,6 +23013,16 @@ The context is now within limits. Please retry your request with the recovered c
             this.logStatus('📋 No feedback request raised: the run has an audience, so it is answered in the conversation, not resumed', true, params);
             return;
         }
+        const isInteractiveConversation = Boolean(
+            params.conversationDetailId ||
+            this._agentRun?.ConversationDetailID ||
+            this._agentRun?.ConversationID
+        );
+        const hasStructuredGate = Boolean(decision.responseForm) || String(decision.step) === 'Plan';
+        if (isInteractiveConversation && !hasStructuredGate) {
+            this.logStatus('📋 No feedback request raised: interactive conversation Chat turn without structured responseForm or Plan gate', true, params);
+            return;
+        }
         await this.createFeedbackRequest(params, stepEntity, decision);
     }
 

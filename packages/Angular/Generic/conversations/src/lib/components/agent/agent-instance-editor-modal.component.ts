@@ -1041,7 +1041,7 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
       const actionId = await this.resolveGenerateImageActionId();
       const params: RunActionParamsList = [
         { Name: 'Prompt', Value: prompt, Type: 'Input' },
-        { Name: 'NumberOfImages', Value: 1, Type: 'Input' },
+        { Name: 'NumberOfImages', Value: '1', Type: 'Input' },
         { Name: 'Size', Value: '1024x1024', Type: 'Input' },
         { Name: 'OutputFormat', Value: 'base64', Type: 'Input' },
       ];
