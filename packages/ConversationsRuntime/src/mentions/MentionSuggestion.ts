@@ -37,6 +37,21 @@ export interface MentionSuggestionPreset {
 }
 
 /**
+ * Population filter narrowing which categories of `@` suggestions are returned.
+ */
+export type MentionPopulationFilter = 'all' | 'my-agents' | 'shared' | 'people';
+
+/**
+ * Field scope restricting which fields a non-empty `@` search query matches against.
+ */
+export type MentionSearchField = 'all' | 'name' | 'capabilities' | 'lineage';
+
+/**
+ * Display section grouping key assigned to `@` mention suggestions.
+ */
+export type MentionGroupKey = 'frequent' | 'my-agents' | 'shared' | 'people' | 'results';
+
+/**
  * One item in a mention-autocomplete list, and the payload an inserted mention carries.
  *
  * `type` is an open string so a host can add its own vocabulary; the shipped producers use
@@ -64,6 +79,20 @@ export interface MentionSuggestion {
     presets?: MentionSuggestionPreset[];
     /** Producer-defined extra payload; renderers never inspect it. */
     data?: Record<string, unknown>;
+    /** Section key used to group suggestions in the dropdown. */
+    group?: MentionGroupKey;
+    /** Human-readable section heading corresponding to {@link group}. */
+    groupLabel?: string;
+    /** Provenance / inheritance label (e.g. `'Chief of Staff · My Agent'`, `'Shared'`). */
+    lineage?: string;
+    /** True when this suggestion is a personal derived agent instance owned by the current user. */
+    isMyAgent?: boolean;
+    /** True when this suggestion matches the user's default chat agent. */
+    isDefaultChatAgent?: boolean;
+    /** True when this suggestion is already active in the current conversation thread. */
+    isInCurrentThread?: boolean;
+    /** Decayed frequency + recency score for this item. */
+    frecencyScore?: number;
 }
 
 /**
@@ -92,4 +121,12 @@ export interface MentionSuggestionScope {
      * only the current user). Null or omitted keeps the engine's list.
      */
     People?: readonly MentionPerson[] | null;
+    /** Restricts suggestions to a specific population slice (`'all'` by default). */
+    PopulationFilter?: MentionPopulationFilter;
+    /** Restricts query matching to a specific field set (`'all'` by default). */
+    SearchField?: MentionSearchField;
+    /** Agent IDs already participating in the active thread (boosted in ranking & Frequent group). */
+    InThreadAgentIDs?: readonly string[];
+    /** Current user's preferred default chat agent ID (boosted in ranking & Frequent group). */
+    DefaultChatAgentID?: string | null;
 }

@@ -1,6 +1,6 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal, RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
@@ -10,12 +10,13 @@ import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './com
 import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest, ExportArtifactLinkTarget } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
-import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { ComposeEmailCommand, MJAIAgentEntityExtended, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import type { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { firstValueFrom, Subject, takeUntil } from 'rxjs';
+import { debounceTime, filter } from 'rxjs/operators';
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -84,6 +85,7 @@ import { firstValueFrom, Subject, takeUntil } from 'rxjs';
               [currentUser]="currentUser"
               [conversationId]="selectedConversationId"
               [conversation]="selectedConversation"
+              [DefaultAgentId]="DefaultChatAgentId"
               [AccessDeniedMessage]="ConversationAccessDeniedMessage"
               [isNewConversation]="isNewUnsavedConversation"
               [pendingMessage]="pendingMessageToSend"
@@ -505,7 +507,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // User Settings persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
+  private readonly USER_SETTING_DEFAULT_CHAT_AGENT_KEY = 'chat.defaultAgentId';
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  /** Per-user preferred default chat agent ID from `UserInfoEngine` (`chat.defaultAgentId`), or null for stock Sage default. */
+  public DefaultChatAgentId: string | null = null;
 
   private engine = ConversationEngine.Instance;
 
@@ -582,6 +588,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Notify the bridge that the workspace is active
     this.bridge.NotifyWorkspaceActive(true);
 
+    // React live when user changes their Default Chat Agent in My Agents (or archives an agent)
+    this.subscribeToDefaultChatAgentChanges();
+
     // Enable URL updates after initialization
     this.skipUrlUpdate = false;
 
@@ -622,14 +631,18 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private async initializeEngines(): Promise<void> {
     try {
       const currentUser = this.CurrentUser;
-      // Initialize AIEngine, conversations, and mention service in parallel
+      // Initialize AIEngine, UserInfoEngine, conversations, and mention service in parallel
       await Promise.all([
         AIEngineBase.Instance.Config(false),
+        UserInfoEngine.Instance.Config(false),
         ...(currentUser ? [
           this.engine.LoadConversations(this.EnvironmentId, currentUser, false),
           this.mentionAutocompleteService.initialize(currentUser)
         ] : [])
       ]);
+
+      // Resolve user's preferred Default Chat Agent (falls back to null -> Sage)
+      this.refreshDefaultChatAgentId();
 
       // Restore active tasks AFTER conversations are cached (uses in-memory lookup)
       if (currentUser) {
@@ -645,6 +658,90 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       this.IsReady = true;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Resolves the user's preferred Default Chat Agent ID from `UserInfoEngine` (`chat.defaultAgentId`),
+   * validating that it points to an active, runnable top-level agent in `AIEngineBase`.
+   * Returns `null` when unset or invalid so the default `Sage` routing applies.
+   */
+  private resolveDefaultChatAgentId(explicitRawValue?: string | null): string | null {
+    const raw = (
+      explicitRawValue !== undefined
+        ? explicitRawValue
+        : UserInfoEngine.Instance.GetSetting(this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY)
+    )?.trim() ?? '';
+    if (!raw || !IsValidUUID(raw)) {
+      return null;
+    }
+    const aiEngine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
+    const agent = aiEngine.GetAgentByID(raw);
+    if (!agent || agent.Status !== 'Active' || agent.ParentID != null || agent.InstantiationMode === 'Required') {
+      return null;
+    }
+    const user = this.CurrentUser ?? this.ProviderToUse.CurrentUser;
+    if (user && !aiEngine.CanUserRunAgentSync(agent, user)) {
+      return null;
+    }
+    return agent.ID;
+  }
+
+  private refreshDefaultChatAgentId(explicitRawValue?: string | null): void {
+    const nextId = this.resolveDefaultChatAgentId(explicitRawValue);
+    if (nextId !== this.DefaultChatAgentId) {
+      this.DefaultChatAgentId = nextId;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Listens for BaseEntity save/delete/remote-invalidate events on `MJ: User Settings`
+   * (specifically `chat.defaultAgentId`) and `MJ: AI Agents` / `MJ: AI Agent Permissions`
+   * so updating Default Chat Agent in the My Agents app updates open Chat tabs live.
+   */
+  private subscribeToDefaultChatAgentChanges(): void {
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(
+        filter((event: MJEvent) => {
+          if (
+            event.event !== MJEventType.ComponentEvent ||
+            event.eventCode !== BaseEntity.BaseEventCode ||
+            !event.args
+          ) {
+            return false;
+          }
+          const args = event.args as BaseEntityEvent;
+          const entityName =
+            args.type === 'remote-invalidate'
+              ? args.entityName
+              : args.baseEntity?.EntityInfo?.Name;
+          const norm = entityName?.trim().toLowerCase() ?? '';
+          if (norm === 'mj: user settings') {
+            if (args.type === 'remote-invalidate') {
+              return true;
+            }
+            const settingEntity = args.baseEntity as MJUserSettingEntity | null | undefined;
+            return settingEntity?.Setting === this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY;
+          }
+          return norm === 'mj: ai agents' || norm === 'mj: ai agent permissions';
+        }),
+        debounceTime(75),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((event: MJEvent) => {
+        const args = event.args as BaseEntityEvent;
+        if (args.type === 'save' || args.type === 'delete') {
+          const entityName = args.baseEntity?.EntityInfo?.Name?.trim().toLowerCase() ?? '';
+          if (entityName === 'mj: user settings') {
+            const settingEntity = args.baseEntity as MJUserSettingEntity;
+            if (settingEntity.Setting === this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY) {
+              this.refreshDefaultChatAgentId(args.type === 'delete' ? null : (settingEntity.Value ?? null));
+              return;
+            }
+          }
+        }
+        this.refreshDefaultChatAgentId();
+      });
   }
 
   /**
@@ -1321,6 +1418,111 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /** @deprecated Use {@link OnNewConversationRequested}. */
   onNewConversationRequested(): void {
     return this.OnNewConversationRequested();
+  }
+
+  /**
+   * Opens the user's most recent active conversation already pinned to this personal agent
+   * instance, or creates a new conversation pinned to it when none exists yet.
+   */
+  async OnStartChatWithAgent(agent: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const existing = this.engine.Conversations
+      .filter(
+        (c) =>
+          !c.IsArchived &&
+          c.DefaultAgentID != null &&
+          UUIDsEqual(c.DefaultAgentID, agent.ID)
+      )
+      .sort((a, b) => {
+        const tA = new Date(a.__mj_UpdatedAt ?? a.__mj_CreatedAt ?? 0).getTime();
+        const tB = new Date(b.__mj_UpdatedAt ?? b.__mj_CreatedAt ?? 0).getTime();
+        return tB - tA;
+      })[0];
+
+    if (existing) {
+      await this.OnConversationSelected(existing.ID);
+      return;
+    }
+
+    await this.OnStartNewChatWithAgent(agent);
+  }
+
+  /**
+   * Explicitly creates a brand-new conversation pinned to a personal agent instance
+   * (triggered by the hover '+' action in My Agents or when no existing thread exists).
+   */
+  async OnStartNewChatWithAgent(agent: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const conversation = await this.engine.CreateConversation(
+      `Chat with ${agent.Name}`,
+      this.EnvironmentId,
+      this.CurrentUser,
+      undefined,
+      undefined,
+      { defaultAgentId: agent.ID }
+    );
+    if (!conversation) {
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Could not start a conversation with ${agent.Name}.`,
+        'error',
+        4000
+      );
+      return;
+    }
+    this.PendingMessageToSend = null;
+    this.PendingAttachmentsToSend = null;
+    this.SelectedConversationId = conversation.ID;
+    this.SelectedConversation = conversation;
+    this.IsNewUnsavedConversation = false;
+    this.bridge.SetActiveFromWorkspace(conversation.ID);
+    this.updateUrl();
+    this.NotifyDisplayNameChanged(conversation.Name || `Chat with ${agent.Name}`);
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Starts a guided conversational onboarding chat pinned to an instantiable template agent
+   * (e.g., Chief of Staff) so the agent walks the user through minting their personal instance.
+   */
+  async OnStartOnboardingWithTemplate(template: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const conversation = await this.engine.CreateConversation(
+      `Set up My ${template.Name}`,
+      this.EnvironmentId,
+      this.CurrentUser,
+      undefined,
+      undefined,
+      { defaultAgentId: template.ID }
+    );
+    if (!conversation) {
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Could not start onboarding with ${template.Name}.`,
+        'error',
+        4000
+      );
+      return;
+    }
+    this.PendingMessageToSend = `Hi! Help me personalize and set up my own ${template.Name}.`;
+    this.PendingAttachmentsToSend = null;
+    this.SelectedConversationId = conversation.ID;
+    this.SelectedConversation = conversation;
+    this.IsNewUnsavedConversation = false;
+    this.bridge.SetActiveFromWorkspace(conversation.ID);
+    this.updateUrl();
+    this.NotifyDisplayNameChanged(conversation.Name || `Set up My ${template.Name}`);
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
+    }
+    this.cdr.detectChanges();
   }
 
   /**
