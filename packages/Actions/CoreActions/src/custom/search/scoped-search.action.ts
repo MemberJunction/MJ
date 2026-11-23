@@ -8,10 +8,12 @@ import {
     SearchAudience,
     SearchResult,
     SearchResultItem,
+    SearchResultScopeAttribution,
     SearchStreamEvent,
     GetSearchScopePermissionResolver,
     EffectivePermission
 } from "@memberjunction/search-engine";
+import { NormalizeScopedSearchQuery } from "./search-query.util";
 import {
     SearchEngineBase,
     MJAIAgentEntity,
@@ -40,6 +42,9 @@ interface FormattedSearchResult {
     RecordName?: string;
     MatchedAt: string;
     RawMetadata?: string;
+    OriginatingScopeID?: string;
+    OriginatingScopeName?: string;
+    OriginatingScopes?: SearchResultScopeAttribution[];
 }
 
 /**
@@ -240,7 +245,8 @@ export class ScopedSearchAction extends BaseAction {
         | { ok: true; query: string; agent: MJAIAgentEntity }
         | { ok: false; result: ActionResultSimple }
     > {
-        const query = this.getStringParam(params, "query");
+        const rawQuery = this.getStringParam(params, "query");
+        const query = rawQuery ? NormalizeScopedSearchQuery(rawQuery) : undefined;
         if (!query) {
             return { ok: false, result: this.createErrorResult("Query parameter is required", "MISSING_QUERY") };
         }
@@ -1129,7 +1135,10 @@ export class ScopedSearchAction extends BaseAction {
             MatchedAt: item.MatchedAt instanceof Date
                 ? item.MatchedAt.toISOString()
                 : String(item.MatchedAt),
-            RawMetadata: item.RawMetadata
+            RawMetadata: item.RawMetadata,
+            ...(item.OriginatingScopeID !== undefined ? { OriginatingScopeID: item.OriginatingScopeID } : {}),
+            ...(item.OriginatingScopeName !== undefined ? { OriginatingScopeName: item.OriginatingScopeName } : {}),
+            ...(item.OriginatingScopes !== undefined ? { OriginatingScopes: item.OriginatingScopes } : {}),
         }));
     }
 
