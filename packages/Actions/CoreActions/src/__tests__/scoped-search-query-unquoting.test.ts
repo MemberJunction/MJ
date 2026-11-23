@@ -150,6 +150,17 @@ describe('NormalizeScopedSearchQuery', () => {
         expect(NormalizeScopedSearchQuery('C:\\Docs\\Q3')).toBe('C:\\Docs\\Q3');
     });
 
+    it('processes long repeated-backslash inputs in linear time without polynomial backtracking', () => {
+        const backslashes = '\\'.repeat(50_000);
+        const start = performance.now();
+        expect(NormalizeScopedSearchQuery(`${backslashes}alpha`)).toBe(`${backslashes}alpha`);
+        expect(NormalizeScopedSearchQuery(`${backslashes}"quoted"`)).toBe('quoted');
+        expect(NormalizeScopedSearchQuery(`${backslashes}'single quoted'`)).toBe('single quoted');
+        expect(NormalizeScopedSearchQuery(`${backslashes}`)).toBe(backslashes);
+        const elapsedMs = performance.now() - start;
+        expect(elapsedMs).toBeLessThan(100);
+    });
+
     it('reduces empty or whitespace-only quotes to empty string', () => {
         expect(NormalizeScopedSearchQuery('')).toBe('');
         expect(NormalizeScopedSearchQuery('   ')).toBe('');

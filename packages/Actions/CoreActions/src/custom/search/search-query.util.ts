@@ -45,9 +45,43 @@ export function NormalizeScopedSearchQuery(rawQuery: string): string {
 
 /**
  * Unescape backslash-escaped quote marks (`\"`, `\'`, etc.) without altering non-quote backslashes.
+ * Uses a single-pass O(n) scan so repeated backslashes never trigger polynomial regex backtracking.
  */
 function unescapeQuotedCharacters(input: string): string {
-    return input.replace(/\\+(["'“”‘’])/g, '$1');
+    if (!input.includes('\\')) return input;
+
+    const parts: string[] = [];
+    let chunkStart = 0;
+    let i = 0;
+
+    while (i < input.length) {
+        if (input[i] !== '\\') {
+            i++;
+            continue;
+        }
+
+        let runEnd = i + 1;
+        while (runEnd < input.length && input[runEnd] === '\\') {
+            runEnd++;
+        }
+
+        if (runEnd < input.length && ALL_QUOTE_CHARS.has(input[runEnd])) {
+            if (i > chunkStart) {
+                parts.push(input.slice(chunkStart, i));
+            }
+            parts.push(input[runEnd]);
+            chunkStart = runEnd + 1;
+            i = runEnd + 1;
+        } else {
+            i = runEnd;
+        }
+    }
+
+    if (chunkStart === 0) return input;
+    if (chunkStart < input.length) {
+        parts.push(input.slice(chunkStart));
+    }
+    return parts.join('');
 }
 
 /**
