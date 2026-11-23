@@ -9,12 +9,12 @@ import { readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
-import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
+import { ParseAndValidateManifest, ParseManifestDependencies } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type ManifestFetchResult, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation, type SchemaOperationResult, type ValidateSchemaNameOptions } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
@@ -1645,7 +1645,16 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     if (app.Status !== 'Active' && app.Status !== 'Disabled') {
       continue;
     }
-    installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL, Dependencies: ReadInstalledDependencies(app, context) };
+    // The app being upgraded: its new manifest is the graph's root, and its record is about to be replaced.
+    if (app.Name === manifest.name) {
+      continue;
+    }
+    installedMap[app.Name] = {
+      Version: app.Version,
+      Repository: app.RepositoryURL,
+      Subpath: app.Subpath,
+      Dependencies: ReadInstalledDependencies(app, context),
+    };
   }
 
   // Zod infers object variant fields as optional; DependencyValue requires them.
@@ -1663,6 +1672,9 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     BuildManifestFetcher(context),
     (repoUrl, versionRange) => ResolveDependencyVersion(repoUrl, versionRange, context.GitHubOptions),
   );
+  for (const warning of result.Warnings ?? []) {
+    context.Callbacks?.OnWarn?.('Dependencies', warning);
+  }
   if (!result.Success) {
     return { Success: false, ErrorMessage: result.ErrorMessage };
   }
@@ -1677,22 +1689,18 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 /**
  * What an installed app depends on, read from its persisted `ManifestJSON` (the documented source
  * of truth, saved in the same write as `Version`). Returns undefined, after a warning, when that
- * manifest cannot be parsed: the graph then reads the installed version's manifest from the app's
- * repository.
+ * cannot be read: the graph then reads the installed version's manifest from the app's repository.
  */
 function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorContext): Record<string, DependencyValue> | undefined {
-  let dependencies: MJAppManifest['dependencies'];
-  try {
-    dependencies = (JSON.parse(app.ManifestJSON) as MJAppManifest).dependencies;
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+  const recorded = ParseManifestDependencies(app.ManifestJSON);
+  if (!recorded.Success || !recorded.Dependencies) {
     context.Callbacks?.OnWarn?.(
       'Dependencies',
-      `Could not parse the recorded manifest of installed app '${app.Name}' (${message}). If this operation needs its dependencies, they are read from ${app.RepositoryURL} at version ${app.Version}.`,
+      `Could not read the recorded dependencies of installed app '${app.Name}' (${recorded.Errors?.join(', ')}). If this operation needs them, they are read from ${app.RepositoryURL} at version ${app.Version}.`,
     );
     return undefined;
   }
-  return (dependencies ?? {}) as Record<string, DependencyValue>;
+  return recorded.Dependencies as Record<string, DependencyValue>;
 }
 
 /**
@@ -1701,8 +1709,8 @@ function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorC
  * builder to walk transitive deps.
  */
 function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
-  return async (repoUrl: string, subpath?: string, version?: string) => {
-    const fetched = await FetchManifestFromGitHub(repoUrl, version, context.GitHubOptions, subpath);
+  return async (repoUrl: string, subpath?: string, version?: string, appName?: string) => {
+    const fetched = await FetchDependencyManifest(repoUrl, version, context.GitHubOptions, subpath, appName);
     if (!fetched.Success || !fetched.ManifestJSON) {
       return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
     }
@@ -1720,6 +1728,25 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
       },
     };
   };
+}
+
+/**
+ * Fetches a dependency's manifest. A read that throws (a rate limit while it looks for a version
+ * tag) is a failed fetch: thrown out of {@link UpgradeApp} it would mark the app being upgraded as
+ * `Error`, although nothing has changed yet.
+ */
+async function FetchDependencyManifest(
+  repoUrl: string,
+  version: string | undefined,
+  gitHubOptions: GitHubClientOptions,
+  subpath?: string,
+  appName?: string,
+): Promise<ManifestFetchResult> {
+  try {
+    return await FetchManifestFromGitHub(repoUrl, version, gitHubOptions, subpath, appName);
+  } catch (error: unknown) {
+    return { Success: false, ErrorMessage: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /**
