@@ -62,23 +62,6 @@
     </mj-page-header>
 
     <mj-page-body>
-        @if (FeedbackBanner) {
-            <div class="cos-banner"
-                 [class.cos-banner--success]="FeedbackBanner.Type === 'success'"
-                 [class.cos-banner--error]="FeedbackBanner.Type === 'error'"
-                 role="status">
-                <div class="cos-banner__content">
-                    <i class="fa-solid"
-                       [class.fa-circle-check]="FeedbackBanner.Type === 'success'"
-                       [class.fa-circle-exclamation]="FeedbackBanner.Type === 'error'"></i>
-                    <span>{{ FeedbackBanner.Message }}</span>
-                </div>
-                <button mjButton variant="flat" size="sm" type="button" (click)="DismissBanner()" aria-label="Dismiss notification">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-        }
-
         @if (IsLoading) {
             <div class="cos-loading">
                 <mj-loading text="Loading your agents, approvals, and wakes..."></mj-loading>

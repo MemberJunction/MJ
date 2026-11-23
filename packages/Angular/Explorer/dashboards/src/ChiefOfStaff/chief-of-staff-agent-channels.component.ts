@@ -58,6 +58,8 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
     public ReplyDraft = '';
     public ChannelErrorMessage: string | null = null;
     public ChannelStatusMessage: string | null = null;
+    /** On mobile/tablet (<= 900px), toggles between the full-width Thread List and the Thread Detail pane. */
+    public MobileShowingDetail = false;
 
     /** User's personal agents that appear as participants in any loaded channel (or owned instances). */
     public get AgentFilterOptions(): ReadonlyArray<{ ID: string; Name: string }> {
@@ -184,7 +186,7 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
                     this.SelectedMessages = [];
                 }
             } else if (this.Channels.length > 0) {
-                await this.SelectChannel(this.Channels[0]);
+                await this.SelectChannel(this.Channels[0], false);
             }
         } catch (error) {
             this.ChannelErrorMessage =
@@ -196,13 +198,21 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
         }
     }
 
-    public async SelectChannel(channel: MJAgentChannelEntity): Promise<void> {
+    public async SelectChannel(channel: MJAgentChannelEntity, openMobileDetail: boolean = true): Promise<void> {
         this.SelectedChannel = channel;
         this.ReplyDraft = '';
         this.ChannelStatusMessage = null;
+        if (openMobileDetail) {
+            this.MobileShowingDetail = true;
+        }
         this.cdr.markForCheck();
         await this.LoadMessagesForChannel(channel.ID);
         this.publishAgentContext();
+    }
+
+    public ShowMobileThreadList(): void {
+        this.MobileShowingDetail = false;
+        this.cdr.markForCheck();
     }
 
     public DismissChannelStatusMessage(): void {
@@ -281,12 +291,15 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
 
             this.ReplyDraft = '';
             await this.LoadChannels();
-            this.ChannelStatusMessage = wasPaused
+            const successMsg = wasPaused
                 ? 'Reply posted. Channel resumed to Open and participant agents have been notified.'
                 : 'Reply posted and participant agents have been notified.';
+            this.ChannelStatusMessage = successMsg;
+            this.showBanner('success', successMsg);
         } catch (error) {
-            this.ChannelErrorMessage =
-                error instanceof Error ? error.message : 'Failed to post reply.';
+            const errMsg = error instanceof Error ? error.message : 'Failed to post reply.';
+            this.ChannelErrorMessage = errMsg;
+            this.showBanner('error', errMsg);
         } finally {
             this.IsPostingReply = false;
             this.cdr.markForCheck();
@@ -313,10 +326,13 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
                 );
             }
             await this.LoadChannels();
-            this.ChannelStatusMessage = 'Agent Channel marked as Resolved.';
+            const resolvedMsg = 'Agent Channel marked as Resolved.';
+            this.ChannelStatusMessage = resolvedMsg;
+            this.showBanner('success', resolvedMsg);
         } catch (error) {
-            this.ChannelErrorMessage =
-                error instanceof Error ? error.message : 'Failed to resolve Agent Channel.';
+            const errMsg = error instanceof Error ? error.message : 'Failed to resolve Agent Channel.';
+            this.ChannelErrorMessage = errMsg;
+            this.showBanner('error', errMsg);
         } finally {
             this.IsPostingReply = false;
             this.cdr.markForCheck();

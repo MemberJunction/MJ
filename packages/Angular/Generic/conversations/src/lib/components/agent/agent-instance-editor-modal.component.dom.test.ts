@@ -15,10 +15,14 @@ import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 const COS_ID = '11111111-0000-4000-8000-000000000001';
 const RESEARCH_ID = '11111111-0000-4000-8000-000000000002';
 const PEPPER_ID = '11111111-0000-4000-8000-000000000003';
+const SALES_DEPT_ID = '11111111-0000-4000-8000-000000000004';
 const AGENT_TYPE_ID = '33333333-0000-4000-8000-000000000001';
 const SAGE_PERSONA_ID = '44444444-0000-4000-8000-000000000001';
 const ONYX_PERSONA_ID = '44444444-0000-4000-8000-000000000002';
+const CORAL_PERSONA_ID = '44444444-0000-4000-8000-000000000003';
+const VERSE_PERSONA_ID = '44444444-0000-4000-8000-000000000004';
 const ALICE_ID = '22222222-0000-4000-8000-000000000001';
+const GENERATE_IMAGE_ACTION_ID = '048FF309-C2CD-44D8-8A8E-8C771ADA8284';
 
 interface StubAgent {
   ID: string;
@@ -50,6 +54,20 @@ interface StubResolvedPersona {
   SpeakingStyle: string | null;
 }
 
+interface CapturedRunActionCall {
+  actionId: string;
+  params: Array<{ Name: string; Value: string | number | boolean | object | null; Type: string }>;
+}
+
+interface MockActionResult {
+  Success: boolean;
+  Message: string;
+  Result: object | null;
+  LogEntry: null;
+  Params: Array<{ Name: string; Value: string | number | boolean | object | null; Type: string }>;
+  RunParams: null;
+}
+
 const mockState = {
   instantiable: [] as StubAgent[],
   derived: [] as StubAgent[],
@@ -69,6 +87,9 @@ const mockState = {
     DisplayNameOverride: string | null;
     CoordinationMode: MJAIAgentUserPolicyEntity['CoordinationMode'];
   }>,
+  runActionCalls: [] as CapturedRunActionCall[],
+  runActionQueue: [] as MockActionResult[],
+  notifications: [] as Array<{ message: string; style: string; duration?: number }>,
 };
 
 const mockEngine = {
@@ -132,13 +153,54 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
   };
 });
 
+vi.mock('@memberjunction/graphql-dataprovider', () => ({
+  GraphQLDataProvider: class {},
+  GraphQLActionClient: class {
+    public async RunAction(
+      actionId: string,
+      params?: Array<{ Name: string; Value: string | number | boolean | object | null; Type: string }>
+    ): Promise<MockActionResult> {
+      mockState.runActionCalls.push({ actionId, params: params ?? [] });
+      const next = mockState.runActionQueue.shift();
+      if (next) {
+        return next;
+      }
+      return {
+        Success: true,
+        Message: 'OK',
+        Result: [],
+        LogEntry: null,
+        Params: params ?? [],
+        RunParams: null,
+      };
+    }
+  },
+}));
+
+vi.mock('@memberjunction/ng-notifications', () => ({
+  MJNotificationService: {
+    get Instance() {
+      return {
+        CreateSimpleNotification: vi.fn((message: string, style: string, duration?: number) => {
+          mockState.notifications.push({ message, style, duration });
+        }),
+      };
+    },
+  },
+}));
+
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
   return {
     ...actual,
     RunView: {
       FromMetadataProvider: () => ({
-        RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+        RunView: vi.fn(async (params: { EntityName?: string }) => {
+          if (params?.EntityName === 'MJ: Actions') {
+            return { Success: true, Results: [{ ID: GENERATE_IMAGE_ACTION_ID }] };
+          }
+          return { Success: true, Results: [] };
+        }),
       }),
     },
   };
@@ -148,7 +210,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
   standalone: false,
   selector: 'mj-dialog',
   template: `
-    <div class="stub-dialog">
+    <div class="stub-dialog" [attr.data-width]="Width">
       <h2 class="stub-dialog-title">{{ Title }}</h2>
       <ng-content></ng-content>
     </div>
@@ -157,8 +219,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 class StubDialogComponent {
   @Input() Title = '';
   @Input() Visible = false;
-  @Input() Width = 680;
-  @Input() MinWidth = 360;
+  @Input() Width = 560;
+  @Input() MinWidth = 320;
   @Output() Close = new EventEmitter<void>();
 }
 
@@ -373,10 +435,26 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
     Status: 'Active',
   };
 
+  const salesDeptTemplate: StubAgent = {
+    ID: SALES_DEPT_ID,
+    Name: 'Sales Deal Desk',
+    Description: 'Shared departmental MEDDPICC deal desk specialist',
+    BaseAgentID: COS_ID,
+    OwnerUserID: null,
+    TypeID: AGENT_TYPE_ID,
+    InstantiationMode: 'Optional',
+    IsPrimaryInstance: false,
+    IconClass: 'fa-solid fa-briefcase',
+    LogoURL: null,
+    AdditionalInstructions: null,
+    TypeConfiguration: null,
+    Status: 'Active',
+  };
+
   const sagePersona: StubPersona = {
     ID: SAGE_PERSONA_ID,
     Name: 'Sage',
-    Description: 'Crisp warm voice',
+    Description: 'Thoughtful calm voice',
     IsActive: true,
     PreviewImageURL: null,
   };
@@ -389,22 +467,49 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
     PreviewImageURL: null,
   };
 
+  const coralPersona: StubPersona = {
+    ID: CORAL_PERSONA_ID,
+    Name: 'Coral',
+    Description: 'Friendly animated voice',
+    IsActive: true,
+    PreviewImageURL: null,
+  };
+
+  const versePersona: StubPersona = {
+    ID: VERSE_PERSONA_ID,
+    Name: 'Verse',
+    Description: 'Dynamic natural voice',
+    IsActive: true,
+    PreviewImageURL: null,
+  };
+
+  async function settle<T>(fixture: ReturnType<typeof renderComponentFixture<T>>): Promise<void> {
+    await fixture.whenStable();
+    await Promise.resolve();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
   beforeEach(() => {
-    mockState.instantiable = [cosTemplate, researchTemplate];
+    mockState.instantiable = [cosTemplate, researchTemplate, salesDeptTemplate];
     mockState.derived = [];
-    mockState.personas = [sagePersona, onyxPersona];
+    mockState.personas = [coralPersona, sagePersona, onyxPersona, versePersona];
     mockState.byId.clear();
     mockState.byId.set(COS_ID.toLowerCase(), cosTemplate);
     mockState.byId.set(RESEARCH_ID.toLowerCase(), researchTemplate);
+    mockState.byId.set(SALES_DEPT_ID.toLowerCase(), salesDeptTemplate);
     mockState.resolvedPersonaByAgentId.clear();
     mockState.resolvedPolicyMode = null;
     mockState.savedAgents = [];
     mockState.savedPersonas = [];
     mockState.savedPolicies = [];
+    mockState.runActionCalls = [];
+    mockState.runActionQueue = [];
+    mockState.notifications = [];
     vi.clearAllMocks();
   });
 
-  it('renders create mode with templates, suggestion chips, personality presets, Chat to Onboard, and saves derived instance', async () => {
+  it('renders progressive create mode with collapsed details, adaptive searchable template picker, vibe-to-voice pairing, and saves derived instance', async () => {
     const provider = buildStubProvider(alice);
     const fixture = renderComponentFixture(AgentInstanceEditorModalComponent, {
       imports: [CommonModule, FormsModule],
@@ -423,15 +528,19 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
         InitialBaseAgentId: COS_ID,
       },
     });
-    await fixture.whenStable();
-    await Promise.resolve();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Create Personal Chief of Staff');
-    expect(el.textContent).toContain('Chief of Staff');
-    expect(el.textContent).toContain('Research Agent');
+    expect(el.textContent).toContain('Based on: Chief of Staff');
+    expect(el.textContent).toContain('Change (3)');
+
+    // Progressive disclosure accordion starts collapsed in create mode with live summary pill
+    const disclosure = el.querySelector('details.aie-disclosure') as HTMLDetailsElement | null;
+    expect(disclosure).not.toBeNull();
+    expect(disclosure!.open).toBe(false);
+    expect(el.querySelector('.aie-disclosure-summary')?.textContent).toContain('Sage');
+    expect(el.querySelector('.aie-disclosure-summary')?.textContent).toContain('Coordinator');
 
     // Save is disabled until a name is provided
     const createBtn = Array.from(el.querySelectorAll('button')).find((b) =>
@@ -440,24 +549,51 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
     expect(createBtn).toBeDefined();
     expect(createBtn!.disabled).toBe(true);
 
-    // Clicking a template switches the selected base template and dialog title
-    const researchCard = Array.from(el.querySelectorAll('.aie-template-card')).find((b) =>
-      b.textContent?.includes('Research Agent')
+    // Open adaptive template picker, search & filter by category, then pick Research Agent
+    const tplToggle = el.querySelector('.aie-tpl-pill-btn') as HTMLButtonElement | null;
+    expect(tplToggle).not.toBeNull();
+    tplToggle!.click();
+    fixture.detectChanges();
+
+    expect(el.querySelectorAll('.aie-tpl-row').length).toBe(3);
+
+    // Category filter narrows to Shared Dept
+    const deptChip = Array.from(el.querySelectorAll('.aie-tpl-picker .aie-chip')).find(
+      (b) => b.textContent?.trim() === 'Shared Dept'
     ) as HTMLButtonElement | undefined;
-    expect(researchCard).toBeDefined();
-    researchCard!.click();
+    expect(deptChip).toBeDefined();
+    deptChip!.click();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('.aie-tpl-row').length).toBe(1);
+    expect(el.querySelector('.aie-tpl-row')?.textContent).toContain('Sales Deal Desk');
+
+    // Reset category to All and filter by search text
+    const allChip = Array.from(el.querySelectorAll('.aie-tpl-picker .aie-chip')).find(
+      (b) => b.textContent?.trim() === 'All'
+    ) as HTMLButtonElement | undefined;
+    allChip!.click();
+    fixture.componentInstance.TemplateSearchText = 'research';
+    fixture.detectChanges();
+    expect(el.querySelectorAll('.aie-tpl-row').length).toBe(1);
+
+    const researchRow = el.querySelector('.aie-tpl-row') as HTMLButtonElement;
+    researchRow.click();
     fixture.detectChanges();
     expect(fixture.componentInstance.SelectedBaseAgentId).toBe(RESEARCH_ID);
+    expect(fixture.componentInstance.TemplatePickerOpen).toBe(false);
     expect(el.textContent).toContain('Create Personal Research Agent');
 
-    // Switch back to Chief of Staff
-    const cosCard = Array.from(el.querySelectorAll('.aie-template-card')).find((b) =>
+    // Re-open picker and switch back to Chief of Staff
+    (el.querySelector('.aie-tpl-pill-btn') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const cosRow = Array.from(el.querySelectorAll('.aie-tpl-row')).find((b) =>
       b.textContent?.includes('Chief of Staff')
     ) as HTMLButtonElement | undefined;
-    cosCard!.click();
+    expect(cosRow).toBeDefined();
+    cosRow!.click();
     fixture.detectChanges();
 
-    // Clicking a suggestion chip populates Name and enables Save
+    // Clicking a suggestion chip populates Name, updates CTA label to "Create Pepper", and enables Save
     const pepperChip = Array.from(el.querySelectorAll('.aie-chip')).find(
       (b) => b.textContent?.trim() === 'Pepper'
     ) as HTMLButtonElement | undefined;
@@ -466,40 +602,236 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
     fixture.detectChanges();
     expect(fixture.componentInstance.InstanceName).toBe('Pepper');
     expect(createBtn!.disabled).toBe(false);
+    expect(createBtn!.textContent).toContain('Create Pepper');
 
-    // Clicking a personality preset populates Tone and SpeakingStyle
-    const presetChip = Array.from(el.querySelectorAll('.aie-chip')).find((b) =>
+    // Clicking a Personality Vibe card sets Tone, SpeakingStyle, AND selects matching cross-vendor Voice (Coral)
+    const wittyVibe = Array.from(el.querySelectorAll('.aie-vibe-card')).find((b) =>
       b.textContent?.includes('Touch Sarcastic & Funny')
     ) as HTMLButtonElement | undefined;
-    expect(presetChip).toBeDefined();
-    presetChip!.click();
+    expect(wittyVibe).toBeDefined();
+    wittyVibe!.click();
     fixture.detectChanges();
     expect(fixture.componentInstance.Tone).toBe('Direct, playful, a touch sarcastic and funny');
     expect(fixture.componentInstance.SpeakingStyle).toBe('Candid banter with dry wit and punchy bullets');
+    expect(fixture.componentInstance.SelectedPersonaId).toBe(CORAL_PERSONA_ID);
+    expect(el.querySelector('.aie-disclosure-summary')?.textContent).toContain('Coral');
 
-    // Saving persists AIAgent, AIAgentPersona (StyleOverrideObject), and AIAgentUserPolicy and emits Saved
+    // Saving persists AIAgent, AIAgentPersona (with Coral voice + StyleOverrideObject), and AIAgentUserPolicy
     const savedEvents: MJAIAgentEntityExtended[] = [];
     fixture.componentInstance.Saved.subscribe((a) => savedEvents.push(a));
     createBtn!.click();
-    await fixture.whenStable();
-    await Promise.resolve();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     expect(mockState.savedAgents).toHaveLength(1);
     expect(mockState.savedAgents[0].Name).toBe('Pepper');
     expect(mockState.savedAgents[0].BaseAgentID).toBe(COS_ID);
     expect(mockState.savedPersonas).toHaveLength(1);
+    expect(mockState.savedPersonas[0].PersonaID).toBe(CORAL_PERSONA_ID);
     expect(mockState.savedPersonas[0].StyleOverrideObject?.Tone).toBe(
       'Direct, playful, a touch sarcastic and funny'
     );
     expect(mockState.savedPolicies).toHaveLength(1);
     expect(mockState.savedPolicies[0].CoordinationMode).toBe('Coordinator');
-    // Must rely on AIEngineBase AutoRefresh instead of manual Config(true) reloads
     expect(mockEngine.Config).not.toHaveBeenCalledWith(true);
     expect(mockEngine.Config).not.toHaveBeenCalledWith(true, expect.anything());
     expect(mockEngine.Config).not.toHaveBeenCalledWith(true, expect.anything(), expect.anything());
     expect(savedEvents.map((a) => a.Name)).toEqual(['Pepper']);
+  });
+
+  it('generates, iteratively refines, undoes, and gracefully handles errors in the inline AI Avatar Studio', async () => {
+    const provider = buildStubProvider(alice);
+    const fixture = renderComponentFixture(AgentInstanceEditorModalComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: [
+        AgentInstanceEditorModalComponent,
+        StubDialogComponent,
+        StubDialogActionsComponent,
+        StubLoadingComponent,
+        StubAlertComponent,
+      ],
+      inputs: {
+        Provider: provider,
+        CurrentUser: alice,
+        Visible: true,
+        Mode: 'create',
+        InitialBaseAgentId: COS_ID,
+      },
+    });
+    await settle(fixture);
+
+    const el = fixture.nativeElement as HTMLElement;
+    const comp = fixture.componentInstance;
+
+    // Mock 128x128 canvas + Image decoding so the true WebP downscale path executes deterministically in jsdom
+    const drawImageSpy = vi.fn();
+    const clearRectSpy = vi.fn();
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockImplementation(() => ({
+        clearRect: clearRectSpy,
+        drawImage: drawImageSpy,
+      }) as Partial<CanvasRenderingContext2D> as CanvasRenderingContext2D);
+    const toDataUrlSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockImplementation((type?: string) =>
+        type === 'image/webp'
+          ? `data:image/webp;base64,d2VicC1hdmF0YXItMTI4-${mockState.runActionCalls.length}`
+          : 'data:image/png;base64,cG5nLXNvdXJjZQ=='
+      );
+    const OriginalImage = globalThis.Image;
+    class MockImage {
+      public naturalWidth = 1024;
+      public naturalHeight = 1024;
+      public width = 1024;
+      public height = 1024;
+      public crossOrigin: string | null = null;
+      public onload: (() => void) | null = null;
+      public onerror: (() => void) | null = null;
+      private _src = '';
+      public get src(): string {
+        return this._src;
+      }
+      public set src(value: string) {
+        this._src = value;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal('Image', MockImage);
+
+    try {
+      // 1. Clicking the 68x68 avatar button opens the Avatar Studio
+      expect(el.querySelector('.aie-avatar-studio')).toBeNull();
+      (el.querySelector('.aie-avatar-trigger') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(el.querySelector('.aie-avatar-studio')).not.toBeNull();
+
+      // 2. Generate Avatar via Generate Image action (ActionParam[] ResultData shape)
+      mockState.runActionQueue.push({
+        Success: true,
+        Message: 'Generated',
+        Result: [
+          {
+            Name: 'Images',
+            Type: 'Output',
+            Value: [
+              {
+                modality: 'Image',
+                mimeType: 'image/png',
+                data: 'Zmlyc3QtYXZhdGFyLXBuZw==',
+              },
+            ],
+          },
+        ],
+        LogEntry: null,
+        Params: [],
+        RunParams: null,
+      });
+
+      const nameInput = el.querySelector('#aie-instance-name') as HTMLInputElement;
+      nameInput.value = 'Pepper';
+      nameInput.dispatchEvent(new Event('input'));
+
+      const promptInput = el.querySelector(
+        '.aie-studio-pane .aie-studio-prompt-row input'
+      ) as HTMLInputElement;
+      promptInput.value = 'Sleek chili mascot badge';
+      promptInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const genBtn = Array.from(el.querySelectorAll('.aie-studio-pane .aie-studio-prompt-row button')).find((b) =>
+        b.textContent?.includes('Generate')
+      ) as HTMLButtonElement | undefined;
+      expect(genBtn).toBeDefined();
+      genBtn!.click();
+      await settle(fixture);
+
+      expect(mockState.runActionCalls).toHaveLength(1);
+      expect(mockState.runActionCalls[0].actionId).toBe(GENERATE_IMAGE_ACTION_ID);
+      expect(mockState.runActionCalls[0].params.find((p) => p.Name === 'Prompt')?.Value).toBe(
+        'Sleek chili mascot badge'
+      );
+      expect(mockState.runActionCalls[0].params.find((p) => p.Name === 'SourceImage')).toBeUndefined();
+      // Downscaled to 128x128 WebP data URI
+      expect(drawImageSpy).toHaveBeenCalledWith(expect.anything(), 0, 0, 1024, 1024, 0, 0, 128, 128);
+      expect(comp.LogoURL).toBe('data:image/webp;base64,d2VicC1hdmF0YXItMTI4-1');
+      expect(el.querySelector('.aie-refine-box')).not.toBeNull();
+
+      // 3. Iterative AI Refinement passes BOTH Prompt AND raw base64 SourceImage ({ Params: [...] } shape)
+      mockState.runActionQueue.push({
+        Success: true,
+        Message: 'Edited',
+        Result: {
+          Params: [
+            {
+              Name: 'Images',
+              Type: 'Output',
+              Value: [
+                {
+                  modality: 'Image',
+                  mimeType: 'image/png',
+                  data: 'cmVmaW5lZC1hdmF0YXItcG5n',
+                },
+              ],
+            },
+          ],
+        },
+        LogEntry: null,
+        Params: [],
+        RunParams: null,
+      });
+
+      const refineInput = el.querySelector('#aie-avatar-refine-input') as HTMLInputElement;
+      expect(refineInput).not.toBeNull();
+      refineInput.value = 'Add glasses and teal background';
+      refineInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const refineBtn = Array.from(el.querySelectorAll('.aie-refine-box button')).find((b) =>
+        b.textContent?.includes('Refine')
+      ) as HTMLButtonElement | undefined;
+      expect(refineBtn).toBeDefined();
+      expect(refineBtn!.disabled).toBe(false);
+      refineBtn!.click();
+      await settle(fixture);
+
+      expect(mockState.runActionCalls).toHaveLength(2);
+      const editParams = mockState.runActionCalls[1].params;
+      expect(editParams.find((p) => p.Name === 'Prompt')?.Value).toBe('Add glasses and teal background');
+      // Must pass raw base64 without data:image/...;base64, prefix so BaseImageGenerator.normalizeImageInput decodes cleanly
+      expect(editParams.find((p) => p.Name === 'SourceImage')?.Value).toBe('Zmlyc3QtYXZhdGFyLXBuZw==');
+      expect(comp.LogoURL).toBe('data:image/webp;base64,d2VicC1hdmF0YXItMTI4-2');
+      expect(comp.AvatarHistory).toHaveLength(2);
+
+      // 4. Undo steps back to the first generated avatar
+      const undoBtn = Array.from(el.querySelectorAll('.aie-studio-footer button')).find((b) =>
+        b.textContent?.includes('Undo')
+      ) as HTMLButtonElement | undefined;
+      expect(undoBtn).toBeDefined();
+      undoBtn!.click();
+      fixture.detectChanges();
+      expect(comp.LogoURL).toBe('data:image/webp;base64,d2VicC1hdmF0YXItMTI4-1');
+
+      // 5. Failed generation surfaces a warning toast via MJNotificationService and inline studio message
+      mockState.runActionQueue.push({
+        Success: false,
+        Message: 'No active image generator API key configured',
+        Result: null,
+        LogEntry: null,
+        Params: [],
+        RunParams: null,
+      });
+      await comp.GenerateAvatar();
+      fixture.detectChanges();
+
+      expect(comp.AvatarErrorMessage).toContain('No active image generator API key configured');
+      expect(mockState.notifications).toHaveLength(1);
+      expect(mockState.notifications[0].style).toBe('warning');
+      expect(mockState.notifications[0].message).toContain('No active image generator API key configured');
+    } finally {
+      getContextSpy.mockRestore();
+      toDataUrlSpy.mockRestore();
+      vi.stubGlobal('Image', OriginalImage);
+    }
   });
 
   it('emits ChatToOnboard with the selected template and closes the modal', async () => {
@@ -521,10 +853,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
         InitialBaseAgentId: COS_ID,
       },
     });
-    await fixture.whenStable();
-    await Promise.resolve();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     const onboarded: MJAIAgentEntityExtended[] = [];
     fixture.componentInstance.ChatToOnboard.subscribe((tpl) => onboarded.push(tpl));
@@ -541,7 +870,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
     expect(fixture.componentInstance.Visible).toBe(false);
   });
 
-  it('renders edit mode with pre-populated Pepper identity, Tone, Standing Instructions, and Archive confirmation', async () => {
+  it('renders edit mode with pre-populated Pepper identity, auto-opened details, Custom vibe badge on manual edit, and Archive confirmation', async () => {
     const pepperAgent: StubAgent = {
       ID: PEPPER_ID,
       Name: 'Pepper',
@@ -587,19 +916,23 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
         EditingAgent: pepperEntity,
       },
     });
-    await fixture.whenStable();
-    await Promise.resolve();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
 
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Tailor Pepper');
-    expect(el.querySelectorAll('.aie-template-card').length).toBe(0);
+    expect(el.querySelector('.aie-tpl-pill-btn')).toBeNull();
     expect(el.textContent).not.toContain('Chat to Onboard');
     expect(fixture.componentInstance.InstanceName).toBe('Pepper');
     expect(fixture.componentInstance.Tone).toBe('Direct, playful, a touch sarcastic and funny');
     expect(fixture.componentInstance.AdditionalInstructions).toBe('Start check-ins with one dry joke.');
     expect(fixture.componentInstance.CoordinationMode).toBe('Coordinator');
+    expect(fixture.componentInstance.AdvancedExpanded).toBe(true);
+
+    // Manually editing Tone away from presets flags Custom vibe
+    fixture.componentInstance.Tone = 'Dry academic minimalist';
+    fixture.detectChanges();
+    expect(fixture.componentInstance.IsCustomVibe).toBe(true);
+    expect(el.textContent).toContain('Custom');
 
     // Archive button reveals inline confirmation
     const archiveBtn = Array.from(el.querySelectorAll('button')).find((b) =>

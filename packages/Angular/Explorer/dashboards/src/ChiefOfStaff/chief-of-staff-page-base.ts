@@ -455,7 +455,8 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
 
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
-        this.requestedAgentQueryParam = this.GetQueryParams()['agent'] ?? null;
+        const initialParams = this.GetQueryParams();
+        this.requestedAgentQueryParam = initialParams['agent'] ?? initialParams['agentId'] ?? null;
         this.OnPageInit();
         this.agentQueryParamInitialized = true;
 
@@ -475,7 +476,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         params: Record<string, string>,
         _source: 'popstate' | 'deeplink',
     ): void {
-        const nextAgent = params['agent'] ?? null;
+        const nextAgent = params['agent'] ?? params['agentId'] ?? null;
         const resolved = nextAgent
             ? ResolveSelectableAgent(this.AvailableAgents, nextAgent)
             : ResolveSelectableAgent(this.AvailableAgents, CHIEF_OF_STAFF_AGENT_NAME);
@@ -530,11 +531,10 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
 
         if (this.HasUnsavedPageEdits()) {
             if (!this.confirmService) {
-                this.FeedbackBanner = {
-                    Type: 'error',
-                    Message:
-                        'You have unsaved governance policy changes. Please save or reset your changes before switching agents.',
-                };
+                this.showBanner(
+                    'error',
+                    'You have unsaved governance policy changes. Please save or reset your changes before switching agents.',
+                );
                 this.SelectedAgentID = prevId;
                 if (!syncQueryParam) {
                     this.syncSelectedAgentQueryParam();
@@ -1231,7 +1231,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
     }
 
     // =========================================================================
-    // Banner
+    // Toast Notifications
     // =========================================================================
 
     public DismissBanner(): void {
@@ -1241,6 +1241,11 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
 
     protected showBanner(type: 'success' | 'error', message: string): void {
         this.FeedbackBanner = { Type: type, Message: message };
+        MJNotificationService.Instance?.CreateSimpleNotification(
+            message,
+            type,
+            type === 'success' ? 3500 : 6000,
+        );
         this.cdr.markForCheck();
     }
 

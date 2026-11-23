@@ -22,24 +22,7 @@
     </mj-page-header>
 
     <mj-page-body>
-        @if (FeedbackBanner) {
-            <div class="cos-banner"
-                 [class.cos-banner--success]="FeedbackBanner.Type === 'success'"
-                 [class.cos-banner--error]="FeedbackBanner.Type === 'error'"
-                 role="status">
-                <div class="cos-banner__content">
-                    <i class="fa-solid"
-                       [class.fa-circle-check]="FeedbackBanner.Type === 'success'"
-                       [class.fa-circle-exclamation]="FeedbackBanner.Type === 'error'"></i>
-                    <span>{{ FeedbackBanner.Message }}</span>
-                </div>
-                <button mjButton variant="flat" size="sm" type="button" (click)="DismissBanner()" aria-label="Dismiss notification">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-        }
-
-        <div class="cos-agents-workspace">
+        <div class="cos-agents-workspace" [class.cos-agents-workspace--mobile-detail]="MobileShowingDetail">
             <!-- Left Roster Rail -->
             <aside class="cos-roster-rail" aria-label="Agent Roster">
                 <div class="cos-roster-search">
@@ -105,9 +88,12 @@
                                             </span>
                                         </span>
                                     </span>
-                                    @if (IsDefaultChatAgent(agent.ID)) {
-                                        <span class="cos-pill cos-pill--ok">Chat Default</span>
-                                    }
+                                    <span class="cos-roster-item__right">
+                                        @if (IsDefaultChatAgent(agent.ID)) {
+                                            <span class="cos-pill cos-pill--ok">Chat Default</span>
+                                        }
+                                        <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
+                                    </span>
                                 </button>
                             }
                         </div>
@@ -149,9 +135,12 @@
                                             </span>
                                         </span>
                                     </span>
-                                    @if (IsDefaultChatAgent(agent.ID)) {
-                                        <span class="cos-pill cos-pill--ok">Chat Default</span>
-                                    }
+                                    <span class="cos-roster-item__right">
+                                        @if (IsDefaultChatAgent(agent.ID)) {
+                                            <span class="cos-pill cos-pill--ok">Chat Default</span>
+                                        }
+                                        <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
+                                    </span>
                                 </button>
                             }
                         </div>
@@ -161,6 +150,17 @@
 
             <!-- Right Detail Pane -->
             <section class="cos-agent-detail-pane" aria-label="Selected Agent Details">
+                <div class="cos-mobile-back-bar">
+                    <button
+                        mjButton
+                        variant="flat"
+                        size="sm"
+                        type="button"
+                        (click)="ShowMobileRoster()">
+                        <i class="fa-solid fa-arrow-left"></i> All Agents
+                    </button>
+                    <span class="cos-mobile-back-bar__title">{{ SelectedAgentName }}</span>
+                </div>
                 @if (IsLoading && !SelectedAgentID) {
                     <div class="cos-loading">
                         <mj-loading text="Loading agent workspace..."></mj-loading>

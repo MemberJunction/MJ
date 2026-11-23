@@ -75,6 +75,8 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
     public RosterSearchText = '';
     public ActiveSubTab: AgentDetailSubTab = 'activity';
     public ShowFiredRoutines = false;
+    /** On mobile/tablet (<= 900px), toggles between the full-width Roster list and the Agent Detail pane. */
+    public MobileShowingDetail = false;
 
     // ── Hero quick actions state ─────────────────────────────────────────────────────────
     public IsUpdatingPrimary = false;
@@ -208,8 +210,45 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
         return Boolean(this.SelectedAgentID && UUIDsEqual(this.SelectedAgentID, agentId));
     }
 
+    protected override OnPageInit(): void {
+        const params = this.GetQueryParams();
+        if (params['agent'] || params['agentId']) {
+            this.MobileShowingDetail = true;
+        }
+    }
+
+    protected override OnQueryParamsChanged(
+        params: Record<string, string>,
+        source: 'popstate' | 'deeplink',
+    ): void {
+        super.OnQueryParamsChanged(params, source);
+        if (params['agent'] || params['agentId']) {
+            this.MobileShowingDetail = true;
+            this.cdr.markForCheck();
+        }
+    }
+
     public SelectRosterAgent(agent: SelectableGovernanceAgent): void {
+        this.MobileShowingDetail = true;
         this.OnSelectedAgentChange(agent.ID);
+        this.cdr.markForCheck();
+    }
+
+    public ShowMobileRoster(): void {
+        this.MobileShowingDetail = false;
+        this.cdr.markForCheck();
+    }
+
+    public override async OnInstanceSaved(
+        savedAgent: Parameters<BaseChiefOfStaffPage['OnInstanceSaved']>[0],
+    ): Promise<void> {
+        this.MobileShowingDetail = true;
+        await super.OnInstanceSaved(savedAgent);
+    }
+
+    public override async OnInstanceArchived(): Promise<void> {
+        this.MobileShowingDetail = false;
+        await super.OnInstanceArchived();
     }
 
     public SetActiveSubTab(tab: AgentDetailSubTab): void {

@@ -2,8 +2,8 @@
   <mj-dialog
     [Title]="DialogTitle"
     [Visible]="true"
-    [Width]="680"
-    [MinWidth]="360"
+    [Width]="DialogWidth"
+    [MinWidth]="320"
     (Close)="OnCancel()">
     <div class="aie-body">
       @if (IsLoading) {
@@ -11,9 +11,15 @@
           <mj-loading text="Loading agent studio..." size="medium"></mj-loading>
         </div>
       } @else {
-        <!-- Live Identity Preview Banner -->
-        <div class="aie-preview-card">
-          <div class="aie-preview-avatar">
+        <!-- 1. Compact Identity Header: 68x68 Avatar Studio Trigger + Base Template Pill + Chat to Onboard -->
+        <div class="aie-identity-header">
+          <button
+            type="button"
+            class="aie-avatar-trigger"
+            [class.aie-avatar-trigger--open]="AvatarStudioOpen"
+            [attr.aria-expanded]="AvatarStudioOpen"
+            title="Click to pick an icon, upload an image, or generate an AI avatar"
+            (click)="ToggleAvatarStudio()">
             @if (PreviewAvatarUrl) {
               <img
                 [src]="PreviewAvatarUrl"
@@ -22,83 +28,359 @@
             } @else {
               <i [class]="IconClass || 'fa-solid fa-wand-magic-sparkles'"></i>
             }
-          </div>
-          <div class="aie-preview-meta">
-            <div class="aie-preview-name-row">
-              <span class="aie-preview-name">{{ InstanceName.trim() || 'Your Personal Agent' }}</span>
-              @if (SelectedBaseAgent) {
-                <span class="aie-base-pill">{{ SelectedBaseAgent.Name }}</span>
-              }
+            <span class="aie-avatar-badge" aria-hidden="true">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              Edit
+            </span>
+          </button>
+
+          <div class="aie-identity-context">
+            <div class="aie-identity-eyebrow-row">
+              <span class="aie-identity-eyebrow">Base Template</span>
               @if (IsPrimaryInstance && ShowPrimaryToggle) {
                 <span class="aie-primary-pill">
                   <i class="fa-solid fa-star"></i> Primary
                 </span>
               }
             </div>
-            <p class="aie-preview-tone">
-              @if (Tone.trim()) {
-                {{ Tone }}
-              } @else if (Description.trim()) {
-                {{ Description }}
+
+            <div class="aie-identity-controls">
+              @if (Mode === 'create' && InstantiableTemplates.length > 1) {
+                <button
+                  type="button"
+                  class="aie-tpl-pill-btn"
+                  [attr.aria-expanded]="TemplatePickerOpen"
+                  (click)="ToggleTemplatePicker()">
+                  <i [class]="SelectedBaseAgent?.IconClass || 'fa-solid fa-robot'"></i>
+                  <span class="aie-tpl-pill-label">Based on: <strong>{{ SelectedBaseAgent?.Name || 'Select template' }}</strong></span>
+                  <span class="aie-tpl-change-hint">
+                    Change ({{ InstantiableTemplates.length }})
+                    <i class="fa-solid" [class.fa-chevron-up]="TemplatePickerOpen" [class.fa-chevron-down]="!TemplatePickerOpen"></i>
+                  </span>
+                </button>
+              } @else if (SelectedBaseAgent) {
+                <span class="aie-tpl-pill-static">
+                  <i [class]="SelectedBaseAgent.IconClass || 'fa-solid fa-robot'"></i>
+                  <span>Based on: <strong>{{ SelectedBaseAgent.Name }}</strong></span>
+                </span>
+              }
+
+              @if (Mode === 'create' && SelectedBaseAgent) {
+                <button
+                  mjButton
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  (click)="OnChatToOnboardClicked()"
+                  title="Set up conversationally in chat instead of using the form">
+                  <i class="fa-solid fa-comments"></i> Chat to Onboard
+                </button>
+              }
+            </div>
+
+            <p class="aie-identity-desc">
+              @if (SelectedBaseAgent?.Description) {
+                {{ SelectedBaseAgent?.Description }}
               } @else {
-                Inherits all tools, skills, and updates live from {{ SelectedBaseAgent?.Name || 'its base template' }}.
+                Inherits all tools, skills, and live updates from {{ SelectedBaseAgent?.Name || 'its base template' }}.
               }
             </p>
           </div>
-          @if (Mode === 'create' && SelectedBaseAgent) {
-            <button
-              mjButton
-              variant="outline"
-              size="sm"
-              type="button"
-              (click)="OnChatToOnboardClicked()"
-              title="Set up conversationally in chat instead of using the form">
-              <i class="fa-solid fa-comments"></i> Chat to Onboard
-            </button>
-          }
         </div>
 
-        @if (ErrorMessage) {
-          <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
-        }
+        <!-- Inline Adaptive Base Template Picker (Scales 2 -> 50+ templates) -->
+        @if (Mode === 'create' && TemplatePickerOpen && InstantiableTemplates.length > 1) {
+          <div class="aie-tpl-picker" role="region" aria-label="Choose base template">
+            <div class="aie-tpl-search-wrap">
+              <i class="fa-solid fa-magnifying-glass aie-tpl-search-icon" aria-hidden="true"></i>
+              <input
+                type="search"
+                class="aie-input aie-tpl-search-input"
+                [(ngModel)]="TemplateSearchText"
+                placeholder="Filter templates by name, category, or skill..."
+                aria-label="Filter base templates" />
+            </div>
 
-        <!-- Base Template Selector (Create mode) -->
-        @if (Mode === 'create' && InstantiableTemplates.length > 0) {
-          <div class="aie-section">
-            <label class="aie-label">Base Agent Template</label>
-            <div class="aie-template-grid">
-              @for (tpl of InstantiableTemplates; track tpl.ID) {
-                <button
-                  type="button"
-                  class="aie-template-card"
-                  [class.aie-template-card--selected]="tpl.ID === SelectedBaseAgentId"
-                  (click)="SelectTemplate(tpl)">
-                  <span class="aie-template-icon">
-                    <i [class]="tpl.IconClass || 'fa-solid fa-robot'"></i>
-                  </span>
-                  <span class="aie-template-text">
-                    <span class="aie-template-name">{{ tpl.Name }}</span>
-                    @if (tpl.Description) {
-                      <span class="aie-template-desc">{{ tpl.Description }}</span>
+            @if (TemplateCategories.length > 2) {
+              <div class="aie-chip-row" role="group" aria-label="Template categories">
+                @for (cat of TemplateCategories; track cat) {
+                  <button
+                    type="button"
+                    class="aie-chip"
+                    [class.aie-chip--active]="SelectedTemplateCategory === cat"
+                    (click)="SetTemplateCategory(cat)">
+                    {{ cat }}
+                  </button>
+                }
+              </div>
+            }
+
+            <div class="aie-tpl-list" role="listbox" aria-label="Available templates">
+              @if (FilteredTemplates.length === 0) {
+                <div class="aie-tpl-empty">No templates match "{{ TemplateSearchText }}".</div>
+              } @else {
+                @for (tpl of FilteredTemplates; track tpl.ID) {
+                  <button
+                    type="button"
+                    class="aie-tpl-row"
+                    role="option"
+                    [class.aie-tpl-row--selected]="tpl.ID === SelectedBaseAgentId"
+                    [attr.aria-selected]="tpl.ID === SelectedBaseAgentId"
+                    (click)="SelectTemplate(tpl)">
+                    <span class="aie-tpl-row-icon">
+                      <i [class]="tpl.IconClass || 'fa-solid fa-robot'"></i>
+                    </span>
+                    <span class="aie-tpl-row-text">
+                      <span class="aie-tpl-row-name">{{ tpl.Name }}</span>
+                      @if (tpl.Description) {
+                        <span class="aie-tpl-row-desc">{{ tpl.Description }}</span>
+                      }
+                    </span>
+                    @if (tpl.InstantiationMode === 'Required') {
+                      <span class="aie-pill">Recommended</span>
+                    } @else {
+                      <span class="aie-pill aie-pill--muted">{{ GetTemplateCategory(tpl) }}</span>
                     }
-                  </span>
-                </button>
+                  </button>
+                }
               }
             </div>
           </div>
         }
 
-        <!-- Name & Suggestions -->
+        <!-- Inline Collapsible AI Avatar Studio -->
+        @if (AvatarStudioOpen) {
+          <div class="aie-avatar-studio" role="region" aria-label="Avatar Studio">
+            <div class="aie-studio-head">
+              <div class="aie-studio-title">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <strong>Avatar Studio</strong>
+                <span class="aie-pill">{{ AvatarStatusLabel }}</span>
+              </div>
+              <button
+                type="button"
+                class="aie-studio-close"
+                aria-label="Close Avatar Studio"
+                (click)="ToggleAvatarStudio()">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <div class="aie-studio-tabs" role="tablist" aria-label="Avatar source">
+              <button
+                type="button"
+                role="tab"
+                class="aie-studio-tab"
+                [class.aie-studio-tab--active]="AvatarStudioTab === 'ai'"
+                [attr.aria-selected]="AvatarStudioTab === 'ai'"
+                (click)="SetAvatarStudioTab('ai')">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> AI Generate
+              </button>
+              <button
+                type="button"
+                role="tab"
+                class="aie-studio-tab"
+                [class.aie-studio-tab--active]="AvatarStudioTab === 'icon'"
+                [attr.aria-selected]="AvatarStudioTab === 'icon'"
+                (click)="SetAvatarStudioTab('icon')">
+                <i class="fa-solid fa-icons"></i> Icon
+              </button>
+              <button
+                type="button"
+                role="tab"
+                class="aie-studio-tab"
+                [class.aie-studio-tab--active]="AvatarStudioTab === 'upload'"
+                [attr.aria-selected]="AvatarStudioTab === 'upload'"
+                (click)="SetAvatarStudioTab('upload')">
+                <i class="fa-solid fa-upload"></i> Upload / URL
+              </button>
+            </div>
+
+            @if (AvatarErrorMessage) {
+              <div class="aie-studio-error" role="alert">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>{{ AvatarErrorMessage }}</span>
+              </div>
+            }
+
+            <!-- Tab 1: AI Generate & Iterative Refinement -->
+            @if (AvatarStudioTab === 'ai') {
+              <div class="aie-studio-pane" role="tabpanel">
+                <div class="aie-studio-prompt-row">
+                  <input
+                    type="text"
+                    class="aie-input"
+                    [(ngModel)]="AvatarPrompt"
+                    [disabled]="IsGeneratingAvatar"
+                    placeholder="Describe your agent avatar (or leave blank for a smart default)..."
+                    aria-label="Avatar generation prompt"
+                    (keydown.enter)="GenerateAvatar()" />
+                  <button
+                    mjButton
+                    variant="primary"
+                    size="sm"
+                    type="button"
+                    [disabled]="IsGeneratingAvatar"
+                    (click)="GenerateAvatar()">
+                    @if (IsGeneratingAvatar) {
+                      <i class="fa-solid fa-spinner fa-spin"></i> Generating...
+                    } @else {
+                      <i class="fa-solid fa-wand-magic-sparkles"></i> Generate
+                    }
+                  </button>
+                </div>
+
+                <div class="aie-chip-row" role="group" aria-label="Avatar style presets">
+                  <span class="aie-chip-hint">Style:</span>
+                  @for (style of AvatarStylePresets; track style) {
+                    <button
+                      type="button"
+                      class="aie-chip"
+                      [class.aie-chip--active]="SelectedAvatarStyle === style"
+                      [disabled]="IsGeneratingAvatar"
+                      (click)="SelectAvatarStylePreset(style)">
+                      {{ style }}
+                    </button>
+                  }
+                </div>
+
+                @if (HasImageAvatar) {
+                  <div class="aie-refine-box">
+                    <label class="aie-refine-label" for="aie-avatar-refine-input">
+                      <i class="fa-solid fa-arrows-rotate"></i> Refine current avatar
+                    </label>
+                    <div class="aie-studio-prompt-row">
+                      <input
+                        id="aie-avatar-refine-input"
+                        type="text"
+                        class="aie-input"
+                        [(ngModel)]="AvatarRefinePrompt"
+                        [disabled]="IsGeneratingAvatar"
+                        placeholder='e.g., "Add glasses", "Make background teal"'
+                        (keydown.enter)="RefineAvatar()" />
+                      <button
+                        mjButton
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        [disabled]="IsGeneratingAvatar || !AvatarRefinePrompt.trim()"
+                        (click)="RefineAvatar()">
+                        <i class="fa-solid fa-sliders"></i> Refine
+                      </button>
+                    </div>
+                    <div class="aie-chip-row">
+                      @for (quick of AvatarQuickRefinements; track quick) {
+                        <button
+                          type="button"
+                          class="aie-chip"
+                          [disabled]="IsGeneratingAvatar"
+                          (click)="ApplyQuickRefinement(quick)">
+                          {{ quick }}
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Tab 2: Curated Icon Grid -->
+            @if (AvatarStudioTab === 'icon') {
+              <div class="aie-studio-pane" role="tabpanel">
+                <div class="aie-icon-grid">
+                  @for (opt of IconOptions; track opt.IconClass) {
+                    <button
+                      type="button"
+                      class="aie-icon-tile"
+                      [class.aie-icon-tile--selected]="!HasImageAvatar && IconClass === opt.IconClass"
+                      [title]="opt.Label"
+                      [attr.aria-label]="opt.Label"
+                      (click)="SelectIcon(opt.IconClass)">
+                      <i [class]="opt.IconClass"></i>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Tab 3: Local File Upload & Image URL -->
+            @if (AvatarStudioTab === 'upload') {
+              <div class="aie-studio-pane" role="tabpanel">
+                <label class="aie-upload-dropzone">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <span>
+                    <strong>Upload image</strong>
+                    <span class="aie-upload-sub">Auto-cropped &amp; compressed to 128×128 WebP</span>
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    class="aie-file-input"
+                    (change)="OnAvatarFileSelected($event)" />
+                </label>
+
+                <div>
+                  <label class="aie-sublabel" for="aie-logo-url">Or paste an image URL</label>
+                  <input
+                    id="aie-logo-url"
+                    type="url"
+                    class="aie-input"
+                    [(ngModel)]="LogoURL"
+                    (ngModelChange)="OnLogoUrlChanged()"
+                    placeholder="https://example.com/avatar.png" />
+                </div>
+              </div>
+            }
+
+            @if (AvatarHistory.length > 0 || HasImageAvatar) {
+              <div class="aie-studio-footer">
+                @if (AvatarHistory.length > 0) {
+                  <button
+                    mjButton
+                    variant="flat"
+                    size="sm"
+                    type="button"
+                    [disabled]="IsGeneratingAvatar"
+                    (click)="UndoAvatar()">
+                    <i class="fa-solid fa-rotate-left"></i> Undo ({{ AvatarHistory.length }})
+                  </button>
+                }
+                @if (HasImageAvatar) {
+                  <button
+                    mjButton
+                    variant="flat"
+                    size="sm"
+                    type="button"
+                    [disabled]="IsGeneratingAvatar"
+                    (click)="ClearAvatarImage()">
+                    <i class="fa-solid fa-icons"></i> Use Icon Instead
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        @if (ErrorMessage) {
+          <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
+        }
+
+        <!-- 2. Name (The ONLY required field) -->
         <div class="aie-section">
-          <label class="aie-label" for="aie-instance-name">
-            Name <span class="aie-required">*</span>
-          </label>
+          <div class="aie-label-row">
+            <label class="aie-label" for="aie-instance-name">
+              Name <span class="aie-required">*</span>
+            </label>
+            <span class="aie-mention-hint">
+              Summon with <code>&#64;{{ MentionHandle }}</code>
+            </span>
+          </div>
           <input
             id="aie-instance-name"
             type="text"
             class="aie-input"
             [(ngModel)]="InstanceName"
-            placeholder="e.g., Pepper, Cato, FDA Clinical Scout"
+            placeholder="Give your agent a name (e.g., Pepper, Cato, Jarvis)..."
             autocomplete="off" />
           @if (Mode === 'create' && SuggestedNames.length > 0) {
             <div class="aie-chip-row">
@@ -116,150 +398,162 @@
           }
         </div>
 
-        <!-- Short Description -->
+        <!-- 3. Personality Vibe 2x2 Archetype Grid -->
         <div class="aie-section">
-          <label class="aie-label" for="aie-instance-desc">Role / Focus</label>
-          <input
-            id="aie-instance-desc"
-            type="text"
-            class="aie-input"
-            [(ngModel)]="Description"
-            placeholder="Optional short description of what this instance focuses on" />
-        </div>
-
-        <!-- Visual Identity: Icon Grid + Avatar URL -->
-        <div class="aie-section">
-          <label class="aie-label">Icon &amp; Custom Avatar</label>
-          <div class="aie-icon-grid">
-            @for (opt of IconOptions; track opt.IconClass) {
-              <button
-                type="button"
-                class="aie-icon-tile"
-                [class.aie-icon-tile--selected]="IconClass === opt.IconClass"
-                [title]="opt.Label"
-                (click)="SelectIcon(opt.IconClass)">
-                <i [class]="opt.IconClass"></i>
-              </button>
+          <div class="aie-label-row">
+            <span class="aie-label">Personality Vibe</span>
+            @if (IsCustomVibe) {
+              <span class="aie-pill">Custom</span>
             }
           </div>
-          <input
-            type="url"
-            class="aie-input aie-input--sub"
-            [(ngModel)]="LogoURL"
-            (ngModelChange)="OnLogoUrlChanged()"
-            placeholder="Optional custom avatar image URL (https://...)" />
-        </div>
-
-        <!-- Voice Persona -->
-        @if (ActivePersonas.length > 0) {
-          <div class="aie-section">
-            <div class="aie-label-row">
-              <label class="aie-label">Voice Persona</label>
-              @if (ActivePersonas.length > 6) {
-                <button
-                  type="button"
-                  class="aie-link-btn"
-                  (click)="ShowAllPersonas = !ShowAllPersonas">
-                  {{ ShowAllPersonas ? 'Show fewer' : 'Show all (' + ActivePersonas.length + ')' }}
-                </button>
-              }
-            </div>
-            <div class="aie-chip-row">
-              @for (persona of VisiblePersonas; track persona.ID) {
-                <button
-                  type="button"
-                  class="aie-chip"
-                  [class.aie-chip--active]="IsPersonaSelected(persona)"
-                  [title]="persona.Description || persona.Name"
-                  (click)="SelectPersona(persona)">
-                  <i class="fa-solid fa-microphone-lines"></i>
-                  {{ persona.Name }}
-                </button>
-              }
-            </div>
-          </div>
-        }
-
-        <!-- Personality Style Presets + Tone & SpeakingStyle -->
-        <div class="aie-section">
-          <label class="aie-label">Personality &amp; Communication Style</label>
-          <div class="aie-chip-row aie-chip-row--presets">
-            @for (preset of PersonalityPresets; track preset.label) {
+          <div class="aie-vibe-grid" role="group" aria-label="Personality vibe">
+            @for (vibe of VibeOptions; track vibe.Key) {
               <button
                 type="button"
-                class="aie-chip"
-                [class.aie-chip--active]="IsPresetActive(preset)"
-                (click)="ApplyPersonalityPreset(preset)">
-                {{ preset.label }}
-              </button>
-            }
-          </div>
-          <div class="aie-two-col">
-            <div>
-              <label class="aie-sublabel" for="aie-tone">Tone</label>
-              <input
-                id="aie-tone"
-                type="text"
-                class="aie-input"
-                [(ngModel)]="Tone"
-                placeholder="e.g., Direct, playful, a touch sarcastic and funny" />
-            </div>
-            <div>
-              <label class="aie-sublabel" for="aie-style">Speaking / Writing Style</label>
-              <input
-                id="aie-style"
-                type="text"
-                class="aie-input"
-                [(ngModel)]="SpeakingStyle"
-                placeholder="e.g., Crisp bullet points, punchy one-liners" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Standing Instructions -->
-        <div class="aie-section">
-          <label class="aie-label" for="aie-instructions">Standing Instructions</label>
-          <textarea
-            id="aie-instructions"
-            class="aie-textarea"
-            rows="3"
-            [(ngModel)]="AdditionalInstructions"
-            placeholder="Custom ground rules, priorities, or domain focus stacked onto every run..."></textarea>
-        </div>
-
-        <!-- Optional Coordination Mode (for Chief of Staff instances) -->
-        @if (IsChiefOfStaffTemplate) {
-          <div class="aie-section">
-            <label class="aie-label">Coordination Autonomy</label>
-            <div class="aie-mode-row">
-              @for (opt of CoordinationModeOptions; track opt.Value) {
-                <button
-                  type="button"
-                  class="aie-mode-pill"
-                  [class.aie-mode-pill--active]="CoordinationMode === opt.Value"
-                  (click)="SetCoordinationMode(opt.Value)">
-                  <span class="aie-mode-pill-title">{{ opt.Label }}</span>
-                  <span class="aie-mode-pill-hint">{{ opt.Hint }}</span>
-                </button>
-              }
-            </div>
-          </div>
-        }
-
-        <!-- Primary Instance Toggle -->
-        @if (ShowPrimaryToggle) {
-          <div class="aie-section aie-primary-row">
-            <label class="aie-checkbox-label">
-              <input type="checkbox" [(ngModel)]="IsPrimaryInstance" />
-              <span>
-                <strong>Primary {{ SelectedBaseAgent?.Name || 'agent' }} instance</strong>
-                <span class="aie-checkbox-sub">
-                  Receives inbound wakes, colleague requests, and serves as your default switcher choice.
+                class="aie-vibe-card"
+                [class.aie-vibe-card--active]="IsVibeActive(vibe)"
+                [attr.aria-pressed]="IsVibeActive(vibe)"
+                (click)="ApplyVibe(vibe)">
+                <span class="aie-vibe-head">
+                  <i [class]="vibe.IconClass"></i>
+                  <span class="aie-vibe-title">{{ vibe.Label }}</span>
                 </span>
-              </span>
-            </label>
+                <span class="aie-vibe-sub">{{ vibe.Subtitle }}</span>
+              </button>
+            }
           </div>
-        }
+        </div>
+
+        <!-- 4. Progressive Disclosure Accordion: Voice, Fine-tuned Style, Role, Standing Instructions & Guardrails -->
+        <details
+          class="aie-disclosure"
+          [open]="AdvancedExpanded"
+          (toggle)="OnAdvancedToggle($event)">
+          <summary class="aie-disclosure-summary">
+            <span class="aie-disclosure-title">
+              <i class="fa-solid fa-sliders"></i>
+              Customize Voice, Instructions &amp; Guardrails
+            </span>
+            <span class="aie-disclosure-meta">
+              <span class="aie-pill">{{ AdvancedSummaryLabel }}</span>
+              <i class="fa-solid fa-chevron-down aie-disclosure-chevron" aria-hidden="true"></i>
+            </span>
+          </summary>
+
+          <div class="aie-disclosure-body">
+            <!-- Cross-Vendor Voice Persona -->
+            @if (ActivePersonas.length > 0) {
+              <div class="aie-section">
+                <div class="aie-label-row">
+                  <label class="aie-label">Voice</label>
+                  <span class="aie-voice-hint">
+                    <i class="fa-solid fa-earth-americas"></i> Universal cross-vendor voice
+                  </span>
+                </div>
+                <div class="aie-chip-row">
+                  @for (persona of VisiblePersonas; track persona.ID) {
+                    <button
+                      type="button"
+                      class="aie-chip"
+                      [class.aie-chip--active]="IsPersonaSelected(persona)"
+                      [title]="persona.Description || persona.Name"
+                      (click)="SelectPersona(persona)">
+                      <i class="fa-solid fa-microphone-lines"></i>
+                      {{ persona.Name }}
+                    </button>
+                  }
+                  @if (ActivePersonas.length > 6) {
+                    <button
+                      type="button"
+                      class="aie-link-btn"
+                      (click)="ShowAllPersonas = !ShowAllPersonas">
+                      {{ ShowAllPersonas ? 'Show fewer' : 'Show all (' + ActivePersonas.length + ')' }}
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Fine-tune Tone & Speaking / Writing Style -->
+            <div class="aie-two-col">
+              <div>
+                <label class="aie-sublabel" for="aie-tone">Tone</label>
+                <input
+                  id="aie-tone"
+                  type="text"
+                  class="aie-input"
+                  [(ngModel)]="Tone"
+                  placeholder="e.g., Direct, playful, analytical" />
+              </div>
+              <div>
+                <label class="aie-sublabel" for="aie-style">Speaking / Writing Style</label>
+                <input
+                  id="aie-style"
+                  type="text"
+                  class="aie-input"
+                  [(ngModel)]="SpeakingStyle"
+                  placeholder="e.g., Crisp bullets, zero fluff" />
+              </div>
+            </div>
+
+            <!-- Role / Focus -->
+            <div class="aie-section">
+              <label class="aie-sublabel" for="aie-instance-desc">Role / Focus</label>
+              <input
+                id="aie-instance-desc"
+                type="text"
+                class="aie-input"
+                [(ngModel)]="Description"
+                placeholder="Optional short description of what this instance focuses on" />
+            </div>
+
+            <!-- Standing Instructions -->
+            <div class="aie-section">
+              <label class="aie-sublabel" for="aie-instructions">Standing Instructions</label>
+              <textarea
+                id="aie-instructions"
+                class="aie-textarea"
+                rows="3"
+                [(ngModel)]="AdditionalInstructions"
+                placeholder="Custom ground rules, priorities, or domain focus stacked onto every run..."></textarea>
+            </div>
+
+            <!-- Coordination Autonomy (Chief of Staff instances) -->
+            @if (IsChiefOfStaffTemplate) {
+              <div class="aie-section">
+                <label class="aie-sublabel">Coordination Autonomy</label>
+                <div class="aie-mode-row" role="group" aria-label="Coordination autonomy">
+                  @for (opt of CoordinationModeOptions; track opt.Value) {
+                    <button
+                      type="button"
+                      class="aie-mode-pill"
+                      [class.aie-mode-pill--active]="CoordinationMode === opt.Value"
+                      [attr.aria-pressed]="CoordinationMode === opt.Value"
+                      (click)="SetCoordinationMode(opt.Value)">
+                      <span class="aie-mode-pill-title">{{ opt.Label }}</span>
+                      <span class="aie-mode-pill-hint">{{ opt.Hint }}</span>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Primary Instance Toggle -->
+            @if (ShowPrimaryToggle) {
+              <div class="aie-primary-row">
+                <label class="aie-checkbox-label">
+                  <input type="checkbox" [(ngModel)]="IsPrimaryInstance" />
+                  <span>
+                    <strong>Primary {{ SelectedBaseAgent?.Name || 'agent' }} instance</strong>
+                    <span class="aie-checkbox-sub">
+                      Receives inbound wakes, colleague requests, and serves as your default switcher choice.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            }
+          </div>
+        </details>
 
         <!-- Archive confirmation inline callout -->
         @if (Mode === 'edit' && ConfirmArchiveOpen) {
@@ -300,7 +594,7 @@
             [disabled]="!CanSave"
             (click)="OnSave()">
             <i class="fa-solid fa-check"></i>
-            {{ IsSaving ? 'Saving...' : (Mode === 'edit' ? 'Save Changes' : 'Create Agent') }}
+            {{ SaveButtonLabel }}
           </button>
           <button
             mjButton

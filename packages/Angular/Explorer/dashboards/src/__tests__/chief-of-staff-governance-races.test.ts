@@ -5,8 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Subject } from 'rxjs';
 import { BaseEntity, IMetadataProvider, RunView, RunViewResult } from '@memberjunction/core';
 import { MJGlobal, MJEventType, UUIDMap } from '@memberjunction/global';
-import type { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import type { MJAIAgentUserPolicyEntity, MJAgentChannelEntity } from '@memberjunction/core-entities';
 import { ChiefOfStaffGovernanceComponent } from '../ChiefOfStaff/chief-of-staff-governance.component';
+import { ChiefOfStaffAgentChannelsComponent } from '../ChiefOfStaff/chief-of-staff-agent-channels.component';
 import {
     BuildPolicyDraftFromEntity,
     CalculateChiefOfStaffMetrics,
@@ -43,6 +45,8 @@ interface GovernanceInternalShape {
     subscribeToLiveEntityChanges: () => void;
     coreAgentTools: () => ChiefOfStaffClientTool[];
     UpdateQueryParams: (params: Record<string, string | null>) => void;
+    showBanner: (type: 'success' | 'error', message: string) => void;
+    OnQueryParamsChanged: (params: Record<string, string>, source: 'popstate' | 'deeplink') => void;
 }
 
 function okRunView<T>(results: T[]): RunViewResult<T> {
@@ -266,5 +270,76 @@ describe('ChiefOfStaffGovernanceComponent — generation token, agent mismatch g
         expect(component.FeedbackBanner?.Type).toBe('error');
         expect(component.FeedbackBanner?.Message).toMatch(/unsaved governance policy changes/i);
         expect(loadSpy).not.toHaveBeenCalled();
+    });
+
+    it('routes showBanner feedback to auto-dismissing MJNotificationService toasts (3500ms success / 6000ms error)', async () => {
+        const { internal } = createGovernanceHarness();
+        const createSimpleNotification = vi.fn();
+        vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({
+            CreateSimpleNotification: createSimpleNotification,
+        } as Partial<MJNotificationService> as MJNotificationService);
+
+        internal.showBanner('success', 'Default Chat Agent set to Pepper.');
+        internal.showBanner('error', 'Failed to save governance policy.');
+
+        expect(createSimpleNotification).toHaveBeenNthCalledWith(
+            1,
+            'Default Chat Agent set to Pepper.',
+            'success',
+            3500,
+        );
+        expect(createSimpleNotification).toHaveBeenNthCalledWith(
+            2,
+            'Failed to save governance policy.',
+            'error',
+            6000,
+        );
+    });
+
+    it('manages mobile drill-down transitions in Agents Master-Detail and Agent Channels', async () => {
+        const { component, internal } = createGovernanceHarness();
+        component.MobileShowingDetail = false;
+        component.OnSelectedAgentChange = vi.fn();
+
+        // Tapping an agent in the roster opens mobile detail view
+        component.SelectRosterAgent(AGENT_SF);
+        expect(component.MobileShowingDetail).toBe(true);
+        expect(component.OnSelectedAgentChange).toHaveBeenCalledWith(AGENT_SF.ID);
+
+        // Tapping "All Agents" back button returns to roster list
+        component.ShowMobileRoster();
+        expect(component.MobileShowingDetail).toBe(false);
+
+        // Deep-linking via ?agentId= transitions straight into mobile detail view
+        internal.OnQueryParamsChanged({ agentId: AGENT_SF.ID }, 'deeplink');
+        expect(component.MobileShowingDetail).toBe(true);
+
+        // Agent Channels mobile drill-down stays on thread list during initial auto-select and opens on user tap
+        const channelsRaw: object = Object.create(ChiefOfStaffAgentChannelsComponent.prototype) as object;
+        const channelsComp = channelsRaw as ChiefOfStaffAgentChannelsComponent;
+        const channelsInternal = channelsRaw as {
+            cdr: { markForCheck: () => void };
+            publishAgentContext: () => void;
+            LoadMessagesForChannel: (id: string) => Promise<void>;
+        };
+        channelsInternal.cdr = { markForCheck: vi.fn() };
+        channelsInternal.publishAgentContext = vi.fn();
+        channelsInternal.LoadMessagesForChannel = vi.fn(async () => undefined);
+        channelsComp.MobileShowingDetail = false;
+
+        const stubChannel = {
+            ID: 'C0000000-0000-0000-0000-000000000001',
+            Topic: 'Q4 Launch Sync',
+            ChannelStatus: 'Open',
+        } as Partial<MJAgentChannelEntity> as MJAgentChannelEntity;
+
+        await channelsComp.SelectChannel(stubChannel, false);
+        expect(channelsComp.MobileShowingDetail).toBe(false);
+
+        await channelsComp.SelectChannel(stubChannel);
+        expect(channelsComp.MobileShowingDetail).toBe(true);
+
+        channelsComp.ShowMobileThreadList();
+        expect(channelsComp.MobileShowingDetail).toBe(false);
     });
 });
