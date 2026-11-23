@@ -748,9 +748,13 @@ export class AgentRunner {
             // on that path (both agent-produced Output and user-attached Input) should
             // be available to the agent via artifact tools.
             // Brand-new conversations created right above have zero prior artifacts, so skip the 3 DB queries.
-            const inputArtifacts = isNewConversation
+            const artifactConversationId = params.SideQuestionContext?.ParentConversationID ?? conversationId;
+            const artifactBranchId = params.SideQuestionContext
+                ? (params.SideQuestionContext.ParentBranchID ?? undefined)
+                : runBranchId;
+            const inputArtifacts = (!params.SideQuestionContext && isNewConversation)
                 ? []
-                : await this.gatherConversationArtifacts(conversationId, contextUser, params.ConversationHistoryFrom, runBranchId, params.provider);
+                : await this.gatherConversationArtifacts(artifactConversationId, contextUser, params.ConversationHistoryFrom, artifactBranchId, params.provider);
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
@@ -3644,11 +3648,14 @@ export class AgentRunner {
         if (params.inputArtifacts !== undefined || !params.contextUser) {
             return params;
         }
-        const conversationId = await this.resolveConversationId(params);
+        const conversationId = params.SideQuestionContext?.ParentConversationID ?? await this.resolveConversationId(params);
         if (!conversationId) {
             return params;
         }
-        const inputArtifacts = await this.gatherConversationArtifacts(conversationId, params.contextUser, params.ConversationHistoryFrom, params.ConversationBranchID, params.provider);
+        const branchId = params.SideQuestionContext
+            ? (params.SideQuestionContext.ParentBranchID ?? undefined)
+            : params.ConversationBranchID;
+        const inputArtifacts = await this.gatherConversationArtifacts(conversationId, params.contextUser, params.ConversationHistoryFrom, branchId, params.provider);
         return inputArtifacts.length > 0 ? { ...params, inputArtifacts } : params;
     }
 

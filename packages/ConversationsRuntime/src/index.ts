@@ -103,3 +103,10 @@ export {
     type ClientToolDefinition,
     type ClientToolHandler,
 } from '@memberjunction/ai-agent-client';
+
+export {
+    SideQuestionController,
+    type SideQuestionScopeState,
+    type AskSideQuestionInput,
+    type AskSideQuestionResult,
+} from './side-questions/SideQuestionController';

@@ -66,6 +66,28 @@ export async function UserMayWriteConversation(
     user: UserInfo | null | undefined,
     conversationId: string
 ): Promise<ConversationWriteDecision> {
+    return evaluateConversationAccess(provider, user, conversationId, 'write');
+}
+
+/**
+ * Decides whether `user` may read `conversationId` (used for read-only child contexts such as
+ * side questions, where a user with `View` access on a shared conversation may ask private
+ * questions in their own child conversation without mutating the parent thread).
+ */
+export async function UserMayReadConversation(
+    provider: IMetadataProvider,
+    user: UserInfo | null | undefined,
+    conversationId: string
+): Promise<ConversationWriteDecision> {
+    return evaluateConversationAccess(provider, user, conversationId, 'read');
+}
+
+async function evaluateConversationAccess(
+    provider: IMetadataProvider,
+    user: UserInfo | null | undefined,
+    conversationId: string,
+    accessLevel: 'read' | 'write'
+): Promise<ConversationWriteDecision> {
     if (provider?.ProviderType !== 'Database' || !user) {
         return { Allowed: true, Reason: null, IsOwner: false, Loaded: false };
     }
@@ -82,7 +104,7 @@ export async function UserMayWriteConversation(
                 : undefined) ??
             provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ??
             null;
-        if (entityInfo) {
+        if (accessLevel === 'write' && entityInfo) {
             if (entityInfo.AllowRecordComments === false) {
                 return {
                     Allowed: false,
@@ -137,7 +159,6 @@ export async function UserMayWriteConversation(
     if (isOwner) {
         return { Allowed: true, Reason: null, IsOwner: true, Loaded: true };
     }
-
     // For AGENT_CHANNEL conversations (MJ: Agent Channels IS-A MJ: Conversations), any enrolled
     // human/agent participant in MJ: Agent Channel Participants may post into the channel.
     if (conversation.TypeID && UUIDsEqual(conversation.TypeID, AGENT_CHANNEL_CONVERSATION_TYPE_ID)) {
@@ -158,6 +179,9 @@ export async function UserMayWriteConversation(
         return { Allowed: false, Reason: 'You do not have access to this conversation.', IsOwner: false, Loaded: true };
     }
 
+    if (accessLevel === 'read' && UserHoldsConversationDeleteRole(user)) {
+        return { Allowed: true, Reason: null, IsOwner: false, Loaded: true };
+    }
     const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(provider, ResourcePermissionEngine) as ResourcePermissionEngine;
     await engine.Config(false, user);
     const grant = engine
@@ -191,6 +215,9 @@ export async function UserMayWriteConversation(
     }
 
     if (hasViewAccess) {
+        if (accessLevel === 'read') {
+            return { Allowed: true, Reason: null, IsOwner: false, Loaded: true };
+        }
         return { Allowed: false, Reason: 'You have view-only access to this conversation.', IsOwner: false, Loaded: true };
     }
     return { Allowed: false, Reason: 'You do not have access to this conversation.', IsOwner: false, Loaded: true };

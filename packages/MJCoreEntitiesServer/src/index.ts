@@ -55,6 +55,7 @@ export * from './custom/anonymousOwnershipKeyGuard';
 export * from './custom/MJConversationEntityServer.server';
 export * from './custom/ConversationReadSecurityHook';
 export * from './custom/MJResourcePermissionEntityServer.server';
+export * from './custom/MJConversationBranchEntityServer.server';
 export * from './custom/MJCommentEntityServer.server';
 export * from './custom/MJFieldSuggestionEntityServer.server';
 export * from './custom/ConversationAndCommentDrivers';

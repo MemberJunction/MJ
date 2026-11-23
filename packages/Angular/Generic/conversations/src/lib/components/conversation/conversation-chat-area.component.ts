@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostListener, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type WorkflowSaveInput, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
@@ -42,6 +42,11 @@ import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ConversationsRuntime, type MentionPerson } from '@memberjunction/conversations-runtime';
 import type { SessionEndReason } from '@memberjunction/realtime-runtime';
 import type { AgentReplyMode, AgentTurnHandler } from '../../models/agent-turn.model';
+import { SideQuestionPanelComponent } from '../side-question/side-question-panel.component';
+import {
+  AfterSideQuestionTurnEventArgs,
+  BeforeSideQuestionTurnEventArgs
+} from '../side-question/side-question-events';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { UserHoldsAuthorization } from '../../services/user-authorization';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
@@ -447,6 +452,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() AllowForking = true;
 
   private _allowRemoteBrowser = false;
+  /**
+   * Host-level opt-in for Antigravity-style Side Questions (`[Side Qs]` header button, `Alt+/`
+   * shortcut, floating drawer / dockable split pane). Defaults true.
+   */
+  @Input() AllowSideQuestions = true;
+
   /**
    * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
    * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
@@ -1621,6 +1632,113 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Output() conversationRenamed = this.ConversationRenamed;
   @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() BeforeSideQuestionTurn = new EventEmitter<BeforeSideQuestionTurnEventArgs>();
+  @Output() AfterSideQuestionTurn = new EventEmitter<AfterSideQuestionTurnEventArgs>();
+
+  @ViewChild(SideQuestionPanelComponent) private sideQuestionPanel?: SideQuestionPanelComponent;
+  public IsSideQuestionOpen = false;
+  public SideQuestionTurnCount = 0;
+
+  /** @deprecated Use {@link SideQuestionTurnCount}. */
+  public get SideQuestionMessageCount(): number {
+    return this.SideQuestionTurnCount;
+  }
+  /** @deprecated Use {@link SideQuestionTurnCount}. */
+  public set SideQuestionMessageCount(value: number) {
+    this.SideQuestionTurnCount = value;
+  }
+  private sideQuestionSubDestroy$?: Subject<void>;
+
+  public get CanUseSideQuestions(): boolean {
+    return this.AllowSideQuestions !== false
+      && Boolean(this.Conversation?.ID)
+      && !this.Conversation?.ParentID;
+  }
+
+  public get ActiveMainAgentNames(): string[] {
+    return (this.InProgressMessageIds ?? [])
+      .map((id) => this.agentNameFor(id))
+      .filter((name): name is string => Boolean(name));
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  public OnGlobalSideQuestionShortcut(event: KeyboardEvent): void {
+    if (!this.CanUseSideQuestions) {
+      return;
+    }
+    if (event.altKey && !event.ctrlKey && !event.metaKey && (event.key === '/' || event.code === 'Slash')) {
+      event.preventDefault();
+      this.ToggleSideQuestions();
+    }
+  }
+
+  public ToggleSideQuestions(): void {
+    if (!this.CanUseSideQuestions) {
+      return;
+    }
+    this.IsSideQuestionOpen = !this.IsSideQuestionOpen;
+    if (this.IsSideQuestionOpen) {
+      this.sideQuestionPanel?.FocusInput();
+    }
+    this.cdr?.markForCheck?.();
+  }
+
+  public OpenSideQuestions(): void {
+    if (!this.CanUseSideQuestions) {
+      return;
+    }
+    this.IsSideQuestionOpen = true;
+    setTimeout(() => this.sideQuestionPanel?.FocusInput(), 0);
+    this.cdr?.markForCheck?.();
+  }
+
+  public CloseSideQuestions(): void {
+    this.IsSideQuestionOpen = false;
+    this.cdr?.markForCheck?.();
+  }
+
+  private bindSideQuestionScope(): void {
+    this.sideQuestionSubDestroy$?.next();
+    this.sideQuestionSubDestroy$?.complete();
+    this.sideQuestionSubDestroy$ = new Subject<void>();
+
+    const convId = this.Conversation?.ID;
+    if (!convId || !this.CurrentUser || !this.CanUseSideQuestions) {
+      this.SideQuestionTurnCount = 0;
+      return;
+    }
+
+    const branchId = this.OpenViewBranchId ?? null;
+    const scope$ = ConversationsRuntime.Instance.SideQuestions
+      .ObserveScope(convId, branchId)
+      .pipe(takeUntil(this.sideQuestionSubDestroy$));
+    const bounded$ = this.destroy$ ? scope$.pipe(takeUntil(this.destroy$)) : scope$;
+    bounded$.subscribe((state) => {
+      this.SideQuestionTurnCount =
+        state.Messages.length > 0
+          ? state.Messages.filter((m) => m.Role === 'User').length
+          : state.TurnCount;
+      this.cdr?.markForCheck?.();
+    });
+
+    if (this.ProviderToUse) {
+      if (this.IsSideQuestionOpen) {
+        void ConversationsRuntime.Instance.SideQuestions.LoadScope(
+          convId,
+          branchId,
+          this.CurrentUser,
+          this.ProviderToUse
+        );
+      } else {
+        void ConversationsRuntime.Instance.SideQuestions.LoadScopeSummary(
+          convId,
+          branchId,
+          this.CurrentUser,
+          this.ProviderToUse
+        );
+      }
+    }
+  }
 
   /**
    * @deprecated Use {@link OpenEntityRecord}.
@@ -3960,6 +4078,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.forkSummaryRefreshTimer = null;
     }
 
+    this.sideQuestionSubDestroy$?.next();
+    this.sideQuestionSubDestroy$?.complete();
+
     // Complete destroy subject to cleanup subscriptions
     this.destroy$.next();
     this.destroy$.complete();
@@ -4005,6 +4126,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.clearTurnTracking();
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
+    this.IsSideQuestionOpen = false;
+    this.SideQuestionTurnCount = 0;
+    this.sideQuestionSubDestroy$?.next();
     // A conversation's browser ends with it: the next conversation starts without one. Reloading the SAME
     // conversation (the overlay-to-workspace handoff) keeps it.
     const browserConversation = this.remoteBrowser?.ConversationId;
@@ -4100,6 +4224,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
 
       this.touchMessageInputCache(conversationId);
+      this.bindSideQuestionScope();
 
       // Only show loading spinner if the engine doesn't have cached data for this conversation.
       // This prevents the "no messages" flash when switching between conversations.
@@ -5369,7 +5494,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       this.IsRenamingTitle = false;
       this.openView = next;
-      return await this.reloadWindowForView();
+      const loaded = await this.reloadWindowForView();
+      this.bindSideQuestionScope();
+      return loaded;
     } finally {
       this.viewChangeInFlight = false;
     }
@@ -8348,6 +8475,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ensureRemoteBrowser().Open(this.ConversationId);
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
+    this.IsSideQuestionOpen = false;
+    this.SideQuestionTurnCount = 0;
+    this.sideQuestionSubDestroy$?.next();
     this.SelectedArtifactId = null;
     this.ShowRemoteBrowserPanel = true;
     this.cdr.detectChanges();

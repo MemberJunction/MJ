@@ -156,6 +156,8 @@ export * from './lib/components/slots/mj-chat-message-extra-default.component';
 export * from './lib/components/slots/mj-chat-demonstration-surface-default.component';
 export * from './lib/components/slots/mj-chat-message-bubble-default.component';
 export * from './lib/events/chat-events';
+export * from './lib/components/side-question/side-question-events';
+export * from './lib/components/side-question/side-question-panel.component';
 
 // Realtime / voice (PR #2787 — co-agent realtime sessions)
 export * from './lib/components/realtime/realtime-agent-picker.component';

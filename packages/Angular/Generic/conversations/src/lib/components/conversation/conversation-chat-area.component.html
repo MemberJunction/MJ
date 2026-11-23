@@ -105,6 +105,19 @@
             <span class="forks-count">{{ ForkSummaries.length }}</span>
           </button>
         }
+        @if (CanUseSideQuestions) {
+          <button mjButton Variant="flat" Size="sm" class="side-questions-button"
+            [class.active]="IsSideQuestionOpen"
+            [attr.aria-expanded]="IsSideQuestionOpen"
+            (click)="ToggleSideQuestions()"
+            title="Ask parallel side questions with full thread &amp; live run context (Alt+/)">
+            <i class="fa-solid fa-comments"></i>
+            <span class="btn-label">Side Qs</span>
+            @if (SideQuestionTurnCount > 0) {
+              <span class="side-questions-count">{{ SideQuestionTurnCount }}</span>
+            }
+          </button>
+        }
         @if (allowPinning && pinnedMessageCount > 0) {
           <button class="pin-chip" [class.active]="showPinsPanel" (click)="TogglePinsPanel()" title="View pinned messages">
             <i class="fa-solid fa-thumbtack"></i>
@@ -486,12 +499,34 @@
               <div class="loading-peripheral-placeholder">
                 <mj-loading text="Loading conversation data..." size="medium"></mj-loading>
               </div>
-            } @else if (ReadOnly) {
-              <div class="read-only-banner" role="status">
-                <i class="fa-solid fa-eye"></i>
-                <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
-              </div>
             } @else {
+              @if (CanUseSideQuestions && IsSideQuestionOpen) {
+                <div class="side-question-above-slot">
+                  <mj-side-question-panel
+                    [Provider]="ProviderToUse"
+                    [CurrentUser]="CurrentUser"
+                    [ParentConversation]="Conversation"
+                    [ParentBranchId]="OpenViewBranchId"
+                    [ApplicationId]="ApplicationId"
+                    [AllowedAgentIDs]="AllowedAgentIDs"
+                    [AllowMentions]="AllowMentions"
+                    [AllowAgentMentions]="AllowAgentMentions"
+                    [AllowEntityMentions]="AllowEntityMentions"
+                    [MentionPeople]="MentionPeople"
+                    [MainRunsInFlightCount]="InFlightCount"
+                    [ActiveMainAgentNames]="ActiveMainAgentNames"
+                    (Close)="CloseSideQuestions()"
+                    (BeforeSideQuestionTurn)="BeforeSideQuestionTurn.emit($event)"
+                    (AfterSideQuestionTurn)="AfterSideQuestionTurn.emit($event)">
+                  </mj-side-question-panel>
+                </div>
+              }
+              @if (ReadOnly) {
+                <div class="read-only-banner" role="status">
+                  <i class="fa-solid fa-eye"></i>
+                  <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
+                </div>
+              } @else {
               @if (isReadOnlyView) {
                 <div class="read-only-banner" role="status">
                   <i class="fa-solid fa-eye"></i>
@@ -576,11 +611,38 @@
                     (beforeAgentTurn)="beforeAgentTurn.emit($event)"
                     (afterAgentTurn)="afterAgentTurn.emit($event)"
                     (uploadStateChanged)="onUploadStateChanged($event)">
+                    @if (inputRef.conversationId === conversationId && CanUseSideQuestions && !IsSideQuestionOpen && (InFlightCount > 0 || SideQuestionTurnCount > 0)) {
+                      <div
+                        composerFooter
+                        class="composer-side-question-footer"
+                        (mousedown)="$event.stopPropagation()"
+                        (click)="$event.stopPropagation()">
+                        <button
+                          type="button"
+                          class="side-question-below-trigger"
+                          (mousedown)="$event.stopPropagation()"
+                          (click)="$event.stopPropagation(); OpenSideQuestions()"
+                          title="Ask a parallel side question (defaults to Sage, or @mention any agent)">
+                          <span class="side-question-below-trigger-left">
+                            <i class="fa-solid fa-comments" aria-hidden="true"></i>
+                            <span>Ask a side question…</span>
+                            @if (SideQuestionTurnCount > 0) {
+                              <span class="side-question-below-trigger-count">{{ SideQuestionTurnCount }}</span>
+                            }
+                          </span>
+                          <span class="side-question-below-trigger-right">
+                            <kbd>Alt+/</kbd>
+                            <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                          </span>
+                        </button>
+                      </div>
+                    }
                   </mj-message-input>
                 }
               </div>
               @if (ComposerHint) {
                 <div class="fork-composer-hint">{{ ComposerHint }}</div>
+              }
               }
             }
           </div>

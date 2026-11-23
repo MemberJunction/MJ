@@ -61,6 +61,12 @@ export const RUNTIME_STATE_TAG = 'mj-runtime-state';
 /** Tag wrapping a relocated agent specialization (child prompt) in the trailing fragment. */
 export const AGENT_SPECIALIZATION_TAG = 'mj-agent-specialization';
 
+/** Tag wrapping the live snapshot of active/recent parent conversation runs for Side Questions. */
+export const ACTIVE_RUNS_SNAPSHOT_TAG = 'mj-active-runs-snapshot';
+
+/** Self-closing structural tag marking the boundary between Main Conversation history and Side Question turns. */
+export const SIDE_QUESTION_THREAD_BOUNDARY_TAG = 'mj-side-question-thread';
+
 /** Heading of the date/time block, in the fragment and in the legacy system-prompt layout alike. */
 export const RUNTIME_STATE_DATETIME_HEADING = '## Current Date/Time';
 

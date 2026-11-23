@@ -58,6 +58,7 @@ export const CONVERSATION_TYPE_CODES = {
     MEETING_ROOM: 'MEETING_ROOM',
     COMMENT: 'COMMENT',
     AGENT_CHANNEL: 'AGENT_CHANNEL',
+    SIDE_QUESTION: 'SIDE_QUESTION',
 } as const;
 
 export type BuiltInConversationTypeCode =
@@ -74,6 +75,7 @@ export const BUILT_IN_CONVERSATION_TYPE_IDS: Readonly<Record<BuiltInConversation
     MEETING_ROOM: '2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926',
     COMMENT: '17E6A105-AE51-43A2-9D56-290BC8D1D6BB',
     AGENT_CHANNEL: '09E7A069-DB29-4329-BB29-4DF8CB998D94',
+    SIDE_QUESTION: '3B81EB3D-92D7-4947-92CE-D250F8928861',
 };
 
 const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversationTypeCode>> = {
@@ -85,6 +87,8 @@ const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversat
     comment: 'COMMENT',
     'agent channel': 'AGENT_CHANNEL',
     agent_channel: 'AGENT_CHANNEL',
+    'side question': 'SIDE_QUESTION',
+    side_question: 'SIDE_QUESTION',
 };
 
 /**
@@ -312,6 +316,14 @@ export interface CreateConversationOptions {
      * Optional explicit `MJ: Conversation Types.ID` (takes precedence over {@link typeCode}).
      */
     typeId?: string;
+    /**
+     * Optional parent Conversation ID when creating a child side-question thread (`ParentID`).
+     */
+    parentId?: string | null;
+    /**
+     * Optional parent fork (`ConversationBranchID`) when a side-question thread is scoped to a fork.
+     */
+    parentBranchId?: string | null;
 }
 
 /**
@@ -2148,7 +2160,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         userId: string,
         sharedConversationIds: string[],
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean },
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean; includeSideQuestions?: boolean },
         sharedProjectIds: string[] = []
     ): string {
         const ownershipClause = `UserID='${userId}'`;
@@ -2175,7 +2187,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const recordLinkedClause = options?.includeRecordLinked
             ? ''
             : ` AND LinkedEntityID IS NULL`;
-        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}`;
+        // Child side-question threads live inside their parent conversation's side-question UI
+        // and must not clutter the top-level Chat sidebar list.
+        const sideQuestionClause = options?.includeSideQuestions
+            ? ''
+            : ` AND ParentID IS NULL`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}${sideQuestionClause}`;
     }
 
     /**
@@ -2594,16 +2611,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         conversation.Name = name;
         conversation.EnvironmentID = environmentId;
         conversation.UserID = contextUser.ID;
+        const defaultTypeCode = options?.anchorType
+            ? CONVERSATION_TYPE_CODES.COMMENT
+            : options?.parentId
+                ? CONVERSATION_TYPE_CODES.SIDE_QUESTION
+                : CONVERSATION_TYPE_CODES.CHAT;
         const resolvedTypeId =
             options?.typeId ??
-            this.ResolveConversationTypeID(
-                options?.typeCode ??
-                    (options?.anchorType ? CONVERSATION_TYPE_CODES.COMMENT : CONVERSATION_TYPE_CODES.CHAT)
-            ) ??
-            BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
+            this.ResolveConversationTypeID(options?.typeCode ?? defaultTypeCode) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS[defaultTypeCode];
         conversation.TypeID = resolvedTypeId;
         if (description) conversation.Description = description;
         if (projectId) conversation.ProjectID = projectId;
+        if (options?.parentId !== undefined) {
+            conversation.ParentID = options.parentId;
+        }
+        if (options?.parentBranchId !== undefined) {
+            conversation.ParentBranchID = options.parentBranchId;
+        }
 
         // Application scoping — when set by an embedded chat surface (e.g.
         // the Form Builder cockpit), keeps this conversation OUT of the main
@@ -2673,6 +2698,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             conversation.ApplicationScope !== 'Application' &&
             conversation.AnchorType == null &&
             conversation.LinkedEntityID == null &&
+            conversation.ParentID == null &&
             !this.GetConversation(conversation.ID)
         ) {
             const updated = [conversation, ...this._conversations$.value];
@@ -5768,6 +5794,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 const scope = data['ApplicationScope'] as string | undefined;
                 const anchorType = data['AnchorType'] as string | null | undefined;
                 const linkedEntityId = data['LinkedEntityID'] as string | null | undefined;
+                const parentId = data['ParentID'] as string | null | undefined;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
                 const inLoadedEnvironment =
@@ -5777,6 +5804,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                     scope !== 'Application' &&
                     anchorType == null &&
                     linkedEntityId == null &&
+                    parentId == null &&
                     !isArchived &&
                     inLoadedEnvironment
                 ) {
@@ -6084,6 +6112,194 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (!saved) {
             throw new Error(conversation.LatestResult?.Message || 'Failed to update conversation');
         }
+        return true;
+    }
+
+    /**
+     * Loads active (non-archived) child side-question threads owned by `contextUser`
+     * for a parent conversation and optional fork branch, newest first.
+     */
+    public async LoadSideConversations(
+        parentConversationId: string,
+        parentBranchId: string | null,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationEntity[]> {
+        const md = provider ?? this.ProviderToUse;
+        const userIdClause = contextUser?.ID ? ` AND UserID='${EscapeSQLString(contextUser.ID)}'` : '';
+        const branchClause = parentBranchId
+            ? ` AND ParentBranchID='${EscapeSQLString(parentBranchId)}'`
+            : ' AND ParentBranchID IS NULL';
+        const rv = RunView.FromMetadataProvider(md);
+        const result = await rv.RunView<MJConversationEntity>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: `ParentID='${EscapeSQLString(parentConversationId)}'${branchClause}${userIdClause} AND (IsArchived IS NULL OR IsArchived=0)`,
+                OrderBy: '__mj_CreatedAt DESC',
+                BypassCache: true,
+                SkipTotalRowCount: true,
+                ResultType: 'entity_object'
+            },
+            contextUser
+        );
+        if (!result.Success) {
+            throw new Error(result.ErrorMessage || `Failed to load side conversations for ${parentConversationId}`);
+        }
+        return result.Results ?? [];
+    }
+
+    /**
+     * Returns the current active side-question thread for `(parentConversationId, parentBranchId, contextUser)`,
+     * or creates a persistent child `MJ: Conversations` record of type `SIDE_QUESTION`.
+     */
+    public async GetOrCreateSideConversation(
+        parentConversationId: string,
+        parentBranchId: string | null,
+        options?: { name?: string; environmentId?: string; projectId?: string | null; defaultAgentId?: string | null },
+        contextUser?: UserInfo
+    ): Promise<MJConversationEntity> {
+        const user = contextUser ?? this.ContextUser;
+        if (!user) {
+            throw new Error('GetOrCreateSideConversation requires a user context.');
+        }
+        const existing = await this.LoadSideConversations(parentConversationId, parentBranchId, user);
+        if (existing.length > 0) {
+            return existing[0];
+        }
+
+        let environmentId = options?.environmentId;
+        let projectId = options?.projectId ?? undefined;
+        let parentName: string | null | undefined;
+        const cachedParent = this.GetConversation(parentConversationId);
+        if (cachedParent) {
+            environmentId = environmentId || cachedParent.EnvironmentID;
+            projectId = projectId ?? cachedParent.ProjectID ?? undefined;
+            parentName = cachedParent.Name;
+        }
+        if (!environmentId) {
+            const parentEntity = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+            if (!(await parentEntity.Load(parentConversationId))) {
+                throw new Error(`Parent conversation ${parentConversationId} could not be loaded.`);
+            }
+            environmentId = parentEntity.EnvironmentID;
+            projectId = projectId ?? parentEntity.ProjectID ?? undefined;
+            parentName = parentEntity.Name;
+        }
+
+        const threadName = options?.name?.trim()
+            || (parentName ? `Side Questions: ${parentName}` : 'Side Questions');
+        return this.CreateConversation(
+            threadName,
+            environmentId,
+            user,
+            undefined,
+            projectId,
+            {
+                parentId: parentConversationId,
+                parentBranchId: parentBranchId ?? null,
+                typeCode: CONVERSATION_TYPE_CODES.SIDE_QUESTION,
+                ...(options?.defaultAgentId !== undefined ? { defaultAgentId: options.defaultAgentId } : {}),
+            }
+        );
+    }
+
+    /**
+     * Loads persisted detail messages for a side-question child conversation in chronological order.
+     */
+    public async LoadSideConversationDetails(
+        sideConversationId: string,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationDetailEntity[]> {
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const result = await rv.RunView<MJConversationDetailEntity>(
+            {
+                EntityName: 'MJ: Conversation Details',
+                ExtraFilter: `ConversationID='${EscapeSQLString(sideConversationId)}'`,
+                OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
+                BypassCache: true,
+                SkipTotalRowCount: true,
+                ResultType: 'entity_object',
+            },
+            contextUser
+        );
+        if (!result.Success) {
+            throw new Error(result.ErrorMessage || `Failed to load details for side conversation ${sideConversationId}`);
+        }
+        return result.Results ?? [];
+    }
+
+    /**
+     * Lightweight summary lookup for `(parentConversationId, parentBranchId, contextUser)`:
+     * avoids instantiating entity objects or loading detail rows when no side conversation exists
+     * or when only the question turn count and saved default agent are needed for badges/headers.
+     */
+    public async GetSideConversationSummary(
+        parentConversationId: string,
+        parentBranchId: string | null,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<{ SideConversationId: string | null; DefaultAgentID: string | null; TurnCount: number }> {
+        const md = provider ?? this.ProviderToUse;
+        const userIdClause = contextUser?.ID ? ` AND UserID='${EscapeSQLString(contextUser.ID)}'` : '';
+        const branchClause = parentBranchId
+            ? ` AND ParentBranchID='${EscapeSQLString(parentBranchId)}'`
+            : ' AND ParentBranchID IS NULL';
+        const rv = RunView.FromMetadataProvider(md);
+        const convResult = await rv.RunView<{ ID: string; DefaultAgentID?: string | null }>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: `ParentID='${EscapeSQLString(parentConversationId)}'${branchClause}${userIdClause} AND (IsArchived IS NULL OR IsArchived=0)`,
+                OrderBy: '__mj_CreatedAt DESC',
+                Fields: ['ID', 'DefaultAgentID'],
+                MaxRows: 1,
+                BypassCache: true,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        if (!convResult.Success) {
+            throw new Error(convResult.ErrorMessage || `Failed to inspect side conversation summary for ${parentConversationId}`);
+        }
+        const sideRow = convResult.Results?.[0];
+        if (!sideRow) {
+            return { SideConversationId: null, DefaultAgentID: null, TurnCount: 0 };
+        }
+        const countResult = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Conversation Details',
+                ExtraFilter: `ConversationID='${EscapeSQLString(sideRow.ID)}' AND Role='User'`,
+                ResultType: 'count_only',
+            },
+            contextUser
+        );
+        return {
+            SideConversationId: sideRow.ID,
+            DefaultAgentID: sideRow.DefaultAgentID ?? null,
+            TurnCount: countResult.Success ? countResult.TotalRowCount : 0,
+        };
+    }
+
+    /**
+     * Archives a side-question thread (`IsArchived = 1`) so the UI starts a fresh child thread
+     * on the next question without losing audit history or mutating the parent conversation.
+     */
+    public async ClearSideConversation(
+        sideConversationId: string,
+        contextUser?: UserInfo
+    ): Promise<boolean> {
+        const user = contextUser ?? this.ContextUser;
+        const conversation = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+        if (!(await conversation.Load(sideConversationId))) {
+            return false;
+        }
+        conversation.IsArchived = true;
+        if (!(await conversation.Save())) {
+            throw new Error(conversation.LatestResult?.Message || `Failed to clear side conversation ${sideConversationId}`);
+        }
+        this.removeDetailCache(sideConversationId);
         return true;
     }
 

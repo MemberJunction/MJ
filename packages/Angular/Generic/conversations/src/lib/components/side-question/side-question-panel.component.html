@@ -1,0 +1,186 @@
+<div
+  class="side-question-panel"
+  role="complementary"
+  aria-label="Side Questions"
+  (keydown.escape)="OnPanelEscape($event)">
+
+  <!-- Header -->
+  <div class="sq-header">
+    <div class="sq-title-group">
+      <span class="sq-icon" aria-hidden="true">
+        <i class="fa-solid fa-comments"></i>
+      </span>
+      <span class="sq-title">Side Question</span>
+
+      <mj-conversation-agent-picker
+        [Conversation]="State?.SideConversation ?? null"
+        [SelectedAgentId]="State?.PreferredAgentId ?? null"
+        [AllowUnboundSelection]="true"
+        [Compact]="true"
+        [DefaultLabel]="DefaultAgentName"
+        [DefaultMenuOptionLabel]="DefaultAgentOptionLabel"
+        [MenuHeader]="'Agent for side questions'"
+        [CurrentUser]="CurrentUser"
+        [AllowedAgentIDs]="AllowedAgentIDs"
+        [Disabled]="IsBusyAsking"
+        (AgentChanged)="OnSideAgentChanged($event)">
+      </mj-conversation-agent-picker>
+
+      <span
+        class="sq-context-badge"
+        [class.is-live]="MainRunsInFlightCount > 0"
+        title="Reads full main-thread history and live agent runs without interrupting them">
+        <span class="sq-context-dot" aria-hidden="true"></span>
+        <span>{{ LiveContextBadgeText }}</span>
+      </span>
+    </div>
+
+    <div class="sq-header-actions">
+      @if (HasTurns) {
+        <div class="sq-nav" role="group" aria-label="Side question navigation">
+          <button
+            type="button"
+            class="sq-nav-arrow"
+            [disabled]="!CanGoPrevious"
+            (click)="GoToPreviousTurn()"
+            title="Previous side question"
+            aria-label="Previous side question">
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+          </button>
+          <span class="sq-nav-counter">{{ EffectiveTurnIndex + 1 }} / {{ TurnCount }}</span>
+          <button
+            type="button"
+            class="sq-nav-arrow"
+            [disabled]="!CanGoNext"
+            (click)="GoToNextTurn()"
+            title="Next side question"
+            aria-label="Next side question">
+            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </button>
+        </div>
+      }
+
+      @if (HasMessages) {
+        <button
+          mjButton
+          Variant="flat"
+          Size="sm"
+          [disabled]="IsBusyAsking"
+          (click)="RequestClear()"
+          title="Clear side-question history">
+          <i class="fa-solid fa-eraser"></i>
+        </button>
+      }
+
+      <button
+        mjButton
+        Variant="flat"
+        Size="sm"
+        (click)="OnCloseClicked()"
+        title="Close Side Questions (Esc)"
+        aria-label="Close Side Questions">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Inline Clear Confirmation (Confirm LEFT, Cancel RIGHT) -->
+  @if (ConfirmingClear) {
+    <div class="sq-clear-confirm" role="alertdialog" aria-label="Confirm clear side questions">
+      <span class="sq-clear-text">Clear all side questions here? Main thread history stays intact.</span>
+      <div class="sq-clear-actions">
+        <button mjButton Variant="danger" Size="sm" (click)="ConfirmClear()">Confirm Clear</button>
+        <button mjButton Variant="secondary" Size="sm" (click)="CancelClear()">Cancel</button>
+      </div>
+    </div>
+  }
+
+  <!-- Single-Turn Paginated Viewport -->
+  @if (State?.IsLoading && !HasTurns) {
+    <div class="sq-turn-viewport">
+      <div class="sq-empty-state">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        <span>Loading side questions...</span>
+      </div>
+    </div>
+  } @else if (CurrentTurn; as turn) {
+    <div class="sq-turn-viewport">
+      <div class="sq-active-question">
+        <span class="sq-question-index">Q{{ turn.Index + 1 }}</span>
+        <span class="sq-question-text">{{ FormatUserQuestion(turn.Question.Message) }}</span>
+      </div>
+
+      <div #answerContainer class="sq-active-answer">
+        <div class="sq-agent-meta">
+          <i
+            [class]="turn.IsStreaming ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-sparkles'"
+            aria-hidden="true"></i>
+          <span>
+            {{
+              turn.IsStreaming
+                ? (State?.ActiveAgentName || CurrentAgentLabel)
+                : (turn.Answer?.Agent || State?.ActiveAgentName || 'Sage')
+            }}
+          </span>
+          @if (turn.IsStreaming && State?.ActiveStatusText && !State?.StreamingText) {
+            <span class="sq-status-pill">{{ State?.ActiveStatusText }}</span>
+          }
+        </div>
+
+        @if (turn.IsStreaming && State?.StreamingText) {
+          <div class="sq-answer-body">
+            <mj-markdown [data]="State?.StreamingText || ''" [OpenLinksInNewTab]="true"></mj-markdown>
+          </div>
+        } @else if (turn.Answer?.Message && turn.Answer!.Message!.trim().length > 0) {
+          <div class="sq-answer-body">
+            <mj-markdown [data]="turn.Answer!.Message!" [OpenLinksInNewTab]="true"></mj-markdown>
+          </div>
+        }
+      </div>
+
+      @if (State?.ErrorMessage) {
+        <div class="sq-error-banner" role="alert">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <span>{{ State?.ErrorMessage }}</span>
+        </div>
+      }
+    </div>
+  } @else if (State?.ErrorMessage) {
+    <div class="sq-turn-viewport">
+      <div class="sq-error-banner" role="alert">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span>{{ State?.ErrorMessage }}</span>
+      </div>
+    </div>
+  }
+
+  <!-- Compact AI-Aware Composer (supports @agent mentions like main chat) -->
+  <div class="sq-composer">
+    <mj-ai-composer
+      #aiComposer
+      [Placeholder]="ComposerPlaceholder"
+      [Disabled]="IsBusyAsking"
+      [Rows]="1"
+      [ShowCharacterCount]="false"
+      [EnableMentions]="AllowMentions"
+      [EnableAgentMentions]="AllowAgentMentions"
+      [EnableEntityMentions]="AllowEntityMentions"
+      [EnableSkillCommands]="false"
+      [TargetAgentId]="EffectiveSelectedAgent?.ID ?? null"
+      [AllowedAgentIDs]="AllowedAgentIDs"
+      [MentionPeople]="MentionPeople"
+      [EnableAttachments]="false"
+      [EnableRealtime]="false"
+      [EnablePlanMode]="false"
+      [SendSlotMode]="ComposerSendSlotMode"
+      [StopCount]="IsBusyAsking && State?.InFlightDetailId ? 1 : 0"
+      [StopLabel]="'Stop side question'"
+      [CurrentUser]="CurrentUser"
+      [Provider]="Provider"
+      [Value]="DraftQuestion"
+      (ValueChange)="OnDraftValueChanged($event)"
+      (TextSubmitted)="OnComposerSubmitted($event)"
+      (StopClicked)="OnStopAsking()">
+    </mj-ai-composer>
+  </div>
+</div>

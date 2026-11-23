@@ -13,10 +13,11 @@ import {
     UserInfo,
     WellKnownUserSource
 } from '@memberjunction/core';
-import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDMap, UUIDSet } from '@memberjunction/global';
 import {
     AnchoredConversationCandidate,
     FilterAnchoredConversationsForUser,
+    UserMayReadConversation,
     type MJConversationEntity
 } from '@memberjunction/core-entities';
 import { EntityNamesMatch, ResolveTargetEntityNameAsync } from './ArtifactSecurityHookHelpers';
@@ -31,6 +32,7 @@ interface ConversationRowProjection {
     AnchorKey?: string | null;
     AnchorMetadata?: string | null;
     AnchorMetadataObject?: MJConversationEntity['AnchorMetadataObject'];
+    ParentID?: string | null;
 }
 
 interface ConversationDetailRowProjection {
@@ -185,13 +187,17 @@ async function filterConversationsRunViewResult(
     // Check if any row is missing security columns due to a narrow `Fields` projection
     const missingMetadataIds: string[] = [];
     for (const row of rows) {
-        const hasSecurityCols =
+        const hasAnchoredCols =
             hasOwnOrEntityField(row, 'AnchorType') &&
             hasOwnOrEntityField(row, 'LinkedEntityID') &&
             hasOwnOrEntityField(row, 'LinkedRecordID') &&
             hasOwnOrEntityField(row, 'AnchorKey') &&
             hasOwnOrEntityField(row, 'AnchorMetadata');
-        if (!hasSecurityCols) {
+        const anchorTypeVal = hasAnchoredCols ? readRowField(row, 'AnchorType') : undefined;
+        // Anchored comment threads (AnchorType != null) don't carry ParentID; non-anchored rows
+        // (e.g. side-question children) also need ParentID present to verify parent read access.
+        const hasParentCol = anchorTypeVal != null || hasOwnOrEntityField(row, 'ParentID');
+        if (!hasAnchoredCols || !hasParentCol) {
             const id = String(readRowField(row, 'ID') ?? '').trim();
             if (id) {
                 missingMetadataIds.push(id);
@@ -199,7 +205,7 @@ async function filterConversationsRunViewResult(
         }
     }
 
-    const hydratedById = new Map<string, ConversationRowProjection>();
+    const hydratedById = new UUIDMap<ConversationRowProjection>();
     if (missingMetadataIds.length > 0) {
         const fetched = await fetchConversationsSecurityMetadataByIds(
             provider,
@@ -209,17 +215,27 @@ async function filterConversationsRunViewResult(
         );
         for (const item of fetched) {
             if (item.ID) {
-                hydratedById.set(NormalizeUUID(item.ID), item);
+                hydratedById.Set(item.ID, item);
             }
         }
     }
 
-    // Collect anchored candidates
+    // Collect anchored candidates and child-conversation (ParentID != null) candidates
     const anchoredCandidates: Array<AnchoredConversationCandidate & { __rowIndex: number }> = [];
+    const childCandidates: Array<{ __rowIndex: number; parentId: string }> = [];
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const rowId = String(readRowField(row, 'ID') ?? '').trim();
-        const hydrated = rowId ? hydratedById.get(NormalizeUUID(rowId)) : undefined;
+        const hydrated = rowId ? hydratedById.Get(rowId) : undefined;
+
+        const parentId = String(
+            (hydrated && hydrated.ParentID !== undefined
+                ? hydrated.ParentID
+                : readRowField(row, 'ParentID')) ?? ''
+        ).trim();
+        if (parentId) {
+            childCandidates.push({ __rowIndex: i, parentId });
+        }
 
         const anchorType = (
             hydrated ? hydrated.AnchorType : readRowField(row, 'AnchorType')
@@ -261,25 +277,46 @@ async function filterConversationsRunViewResult(
         });
     }
 
-    if (anchoredCandidates.length === 0) {
+    if (anchoredCandidates.length === 0 && childCandidates.length === 0) {
         return results;
     }
 
-    const allowedAnchored = await FilterAnchoredConversationsForUser(
-        provider,
-        contextUser,
-        anchoredCandidates
-    );
-    if (allowedAnchored.length === anchoredCandidates.length) {
+    const deniedRowIndexes = new Set<number>();
+
+    if (anchoredCandidates.length > 0) {
+        const allowedAnchored = await FilterAnchoredConversationsForUser(
+            provider,
+            contextUser,
+            anchoredCandidates
+        );
+        if (allowedAnchored.length < anchoredCandidates.length) {
+            const allowedIndexes = new Set<number>(allowedAnchored.map((c) => c.__rowIndex));
+            for (const candidate of anchoredCandidates) {
+                if (!allowedIndexes.has(candidate.__rowIndex)) {
+                    deniedRowIndexes.add(candidate.__rowIndex);
+                }
+            }
+        }
+    }
+
+    if (childCandidates.length > 0) {
+        const parentAllowed = await checkParentReadAccessMap(
+            provider,
+            contextUser,
+            childCandidates.map((c) => c.parentId)
+        );
+        for (const candidate of childCandidates) {
+            if (parentAllowed.Get(candidate.parentId) !== true) {
+                deniedRowIndexes.add(candidate.__rowIndex);
+            }
+        }
+    }
+
+    if (deniedRowIndexes.size === 0) {
         return results;
     }
 
-    const allowedRowIndexes = new Set<number>(allowedAnchored.map((c) => c.__rowIndex));
-    const anchoredRowIndexes = new Set<number>(anchoredCandidates.map((c) => c.__rowIndex));
-
-    const filteredRows = rows.filter(
-        (_row, index) => !anchoredRowIndexes.has(index) || allowedRowIndexes.has(index)
-    );
+    const filteredRows = rows.filter((_row, index) => !deniedRowIndexes.has(index));
     const removedCount = rows.length - filteredRows.length;
 
     return {
@@ -347,44 +384,56 @@ async function filterConversationDetailsRunViewResult(
         return results;
     }
 
-    // Fetch only parent conversations that are anchored (`AnchorType IS NOT NULL`)
-    const anchoredParents = await fetchConversationsSecurityMetadataByIds(
+    // Fetch parent conversations that are either anchored OR child side-question threads
+    const securityRows = await fetchConversationsSecurityMetadataByIds(
         provider,
         contextUser,
         [...conversationIdsByNorm.values()],
         true
     );
-    if (anchoredParents.length === 0) {
+    if (securityRows.length === 0) {
         return results;
     }
 
-    const allowedParents = await FilterAnchoredConversationsForUser(
-        provider,
-        contextUser,
-        anchoredParents
-    );
-    if (allowedParents.length === anchoredParents.length) {
-        return results;
-    }
-
-    const allowedNormIds = new Set<string>(
-        allowedParents.map((c) => NormalizeUUID(String(c.ID ?? '')))
-    );
-    const deniedNormIds = new Set<string>();
-    for (const parent of anchoredParents) {
-        const norm = NormalizeUUID(String(parent.ID ?? ''));
-        if (norm && !allowedNormIds.has(norm)) {
-            deniedNormIds.add(norm);
+    const deniedIds = new UUIDSet();
+    const anchoredParents = securityRows.filter((c) => c.AnchorType != null);
+    if (anchoredParents.length > 0) {
+        const allowedParents = await FilterAnchoredConversationsForUser(
+            provider,
+            contextUser,
+            anchoredParents
+        );
+        if (allowedParents.length < anchoredParents.length) {
+            const allowedSet = new UUIDSet(allowedParents.map((c) => c.ID));
+            for (const parent of anchoredParents) {
+                if (parent.ID && !allowedSet.Has(parent.ID)) {
+                    deniedIds.Add(parent.ID);
+                }
+            }
         }
     }
 
-    if (deniedNormIds.size === 0) {
+    const childParents = securityRows.filter((c) => typeof c.ParentID === 'string' && c.ParentID.trim().length > 0);
+    if (childParents.length > 0) {
+        const parentAllowed = await checkParentReadAccessMap(
+            provider,
+            contextUser,
+            childParents.map((c) => c.ParentID as string)
+        );
+        for (const childConv of childParents) {
+            if (childConv.ID && childConv.ParentID && parentAllowed.Get(childConv.ParentID) !== true) {
+                deniedIds.Add(childConv.ID);
+            }
+        }
+    }
+
+    if (deniedIds.Size === 0) {
         return results;
     }
 
     const filteredRows = rows.filter((_row, index) => {
         const convNorm = rowConvNormByIndex.get(index);
-        return !convNorm || !deniedNormIds.has(convNorm);
+        return !convNorm || !deniedIds.Has(convNorm);
     });
     const removedCount = rows.length - filteredRows.length;
 
@@ -399,11 +448,41 @@ async function filterConversationDetailsRunViewResult(
     };
 }
 
+/**
+ * Evaluates `UserMayReadConversation` once per unique parent conversation ID and returns a
+ * `UUIDMap<boolean>` (`true` iff the parent conversation loaded and `contextUser` may read it).
+ */
+async function checkParentReadAccessMap(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    parentIds: readonly string[]
+): Promise<UUIDMap<boolean>> {
+    const uniqueParents = new UUIDMap<string>();
+    for (const raw of parentIds) {
+        const trimmed = raw.trim();
+        if (trimmed && !uniqueParents.Has(trimmed)) {
+            uniqueParents.Set(trimmed, trimmed);
+        }
+    }
+    const allowedMap = new UUIDMap<boolean>();
+    await Promise.all(
+        [...uniqueParents.Values()].map(async (parentId) => {
+            try {
+                const decision = await UserMayReadConversation(provider, contextUser, parentId);
+                allowedMap.Set(parentId, Boolean(decision.Loaded && decision.Allowed));
+            } catch {
+                allowedMap.Set(parentId, false);
+            }
+        })
+    );
+    return allowedMap;
+}
+
 async function fetchConversationsSecurityMetadataByIds(
     provider: IMetadataProvider,
     contextUser: UserInfo,
     conversationIds: readonly string[],
-    anchoredOnly: boolean
+    securityRelevantOnly: boolean
 ): Promise<ConversationRowProjection[]> {
     const uniqueEscaped = Array.from(
         new Set(
@@ -420,14 +499,14 @@ async function fetchConversationsSecurityMetadataByIds(
     const systemUser = (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? contextUser;
     const rv = RunView.FromMetadataProvider(provider);
     const filterClauses = [`ID IN (${uniqueEscaped.join(',')})`];
-    if (anchoredOnly) {
-        filterClauses.push(`AnchorType IS NOT NULL`);
+    if (securityRelevantOnly) {
+        filterClauses.push(`(AnchorType IS NOT NULL OR ParentID IS NOT NULL)`);
     }
 
     const params: RunViewParams = {
         EntityName: 'MJ: Conversations',
         ExtraFilter: filterClauses.join(' AND '),
-        Fields: ['ID', 'LinkedEntityID', 'LinkedRecordID', 'AnchorType', 'AnchorKey', 'AnchorMetadata'],
+        Fields: ['ID', 'LinkedEntityID', 'LinkedRecordID', 'AnchorType', 'AnchorKey', 'AnchorMetadata', 'ParentID'],
         ResultType: 'simple'
     };
     INTERNAL_SECURITY_QUERY_PARAMS.add(params);

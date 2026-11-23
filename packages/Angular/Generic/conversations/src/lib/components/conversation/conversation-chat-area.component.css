@@ -1631,3 +1631,87 @@
   outline: none;
   border-color: var(--mj-border-focus);
 }
+
+/* Side Questions trigger & AGY-style live strip */
+.side-questions-button.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+}
+
+.side-questions-count {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
+  color: var(--mj-brand-primary);
+}
+
+.side-question-above-slot {
+  margin-bottom: 0.625rem;
+}
+
+.composer-side-question-footer {
+  border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-border-default));
+  border-radius: 0 0 10px 10px;
+  cursor: default;
+}
+
+.side-question-below-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 0 0 10px 10px;
+  border: none;
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.side-question-below-trigger:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
+}
+
+.side-question-below-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+.side-question-below-trigger-left,
+.side-question-below-trigger-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.side-question-below-trigger-left i {
+  color: var(--mj-brand-primary);
+}
+
+.side-question-below-trigger-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+  color: var(--mj-brand-primary);
+}
+
+.side-question-below-trigger kbd {
+  font-size: 10px;
+  font-family: inherit;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+}

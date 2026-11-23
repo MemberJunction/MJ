@@ -38,6 +38,7 @@ import { ConversationStreaming } from './streaming/ConversationStreaming';
 import { ConversationLiveness } from './streaming/ConversationLiveness';
 import { ConversationTail } from './streaming/ConversationTail';
 import { ConversationAgentRunner } from './agent-runner/ConversationAgentRunner';
+import { SideQuestionController } from './side-questions/SideQuestionController';
 import {
     INotificationAdapter,
     ConsoleNotificationAdapter,
@@ -185,6 +186,7 @@ export class ConversationsRuntime
     private _liveness?: ConversationLiveness;
     private _tail?: ConversationTail;
     private _agentRunner?: ConversationAgentRunner;
+    private _sideQuestions?: SideQuestionController;
 
     /** Mention parser — pure string logic. See {@link MentionParser}. */
     public get Mentions(): MentionParser {
@@ -297,6 +299,22 @@ export class ConversationsRuntime
         return this._agentRunner;
     }
 
+    /**
+     * Persistent side-question controller — lets users ask parallel read-only side questions
+     * anchored to a parent conversation/branch without affecting main runs. See {@link SideQuestionController}.
+     */
+    public get SideQuestions(): SideQuestionController {
+        if (!this._sideQuestions) {
+            this._sideQuestions = new SideQuestionController(
+                this.AgentRunner,
+                this._defaultAgent,
+                this.Streaming,
+                this._mentions
+            );
+        }
+        return this._sideQuestions;
+    }
+
     // ────────────────────────────────────────────────────────────────────
     // Lifecycle
     // ────────────────────────────────────────────────────────────────────
@@ -350,5 +368,6 @@ export class ConversationsRuntime
             this._streaming = undefined;
         }
         this._agentRunner = undefined;
+        this._sideQuestions = undefined;
     }
 }

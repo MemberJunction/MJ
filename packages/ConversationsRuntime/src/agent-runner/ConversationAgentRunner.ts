@@ -113,6 +113,20 @@ export interface ProcessMessageInput {
      */
     ReplyBranchID?: string | null;
     /**
+     * Optional configuration preset ID (`MJAIAgentConfigurationEntity.ID`) selected by an `@agent` mention.
+     */
+    configurationId?: string | null;
+    /** Maximum conversation history turns sent to the model (defaults to 20). */
+    maxHistoryMessages?: number;
+    /** Whether the agent may create persisted conversation artifacts on this turn (defaults to true). */
+    createArtifacts?: boolean;
+    /** Whether the server creates completion notifications for this turn (defaults to true). */
+    createNotification?: boolean;
+    /** When true, suppresses global error toast notifications (used by inline panels that render their own errors). */
+    suppressErrorToast?: boolean;
+    /** When false, omits this run from global `IsProcessing$` tracking (e.g. Side Question turns). Defaults to true. */
+    trackGlobalProcessing?: boolean;
+    /**
      * Optional untrusted advisory pre-discovery hint from client-side local ONNX/WASM inference.
      * Pre-filtered client-side against `availableAgents`, and always re-verified server-side.
      */
@@ -205,9 +219,12 @@ export class ConversationAgentRunner {
         const agent = await this.resolveAgent(input);
         if (!agent) return null;
 
+        const trackGlobalProcessing = input.trackGlobalProcessing !== false;
         try {
-            this._activeRunCount++;
-            this._isProcessing$.next(true);
+            if (trackGlobalProcessing) {
+                this._activeRunCount++;
+                this._isProcessing$.next(true);
+            }
 
             const currentUser = this.Provider.CurrentUser;
             if (!currentUser) {
@@ -241,7 +258,8 @@ export class ConversationAgentRunner {
                 UserMessageId: input.message.ID,
                 OnAccepted: input.onReplyAccepted,
                 AgentId: agent.ID,
-                MaxHistoryMessages: 20,
+                ...(input.configurationId ? { ConfigurationId: input.configurationId } : {}),
+                MaxHistoryMessages: input.maxHistoryMessages ?? 20,
                 Data: {
                     ALL_AVAILABLE_AGENTS: availableAgents.map((a) => ({
                         ID: a.ID,
@@ -265,8 +283,8 @@ export class ConversationAgentRunner {
                 ...(input.requestedSkillIDs?.length ? { RequestedSkillIDs: input.requestedSkillIDs } : {}),
                 ...(input.AgentHistoryFrom ? { AgentHistoryFrom: input.AgentHistoryFrom } : {}),
                 ...(input.ReplyBranchID ? { ReplyBranchId: input.ReplyBranchID } : {}),
-                CreateArtifacts: true,
-                CreateNotification: true,
+                CreateArtifacts: input.createArtifacts ?? true,
+                CreateNotification: input.createNotification ?? true,
                 OnProgress: input.onProgress
                     ? (progress) =>
                           input.onProgress!({
@@ -292,7 +310,9 @@ export class ConversationAgentRunner {
             }
             const errorMsg = runResult.ErrorMessage ?? 'Agent execution failed';
             console.error('[ConversationAgentRunner] Agent execution failed:', errorMsg);
-            this.context.Notification.Notify('error', errorMsg, 5_000);
+            if (!input.suppressErrorToast) {
+                this.context.Notification.Notify('error', errorMsg, 5_000);
+            }
             return coerceFailedExecuteAgentResult(
                 runResult.Result as ExecuteAgentResult | null | undefined,
                 errorMsg,
@@ -302,11 +322,15 @@ export class ConversationAgentRunner {
                 'Error processing message through agent: ' +
                 (error instanceof Error ? error.message : String(error));
             console.error('[ConversationAgentRunner] Error processing message:', error);
-            this.context.Notification.Notify('error', errorMsg, 5_000);
+            if (!input.suppressErrorToast) {
+                this.context.Notification.Notify('error', errorMsg, 5_000);
+            }
             return coerceFailedExecuteAgentResult<ExecuteAgentResult>(undefined, errorMsg);
         } finally {
-            this._activeRunCount = Math.max(0, this._activeRunCount - 1);
-            this._isProcessing$.next(this._activeRunCount > 0);
+            if (trackGlobalProcessing) {
+                this._activeRunCount = Math.max(0, this._activeRunCount - 1);
+                this._isProcessing$.next(this._activeRunCount > 0);
+            }
         }
     }
 

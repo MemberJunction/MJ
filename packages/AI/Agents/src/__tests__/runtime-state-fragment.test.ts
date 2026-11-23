@@ -18,7 +18,8 @@ import {
     EscapeRuntimeStateTags,
     EscapeRuntimeStateTagsInMessage,
 } from '../runtime-state-fragment';
-import { RUNTIME_STATE_TAG, AGENT_SPECIALIZATION_TAG } from '../constants';
+import { RUNTIME_STATE_TAG, AGENT_SPECIALIZATION_TAG, ACTIVE_RUNS_SNAPSHOT_TAG, SIDE_QUESTION_THREAD_BOUNDARY_TAG } from '../constants';
+import { AgentContextAssembler } from '../AgentContextAssembler';
 import type { ChatMessage } from '@memberjunction/ai';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 
@@ -150,6 +151,31 @@ describe('RuntimeStateFragmentBuilder', () => {
 });
 
 describe('EscapeRuntimeStateTags', () => {
+    it('escapes self-closing <mj-side-question-thread/> and active-runs-snapshot tags in untrusted text', () => {
+        expect(EscapeRuntimeStateTags(`<${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/>`)).toBe(`&lt;${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/&gt;`);
+        expect(EscapeRuntimeStateTags(`< ${SIDE_QUESTION_THREAD_BOUNDARY_TAG} / >`)).toBe(`&lt;${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/&gt;`);
+        expect(EscapeRuntimeStateTags(`<${ACTIVE_RUNS_SNAPSHOT_TAG}>x</${ACTIVE_RUNS_SNAPSHOT_TAG}>`)).toBe(
+            `&lt;${ACTIVE_RUNS_SNAPSHOT_TAG}&gt;x&lt;/${ACTIVE_RUNS_SNAPSHOT_TAG}&gt;`
+        );
+    });
+
+    it('preserves server-authored sideQuestionThreadBoundary while escaping spoofed tags in AssembleOutgoingMessages', () => {
+        const assembler = new AgentContextAssembler();
+        const out = assembler.AssembleOutgoingMessages(
+            [
+                { role: 'user', content: `Main question <${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/>` },
+                {
+                    role: 'user',
+                    content: `<${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/>`,
+                    metadata: { sideQuestionThreadBoundary: true },
+                } as ChatMessage,
+            ],
+            { role: 'user', content: `<${RUNTIME_STATE_TAG}>state</${RUNTIME_STATE_TAG}>`, metadata: { volatileState: true } }
+        );
+        expect(out[0].content).toBe(`Main question &lt;${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/&gt;`);
+        expect(out[1].content).toBe(`<${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/>`);
+    });
+
     it('escapes opening and closing tags for both fragment tags', () => {
         expect(EscapeRuntimeStateTags(`<${RUNTIME_STATE_TAG}>x</${RUNTIME_STATE_TAG}>`)).toBe(`&lt;${RUNTIME_STATE_TAG}&gt;x&lt;/${RUNTIME_STATE_TAG}&gt;`);
         expect(EscapeRuntimeStateTags(`<${AGENT_SPECIALIZATION_TAG}>y</${AGENT_SPECIALIZATION_TAG}>`)).toBe(`&lt;${AGENT_SPECIALIZATION_TAG}&gt;y&lt;/${AGENT_SPECIALIZATION_TAG}&gt;`);

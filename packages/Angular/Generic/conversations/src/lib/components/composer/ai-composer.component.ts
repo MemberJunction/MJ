@@ -70,6 +70,7 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       (PlanModeToggle)="planModeToggle.emit()"
       (BeforeSkillsOpened)="beforeSkillsOpened.emit($event)"
       (AfterSkillsOpened)="afterSkillsOpened.emit()">
+      <ng-content select="[composerFooter]" composerFooter></ng-content>
     </mj-message-input-box>
   `
 })

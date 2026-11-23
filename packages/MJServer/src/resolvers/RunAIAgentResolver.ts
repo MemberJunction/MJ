@@ -1,9 +1,10 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, ServerOperationScopeManager } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine, ConversationWindowSourceRow, UserMayReadConversation } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import {
+    ActiveAgentRunSnapshotService,
     AgentRunner,
     ArtifactToolManager,
     CanAgentOwnSubAgentConsults,
@@ -12,6 +13,7 @@ import {
     HostAllowedAgentIDs,
     KeepHostAllowedAgents,
     LoadOpenSubAgentConsults,
+    SIDE_QUESTION_THREAD_BOUNDARY_TAG,
 } from '@memberjunction/ai-agents';
 import {
     AttachmentData,
@@ -23,6 +25,7 @@ import {
     MJAIAgentRunEntityExtended,
     SanitizeEdgePreDiscoveryHint,
     BuildTaskGraphStartDebug,
+    SideQuestionExecutionContext,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
@@ -36,7 +39,7 @@ import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import { AuthorizeConversationTurn } from '../realtimeSessions/sessionAccess.js';
 import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
-import { EscapeSQLString, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, SafeJSONParse, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
 
@@ -48,6 +51,19 @@ import { NotificationEngine } from '@memberjunction/notifications';
  * pre-existing per-call MAX_INLINE_ARTIFACT_CHARS / maxInlineChars constants.
  */
 const INLINE_SIZE_CAP = 100 * 1024;
+
+interface ConversationParentLink {
+    ParentID: string | null;
+    ParentBranchID: string | null;
+}
+
+/**
+ * Bounded process-local cache of `(ConversationID -> { ParentID, ParentBranchID })`.
+ * Safe across requests because `ParentID` and `ParentBranchID` are immutable after creation.
+ * Eliminates repeated DB round-trips on hot normal conversation turns.
+ */
+const MAX_PARENT_LINK_CACHE_ENTRIES = 2048;
+const CONVERSATION_PARENT_LINK_CACHE = new UUIDMap<ConversationParentLink>();
 
 /** Progress metadata is an untyped bag. A run is an object that carries an ID field. */
 function isAgentRunEntity(value: unknown): value is MJAIAgentRunEntityExtended {
@@ -381,7 +397,9 @@ export class RunAIAgentResolver extends ResolverBase {
          *  writes into this instance, so its writes carry the server-authored marker and the user it was made as. */
         replyDetail?: MJConversationDetailEntityExtended,
         /** Optional explicit handoff override; defaults to whether the caller registered `userPayload` as interactive. */
-        followHandoffs?: boolean
+        followHandoffs?: boolean,
+        /** Side-question isolation & live snapshot context, when running inside a child Side Question thread. */
+        sideQuestionContext?: SideQuestionExecutionContext
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         // Best-effort handle for persistInFlightAgentFailure. Populated from a
@@ -468,6 +486,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 ConversationHistoryFrom: conversationHistoryFrom,
                 ...(conversationBranchId ? { ConversationBranchID: conversationBranchId } : {}),
                 ...(allowHandoff ? { handoffChain: [] as string[] } : {}),
+                ...(sideQuestionContext ? { SideQuestionContext: sideQuestionContext } : {}),
                 data: parsedData,
                 // Whether the run may read the reserved data keys (scope, agent-type params); BaseAgent drops them otherwise.
                 TrustReservedRunData: trustReservedRunData,
@@ -1302,9 +1321,10 @@ export class RunAIAgentResolver extends ResolverBase {
             // with an open sub-agent consult continues that run rather than starting over: chain it
             // by LastRunID (the chat client never sends one) and, when the caller supplied no
             // payload, roll the prior run's FinalPayload into this run's start.
-            let effectiveLastRunId = lastRunId;
-            let effectiveAutoPopulate = autoPopulateLastRunPayload;
-            if (!effectiveLastRunId) {
+            const isSideQuestion = Boolean(turn.SideQuestionContext?.ReadOnlyMode);
+            let effectiveLastRunId = isSideQuestion ? undefined : lastRunId;
+            let effectiveAutoPopulate = isSideQuestion ? false : autoPopulateLastRunPayload;
+            if (!isSideQuestion && !effectiveLastRunId) {
                 const chainable = await this.findChainablePredecessor(turn.ConversationId, effectiveAgentId, branchId, currentUser, p);
                 if (chainable) {
                     effectiveLastRunId = chainable.runId;
@@ -1319,20 +1339,40 @@ export class RunAIAgentResolver extends ResolverBase {
                 }
             }
 
+            const effectiveCreateArtifacts = isSideQuestion ? false : (createArtifacts || false);
+            const effectiveCreateNotification = isSideQuestion ? false : (createNotification || false);
+            const effectiveFollowHandoffs = isSideQuestion ? false : undefined;
+
             if (fireAndForget) {
                 // Fire-and-forget mode: start execution in background, return immediately.
                 // The client will receive the result via WebSocket PubSub completion event.
-                this.executeAgentInBackground(
-                    p, dataSource, effectiveAgentId, effectiveUserPayload, turn.MessagesJson, sessionId, pubSub,
-                    data, payload, effectiveLastRunId, effectiveAutoPopulate, configurationId,
-                    reply.ID, createArtifacts || false, createNotification || false,
-                    sourceArtifactId, sourceArtifactVersionId, turn.ConversationId, planMode, requestedSkillIDs,
-                    undefined, // taskGraphDebug
-                    historyFrom,
-                    trustRunData,
-                    branchId,
-                    reply
-                );
+                if (isSideQuestion) {
+                    this.executeAgentInBackground(
+                        p, dataSource, effectiveAgentId, effectiveUserPayload, turn.MessagesJson, sessionId, pubSub,
+                        data, payload, effectiveLastRunId, effectiveAutoPopulate, configurationId,
+                        reply.ID, effectiveCreateArtifacts, effectiveCreateNotification,
+                        sourceArtifactId, sourceArtifactVersionId, turn.ConversationId, planMode, requestedSkillIDs,
+                        undefined, // taskGraphDebug
+                        historyFrom,
+                        trustRunData,
+                        branchId,
+                        reply,
+                        effectiveFollowHandoffs,
+                        turn.SideQuestionContext
+                    );
+                } else {
+                    this.executeAgentInBackground(
+                        p, dataSource, effectiveAgentId, effectiveUserPayload, turn.MessagesJson, sessionId, pubSub,
+                        data, payload, effectiveLastRunId, effectiveAutoPopulate, configurationId,
+                        reply.ID, effectiveCreateArtifacts, effectiveCreateNotification,
+                        sourceArtifactId, sourceArtifactVersionId, turn.ConversationId, planMode, requestedSkillIDs,
+                        undefined, // taskGraphDebug
+                        historyFrom,
+                        trustRunData,
+                        branchId,
+                        reply
+                    );
+                }
 
                 LogStatus(`🔥 Fire-and-forget: Agent ${effectiveAgentId} execution started in background for session ${sessionId}`);
 
@@ -1349,6 +1389,39 @@ export class RunAIAgentResolver extends ResolverBase {
             }
 
             // Synchronous mode (default): wait for execution to complete
+            if (isSideQuestion) {
+                return this.executeAIAgent(
+                    p,
+                    dataSource,
+                    effectiveAgentId,
+                    effectiveUserPayload,
+                    turn.MessagesJson,
+                    sessionId,
+                    pubSub,
+                    data,
+                    payload,
+                    undefined, // templateData
+                    effectiveLastRunId,
+                    effectiveAutoPopulate,
+                    configurationId,
+                    reply.ID,
+                    effectiveCreateArtifacts,
+                    effectiveCreateNotification,
+                    sourceArtifactId,
+                    sourceArtifactVersionId,
+                    turn.ConversationId, // LATENCY OPT #2: pass pre-resolved conversationId
+                    undefined, // runRef
+                    planMode,
+                    requestedSkillIDs,
+                    undefined, // taskGraphDebug
+                    historyFrom,
+                    trustRunData,
+                    branchId,
+                    reply,
+                    effectiveFollowHandoffs,
+                    turn.SideQuestionContext
+                );
+            }
             return this.executeAIAgent(
                 p,
                 dataSource,
@@ -1364,8 +1437,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 effectiveAutoPopulate,
                 configurationId,
                 reply.ID,
-                createArtifacts || false,
-                createNotification || false,
+                effectiveCreateArtifacts,
+                effectiveCreateNotification,
                 sourceArtifactId,
                 sourceArtifactVersionId,
                 turn.ConversationId, // LATENCY OPT #2: pass pre-resolved conversationId
@@ -1400,7 +1473,14 @@ export class RunAIAgentResolver extends ResolverBase {
         p: DatabaseProviderBase,
         user: UserInfo,
         request: ConversationTurnRequest
-    ): Promise<{ ConversationId: string; BranchId: string | null; MessagesJson: string; Reply: MJConversationDetailEntityExtended; Announcement?: MJConversationDetailEntityExtended }> {
+    ): Promise<{
+        ConversationId: string;
+        BranchId: string | null;
+        MessagesJson: string;
+        Reply: MJConversationDetailEntityExtended;
+        Announcement?: MJConversationDetailEntityExtended;
+        SideQuestionContext?: SideQuestionExecutionContext;
+    }> {
         // LATENCY OPTIMIZATION (Opt #2 + #3): the user's message is loaded once here for its conversation and
         // branch, which are threaded through the call chain rather than reloaded downstream.
         const placement = await this.loadPlacementOf(p, user, request.UserMessageId);
@@ -1409,7 +1489,10 @@ export class RunAIAgentResolver extends ResolverBase {
         // anonymous visitor: every visitor is the one shared Anonymous user, so under a guest role whose row
         // filters key on UserID another visitor's message loads fine (MJ#6032). The conversation's scope stamp
         // decides instead, exactly as it does for the realtime gates — and before any row is written.
-        const access = await AuthorizeConversationTurn(conversationId, user, p);
+        const [access, parentLink] = await Promise.all([
+            AuthorizeConversationTurn(conversationId, user, p),
+            this.resolveConversationParentLink(p, user, conversationId),
+        ]);
         if (!access.Allowed) {
             LogError(`RunAIAgentFromConversationDetail: anonymous visitor ${user.AnonymousVisitorID ?? '(no visitor id)'} refused a turn in conversation ${conversationId} (${access.Reason})`);
             throw new Error('Not authorized: you do not own this conversation');
@@ -1420,9 +1503,46 @@ export class RunAIAgentResolver extends ResolverBase {
         const parentId = request.ReplyParentId
             ? await this.validateReplyParent(p, user, request.ReplyParentId, conversationId)
             : request.UserMessageId;
-        const messages = await this.loadConversationHistoryWithAttachments(conversationId, user, request.MaxHistoryMessages, p, undefined, request.HistoryFrom, branchId);
+
+        let sideQuestionContext: SideQuestionExecutionContext | undefined;
+        let messages: ChatMessage[];
+
+        if (parentLink.ParentID) {
+            const parentReadDecision = await UserMayReadConversation(p, user, parentLink.ParentID);
+            if (!parentReadDecision.Loaded || !parentReadDecision.Allowed) {
+                throw new Error(parentReadDecision.Reason ?? 'Not authorized to read the parent conversation');
+            }
+            const parentBranchId = parentLink.ParentBranchID ?? null;
+            const [combinedMessages, snapshot] = await Promise.all([
+                this.loadSideQuestionCombinedHistory(
+                    parentLink.ParentID,
+                    parentBranchId,
+                    conversationId,
+                    user,
+                    request.MaxHistoryMessages,
+                    p,
+                    request.HistoryFrom
+                ),
+                ActiveAgentRunSnapshotService.Instance.CaptureSnapshot({
+                    ParentConversationID: parentLink.ParentID,
+                    ParentBranchID: parentBranchId,
+                    ContextUser: user,
+                    Provider: p,
+                }),
+            ]);
+            messages = combinedMessages;
+            sideQuestionContext = {
+                ParentConversationID: parentLink.ParentID,
+                ParentBranchID: parentBranchId,
+                ReadOnlyMode: true,
+                ActiveRunsSnapshot: snapshot,
+            };
+        } else {
+            messages = await this.loadConversationHistoryWithAttachments(conversationId, user, request.MaxHistoryMessages, p, undefined, request.HistoryFrom, branchId);
+        }
+
         const runner = new AgentRunner(p);
-        const announcement = request.AnnouncedByAgentId
+        const announcement = !sideQuestionContext && request.AnnouncedByAgentId
             ? await this.postContinuationAnnouncement(runner, user, conversationId, branchId, parentId, request.AnnouncedByAgentId, request.AgentId)
             : undefined;
         const reply = await runner.CreateAgentReplyDetail({
@@ -1433,7 +1553,66 @@ export class RunAIAgentResolver extends ResolverBase {
             parentId: announcement?.ID ?? parentId,
             provider: p
         });
-        return { ConversationId: conversationId, BranchId: branchId, MessagesJson: JSON.stringify(messages), Reply: reply, Announcement: announcement };
+        return {
+            ConversationId: conversationId,
+            BranchId: branchId,
+            MessagesJson: JSON.stringify(messages),
+            Reply: reply,
+            Announcement: announcement,
+            ...(sideQuestionContext ? { SideQuestionContext: sideQuestionContext } : {}),
+        };
+    }
+
+    /**
+     * Resolves immutable `(ParentID, ParentBranchID)` metadata for a conversation via the process-local
+     * cache or a lightweight `simple` projection (`0ms` on repeat turns, no `BaseEntity` allocation).
+     */
+    private async resolveConversationParentLink(
+        p: DatabaseProviderBase,
+        user: UserInfo,
+        conversationId: string
+    ): Promise<ConversationParentLink> {
+        if ('RunView' in p && typeof p.RunView === 'function') {
+            const cached = CONVERSATION_PARENT_LINK_CACHE.Get(conversationId);
+            if (cached) {
+                return cached;
+            }
+            const res = await RunView.FromMetadataProvider(p).RunView<ConversationParentLink & { ID: string }>(
+                {
+                    EntityName: 'MJ: Conversations',
+                    ExtraFilter: `ID='${EscapeSQLString(conversationId)}'`,
+                    Fields: ['ID', 'ParentID', 'ParentBranchID'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple',
+                },
+                user
+            );
+            if (res.Success && res.Results && res.Results.length > 0) {
+                const row = res.Results[0];
+                const link: ConversationParentLink = {
+                    ParentID: row.ParentID ?? null,
+                    ParentBranchID: row.ParentBranchID ?? null,
+                };
+                if (CONVERSATION_PARENT_LINK_CACHE.Size >= MAX_PARENT_LINK_CACHE_ENTRIES) {
+                    CONVERSATION_PARENT_LINK_CACHE.Clear();
+                }
+                CONVERSATION_PARENT_LINK_CACHE.Set(conversationId, link);
+                return link;
+            }
+            return { ParentID: null, ParentBranchID: null };
+        }
+
+        if (typeof p.GetEntityObject === 'function') {
+            const conv = await p.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+            if (await conv.Load(conversationId)) {
+                return {
+                    ParentID: conv.ParentID ?? null,
+                    ParentBranchID: conv.ParentBranchID ?? null,
+                };
+            }
+        }
+        return { ParentID: null, ParentBranchID: null };
     }
 
     /** The conversation, branch (null is Main) and sequence of a message, read as `user`; throws when they can't read it. */
@@ -1738,7 +1917,11 @@ export class RunAIAgentResolver extends ResolverBase {
         /** The conversation branch of the run — threaded through to ExecuteAgentParams.ConversationBranchID. */
         conversationBranchId?: string | null,
         /** The reply row this request created for the run — see executeAIAgent. */
-        replyDetail?: MJConversationDetailEntityExtended
+        replyDetail?: MJConversationDetailEntityExtended,
+        /** Optional explicit handoff override passed through to executeAIAgent. */
+        followHandoffs?: boolean,
+        /** Side-question isolation & live snapshot context passed through to executeAIAgent. */
+        sideQuestionContext?: SideQuestionExecutionContext
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
@@ -1754,13 +1937,23 @@ export class RunAIAgentResolver extends ResolverBase {
 
         // executeAIAgent resolves on every failure and publishes the run's completion itself (PublishFinal, or
         // PublishFailure from its catch), so nothing here publishes one.
-        this.executeAIAgent(
-            p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
-            data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
-            configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug,
-            conversationHistoryFrom, trustReservedRunData, conversationBranchId, replyDetail
-        ).catch((error: unknown) => {
+        const execPromise = (followHandoffs !== undefined || sideQuestionContext !== undefined)
+            ? this.executeAIAgent(
+                  p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                  data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
+                  configurationId, conversationDetailId, createArtifacts, createNotification,
+                  sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug,
+                  conversationHistoryFrom, trustReservedRunData, conversationBranchId, replyDetail,
+                  followHandoffs, sideQuestionContext
+              )
+            : this.executeAIAgent(
+                  p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                  data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
+                  configurationId, conversationDetailId, createArtifacts, createNotification,
+                  sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug,
+                  conversationHistoryFrom, trustReservedRunData, conversationBranchId, replyDetail
+              );
+        execPromise.catch((error: unknown) => {
             // Only a broken executeAIAgent contract lands here. Logged rather than left as an unhandled rejection;
             // no completion is published, because executeAIAgent may already have sent one.
             LogError(`🔥 Fire-and-forget run of agent ${agentId} for session ${sessionId} rejected, which executeAIAgent never should`, undefined, error);
@@ -1787,6 +1980,36 @@ export class RunAIAgentResolver extends ResolverBase {
      * read-only history assembly. The 'simple' result type returns plain JS objects,
      * reducing per-record overhead (~30ms total savings).
      */
+    private async loadSideQuestionCombinedHistory(
+        parentConversationId: string,
+        parentBranchId: string | null,
+        sideConversationId: string,
+        contextUser: UserInfo,
+        maxMessages: number,
+        provider: IMetadataProvider,
+        historyFrom?: Date
+    ): Promise<ChatMessage[]> {
+        const [parentRows, sideRows] = await Promise.all([
+            ConversationEngine.LoadWindowRowsFresh(parentConversationId, contextUser, provider, historyFrom, parentBranchId),
+            ConversationEngine.LoadWindowRowsFresh(sideConversationId, contextUser, provider, undefined, null)
+        ]);
+        // Omit blank in-progress assistant placeholders from the parent thread so an active parent turn's
+        // empty row does not skew prefix history; live parent progress arrives in <mj-active-runs-snapshot>.
+        const settledParentRows = parentRows.filter(
+            (r) => !(r.Role !== 'User' && (!r.Message || !r.Message.trim()))
+        );
+        const [parentMessages, sideMessages] = await Promise.all([
+            this.buildMessagesFromWindowRows(settledParentRows, contextUser, maxMessages, provider, undefined, historyFrom),
+            this.buildMessagesFromWindowRows(sideRows, contextUser, maxMessages, provider)
+        ]);
+        const boundaryMessage = {
+            role: 'user',
+            content: `<${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/>`,
+            metadata: { sideQuestionThreadBoundary: true },
+        } as ChatMessage;
+        return [...parentMessages, boundaryMessage, ...sideMessages];
+    }
+
     private async loadConversationHistoryWithAttachments(
         conversationId: string,
         contextUser: UserInfo,
@@ -1816,6 +2039,18 @@ export class RunAIAgentResolver extends ResolverBase {
         //   4. A history floor (`historyFrom`) is applied in the query, so rows before it never
         //      leave the database, and again in the assembly, which then skips the summary.
         const rows = await ConversationEngine.LoadWindowRowsFresh(conversationId, contextUser, provider, historyFrom, branchId);
+        return this.buildMessagesFromWindowRows(rows, contextUser, maxMessages, provider, excludeDetailIds, historyFrom, speakerAttribution);
+    }
+
+    private async buildMessagesFromWindowRows(
+        rows: ConversationWindowSourceRow[],
+        contextUser: UserInfo,
+        maxMessages: number,
+        provider: IMetadataProvider,
+        excludeDetailIds?: string[],
+        historyFrom?: Date,
+        speakerAttribution?: 'off' | 'auto' | 'always'
+    ): Promise<ChatMessage[]> {
         const window = ConversationEngine.AssembleContextWindow(rows, {
             maxTailMessages: maxMessages,
             excludeDetailIds,

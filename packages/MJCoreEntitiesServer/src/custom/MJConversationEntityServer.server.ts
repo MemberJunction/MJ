@@ -132,6 +132,7 @@ export class MJConversationEntityServer extends MJConversationEntity {
             checkParentSelfReference(this),
             checkParentOwnerOnlyChange(this),
             checkInheritanceReadingsAgree(this),
+            checkSideQuestionParentLink(this),
         ]) {
             if (violation) {
                 result.Errors.push(violation);
@@ -224,25 +225,48 @@ export class MJConversationEntityServer extends MJConversationEntity {
             this.RegisterResultHistoryEntry(result);
             return false;
         }
+        const childFailure = await deleteChildSideConversations(this, options);
+        if (childFailure) {
+            const result = new BaseEntityResult();
+            result.StartedAt = new Date();
+            result.Success = false;
+            result.Type = 'delete';
+            result.Message = childFailure;
+            result.EndedAt = new Date();
+            this.RegisterResultHistoryEntry(result);
+            return false;
+        }
         return super.Delete(options);
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const typeIdField = typeof this.GetFieldByName === 'function' ? this.GetFieldByName('TypeID') : undefined;
+        const hasChatDefault = !this.TypeID || UUIDsEqual(this.TypeID, BUILT_IN_CONVERSATION_TYPE_IDS.CHAT);
         const shouldDefaultAnchoredToComment =
             !this.IsSaved &&
             Boolean(this.AnchorType) &&
             !typeIdField?.Dirty &&
             Boolean(this.TypeID && UUIDsEqual(this.TypeID, BUILT_IN_CONVERSATION_TYPE_IDS.CHAT));
-        if (!this.TypeID || shouldDefaultAnchoredToComment) {
+        const shouldDefaultSideQuestion =
+            !this.IsSaved &&
+            !this.AnchorType &&
+            Boolean(this.ParentBranchID) &&
+            !typeIdField?.Dirty &&
+            hasChatDefault;
+        if (!this.TypeID || shouldDefaultAnchoredToComment || shouldDefaultSideQuestion) {
             const defaultCode = this.AnchorType
                 ? CONVERSATION_TYPE_CODES.COMMENT
-                : CONVERSATION_TYPE_CODES.CHAT;
+                : shouldDefaultSideQuestion
+                    ? CONVERSATION_TYPE_CODES.SIDE_QUESTION
+                    : CONVERSATION_TYPE_CODES.CHAT;
+            const fallbackId = this.AnchorType
+                ? BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT
+                : shouldDefaultSideQuestion
+                    ? BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION
+                    : BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
             this.TypeID =
                 ConversationEngine.Instance.ResolveConversationTypeID(defaultCode) ??
-                (this.AnchorType
-                    ? BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT
-                    : BUILT_IN_CONVERSATION_TYPE_IDS.CHAT);
+                fallbackId;
         }
         const additionalData = typeof this.GetFieldByName === 'function' ? this.GetFieldByName('AdditionalData') : undefined;
         if (additionalData?.Dirty) {
@@ -379,6 +403,63 @@ export class MJConversationEntityServer extends MJConversationEntity {
     }
 }
 
+function resolveSideQuestionTypeId(): string {
+    return (
+        ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SIDE_QUESTION) ??
+        BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION
+    );
+}
+
+function isSideQuestionType(entity: Pick<MJConversationEntity, 'TypeID'>): boolean {
+    if (!entity.TypeID) {
+        return false;
+    }
+    const resolved = resolveSideQuestionTypeId();
+    return UUIDsEqual(entity.TypeID, resolved) || UUIDsEqual(entity.TypeID, BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION);
+}
+
+async function deleteChildSideConversations(
+    entity: MJConversationEntity,
+    options?: EntityDeleteOptions
+): Promise<string | null> {
+    // Side-question threads never own child side questions.
+    if (isSideQuestionType(entity)) {
+        return null;
+    }
+    const provider = toMetadataProvider(entity.ProviderToUse);
+    if (!entity.ID || !provider || provider.ProviderType !== 'Database' || !('RunView' in provider) || typeof provider.RunView !== 'function') {
+        return null;
+    }
+    const systemUser =
+        (await WellKnownUserSource.Instance.GetSystemUser(provider)) ??
+        UserCache.Instance.GetSystemUser();
+    const actor = systemUser ?? entity.ContextCurrentUser;
+    const rv = RunView.FromMetadataProvider(provider);
+    const sideQuestionTypeId = resolveSideQuestionTypeId();
+    const queryParams: RunViewParams = {
+        EntityName: 'MJ: Conversations',
+        ExtraFilter: `ParentID='${EscapeSQLString(entity.ID)}' AND TypeID='${EscapeSQLString(sideQuestionTypeId)}'`,
+        SkipTotalRowCount: true,
+        BypassCache: true,
+        ResultType: 'entity_object'
+    };
+    MarkInternalConversationSecurityQuery(queryParams);
+    const result = await rv.RunView<MJConversationEntity>(queryParams, actor);
+    if (!result.Success) {
+        LogError(`MJConversationEntityServer: failed to check child side conversations before delete (${entity.ID}): ${result.ErrorMessage}`);
+        return 'Unable to verify child side-question threads before deleting this conversation.';
+    }
+    if (!result.Results || result.Results.length === 0) {
+        return null;
+    }
+    for (const child of result.Results) {
+        if (!(await child.Delete(options))) {
+            return child.LatestResult?.CompleteMessage?.trim() || 'Failed to delete a child side-question conversation.';
+        }
+    }
+    return null;
+}
+
 /**
  * Refuses `AdditionalData` that the conversation list's SQL filter and the parser would read differently, from
  * anyone, the owner and the server included. The `LIKE` filter also matches the key nested in another object,
@@ -509,8 +590,46 @@ function checkParentOwnerOnlyChange(entity: MJConversationEntity): ValidationErr
 }
 
 /**
- * Enforces that whenever `ParentID` is set on create or changed on update by a non-system user,
- * the target parent conversation exists AND belongs to `ContextCurrentUser` (`parent.UserID`).
+ * Enforces `ParentBranchID` requires `ParentID` (mirroring `CK_Conversation_ParentLink`)
+ * and keeps `ParentID`/`ParentBranchID` immutable after save for `SIDE_QUESTION` threads.
+ */
+function checkSideQuestionParentLink(entity: MJConversationEntity): ValidationErrorInfo | null {
+    if (entity.ParentBranchID && !entity.ParentID) {
+        return new ValidationErrorInfo(
+            'ParentBranchID',
+            'ParentBranchID cannot be set without ParentID.',
+            null,
+            ValidationErrorType.Failure,
+        );
+    }
+    if (!entity.IsSaved || !isSideQuestionType(entity)) {
+        return null;
+    }
+    const user = entity.ContextCurrentUser;
+    if (user && WellKnownUserSource.Instance.IsSystemUser(user)) {
+        return null;
+    }
+    const dirtyParent = entity.GetFieldByName('ParentID')?.Dirty;
+    const dirtyBranch = entity.GetFieldByName('ParentBranchID')?.Dirty;
+    if (!dirtyParent && !dirtyBranch && !IsSetByTransactionVariable(entity, ['ParentID', 'ParentBranchID'])) {
+        return null;
+    }
+    return new ValidationErrorInfo(
+        dirtyBranch && !dirtyParent ? 'ParentBranchID' : 'ParentID',
+        'ParentID and ParentBranchID cannot be modified after a side-question conversation is created.',
+        null,
+        ValidationErrorType.Failure,
+    );
+}
+
+/**
+ * Enforces that whenever `ParentID` (or `ParentBranchID`) is set on create or changed on update
+ * by a non-system user, the target parent conversation exists and:
+ * - For `SIDE_QUESTION` threads: the parent is a top-level conversation and the user can read it
+ *   (`UserCanReadConversation`), allowing private per-user side questions on shared conversations
+ *   without relaxing PR #6851's strict child-read isolation.
+ * - For all other conversations: the parent belongs to `ContextCurrentUser` (`parent.UserID`).
+ * When `ParentBranchID` is also set, verifies the branch belongs to `ParentID`.
  */
 async function checkParentTargetOwnership(entity: MJConversationEntityServer): Promise<string | null> {
     const provider = toMetadataProvider(entity.ProviderToUse);
@@ -522,8 +641,10 @@ async function checkParentTargetOwnership(entity: MJConversationEntityServer): P
         return null;
     }
     const parentField = typeof entity.GetFieldByName === 'function' ? entity.GetFieldByName('ParentID') : undefined;
+    const branchField = typeof entity.GetFieldByName === 'function' ? entity.GetFieldByName('ParentBranchID') : undefined;
     const parentChanged = !entity.IsSaved || Boolean(parentField?.Dirty) || IsSetByTransactionVariable(entity, ['ParentID', 'ID']);
-    if (!entity.ParentID || !parentChanged) {
+    const branchChanged = !entity.IsSaved || Boolean(branchField?.Dirty) || IsSetByTransactionVariable(entity, ['ParentBranchID', 'ID']);
+    if (!entity.ParentID || (!parentChanged && !branchChanged)) {
         return null;
     }
     if (entity.ID && UUIDsEqual(entity.ParentID, entity.ID)) {
@@ -537,11 +658,24 @@ async function checkParentTargetOwnership(entity: MJConversationEntityServer): P
     const queryParams: RunViewParams = {
         EntityName: 'MJ: Conversations',
         ExtraFilter: `ID='${EscapeSQLString(entity.ParentID)}'`,
-        Fields: ['ID', 'UserID'],
+        Fields: [
+            'ID',
+            'UserID',
+            'ParentID',
+            'ProjectID',
+            'AdditionalData',
+            'AnchorType',
+            'LinkedEntityID',
+            'LinkedRecordID',
+            'AnchorKey',
+            'AnchorMetadata',
+            'TypeID',
+            'ExternalID',
+        ],
         ResultType: 'simple',
     };
     MarkInternalConversationSecurityQuery(queryParams);
-    const read = await rv.RunView<{ ID: string; UserID: string | null }>(queryParams, readUser);
+    const read = await rv.RunView<ConversationSecurityRow>(queryParams, readUser);
     if (!read.Success) {
         return `Could not verify parent conversation ownership: ${read.ErrorMessage}`;
     }
@@ -549,8 +683,35 @@ async function checkParentTargetOwnership(entity: MJConversationEntityServer): P
     if (!parentRow) {
         return 'The target parent conversation does not exist.';
     }
-    if (!parentRow.UserID || !UUIDsEqual(parentRow.UserID, user.ID)) {
+    const isParentOwner = Boolean(parentRow.UserID && UUIDsEqual(parentRow.UserID, user.ID));
+    if (isSideQuestionType(entity)) {
+        if (parentRow.ParentID) {
+            return 'Side-question threads cannot be nested inside another child conversation.';
+        }
+        if (!isParentOwner) {
+            const canReadParent = await UserCanReadConversation(provider, user, parentRow);
+            if (!canReadParent) {
+                return 'You do not have permission to read the parent conversation.';
+            }
+        }
+    } else if (!isParentOwner) {
         return 'You can only nest a conversation under a parent conversation that you own.';
+    }
+    if (entity.ParentBranchID && branchChanged) {
+        const branchRead = await rv.RunView<{ ID: string; ConversationID: string }>(
+            {
+                EntityName: 'MJ: Conversation Branches',
+                ExtraFilter: `ID='${EscapeSQLString(entity.ParentBranchID)}'`,
+                Fields: ['ID', 'ConversationID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            readUser
+        );
+        const branchRow = branchRead.Success ? branchRead.Results[0] : undefined;
+        if (!branchRow || !UUIDsEqual(branchRow.ConversationID, entity.ParentID)) {
+            return 'ParentBranchID does not belong to the specified parent conversation.';
+        }
     }
     return null;
 }
