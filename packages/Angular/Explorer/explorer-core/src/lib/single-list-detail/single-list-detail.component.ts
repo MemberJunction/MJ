@@ -8,7 +8,7 @@ import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql
 import { CapabilitiesForLevel, type ApplyResult, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists-base';
 import {
   ListSharingService, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue,
-  CreateListsClient, ListChangeApplied, ListChangeFailureMessage, RecordCountText,
+  AddViewResultsToList, CreateListsClient, ListChangeApplied, ListChangeFailureMessage, RecordCountText, RunListChange,
 } from '@memberjunction/ng-list-management';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
@@ -1565,9 +1565,11 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   private notifyMoveCopyResult(result: ApplyResult, isMove: boolean, targetName: string, requested: number): void {
     const verb = isMove ? 'Move' : 'Copy';
     if (!result.Success) {
-      const sourceNote = isMove && result.ResultCode === 'PARTIAL_SUCCESS' ? ' — nothing was removed from this list' : '';
-      this.sharedService.CreateSimpleNotification(
-        `${verb} failed: ${ListChangeFailureMessage(result, 'unknown error')}${sourceNote}`, 'error', 5000);
+      // After a partial move the server message says what was added and what stayed in the source.
+      const text = isMove && result.ResultCode === 'PARTIAL_SUCCESS' && result.Message
+        ? `Move incomplete: ${result.Message}`
+        : `${verb} failed: ${ListChangeFailureMessage(result, 'unknown error')}`;
+      this.sharedService.CreateSimpleNotification(text, 'error', 5000);
       return;
     }
     const added = result.Counts?.Added ?? 0;
@@ -1613,7 +1615,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     this.RemoveTotal = this.SelectedKeys.length;
     this.RemoveProgress = 0;
 
-    const result = await this.runListChange(() =>
+    const result = await RunListChange(() =>
       CreateListsClient(this.ProviderToUse).RemoveRecordsFromList(this.ListRecord!.ID, this.extractSelectedRecordIds()));
     this.notifyRemoveResult(result);
 
@@ -1636,15 +1638,6 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     }
   }
 
-  /** Runs a server list change and turns a thrown error into a failed result. */
-  private async runListChange(call: () => Promise<ApplyResult>): Promise<ApplyResult> {
-    try {
-      return await call();
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: message };
-    }
-  }
 
   private notifyRemoveResult(result: ApplyResult): void {
     const removedText = `Removed ${RecordCountText(result.Counts?.Removed ?? 0)} from list`;
@@ -1855,7 +1848,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     this.AddTotal = recordsToAdd.length;
     this.AddProgress = 0;
 
-    const result = await this.runListChange(() =>
+    const result = await RunListChange(() =>
       CreateListsClient(this.ProviderToUse).AddRecordsToList(this.ListRecord!.ID, recordsToAdd.map(r => r.ID)));
     this.notifyAddResult(result);
 
@@ -1968,7 +1961,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     this.FetchingRecordsToSave = true;
     this.cdr.detectChanges();
 
-    const result = await this.addViewResults(this.ListRecord.ID);
+    const result = await AddViewResultsToList(CreateListsClient(this.ProviderToUse), this.UserViewsToAdd.map(view => view.ID), this.ListRecord.ID);
     this.FetchingRecordsToSave = false;
 
     if (result.Success && (result.Counts?.Added ?? 0) === 0) {
@@ -1991,28 +1984,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     }
   }
 
-  /** Adds the results of every selected view to the list, one server call per view, and sums the counts. */
-  private async addViewResults(listId: string): Promise<ApplyResult> {
-    const client = CreateListsClient(this.ProviderToUse);
-    const total: ApplyResult = { Success: true, ResultCode: 'SUCCESS', Message: '', Counts: { Added: 0, Removed: 0, Failed: 0 }, Errors: [] };
-    for (const view of this.UserViewsToAdd) {
-      const result = await this.runListChange(() => client.AddViewResultsToList(view.ID, listId));
-      this.mergeViewResult(total, result);
-    }
-    return total;
-  }
 
-  private mergeViewResult(total: ApplyResult, result: ApplyResult): void {
-    total.Counts!.Added += result.Counts?.Added ?? 0;
-    total.Counts!.Failed += result.Counts?.Failed ?? 0;
-    total.Errors!.push(...(result.Errors ?? []));
-    if (result.Success) return;
-    const anyAdded = total.Counts!.Added > 0;
-    total.Success = false;
-    total.ResultCode = anyAdded || result.ResultCode === 'PARTIAL_SUCCESS' ? 'PARTIAL_SUCCESS' : result.ResultCode;
-    total.Message = result.Message;
-    if (!result.Counts) total.Errors!.push(result.Message);
-  }
 
   /** @deprecated Use {@link ConfirmAddFromView}. */
   async confirmAddFromView(): Promise<void> {

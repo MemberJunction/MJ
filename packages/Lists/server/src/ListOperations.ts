@@ -691,7 +691,8 @@ export class ListOperations {
   /**
    * Adds records to the target list the same way as {@link AddRecordsToList}. With
    * `RemoveFromSource`, the records are then removed from the source list, but only when every add
-   * succeeded: after a failed add nothing is removed and the result is `PARTIAL_SUCCESS`. Both
+   * succeeded: after a failed add nothing is removed and the result is `PARTIAL_SUCCESS`. A failed
+   * removal also gives `PARTIAL_SUCCESS`; `Message` says which of the two happened. Both
    * lists must exist (`TARGET_NOT_FOUND`), be different lists and hold the same entity.
    * `TargetListId` is the target list.
    */
@@ -706,15 +707,24 @@ export class ListOperations {
 
     const unique = this.uniqueRecordIds(recordIds);
     const added = await this.addMissingMembers(targetListId, unique);
-    if (added.failed > 0 || !opts.RemoveFromSource) return this.memberWriteResult(targetListId, added);
+    if (!opts.RemoveFromSource) return this.memberWriteResult(targetListId, added);
+    if (added.failed > 0) {
+      const result = this.memberWriteResult(targetListId, added);
+      return { ...result, Message: `Added ${added.added} member(s), ${added.failed} failed; nothing was removed from the source list` };
+    }
 
     const removal = await this.removeDeltaRecords(sourceListId, unique);
-    return this.memberWriteResult(targetListId, {
+    const result = this.memberWriteResult(targetListId, {
       ...added,
       removed: removal.removed,
       failed: removal.errors.length,
       errors: removal.errors,
     });
+    if (removal.errors.length === 0) return result;
+    return {
+      ...result,
+      Message: `Added ${added.added} member(s) to the target list; removed ${removal.removed}, ${removal.errors.length} could not be removed from the source list`,
+    };
   }
 
   /**

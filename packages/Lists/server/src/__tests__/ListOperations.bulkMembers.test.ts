@@ -28,6 +28,8 @@ const store = vi.hoisted(() => ({
   details: [] as StoredDetail[],
   lookupFilters: [] as string[],
   failInsertFor: new Set<string>(),
+  failDeleteFor: new Set<string>(),
+  failLookups: false,
   nextId: 1,
 }));
 
@@ -49,12 +51,13 @@ vi.mock('@memberjunction/core', () => {
       get RecordID() { return row.RecordID; },
       get Sequence() { return row.Sequence; },
       Status: row.Status,
-      LatestResult: { CompleteMessage: '' },
       async Save() {
         row.Status = this.Status;
         return true;
       },
+      LatestResult: { CompleteMessage: 'delete refused' },
       async Delete() {
+        if (store.failDeleteFor.has(row.RecordID)) return false;
         store.details = store.details.filter((d) => d !== row);
         return true;
       },
@@ -112,6 +115,7 @@ vi.mock('@memberjunction/core', () => {
     }
     async RunView(params: { EntityName: string; ExtraFilter: string; ResultType: string; OrderBy?: string }) {
       store.lookupFilters.push(params.ExtraFilter);
+      if (store.failLookups) return { Success: false, Results: [], RowCount: 0, ErrorMessage: 'lookup down' };
       const { listId, recordIds } = parseFilter(params.ExtraFilter);
       let rows = store.details.filter((d) => d.ListID === listId && (!recordIds || recordIds.includes(d.RecordID)));
       if (params.OrderBy) rows = [...rows].sort((a, b) => a.Sequence - b.Sequence);
@@ -186,6 +190,8 @@ describe('ListOperations bulk member operations', () => {
     store.details = [];
     store.lookupFilters = [];
     store.failInsertFor.clear();
+    store.failDeleteFor.clear();
+    store.failLookups = false;
     store.nextId = 1;
   });
 
@@ -248,6 +254,25 @@ it('saves the given Status and the input position as Sequence', async () => {
       expect(store.lookupFilters.some((f) => f.includes("'o''brien'"))).toBe(true);
       expect(result.Counts?.Added).toBe(0);
     });
+
+    it('escapes quotes in the list ID of the member lookup', async () => {
+      addList("L'1");
+
+      await ops().AddRecordsToList("L'1", ['a']);
+
+      expect(store.lookupFilters[0]).toContain("ListID='L''1' AND");
+    });
+
+    it('adds nothing and counts every record as failed when the member lookup fails', async () => {
+      addList('L1');
+      store.failLookups = true;
+
+      const result = await ops().AddRecordsToList('L1', ['a', 'b']);
+
+      expect(result).toMatchObject({ Success: false, ResultCode: 'PARTIAL_SUCCESS' });
+      expect(result.Counts).toMatchObject({ Added: 0, Failed: 2 });
+      expect(membersOf('L1')).toEqual([]);
+    });
   });
 
   describe('RemoveRecordsFromList', () => {
@@ -267,6 +292,18 @@ it('saves the given Status and the input position as Sequence', async () => {
       const lookups = store.lookupFilters.filter((f) => f.includes('RecordID IN'));
       expect(lookups).toHaveLength(3);
       expect(Math.max(...lookups.map(inListSize))).toBeLessThanOrEqual(500);
+    });
+
+    it('counts only the rows that were deleted as removed', async () => {
+      addList('L1');
+      addMembers('L1', ['a', 'b']);
+      store.failDeleteFor.add('b');
+
+      const result = await ops().RemoveRecordsFromList('L1', ['a', 'b']);
+
+      expect(result).toMatchObject({ Success: false, ResultCode: 'PARTIAL_SUCCESS' });
+      expect(result.Counts).toMatchObject({ Removed: 1, Failed: 1 });
+      expect(membersOf('L1')).toEqual(['b']);
     });
   });
 
@@ -290,6 +327,14 @@ it('saves the given Status and the input position as Sequence', async () => {
       });
       const copied = store.details.filter((d) => d.ListID === result.CreatedListId);
       expect(copied.map((d) => [d.RecordID, d.Sequence]).sort()).toEqual([['a', 5], ['b', 2]]);
+    });
+
+    it('escapes quotes in the list ID of the member read', async () => {
+      addList("L'1");
+
+      await ops().DuplicateList("L'1");
+
+      expect(store.lookupFilters).toContain("ListID='L''1'");
     });
 
     it('uses the given name', async () => {
@@ -342,7 +387,34 @@ it('saves the given Status and the input position as Sequence', async () => {
 
       expect(result).toMatchObject({ Success: false, ResultCode: 'PARTIAL_SUCCESS' });
       expect(result.Counts).toMatchObject({ Added: 1, Removed: 0, Failed: 1 });
+      expect(result.Message).toMatch(/nothing was removed from the source list/);
       expect(membersOf('SRC')).toEqual(['a', 'b']);
+    });
+
+    it('reports the records that stay in the source when a removal fails during a move', async () => {
+      addList('SRC');
+      addList('DST');
+      addMembers('SRC', ['a', 'b']);
+      store.failDeleteFor.add('b');
+
+      const result = await ops().CopyRecordsToList('SRC', 'DST', ['a', 'b'], { RemoveFromSource: true });
+
+      expect(result).toMatchObject({ Success: false, ResultCode: 'PARTIAL_SUCCESS' });
+      expect(result.Counts).toMatchObject({ Added: 2, Removed: 1, Failed: 1 });
+      expect(result.Message).toMatch(/1 could not be removed from the source list/);
+      expect(result.Message).not.toMatch(/nothing was removed/);
+      expect(membersOf('DST')).toEqual(['a', 'b']);
+      expect(membersOf('SRC')).toEqual(['b']);
+    });
+
+    it('refuses a copy from a list to itself', async () => {
+      addList('SRC');
+      addMembers('SRC', ['a']);
+
+      const result = await ops().CopyRecordsToList('SRC', 'SRC', ['a'], { RemoveFromSource: true });
+
+      expect(result).toMatchObject({ Success: false, ResultCode: 'UNEXPECTED_ERROR' });
+      expect(membersOf('SRC')).toEqual(['a']);
     });
 
     it('refuses lists of different entities', async () => {
@@ -385,6 +457,17 @@ it('saves the given Status and the input position as Sequence', async () => {
       expect(result).toMatchObject({ Success: false, ResultCode: 'UNEXPECTED_ERROR' });
       expect(result.Message).toMatch(/Bogus/);
       expect(store.details[0].Status).toBe('Active');
+    });
+
+    it('counts the records of a failed lookup as failed', async () => {
+      addList('L1');
+      addMembers('L1', ['a', 'b']);
+      store.failLookups = true;
+
+      const result = await ops().SetRecordStatus('L1', ['a', 'b'], 'Complete');
+
+      expect(result).toMatchObject({ Success: false, ResultCode: 'PARTIAL_SUCCESS' });
+      expect(result.Counts).toMatchObject({ Updated: 0, Failed: 2 });
     });
   });
 });

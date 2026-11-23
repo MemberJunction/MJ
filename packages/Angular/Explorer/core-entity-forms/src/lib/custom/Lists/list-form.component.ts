@@ -8,7 +8,7 @@ import { MJListEntity, MJListDetailEntity, MJListCategoryEntity, MJUserViewEntit
 import { CompositeKey, Metadata, RunView, RunViewResult, EntityInfo, LogError } from '@memberjunction/core';
 import {
     ListShareDialogConfig, ListShareDialogResult, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue,
-    CreateListsClient, ListChangeApplied, ListChangeFailureMessage, RecordCountText
+    AddViewResultsToList, CreateListsClient, ListChangeApplied, ListChangeFailureMessage, RecordCountText, RunListChange
 } from '@memberjunction/ng-list-management';
 import type { ApplyResult } from '@memberjunction/lists-base';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
@@ -1282,7 +1282,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.AddProgress = 0;
         this.cdr.detectChanges();
 
-        const result = await this.runListChange(() =>
+        const result = await RunListChange(() =>
             CreateListsClient(this.metadata).AddRecordsToList(this.record.ID, recordsToAdd.map(r => r.ID)));
         this.notifyAddResult(result);
 
@@ -1296,15 +1296,6 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
     }
 
-    /** Runs a server list change and turns a thrown error into a failed result. */
-    private async runListChange(call: () => Promise<ApplyResult>): Promise<ApplyResult> {
-        try {
-            return await call();
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: message };
-        }
-    }
 
     private notifyAddResult(result: ApplyResult): void {
         const added = result.Counts?.Added ?? 0;
@@ -1415,7 +1406,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.FetchingRecordsToSave = true;
         this.cdr.detectChanges();
 
-        const result = await this.addViewResults(this.record.ID);
+        const result = await AddViewResultsToList(CreateListsClient(this.metadata), this.UserViewsToAdd.map(view => view.ID), this.record.ID);
         this.FetchingRecordsToSave = false;
 
         if (result.Success && (result.Counts?.Added ?? 0) === 0) {
@@ -1433,28 +1424,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
     }
 
-    /** Adds the results of every selected view to the list, one server call per view, and sums the counts. */
-    private async addViewResults(listId: string): Promise<ApplyResult> {
-        const client = CreateListsClient(this.metadata);
-        const total: ApplyResult = { Success: true, ResultCode: 'SUCCESS', Message: '', Counts: { Added: 0, Removed: 0, Failed: 0 }, Errors: [] };
-        for (const view of this.UserViewsToAdd) {
-            const result = await this.runListChange(() => client.AddViewResultsToList(view.ID, listId));
-            this.mergeViewResult(total, result);
-        }
-        return total;
-    }
 
-    private mergeViewResult(total: ApplyResult, result: ApplyResult): void {
-        total.Counts!.Added += result.Counts?.Added ?? 0;
-        total.Counts!.Failed += result.Counts?.Failed ?? 0;
-        total.Errors!.push(...(result.Errors ?? []));
-        if (result.Success) return;
-        const anyAdded = total.Counts!.Added > 0;
-        total.Success = false;
-        total.ResultCode = anyAdded || result.ResultCode === 'PARTIAL_SUCCESS' ? 'PARTIAL_SUCCESS' : result.ResultCode;
-        total.Message = result.Message;
-        if (!result.Counts) total.Errors!.push(result.Message);
-    }
 
     /** @deprecated Use {@link ConfirmAddFromView}. */
     public async confirmAddFromView(): Promise<void> {

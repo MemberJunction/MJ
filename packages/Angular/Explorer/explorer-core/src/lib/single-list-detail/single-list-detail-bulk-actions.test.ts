@@ -26,7 +26,7 @@ function applyResult() {
 
 function createComponent(state: Open = {}): Harness {
   const result = applyResult();
-  const executeGQL = vi.fn(async () => ({
+  const executeGQL = vi.fn(async (_query: string, _variables: unknown): Promise<Open> => ({
     AddRecordsToList: result, RemoveRecordsFromList: result, SetListRecordStatus: result,
     CopyRecordsToList: result, AddViewResultsToList: result,
   }));
@@ -88,6 +88,19 @@ describe('SingleListDetailComponent bulk member actions', () => {
     expect(h.executeGQL).toHaveBeenCalledTimes(1);
     expect(h.executeGQL.mock.calls[0][1]).toEqual({ sourceListId: 'list-1', targetListId: 'list-2', recordIds: ['r1', 'r2'], removeFromSource: true });
     expectNoDetailObjects(h);
+  });
+
+  it('a move with a failed removal shows the server message, not "nothing was removed"', async () => {
+    const h = createComponent({ MoveCopyMode: 'move', MoveCopySelectedTarget: { ID: 'list-2', Name: 'Target' } });
+    const message = 'Added 2 member(s) to the target list; removed 1, 1 could not be removed from the source list';
+    h.executeGQL.mockResolvedValueOnce({
+      CopyRecordsToList: { Success: false, ResultCode: 'PARTIAL_SUCCESS', Message: message, AddedCount: 2, RemovedCount: 1, FailedCount: 1 },
+    });
+
+    await h.component.OnMoveConfirmCommit('client-move-delta');
+
+    const notify = (h.component as unknown as Open).sharedService as { CreateSimpleNotification: ReturnType<typeof vi.fn> };
+    expect(notify.CreateSimpleNotification).toHaveBeenCalledWith(`Move incomplete: ${message}`, 'error', 5000);
   });
 
   it('ConfirmRemoveFromList removes the selected records in one server call', async () => {

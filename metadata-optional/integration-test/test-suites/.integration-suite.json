@@ -175,6 +175,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT186 - List Member Mutations (client transport)",
+            "Sequence": 70,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "110D3047-9312-48BB-881C-7BA9C96F3A46"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT175 - List Refresh From Source",
             "Sequence": 14,
             "Status": "Active"

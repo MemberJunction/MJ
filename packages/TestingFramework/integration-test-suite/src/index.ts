@@ -26,6 +26,7 @@ export * from './checks/field-rules-bulk-update.checks';
 export * from './checks/list-refresh.checks';
 export * from './checks/list-from-query.checks';
 export * from './checks/lists.checks';
+export * from './checks/lists-members-client.checks';
 export * from './checks/metadata-consistency.checks';
 export * from './checks/open-app-local-source.checks';
 export * from './checks/open-app-teardown.checks';

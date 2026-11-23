@@ -1,17 +1,6 @@
-import type { IMetadataProvider } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { ApplyResult } from '@memberjunction/lists-base';
 
-/**
- * The client for the server's bulk list operations, bound to the given provider.
- * Throws when the provider is not a GraphQL data provider.
- */
-export function CreateListsClient(provider: IMetadataProvider): GraphQLListsClient {
-  if (!(provider instanceof GraphQLDataProvider)) {
-    throw new Error('List operations need a GraphQL data provider.');
-  }
-  return new GraphQLListsClient(provider);
-}
+export { CreateListsClient } from '@memberjunction/ng-list-management';
 
 /** Number of records the operation could not process. */
 export function ListResultFailedCount(result: ApplyResult): number {
