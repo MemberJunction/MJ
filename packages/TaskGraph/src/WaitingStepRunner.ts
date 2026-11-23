@@ -20,7 +20,14 @@ import { IMetadataProvider, LimitsConfigResolver, LogError, LogStatus, UserInfo 
 import { IndexByUUID } from '@memberjunction/global';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
-import { ResolveHumanTaskProvider, type HumanTaskRaiseResult } from '@memberjunction/ai-core-plus';
+import { BuildEnqueueCorrelationKey, ResolveHumanTaskProvider, type HumanTaskRaiseResult } from '@memberjunction/ai-core-plus';
+import { ForEachEnqueueCoordinator } from './enqueue-fanout';
+import {
+    TaskGraphQueueRegistry,
+    ResolveServiceUser,
+    SaveTaskWithAuthority,
+    type TaskGraphEnqueueStepWorkPayload,
+} from './queue-dispatch';
 import {
     ComposeWaitingStepOutput,
     ParseStepConfiguration,
@@ -74,7 +81,7 @@ export class WaitingStepRunner {
         const config = ParseStepConfiguration(task.Configuration);
         const now = this.now();
         const due = WaitingStepDueAt(kind, config, step.Payload, now);
-        const key = kind === 'External' ? ResolveCorrelationKey(config.external, step.Payload) : { Value: null };
+        const key = this.resolveStepCorrelationKey(kind, task, config, step.Payload);
 
         const won = await this.claims.TryMarkWaiting(
             provider,
@@ -88,6 +95,9 @@ export class WaitingStepRunner {
         );
         if (!won) return false;   // another instance reached it, or it is no longer Pending
         task.ClaimedBy = WAITING_STEP_MARKER;
+        if ('Value' in key && key.Value) {
+            task.CorrelationKey = key.Value;
+        }
         // The procedure wrote the start payload and input taint to the row; keep the in-memory copy
         // in step, so a held signal applied below decides its taint from the same record.
         config.runtime = { ...(config.runtime ?? {}), payloadAtStart: step.Payload, isInputTainted: step.InputTainted };
@@ -95,13 +105,157 @@ export class WaitingStepRunner {
         // Unresolvable settings fail the step loudly rather than guessing. A Wait whose moment was
         // "now" because a payload value was missing would take a wrong turn nobody could see.
         if ('Error' in due) return this.fail(provider, task, `${kind} step "${task.Name}" cannot wait: ${due.Error}.`);
-        if ('Error' in key) return this.fail(provider, task, `External step "${task.Name}" cannot wait: ${key.Error}.`);
+        if ('Error' in key) return this.fail(provider, task, `${kind} step "${task.Name}" cannot wait: ${key.Error}.`);
 
         if (kind === 'ProviderHuman') {
             const raised = await this.raiseWithProvider(task, config, step, due.Value, provider);
             if (raised) return raised;
         }
+        if (kind === 'Enqueue') {
+            return this.reachEnqueueStep(provider, task, config, step, key.Value ?? BuildEnqueueCorrelationKey(task.ParentID ?? task.ID, task.ID));
+        }
+        if (kind === 'EnqueueFanOut') {
+            return ForEachEnqueueCoordinator.Instance.StartFanOut({
+                Task: task,
+                Payload: step.Payload,
+                InputTainted: step.InputTainted,
+                Provider: provider,
+                ContextUser: this.contextUser(),
+            });
+        }
         return this.applyHeldSignal(provider, task, config);
+    }
+
+    private resolveStepCorrelationKey(
+        kind: ReturnType<typeof WaitingStepKindOf>,
+        task: MJTaskEntity,
+        config: ReturnType<typeof ParseStepConfiguration>,
+        payload: Record<string, unknown>,
+    ): ReturnType<typeof ResolveCorrelationKey> {
+        if (kind === 'External') {
+            return ResolveCorrelationKey(config.external, payload);
+        }
+        if (kind === 'Enqueue') {
+            const raw = config.enqueue?.correlationKey?.trim();
+            if (!raw) {
+                return { Value: BuildEnqueueCorrelationKey(task.ParentID ?? task.ID, task.ID) };
+            }
+            return ResolveCorrelationKey({ correlationKey: raw }, payload);
+        }
+        if (kind === 'EnqueueFanOut') {
+            const raw = config.forEach?.enqueue?.correlationKey?.trim();
+            if (!raw) {
+                return { Value: BuildEnqueueCorrelationKey(task.ParentID ?? task.ID, task.ID) };
+            }
+            return ResolveCorrelationKey({ correlationKey: raw }, payload);
+        }
+        return { Value: null };
+    }
+
+    private async reachEnqueueStep(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        config: ReturnType<typeof ParseStepConfiguration>,
+        step: ReachedWaitingStep,
+        correlationKey: string,
+    ): Promise<boolean> {
+        const earlyEntries = ForEachEnqueueCoordinator.Instance.ConsumeEarlyCompletions(correlationKey);
+        if (earlyEntries.length > 0) {
+            const first = earlyEntries[0];
+            return this.completeEnqueueFromEarlyEntry(provider, task, config, first);
+        }
+        if (await this.applyHeldSignal(provider, task, config)) {
+            return true;
+        }
+
+        const queueLimits = LimitsConfigResolver.Resolve().Limits.TaskGraphQueue;
+        const enqueueCfg = config.enqueue ?? {};
+        const topic = enqueueCfg.topic?.trim() || queueLimits.DefaultEnqueueTopicName;
+        const maxRetries = typeof enqueueCfg.maxRetries === 'number'
+            ? Math.min(enqueueCfg.maxRetries, queueLimits.MaxEnqueueRedeliveryAttempts)
+            : queueLimits.MaxEnqueueRedeliveryAttempts;
+        const graphRunID = task.ParentID ?? task.ID;
+        const publishedAt = this.now().toISOString();
+        const handlerKey = enqueueCfg.handlerKey?.trim() || 'TaskGraph.EnqueueItem';
+
+        const serviceUser = ResolveServiceUser(this.contextUser());
+        config.runtime = {
+            ...(config.runtime ?? {}),
+            enqueueState: {
+                correlationKey,
+                topic,
+                publishedAt,
+                processedKeys: config.runtime?.enqueueState?.processedKeys ?? [],
+            },
+        };
+        task.Configuration = JSON.stringify(config);
+        await SaveTaskWithAuthority(task, serviceUser);
+
+        const workPayload: TaskGraphEnqueueStepWorkPayload = {
+            Kind: 'TaskGraph.EnqueueStep',
+            GraphRunID: graphRunID,
+            StepInvocationID: task.ID,
+            TaskID: task.ID,
+            TaskName: task.Name,
+            CorrelationKey: correlationKey,
+            Topic: topic,
+            HandlerKey: enqueueCfg.handlerKey,
+            ActionName: enqueueCfg.actionName,
+            InputPayload: { ...step.Payload, ...(enqueueCfg.payload ?? {}) },
+            MaxRetries: maxRetries,
+            PublishedAt: publishedAt,
+        };
+
+        try {
+            await TaskGraphQueueRegistry.Instance.PublishWithRetry(
+                [
+                    {
+                        Topic: topic,
+                        HandlerKey: handlerKey,
+                        Payload: workPayload,
+                        CorrelationId: correlationKey,
+                        IdempotencyKey: `${graphRunID}:${task.ID}`,
+                        SubjectType: 'MJ: Tasks',
+                        SubjectId: task.ID,
+                        MaxAttempts: maxRetries + 1,
+                    },
+                ],
+                this.contextUser(),
+                provider,
+            );
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return this.fail(provider, task, `Enqueue step "${task.Name}" could not publish to topic "${topic}": ${msg}`);
+        }
+
+        const lateEarly = ForEachEnqueueCoordinator.Instance.ConsumeEarlyCompletions(correlationKey);
+        if (lateEarly.length > 0) {
+            return this.completeEnqueueFromEarlyEntry(provider, task, config, lateEarly[0]);
+        }
+        return this.applyHeldSignal(provider, task, config);
+    }
+
+    private async completeEnqueueFromEarlyEntry(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        config: ReturnType<typeof ParseStepConfiguration>,
+        entry: { Status: 'Complete' | 'Failed'; Payload?: Record<string, unknown> | null; ErrorMessage?: string | null },
+    ): Promise<boolean> {
+        const output = entry.Status === 'Complete'
+            ? JSON.stringify(ComposeWaitingStepOutput(PayloadAtStartOf(config), entry.Payload ?? {}))
+            : null;
+        const outcome = await this.claims.TryCompleteWaitingStep(
+            provider,
+            task.ID,
+            WAITING_STEP_MARKER,
+            entry.Status,
+            output,
+            entry.ErrorMessage ?? (entry.Status === 'Failed' ? 'Early signal reported failure.' : null),
+            '{}',
+            WaitingStepOutputTaint(config, entry.Payload ?? null),
+            this.contextUser(),
+        );
+        return outcome === 'Completed';
     }
 
     /**

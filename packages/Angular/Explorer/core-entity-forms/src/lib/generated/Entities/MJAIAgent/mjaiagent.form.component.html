@@ -796,9 +796,17 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="MaxSubAgentConsultRounds"
             Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Isolation"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

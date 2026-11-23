@@ -1215,7 +1215,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (97 classes)
+// @memberjunction/core-entities-server (98 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1289,6 +1289,7 @@ import {
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJRubricBandEntityServer,
@@ -2618,6 +2619,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJRubricBandEntityServer,
@@ -2645,11 +2647,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryRefreshExtractionServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
-    ActivateFormContributionVersionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -2849,11 +2851,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
-    VerifyMyCommunicationCapabilitiesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -2941,7 +2943,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1270;
+export const CLASS_REGISTRATIONS_COUNT = 1271;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

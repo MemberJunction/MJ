@@ -49,6 +49,84 @@ export const LIMITS_TIER_PRECEDENCE: readonly LimitsSourceTier[] = [
 export type FastJudgeFailureFallbackMode = 'ContinueWithWarning' | 'PauseForHuman';
 
 /**
+ * Supported execution isolation levels for task graphs and persisted workflows (`AIAgent.Isolation`).
+ * Alphabetically ordered union matches CodeGen entity value-list generation.
+ */
+export type TaskGraphIsolationLevel = 'Container' | 'InProcess' | 'Process' | 'Worker';
+
+/**
+ * Ordered list of valid {@link TaskGraphIsolationLevel} values.
+ */
+export const TASK_GRAPH_ISOLATION_LEVELS: readonly TaskGraphIsolationLevel[] = [
+    'InProcess',
+    'Worker',
+    'Process',
+    'Container',
+] as const;
+
+/**
+ * Runtime type guard verifying whether an untyped value is a valid {@link TaskGraphIsolationLevel}.
+ */
+export function IsTaskGraphIsolationLevel(value: unknown): value is TaskGraphIsolationLevel {
+    return value === 'InProcess' || value === 'Worker' || value === 'Process' || value === 'Container';
+}
+
+/**
+ * Execution isolation defaults and resource-containment guard settings for task graphs and workflows.
+ */
+export interface MJLimitsIsolationConfig {
+    /** Default isolation mode for existing or unspecified workflows (`'InProcess'` for safe upgrade compatibility). */
+    DefaultIsolation: TaskGraphIsolationLevel;
+    /** Default isolation mode applied to newly drafted workflows authored via `Workflow.Draft` (`'Worker'`). */
+    DraftDefaultIsolation: TaskGraphIsolationLevel;
+    /** V8 max old-generation heap ceiling (MB) passed to `worker_threads` `resourceLimits` in `'Worker'` mode. */
+    WorkerMaxOldGenerationSizeMb: number;
+    /** V8 max young-generation heap ceiling (MB) passed to `worker_threads` `resourceLimits` in `'Worker'` mode. */
+    WorkerMaxYoungGenerationSizeMb: number;
+    /** Maximum wall-clock execution timeout (ms) for `'Worker'` mode step execution. */
+    WorkerTimeoutMs: number;
+    /** OS memory ceiling (MB) enforced for `'Process'` mode (`child_process`) execution. */
+    ProcessMaxMemoryMb: number;
+    /** Maximum wall-clock execution timeout (ms) for `'Process'` mode (`child_process`) execution. */
+    ProcessTimeoutMs: number;
+    /** Container memory limit (MB) passed to container runtime (`--memory`) in `'Container'` mode. */
+    ContainerMemoryMb: number;
+    /** Container CPU quota (logical vCPUs) passed to container runtime (`--cpus`) in `'Container'` mode. */
+    ContainerCpuQuota: number;
+    /** Maximum wall-clock execution timeout (ms) for `'Container'` mode execution. */
+    ContainerTimeoutMs: number;
+    /** Default OCI image reference used by the `'Container'` isolation runner. */
+    ContainerImage: string;
+    /** Container runtime binary (`'docker'` | `'podman'`) used by the `'Container'` isolation runner. */
+    ContainerRuntime: string;
+}
+
+/**
+ * Queue dispatch, bounded `Enqueue` fan-out concurrency, isolated runner backpressure,
+ * redelivery retry caps, and caller notification retention limits for queued TaskGraphs.
+ */
+export interface MJLimitsTaskGraphQueueConfig {
+    /** Default WorkQueue topic used when `TaskGraph.Submit` runs with `Dispatch: 'Queue'`. */
+    GraphDispatchTopicName: string;
+    /** Default WorkQueue topic used by `Enqueue` steps when no explicit topic is supplied. */
+    DefaultEnqueueTopicName: string;
+    /** Bounded concurrent WorkQueue publish operations permitted during `ForEach` + `Enqueue` fan-out. */
+    MaxEnqueuePublishConcurrency: number;
+    /** Batch size for WorkQueue publishes inside `ForEach` + `Enqueue` fan-out. */
+    EnqueuePublishBatchSize: number;
+    /** Bounded concurrent active isolated runners executing queued graph/step work items per host. */
+    MaxConcurrentIsolatedRunners: number;
+    /** Hard safety ceiling on items emitted by a single `ForEach` + `Enqueue` fan-out. */
+    MaxEnqueueItemsPerFanOut: number;
+    /** Maximum delivery/retry attempts before a queued step/item transitions to terminal failure. */
+    MaxEnqueueRedeliveryAttempts: number;
+    /** Maximum publish retry attempts when WorkQueue transport publish fails transiently. */
+    EnqueuePublishRetryAttempts: number;
+    /** Retention window (ms) for recovering unacknowledged terminal caller notifications across restarts. */
+    CallerNotificationRetentionMs: number;
+}
+
+/**
  * Dollar USD and wall-clock time budget ceilings for a single scope.
  */
 export interface MJLimitsScopeBudget {
@@ -249,6 +327,10 @@ export interface MJLimitsConfig {
     ResourceGuards: MJLimitsResourceGuardsConfig;
     /** Operational tuning defaults for caching, compaction, candidate caps, and batching. */
     Tuning: MJLimitsTuningConfig;
+    /** Task graph and workflow execution isolation defaults and runtime resource ceilings. */
+    Isolation: MJLimitsIsolationConfig;
+    /** Task graph queue dispatch, bounded fan-out, runner backpressure, and notification retention limits. */
+    TaskGraphQueue: MJLimitsTaskGraphQueueConfig;
 }
 
 /** Partial override for {@link MJLimitsScopeBudget}. */
@@ -300,6 +382,12 @@ export type MJLimitsResourceGuardsOverride = Partial<MJLimitsResourceGuardsConfi
 /** Partial override for {@link MJLimitsTuningConfig}. */
 export type MJLimitsTuningOverride = Partial<MJLimitsTuningConfig>;
 
+/** Partial override for {@link MJLimitsIsolationConfig}. */
+export type MJLimitsIsolationOverride = Partial<MJLimitsIsolationConfig>;
+
+/** Partial override for {@link MJLimitsTaskGraphQueueConfig}. */
+export type MJLimitsTaskGraphQueueOverride = Partial<MJLimitsTaskGraphQueueConfig>;
+
 /**
  * Partial override object accepted by any tier of {@link LimitsConfigResolver}.
  */
@@ -317,6 +405,8 @@ export interface MJLimitsOverride {
     ProgressDetector?: MJLimitsProgressDetectorOverride;
     ResourceGuards?: MJLimitsResourceGuardsOverride;
     Tuning?: MJLimitsTuningOverride;
+    Isolation?: MJLimitsIsolationOverride;
+    TaskGraphQueue?: MJLimitsTaskGraphQueueOverride;
 }
 
 /**
@@ -411,6 +501,31 @@ export const CODE_FALLBACK_LIMITS: Readonly<MJLimitsConfig> = {
         MaxAgentsOfferedInDraft: 40,
         MaxStepsPerSignal: 1000,
     },
+    Isolation: {
+        DefaultIsolation: 'InProcess',
+        DraftDefaultIsolation: 'Worker',
+        WorkerMaxOldGenerationSizeMb: 256,
+        WorkerMaxYoungGenerationSizeMb: 64,
+        WorkerTimeoutMs: 120_000,
+        ProcessMaxMemoryMb: 512,
+        ProcessTimeoutMs: 300_000,
+        ContainerMemoryMb: 512,
+        ContainerCpuQuota: 1,
+        ContainerTimeoutMs: 300_000,
+        ContainerImage: 'node:20-alpine',
+        ContainerRuntime: 'docker',
+    },
+    TaskGraphQueue: {
+        GraphDispatchTopicName: 'mj.taskgraph.runs',
+        DefaultEnqueueTopicName: 'mj.taskgraph.steps',
+        MaxEnqueuePublishConcurrency: 25,
+        EnqueuePublishBatchSize: 100,
+        MaxConcurrentIsolatedRunners: 16,
+        MaxEnqueueItemsPerFanOut: 100_000,
+        MaxEnqueueRedeliveryAttempts: 5,
+        EnqueuePublishRetryAttempts: 3,
+        CallerNotificationRetentionMs: 86_400_000,
+    },
 };
 
 /**
@@ -421,9 +536,13 @@ export const DEFAULT_MJ_LIMITS_CONFIG: Readonly<MJLimitsConfig> = CODE_FALLBACK_
 
 type ResourceGuardKey = keyof MJLimitsResourceGuardsConfig;
 type TuningKey = keyof MJLimitsTuningConfig;
+type IsolationKey = keyof MJLimitsIsolationConfig;
+type TaskGraphQueueKey = keyof MJLimitsTaskGraphQueueConfig;
 
 export type ResourceGuardKeyPath = `ResourceGuards.${ResourceGuardKey}`;
 export type TuningKeyPath = `Tuning.${TuningKey}`;
+export type IsolationKeyPath = `Isolation.${IsolationKey}`;
+export type TaskGraphQueueKeyPath = `TaskGraphQueue.${TaskGraphQueueKey}`;
 
 /**
  * Union of all canonical dot-separated limit key paths tracked for provenance.
@@ -463,7 +582,9 @@ export type LimitsKeyPath =
     | 'ProgressDetector.FastJudgeMaxInputChars'
     | 'ProgressDetector.FastJudgeFailureFallback'
     | ResourceGuardKeyPath
-    | TuningKeyPath;
+    | TuningKeyPath
+    | IsolationKeyPath
+    | TaskGraphQueueKeyPath;
 
 const RESOURCE_GUARD_KEYS: readonly ResourceGuardKey[] = [
     'MaxValidationRetries',
@@ -512,6 +633,58 @@ const TUNING_KEYS: readonly TuningKey[] = [
     'MaxStepsPerSignal',
 ] as const;
 
+const ISOLATION_NUMERIC_KEYS: readonly (
+    | 'WorkerMaxOldGenerationSizeMb'
+    | 'WorkerMaxYoungGenerationSizeMb'
+    | 'WorkerTimeoutMs'
+    | 'ProcessMaxMemoryMb'
+    | 'ProcessTimeoutMs'
+    | 'ContainerMemoryMb'
+    | 'ContainerCpuQuota'
+    | 'ContainerTimeoutMs'
+)[] = [
+    'WorkerMaxOldGenerationSizeMb',
+    'WorkerMaxYoungGenerationSizeMb',
+    'WorkerTimeoutMs',
+    'ProcessMaxMemoryMb',
+    'ProcessTimeoutMs',
+    'ContainerMemoryMb',
+    'ContainerCpuQuota',
+    'ContainerTimeoutMs',
+] as const;
+
+const ISOLATION_KEYS: readonly IsolationKey[] = [
+    'DefaultIsolation',
+    'DraftDefaultIsolation',
+    ...ISOLATION_NUMERIC_KEYS,
+    'ContainerImage',
+    'ContainerRuntime',
+] as const;
+
+const TASK_GRAPH_QUEUE_NUMERIC_KEYS: readonly (
+    | 'MaxEnqueuePublishConcurrency'
+    | 'EnqueuePublishBatchSize'
+    | 'MaxConcurrentIsolatedRunners'
+    | 'MaxEnqueueItemsPerFanOut'
+    | 'MaxEnqueueRedeliveryAttempts'
+    | 'EnqueuePublishRetryAttempts'
+    | 'CallerNotificationRetentionMs'
+)[] = [
+    'MaxEnqueuePublishConcurrency',
+    'EnqueuePublishBatchSize',
+    'MaxConcurrentIsolatedRunners',
+    'MaxEnqueueItemsPerFanOut',
+    'MaxEnqueueRedeliveryAttempts',
+    'EnqueuePublishRetryAttempts',
+    'CallerNotificationRetentionMs',
+] as const;
+
+const TASK_GRAPH_QUEUE_KEYS: readonly TaskGraphQueueKey[] = [
+    'GraphDispatchTopicName',
+    'DefaultEnqueueTopicName',
+    ...TASK_GRAPH_QUEUE_NUMERIC_KEYS,
+] as const;
+
 /**
  * Ordered list of every {@link LimitsKeyPath} covered by {@link LimitsConfigResolver}.
  */
@@ -551,6 +724,8 @@ export const LIMITS_KEY_PATHS: readonly LimitsKeyPath[] = [
     'ProgressDetector.FastJudgeFailureFallback',
     ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
     ...TUNING_KEYS.map((k): TuningKeyPath => `Tuning.${k}`),
+    ...ISOLATION_KEYS.map((k): IsolationKeyPath => `Isolation.${k}`),
+    ...TASK_GRAPH_QUEUE_KEYS.map((k): TaskGraphQueueKeyPath => `TaskGraphQueue.${k}`),
 ] as const;
 
 /** Primitive value type for an individual resolved limit key. */
@@ -683,6 +858,8 @@ const NUMERIC_CEILING_KEYS: ReadonlySet<LimitsKeyPath> = new Set<LimitsKeyPath>(
     'Budgets.AllowedInFlightOvershootMs',
     'ProgressDetector.FastJudgeMaxInputChars',
     ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
+    ...ISOLATION_NUMERIC_KEYS.map((k): IsolationKeyPath => `Isolation.${k}`),
+    ...TASK_GRAPH_QUEUE_NUMERIC_KEYS.map((k): TaskGraphQueueKeyPath => `TaskGraphQueue.${k}`),
 ]);
 
 /**
@@ -830,6 +1007,46 @@ function readFastJudgeFallback(raw: LimitsInputValue): FastJudgeFailureFallbackM
         return raw;
     }
     return undefined;
+}
+
+function readIsolationLevel(raw: LimitsInputValue): TaskGraphIsolationLevel | undefined {
+    return IsTaskGraphIsolationLevel(raw) ? raw : undefined;
+}
+
+function normalizeIsolationOverride(raw: LimitsInputValue): MJLimitsIsolationOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
+        return undefined;
+    }
+    const out: MJLimitsIsolationOverride = {};
+    const defaultIso = readIsolationLevel(readObjectProperty(raw, ['DefaultIsolation', 'defaultIsolation']));
+    if (defaultIso !== undefined) out.DefaultIsolation = defaultIso;
+    const draftIso = readIsolationLevel(readObjectProperty(raw, ['DraftDefaultIsolation', 'draftDefaultIsolation']));
+    if (draftIso !== undefined) out.DraftDefaultIsolation = draftIso;
+    const numeric = normalizePositiveIntSection(raw, ISOLATION_NUMERIC_KEYS);
+    if (numeric) {
+        Object.assign(out, numeric);
+    }
+    const containerImage = readNonEmptyString(readObjectProperty(raw, ['ContainerImage', 'containerImage']));
+    if (containerImage !== undefined) out.ContainerImage = containerImage;
+    const containerRuntime = readNonEmptyString(readObjectProperty(raw, ['ContainerRuntime', 'containerRuntime']));
+    if (containerRuntime !== undefined) out.ContainerRuntime = containerRuntime;
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function normalizeTaskGraphQueueOverride(raw: LimitsInputValue): MJLimitsTaskGraphQueueOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
+        return undefined;
+    }
+    const out: MJLimitsTaskGraphQueueOverride = {};
+    const graphTopic = readNonEmptyString(readObjectProperty(raw, ['GraphDispatchTopicName', 'graphDispatchTopicName']));
+    if (graphTopic !== undefined) out.GraphDispatchTopicName = graphTopic;
+    const stepTopic = readNonEmptyString(readObjectProperty(raw, ['DefaultEnqueueTopicName', 'defaultEnqueueTopicName']));
+    if (stepTopic !== undefined) out.DefaultEnqueueTopicName = stepTopic;
+    const numeric = normalizePositiveIntSection(raw, TASK_GRAPH_QUEUE_NUMERIC_KEYS);
+    if (numeric) {
+        Object.assign(out, numeric);
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function normalizeScopeBudgetOverride(raw: LimitsInputValue): MJLimitsScopeBudgetOverride | undefined {
@@ -999,6 +1216,10 @@ export function NormalizeLimitsInput(raw: LimitsInputValue): MJLimitsOverride {
     if (resourceGuards) out.ResourceGuards = resourceGuards;
     const tuning = normalizePositiveIntSection(readObjectProperty(raw, ['Tuning', 'tuning']), TUNING_KEYS);
     if (tuning) out.Tuning = tuning;
+    const isolation = normalizeIsolationOverride(readObjectProperty(raw, ['Isolation', 'isolation']));
+    if (isolation) out.Isolation = isolation;
+    const taskGraphQueue = normalizeTaskGraphQueueOverride(readObjectProperty(raw, ['TaskGraphQueue', 'taskGraphQueue']));
+    if (taskGraphQueue) out.TaskGraphQueue = taskGraphQueue;
     return out;
 }
 
@@ -1016,6 +1237,8 @@ function cloneDefaultLimits(): MJLimitsConfig {
         ProgressDetector: { ...CODE_FALLBACK_LIMITS.ProgressDetector },
         ResourceGuards: { ...CODE_FALLBACK_LIMITS.ResourceGuards },
         Tuning: { ...CODE_FALLBACK_LIMITS.Tuning },
+        Isolation: { ...CODE_FALLBACK_LIMITS.Isolation },
+        TaskGraphQueue: { ...CODE_FALLBACK_LIMITS.TaskGraphQueue },
     };
 }
 
@@ -1027,6 +1250,14 @@ function extractTierValue(layer: MJLimitsOverride, key: LimitsKeyPath): LimitsSc
     if (key.startsWith('Tuning.')) {
         const subKey = key.slice('Tuning.'.length) as TuningKey;
         return layer.Tuning?.[subKey];
+    }
+    if (key.startsWith('Isolation.')) {
+        const subKey = key.slice('Isolation.'.length) as IsolationKey;
+        return layer.Isolation?.[subKey];
+    }
+    if (key.startsWith('TaskGraphQueue.')) {
+        const subKey = key.slice('TaskGraphQueue.'.length) as TaskGraphQueueKey;
+        return layer.TaskGraphQueue?.[subKey];
     }
     switch (key) {
         case 'AgentChannelConsecutiveTurns': return layer.AgentChannelConsecutiveTurns;
@@ -1074,6 +1305,26 @@ function assignResolvedValue(target: MJLimitsConfig, key: LimitsKeyPath, value: 
     if (key.startsWith('Tuning.')) {
         const subKey = key.slice('Tuning.'.length) as TuningKey;
         target.Tuning[subKey] = value as number;
+        return;
+    }
+    if (key.startsWith('Isolation.')) {
+        const subKey = key.slice('Isolation.'.length) as IsolationKey;
+        if (subKey === 'ContainerImage' || subKey === 'ContainerRuntime') {
+            target.Isolation[subKey] = value as string;
+        } else if (subKey === 'DefaultIsolation' || subKey === 'DraftDefaultIsolation') {
+            target.Isolation[subKey] = value as TaskGraphIsolationLevel;
+        } else {
+            target.Isolation[subKey] = value as number;
+        }
+        return;
+    }
+    if (key.startsWith('TaskGraphQueue.')) {
+        const subKey = key.slice('TaskGraphQueue.'.length) as TaskGraphQueueKey;
+        if (subKey === 'GraphDispatchTopicName' || subKey === 'DefaultEnqueueTopicName') {
+            target.TaskGraphQueue[subKey] = value as string;
+        } else {
+            target.TaskGraphQueue[subKey] = value as number;
+        }
         return;
     }
     switch (key) {
@@ -1221,11 +1472,49 @@ export function ValidateLimitsConfig(config: MJLimitsConfig): LimitsValidationRe
         ['ProgressDetector.FastJudgeMaxInputChars', config.ProgressDetector.FastJudgeMaxInputChars],
         ...RESOURCE_GUARD_KEYS.map((k): [LimitsKeyPath, number] => [`ResourceGuards.${k}`, config.ResourceGuards[k]]),
         ...TUNING_KEYS.map((k): [LimitsKeyPath, number] => [`Tuning.${k}`, config.Tuning[k]]),
+        ...ISOLATION_NUMERIC_KEYS.map((k): [LimitsKeyPath, number] => [`Isolation.${k}`, config.Isolation[k]]),
+        ...TASK_GRAPH_QUEUE_NUMERIC_KEYS.map((k): [LimitsKeyPath, number] => [`TaskGraphQueue.${k}`, config.TaskGraphQueue[k]]),
     ];
     for (const [key, val] of positiveIntChecks) {
         if (!Number.isFinite(val) || val < 1) {
             issues.push({ Key: key, Message: `${key} must be a positive number >= 1.` });
         }
+    }
+    if (!IsTaskGraphIsolationLevel(config.Isolation.DefaultIsolation)) {
+        issues.push({
+            Key: 'Isolation.DefaultIsolation',
+            Message: 'Isolation.DefaultIsolation must be one of InProcess, Worker, Process, or Container.',
+        });
+    }
+    if (!IsTaskGraphIsolationLevel(config.Isolation.DraftDefaultIsolation)) {
+        issues.push({
+            Key: 'Isolation.DraftDefaultIsolation',
+            Message: 'Isolation.DraftDefaultIsolation must be one of InProcess, Worker, Process, or Container.',
+        });
+    }
+    if (!config.Isolation.ContainerImage || !config.Isolation.ContainerImage.trim()) {
+        issues.push({
+            Key: 'Isolation.ContainerImage',
+            Message: 'Isolation.ContainerImage must be a non-empty string.',
+        });
+    }
+    if (!config.Isolation.ContainerRuntime || !config.Isolation.ContainerRuntime.trim()) {
+        issues.push({
+            Key: 'Isolation.ContainerRuntime',
+            Message: 'Isolation.ContainerRuntime must be a non-empty string.',
+        });
+    }
+    if (!config.TaskGraphQueue.GraphDispatchTopicName || !config.TaskGraphQueue.GraphDispatchTopicName.trim()) {
+        issues.push({
+            Key: 'TaskGraphQueue.GraphDispatchTopicName',
+            Message: 'TaskGraphQueue.GraphDispatchTopicName must be a non-empty string.',
+        });
+    }
+    if (!config.TaskGraphQueue.DefaultEnqueueTopicName || !config.TaskGraphQueue.DefaultEnqueueTopicName.trim()) {
+        issues.push({
+            Key: 'TaskGraphQueue.DefaultEnqueueTopicName',
+            Message: 'TaskGraphQueue.DefaultEnqueueTopicName must be a non-empty string.',
+        });
     }
     if (config.MaxTasksPerAgentGraph > config.MaxTasksPerGraph) {
         issues.push({

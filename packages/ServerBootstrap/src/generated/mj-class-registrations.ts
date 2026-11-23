@@ -1499,7 +1499,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (97 classes)
+// @memberjunction/core-entities-server (98 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1573,6 +1573,7 @@ import {
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJRubricBandEntityServer,
@@ -3105,6 +3106,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJRubricBandEntityServer,
@@ -3208,11 +3210,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
-    CalculateExpressionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    CalculateExpressionAction,
     CancelAgentWakeAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
@@ -3412,11 +3414,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     MJWorkQueueDeliveryEntityServer,
     MJWorkQueueMessageEntityServer,
     MJWorkQueueSubscriptionEntityServer,
-    MJWorkQueueTopicEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
     WorkQueueDiscardDeliveryServerOperation,
     WorkQueueGetBacklogServerOperation,
@@ -3472,7 +3474,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1437;
+export const CLASS_REGISTRATIONS_COUNT = 1438;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

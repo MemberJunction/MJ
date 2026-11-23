@@ -3099,7 +3099,7 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611220626__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
+(`V202611222146__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
 then deletes the runs (`:754`) and the models (`:755`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
@@ -11461,7 +11461,7 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611220626__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611222146__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT, TZ<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
@@ -13703,7 +13703,7 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   before every client one, suite-sequencing test); the four class-registration manifests taken from next and regenerated
   (a fresh scan reports no change); bundle count 254 + 30 (ours) + 1 (next) = 285.
 - **Migration retimed** after next's newest (`V202611220625`, none of next's three new migrations touches a PS object):
-  `V202611220626__v6.3.x__PS_Honest_Serving_Schema.sql`; Flyway history of `MJ_PS_PR4_claude` and `MJ_PS_PR4_review`
+  `V202611222146__v6.3.x__PS_Honest_Serving_Schema.sql`; Flyway history of `MJ_PS_PR4_claude` and `MJ_PS_PR4_review`
   updated; next's migrations applied to both (4 applied each); metadata pushed to both (0 errors).
 - **Verified:** root install + build (322/322); integration-test-suite 1132/1132; Engine 1887/1887; TruthSuite 189/189;
   Core 593/593; the four bootstrap packages build 0.
