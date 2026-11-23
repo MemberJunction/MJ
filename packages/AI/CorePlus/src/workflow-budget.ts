@@ -89,6 +89,8 @@ export interface CreateWorkflowBudgetOptions {
     WorkflowMaxCostUsd?: number;
     WorkflowMaxDurationMs?: number;
     WorkflowStartedAtMs?: number;
+    /** Optional prior cumulative USD spend to seed a workflow/child tree budget without losing prior node spend. */
+    InitialCumulativeCostUsd?: number;
     CreateAbortController?: boolean;
 }
 
@@ -197,6 +199,13 @@ export function CreateWorkflowBudget(
         options.MaxTreeTokens !== undefined;
     const shouldCreateAbort = options.CreateAbortController ?? hasCaps;
 
+    const initialCost =
+        typeof options.InitialCumulativeCostUsd === 'number' &&
+        Number.isFinite(options.InitialCumulativeCostUsd) &&
+        options.InitialCumulativeCostUsd > 0
+            ? options.InitialCumulativeCostUsd
+            : 0;
+
     return {
         ...(options.MaxTreeSteps !== undefined ? { maxTreeSteps: options.MaxTreeSteps } : {}),
         ...(options.MaxTreeTokens !== undefined ? { maxTreeTokens: options.MaxTreeTokens } : {}),
@@ -207,8 +216,8 @@ export function CreateWorkflowBudget(
         workflowStartedAtMs: startedAtMs,
         totalSteps: 0,
         totalTokens: 0,
-        totalCost: 0,
-        cumulativeCostUsd: 0,
+        totalCost: initialCost,
+        cumulativeCostUsd: initialCost,
         startedAtMs,
         lastUpdatedAtMs: startedAtMs,
         ...(shouldCreateAbort ? { abortController: new AbortController() } : {}),

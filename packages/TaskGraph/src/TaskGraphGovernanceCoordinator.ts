@@ -20,6 +20,7 @@ import {
     LogError,
     LogStatus,
     RunView,
+    RunViewDecisionReadTruncatedError,
     type RunViewParams,
     UserInfo,
     ValidateDecisionReadResult,
@@ -2759,13 +2760,17 @@ export class TaskGraphGovernanceCoordinator {
             if ('Error' in validated) {
                 if (validated.Truncated) {
                     LogError(`[TaskGraphGovernanceCoordinator] ${validated.ErrorMessage}`);
+                    throw validated.Error;
                 }
                 return;
             }
             state.KnownChildCount = validated.Results.length;
             this.ingestNodeRows(state, validated.Results);
             await this.recoverMissingNodeMetricsFromRows(provider, state, validated.Results, contextUser);
-        } catch {
+        } catch (error) {
+            if (error instanceof RunViewDecisionReadTruncatedError) {
+                throw error;
+            }
             // Best-effort sync in offline harnesses
         }
     }
@@ -3292,6 +3297,7 @@ export class TaskGraphGovernanceCoordinator {
                 if ('Error' in validated) {
                     if (validated.Truncated) {
                         LogError(`[TaskGraphGovernanceCoordinator] ${validated.ErrorMessage}`);
+                        throw validated.Error;
                     }
                     continue;
                 }
@@ -3323,7 +3329,10 @@ export class TaskGraphGovernanceCoordinator {
                     }
                 }
             }
-        } catch {
+        } catch (error) {
+            if (error instanceof RunViewDecisionReadTruncatedError) {
+                throw error;
+            }
             // Best-effort run-billing recovery when run entities are unavailable in offline mocks
         }
         return lookup;

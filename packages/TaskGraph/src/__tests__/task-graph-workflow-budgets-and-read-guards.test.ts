@@ -296,4 +296,84 @@ describe('MJ-10: Zero Silent Decision-Read Row-Cap Enforcement in TaskGraph', ()
             RunViewDecisionReadTruncatedError,
         );
     });
+
+    it('TaskGraphGovernanceCoordinator.syncSettledNodesFromStore and loadRunMetricsLookup fail closed with RunViewDecisionReadTruncatedError on truncated reads', async () => {
+        const capturedQueries: RunViewParams[] = [];
+        const parent = createParentTaskEntity({
+            id: 'graph-trunc-1',
+            workflowMaxCostUsd: 1.0,
+        });
+        const node1 = createChildTaskEntity('task-1', 'graph-trunc-1', 'Node 1');
+        const fakeRunView: Pick<RunView, 'RunView' | 'RunViews'> = {
+            RunView: async <T = Record<string, string | number | boolean | null>>(params: RunViewParams) => {
+                capturedQueries.push(params);
+                if (params.EntityName === 'MJ: Tasks' && params.ExtraFilter?.includes("ParentID='graph-trunc-1'")) {
+                    return {
+                        Success: true,
+                        Results: [{ ID: 'task-1', Status: 'Complete', AgentRunID: null, StartedAt: null, CompletedAt: null, __mj_UpdatedAt: null, Configuration: null }] as T[],
+                        RowCount: 1,
+                        TotalRowCount: 500,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserView: {} as RunViewResult<T>['UserView'],
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [] as T[],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                    UserView: {} as RunViewResult<T>['UserView'],
+                };
+            },
+            RunViews: async <T = Record<string, string | number | boolean | null>>(queries: RunViewParams[]) => {
+                capturedQueries.push(...queries);
+                return queries.map(() => ({
+                    Success: true,
+                    Results: [{ ID: 'run-1', TotalCostRollup: 0.1, TotalCost: 0.1 }] as T[],
+                    RowCount: 1,
+                    TotalRowCount: 250,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                    UserView: {} as RunViewResult<T>['UserView'],
+                }));
+            },
+        };
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(fakeRunView as RunView);
+
+        const coordinator = new TaskGraphGovernanceCoordinator(new TaskClaimStore('inst-1', 60), { Enabled: true });
+        const contextUser = { ID: 'u-1', Type: 'Owner' } as UserInfo;
+        const provider = {
+            CurrentUser: contextUser,
+            RunView: fakeRunView.RunView,
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        await expect(
+            coordinator.RecordNodeSettlementAndEvaluate({
+                Provider: provider,
+                ContextUser: contextUser,
+                Parent: parent,
+                Task: node1,
+                Success: true,
+                CostUsd: 0.1,
+                TokensUsed: 100,
+            }),
+        ).rejects.toBeInstanceOf(RunViewDecisionReadTruncatedError);
+        const syncQuery = capturedQueries.find(
+            (q) => q.EntityName === 'MJ: Tasks' && q.ExtraFilter?.includes("ParentID='graph-trunc-1'"),
+        );
+        expect(syncQuery?.IgnoreMaxRows).toBe(true);
+
+        // Now test loadRunMetricsLookup truncation via ResolveOrRecoverNodeSettlementMetrics with an AgentRunID
+        capturedQueries.length = 0;
+        await expect(
+            coordinator.ResolveOrRecoverNodeSettlementMetrics(provider, 'graph-trunc-1', parent, contextUser, {
+                AgentRunID: 'run-1',
+            }),
+        ).rejects.toBeInstanceOf(RunViewDecisionReadTruncatedError);
+        const metricsQuery = capturedQueries.find((q) => q.EntityName === 'MJ: AI Agent Runs');
+        expect(metricsQuery?.IgnoreMaxRows).toBe(true);
+    });
 });

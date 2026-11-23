@@ -20,8 +20,20 @@ import { LogError, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJTaskEntity } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, TASK_SECURITY_ENVELOPE_VERSION } from '@memberjunction/ai-core-plus';
-import type { ActionChange, AgentExecutionProgressCallback, ExecuteAgentParams, TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
+import {
+    CreateWorkflowBudget,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    TASK_SECURITY_ENVELOPE_VERSION,
+} from '@memberjunction/ai-core-plus';
+import type {
+    ActionChange,
+    AgentExecutionProgressCallback,
+    AgentTreeBudget,
+    ExecuteAgentParams,
+    TaskSecurityEnvelope,
+    WorkflowBudgetBreachDiagnostic,
+} from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
 import { PickUsageMetric, SumUsageTokenPair } from './taskGraphUsageMetrics.js';
 
@@ -83,23 +95,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             const envelopeParams = await TaskGraphEnvelopeRunParams(env ?? CLEAN_NODE_ENVELOPE, actingUser);
 
             const runner = new AgentRunner(params.Provider);
-            const effectiveWorkflowMaxCostUsd =
-                params.WorkflowBudget?.RemainingCostUsd !== undefined
-                    ? params.WorkflowBudget.RemainingCostUsd
-                    : params.WorkflowBudget?.WorkflowMaxCostUsd;
-            const workflowBudgetParams = params.WorkflowBudget
-                ? {
-                      ...(effectiveWorkflowMaxCostUsd !== undefined
-                          ? { workflowMaxCostUsd: effectiveWorkflowMaxCostUsd }
-                          : {}),
-                      ...(params.WorkflowBudget.WorkflowMaxDurationMs !== undefined
-                          ? { workflowMaxDurationMs: params.WorkflowBudget.WorkflowMaxDurationMs }
-                          : {}),
-                      ...(params.WorkflowBudget.WorkflowStartedAtMs !== undefined
-                          ? { workflowStartedAtMs: params.WorkflowBudget.WorkflowStartedAtMs }
-                          : {}),
-                  }
-                : {};
+            const workflowBudgetParams = this.buildWorkflowBudgetRunParams(params);
             const result = await runner.RunAgent({
                 agent,
                 provider: params.Provider,
@@ -176,6 +172,12 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 SumUsageTokenPair(agentRun?.TotalPromptTokensUsed, agentRun?.TotalCompletionTokensUsed),
             ]);
 
+            const normalizedLimitExceeded = this.normalizeLimitExceededDiagnostic(
+                result?.limitExceeded,
+                params,
+                costUsd
+            );
+
             return {
                 Success: success,
                 Output: this.extractOutput(result),
@@ -185,7 +187,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 IsOutputTainted: (result?.taintedSources?.length ?? 0) > 0 || env?.IsRunTainted === true,
                 ...(costUsd !== undefined ? { CostUsd: costUsd } : {}),
                 ...(tokensUsed !== undefined ? { TokensUsed: tokensUsed } : {}),
-                ...(result?.limitExceeded ? { LimitExceeded: result.limitExceeded } : {}),
+                ...(normalizedLimitExceeded ? { LimitExceeded: normalizedLimitExceeded } : {}),
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -194,6 +196,61 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
         }
     }
 
+
+    private buildWorkflowBudgetRunParams(params: TaskAgentRunParams): {
+        treeBudget?: AgentTreeBudget;
+        workflowMaxCostUsd?: number;
+        workflowMaxDurationMs?: number;
+        workflowStartedAtMs?: number;
+    } {
+        const wf = params.WorkflowBudget;
+        if (!wf) {
+            return {};
+        }
+        const wholeWorkflowMaxCostUsd = wf.WorkflowMaxCostUsd ?? wf.RemainingCostUsd;
+        const priorCostUsd = Math.max(0, wf.CumulativeCostUsd ?? 0);
+        const childTreeBudget = CreateWorkflowBudget({
+            WorkflowMaxCostUsd: wholeWorkflowMaxCostUsd,
+            WorkflowMaxDurationMs: wf.WorkflowMaxDurationMs,
+            WorkflowStartedAtMs: wf.WorkflowStartedAtMs,
+            InitialCumulativeCostUsd: priorCostUsd,
+        });
+        return {
+            treeBudget: childTreeBudget,
+            ...(wholeWorkflowMaxCostUsd !== undefined ? { workflowMaxCostUsd: wholeWorkflowMaxCostUsd } : {}),
+            ...(wf.WorkflowMaxDurationMs !== undefined ? { workflowMaxDurationMs: wf.WorkflowMaxDurationMs } : {}),
+            ...(wf.WorkflowStartedAtMs !== undefined ? { workflowStartedAtMs: wf.WorkflowStartedAtMs } : {}),
+        };
+    }
+
+    private normalizeLimitExceededDiagnostic(
+        diagnostic: WorkflowBudgetBreachDiagnostic | undefined,
+        params: TaskAgentRunParams,
+        childCostUsd: number | undefined
+    ): WorkflowBudgetBreachDiagnostic | undefined {
+        if (!diagnostic) {
+            return undefined;
+        }
+        const wf = params.WorkflowBudget;
+        if (!wf || diagnostic.Dimension !== 'CostUsd' || wf.WorkflowMaxCostUsd === undefined) {
+            return diagnostic;
+        }
+        // If a downstream mock or custom runner ignored the seeded treeBudget and reported RemainingCostUsd as Limit,
+        // normalize Limit to the whole-workflow cap and CumulativeCostUsd to PriorCost + ChildCost.
+        if (diagnostic.Limit === wf.WorkflowMaxCostUsd) {
+            return diagnostic;
+        }
+        const priorCost = Math.max(0, wf.CumulativeCostUsd ?? 0);
+        const childSpend = Math.max(0, childCostUsd ?? diagnostic.CumulativeCostUsd);
+        const totalCumulative = priorCost + childSpend;
+        return {
+            ...diagnostic,
+            Limit: wf.WorkflowMaxCostUsd,
+            CumulativeCostUsd: totalCumulative,
+            CurrentValue: totalCumulative,
+            Reason: `Workflow USD cost budget exceeded ($${totalCumulative.toFixed(4)}/$${wf.WorkflowMaxCostUsd.toFixed(4)}; elapsed ${diagnostic.ElapsedWallClockMs}ms)`,
+        };
+    }
 
     /**
      * Who the agent runs as. The dispatcher already decided (`ContextUser`), and when the graph carries
