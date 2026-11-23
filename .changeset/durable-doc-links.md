@@ -1,4 +1,5 @@
 ---
+"@memberjunction/ai-agents": patch
 "@memberjunction/content-pipeline": patch
 "@memberjunction/core-entities": patch
 "@memberjunction/ng-artifacts": patch

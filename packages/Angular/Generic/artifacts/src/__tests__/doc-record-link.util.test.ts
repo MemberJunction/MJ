@@ -161,11 +161,11 @@ describe('doc-record-link.util', () => {
     expect(runViewsCalls).toHaveLength(0);
   });
 
-  it('triggers ONE RunViews call for N linked docs regardless of N through the real ArtifactPermissionEngine.ResolvePermissionsBatch', async () => {
+  it('triggers O(1) RunViews calls for N linked docs regardless of N through the real ArtifactPermissionEngine.ResolvePermissionsBatch', async () => {
     const viewerUser = { ID: '22222222-2222-4222-8222-222222222222', Name: 'Alice', UserRoles: [] } as unknown as UserInfo;
     const ownerId = '11111111-1111-4111-8111-111111111111';
 
-    const runBatchDocLinks = async (count: number) => {
+    const runBatchDocLinks = async (count: number, allOwned: boolean) => {
       const ids = Array.from({ length: count }, (_, i) => `a0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
       const markdown = ids
         .map((id, i) => ConversationUtility.CreateRecordLink('MJ: Artifacts', `Doc ${i + 1}`, { ID: id }))
@@ -198,7 +198,7 @@ describe('doc-record-link.util', () => {
                 Success: true,
                 Results: ids.map((id, idx) => ({
                   ID: id,
-                  UserID: idx % 2 === 0 ? viewerUser.ID : ownerId,
+                  UserID: allOwned || idx % 2 === 0 ? viewerUser.ID : ownerId,
                   DelegateEntityID: null,
                   DelegateRecordID: null,
                 })),
@@ -218,19 +218,22 @@ describe('doc-record-link.util', () => {
       return { links, access, singleCalls, batchCalls };
     };
 
-    const run5 = await runBatchDocLinks(5);
-    const run15 = await runBatchDocLinks(15);
+    // All-owner docs: strictly ONE RunViews call with only MJ: Artifacts regardless of N.
+    const owned15 = await runBatchDocLinks(15, true);
+    expect(owned15.singleCalls).toHaveLength(0);
+    expect(owned15.batchCalls).toHaveLength(1);
+    expect(owned15.batchCalls[0].map((p) => p.EntityName)).toEqual(['MJ: Artifacts']);
 
-    // Whatever N is (5 or 15), the artifact path makes ONE RunViews call and ZERO per-artifact RunView calls.
+    // Mixed owned + unowned docs: flat 2 RunViews calls whether N=5 or N=15, zero per-artifact RunView calls.
+    const run5 = await runBatchDocLinks(5, false);
+    const run15 = await runBatchDocLinks(15, false);
+
     expect(run5.singleCalls).toHaveLength(0);
-    expect(run5.batchCalls).toHaveLength(1);
+    expect(run5.batchCalls).toHaveLength(2);
     expect(run15.singleCalls).toHaveLength(0);
-    expect(run15.batchCalls).toHaveLength(1);
-    expect(run15.batchCalls[0].map((p) => p.EntityName)).toEqual([
-      'MJ: Artifacts',
-      'MJ: Artifact Permissions',
-      'MJ: Artifact Versions',
-    ]);
+    expect(run15.batchCalls).toHaveLength(2);
+    expect(run15.batchCalls[0].map((p) => p.EntityName)).toEqual(['MJ: Artifacts']);
+    expect(run15.batchCalls[1].map((p) => p.EntityName)).toEqual(['MJ: Artifact Permissions', 'MJ: Artifact Versions']);
     // Never requests Name on MJ: Artifacts.
     expect(run15.batchCalls[0][0].Fields).not.toContain('Name');
     expect(run15.access.get(run15.links[0].KeySignature)).toBe('readable');

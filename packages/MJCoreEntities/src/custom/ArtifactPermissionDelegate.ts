@@ -528,13 +528,16 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     }
 
     /**
-     * Resolves permissions for many artifacts in a single batched pass instead of per-artifact queries:
-     * - Loads artifact rows (`ID IN (...)`), direct `MJ: Artifact Permissions` (`ArtifactID IN (...)`),
-     *   and `MJ: Artifact Versions` (`ArtifactID IN (...)`) in one `RunViews` call per 200-ID chunk.
-     * - Loads `MJ: Collection Artifacts`, walks `MJ: Collections` ancestry level-by-level (one batched
-     *   query per depth level across all artifacts), and loads `MJ: Collection Permissions` once.
-     * - Evaluates owner, direct grants, collection inheritance, and delegate rules (including batched
-     *   parent-artifact delegation) in memory with identical semantics to {@link ResolvePermissions}.
+     * Resolves permissions for many artifacts in a staged batched pass instead of per-artifact queries:
+     * - Loads only `MJ: Artifacts` headers first (`ID IN (...)`, `BypassCache: true`) so owned, missing,
+     *   unregistered-delegate, and parent-delegated artifacts settle without extra permission/version queries.
+     * - Loads `MJ: Artifact Permissions` (`ArtifactID IN (...)`) and `MJ: Artifact Versions` (`ArtifactID IN (...)`)
+     *   only for non-owned artifacts that still require fallback evaluation (in 1 `RunViews` call on Network
+     *   providers, or `user` + `systemUser` in parallel on Database providers).
+     * - Walks `MJ: Collection Artifacts` -> `MJ: Collections` ancestry level-by-level (one batched query per
+     *   depth level across all artifacts) and loads `MJ: Collection Permissions` once.
+     * - Evaluates custom delegates (deferring fallback loading to a single batch only for non-owner defers)
+     *   and `ParentArtifactPermissionDelegate` chains with exact accumulated `Depth` and `VisitedArtifactIDs`.
      *
      * Returns a `Map` keyed by each input ID in `artifactIds`.
      */
@@ -676,50 +679,45 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 ? IndexByUUID(provider.Entities, (e) => e.ID)
                 : null;
 
-        const artifactsByNormId = new Map<string, ArtifactRowProjection>();
-        const directPermsByNormArtifactId = new Map<string, ArtifactPermissionRowProjection[]>();
-        const collectionPermsByNormArtifactId = new Map<string, CollectionPermissionRowProjection[]>();
+        const normUserId = NormalizeUUID(user.ID ?? '');
+        const resolvedByNorm = new Map<string, ResolvedArtifactPermissions>();
         const loadedNormIds = new Set<string>();
         const parentDelegateMetaByNormId = new Map<
             string,
             { Artifact: ArtifactRowProjection; DelegateEntityName: string; DelegateEntityId: string; DelegateRecordId: string }
         >();
-        const customDelegatedByNormId = new Map<string, { normId: string; id: string; Artifact: ArtifactRowProjection }>();
-        const missingDelegateErrors = new Map<string, ResolvedArtifactPermissions>();
-        const idTextByNormId = new Map<string, string>();
-        for (const item of initialItems) {
-            idTextByNormId.set(item.normId, item.id);
-        }
+        const customDelegatedByNormId = new Map<
+            string,
+            {
+                normId: string;
+                id: string;
+                Artifact: ArtifactRowProjection;
+                Delegate: IArtifactPermissionDelegate;
+                DelegateEntityName: string;
+                DelegateEntityId: string;
+                DelegateRecordId: string;
+            }
+        >();
 
-        // Iterative wave loading: Wave 0 loads initialItems; subsequent waves (at most MAX_DELEGATE_DEPTH - depth)
-        // batch-load any unseen ParentArtifactPermissionDelegate targets so multi-hop parent chains stay O(depth)
-        // with exact per-node cycle detection, exact depth caps, and zero memo deadlocks.
+        // Iterative wave loading: each wave loads ONLY MJ: Artifacts first so owned, missing, unregistered-delegate,
+        // and parent-delegated artifacts settle without querying MJ: Artifact Permissions or MJ: Artifact Versions.
         let waveItems: Array<{ normId: string; id: string }> = initialItems.map((i) => ({ normId: i.normId, id: i.id }));
         const maxExtraWaves = Math.max(0, MAX_DELEGATE_DEPTH - depth);
 
         for (let wave = 0; wave <= maxExtraWaves && waveItems.length > 0; wave++) {
             for (const w of waveItems) {
                 loadedNormIds.add(w.normId);
-                if (!idTextByNormId.has(w.normId)) {
-                    idTextByNormId.set(w.normId, w.id);
-                }
             }
 
-            const loaded = await this.loadInitialBatchData(provider, waveItems, user, strictThrowOnQueryError);
-
-            const waveArtifactsNeedingDirect = new Set<string>();
-            const waveArtifactsNeedingCollections = new Set<string>();
+            const artifactsInWave = await this.loadArtifactRowsBatch(provider, waveItems, user, strictThrowOnQueryError);
+            const nonDelegatedNonOwners: Array<{ normId: string; id: string; Artifact: ArtifactRowProjection }> = [];
             const nextWaveParentsByNorm = new Map<string, { normId: string; id: string }>();
 
             for (const w of waveItems) {
-                const artifact = loaded.ArtifactsByNormId.get(w.normId);
+                const artifact = artifactsInWave.get(w.normId);
                 if (!artifact) {
+                    resolvedByNorm.set(w.normId, this.buildDenied(w.id, `Artifact '${w.id}' was not found.`));
                     continue;
-                }
-                artifactsByNormId.set(w.normId, artifact);
-                const directRows = loaded.DirectPermsByNormArtifactId.get(w.normId);
-                if (directRows) {
-                    directPermsByNormArtifactId.set(w.normId, directRows);
                 }
 
                 const isOwner = Boolean(artifact.UserID && UUIDsEqual(artifact.UserID, user.ID));
@@ -732,7 +730,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                         LogError(
                             `No permission delegate is registered for delegating entity '${entityLabel}' (${artifact.DelegateRecordID}) on artifact '${artifact.ID}'.`
                         );
-                        missingDelegateErrors.set(
+                        resolvedByNorm.set(
                             w.normId,
                             this.buildDenied(
                                 artifact.ID,
@@ -751,78 +749,50 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                         const parentTrimmed = artifact.DelegateRecordID.trim();
                         if (wave < maxExtraWaves && IsValidUUID(parentTrimmed)) {
                             const parentNorm = NormalizeUUID(parentTrimmed);
-                            if (!loadedNormIds.has(parentNorm) && !visited.has(parentNorm)) {
+                            const parentMemoKey = `${parentNorm}::${normUserId}`;
+                            const hasMemoHit = !strictThrowOnQueryError && memo.has(parentMemoKey);
+                            if (!loadedNormIds.has(parentNorm) && !visited.has(parentNorm) && !hasMemoHit) {
                                 nextWaveParentsByNorm.set(parentNorm, { normId: parentNorm, id: parentTrimmed });
                             }
                         }
                     } else {
-                        customDelegatedByNormId.set(w.normId, { normId: w.normId, id: w.id, Artifact: artifact });
-                        if (!isOwner) {
-                            waveArtifactsNeedingDirect.add(w.normId);
-                            waveArtifactsNeedingCollections.add(w.normId);
-                        }
+                        customDelegatedByNormId.set(w.normId, {
+                            normId: w.normId,
+                            id: w.id,
+                            Artifact: artifact,
+                            Delegate: delegate,
+                            DelegateEntityName: delegateEntityName,
+                            DelegateEntityId: artifact.DelegateEntityID,
+                            DelegateRecordId: artifact.DelegateRecordID
+                        });
                     }
-                } else if (!isOwner) {
-                    waveArtifactsNeedingDirect.add(w.normId);
-                    waveArtifactsNeedingCollections.add(w.normId);
+                } else if (isOwner) {
+                    resolvedByNorm.set(w.normId, this.evaluateNonDelegatedArtifact(artifact, user, [], []));
+                } else {
+                    nonDelegatedNonOwners.push({ normId: w.normId, id: w.id, Artifact: artifact });
                 }
             }
 
-            if (strictThrowOnQueryError) {
-                if (waveArtifactsNeedingDirect.size > 0 && loaded.DirectQueryError) {
-                    throw loaded.DirectQueryError;
+            if (nonDelegatedNonOwners.length > 0) {
+                const { DirectPermsByNormArtifactId, CollectionPermsByNormArtifactId } =
+                    await this.loadDirectAndCollectionBatch(provider, nonDelegatedNonOwners, user, strictThrowOnQueryError);
+                for (const item of nonDelegatedNonOwners) {
+                    resolvedByNorm.set(
+                        item.normId,
+                        this.evaluateNonDelegatedArtifact(
+                            item.Artifact,
+                            user,
+                            DirectPermsByNormArtifactId.get(item.normId) ?? [],
+                            CollectionPermsByNormArtifactId.get(item.normId) ?? []
+                        )
+                    );
                 }
-                if (waveArtifactsNeedingCollections.size > 0 && loaded.VersionQueryError) {
-                    throw loaded.VersionQueryError;
-                }
-            }
-
-            const waveColPerms = await this.loadBatchedCollectionPermissions(
-                provider,
-                waveItems,
-                waveArtifactsNeedingCollections,
-                loaded.VersionIdsByNormArtifactId,
-                loaded.QueryActor,
-                user,
-                strictThrowOnQueryError
-            );
-            for (const [normId, rows] of waveColPerms.entries()) {
-                collectionPermsByNormArtifactId.set(normId, rows);
             }
 
             waveItems = Array.from(nextWaveParentsByNorm.values());
         }
 
-        // Pass 1: settle all non-delegated, missing-artifact, and unregistered-delegate nodes in memory
-        const resolvedByNorm = new Map<string, ResolvedArtifactPermissions>();
-        for (const normId of loadedNormIds) {
-            const missingErr = missingDelegateErrors.get(normId);
-            if (missingErr) {
-                resolvedByNorm.set(normId, missingErr);
-                continue;
-            }
-            const artifact = artifactsByNormId.get(normId);
-            if (!artifact) {
-                const rawText = idTextByNormId.get(normId) ?? normId;
-                resolvedByNorm.set(normId, this.buildDenied(rawText, `Artifact '${rawText}' was not found.`));
-                continue;
-            }
-            if (parentDelegateMetaByNormId.has(normId) || customDelegatedByNormId.has(normId)) {
-                continue;
-            }
-            resolvedByNorm.set(
-                normId,
-                this.evaluateNonDelegatedArtifact(
-                    artifact,
-                    user,
-                    directPermsByNormArtifactId.get(normId) ?? [],
-                    collectionPermsByNormArtifactId.get(normId) ?? []
-                )
-            );
-        }
-
         // Seed a child memo with already-settled entries (never unresolved promises) so custom delegates cannot deadlock
-        const normUserId = NormalizeUUID(user.ID ?? '');
         const settledMemo = new Map<string, Promise<ResolvedArtifactPermissions>>(memo);
         if (!strictThrowOnQueryError) {
             for (const [normId, resolved] of resolvedByNorm.entries()) {
@@ -830,50 +800,150 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             }
         }
 
-        // Pass 2: evaluate custom delegates using already-loaded direct & collection fallback rows (0 extra DB queries)
-        if (customDelegatedByNormId.size > 0) {
-            await Promise.all(
-                Array.from(customDelegatedByNormId.values()).map(async ({ normId, Artifact }) => {
-                    const childVisited = new Set<string>(visited);
-                    childVisited.add(normId);
-                    const directRows = directPermsByNormArtifactId.get(normId) ?? [];
-                    const collectionRows = collectionPermsByNormArtifactId.get(normId) ?? [];
-                    const delegateResult = await this.evaluateDelegate(
-                        provider,
-                        Artifact,
-                        user,
-                        depth,
-                        childVisited,
-                        settledMemo,
-                        strictThrowOnQueryError,
-                        { DirectRows: directRows, CollectionRows: collectionRows },
-                        entitiesById
-                    );
-                    const resolved =
-                        delegateResult ??
-                        this.evaluateNonDelegatedArtifact(Artifact, user, directRows, collectionRows);
-                    resolvedByNorm.set(normId, resolved);
-                    if (!strictThrowOnQueryError) {
-                        settledMemo.set(`${normId}::${normUserId}`, Promise.resolve(resolved));
-                    }
-                })
-            );
+        interface ParentDelegateMeta {
+            Artifact: ArtifactRowProjection;
+            DelegateEntityName: string;
+            DelegateEntityId: string;
+            DelegateRecordId: string;
+        }
+        interface PendingCustomInvocation {
+            Kind: 'direct' | 'parent-chain';
+            StartNormId: string;
+            StartMeta?: ParentDelegateMeta;
+            TargetNormId: string;
+            Depth: number;
+            Visited: ReadonlySet<string>;
         }
 
-        // Pass 3: evaluate every ParentArtifactPermissionDelegate node in memory with its OWN per-node visited set & hop depth.
-        // Keep base (non-parent-delegated) settled results separate while walking so each node counts every parent hop cleanly.
         const parentResolvedByNorm = new Map<string, ResolvedArtifactPermissions>();
-        for (const [startNormId, startMeta] of parentDelegateMetaByNormId.entries()) {
-            const result = this.resolveParentDelegateChainInMemory(
-                startNormId,
+        const pendingCustomInvocations: PendingCustomInvocation[] = [];
+        const pendingMemoParentChains: Array<{
+            StartNormId: string;
+            StartMeta: ParentDelegateMeta;
+            Promise: Promise<ResolvedArtifactPermissions>;
+        }> = [];
+
+        // Walk parent-delegate chains for initialItems, capturing exact accumulated Depth & VisitedArtifactIDs
+        // whenever a chain terminates at a custom-delegated artifact.
+        for (const item of initialItems) {
+            if (customDelegatedByNormId.has(item.normId)) {
+                const directVisited = new Set<string>(visited);
+                directVisited.add(item.normId);
+                pendingCustomInvocations.push({
+                    Kind: 'direct',
+                    StartNormId: item.normId,
+                    TargetNormId: item.normId,
+                    Depth: depth,
+                    Visited: directVisited
+                });
+                continue;
+            }
+            const startMeta = parentDelegateMetaByNormId.get(item.normId);
+            if (!startMeta) {
+                continue;
+            }
+            const walk = this.walkParentDelegateChain(
+                item.normId,
                 startMeta,
                 depth,
                 visited,
+                normUserId,
+                strictThrowOnQueryError,
                 parentDelegateMetaByNormId,
-                resolvedByNorm
+                customDelegatedByNormId,
+                resolvedByNorm,
+                memo
             );
-            parentResolvedByNorm.set(startNormId, result);
+            if (walk.Kind === 'resolved') {
+                parentResolvedByNorm.set(item.normId, walk.Result);
+            } else if (walk.Kind === 'memo') {
+                pendingMemoParentChains.push({
+                    StartNormId: item.normId,
+                    StartMeta: startMeta,
+                    Promise: walk.Promise
+                });
+            } else {
+                pendingCustomInvocations.push({
+                    Kind: 'parent-chain',
+                    StartNormId: item.normId,
+                    StartMeta: startMeta,
+                    TargetNormId: walk.CustomNormId,
+                    Depth: walk.Depth,
+                    Visited: walk.Visited
+                });
+            }
         }
+
+        if (pendingMemoParentChains.length > 0) {
+            const memoParents = await Promise.all(pendingMemoParentChains.map((p) => p.Promise));
+            for (let i = 0; i < pendingMemoParentChains.length; i++) {
+                const entry = pendingMemoParentChains[i];
+                parentResolvedByNorm.set(entry.StartNormId, this.formatParentDelegateResult(entry.StartMeta, memoParents[i]));
+            }
+        }
+
+        // Evaluate custom delegates in parallel with exact accumulated Depth & VisitedArtifactIDs;
+        // batch-load direct + collection fallback rows ONCE only for non-owner invocations that returned 'Defer'.
+        if (pendingCustomInvocations.length > 0) {
+            const evaluated = await Promise.all(
+                pendingCustomInvocations.map(async (inv) => {
+                    const target = customDelegatedByNormId.get(inv.TargetNormId)!;
+                    const decisions = await this.evaluateCustomDelegateDecisions(
+                        provider,
+                        target.Delegate,
+                        target.Artifact,
+                        target.DelegateEntityId,
+                        target.DelegateEntityName,
+                        target.DelegateRecordId,
+                        user,
+                        inv.Depth,
+                        inv.Visited,
+                        settledMemo
+                    );
+                    return { inv, target, decisions };
+                })
+            );
+
+            const customNeedingFallback = new Map<string, { normId: string; id: string }>();
+            for (const { target, decisions } of evaluated) {
+                const isOwner = Boolean(target.Artifact.UserID && UUIDsEqual(target.Artifact.UserID, user.ID));
+                if (decisions.NeedsFallback && !isOwner) {
+                    customNeedingFallback.set(target.normId, { normId: target.normId, id: target.id });
+                }
+            }
+
+            let fallbackDirect = new Map<string, ArtifactPermissionRowProjection[]>();
+            let fallbackCollections = new Map<string, CollectionPermissionRowProjection[]>();
+            if (customNeedingFallback.size > 0) {
+                const loadedFallback = await this.loadDirectAndCollectionBatch(
+                    provider,
+                    Array.from(customNeedingFallback.values()),
+                    user,
+                    strictThrowOnQueryError
+                );
+                fallbackDirect = loadedFallback.DirectPermsByNormArtifactId;
+                fallbackCollections = loadedFallback.CollectionPermsByNormArtifactId;
+            }
+
+            for (const { inv, target, decisions } of evaluated) {
+                const finalized = this.finalizeCustomDelegateDecisions(
+                    target.Artifact,
+                    target.DelegateEntityId,
+                    target.DelegateEntityName,
+                    target.DelegateRecordId,
+                    decisions,
+                    user,
+                    fallbackDirect.get(target.normId) ?? [],
+                    fallbackCollections.get(target.normId) ?? []
+                );
+                if (inv.Kind === 'direct') {
+                    resolvedByNorm.set(inv.StartNormId, finalized);
+                } else {
+                    parentResolvedByNorm.set(inv.StartNormId, this.formatParentDelegateResult(inv.StartMeta!, finalized));
+                }
+            }
+        }
+
         for (const [normId, result] of parentResolvedByNorm.entries()) {
             resolvedByNorm.set(normId, result);
         }
@@ -881,35 +951,45 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         return resolvedByNorm;
     }
 
-    private resolveParentDelegateChainInMemory(
+    private formatParentDelegateResult(
+        startMeta: { Artifact: ArtifactRowProjection; DelegateEntityName: string; DelegateEntityId: string; DelegateRecordId: string },
+        parentPerms: ResolvedArtifactPermissions
+    ): ResolvedArtifactPermissions {
+        if (!parentPerms.CanRead) {
+            return this.buildDenied(
+                startMeta.Artifact.ID,
+                `Access denied by delegate entity '${startMeta.DelegateEntityName || startMeta.DelegateEntityId}' (${startMeta.DelegateRecordId}).`
+            );
+        }
+        return {
+            ArtifactID: startMeta.Artifact.ID,
+            CanRead: parentPerms.CanRead,
+            CanEdit: parentPerms.CanEdit,
+            CanDelete: parentPerms.CanDelete,
+            CanShare: parentPerms.CanShare,
+            Source: 'Delegate',
+            Reason: `Permissions resolved via delegate '${startMeta.DelegateEntityName || startMeta.DelegateEntityId}' (${startMeta.DelegateRecordId}).`
+        };
+    }
+
+    private walkParentDelegateChain(
         startNormId: string,
         startMeta: { Artifact: ArtifactRowProjection; DelegateEntityName: string; DelegateEntityId: string; DelegateRecordId: string },
         baseDepth: number,
         baseVisited: ReadonlySet<string>,
+        normUserId: string,
+        strictThrowOnQueryError: boolean,
         parentDelegateMetaByNormId: ReadonlyMap<
             string,
             { Artifact: ArtifactRowProjection; DelegateEntityName: string; DelegateEntityId: string; DelegateRecordId: string }
         >,
-        resolvedByNorm: ReadonlyMap<string, ResolvedArtifactPermissions>
-    ): ResolvedArtifactPermissions {
-        const formatResult = (parentPerms: ResolvedArtifactPermissions): ResolvedArtifactPermissions => {
-            if (!parentPerms.CanRead) {
-                return this.buildDenied(
-                    startMeta.Artifact.ID,
-                    `Access denied by delegate entity '${startMeta.DelegateEntityName || startMeta.DelegateEntityId}' (${startMeta.DelegateRecordId}).`
-                );
-            }
-            return {
-                ArtifactID: startMeta.Artifact.ID,
-                CanRead: parentPerms.CanRead,
-                CanEdit: parentPerms.CanEdit,
-                CanDelete: parentPerms.CanDelete,
-                CanShare: parentPerms.CanShare,
-                Source: 'Delegate',
-                Reason: `Permissions resolved via delegate '${startMeta.DelegateEntityName || startMeta.DelegateEntityId}' (${startMeta.DelegateRecordId}).`
-            };
-        };
-
+        customDelegatedByNormId: ReadonlyMap<string, unknown>,
+        resolvedByNorm: ReadonlyMap<string, ResolvedArtifactPermissions>,
+        memo: ReadonlyMap<string, Promise<ResolvedArtifactPermissions>>
+    ):
+        | { Kind: 'resolved'; Result: ResolvedArtifactPermissions }
+        | { Kind: 'memo'; Promise: Promise<ResolvedArtifactPermissions> }
+        | { Kind: 'custom'; CustomNormId: string; Depth: number; Visited: ReadonlySet<string> } {
         const localVisited = new Set<string>(baseVisited);
         localVisited.add(startNormId);
         let currentMeta = startMeta;
@@ -919,28 +999,66 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             const nextDepth = currentDepth + 1;
             const parentTrimmed = currentMeta.DelegateRecordId.trim();
             if (!parentTrimmed || !IsValidUUID(parentTrimmed)) {
-                return formatResult(this.buildDenied(parentTrimmed, 'Artifact ID and user ID must be valid UUIDs.'));
+                return {
+                    Kind: 'resolved',
+                    Result: this.formatParentDelegateResult(
+                        startMeta,
+                        this.buildDenied(parentTrimmed, 'Artifact ID and user ID must be valid UUIDs.')
+                    )
+                };
             }
             if (nextDepth > MAX_DELEGATE_DEPTH) {
-                return formatResult(this.buildDenied(parentTrimmed, 'Maximum artifact permission delegation depth exceeded.'));
+                return {
+                    Kind: 'resolved',
+                    Result: this.formatParentDelegateResult(
+                        startMeta,
+                        this.buildDenied(parentTrimmed, 'Maximum artifact permission delegation depth exceeded.')
+                    )
+                };
             }
             const parentNorm = NormalizeUUID(parentTrimmed);
             if (localVisited.has(parentNorm)) {
-                return formatResult(this.buildDenied(parentTrimmed, 'Circular artifact permission delegation detected.'));
+                return {
+                    Kind: 'resolved',
+                    Result: this.formatParentDelegateResult(
+                        startMeta,
+                        this.buildDenied(parentTrimmed, 'Circular artifact permission delegation detected.')
+                    )
+                };
             }
 
             const settledParent = resolvedByNorm.get(parentNorm);
             if (settledParent) {
-                return formatResult(settledParent);
+                return { Kind: 'resolved', Result: this.formatParentDelegateResult(startMeta, settledParent) };
+            }
+
+            if (customDelegatedByNormId.has(parentNorm)) {
+                localVisited.add(parentNorm);
+                return { Kind: 'custom', CustomNormId: parentNorm, Depth: nextDepth, Visited: localVisited };
             }
 
             const nextParentMeta = parentDelegateMetaByNormId.get(parentNorm);
-            if (!nextParentMeta) {
-                return formatResult(this.buildDenied(parentTrimmed, `Artifact '${parentTrimmed}' was not found.`));
+            if (nextParentMeta) {
+                localVisited.add(parentNorm);
+                currentMeta = nextParentMeta;
+                currentDepth = nextDepth;
+                continue;
             }
-            localVisited.add(parentNorm);
-            currentMeta = nextParentMeta;
-            currentDepth = nextDepth;
+
+            if (!strictThrowOnQueryError) {
+                const memoPromise = memo.get(`${parentNorm}::${normUserId}`);
+                if (memoPromise) {
+                    return { Kind: 'memo', Promise: memoPromise };
+                }
+            }
+
+            return {
+                Kind: 'resolved',
+                Result: this.formatParentDelegateResult(
+                    startMeta,
+                    this.buildDenied(parentTrimmed, `Artifact '${parentTrimmed}' was not found.`)
+                )
+            };
         }
     }
 
@@ -1003,74 +1121,35 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         return this.buildDenied(artifact.ID, `User '${user.ID}' has no permission grant on artifact '${artifact.ID}'.`);
     }
 
-    private async loadInitialBatchData(
+    private async loadArtifactRowsBatch(
         provider: IMetadataProvider,
         items: ReadonlyArray<{ normId: string; id: string }>,
         user: UserInfo,
         strictThrowOnQueryError: boolean
-    ): Promise<{
-        ArtifactsByNormId: Map<string, ArtifactRowProjection>;
-        DirectPermsByNormArtifactId: Map<string, ArtifactPermissionRowProjection[]>;
-        VersionIdsByNormArtifactId: Map<string, string[]>;
-        QueryActor: UserInfo | null;
-        DirectQueryError: Error | null;
-        VersionQueryError: Error | null;
-    }> {
+    ): Promise<Map<string, ArtifactRowProjection>> {
         const artifactsByNormId = new Map<string, ArtifactRowProjection>();
-        const directPermsByNormArtifactId = new Map<string, ArtifactPermissionRowProjection[]>();
-        const versionIdsByNormArtifactId = new Map<string, string[]>();
-        let directQueryError: Error | null = null;
-        let versionQueryError: Error | null = null;
+        if (items.length === 0) {
+            return artifactsByNormId;
+        }
 
         const ids = items.map((i) => i.id);
         const contextLabel = ids.length === 1 ? `artifact '${ids[0]}'` : `batch of ${ids.length} artifacts`;
-        const queryActor = await this.resolvePermissionQueryActor(provider, user, contextLabel);
         const rv = RunView.FromMetadataProvider(provider);
-        const safeUserId = EscapeSQLString(user.ID);
-        const chunks = chunkArray(ids, IN_CLAUSE_CHUNK_SIZE);
-
-        const artifactQueries: RunViewParams[] = [];
-        const directQueries: RunViewParams[] = [];
-        const versionQueries: RunViewParams[] = [];
-
-        for (const chunk of chunks) {
+        const artifactQueries: RunViewParams[] = chunkArray(ids, IN_CLAUSE_CHUNK_SIZE).map((chunk) => {
             const artParams: RunViewParams = {
                 EntityName: 'MJ: Artifacts',
                 ExtraFilter: buildEqOrInFilter('ID', chunk),
                 Fields: ['ID', 'UserID', 'DelegateEntityID', 'DelegateRecordID'],
                 ...(chunk.length === 1 ? { MaxRows: 1 } : { IgnoreMaxRows: true }),
                 SkipTotalRowCount: true,
-                ResultType: 'simple'
-            };
-            const directParams: RunViewParams = {
-                EntityName: 'MJ: Artifact Permissions',
-                ExtraFilter: `${buildEqOrInFilter('ArtifactID', chunk)} AND UserID='${safeUserId}'`,
-                Fields: ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-                IgnoreMaxRows: true,
-                SkipTotalRowCount: true,
+                BypassCache: true,
                 ResultType: 'simple'
             };
             ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(artParams);
-            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(directParams);
-            artifactQueries.push(artParams);
-            directQueries.push(directParams);
+            return artParams;
+        });
 
-            if (queryActor) {
-                const verParams: RunViewParams = {
-                    EntityName: 'MJ: Artifact Versions',
-                    ExtraFilter: buildEqOrInFilter('ArtifactID', chunk),
-                    Fields: ['ID', 'ArtifactID'],
-                    IgnoreMaxRows: true,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple'
-                };
-                ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(verParams);
-                versionQueries.push(verParams);
-            }
-        }
-
-        const singleNormFallback = items.length === 1 ? items[0].normId : null;
-        const ingestArtifactResult = (res: { Success?: boolean; ErrorMessage?: string; Results?: unknown[] }): void => {
+        const ingest = (res: { Success?: boolean; ErrorMessage?: string; Results?: unknown[] }): void => {
             if (!res?.Success) {
                 if (strictThrowOnQueryError) {
                     throw new Error(res?.ErrorMessage || `Failed loading artifact rows for ${contextLabel}.`);
@@ -1083,6 +1162,88 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 }
             }
         };
+
+        try {
+            const results = canUseRunViews(provider, rv)
+                ? await rv.RunViews(artifactQueries, user)
+                : await Promise.all(artifactQueries.map((q) => rv.RunView<ArtifactRowProjection>(q, user)));
+            for (const res of results) {
+                ingest(res);
+            }
+        } catch (err: unknown) {
+            LogError(
+                `ArtifactPermissionEngine.loadArtifactRowsBatch error for ${contextLabel} (user '${user.ID}'): ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+            if (strictThrowOnQueryError) {
+                throw err;
+            }
+        }
+
+        return artifactsByNormId;
+    }
+
+    private async loadDirectAndCollectionBatch(
+        provider: IMetadataProvider,
+        items: ReadonlyArray<{ normId: string; id: string }>,
+        user: UserInfo,
+        strictThrowOnQueryError: boolean
+    ): Promise<{
+        DirectPermsByNormArtifactId: Map<string, ArtifactPermissionRowProjection[]>;
+        CollectionPermsByNormArtifactId: Map<string, CollectionPermissionRowProjection[]>;
+    }> {
+        const directPermsByNormArtifactId = new Map<string, ArtifactPermissionRowProjection[]>();
+        const versionIdsByNormArtifactId = new Map<string, string[]>();
+        if (items.length === 0) {
+            return {
+                DirectPermsByNormArtifactId: directPermsByNormArtifactId,
+                CollectionPermsByNormArtifactId: new Map<string, CollectionPermissionRowProjection[]>()
+            };
+        }
+
+        let directQueryError: Error | null = null;
+        let versionQueryError: Error | null = null;
+
+        const ids = items.map((i) => i.id);
+        const contextLabel = ids.length === 1 ? `artifact '${ids[0]}'` : `batch of ${ids.length} artifacts`;
+        const queryActor = await this.resolvePermissionQueryActor(provider, user, contextLabel);
+        const rv = RunView.FromMetadataProvider(provider);
+        const safeUserId = EscapeSQLString(user.ID);
+        const chunks = chunkArray(ids, IN_CLAUSE_CHUNK_SIZE);
+
+        const directQueries: RunViewParams[] = [];
+        const versionQueries: RunViewParams[] = [];
+
+        for (const chunk of chunks) {
+            const directParams: RunViewParams = {
+                EntityName: 'MJ: Artifact Permissions',
+                ExtraFilter: `${buildEqOrInFilter('ArtifactID', chunk)} AND UserID='${safeUserId}'`,
+                Fields: ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+                IgnoreMaxRows: true,
+                SkipTotalRowCount: true,
+                BypassCache: true,
+                ResultType: 'simple'
+            };
+            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(directParams);
+            directQueries.push(directParams);
+
+            if (queryActor) {
+                const verParams: RunViewParams = {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: buildEqOrInFilter('ArtifactID', chunk),
+                    Fields: ['ID', 'ArtifactID'],
+                    IgnoreMaxRows: true,
+                    SkipTotalRowCount: true,
+                    BypassCache: true,
+                    ResultType: 'simple'
+                };
+                ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(verParams);
+                versionQueries.push(verParams);
+            }
+        }
+
+        const singleNormFallback = items.length === 1 ? items[0].normId : null;
         const ingestDirectResult = (res: { Success?: boolean; ErrorMessage?: string; Results?: unknown[] }): void => {
             if (!res?.Success) {
                 if (!directQueryError) {
@@ -1130,24 +1291,20 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
 
         if (canUseRunViews(provider, rv)) {
             if (provider.ProviderType !== 'Database') {
-                // On Network/GraphQL providers, queryActor === user: send all 3 entity groups in ONE RunViews call.
-                const combined = [...artifactQueries, ...directQueries, ...versionQueries];
+                // On Network/GraphQL providers, queryActor === user: send Direct Perms + Versions in ONE RunViews call.
+                const combined = [...directQueries, ...versionQueries];
                 try {
                     const batchRes = await rv.RunViews(combined, user);
-                    const artCount = artifactQueries.length;
                     const directCount = directQueries.length;
-                    for (let i = 0; i < artCount; i++) {
-                        ingestArtifactResult(batchRes[i]);
-                    }
                     for (let i = 0; i < directCount; i++) {
-                        ingestDirectResult(batchRes[artCount + i]);
+                        ingestDirectResult(batchRes[i]);
                     }
                     for (let i = 0; i < versionQueries.length; i++) {
-                        ingestVersionResult(batchRes[artCount + directCount + i]);
+                        ingestVersionResult(batchRes[directCount + i]);
                     }
                 } catch (err: unknown) {
                     LogError(
-                        `ArtifactPermissionEngine.loadInitialBatchData error for ${contextLabel} (user '${user.ID}'): ${
+                        `ArtifactPermissionEngine.loadDirectAndCollectionBatch error for ${contextLabel} (user '${user.ID}'): ${
                             err instanceof Error ? err.message : String(err)
                         }`
                     );
@@ -1156,28 +1313,25 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     }
                 }
             } else {
-                // On Database providers, run MJ: Artifacts + MJ: Artifact Permissions as `user` (preserving
-                // entity CanRead and RLS) in 1 RunViews call, and MJ: Artifact Versions as `queryActor`
-                // (systemUser, avoiding ArtifactVersionPostRunViewHook recursion) in parallel.
-                const userQueries = [...artifactQueries, ...directQueries];
-                const runUserBatch = async (): Promise<void> => {
+                // On Database providers, run MJ: Artifact Permissions as `user` (preserving entity CanRead and RLS)
+                // and MJ: Artifact Versions as `queryActor` (systemUser, avoiding ArtifactVersionPostRunViewHook recursion) in parallel.
+                const runDirectBatch = async (): Promise<void> => {
                     try {
-                        const batchRes = await rv.RunViews(userQueries, user);
-                        const artCount = artifactQueries.length;
-                        for (let i = 0; i < artCount; i++) {
-                            ingestArtifactResult(batchRes[i]);
-                        }
-                        for (let i = 0; i < directQueries.length; i++) {
-                            ingestDirectResult(batchRes[artCount + i]);
+                        const resList =
+                            directQueries.length === 1
+                                ? [await rv.RunView<ArtifactPermissionRowProjection>(directQueries[0], user)]
+                                : await rv.RunViews(directQueries, user);
+                        for (const res of resList) {
+                            ingestDirectResult(res);
                         }
                     } catch (err: unknown) {
                         LogError(
-                            `ArtifactPermissionEngine.loadInitialBatchData error for ${contextLabel} (user '${user.ID}'): ${
+                            `ArtifactPermissionEngine.loadDirectPermissionRows error for ${contextLabel} (user '${user.ID}'): ${
                                 err instanceof Error ? err.message : String(err)
                             }`
                         );
-                        if (strictThrowOnQueryError) {
-                            throw err;
+                        if (!directQueryError) {
+                            directQueryError = err instanceof Error ? err : new Error(String(err));
                         }
                     }
                 };
@@ -1204,21 +1358,11 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                         }
                     }
                 };
-                await Promise.all([runUserBatch(), runVersionBatch()]);
+                await Promise.all([runDirectBatch(), runVersionBatch()]);
             }
         } else {
             // Fallback for test doubles that stub only RunView without RunViews
             await Promise.all([
-                ...artifactQueries.map(async (q) => {
-                    try {
-                        ingestArtifactResult(await rv.RunView<ArtifactRowProjection>(q, user));
-                    } catch (err: unknown) {
-                        LogError(`ArtifactPermissionEngine.loadArtifactRow error: ${err instanceof Error ? err.message : String(err)}`);
-                        if (strictThrowOnQueryError) {
-                            throw err;
-                        }
-                    }
-                }),
                 ...directQueries.map(async (q) => {
                     try {
                         ingestDirectResult(await rv.RunView<ArtifactPermissionRowProjection>(q, user));
@@ -1248,13 +1392,29 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             ]);
         }
 
+        if (strictThrowOnQueryError) {
+            if (directQueryError) {
+                throw directQueryError;
+            }
+            if (versionQueryError) {
+                throw versionQueryError;
+            }
+        }
+
+        const artifactsNeedingCollections = new Set<string>(items.map((i) => i.normId));
+        const collectionPermsByNormArtifactId = await this.loadBatchedCollectionPermissions(
+            provider,
+            items,
+            artifactsNeedingCollections,
+            versionIdsByNormArtifactId,
+            queryActor,
+            user,
+            strictThrowOnQueryError
+        );
+
         return {
-            ArtifactsByNormId: artifactsByNormId,
             DirectPermsByNormArtifactId: directPermsByNormArtifactId,
-            VersionIdsByNormArtifactId: versionIdsByNormArtifactId,
-            QueryActor: queryActor,
-            DirectQueryError: directQueryError,
-            VersionQueryError: versionQueryError
+            CollectionPermsByNormArtifactId: collectionPermsByNormArtifactId
         };
     }
 
@@ -1324,6 +1484,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 Fields: ['ArtifactVersionID', 'CollectionID'],
                 IgnoreMaxRows: true,
                 SkipTotalRowCount: true,
+                BypassCache: true,
                 ResultType: 'simple'
             }));
             const colArtResults = await runBatch(colArtQueries);
@@ -1384,6 +1545,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     Fields: ['ID', 'OwnerID', 'ParentID'],
                     IgnoreMaxRows: true,
                     SkipTotalRowCount: true,
+                    BypassCache: true,
                     ResultType: 'simple'
                 }));
                 const colMetaResults = await runBatch(colMetaQueries);
@@ -1426,6 +1588,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 Fields: ['CollectionID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
                 IgnoreMaxRows: true,
                 SkipTotalRowCount: true,
+                BypassCache: true,
                 ResultType: 'simple'
             }));
             const permResults = await runBatch(permQueries);
@@ -1509,66 +1672,24 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         }
     }
 
-    private async evaluateDelegate(
+    private async evaluateCustomDelegateDecisions(
         provider: IMetadataProvider,
+        delegate: IArtifactPermissionDelegate,
         artifact: ArtifactRowProjection,
+        delegateEntityId: string,
+        delegateEntityName: string,
+        delegateRecordId: string,
         user: UserInfo,
         depth: number,
         visited: ReadonlySet<string>,
-        memo: Map<string, Promise<ResolvedArtifactPermissions>>,
-        strictThrowOnQueryError = false,
-        preloadedFallback?: {
-            DirectRows: ReadonlyArray<ArtifactPermissionRowProjection>;
-            CollectionRows: ReadonlyArray<CollectionPermissionRowProjection>;
-        },
-        entitiesById: UUIDMap<EntityInfo> | null = null
-    ): Promise<ResolvedArtifactPermissions | null> {
-        const delegateEntityId = artifact.DelegateEntityID!;
-        const delegateRecordId = artifact.DelegateRecordID!;
-        const entityInfo = this.lookupEntityInfo(provider, delegateEntityId, entitiesById);
-        const delegateEntityName = entityInfo?.Name ?? '';
-
-        const delegate = this.resolveDelegateInstance(delegateEntityId, delegateEntityName);
-        if (!delegate) {
-            const entityLabel = delegateEntityName || delegateEntityId;
-            LogError(
-                `No permission delegate is registered for delegating entity '${entityLabel}' (${delegateRecordId}) on artifact '${artifact.ID}'.`
-            );
-            return this.buildDenied(
-                artifact.ID,
-                `No permission delegate is registered for delegating entity '${entityLabel}' (${delegateRecordId}).`
-            );
-        }
-
-        // Fast O(depth) path for parent-artifact delegation ('MJ: Artifacts'): resolve the parent once per hop
-        // instead of invoking 4 independent recursive calls across CanRead/CanEdit/CanDelete/CanShare.
-        if (delegate instanceof ParentArtifactPermissionDelegate) {
-            const parentPerms = await this.ResolvePermissions(
-                provider,
-                delegateRecordId,
-                user,
-                depth + 1,
-                visited,
-                memo,
-                strictThrowOnQueryError
-            );
-            if (!parentPerms.CanRead) {
-                return this.buildDenied(
-                    artifact.ID,
-                    `Access denied by delegate entity '${delegateEntityName || delegateEntityId}' (${delegateRecordId}).`
-                );
-            }
-            return {
-                ArtifactID: artifact.ID,
-                CanRead: parentPerms.CanRead,
-                CanEdit: parentPerms.CanEdit,
-                CanDelete: parentPerms.CanDelete,
-                CanShare: parentPerms.CanShare,
-                Source: 'Delegate',
-                Reason: `Permissions resolved via delegate '${delegateEntityName || delegateEntityId}' (${delegateRecordId}).`
-            };
-        }
-
+        memo: Map<string, Promise<ResolvedArtifactPermissions>>
+    ): Promise<{
+        NormRead: DelegatePermissionDecision;
+        NormEdit: DelegatePermissionDecision;
+        NormDelete: DelegatePermissionDecision;
+        NormShare: DelegatePermissionDecision;
+        NeedsFallback: boolean;
+    }> {
         const context: ArtifactDelegateContext = {
             ArtifactID: artifact.ID,
             ArtifactOwnerUserID: artifact.UserID,
@@ -1592,10 +1713,39 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         const normEdit = normalizeDecision(editDec);
         const normDelete = normalizeDecision(deleteDec);
         const normShare = normalizeDecision(shareDec);
+        const needsFallback =
+            normRead !== 'Deny' &&
+            (normRead === 'Defer' || normEdit === 'Defer' || normDelete === 'Defer' || normShare === 'Defer');
 
-        // If every action deferred, fall through to owner / MJ: Artifact Permissions.
+        return {
+            NormRead: normRead,
+            NormEdit: normEdit,
+            NormDelete: normDelete,
+            NormShare: normShare,
+            NeedsFallback: needsFallback
+        };
+    }
+
+    private finalizeCustomDelegateDecisions(
+        artifact: ArtifactRowProjection,
+        delegateEntityId: string,
+        delegateEntityName: string,
+        delegateRecordId: string,
+        decisions: {
+            NormRead: DelegatePermissionDecision;
+            NormEdit: DelegatePermissionDecision;
+            NormDelete: DelegatePermissionDecision;
+            NormShare: DelegatePermissionDecision;
+        },
+        user: UserInfo,
+        directRows: ReadonlyArray<ArtifactPermissionRowProjection>,
+        collectionRows: ReadonlyArray<CollectionPermissionRowProjection>
+    ): ResolvedArtifactPermissions {
+        const { NormRead: normRead, NormEdit: normEdit, NormDelete: normDelete, NormShare: normShare } = decisions;
+
+        // If every action deferred, fall through to owner / MJ: Artifact Permissions / Collection Permissions.
         if (normRead === 'Defer' && normEdit === 'Defer' && normDelete === 'Defer' && normShare === 'Defer') {
-            return null;
+            return this.evaluateNonDelegatedArtifact(artifact, user, directRows, collectionRows);
         }
 
         // If the delegate explicitly denied Read, deny all actions immediately.
@@ -1614,9 +1764,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         let fallbackRead = isOwner;
 
         if (!isOwner && (normRead === 'Defer' || normEdit === 'Defer' || normDelete === 'Defer' || normShare === 'Defer')) {
-            const fallbackRows: CollectionPermissionRowProjection[] = preloadedFallback
-                ? [...preloadedFallback.DirectRows, ...preloadedFallback.CollectionRows]
-                : [];
+            const fallbackRows: CollectionPermissionRowProjection[] = [...directRows, ...collectionRows];
             fallbackEdit = fallbackRows.some((r) => Boolean(r.CanEdit));
             fallbackDelete = fallbackRows.some((r) => Boolean(r.CanDelete));
             fallbackShare = fallbackRows.some((r) => Boolean(r.CanShare));
@@ -2232,28 +2380,27 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 }
             }
 
-            // 4. Verify each candidate through ResolvePermissions (with shared memo) so delegate 'Deny' overrides are honored
-            const resolveMemo = new Map<string, Promise<ResolvedArtifactPermissions>>();
+            // 4. Verify all candidates in one batched ResolvePermissionsBatch call (chunked internally at
+            // IN_CLAUSE_CHUNK_SIZE) so delegate 'Deny' overrides are honored in O(1) round trips.
             const candidateValues = Array.from(candidates.entries());
-            for (const batch of chunkArray(candidateValues, 20)) {
-                const resolvedBatch = await Promise.all(
-                    batch.map(async ([normId, rawId]) => ({
-                        normId,
-                        perms: await this.ResolvePermissions(
-                            provider,
-                            rawId,
-                            user,
-                            0,
-                            undefined,
-                            resolveMemo,
-                            throwOnQueryFailure
-                        )
-                    }))
+            if (candidateValues.length > 0) {
+                const resolveMemo = new Map<string, Promise<ResolvedArtifactPermissions>>();
+                const resolvedBatch = await this.ResolvePermissionsBatch(
+                    provider,
+                    candidateValues.map(([, rawId]) => rawId),
+                    user,
+                    0,
+                    undefined,
+                    resolveMemo,
+                    throwOnQueryFailure
                 );
-                for (const entry of resolvedBatch) {
-                    const matches = predicate ? predicate(entry.perms) : entry.perms.CanRead;
-                    if (entry.perms.CanRead && matches) {
-                        readable.add(entry.normId);
+                for (const [normId, rawId] of candidateValues) {
+                    const perms = resolvedBatch.get(rawId);
+                    if (perms && perms.CanRead) {
+                        const matches = predicate ? predicate(perms) : perms.CanRead;
+                        if (matches) {
+                            readable.add(normId);
+                        }
                     }
                 }
             }
