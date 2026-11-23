@@ -20,6 +20,8 @@ const { db, writes, saveOptions } = vi.hoisted(() => ({
         canApproveQueries: true,
         /** The (user, provider) each `UserCanApproveQueries` call was given. */
         approveChecks: [] as unknown[][],
+        /** Whether the context user has Update on MJ: Queries (the UI role does not). */
+        canUpdateQueries: true,
     },
     writes: [] as Array<Record<string, unknown>>,
     saveOptions: [] as Array<EntitySaveOptions | undefined>,
@@ -115,7 +117,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public DeclaredParameters = { Items: [] };
         public DeclaredFields = { Items: [] };
         public DeclaredEntities = { Items: [] };
-        public EntityInfo = { Name: 'MJ: Queries' };
+        public EntityInfo = { Name: 'MJ: Queries', GetUserPermisions: () => ({ CanUpdate: db.canUpdateQueries }) };
         public Status = 'Approved';
         public SQL = 'SELECT 1';
         public UsesTemplate = false;
@@ -166,6 +168,7 @@ beforeEach(() => {
     db.views = [];
     db.canApproveQueries = true;
     db.approveChecks = [];
+    db.canUpdateQueries = true;
     writes.length = 0;
     saveOptions.length = 0;
 });
@@ -312,6 +315,22 @@ describe('MJQueryEntityServer', () => {
             Success: false,
             Message: expect.stringContaining("needs the 'Queries: Approve' authorization"),
         }));
+    });
+
+    it('skips the fingerprint stamp, quietly, for a user who may create queries but not update them', async () => {
+        db.stored = { Status: 'Pending', ...PENDING };
+        db.canApproveQueries = false;
+        db.canUpdateQueries = false;
+        const query = create(MJQueryEntityServer);
+        query.Status = 'Pending';
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            expect(await query.Save()).toBe(true);
+            expect(writes).toHaveLength(1);
+            expect(errors).not.toHaveBeenCalled();
+        } finally {
+            errors.mockRestore();
+        }
     });
 
     it('still saves a draft for a user who does not hold Queries: Approve', async () => {

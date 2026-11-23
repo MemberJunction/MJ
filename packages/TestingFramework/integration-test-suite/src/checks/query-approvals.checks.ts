@@ -331,7 +331,7 @@ export const QueryApprovalsChecks: NamedCheck[] = [
     },
     {
         Id: 'query-approvals.QA7',
-        Name: 'QA7: a draft that reads an entity row-filtered for the running user is refused at run; approved, it runs (#6746)',
+        Name: 'QA7: a draft that reads an entity row-filtered for the running user is refused at run, a comma join included; approved, it runs (#6746)',
         Fn: async (ctx) => {
             const ui = uiOnlyUser(ctx);
             const platform = PlatformOf(ctx, 'query-approvals');
@@ -346,6 +346,13 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             await adoptAsHolder(ctx, 'IT120 UI Draft Agent Runs', filtered.ID);
             const refused = await runAs(ctx, filtered.ID, ui);
             AssertEqual(refused.Success, false, 'a draft reading a row-filtered entity must be refused for the UI user');
+
+            // Review bypass form 1: the filtered view after a comma that follows a JOIN … ON.
+            const commaJoin = await createQuery('IT120 UI Draft Comma Join',
+                ForPlatform('SELECT r.[ID] FROM __mj.[vwUsers] u JOIN __mj.[vwRoles] ro ON 1 = 1, __mj.[vwAIAgentRuns] r WHERE 1 = 0', platform), ui);
+            await adoptAsHolder(ctx, 'IT120 UI Draft Comma Join', commaJoin.ID);
+            const commaRefused = await runAs(ctx, commaJoin.ID, ui);
+            AssertEqual(commaRefused.Success, false, 'a draft reading the row-filtered view through a comma join after JOIN … ON must be refused for the UI user');
 
             // A draft that reads no row-filtered entity still runs: drafts are not blocked as such.
             const plain = await createQuery('IT120 UI Draft Rows', `SELECT N FROM ${ROWS}`, ui);

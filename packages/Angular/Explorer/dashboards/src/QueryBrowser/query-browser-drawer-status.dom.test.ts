@@ -33,6 +33,13 @@ describe('QueryBrowserResourceComponent drawer statuses', () => {
         expect(c.DrawerStatuses).toContain('Approved');
     });
 
+    it('forgets the loaded status when Create opens after editing an Approved query', () => {
+        const c = browser();
+        c.OpenEditDrawer(query('Approved'));
+        c.OpenCreateDrawer();
+        expect(c.DrawerStatuses).not.toContain('Approved');
+    });
+
     it('does not offer Approved when editing a draft', () => {
         const c = browser();
         c.OpenEditDrawer(query('Pending'));

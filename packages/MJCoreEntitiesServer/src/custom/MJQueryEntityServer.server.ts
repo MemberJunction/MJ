@@ -456,6 +456,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * each refresh. On an approving save it also goes in `ApprovedFingerprint`; until that write
      * lands the approval is not current, so a failure here fails closed. Nothing is written when
      * neither value changed.
+     *
+     * The stamp is a second save, an update, so it is skipped for a user who may create queries but
+     * not update them (the UI role saving a draft). That user cannot approve, so only
+     * `DefinitionFingerprint` is lost, and it is left null: a list linked to the query computes the
+     * fingerprint live and treats a null stored one as unchanged.
      */
     private async stampFingerprintsAsync(options: EntitySaveOptions | undefined, approving: boolean): Promise<void> {
         try {
@@ -463,12 +468,19 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             this.DefinitionFingerprint = fingerprint;
             if (approving) this.ApprovedFingerprint = fingerprint;
             if (!this.Dirty) return;
+            if (!approving && !this.contextUserCanUpdate()) return;
             if (!await super.Save(options)) {
                 LogError(`[MJQueryEntityServer] Query "${this.Name}" saved, but its fingerprint was not: ${this.LatestResult?.CompleteMessage}`);
             }
         } catch (e) {
             LogError(`[MJQueryEntityServer] Query "${this.Name}" saved, but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    /** Whether the user this save runs as may update queries; true when there is no such user. */
+    private contextUserCanUpdate(): boolean {
+        const user = this.ContextCurrentUser;
+        return !user || this.EntityInfo.GetUserPermisions(user)?.CanUpdate === true;
     }
 
     /** This query's dialect and parameter rows as stored, bypassing every cache. */
