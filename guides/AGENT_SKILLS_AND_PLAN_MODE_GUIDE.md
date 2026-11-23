@@ -107,6 +107,7 @@ validateSkillNextStep  ── fuzzy-matches names vs GetSkillsForAgent; unknown/
         ▼
 executeSkillStep  ── for each newly-activated skill:
         ├─ recordSkillActivationStep()   → AIAgentRunStep (StepType='Skill')
+        ├─ resolveSkillInstructions()    → stored text, or rendered once if it's a template (§1.3b)
         ├─ buildSkillActivationMessage() → appends Instructions to conversationMessages
         └─ enableSkillCapabilities()     → pushes 'specific'-scoped add ActionChange/SubAgentChange
                                           (Actions: the skill's ExposeToModel rows only — GetSkillExposedActionIDs)
@@ -123,7 +124,7 @@ Key implementation notes (all in [`base-agent.ts`](../packages/AI/Agents/src/bas
 - **Idempotent re-activation.** `_activatedSkillIDs` tracks what's already active; re-requesting an active skill is a harmless no-op (no duplicate instructions, no duplicate change entries).
 - **`_effectiveSubAgents`** mirrors `_effectiveActions` so a runtime-added sub-agent (from a skill) validates correctly in `validateSubAgentNextStep`. (This closed a pre-existing gap in the `subAgentChanges` mechanism that affected any consumer, not just Skills.)
 
-`executeSkillStep` is decomposed into `resolveSkillActivations` / `buildSkillActivationMessage` / `enableSkillCapabilities` / `recordSkillActivationStep`, all `protected` — override any one for fine-grained control (custom instruction formatting, a licensing check on activation, cascading grants via `'all-subagents'`, etc.) without re-implementing the step.
+`executeSkillStep` is decomposed into `resolveSkillActivations` / `resolveSkillInstructions` / `buildSkillActivationMessage` / `enableSkillCapabilities` / `recordSkillActivationStep`, all `protected` — override any one for fine-grained control (custom instruction formatting, a licensing check on activation, cascading grants via `'all-subagents'`, etc.) without re-implementing the step.
 
 ### 1.3a Observability — `AIAgentRunStep.Skills` (v5.45)
 
@@ -156,6 +157,43 @@ Population rules (all in `createStepEntity` + the activation paths):
 The runtime type twin is `AgentSkillInvocation` in `@memberjunction/ai-core-plus`; the CodeGen JSON-type interface lives at `metadata/entities/JSONType-interfaces/AgentSkillInvocation.ts` — keep them in sync.
 
 **UX**: the agent-run form renders this end to end — `Skill`/`Plan` step nodes get dedicated icons, any step with `Skills` shows per-skill chips (auto-activations get a warning accent — the agent expanded its own surface), and the step drill-in panel gains a **Skills tab** showing each invocation's activation type, provenance-of-authority grid, and reason.
+
+### 1.3b Templated instructions — `{# mj:template #}`
+
+A skill's `Instructions` can be a Nunjucks template that renders with the run's data when the skill activates — conditionals, loops over data, values from the payload — the same things an agent prompt can do. It is **opt-in**: start the instructions with the marker
+
+```
+{# mj:template #}
+```
+
+The marker is a Nunjucks comment, so it renders to nothing. Without it the text is used exactly as stored, which is why a skill that mentions `{{ }}` literally (the `{{query:"Category/Name"}}` composition syntax in *Data Analysis & Queries*) is never parsed. In code: `SKILL_INSTRUCTIONS_TEMPLATE_MARKER` / `IsTemplatedSkillInstructions()` from `@memberjunction/ai-agents`.
+
+**Data available to the template** (`buildSkillTemplateData`, protected — override to add values):
+
+| Variable | Value |
+|---|---|
+| every key of `params.data` | the caller's run data, as agent prompts get it |
+| `_CURRENT_PAYLOAD` | the payload at activation time |
+| `agentName`, `agentDescription` | the activating agent |
+
+```
+{# mj:template #}
+## Component design rules
+Brand color: {{ brandColor }}
+{% if _CURRENT_PAYLOAD.phase == "design" %}You are in the design phase: ...{% endif %}
+{% for e in entityCatalog %}- {{ e.Name }}: {{ e.Description }}
+{% endfor %}
+```
+
+Behavior to know:
+
+- **Rendered once, at activation.** The result is appended to the conversation once, like any activation message, and is not re-rendered on later turns, so the prompt cache is unaffected. A Conversation-scoped skill (§1.6c) is re-rendered when it re-activates at the start of each run.
+- **A template error never fails the run.** The stored text is used instead and a `warning` is logged (category `AgentSkills`) naming the skill.
+- **Values are HTML-escaped**, as in agent prompts (`&` → `&amp;`). Use `| safe` for a value that must stay as written.
+- **Composition:** `{% template "Template Name" %}` embeds a stored MJ template. `{% include %}` does not resolve stored templates. `{% AIPrompt %}` works, but it makes an LLM call during activation.
+- **Payload timing:** a skill pre-activated from `requestedSkillIDs` or the conversation (§1.6a, §1.6c) sees the run's starting payload; a skill the model activates sees the payload from that decision.
+- **Inspection:** `Get Skill Details` returns the template source unrendered, with `InstructionsAreTemplate: true`, since the action has no run data to render it with.
+- **SKILL.md:** the marker is ordinary body text, so it survives export and import (§1.7).
 
 ### 1.4 Realtime and proxy agents
 
@@ -258,7 +296,8 @@ subAgents:
   - Report Formatter Agent
 ---
 
-Instructions body — plain markdown, appended to an accepting agent's system
+Instructions body — plain markdown (or a template, when it starts with
+{# mj:template #} — see §1.3b), appended to an accepting agent's system
 prompt when the skill is activated.
 ```
 
