@@ -308,6 +308,7 @@ export class ResolverBase {
 
   /**
    * Decrypts or masks encrypted fields on a mapped row when `plan.encryptedFields.length > 0`.
+   * A value not in the encrypted format gets the same rule as {@link FilterEncryptedFieldsForAPI}.
    */
   private async decryptRowEncryptedFields(
     row: Record<string, unknown>,
@@ -343,7 +344,30 @@ export class ResolverBase {
         } else if (!field.SendEncryptedValue) {
           row[fieldName] = ENCRYPTED_SENTINEL;
         }
+      } else {
+        row[fieldName] = await this.apiValueForClearEncryptedField(field, value, fieldName, contextUser);
       }
+    }
+  }
+
+  /**
+   * The value an API caller gets for an encrypted field whose value is not in the encrypted
+   * format: the value itself when the field allows decryption in the API, its ciphertext when the
+   * field sends encrypted values, else the sentinel. Encryption failure gives the sentinel.
+   */
+  private async apiValueForClearEncryptedField(
+    field: EntityFieldInfo,
+    value: unknown,
+    fieldName: string,
+    contextUser?: UserInfo
+  ): Promise<unknown> {
+    if (field.AllowDecryptInAPI) return value;
+    if (!field.SendEncryptedValue || typeof value !== 'string' || !field.EncryptionKeyID) return ENCRYPTED_SENTINEL;
+    try {
+      return await EncryptionEngine.Instance.Encrypt(value, field.EncryptionKeyID, contextUser);
+    } catch (err) {
+      LogError(`Failed to re-encrypt field ${fieldName} for API response: ${err}`);
+      return ENCRYPTED_SENTINEL;
     }
   }
 
@@ -799,20 +823,9 @@ export class ResolverBase {
       const engine = EncryptionEngine.Instance;
       await engine.Config(false, contextUser);
       const keyMarker = field.EncryptionKeyID ? engine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
-      // Only encrypt if the value is not already encrypted (PreserveRestrictedApiCiphertext keeps DB/cache ciphertext intact)
-      if (typeof value === 'string' && !IsValueEncrypted(value, keyMarker)) {
-        try {
-          const encryptedValue = await engine.Encrypt(
-            value,
-            field.EncryptionKeyID as string,
-            contextUser
-          );
-          dataObject[fieldName] = encryptedValue;
-        } catch (err) {
-          // If re-encryption fails, use sentinel for safety
-          LogError(`Failed to re-encrypt field ${fieldName} for API response: ${err}`);
-          dataObject[fieldName] = ENCRYPTED_SENTINEL;
-        }
+      // Ciphertext passes as it is (PreserveRestrictedApiCiphertext keeps DB/cache ciphertext intact)
+      if (typeof value !== 'string' || !IsValueEncrypted(value, keyMarker)) {
+        dataObject[fieldName] = await this.apiValueForClearEncryptedField(field, value, fieldName, contextUser);
       }
     }
 

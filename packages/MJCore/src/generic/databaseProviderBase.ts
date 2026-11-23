@@ -15,7 +15,7 @@ import { SaveErrorMessageForUser } from "./constraintErrorRedaction";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { CanonicalPrimaryKeyValue } from "./util";
-import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, ValidationResult, EscapeSQLString } from "@memberjunction/global";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, ValidationResult, EscapeSQLString, ENCRYPTED_SENTINEL, ENCRYPTION_MARKER, IsEncryptedSentinel } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 import { EntityLifecyclePolicyEngine } from "./entityLifecyclePolicy";
 import { DocumentNumberingEngine } from "./documentNumberingEngine";
@@ -830,6 +830,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
             const bDiff = this.isFieldDifferent(f, oldData[key], newData[key]);
             if (bDiff) {
+                if (f.Encrypt) {
+                    // An encrypted field is recorded as changed, never with its clear text.
+                    changes[key] = { field: key, oldValue: this.maskEncryptedValue(oldData[key]), newValue: this.maskEncryptedValue(newData[key]) };
+                    continue;
+                }
                 if (f.IsBinaryFieldType) {
                     // A binary value (base64, possibly megabytes) is recorded by size, not content:
                     // the record snapshot (FullRecordJSON) keeps the bytes for restore, so the diff
@@ -843,6 +848,31 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             }
         }
         return changes;
+    }
+
+    /** The value an encrypted field carries in a Record Change: the sentinel (null and undefined pass through). */
+    private maskEncryptedValue(value: unknown): unknown {
+        return value === null || value === undefined ? value : ENCRYPTED_SENTINEL;
+    }
+
+    /**
+     * A copy of a record snapshot in which every encrypted field holds either its stored
+     * ciphertext or the sentinel, or `data` itself when the entity has no encrypted fields.
+     * Ciphertext stays so that a restore from the snapshot gives the value back.
+     */
+    protected MaskEncryptedFieldsInSnapshot(data: Record<string, unknown> | null, entityInfo: EntityInfo): Record<string, unknown> | null {
+        const encrypted = entityInfo.EncryptedFields;
+        if (!data || encrypted.length === 0) return data;
+        const masked = { ...data };
+        for (const f of encrypted) {
+            if (f.Name in masked && !this.isCiphertext(masked[f.Name])) masked[f.Name] = this.maskEncryptedValue(masked[f.Name]);
+        }
+        return masked;
+    }
+
+    /** True for a value in the stored encrypted format (the sentinel is not ciphertext). */
+    private isCiphertext(value: unknown): boolean {
+        return typeof value === 'string' && value.startsWith(ENCRYPTION_MARKER) && !IsEncryptedSentinel(value);
     }
 
     /** The diff entry for a binary field: its size, never its base64 (null and undefined pass through). */
@@ -3321,7 +3351,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
         let fullRecordJSON = '';
         if (!skipFullRecordJSON) {
-            const dataForFullJSON = newData ?? oldData;
+            const dataForFullJSON = this.MaskEncryptedFieldsInSnapshot(newData ?? oldData, entityInfo);
             fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
         }
         const changesJSON = changes !== null ? JSON.stringify(changes) : '';

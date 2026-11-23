@@ -113,7 +113,7 @@ import {
     WellKnownUserSource,
 } from '@memberjunction/core';
 
-import { BytesToBase64, EscapeSQLString, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { BytesToBase64, EscapeSQLString, GroupByUUID, IndexByUUID, IsByteArray, IsEncryptedSentinel, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -1787,19 +1787,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * For each field marked with `Encrypt=true`:
      * - If `EncryptionKeyID` is null → throws an error (misconfiguration)
      * - If value is null/undefined → skips (nothing to encrypt)
+     * - If value is the masked placeholder (`ENCRYPTED_SENTINEL`) → an update leaves the
+     *   stored value in place (the field is removed from the map) and a create stores null
      * - If value is already encrypted → skips (prevents double-encryption)
      * - Otherwise → encrypts the value using the configured key
      *
      * @param entity The entity being saved
      * @param fieldValues Map of field info to current values — values are mutated in-place
      * @param contextUser User context for encryption operations
+     * @param isNew True for a create; defaults to whether the entity is not yet saved
      * @throws Error if a field is marked for encryption but has no EncryptionKeyID configured
      * @throws Error if encryption fails (to prevent storing unencrypted sensitive data)
      */
     protected async EncryptFieldValuesForSave(
         entity: BaseEntity,
         fieldValues: Map<EntityFieldInfo, unknown>,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        isNew: boolean = !entity.IsSaved
     ): Promise<void> {
         // Lazy-load encryption engine only when needed
         let encryptionEngine: EncryptionEngine | null = null;
@@ -1819,6 +1823,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             if (value === null || value === undefined) continue;
+
+            if (typeof value === 'string' && IsEncryptedSentinel(value)) {
+                this.dropMaskedPlaceholder(fieldValues, field, isNew);
+                continue;
+            }
 
             // Lazy-load encryption engine on first encrypted field
             if (!encryptionEngine) {
@@ -1850,6 +1859,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     );
                 }
             }
+        }
+    }
+
+    /**
+     * Keeps the masked placeholder out of the database: an update omits the field so the stored
+     * value stays, and a create stores null.
+     */
+    private dropMaskedPlaceholder(fieldValues: Map<EntityFieldInfo, unknown>, field: EntityFieldInfo, isNew: boolean): void {
+        if (isNew) {
+            fieldValues.set(field, null);
+        } else {
+            fieldValues.delete(field);
         }
     }
 
@@ -2402,7 +2423,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             : fieldValueMap;
 
         // 3. Encrypt — between coercion and rendering, mutates the map in place.
-        await this.EncryptFieldValuesForSave(entity, effectiveFieldValueMap, user);
+        await this.EncryptFieldValuesForSave(entity, effectiveFieldValueMap, user, isNew);
 
         // 4. Render the provider-specific binding.
         const binding = this.RenderSaveCallBinding(entity, effectiveFieldValueMap, isUpdate, spName);
@@ -2606,7 +2627,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
     }
 
-    /** Reads and stores the full-width delete snapshot when one is needed; true when it stored one. */
+    /**
+     * Stores the delete snapshot when it differs from the object's own values: widened to full
+     * width for a restricted user, and with encrypted fields in their encrypted form. True when it
+     * stored one.
+     */
     private async captureDeleteSnapshot(entity: BaseEntity, options: EntityDeleteOptions | undefined, user: UserInfo): Promise<boolean> {
         if (!this.ShouldTrackRecordChanges(entity.EntityInfo) || options?.SkipRecordChanges === true || options?.ReplayOnly === true) {
             return false;
@@ -2614,16 +2639,48 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (!entity.IsSaved || entity.EntityInfo.ExternalDataSourceID) {
             return false; // the orchestration refuses these; nothing to snapshot
         }
+        const widened = await this.widenedDeleteSnapshot(entity, user);
+        if (!widened && entity.EntityInfo.EncryptedFields.length === 0) {
+            return false;
+        }
+        this._deleteSnapshots.set(entity, await this.encryptSnapshotFields(widened ?? entity.GetAll(true), entity, user));
+        return true;
+    }
+
+    /** The full-width delete snapshot for a user whose object lacks stored values, else null. */
+    private async widenedDeleteSnapshot(entity: BaseEntity, user: UserInfo): Promise<Record<string, unknown> | null> {
         const lacking = FieldsLackingStoredValue(entity, user);
         if (lacking.size === 0) {
-            return false;
+            return null;
         }
         const storedRow = await this.ReadStoredRowForRecordChange(entity, user, lacking);
-        if (!storedRow) {
-            return false;
+        return storedRow ? WidenDeleteSnapshot(entity, entity.GetAll(true), storedRow, lacking) : null;
+    }
+
+    /**
+     * A copy of `snapshot` with each encrypted field's clear value encrypted as a save stores it,
+     * so a restore from the snapshot gives the value back. When encryption fails the clear values
+     * stay in the copy, and the Record Change masks them.
+     */
+    private async encryptSnapshotFields(snapshot: Record<string, unknown>, entity: BaseEntity, user: UserInfo): Promise<Record<string, unknown>> {
+        const fieldValues = new Map<EntityFieldInfo, unknown>();
+        for (const f of entity.EntityInfo.EncryptedFields) {
+            if (f.Name in snapshot) fieldValues.set(f, snapshot[f.Name]);
         }
-        this._deleteSnapshots.set(entity, WidenDeleteSnapshot(entity, entity.GetAll(true), storedRow, lacking));
-        return true;
+        if (fieldValues.size === 0) {
+            return snapshot;
+        }
+        try {
+            await this.EncryptFieldValuesForSave(entity, fieldValues, user, false);
+        } catch (e) {
+            LogError(`Record Change snapshot of ${entity.EntityInfo.Name}: encrypted fields are masked because encryption failed: ${e instanceof Error ? e.message : String(e)}`);
+            return snapshot;
+        }
+        const encrypted = { ...snapshot };
+        for (const [f, v] of fieldValues) {
+            encrypted[f.Name] = v;
+        }
+        return encrypted;
     }
 
     /**

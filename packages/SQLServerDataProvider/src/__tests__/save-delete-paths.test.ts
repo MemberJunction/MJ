@@ -1739,6 +1739,21 @@ describe('SQLServerDataProvider server-side concurrency check', () => {
     expect(saveSQL.simpleSQL).not.toContain('top-secret-plaintext-token');
     encryptSpy.mockRestore();
   });
+
+  it('passes the primary key to spUpdate when the only changed field holds the masked placeholder', async () => {
+    const provider = makeProvider();
+    const entityInfo = makeWidgetEntityInfo();
+    const descField = entityInfo.Fields.find((f) => f.Name === 'Description')!;
+    Object.defineProperty(descField, 'Encrypt', { value: true, configurable: true });
+    Object.defineProperty(descField, 'EncryptionKeyID', { value: 'K0000000-0000-0000-0000-000000000001', configurable: true });
+
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Description', '[!ENCRYPTED$]');
+
+    const { fullSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER, new EntitySaveOptions());
+    expect(fullSQL).toMatch(/EXEC \[dbo\]\.\[?spUpdateWidget\]?\s+@ID=@ID/);
+    expect(fullSQL).not.toContain('[!ENCRYPTED$]');
+  });
 });
 
 describe('SQLServerDataProvider Record Change snapshot built from the returned row', () => {

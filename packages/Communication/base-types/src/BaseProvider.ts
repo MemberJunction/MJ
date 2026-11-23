@@ -133,6 +133,12 @@ export class Message {
      */
     public DryRun?: boolean;
 
+    /**
+     * True when the message body carries a secret, such as a sign-in link, a token or a one-time
+     * code. The Communication Log for the send then keeps the addresses and subject but not the body.
+     */
+    public ContainsSecrets?: boolean;
+
     constructor(copyFrom?: Message) {
         // copy all properties from the message to us, used for copying a message
         if (copyFrom){

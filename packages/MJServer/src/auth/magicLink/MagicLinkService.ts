@@ -1201,6 +1201,7 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       const msg = new Message();
       msg.From = this.config.fromAddress ?? '';
       msg.To = email;
+      msg.ContainsSecrets = true;
       msg.Subject = `You've been invited to ${appName}`;
       msg.Body = `You've been invited to access ${appName}. Open this link to sign in:\n\n${redemptionUrl}\n\nThis link is single-use and will expire.`;
       msg.HTMLBody =

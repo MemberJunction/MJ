@@ -173,9 +173,10 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public async testEncryptFieldValuesForSave(
         entity: BaseEntity,
         fieldValues: Map<EntityFieldInfo, unknown>,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        isNew?: boolean
     ): Promise<void> {
-        return this.EncryptFieldValuesForSave(entity, fieldValues, contextUser);
+        return this.EncryptFieldValuesForSave(entity, fieldValues, contextUser, isNew);
     }
 
     // Track ExecuteSQL calls for Load testing
@@ -1462,6 +1463,46 @@ describe('GenericDatabaseProvider', () => {
 
             expect(results).toHaveLength(1);
             expect(results[0]).toEqual([{ ID: '1', Name: 'Only' }]);
+        });
+    });
+
+    describe('EncryptFieldValuesForSave - masked placeholder values', () => {
+        const maskedField = {
+            Name: 'ClientSecret',
+            Encrypt: true,
+            EncryptionKeyID: 'key-id',
+        } as unknown as EntityFieldInfo;
+        const entity = { EntityInfo: { Name: 'Registrations' } } as unknown as BaseEntity;
+
+        beforeEach(() => {
+            mockEncryptionEngine.Encrypt.mockReset();
+            mockEncryptionEngine.Encrypt.mockResolvedValue('$ENC$ciphertext');
+            mockEncryptionEngine.GetKeyByID.mockReturnValue({ Marker: '$ENC$' });
+            mockEncryptionEngine.IsEncrypted.mockImplementation(
+                (value: unknown, marker?: string) =>
+                    typeof value === 'string' && (value === '[!ENCRYPTED$]' || value.startsWith(marker ?? '$ENC$'))
+            );
+        });
+
+        afterEach(() => {
+            mockEncryptionEngine.IsEncrypted.mockReset();
+            mockEncryptionEngine.IsEncrypted.mockReturnValue(false);
+        });
+
+        it('leaves the stored value in place when an update carries the masked placeholder', async () => {
+            const fieldValues = new Map<EntityFieldInfo, unknown>([[maskedField, '[!ENCRYPTED$]']]);
+
+            await provider.testEncryptFieldValuesForSave(entity, fieldValues, mockUser, false);
+
+            expect(fieldValues.has(maskedField)).toBe(false);
+        });
+
+        it('stores null when a create carries the masked placeholder', async () => {
+            const fieldValues = new Map<EntityFieldInfo, unknown>([[maskedField, '[!ENCRYPTED$]']]);
+
+            await provider.testEncryptFieldValuesForSave(entity, fieldValues, mockUser, true);
+
+            expect(fieldValues.get(maskedField)).toBeNull();
         });
     });
 

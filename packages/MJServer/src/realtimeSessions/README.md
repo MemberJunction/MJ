@@ -137,11 +137,11 @@ Other settings: `communicationProvider`, `fromAddress`, `publicBaseUrl` (default
 
 ## Limitations to know about
 
-- **The email body is logged by the communication engine.** `CommunicationEngine.SendSingleMessage` writes an
-  `MJ: Communication Logs` row whose `MessageContent` contains the full body — here, the live link and code (the same
-  is already true of magic-link emails). Keep read access to that entity restricted to administrators. A principal who
-  can read it can redeem a verification for an address they do not control; `deliveryMode: 'dry-run'` makes that the
-  intended way to read the email, which is why it must never be used in production.
+- **A rehearsal logs the email body.** A delivered verification email is sent with `ContainsSecrets`, so its
+  `MJ: Communication Logs` row keeps the addresses and subject but not the link or code. In `deliveryMode: 'dry-run'`
+  the row keeps the full body, because that is how a rehearsal reads the email. A principal who can read that row can
+  redeem a verification for an address they do not control, which is why `dry-run` must never be used in production.
+  Keep read access to that entity restricted to administrators.
 
 - Rate limiters are per process. Across replicas the in-memory limits are best-effort; per-session send and
   attempt counts are persisted and exact.

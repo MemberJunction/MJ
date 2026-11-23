@@ -94,6 +94,8 @@ export class RuntimeVerificationPorts extends SessionVerificationPortsBase {
             const message = new Message();
             // Rehearsal mode: the engine builds and LOGS the message but never delivers it (see the config docs).
             message.DryRun = cfg.deliveryMode === 'dry-run';
+            // A delivered email keeps its link and code out of the Communication Log; a rehearsal logs them.
+            message.ContainsSecrets = !message.DryRun;
             message.From = cfg.fromAddress ?? '';
             message.To = email.To;
             message.Subject = email.Subject;

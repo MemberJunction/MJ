@@ -1898,8 +1898,9 @@ export class SQLServerDataProvider
       }
     }
 
-    // UPDATE: tail-append PK declarations from the loaded entity's PrimaryKey.
-    if (isUpdate && execParams.length > 0) {
+    // UPDATE: tail-append PK declarations from the loaded entity's PrimaryKey. Every update gets
+    // them, also one with no other parameter, which then changes no column.
+    if (isUpdate) {
       for (const pkv of entity.PrimaryKey.KeyValuePairs) {
         const f = entity.EntityInfo.FieldByName(pkv.FieldName);
         if (!f) continue;
@@ -1908,7 +1909,8 @@ export class SQLServerDataProvider
         setStatements.push(`SET ${varName} = ${params.AddField(f, this.generateSetStatementValue(f, pkv.Value))}`);
         execParams.push(`@${f.CodeName}=${varName}`);
         const pkeyQuotes = f.NeedsQuotes ? "'" : '';
-        simpleParams += `, @${f.CodeName} = ${pkeyQuotes}${pkv.Value}${pkeyQuotes}`;
+        simpleParams += `${bFirst ? '' : ', '}@${f.CodeName} = ${pkeyQuotes}${pkv.Value}${pkeyQuotes}`;
+        bFirst = false;
       }
     }
 
