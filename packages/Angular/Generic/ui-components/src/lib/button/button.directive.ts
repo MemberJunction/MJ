@@ -1,4 +1,5 @@
 import {
+  booleanAttribute,
   Directive,
   Input,
   Output,
@@ -7,6 +8,7 @@ import {
   HostListener,
   ElementRef,
   AfterContentInit,
+  OnDestroy,
   isDevMode
 } from '@angular/core';
 
@@ -54,7 +56,7 @@ export type MjButtonShape = 'default' | 'circle';
   selector: 'button[mjButton], a[mjButton]',
   standalone: true
 })
-export class MJButtonDirective implements AfterContentInit {
+export class MJButtonDirective implements AfterContentInit, OnDestroy {
   @Input() Variant: MjButtonVariant = 'secondary';
 
   /** @deprecated Use {@link Variant}. */
@@ -115,9 +117,94 @@ export class MJButtonDirective implements AfterContentInit {
    */
   @Output() selectedChange = this.SelectedChange;
 
+  /**
+   * Stretches the button to `width: 100%` of its container via `.mj-btn--full`.
+   * Opt-in per template instance rather than inferred from parent container selectors.
+   */
+  @Input({ transform: booleanAttribute }) FullWidth = false;
+
+  /**
+   * Disables a `<button mjButton>` or `<a mjButton>`.
+   *
+   * On `<a>` (which has no native `disabled` attribute), sets `aria-disabled="true"`, removes the link
+   * from sequential keyboard navigation (`tabindex="-1"`, restoring any prior `tabindex` when re-enabled),
+   * and blocks pointer and keyboard activation. On `<button>`, forwards to native `disabled` only when
+   * bound so existing lowercase `[disabled]` bindings on `<button>` are never clobbered.
+   */
+  @Input({ transform: booleanAttribute })
+  set Disabled(value: boolean) {
+    const next = Boolean(value);
+    this._disabled = next;
+    const el = this.host.nativeElement;
+    if (el.tagName?.toUpperCase() === 'A') {
+      if (next) {
+        if (!this._hasSavedTabIndex) {
+          this._savedTabIndex = el.getAttribute('tabindex');
+          this._hasSavedTabIndex = true;
+        }
+        el.setAttribute('aria-disabled', 'true');
+        el.setAttribute('tabindex', '-1');
+      } else {
+        el.removeAttribute?.('aria-disabled');
+        if (this._hasSavedTabIndex) {
+          if (this._savedTabIndex !== null) {
+            el.setAttribute('tabindex', this._savedTabIndex);
+          } else {
+            el.removeAttribute?.('tabindex');
+          }
+          this._savedTabIndex = null;
+          this._hasSavedTabIndex = false;
+        }
+      }
+    } else {
+      if ('disabled' in el) {
+        (el as HTMLButtonElement).disabled = next;
+      }
+      if (next) {
+        el.setAttribute('disabled', '');
+      } else {
+        el.removeAttribute?.('disabled');
+      }
+    }
+  }
+  get Disabled(): boolean {
+    return this._disabled;
+  }
+  private _disabled = false;
+  private _savedTabIndex: string | null = null;
+  private _hasSavedTabIndex = false;
+
+  private readonly captureClickGuard = (event: MouseEvent): void => {
+    if (this.isHostDisabled()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  };
+
+  private readonly captureKeydownGuard = (event: KeyboardEvent): void => {
+    if (this.isHostDisabled() && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  };
+
   // Constructor injection (not inject()) so the directive can be unit-tested via direct
   // instantiation with a stub ElementRef — the established pattern in this package's specs.
-  constructor(private readonly host: ElementRef<HTMLElement>) {}
+  constructor(private readonly host: ElementRef<HTMLElement>) {
+    const el = this.host.nativeElement;
+    if (typeof el.addEventListener === 'function') {
+      el.addEventListener('click', this.captureClickGuard, true);
+      el.addEventListener('keydown', this.captureKeydownGuard, true);
+    }
+  }
+
+  ngOnDestroy(): void {
+    const el = this.host.nativeElement;
+    if (typeof el.removeEventListener === 'function') {
+      el.removeEventListener('click', this.captureClickGuard, true);
+      el.removeEventListener('keydown', this.captureKeydownGuard, true);
+    }
+  }
 
   /**
    * Accessible name for the button, surfaced as `aria-label`. Primarily for **icon-only** buttons
@@ -160,14 +247,30 @@ export class MJButtonDirective implements AfterContentInit {
   @HostBinding('class.mj-btn--lg') get isLg() { return this.Size === 'lg'; }
 
   @HostBinding('class.mj-btn--circle') get isCircle() { return this.Shape === 'circle'; }
+  @HostBinding('class.mj-btn--full') get isFullWidth() { return this.FullWidth; }
 
   @HostBinding('class.mj-btn--selected') get isSelected() { return this.Toggleable && this.Selected; }
   @HostBinding('attr.aria-pressed') get ariaPressed(): string | null {
     return this.Toggleable ? String(this.Selected) : null;
   }
 
-  @HostListener('click')
-  OnClick(): void {
+  private isHostDisabled(): boolean {
+    const el = this.host.nativeElement;
+    return (
+      this._disabled ||
+      (el as HTMLButtonElement).disabled === true ||
+      el.getAttribute('disabled') !== null ||
+      el.getAttribute('aria-disabled') === 'true'
+    );
+  }
+
+  @HostListener('click', ['$event'])
+  OnClick(event?: Event): void {
+    if (this.isHostDisabled()) {
+      event?.preventDefault();
+      event?.stopImmediatePropagation();
+      return;
+    }
     if (this.Toggleable) {
       this.Selected = !this.Selected;
       this.SelectedChange.emit(this.Selected);

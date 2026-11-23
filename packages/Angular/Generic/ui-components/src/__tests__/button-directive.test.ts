@@ -6,12 +6,14 @@ import { MJButtonDirective, MjButtonVariant } from '../lib/button/button.directi
  * Minimal in-memory stand-in for the host `ElementRef`, so the directive can be instantiated
  * directly (no Angular TestBed) and we can assert what it writes to / reads from the element.
  */
-function makeHost(textContent = ''): ElementRef<HTMLElement> {
+function makeHost(textContent = '', tagName = 'BUTTON'): ElementRef<HTMLElement> {
   const attrs: Record<string, string> = {};
   const el = {
+    tagName,
     textContent,
     setAttribute: (k: string, v: string) => { attrs[k] = v; },
     getAttribute: (k: string) => (k in attrs ? attrs[k] : null),
+    removeAttribute: (k: string) => { delete attrs[k]; },
   } as unknown as HTMLElement;
   return new ElementRef(el);
 }
@@ -285,6 +287,41 @@ describe('MJButtonDirective', () => {
       d.ngAfterContentInit();
       expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
+    });
+  });
+
+  describe('FullWidth input', () => {
+    it('defaults FullWidth to false', () => {
+      expect(directive.FullWidth).toBe(false);
+      expect(directive.isFullWidth).toBe(false);
+    });
+
+    it('enables isFullWidth when FullWidth is true', () => {
+      directive.FullWidth = true;
+      expect(directive.isFullWidth).toBe(true);
+    });
+  });
+
+  describe('Disabled input', () => {
+    it('sets aria-disabled and tabindex="-1" on an anchor host, and removes them when re-enabled', () => {
+      const host = makeHost('Open docs', 'A');
+      const d = new MJButtonDirective(host);
+      d.Disabled = true;
+      expect(host.nativeElement.getAttribute('aria-disabled')).toBe('true');
+      expect(host.nativeElement.getAttribute('tabindex')).toBe('-1');
+
+      d.Disabled = false;
+      expect(host.nativeElement.getAttribute('aria-disabled')).toBeNull();
+      expect(host.nativeElement.getAttribute('tabindex')).toBeNull();
+    });
+
+    it('blocks toggleable state flips in OnClick when Disabled is true', () => {
+      const host = makeHost('Toggle', 'A');
+      const d = new MJButtonDirective(host);
+      d.Toggleable = true;
+      d.Disabled = true;
+      d.OnClick();
+      expect(d.Selected).toBe(false);
     });
   });
 });
