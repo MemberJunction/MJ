@@ -509,6 +509,107 @@ describe('ProviderBase — metadata change notices from other servers', () => {
         await vi.advanceTimersByTimeAsync(5000);
         expect(p.Checks).toHaveLength(0);
     });
+
+    it('does not add thundering-herd jitter to set notices because the snapshot is already in shared storage', async () => {
+        const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+        try {
+            const p = new NoticeTestProvider();
+            p.HandlePeerMetadataNotice(notice({ Action: 'set' }));
+            await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs - 1);
+            expect(p.Checks).toHaveLength(0);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(p.Checks).toEqual([true]);
+        } finally {
+            random.mockRestore();
+        }
+    });
+
+    it('runs peer notice checks immediately when PeerMetadataNoticeMustWait is false even if MetadataMemberRefreshMustWait is true', async () => {
+        class PoolReadNoticeProvider extends NoticeTestProvider {
+            protected override get MetadataMemberRefreshMustWait(): boolean { return true; }
+            protected override get PeerMetadataNoticeMustWait(): boolean { return false; }
+        }
+        const p = new PoolReadNoticeProvider();
+        p.HandlePeerMetadataNotice(notice({ Action: 'set' }));
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs);
+        expect(p.Checks).toEqual([true]);
+    });
+
+    it('uses PeerMetadataNoticeMustWait on the retry timer when MetadataMemberRefreshMustWait stays true', async () => {
+        class RetryPoolNoticeProvider extends NoticeTestProvider {
+            public WaitForPeerNotice = true;
+            protected override get MetadataMemberRefreshMustWait(): boolean { return true; }
+            protected override get PeerMetadataNoticeMustWait(): boolean { return this.WaitForPeerNotice; }
+        }
+        const p = new RetryPoolNoticeProvider();
+        p.HandlePeerMetadataNotice(notice({ Action: 'set' }));
+
+        // First timer fires while PeerMetadataNoticeMustWait is true -> schedules a retry window.
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs);
+        expect(p.Checks).toHaveLength(0);
+
+        // PeerMetadataNoticeMustWait clears while MetadataMemberRefreshMustWait remains true -> retry runs the check.
+        p.WaitForPeerNotice = false;
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs);
+        expect(p.Checks).toEqual([true]);
+    });
+
+    it('still checks timestamps and adopts a peer snapshot when AllowRefreshCheck is true while AllowRefresh is false', async () => {
+        class SuspendedSaveProvider extends MemberRefreshTestProvider {
+            public TimestampReads = 0;
+            public StorageLoads = 0;
+            protected override get AllowRefresh(): boolean { return false; }
+            protected override get AllowRefreshCheck(): boolean { return true; }
+            protected override async RefreshRemoteMetadataTimestamps(): Promise<boolean> {
+                this.TimestampReads++;
+                return true;
+            }
+            protected override async LoadLocalMetadataFromStorage(): Promise<void> {
+                this.StorageLoads++;
+            }
+            public override LocalMetadataObsolete(): boolean { return false; }
+        }
+        const p = new SuspendedSaveProvider();
+        const needsRefresh = await p.CheckToSeeIfRefreshNeeded(undefined, true);
+        expect(needsRefresh).toBe(false);
+        expect(p.TimestampReads).toBe(1);
+        expect(p.StorageLoads).toBe(1);
+    });
+
+    it('does not re-read remote metadata timestamps a second time during a member-write full reload', async () => {
+        class FullReloadTimestampsProvider extends MemberRefreshTestProvider {
+            public TimestampReads = 0;
+            public GetAllMetadataCalls = 0;
+            protected override async RefreshAfterMetadataMemberChange(): Promise<boolean> {
+                return ProviderBase.prototype['RefreshAfterMetadataMemberChange'].call(this);
+            }
+            public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
+                return ProviderBase.prototype.Refresh.call(this, providerToUse);
+            }
+            protected override async RefreshRemoteMetadataTimestamps(): Promise<boolean> {
+                this.TimestampReads++;
+                return true;
+            }
+            protected override MetadataRefreshScope() {
+                return { Kind: 'full' as const, Reason: 'MJ: Entities changed' };
+            }
+            protected override async GetAllMetadata(): Promise<AllMetadata> {
+                this.GetAllMetadataCalls++;
+                return new AllMetadata();
+            }
+        }
+        const p = new FullReloadTimestampsProvider();
+        await p.Config({ IgnoreExistingMetadata: true } as never);
+        p.TimestampReads = 0;
+        p.GetAllMetadataCalls = 0;
+        p.RegisterMembership(buildDataset(['MJ: Entities']));
+
+        p.HandleMemberEvent('mj: entities', saveEvent('MJ: Entities'));
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs + 50);
+
+        expect(p.GetAllMetadataCalls).toBe(1);
+        expect(p.TimestampReads).toBe(1);
+    });
 });
 
 // ===========================================================================

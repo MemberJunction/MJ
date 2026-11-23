@@ -57,6 +57,7 @@ export const CONVERSATION_TYPE_CODES = {
     ROUTINE: 'ROUTINE',
     MEETING_ROOM: 'MEETING_ROOM',
     COMMENT: 'COMMENT',
+    AGENT_CHANNEL: 'AGENT_CHANNEL',
 } as const;
 
 export type BuiltInConversationTypeCode =
@@ -72,6 +73,7 @@ export const BUILT_IN_CONVERSATION_TYPE_IDS: Readonly<Record<BuiltInConversation
     ROUTINE: '18D12ABA-BE8C-4087-B440-835B6D077DD7',
     MEETING_ROOM: '2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926',
     COMMENT: '17E6A105-AE51-43A2-9D56-290BC8D1D6BB',
+    AGENT_CHANNEL: '09E7A069-DB29-4329-BB29-4DF8CB998D94',
 };
 
 const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversationTypeCode>> = {
@@ -81,6 +83,8 @@ const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversat
     'meeting room': 'MEETING_ROOM',
     meeting_room: 'MEETING_ROOM',
     comment: 'COMMENT',
+    'agent channel': 'AGENT_CHANNEL',
+    agent_channel: 'AGENT_CHANNEL',
 };
 
 /**
@@ -1447,16 +1451,21 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * True when the user may grant others access to the conversation: they own it,
-     * or hold an Owner-level grant on it. Mirrors the server's share gate in
-     * `MJResourcePermissionEntityExtended`, so the UI never offers a share the save
-     * would refuse.
+     * True when this conversation has an explicit `MJ: Resource Permissions` share record
+     * granting the current user access (distinct from implicit folder inheritance).
+     */
+    public IsConversationExplicitlyShared(conversationId: string): boolean {
+        return this._explicitSharedConversationIds.has(NormalizeUUID(conversationId));
+    }
+
+    /**
+     * True only when the user owns the conversation (`conversation.UserID === userId`).
+     * Mirrors the server's owner-only sharing gate in `MJResourcePermissionEntityServer`:
+     * non-owner recipients—even with an `'Owner'`-level grant—cannot reshare or revoke
+     * shares on a conversation (including private `ParentID` side threads).
      */
     public CanShareConversation(conversation: MJConversationEntity, userId: string): boolean {
-        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
-            return true;
-        }
-        return this.GetSharedByInfo(conversation.ID)?.Level === 'Owner';
+        return Boolean(conversation?.UserID && userId && UUIDsEqual(conversation.UserID, userId));
     }
 
     /**
@@ -1858,6 +1867,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 continue;
             }
             if (
+                !conv.ParentID &&
                 conv.ProjectID &&
                 IsInheritingFolderAccess(conv) &&
                 sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))
@@ -2148,7 +2158,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 : '';
         const sharedFolderClause =
             sharedProjectIds.length > 0
-                ? ` OR (ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')}) AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
+                ? ` OR (ParentID IS NULL AND ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')}) AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
                 : '';
         // The main chat view shows Global and Both. App-scoped conversations live inside
         // their owning Application's embedded surface.
@@ -3253,6 +3263,31 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
 
         this._conversations$.next([conversation, ...this._conversations$.value]);
+        return conversation;
+    }
+
+    /**
+     * Verifies current server readability for a conversation deep link by performing a fresh
+     * single-row `Load(id)`. Unlike {@link EnsureConversationLoaded}, this never trusts a
+     * stale client cache entry for non-owned conversations; if access was revoked server-side,
+     * the cached entry is evicted and `null` is returned so the UI denies access cleanly.
+     */
+    public async VerifyConversationAccess(
+        id: string,
+        contextUser: UserInfo
+    ): Promise<MJConversationEntity | null> {
+        const md = this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const loaded = await conversation.Load(id);
+        if (!loaded) {
+            const existing = this.GetConversation(id);
+            if (existing) {
+                this._conversations$.next(
+                    this._conversations$.value.filter((c) => !UUIDsEqual(c.ID, id))
+                );
+            }
+            return null;
+        }
         return conversation;
     }
 

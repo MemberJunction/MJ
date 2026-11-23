@@ -7,9 +7,9 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEntity, type IMetadataProvider } from '@memberjunction/core';
-import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { MJEventType, MJGlobal, UUIDSet } from '@memberjunction/global';
 import { CanonGraphEngine } from '../../engines/CanonGraphEngine';
-import { GraphEngine } from '../../graph/GraphEngine';
+import { GraphEngine, IsCanonGraph } from '../../graph/GraphEngine';
 import { CanonMetadataRows, FakeGraphProvider, IDS, MakeUser } from './graphTestFixtures';
 
 const analyst = MakeUser('u-analyst', ['Analyst']);
@@ -103,5 +103,19 @@ describe('GraphEngine.HasActiveCanonGraphs (unloaded probe)', () => {
 
         expect(await GraphEngine.Instance.HasActiveCanonGraphs(analyst, provider as unknown as IMetadataProvider)).toBe(true);
         expect(provider.ReadsOf('MJ: Graph Types')).toHaveLength(2);
+    });
+
+    it('does not treat a graph named "MJ Canon" as Canon unless its graph type is', async () => {
+        const provider = new FakeGraphProvider();
+        provider.Reset({
+            'MJ: Graph Types': [{ ID: IDS.GraphTypeCanon, Name: 'Knowledge', IsCanon: false, Status: 'Active' }],
+            'MJ: Graphs': [
+                { ID: IDS.GraphCanon, Name: 'MJ Canon', GraphTypeID: IDS.GraphTypeCanon, GraphType: 'Knowledge', LoadMode: 'Preload', Status: 'Active' },
+            ],
+        });
+
+        expect(IsCanonGraph({ GraphTypeID: IDS.GraphTypeCanon }, new UUIDSet())).toBe(false);
+        expect(await GraphEngine.Instance.HasActiveCanonGraphs(analyst, provider as unknown as IMetadataProvider)).toBe(false);
+        expect(provider.ReadsOf('MJ: Graph Types')).toHaveLength(1);
     });
 });

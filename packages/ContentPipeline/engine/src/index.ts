@@ -25,4 +25,6 @@ export * from './ManagedPromptClassifier.js';
 export * from './ManagedPromptConceptSynthesizer.js';
 export * from './VectorRouting.js';
 export * from './ContentUploadIngestor.js';
+export * from './GraphEvidenceRetractor.js';
+export * from './ArtifactGraphIndexer.js';
 

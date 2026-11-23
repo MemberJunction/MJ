@@ -1,4 +1,14 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import {
+   ActionResultSimple,
+   CreateContractGovernedNamedPersonRequest,
+   RunActionParams,
+   SubmitContractGovernedWorkflow,
+   type HostGrantedWorkflowSubmissionPayload,
+   type HostGrantedWorkflowSubmissionResult,
+   type NamedPersonAgentRequestPayload,
+   type NamedPersonAgentRequestReceipt,
+   type SupportsAudienceContract
+} from "@memberjunction/actions-base";
  
 /**
  * Base class for all actions. All actions will derive from this class and be instantiated by the ClassFactory within the @memberjunctin/global package.
@@ -44,6 +54,15 @@ export abstract class BaseAction {
    }
 
    /**
+    * Optional formalized SupportsAudience contract declaring supported audience modes,
+    * server-bound hidden scope parameters, receipt-only chat return shaping, and host-granted
+    * workflow / named-person request capabilities.
+    */
+   public get AudienceContract(): SupportsAudienceContract | undefined {
+      return undefined;
+   }
+
+   /**
     * True when the action authorizes its caller itself, so a public entry point such as the
     * `RunAction` mutation may run it for an authenticated user without an `MJ: Action
     * Authorizations` link. Set it only on an action that either checks an authorization the caller
@@ -64,6 +83,49 @@ export abstract class BaseAction {
     */
    public async Run(params: RunActionParams): Promise<ActionResultSimple> {
       return await this.InternalRunAction(params);
+   }
+
+   /**
+    * Dispatches a host-granted workflow after verifying this action's effective
+    * {@link SupportsAudienceContract.AllowsHostGrantedWorkflowSubmission} capability flag.
+    */
+   protected async SubmitHostGrantedWorkflow(
+      params: RunActionParams,
+      payload: HostGrantedWorkflowSubmissionPayload
+   ): Promise<HostGrantedWorkflowSubmissionResult> {
+      const contract = this.effectiveAudienceContract(params);
+      return SubmitContractGovernedWorkflow(contract, payload, params.Action?.Name);
+   }
+
+   /**
+    * Dispatches a named-person agent request after verifying this action's effective
+    * {@link SupportsAudienceContract.AllowsNamedPersonAgentRequests} capability flag.
+    */
+   protected async CreateNamedPersonAgentRequest(
+      params: RunActionParams,
+      payload: NamedPersonAgentRequestPayload
+   ): Promise<NamedPersonAgentRequestReceipt> {
+      const contract = this.effectiveAudienceContract(params);
+      return CreateContractGovernedNamedPersonRequest(contract, payload, params.Action?.Name);
+   }
+
+   private effectiveAudienceContract(params: RunActionParams): SupportsAudienceContract | undefined {
+      const instanceContract = this.AudienceContract;
+      const paramContract = params.AudienceContract;
+      if (!instanceContract) {
+         return paramContract;
+      }
+      if (!paramContract) {
+         return instanceContract;
+      }
+      return {
+         ...instanceContract,
+         ...paramContract,
+         HiddenScopeParams: [
+            ...(instanceContract.HiddenScopeParams ?? []),
+            ...(paramContract.HiddenScopeParams ?? []),
+         ],
+      };
    }      
  
    /**

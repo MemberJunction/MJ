@@ -34,6 +34,13 @@
         "ResourceType": "Custom",
         "DriverClass": "AdminDeveloperTools",
         "isDefault": false
+      },
+      {
+        "Label": "Execution Limits",
+        "Icon": "fa-solid fa-gauge-high",
+        "ResourceType": "Custom",
+        "DriverClass": "AdminLimitsResource",
+        "isDefault": false
       }
     ]
   },

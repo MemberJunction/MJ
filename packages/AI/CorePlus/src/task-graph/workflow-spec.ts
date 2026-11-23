@@ -23,6 +23,7 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { TaskGraphSpec } from './task-graph-spec';
 
 /**
@@ -116,6 +117,8 @@ export type WorkflowSpec = {
      * reviewed running against real data.
      */
     status: 'Active' | 'Paused' | 'Draft';
+    /** Optional workflow-level execution isolation override (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
+    isolation?: MJAIAgentEntity['Isolation'];
     /** The WHAT — `TaskGraphSpec` verbatim (D16). A one-node graph still constant-folds (D9). */
     graph: TaskGraphSpec;
     /** The WHEN. Empty is legal and means the same as a single `OnDemand` trigger. */
@@ -137,7 +140,8 @@ export type WorkflowSpecValidationError = {
         | 'InvalidFilter'
         | 'MissingCron'
         | 'DuplicateTrigger'
-        | 'ScopeWithoutEntity';
+        | 'ScopeWithoutEntity'
+        | 'InvalidIsolation';
     Message: string;
     /** Index of the offending trigger, when the failure is trigger-specific. */
     TriggerIndex?: number;

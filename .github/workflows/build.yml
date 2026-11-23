@@ -48,6 +48,27 @@ jobs:
       - name: Build packages
         run: pnpm run build
 
+      # Open App CI builds `next` against MJ `next` (each app's .github/actions/ci-install). It
+      # resolves the newest commit whose run of THIS workflow passed and downloads this artifact
+      # instead of rebuilding all of MJ, so a downstream PR costs minutes, not a full MJ build.
+      # Only `dist/` folders: the consumer clones the same commit for sources and package.json.
+      - name: Package the build for Open App CI
+        if: github.event_name == 'push' && github.ref_name == 'next'
+        run: |
+          find packages -name node_modules -prune -o -name dist -type d -prune -print0 \
+            | tar --null -czf mj-dist.tar.gz -T -
+          ls -lh mj-dist.tar.gz
+
+      - name: Upload the build for Open App CI
+        if: github.event_name == 'push' && github.ref_name == 'next'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mj-dist
+          path: mj-dist.tar.gz
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+
   # Backstop alarm: this workflow's push run on `next` gates nothing, so a red one used to be
   # visible only to whoever opened the Actions tab. Red opens (or comments on) one rolling issue
   # for THIS workflow; green closes it. Logic and tests: .github/scripts/backstop-alarm.mjs.

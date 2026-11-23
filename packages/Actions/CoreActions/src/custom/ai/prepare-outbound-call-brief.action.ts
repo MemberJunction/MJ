@@ -99,7 +99,7 @@ export class PrepareOutboundCallBriefAction extends BaseAction {
                 };
             }
             const policy = policyLookup.policy;
-            const phoneMode = policy?.PhoneChannelMode ?? 'OutboundWithApproval';
+            const phoneMode = policy?.PhoneChannelMode ?? 'Disabled';
             if (phoneMode === 'Disabled' || phoneMode === 'InboundOnly') {
                 return {
                     Success: false,
