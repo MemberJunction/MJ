@@ -31,6 +31,9 @@ export interface UserMenuItem {
     /** Whether item requires Developer role to be visible */
     developerOnly: boolean;
 
+    /** Whether item is an administrative or workspace-management item hidden for restricted participants */
+    adminOnly?: boolean;
+
     /** Whether the item is currently visible (dynamic control) */
     visible: boolean;
 
@@ -172,6 +175,9 @@ export interface UserMenuContext {
 
     /** Whether the in-app feedback feature is enabled for this org */
     feedbackEnabled?: boolean;
+
+    /** Whether administrative / workspace-management menu items should be shown (false for restricted participants) */
+    showAdminMenuItems?: boolean;
 }
 
 /**

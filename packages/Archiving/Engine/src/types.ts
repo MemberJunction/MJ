@@ -1,4 +1,4 @@
-import { BaseEntity, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { FileStorageBase } from '@memberjunction/storage';
 import type { MJArchiveConfigurationEntity } from '@memberjunction/core-entities';
 
@@ -97,6 +97,20 @@ export interface ArchiveRecordContext {
     ContextUser: UserInfo;
     /** The current ArchiveRun record */
     ArchiveRun: BaseEntity;
+}
+
+/**
+ * What a driver needs to build its eligibility filter for one entity configuration.
+ */
+export interface EligibilityFilterContext {
+    /** Field configuration for this entity */
+    FieldConfig: ArchiveFieldConfiguration;
+    /** Metadata for the entity being archived */
+    EntityInfo: EntityInfo;
+    /** The ArchiveConfigurationEntity record */
+    ConfigEntity: BaseEntity;
+    /** The parent ArchiveConfiguration record */
+    Config: BaseEntity;
 }
 
 /**

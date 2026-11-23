@@ -1,6 +1,6 @@
 name: MJ workspace setup
 description: >-
-  pnpm + Node + a frozen-lockfile install + the MJExplorer environment file CI has to synthesize.
+  pnpm + Node + a cached frozen-lockfile install + the MJExplorer environment file CI has to synthesize.
   Extracted because the Unit Tests workflow now runs these same five steps in four separate jobs
   (build, each test shard, the ESM guard, the nightly coverage lane) and they must not drift —
   a shard installing differently from the job that built its dist/ produces failures that look
@@ -31,12 +31,36 @@ runs:
       uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
-        cache: 'pnpm'
+        package-manager-cache: false
+
+    # The pnpm store has its own cache key, which only this action writes, and only after a
+    # full install. The setup-node pnpm cache shares one key with every job in the repository,
+    # so a job that does not install can save a near-empty store that all later jobs then hit.
+    - name: Find the pnpm store
+      if: inputs.install == 'true'
+      id: pnpm-store
+      shell: bash
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the pnpm store
+      if: inputs.install == 'true'
+      id: pnpm-cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: pnpm-store-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
 
     - name: Install dependencies
       if: inputs.install == 'true'
       shell: bash
       run: pnpm install --frozen-lockfile
+
+    - name: Save the pnpm store
+      if: inputs.install == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: ${{ steps.pnpm-cache.outputs.cache-primary-key }}
 
     # MJExplorer's environment.ts is gitignored (it carries per-deployment auth config), so CI
     # has to synthesize one or the Explorer packages fail to compile.

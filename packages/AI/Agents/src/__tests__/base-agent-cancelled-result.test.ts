@@ -28,6 +28,7 @@ interface FakeRun {
     CancellationReason?: string | null;
     FinalPayload?: string | null;
     Steps: FakeStep[];
+    MarkServerCancellation?: ReturnType<typeof vi.fn>;
     Save: ReturnType<typeof vi.fn>;
 }
 
@@ -139,5 +140,32 @@ describe('BaseAgent.createCancelledResult', () => {
         await cancel(agentWithRun(run), `${BaseAgent.AgentTimeoutAbortReason}: agent 'X' ran past 10ms`);
         expect(run.CancellationReason).toBe('Timeout');
         expect(run.FinalPayload).toBeNull();
+    });
+
+    it('calls MarkServerCancellation() before Save() so server finalization succeeds across Timeout, System, and attributed User Request cancellations', async () => {
+        for (const reason of [
+            `${BaseAgent.AgentTimeoutAbortReason}: agent 'X' ran past 10ms`,
+            'upstream cancellation',
+            AgentRunWatchdog.UserCancelAbortReason,
+        ]) {
+            const callOrder: string[] = [];
+            const run: FakeRun = {
+                ID: RUN_ID,
+                FinalPayload: null,
+                Steps: [],
+                MarkServerCancellation: vi.fn(() => {
+                    callOrder.push('MarkServerCancellation');
+                    return run;
+                }),
+                Save: vi.fn(async () => {
+                    callOrder.push('Save');
+                    return true;
+                }),
+            };
+            await cancel(agentWithRun(run), reason);
+            expect(run.MarkServerCancellation).toHaveBeenCalledTimes(1);
+            expect(run.Save).toHaveBeenCalledTimes(1);
+            expect(callOrder).toEqual(['MarkServerCancellation', 'Save']);
+        }
     });
 });

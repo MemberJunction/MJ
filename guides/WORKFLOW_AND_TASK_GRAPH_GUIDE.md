@@ -556,19 +556,27 @@ const result = await TaskGraphWaitingSteps.CompleteWaitingStep(
 
 ### Human-step providers
 
-A Human step uses MJ's built-in inbox (an `MJ: AI Agent Requests` row) unless it names a provider.
-Any package can supply one — an approval system, a ticketing integration — without core knowing it
-exists:
+A Human step uses MJ's built-in inbox (an `MJ: AI Agent Requests` row) unless a provider takes it.
+Any package can supply one (an approval system, a ticketing integration) without core knowing it
+exists. The contract lives in `@memberjunction/ai-core-plus`, so agents can use the same providers
+(see [The install's default provider](#the-installs-default-provider)):
 
 ```typescript
-import { RegisterClass } from '@memberjunction/global';
-import { BaseHumanTaskProvider, type HumanTaskRaiseContext, type HumanTaskRaiseResult } from '@memberjunction/task-graph';
+import { RegisterClassEx } from '@memberjunction/global';
+import {
+    BaseHumanTaskProvider, HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT,
+    type HumanTaskRaiseContext, type HumanTaskRaiseResult,
+} from '@memberjunction/ai-core-plus';
 
-@RegisterClass(BaseHumanTaskProvider, 'BizAppsTasks')
+@RegisterClassEx(BaseHumanTaskProvider, {
+    key: 'BizAppsTasks',
+    metadata: { [HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT]: true },   // optional: may be the install's default
+})
 export class BizAppsTasksHumanTaskProvider extends BaseHumanTaskProvider {
     public async RaiseTask(ctx: HumanTaskRaiseContext): Promise<HumanTaskRaiseResult> {
-        // Create the app's own task. Remember ctx.TaskID: when that task is decided, call
-        // TaskGraphWaitingSteps.CompleteWaitingStep({ TaskID: ctx.TaskID, Payload: { decision } }, ...)
+        // Create the app's own task and remember ctx.Subject. When the task is decided:
+        //  - Subject.Kind 'WorkflowStep': TaskGraphWaitingSteps.CompleteWaitingStep({ TaskID: ctx.Subject.TaskID, ... })
+        //  - Subject.Kind 'AgentRequest': AnswerAgentRequestFromProvider({ AgentRequestID: ctx.Subject.AgentRequestID, ... })
         return { Outcome: 'raised', ExternalReference: appTask.ID };
     }
 }
@@ -584,14 +592,47 @@ export class BizAppsTasksHumanTaskProvider extends BaseHumanTaskProvider {
   `TaskGraph.RetryTask` raises it again.
 - The provider receives the step's instructions, its `providerConfiguration` untouched, the assigned
   and owning users, the deadline, and the payload the step was reached with.
-- `WithdrawTask` is called when the step expires. The default does nothing.
+- `WithdrawTask` is called when the step expires (reason `'expired'`). The default does nothing.
 - Only the provider completes the step, by calling `TaskGraphWaitingSteps.CompleteWaitingStep` in
   process when the person decides. The `TaskGraph.CompleteWaitingStep` remote operation refuses
   provider-raised Human steps: through it the run's owner, often the person asking for the approval,
   could approve their own request.
 - An unregistered provider is **refused at submit**, by name; the dispatcher re-checks when it
   reaches the step, so a host that differs fails the step with the name rather than waiting forever.
-- Omitted, or `'AgentRequest'`, is the built-in inbox, unchanged.
+- `'AgentRequest'` is the built-in inbox, always. Omitted means the install's default provider, which
+  is the inbox unless the install chose one.
+
+#### The install's default provider
+
+Installing a provider never reroutes anyone's approvals. A provider takes asks that do not name it
+only when **both** of these hold:
+
+1. **The provider declares it can.** Its registration carries `CanBeDefault: true` (the
+   `HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT` metadata key above). The app that writes the provider knows
+   whether it can take any ask, not only the ones built for it.
+2. **The install chooses it.** `humanTasks.defaultProvider` in `mj.config.cjs` (env
+   `MJ_HUMAN_TASKS_DEFAULT_PROVIDER`), applied at MJAPI startup through
+   `HumanTaskProviderDefaults.Instance.Configure()`.
+
+A configured provider that is not registered, or does not declare `CanBeDefault`, is ignored with an
+error at startup, and asks stay in the inbox. It is checked each time it is read, so a provider whose
+package loads later takes effect then.
+
+With a default in effect:
+
+- **Workflow Human steps that name no provider** go to it. The choice is made at submit and written
+  into the step's configuration, so the step records where it went and changing the setting later
+  does not reroute running workflows. A step naming `'AgentRequest'` stays in the inbox.
+- **Agents' questions (Chat steps)** are raised through it as well as kept in the inbox. The
+  `MJ: AI Agent Requests` row stays the source of truth, because answering it is what resumes the
+  agent. The row records the provider and its reference (`HumanTaskProvider`,
+  `HumanTaskExternalReference`). The provider answers with `AnswerAgentRequestFromProvider`
+  (`@memberjunction/ai-agents`): only the provider the request was raised through, only while it is
+  open, saved as the request's owner so the resumed run has that user's permissions. An answer given
+  in the inbox or the conversation instead calls `WithdrawTask` with `'completed-elsewhere'`. If
+  raising fails, the provider is cleared from the row and the inbox alone holds the request.
+- **Plan approvals** (an agent's Plan step) stay in the inbox: the reviewer edits the plan, and that
+  reply has no place in the provider contract yet.
 
 Drawn workflows (`AIAgentStep`) accept `External` and `Wait` step types, and a Human step's
 `provider` / `providerConfiguration` ride in its `Configuration`, exactly as they do on a graph node.
@@ -663,7 +704,7 @@ detached for a moment.
 
 | `type` | Fires | What saving creates or updates |
 |---|---|---|
-| `OnDemand` | Only when something asks: **Run** in the Workflows app, an agent, the `TaskGraph.Submit` operation | Nothing |
+| `OnDemand` | Only when something asks: **Run** on the workflow's agent form (opened from the Workflows app), an agent, the `TaskGraph.Submit` operation | Nothing |
 | `Schedule` | On `cron`, in `timezone` (an IANA zone; absent means the job's own default) | One `MJ: Scheduled Jobs` row of the existing `Agent` job type, pointing at the workflow's agent |
 | `EntityEvent` | After a record of `entityName` is created, updated or deleted, when `filter` allows | An `MJ: Entity Actions` binding on that entity dispatching to the existing `Execute Agent` action: an `MJ: Entity Action Invocations` row for the event, `MJ: Entity Action Params` carrying the agent and the changed record, and, when `filter` is set, an `MJ: Action Filters` row bound through `MJ: Entity Action Filters` |
 
@@ -715,6 +756,11 @@ A trigger follows the workflow's status. A schedule's job, and a record-change t
 `MJ: Entity Actions` binding, are `Active` only while the spec is `Active`; a `Draft` or `Paused`
 workflow keeps them, `Disabled`, without running on them.
 
+The workflow's Flow agent follows the status too: a `Draft` or `Paused` spec is saved as an
+`MJ: AI Agents` row with `Status = 'Disabled'`
+(`packages/AI/AgentManager/core/src/workflow-agent-writer.ts`), and the agent form's **Run** button is
+disabled unless the agent is `Active`. A draft cannot be run on demand until it is saved `Active`.
+
 Removing a trigger from the spec **disables** what it owned: the Scheduled Job, or the binding.
 Re-adding it reactivates the same row, with its history.
 
@@ -727,9 +773,9 @@ or split them into two workflows.
 
 | Surface | What it does with triggers |
 |---|---|
-| **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow **on demand**. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
+| **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow through `Workflow.Save` as a `Draft` with no triggers (its Flow agent is `Disabled`) and opens it on the AI Agents form. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
 | **Workflows** app → list | Does not read triggers back yet, so every workflow shows as *On demand* |
-| A conversation's plan card → **Save as workflow** | Saves an agent's plan as an on-demand workflow |
+| A conversation's plan card → **Save as workflow** | Saves an agent's plan as a `Draft` on-demand workflow (`status: 'Draft'`, no triggers) |
 | **Scheduling** app | Shows the job a `Schedule` trigger owns, and its runs |
 | `Workflow.Save`, from code, an agent or an MCP client | The way to add or change a `Schedule` or `EntityEvent` trigger today |
 
@@ -1005,6 +1051,53 @@ The type system makes most of this a compile error rather than a runtime surpris
 > Steps 4 and 5 are the ones that bite. A kind added to the spec but not to the persistence switch
 > throws loudly (by design); a kind added to `DISPATCHABLE_KINDS` without a runner produces a task
 > that waits forever.
+
+---
+
+## Execution Isolation Levels & Fault Boundaries
+
+Workflows (`AIAgent.Isolation`) and submitted graphs (`TaskGraphSpec.isolation`) support four progressive isolation modes controlled per workflow/graph and configured by `LimitsConfigResolver` (`Limits.Isolation`):
+
+| Mode | Substrate | Default Scope | Fault-Boundary Guarantee & Limitations |
+|---|---|---|---|
+| `'InProcess'` | Host Node.js event loop (`InProcessIsolationRunner`) | Upgraded existing workflows (`AIAgent.Isolation` backfill) & `DefaultIsolation` | Zero IPC serialization overhead; shares V8 heap, native memory, and crash domain with host MJAPI. |
+| `'Worker'` | Node `worker_threads.Worker` (`WorkerIsolationRunner`) | Newly drafted workflows (`Workflow.Draft` → `DraftDefaultIsolation`) | Bounded by V8 `resourceLimits` (`WorkerMaxOldGenerationSizeMb`, `WorkerMaxYoungGenerationSizeMb`). Guarantees clean worker termination (`ERR_WORKER_OUT_OF_MEMORY`) without crashing host MJAPI for unbounded V8 JavaScript heap allocations (objects, arrays, strings, closures), plus wall-clock `WorkerTimeoutMs` termination. **Important limitation**: V8 heap `resourceLimits` do NOT constrain native C++ addon allocations or off-heap `Buffer` / `ArrayBuffer` / `SharedArrayBuffer` / WASM linear memory — workloads that allocate untrusted or unbounded native/`Buffer` memory MUST use `'Process'` or `'Container'` isolation for OS-level containment. |
+| `'Process'` | Isolated OS `child_process` (`ProcessIsolationRunner`) | Explicit workflow/graph override | Separate OS process crash domain with `--max-old-space-size`, active RSS monitoring (`ProcessMaxMemoryMb`), hard `SIGTERM`→`SIGKILL` timeout (`ProcessTimeoutMs`), and exit-code / signal propagation across both V8 heap and native/`Buffer` allocations. |
+| `'Container'` | Hardened OCI container (`ContainerIsolationRunner`) | Explicit workflow/graph override | Full kernel namespace (PID/mount/network/IPC) and cgroup v2 containment (`--rm`, `--network=none`, `--read-only`, `--security-opt=no-new-privileges`, `--memory`, `--memory-swap`, `--cpus`). Detects cgroup OOM kills (`exit 137`), timeouts, startup errors, and non-zero exits cleanly. |
+
+### Precedence (`ResolveTaskGraphIsolation`)
+
+Effective isolation resolves in order:
+1. Explicit submit/runtime override (`TaskGraphSubmitContext.Isolation`)
+2. Graph / workflow spec setting (`TaskGraphSpec.isolation` / `WorkflowSpec.isolation`)
+3. Owning Flow agent entity property (`MJAIAgentEntity.Isolation`)
+4. `LimitsConfigResolver` fallback (`Limits.Isolation.DefaultIsolation`, default `'InProcess'`; `Workflow.Draft` uses `Limits.Isolation.DraftDefaultIsolation`, default `'Worker'`)
+
+### Container Runtime Prerequisites
+
+Enabling `'Container'` mode in production hosts requires:
+1. Docker Engine >= 20.10 or Podman >= 4.0 CLI binary installed on `PATH` (configured via `Limits.Isolation.ContainerRuntime`, default `'docker'`).
+2. Container daemon/socket accessible by the MJAPI host service user without interactive `sudo`.
+3. Configured OCI runtime image (default `'node:20-alpine'`, configured via `Limits.Isolation.ContainerImage`) pre-pulled locally or reachable in the host registry.
+4. Linux cgroup v2 memory/CPU accounting enabled (or Docker Desktop VM memory limits on macOS/Windows) for hard cgroup OOM containment.
+
+---
+
+## Queued Graph Dispatch (`Dispatch: 'Queue'`) & `Enqueue` Steps
+
+### 1. Submitting Graphs onto WorkQueue (`Dispatch: 'Queue'`)
+
+`TaskGraph.Submit` (`TaskGraphService.Submit`) accepts `Dispatch?: 'Inline' | 'Queue'` (default `'Inline'`).
+When `Dispatch === 'Queue'`:
+- The parent `MJ: Tasks` row persists immediately in `'Pending'` with `dispatchMode: 'Queue'`, serialized `queuedSubmission` snapshot, workflow `Isolation`, and a durable `'Pending'` caller notification record.
+- Child tasks are **not** materialized at submit time, preventing inline dispatchers from claiming work prematurely.
+- `TaskGraphRunWorkHandler` (`@RegisterClass(BaseWorkHandler, 'TaskGraph.RunGraph')`) idempotently materializes child tasks/dependencies via `TaskGraphService.MaterializeQueuedGraph`, executes the graph honoring its resolved `Isolation`, records terminal state (`Succeeded` / `Failed` / `Cancelled`), and writes a `'Ready'` terminal notification (`TaskGraphCallerNotificationService`).
+- Caller hosts recover unacknowledged `'Ready'` notifications cleanly across process restarts via `TaskGraphCallerNotificationService.Instance.RecoverPendingNotifications(...)` / `WaitForNotification(...)`.
+
+### 2. `Enqueue` Steps & Bounded 10,000-Item `ForEach` + `Enqueue` Fan-Out
+
+- **Single `Enqueue` steps** (`TaskNode.Enqueue`) durably register waiting state (`StepType = 'External'`, deterministic `BuildEnqueueCorrelationKey(graphRunId, stepInvocationId, correlationKey)`) **before** publishing onto the WorkQueue topic, reconcile early completions without stranding, and deduplicate repeated `CompleteWaitingStep` calls.
+- **`ForEach` + `Enqueue` fan-out** (`ForEachOperation.enqueue`) uses `ForEachEnqueueCoordinator` with bounded concurrent publish batches (`Limits.TaskGraphQueue.MaxEnqueuePublishConcurrency`, `EnqueuePublishBatchSize`), a compact hex completion bitmap (`~2.5 KB` per 10,000 items), host-wide active isolated runner bounding (`Limits.TaskGraphQueue.MaxConcurrentIsolatedRunners` via `BoundedRunnerSemaphore`), idempotent per-item completion deduplication, and terminal failure propagation after retry exhaustion (`Limits.TaskGraphQueue.MaxEnqueueRedeliveryAttempts`).
 
 ---
 

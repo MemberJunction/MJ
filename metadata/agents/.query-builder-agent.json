@@ -484,6 +484,26 @@
                   "lastModified": "2026-11-18T00:24:47.280Z",
                   "checksum": "e9b61ca75b6273dd85663b4826aeaec6e434a7f3948c7a223ce485f019f6adfb"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Graph Context",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "81F24722-81C5-4A2C-A3AE-A2B3A8E05003"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Find Graph Path",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4B7BEFDF-66C2-484E-BFA5-8181D668B181"
+                }
               }
             ],
             "MJ: AI Agent Rubrics": [

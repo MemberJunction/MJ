@@ -27,6 +27,7 @@ import {
     MJConversationTypeEntity,
     MJEntityEntity,
     MJFieldSuggestionEntity,
+    MJAIAgentUserPolicyEntity,
     MJListEntity,
     MJUserRoutineEntity,
 } from '@memberjunction/core-entities';
@@ -37,6 +38,7 @@ import {
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, ActionResult, RunActionParams } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AgentWakeTriggerService } from '@memberjunction/ai-agents';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -60,6 +62,8 @@ interface WorkBusCoreFixture {
     ListsConfigMutated: boolean;
     FixtureListID: string;
     ChiefOfStaffAgentID: string;
+    /** The context user's Chief of Staff policy as Setup found it; Teardown puts it back. */
+    PolicyFixture: ChiefOfStaffPolicyFixture;
     NoGrantUser: UserInfo | null;
     CreatedConversationIDs: string[];
     CreatedRoutineIDs: string[];
@@ -67,7 +71,67 @@ interface WorkBusCoreFixture {
     CreatedExtraListIDs: string[];
 }
 
+/**
+ * What Setup did to the context user's Chief of Staff policy. A workstream wake is suppressed
+ * unless the target user has an `Active` `MJ: AI Agent User Policies` row for the agent (MJ 6825),
+ * so WBC10 needs one; Teardown reverses exactly what Setup changed.
+ */
+interface ChiefOfStaffPolicyFixture {
+    PolicyID: string;
+    /** Setup created the row, so Teardown deletes it. */
+    Created: boolean;
+    /** The row existed with another status, which Teardown puts back; null when Setup left the status alone. */
+    PreviousStatus: MJAIAgentUserPolicyEntity['Status'] | null;
+}
+
 let fixture: WorkBusCoreFixture | null = null;
+
+/** Gives the context user an `Active` Chief of Staff policy, creating or activating one, and records what changed. */
+async function ensureActiveChiefOfStaffPolicy(ctx: IntegrationCheckContext, agentID: string): Promise<ChiefOfStaffPolicyFixture> {
+    const existing = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentUserPolicyEntity>(
+        {
+            EntityName: 'MJ: AI Agent User Policies',
+            ExtraFilter: `AgentID='${agentID}' AND UserID='${ctx.User.ID}'`,
+            ResultType: 'entity_object',
+            BypassCache: true,
+        },
+        ctx.User
+    );
+    Assert(existing.Success, `Reading the Chief of Staff policy failed: ${existing.ErrorMessage}`);
+    const created = existing.Results.length === 0;
+    const policy = created
+        ? await ctx.Provider.GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', ctx.User)
+        : existing.Results[0];
+    const previousStatus = created || policy.Status === 'Active' ? null : policy.Status;
+    if (created) {
+        policy.NewRecord();
+        policy.AgentID = agentID;
+        policy.UserID = ctx.User.ID;
+    }
+    if (created || previousStatus != null) {
+        policy.Status = 'Active';
+        Assert(await policy.Save(), `Activating the Chief of Staff policy failed: ${policy.LatestResult?.CompleteMessage ?? ''}`);
+    }
+    AgentUserPolicyEngine.Instance.ClearCache(agentID, ctx.User.ID);
+    return { PolicyID: policy.ID, Created: created, PreviousStatus: previousStatus };
+}
+
+/** Undoes {@link ensureActiveChiefOfStaffPolicy}: deletes a policy it created, or puts back the status it changed. */
+async function revertChiefOfStaffPolicy(ctx: IntegrationCheckContext, agentID: string, f: ChiefOfStaffPolicyFixture): Promise<void> {
+    if (!f.Created && f.PreviousStatus == null) {
+        return;
+    }
+    const policy = await ctx.Provider.GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', ctx.User);
+    if (await policy.Load(f.PolicyID)) {
+        if (f.Created) {
+            await policy.Delete().catch(() => undefined);
+        } else if (f.PreviousStatus != null) {
+            policy.Status = f.PreviousStatus;
+            await policy.Save().catch(() => undefined);
+        }
+    }
+    AgentUserPolicyEngine.Instance.ClearCache(agentID, ctx.User.ID);
+}
 
 function fx(): WorkBusCoreFixture {
     Assert(fixture != null, 'work-bus-core fixture missing (bundle Setup did not run)');
@@ -799,12 +863,15 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             `Saving fixture MJ: Lists row failed: ${fixtureList.LatestResult?.CompleteMessage ?? ''}`
         );
 
+        const policyFixture = await ensureActiveChiefOfStaffPolicy(ctx, cosAgent!.ID);
+
         fixture = {
             ListsEntityID: listsInfo.ID,
             OriginalListsConfig: originalConfig,
             ListsConfigMutated: true,
             FixtureListID: fixtureList.ID,
             ChiefOfStaffAgentID: cosAgent!.ID,
+            PolicyFixture: policyFixture,
             NoGrantUser: findUserByEmail(UserCache.Users, SEEDED_NOGRANT_EMAIL) ?? null,
             CreatedConversationIDs: [],
             CreatedRoutineIDs: [],
@@ -861,6 +928,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
                 await list.Delete().catch(() => undefined);
             }
         }
+
+        await revertChiefOfStaffPolicy(ctx, f.ChiefOfStaffAgentID, f.PolicyFixture);
 
         // Restore MJ: Lists Configuration verbatim and refresh metadata
         if (f.ListsConfigMutated) {

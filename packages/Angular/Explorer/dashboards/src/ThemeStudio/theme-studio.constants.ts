@@ -133,6 +133,7 @@ export const TOKEN_PREVIEW_TARGETS: Record<string, string[]> = {
   '--mj-radius-lg': ['.mx', '.report'],
   '--mj-shadow-brand-md': ['.report'],
   '--mj-font-family': ['.mx-ph-title', '.ag-sum', '.kpi .n'],
+  '--mj-font-family-display': ['.mx-ph-title', '.mx-dlg-t', '.rhead .ti', '.chart .ct'],
 };
 
 /**

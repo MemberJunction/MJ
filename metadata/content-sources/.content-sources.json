@@ -1,0 +1,35 @@
+[
+  {
+    "fields": {
+      "Name": "MJ Docs",
+      "ContentTypeID": "@lookup:MJ: Content Types.Name=MJ Docs",
+      "ContentSourceTypeID": "@lookup:MJ: Content Source Types.Name=Upload",
+      "ContentFileTypeID": "@lookup:MJ: Content File Types.Name=MD",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Artifacts",
+      "EntityDocumentID": "@lookup:MJ: Entity Documents.Name=Artifacts Content",
+      "EmbeddingModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "GraphID": "@lookup:MJ: Graphs.Name=Library Knowledge",
+      "URL": "upload://mj/artifacts",
+      "ForceDiscovery": false,
+      "Configuration": {
+        "Artifacts": {
+          "ArtifactTypes": [
+            "Markdown Document"
+          ],
+          "DebounceMs": 10000,
+          "Enabled": true
+        },
+        "GraphOverlay": {
+          "Enabled": true,
+          "SynthesizeConcepts": true,
+          "SynthesizerKey": "Deterministic",
+          "DetectContradictions": false
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "6CCDFA7B-11C3-49AA-9D56-C716A891E60E"
+    }
+  }
+]

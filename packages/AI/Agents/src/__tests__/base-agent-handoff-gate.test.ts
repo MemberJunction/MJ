@@ -327,6 +327,8 @@ class HandoffLoopHarness {
             }
             throw new Error(`HandoffLoopHarness: unexpected GetEntityObject('${entityName}')`);
         },
+        RunView: async () => ({ Success: true, Results: [] }),
+        RunViews: async () => [],
     };
 }
 

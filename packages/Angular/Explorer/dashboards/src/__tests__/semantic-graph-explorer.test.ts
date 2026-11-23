@@ -1,14 +1,37 @@
 import '@angular/compiler'; // JIT support — component barrel import evaluates Angular decorators in vitest's node env
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockCdr = vi.hoisted(() => ({
+    markForCheck: vi.fn(),
+    detectChanges: vi.fn(),
+    checkNoChanges: vi.fn(),
+    detach: vi.fn(),
+    reattach: vi.fn(),
+}));
+
+vi.mock('@angular/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@angular/core')>();
+    return {
+        ...actual,
+        inject: (token: { name?: string }) => {
+            if (token?.name === 'ChangeDetectorRef') return mockCdr;
+            return {};
+        },
+    };
+});
+
+import { AuthorizationInfo, AuthorizationRoleInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { GRAPH_APPROVE_EDGES_AUTHORIZATION, type MJGraphConceptEntity } from '@memberjunction/core-entities';
 import {
     DEFAULT_GRAPH_CATEGORIES,
     GraphNode,
     GraphEdge,
     GraphCategoryConfig,
+    GraphViewComponent,
     BeforeNodeActionEventArgs,
     NodeActionEventArgs,
 } from '@memberjunction/ng-graph-view';
-import { DEFAULT_SEMANTIC_GRAPH_CATEGORIES } from '../KnowledgeHub/components/visualize/semantic-graph/semantic-graph-explorer.component';
+import { DEFAULT_SEMANTIC_GRAPH_CATEGORIES, SemanticGraphExplorerComponent } from '../KnowledgeHub/components/visualize/semantic-graph/semantic-graph-explorer.component';
 import {
     VISUALIZATION_MODES,
     IsValidVisualizationMode,
@@ -150,6 +173,132 @@ describe('Semantic Graph & Canon Explorer + @memberjunction/ng-graph-view extens
             expect(ctx['ActiveVisualizationMode']).toBe('graph');
             expect(ctx['AvailableVisualizationModes']).toEqual(['clusters', 'tagcloud', 'graph']);
             expect(ctx['DrilldownRecordCount']).toBe(1);
+        });
+    });
+
+    describe('Workstream 5a approval gating on GraphViewComponent & SemanticGraphExplorerComponent', () => {
+        const APPROVE_AUTH_ID = 'F1000001-0000-0000-0000-000000000001';
+        const STAFF_ROLE_ID = 'F1000002-0000-0000-0000-000000000001';
+        const CURATOR_ROLE_ID = 'F1000002-0000-0000-0000-000000000002';
+
+        function makeUser(id: string, roleId: string): UserInfo {
+            return {
+                ID: id,
+                Name: id,
+                Email: `${id}@example.com`,
+                Type: 'User',
+                UserRoles: [{ UserID: id, RoleID: roleId, RoleName: roleId }],
+            } as unknown as UserInfo;
+        }
+
+        function makeProvider(user: UserInfo, saveMock: ReturnType<typeof vi.fn>): IMetadataProvider {
+            const owningProvider = {
+                AuthorizationRoles: [
+                    new AuthorizationRoleInfo({ ID: 'ar-ui-1', AuthorizationID: APPROVE_AUTH_ID, RoleID: CURATOR_ROLE_ID, Type: 'Allow' }),
+                ],
+            } as unknown as IMetadataProvider;
+            const auths = [
+                new AuthorizationInfo({ ID: APPROVE_AUTH_ID, Name: GRAPH_APPROVE_EDGES_AUTHORIZATION, ParentID: null, IsActive: true }, owningProvider),
+            ];
+            return {
+                CurrentUser: user,
+                Authorizations: auths,
+                GetEntityObject: async (): Promise<MJGraphConceptEntity> =>
+                    ({
+                        Status: 'Proposed',
+                        Load: vi.fn().mockResolvedValue(true),
+                        Save: saveMock,
+                        LatestResult: { CompleteMessage: 'refused' },
+                    }) as unknown as MJGraphConceptEntity,
+            } as unknown as IMetadataProvider;
+        }
+
+        const proposedNode: GraphNode = {
+            ID: 'C0000001-0000-0000-0000-000000000001',
+            Label: 'Grace Period',
+            Category: 'Policy',
+            Status: 'Proposed',
+        };
+
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('defaults GraphViewComponent.CanApproveNodes to false and blocks approve actions until enabled', () => {
+            const view = new GraphViewComponent();
+            expect(view.CanApproveNodes).toBe(false);
+
+            const emitted: NodeActionEventArgs[] = [];
+            view.NodeAction.subscribe((e) => emitted.push(e));
+
+            view.TriggerNodeAction(proposedNode, 'approve');
+            expect(emitted).toHaveLength(0);
+
+            view.CanApproveNodes = true;
+            view.TriggerNodeAction(proposedNode, 'approve');
+            expect(emitted).toHaveLength(1);
+            expect(emitted[0].Action).toBe('approve');
+        });
+
+        it('allows sample graph preview approval, denies unauthorized DB approvals, and allows authorized curators', async () => {
+            const staffSave = vi.fn().mockResolvedValue(true);
+            const explorer = new SemanticGraphExplorerComponent();
+            explorer.SelectedGraphID = 'G1';
+            explorer.GraphOptions = [
+                {
+                    ID: 'G1',
+                    Name: 'Real Org Graph',
+                    Description: '',
+                    GraphTypeID: 'GT-CANON',
+                    GraphTypeName: 'Canon',
+                    IsCanon: true,
+                    GraphTypeRank: 1,
+                    IconClass: 'fa-solid fa-diagram-project',
+                    ConceptCount: 1,
+                    ConflictCount: 0,
+                    SourceNames: ['Source 1'],
+                    IsSample: false,
+                },
+                {
+                    ID: 'G-SAMPLE',
+                    Name: 'Sample Graph',
+                    Description: '',
+                    GraphTypeID: 'GT-CANON',
+                    GraphTypeName: 'Canon',
+                    IsCanon: true,
+                    GraphTypeRank: 1,
+                    IconClass: 'fa-solid fa-diagram-project',
+                    ConceptCount: 1,
+                    ConflictCount: 0,
+                    SourceNames: [],
+                    IsSample: true,
+                },
+            ];
+            explorer.Provider = makeProvider(makeUser('u-staff', STAFF_ROLE_ID), staffSave);
+
+            expect(explorer.CanApproveSelectedGraph).toBe(false);
+            await explorer.OnNodeAction({ Node: { ...proposedNode }, Action: 'approve' });
+            expect(staffSave).not.toHaveBeenCalled();
+            expect(explorer.ActionError).toContain(GRAPH_APPROVE_EDGES_AUTHORIZATION);
+
+            // Sample preview stays interactive without DB authorization
+            explorer.SelectedGraphID = 'G-SAMPLE';
+            expect(explorer.CanApproveSelectedGraph).toBe(true);
+            const sampleNode: GraphNode = { ID: 'sample-concept-1', Label: 'Sample', Category: 'Term', Status: 'Proposed' };
+            await explorer.OnNodeAction({ Node: sampleNode, Action: 'approve' });
+            expect(sampleNode.Status).toBe('Approved');
+            expect(staffSave).not.toHaveBeenCalled();
+
+            // Curator with Graph: Approve Edges proceeds to entity Load + Save on real graph
+            const curatorSave = vi.fn().mockResolvedValue(true);
+            explorer.SelectedGraphID = 'G1';
+            explorer.Provider = makeProvider(makeUser('u-curator', CURATOR_ROLE_ID), curatorSave);
+            expect(explorer.CanApproveSelectedGraph).toBe(true);
+            const dbNode = { ...proposedNode };
+            await explorer.OnNodeAction({ Node: dbNode, Action: 'approve' });
+            expect(curatorSave).toHaveBeenCalledTimes(1);
+            expect(dbNode.Status).toBe('Approved');
+            expect(explorer.ActionError).toBeNull();
         });
     });
 });

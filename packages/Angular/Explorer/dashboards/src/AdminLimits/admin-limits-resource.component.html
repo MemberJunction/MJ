@@ -1,0 +1,580 @@
+<mj-page-layout>
+    <mj-page-header
+        Title="Execution Limits & Governance"
+        Icon="fa-solid fa-gauge-high"
+        Subtitle="5-tier hierarchical limits provenance, approved backstops, multi-scope budgets, deterministic progress detection, and pause/resume controls"
+    >
+        <div meta class="limits-header-meta">
+            @if (Diagnostics) {
+                <mj-stat-badge
+                    [Count]="Diagnostics.OverriddenKeys.length"
+                    [Total]="TotalLimitsKeyCount"
+                    Label="overridden keys"
+                />
+                @if (Diagnostics.PausedRuns.length > 0) {
+                    <span class="status-pill status-paused">
+                        <i class="fa-solid fa-circle-pause"></i>
+                        {{ Diagnostics.PausedRuns.length }} paused for review
+                    </span>
+                } @else {
+                    <span class="status-pill status-healthy">
+                        <i class="fa-solid fa-circle-check"></i>
+                        0 paused runs
+                    </span>
+                }
+            }
+        </div>
+
+        <div actions class="limits-header-actions">
+            <mj-refresh-button
+                [Loading]="IsLoading || IsRefreshing"
+                (Clicked)="RefreshDiagnostics()"
+            />
+        </div>
+
+        <div toolbar class="limits-header-toolbar">
+            <div class="tab-pill-group">
+                <button
+                    type="button"
+                    class="tab-pill"
+                    [class.active]="ActiveTab === 'overview'"
+                    (click)="OnTabChange('overview')"
+                >
+                    <i class="fa-solid fa-layer-group"></i>
+                    Hierarchy & Backstops
+                </button>
+                <button
+                    type="button"
+                    class="tab-pill"
+                    [class.active]="ActiveTab === 'provenance'"
+                    (click)="OnTabChange('provenance')"
+                >
+                    <i class="fa-solid fa-table-list"></i>
+                    Tier Provenance
+                </button>
+                <button
+                    type="button"
+                    class="tab-pill"
+                    [class.active]="ActiveTab === 'budgets'"
+                    (click)="OnTabChange('budgets')"
+                >
+                    <i class="fa-solid fa-coins"></i>
+                    Budget Utilization
+                </button>
+                <button
+                    type="button"
+                    class="tab-pill"
+                    [class.active]="ActiveTab === 'runs'"
+                    (click)="OnTabChange('runs')"
+                >
+                    <i class="fa-solid fa-wave-square"></i>
+                    Active & Paused Runs
+                </button>
+            </div>
+
+            <div class="toolbar-search">
+                <mj-page-search
+                    [Value]="SearchQuery"
+                    Placeholder="Filter keys, agents, or diagnostics..."
+                    (ValueChange)="OnSearchChange($event)"
+                />
+            </div>
+        </div>
+    </mj-page-header>
+
+    <mj-page-body>
+        @if (LoadError) {
+            <div class="alert-banner alert-error" data-testid="admin-limits-error-banner">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>{{ LoadError }}</span>
+            </div>
+        }
+
+        @if (ActionFeedback) {
+            <div class="alert-banner alert-success" data-testid="admin-limits-success-banner">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>{{ ActionFeedback }}</span>
+            </div>
+        }
+
+        @if (IsLoading && !Diagnostics) {
+            <div class="loading-state">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <span>Resolving 5-tier execution limits and inspecting active runs...</span>
+            </div>
+        } @else if (Diagnostics) {
+            @switch (ActiveTab) {
+                @case ('overview') {
+                    <section class="panel-section">
+                        <div class="section-header">
+                            <h2>5-Tier Limits Precedence Chain</h2>
+                            <span class="section-caption">Lowest (Tier 1) to Highest (Tier 5) — resolved at {{ Diagnostics.ResolvedAtISO }}</span>
+                        </div>
+                        <div class="tier-chain-grid">
+                            @for (tier of Diagnostics.TierSummaries; track tier.Tier) {
+                                <div class="tier-card" [class.tier-active]="tier.WinningKeyCount > 0">
+                                    <div class="tier-card-top">
+                                        <span class="tier-rank">Tier {{ tier.Rank }}</span>
+                                        <span class="tier-badge">{{ tier.WinningKeyCount }} winning</span>
+                                    </div>
+                                    <div class="tier-name">{{ tier.Tier }}</div>
+                                    <p class="tier-desc">{{ tier.Description }}</p>
+                                    <div class="tier-footer">
+                                        <span>Supplied keys: {{ tier.SuppliedKeyCount }}</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </section>
+
+                    <section class="panel-section">
+                        <div class="section-header">
+                            <h2>Approved Safety Backstops & Briefing Limits</h2>
+                            <span class="section-caption">Centralized in LimitsConfigResolver with zero unapproved RunawayGuard literals</span>
+                        </div>
+                        <div class="backstops-grid">
+                            @for (backstop of Diagnostics.ApprovedBackstops; track backstop.Key) {
+                                <div class="backstop-card">
+                                    <div class="backstop-top">
+                                        <span class="backstop-category">{{ backstop.Category }}</span>
+                                        <span class="provenance-chip" [class.overridden]="backstop.IsOverridden">
+                                            {{ backstop.SourceTier }}
+                                        </span>
+                                    </div>
+                                    <div class="backstop-value">
+                                        {{ backstop.EffectiveValue.toLocaleString() }}
+                                        <span class="backstop-unit">{{ backstop.Unit }}</span>
+                                    </div>
+                                    <div class="backstop-label">{{ backstop.Label }}</div>
+                                    <div class="backstop-key">{{ backstop.Key }}</div>
+                                    <p class="backstop-desc">{{ backstop.Description }}</p>
+                                </div>
+                            }
+                        </div>
+                    </section>
+
+                    <section class="panel-section">
+                        <div class="section-header">
+                            <h2>Progress Detector & Fast Convergence Judge Policy</h2>
+                            <span class="section-caption">Deterministic 6-signal window evaluated before invoking sub-200ms Ambiguous judge</span>
+                        </div>
+                        <div class="policy-summary-grid">
+                            <div class="policy-stat">
+                                <span class="stat-label">Progress Detector</span>
+                                <span class="stat-value">{{ Diagnostics.ResolvedLimits.ProgressDetector.Enabled ? 'Enabled' : 'Disabled' }}</span>
+                            </div>
+                            <div class="policy-stat">
+                                <span class="stat-label">Window / Warmup</span>
+                                <span class="stat-value">{{ Diagnostics.ResolvedLimits.ProgressDetector.WindowSize }} / {{ Diagnostics.ResolvedLimits.ProgressDetector.MinIterationsBeforeCheck }} iters</span>
+                            </div>
+                            <div class="policy-stat">
+                                <span class="stat-label">Ambiguity Band</span>
+                                <span class="stat-value">{{ Diagnostics.ResolvedLimits.ProgressDetector.AmbiguityLowScoreThreshold }} – {{ Diagnostics.ResolvedLimits.ProgressDetector.AmbiguityHighScoreThreshold }}</span>
+                            </div>
+                            <div class="policy-stat">
+                                <span class="stat-label">Fast Judge Deadline</span>
+                                <span class="stat-value">{{ Diagnostics.ResolvedLimits.ProgressDetector.FastJudgeTimeoutMs }} ms ({{ Diagnostics.ResolvedLimits.ProgressDetector.FastJudgeFailureFallback }})</span>
+                            </div>
+                        </div>
+                    </section>
+                }
+
+                @case ('provenance') {
+                    <section class="panel-section">
+                        <div class="filter-bar">
+                            <div class="filter-group">
+                                <label class="filter-label" for="category-select">Category:</label>
+                                <select
+                                    id="category-select"
+                                    class="mj-select"
+                                    [value]="SelectedCategory"
+                                    (change)="OnCategorySelectEvent($event)"
+                                >
+                                    @for (cat of CategoryOptions; track cat) {
+                                        <option [value]="cat">{{ cat }}</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <button
+                                type="button"
+                                mjButton
+                                [variant]="ShowOverriddenOnly ? 'primary' : 'outline'"
+                                size="sm"
+                                (click)="ToggleOverriddenOnly()"
+                            >
+                                <i class="fa-solid fa-code-branch"></i>
+                                Overridden Only ({{ Diagnostics.OverriddenKeys.length }})
+                            </button>
+
+                            <button
+                                type="button"
+                                mjButton
+                                [variant]="ShowClampedOnly ? 'primary' : 'outline'"
+                                size="sm"
+                                (click)="ToggleClampedOnly()"
+                            >
+                                <i class="fa-solid fa-shield-halved"></i>
+                                Policy-Clamped ({{ Diagnostics.ClampedKeys.length }})
+                            </button>
+                        </div>
+
+                        <div class="table-wrapper">
+                            <table class="limits-table">
+                                <thead>
+                                    <tr>
+                                        <th>Key Path</th>
+                                        <th>Category</th>
+                                        <th>Effective Value</th>
+                                        <th>Winning Tier</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (row of ProvenanceRows; track row.Key) {
+                                        <tr>
+                                            <td class="mono-cell">{{ row.Key }}</td>
+                                            <td>{{ row.Category }}</td>
+                                            <td class="mono-cell">{{ FormatScalarValue(row.EffectiveValue) }}</td>
+                                            <td>
+                                                <span class="provenance-chip" [class.overridden]="row.IsOverridden">
+                                                    {{ row.SourceTier }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (row.WasClampedByPolicyCeiling) {
+                                                    <span class="status-pill status-warning">Clamped by Policy</span>
+                                                } @else if (row.IsOverridden) {
+                                                    <span class="status-pill status-info">Overridden</span>
+                                                } @else {
+                                                    <span class="status-pill status-neutral">Default</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                }
+
+                @case ('budgets') {
+                    <section class="panel-section">
+                        <div class="section-header">
+                            <h2>Multi-Scope Dollar (USD) & Wall-Clock Time Utilization</h2>
+                            <span class="section-caption">
+                                Paused wall-clock counted: {{ Diagnostics.BudgetUtilization.CountPausedTimeTowardsWallClock ? 'Yes' : 'No (Excluded)' }} ·
+                                Overshoot tolerance: {{ FormatCostUsd(Diagnostics.BudgetUtilization.AllowedInFlightOvershootUsd) }} / {{ FormatDurationMs(Diagnostics.BudgetUtilization.AllowedInFlightOvershootMs) }}
+                            </span>
+                        </div>
+
+                        <div class="scopes-grid">
+                            @for (scope of Diagnostics.BudgetUtilization.Scopes; track scope.Scope) {
+                                <div class="scope-card">
+                                    <div class="scope-title">{{ scope.Label }}</div>
+                                    <div class="scope-metric">
+                                        <div class="metric-row">
+                                            <span>Dollar Spend (USD)</span>
+                                            <span class="mono-cell">{{ FormatCostUsd(scope.ObservedCostUsd) }} / {{ FormatCostUsd(scope.MaxCostUsd) }}</span>
+                                        </div>
+                                        @if (scope.CostUtilizationPct !== null) {
+                                            <div class="progress-track">
+                                                <div class="progress-fill" [style.width.%]="scope.CostUtilizationPct"></div>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="scope-metric">
+                                        <div class="metric-row">
+                                            <span>Active Wall-Clock Time</span>
+                                            <span class="mono-cell">{{ FormatDurationMs(scope.ObservedWallClockMs) }} / {{ FormatDurationMs(scope.MaxWallClockMs) }}</span>
+                                        </div>
+                                        @if (scope.WallClockUtilizationPct !== null) {
+                                            <div class="progress-track">
+                                                <div class="progress-fill" [style.width.%]="scope.WallClockUtilizationPct"></div>
+                                            </div>
+                                        }
+                                    </div>
+                                    <p class="scope-note">{{ scope.Note }}</p>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
+                @case ('runs') {
+                    <section class="panel-section">
+                        <div class="filter-bar">
+                            <div class="filter-group">
+                                <label class="filter-label" for="status-select">Status:</label>
+                                <select
+                                    id="status-select"
+                                    class="mj-select"
+                                    [value]="RunStatusFilter"
+                                    (change)="OnRunStatusSelectEvent($event)"
+                                >
+                                    @for (st of RunStatusOptions; track st) {
+                                        <option [value]="st">{{ st }}</option>
+                                    }
+                                </select>
+                            </div>
+                            <span class="section-caption">
+                                Showing {{ FilteredRuns.length }} of {{ Diagnostics.ActiveAndRecentRuns.length }} inspected runs
+                            </span>
+                        </div>
+
+                        @if (FilteredRuns.length === 0) {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-wave-square"></i>
+                                <p>No agent runs match the active status or search filter.</p>
+                            </div>
+                        } @else {
+                            <div class="runs-layout">
+                                <div class="table-wrapper">
+                                    <table class="limits-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Agent</th>
+                                                <th>Status</th>
+                                                <th>Progress</th>
+                                                <th>Cost / Iters</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (run of FilteredRuns; track run.AgentRunID) {
+                                                <tr
+                                                    class="clickable-row"
+                                                    [class.selected-row]="IsRunSelected(run)"
+                                                    (click)="SelectRun(run)"
+                                                >
+                                                    <td>
+                                                        <div class="run-agent-name">{{ run.AgentName }}</div>
+                                                        <div class="mono-sub">{{ run.AgentRunID }}</div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="status-pill" [class]="'status-run-' + run.Status.toLowerCase()">
+                                                            {{ run.Status }}
+                                                        </span>
+                                                        @if (run.PauseReason) {
+                                                            <div class="pause-reason-sub">{{ run.PauseReason }}</div>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (run.ProgressClassification) {
+                                                            <span class="status-pill" [class]="'progress-' + run.ProgressClassification.toLowerCase()">
+                                                                {{ run.ProgressClassification }}
+                                                                @if (run.ProgressScore !== null) {
+                                                                    ({{ run.ProgressScore.toFixed(2) }})
+                                                                }
+                                                            </span>
+                                                        } @else {
+                                                            <span class="muted-text">—</span>
+                                                        }
+                                                    </td>
+                                                    <td class="mono-cell">
+                                                        {{ FormatCostUsd(run.TotalCostUsd) }} · {{ run.TotalPromptIterations }} iters
+                                                    </td>
+                                                    <td class="actions-cell" (click)="$event.stopPropagation()">
+                                                        @if (run.Status === 'Paused' && run.IsPausedWithCheckpoint) {
+                                                            <button
+                                                                type="button"
+                                                                mjButton
+                                                                variant="primary"
+                                                                size="sm"
+                                                                [disabled]="IsMutatingRun"
+                                                                (click)="OpenResumeModal(run)"
+                                                            >
+                                                                <i class="fa-solid fa-play"></i>
+                                                                Approve & Resume
+                                                            </button>
+                                                        } @else if (run.Status === 'Running') {
+                                                            <button
+                                                                type="button"
+                                                                mjButton
+                                                                variant="warning"
+                                                                size="sm"
+                                                                [disabled]="IsMutatingRun"
+                                                                (click)="PauseActiveRun(run)"
+                                                            >
+                                                                <i class="fa-solid fa-pause"></i>
+                                                                Pause
+                                                            </button>
+                                                        } @else {
+                                                            <button
+                                                                type="button"
+                                                                mjButton
+                                                                variant="outline"
+                                                                size="sm"
+                                                                (click)="SelectRun(run)"
+                                                            >
+                                                                Inspect
+                                                            </button>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                @if (SelectedRun) {
+                                    <aside class="detail-drawer">
+                                        <div class="drawer-header">
+                                            <div>
+                                                <h3>{{ SelectedRun.AgentName }}</h3>
+                                                <span class="mono-sub">{{ SelectedRun.AgentRunID }}</span>
+                                            </div>
+                                            <button type="button" mjButton variant="icon" size="sm" (click)="SelectRun(null)">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+                                        </div>
+
+                                        <div class="drawer-block" data-testid="selected-run-limits-snapshot">
+                                            <h4>Resolved Run Limits &amp; Tier Provenance</h4>
+                                            @if (!SelectedRun.Snapshot) {
+                                                <p class="muted-text" data-testid="legacy-run-no-snapshot">No resolved limits snapshot was persisted for this legacy run.</p>
+                                            } @else {
+                                                <div class="kv-line"><span>Agent Channel Consecutive Turns</span><span>{{ SelectedRun.Snapshot.ResolvedLimits.AgentChannelConsecutiveTurns }} ({{ SelectedRun.Snapshot.Provenance['AgentChannelConsecutiveTurns'].SourceTier }})</span></div>
+                                                <div class="kv-line"><span>Absolute Iteration Ceiling</span><span>{{ SelectedRun.Snapshot.ResolvedLimits.AgentAbsoluteIterations }} ({{ SelectedRun.Snapshot.Provenance['AgentAbsoluteIterations'].SourceTier }})</span></div>
+                                                <div class="kv-line"><span>Per-Run Max Cost</span><span>{{ FormatCostUsd(SelectedRun.Snapshot.ResolvedLimits.Budgets.PerRun.MaxCostUsd) }} ({{ SelectedRun.Snapshot.Provenance['Budgets.PerRun.MaxCostUsd'].SourceTier }})</span></div>
+                                                <div class="kv-line"><span>Per-Run Wall Clock</span><span>{{ FormatDurationMs(SelectedRun.Snapshot.ResolvedLimits.Budgets.PerRun.MaxWallClockMs) }} ({{ SelectedRun.Snapshot.Provenance['Budgets.PerRun.MaxWallClockMs'].SourceTier }})</span></div>
+                                                @if (SelectedRunSnapshotRows.length > 0) {
+                                                    @for (row of SelectedRunSnapshotRows; track row.Key) {
+                                                        <div class="kv-line" data-testid="selected-run-provenance-row">
+                                                            <span class="mono-sub">{{ row.Key }}</span>
+                                                            <span>{{ FormatScalarValue(row.EffectiveValue) }} · {{ row.SourceTier }}@if (row.WasClampedByPolicyCeiling) { · Clamped }</span>
+                                                        </div>
+                                                    }
+                                                }
+                                            }
+                                        </div>
+
+                                        <div class="drawer-block">
+                                            <h4>Deterministic Progress Signals</h4>
+                                            <p class="drawer-text">{{ SelectedRun.ProgressReason || 'No progress evaluation logged yet.' }}</p>
+                                        </div>
+
+                                        <div class="drawer-block">
+                                            <h4>Fast Convergence Judge Log ({{ SelectedRun.FastJudgeEntries.length }})</h4>
+                                            @if (SelectedRun.FastJudgeEntries.length === 0) {
+                                                <p class="muted-text">Fast judge not invoked for this run.</p>
+                                            } @else {
+                                                @for (entry of SelectedRun.FastJudgeEntries; track entry.TimestampISO) {
+                                                    <div class="judge-entry">
+                                                        <div class="judge-entry-top">
+                                                            <span>Iter #{{ entry.Iteration }} · {{ entry.Source }}</span>
+                                                            <span>{{ entry.LatencyMs }}ms</span>
+                                                        </div>
+                                                        <div class="judge-verdict">
+                                                            {{ entry.Converging ? 'Converging' : 'Stalled' }} — {{ entry.Reason }}
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+
+                                        @if (SelectedRun.IsPausedWithCheckpoint) {
+                                            <div class="drawer-block">
+                                                <h4>Persisted Checkpoint</h4>
+                                                <div class="kv-line"><span>Checkpoint ID</span><span class="mono-sub">{{ SelectedRun.CheckpointID }}</span></div>
+                                                <div class="kv-line"><span>Completed Steps / Turns</span><span>{{ SelectedRun.CompletedStepCount }} / {{ SelectedRun.CompletedPromptTurns }}</span></div>
+                                                <div class="kv-line"><span>Cumulative Spend</span><span>{{ FormatCostUsd(SelectedRun.CumulativeRunCostUsd) }}</span></div>
+                                                <div class="kv-line"><span>Approval Status</span><span>{{ SelectedRun.HumanApprovalStatus }}</span></div>
+                                            </div>
+                                        }
+                                    </aside>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+            }
+        }
+
+        @if (ResumeModalRun) {
+            <div class="modal-backdrop">
+                <div class="modal-card">
+                    <div class="modal-header">
+                        <h3>Approve & Resume Run: {{ ResumeModalRun.AgentName }}</h3>
+                        <button type="button" mjButton variant="icon" size="sm" (click)="CloseResumeModal()">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <p class="modal-summary">{{ ResumeModalRun.PauseSummary }}</p>
+                    @if (LoadError) {
+                        <div class="alert-banner alert-error" data-testid="resume-modal-error-banner">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>{{ LoadError }}</span>
+                        </div>
+                    }
+
+                    <div class="form-field">
+                        <label for="ext-cost">Additional Dollar Budget (USD, optional)</label>
+                        <input
+                            id="ext-cost"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            class="mj-input"
+                            [value]="AdditionalCostUsdInput"
+                            (input)="OnAdditionalCostInputEvent($event)"
+                        />
+                    </div>
+                    <div class="form-field">
+                        <label for="ext-wall">Additional Active Wall-Clock Time (ms, optional)</label>
+                        <input
+                            id="ext-wall"
+                            type="number"
+                            step="1000"
+                            min="0"
+                            class="mj-input"
+                            [value]="AdditionalWallClockMsInput"
+                            (input)="OnAdditionalWallClockInputEvent($event)"
+                        />
+                    </div>
+                    <div class="form-field">
+                        <label for="ext-notes">Approval Notes</label>
+                        <textarea
+                            id="ext-notes"
+                            rows="3"
+                            class="mj-input"
+                            [value]="DecisionNotesInput"
+                            (input)="OnDecisionNotesInputEvent($event)"
+                        ></textarea>
+                    </div>
+                    <label class="checkbox-row">
+                        <input
+                            type="checkbox"
+                            [checked]="ResetProgressWindowOnResume"
+                            (change)="OnResetProgressCheckboxEvent($event)"
+                        />
+                        <span>Reset ProgressDetector sliding window on resume</span>
+                    </label>
+
+                    <!-- MJ Dialog Button Placement: Confirm on LEFT, Cancel on RIGHT -->
+                    <div class="modal-footer">
+                        <button
+                            type="button"
+                            mjButton
+                            variant="primary"
+                            size="sm"
+                            [disabled]="IsMutatingRun"
+                            (click)="ConfirmResumePausedRun()"
+                        >
+                            Approve & Resume Run
+                        </button>
+                        <button
+                            type="button"
+                            mjButton
+                            variant="outline"
+                            size="sm"
+                            (click)="CloseResumeModal()"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </mj-page-body>
+</mj-page-layout>

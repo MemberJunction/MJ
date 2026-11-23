@@ -15,7 +15,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import { UserInfo } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, UserInfo } from '@memberjunction/core';
 import { ConversationBranchRow, ConversationEngine, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { FormatSequencedHistoryLine } from './conversation-history-format';
 
@@ -142,7 +142,12 @@ const MAX_SEARCH_SCAN_MS = 2_000;
  * response fan out arbitrary work/cost. Excess calls are reported back to the model as
  * skipped so it can re-request them next turn. Consumed by BaseAgent's executor.
  */
-export const MAX_CONVERSATION_TOOL_CALLS_PER_TURN = 8;
+export const MAX_CONVERSATION_TOOL_CALLS_PER_TURN = CODE_FALLBACK_LIMITS.ResourceGuards.MaxConversationToolCallsPerTurn;
+
+/** Resolves the effective per-turn conversation tool call cap from `LimitsConfigResolver.Instance`. */
+export function GetMaxConversationToolCallsPerTurn(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxConversationToolCallsPerTurn;
+}
 
 /**
  * Per-run manager for conversation-history retrieval tools. Initialized with the run's

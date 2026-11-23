@@ -20,6 +20,8 @@
     "@memberjunction/ai": "6.3.0-edge.1",
     "@memberjunction/ai-agents": "6.3.0-edge.1",
     "@memberjunction/ai-core-plus": "6.3.0-edge.1",
+    "@memberjunction/communication-engine": "6.3.0-edge.1",
+    "@memberjunction/communication-types": "6.3.0-edge.1",
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/core-entities": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",

@@ -32,9 +32,11 @@ import {
     type TaskGraphEdge,
     type TaskGraphNode,
 } from './graph-algorithms';
+import { IsTaskGraphIsolationLevel, TASK_GRAPH_ISOLATION_LEVELS } from '@memberjunction/core';
 import {
     ConfigOf,
     DECISION_ANSWER_FIELDS,
+    GetMaxTasksPerGraph,
     MAX_TASKS_PER_GRAPH,
     TaskGraphSpec,
     TaskGraphSpecNode,
@@ -402,6 +404,9 @@ const REQUIRED_CONFIG_FIELDS: Record<TaskGraphNodeKind, readonly string[]> = {
     // about a setting that does not apply to it.
     While: ['condition'],
     External: ['domain'],
+    // `topic` defaults to `Limits.TaskGraphQueue.DefaultEnqueueTopicName` when omitted, and
+    // `correlationKey` defaults deterministically to `<graphRunId>:<stepInvocationId>`.
+    Enqueue: [],
     // Neither field alone is required — exactly one of `until` / `durationSeconds` is, which the
     // per-kind check below says in words rather than as a missing field.
     Wait: [],
@@ -451,6 +456,19 @@ export function WaitingStepConfigurationProblems(task: TaskGraphSpecNode): strin
             problems.push('its correlationKey is empty; omit it to signal the step by its task ID');
         }
         problems.push(...deadlineProblems(external.expiresInHours));
+    }
+    const enqueue = ConfigOf(task, 'Enqueue');
+    if (enqueue) {
+        if (enqueue.topic !== undefined && !(typeof enqueue.topic === 'string' && enqueue.topic.trim())) {
+            problems.push('its topic is empty; omit it to use the default enqueue topic');
+        }
+        if (enqueue.correlationKey !== undefined && !(typeof enqueue.correlationKey === 'string' && enqueue.correlationKey.trim())) {
+            problems.push('its correlationKey is empty; omit it to derive one automatically');
+        }
+        if (enqueue.maxRetries !== undefined && !(typeof enqueue.maxRetries === 'number' && Number.isInteger(enqueue.maxRetries) && enqueue.maxRetries >= 0)) {
+            problems.push('"maxRetries" must be a non-negative integer');
+        }
+        problems.push(...deadlineProblems(enqueue.expiresInHours));
     }
     const human = ConfigOf(task, 'Human');
     if (human) {
@@ -674,15 +692,58 @@ function checkLoopConfiguration(
 
     const label = task.name?.trim() || task.tempId;
     const config = (task.configuration ?? {}) as Record<string, unknown>;
-    const bodyArms = (['action', 'steps', 'subAgent', 'prompt'] as const).filter(
+    const bodyArms = (['action', 'steps', 'subAgent', 'prompt', 'enqueue'] as const).filter(
         (arm) => config[arm] !== undefined && config[arm] !== null,
     );
     if (bodyArms.length > 1) {
         errors.push({
             Code: 'InvalidConfiguration',
-            Message: `Task "${label}" is a ${task.kind} step and declares multiple loop bodies (${bodyArms.join(', ')}); choose only one of action, steps, subAgent, or prompt.`,
+            Message: `Task "${label}" is a ${task.kind} step and declares multiple loop bodies (${bodyArms.join(', ')}); choose only one of action, steps, subAgent, prompt, or enqueue.`,
             TempId: task.tempId,
         });
+    }
+    if (task.kind === 'While' && config['enqueue'] !== undefined && config['enqueue'] !== null) {
+        errors.push({
+            Code: 'InvalidConfiguration',
+            Message: `Task "${label}" is a While step; enqueue fan-out loop bodies are only supported on ForEach steps.`,
+            TempId: task.tempId,
+        });
+    }
+    const rawEnqueue = config['enqueue'];
+    if (rawEnqueue !== undefined && rawEnqueue !== null) {
+        if (typeof rawEnqueue !== 'object' || Array.isArray(rawEnqueue)) {
+            errors.push({
+                Code: 'InvalidConfiguration',
+                Message: `Task "${label}" is a ${task.kind} step whose enqueue configuration must be an object.`,
+                TempId: task.tempId,
+            });
+        } else {
+            const enq = rawEnqueue as Record<string, unknown>;
+            if (enq['topic'] !== undefined && !(typeof enq['topic'] === 'string' && enq['topic'].trim().length > 0)) {
+                errors.push({
+                    Code: 'InvalidConfiguration',
+                    Message: `Task "${label}" enqueue.topic must be a non-empty string when provided.`,
+                    TempId: task.tempId,
+                });
+            }
+            for (const positiveKey of ['publishConcurrency', 'maxActiveRunners'] as const) {
+                const v = enq[positiveKey];
+                if (v !== undefined && !(typeof v === 'number' && Number.isInteger(v) && v >= 1)) {
+                    errors.push({
+                        Code: 'InvalidConfiguration',
+                        Message: `Task "${label}" enqueue.${positiveKey} must be a positive integer >= 1.`,
+                        TempId: task.tempId,
+                    });
+                }
+            }
+            if (enq['maxRetries'] !== undefined && !(typeof enq['maxRetries'] === 'number' && Number.isInteger(enq['maxRetries']) && enq['maxRetries'] >= 0)) {
+                errors.push({
+                    Code: 'InvalidConfiguration',
+                    Message: `Task "${label}" enqueue.maxRetries must be a non-negative integer.`,
+                    TempId: task.tempId,
+                });
+            }
+        }
     }
 
     const rawSteps = config['steps'];
@@ -1015,6 +1076,13 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec, options?: TaskGraphVa
         errors.push({ Code: 'MissingWorkflowName', Message: 'workflowName is required.' });
     }
 
+    if (spec.isolation !== undefined && !IsTaskGraphIsolationLevel(spec.isolation)) {
+        errors.push({
+            Code: 'InvalidIsolation',
+            Message: `Invalid isolation level "${String(spec.isolation)}". Expected one of: ${TASK_GRAPH_ISOLATION_LEVELS.join(', ')}.`,
+        });
+    }
+
     const tasks = spec.tasks ?? [];
     if (tasks.length === 0) {
         errors.push({ Code: 'EmptyGraph', Message: 'A task graph must contain at least one task.' });
@@ -1022,7 +1090,8 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec, options?: TaskGraphVa
         return { Valid: errors.length === 0, Errors: errors };
     }
 
-    const maxTasks = Math.min(options?.MaxTasks ?? MAX_TASKS_PER_GRAPH, MAX_TASKS_PER_GRAPH);
+    const ceiling = GetMaxTasksPerGraph();
+    const maxTasks = Math.min(options?.MaxTasks ?? ceiling, ceiling);
     if (tasks.length > maxTasks) {
         errors.push({
             Code: 'TooManyTasks',

@@ -9,11 +9,13 @@
  *
  * Each test below names the specific wrong-but-plausible behaviour it rules out.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { LimitsConfigResolver, type UserInfo } from '@memberjunction/core';
 import {
     RunForEachLoop,
     RunWhileLoop,
     DEFAULT_FOREACH_MAX_ITERATIONS,
+    DEFAULT_WHILE_MAX_ITERATIONS,
     type LoopBodyInvoker,
 } from '../TaskLoopExecutor';
 import type { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
@@ -83,11 +85,23 @@ describe('RunForEachLoop', () => {
             .then(() => expect(seen).toHaveLength(0));
     });
 
-    it('applies a default ceiling when none is set', async () => {
-        const big = `static:${JSON.stringify(Array.from({ length: DEFAULT_FOREACH_MAX_ITERATIONS + 5 }, (_, i) => i))}`;
+    beforeEach(() => {
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
+    });
+
+    it('exposes 1,000,000 as the default ForEach and While loop ceilings from LimitsConfigResolver', () => {
+        expect(DEFAULT_FOREACH_MAX_ITERATIONS).toBe(1_000_000);
+        expect(DEFAULT_WHILE_MAX_ITERATIONS).toBe(1_000_000);
+        expect(LimitsConfigResolver.Resolve().Limits.ForEachMaxIterations).toBe(1_000_000);
+        expect(LimitsConfigResolver.Resolve().Limits.WhileLoopMaxIterations).toBe(1_000_000);
+    });
+
+    it('applies a default ceiling from LimitsConfigResolver when none is set on the operation', async () => {
+        LimitsConfigResolver.Instance.RegisterMjConfigLimits({ ForEachMaxIterations: 25 });
+        const big = `static:${JSON.stringify(Array.from({ length: 30 }, (_, i) => i))}`;
         const { seen, invoke } = recorder();
         await RunForEachLoop({ collectionPath: big }, {}, invoke);
-        expect(seen).toHaveLength(DEFAULT_FOREACH_MAX_ITERATIONS);
+        expect(seen).toHaveLength(25);
     });
 
     it('stops at the first failure by default', async () => {
@@ -213,5 +227,288 @@ describe('a While loop must be able to reach its exit condition', () => {
 
         expect(iterations).toBe(3);
         expect(result.Output).toMatchObject({ iterations: 3 });
+    });
+
+    it('pauses at iteration cursor via OnIterationGovernance and resumes from StartIndex + InitialResults without replaying completed items (CR-7)', async () => {
+        const executed: number[] = [];
+        const op: ForEachOperation = { collectionPath: 'static:["a","b","c","d","e"]' };
+        const firstPass = await RunForEachLoop(
+            op,
+            {},
+            async ({ Index }) => {
+                executed.push(Index);
+                return { Success: true, Output: `item-${Index}` };
+            },
+            {
+                OnIterationGovernance: async ({ CompletedIterations }) =>
+                    CompletedIterations >= 2
+                        ? { ShouldPause: true, Reason: 'Budget pause after index 1' }
+                        : { ShouldPause: false },
+            },
+        );
+
+        expect(firstPass.Success).toBe(false);
+        expect(firstPass.Paused).toBe(true);
+        expect(firstPass.ResumeCursorIndex).toBe(2);
+        expect(executed).toEqual([0, 1]);
+        expect(firstPass.Output.results).toEqual(['item-0', 'item-1']);
+
+        const secondPass = await RunForEachLoop(
+            op,
+            {},
+            async ({ Index }) => {
+                executed.push(Index);
+                return { Success: true, Output: `item-${Index}` };
+            },
+            {
+                StartIndex: firstPass.ResumeCursorIndex,
+                InitialResults: firstPass.Output.results,
+            },
+        );
+
+        expect(secondPass.Success).toBe(true);
+        expect(executed).toEqual([0, 1, 2, 3, 4]);
+        expect(secondPass.Output.results).toEqual(['item-0', 'item-1', 'item-2', 'item-3', 'item-4']);
+    });
+
+    it('wires LoopExecutionOptions into parallel ForEach with OnIterationGovernance, LoopCursorSnapshot, and ResumeFromCursor without replaying completed indices', async () => {
+        const executed: number[] = [];
+        const op: ForEachOperation = {
+            collectionPath: 'static:["p0","p1","p2","p3","p4","p5"]',
+            executionMode: 'parallel',
+            maxConcurrency: 2,
+        };
+
+        const firstPass = await RunForEachLoop(
+            op,
+            {},
+            async ({ Index, Bindings }) => {
+                executed.push(Index);
+                return { Success: true, Output: `done-${Bindings['item']}`, CostUsd: 0.1, TokensUsed: 50 };
+            },
+            {
+                OnIterationGovernance: async ({ CompletedIterations }) =>
+                    CompletedIterations >= 4
+                        ? { ShouldPause: true, Reason: 'Budget exhausted after 2 parallel batches' }
+                        : { ShouldPause: false },
+            },
+        );
+
+        expect(firstPass.Success).toBe(false);
+        expect(firstPass.Paused).toBe(true);
+        expect(firstPass.PauseReason).toBe('Budget exhausted after 2 parallel batches');
+        expect(firstPass.LoopCursorSnapshot).toEqual({
+            LoopType: 'ForEach',
+            NextIterationIndex: 4,
+            CompletedIndices: [0, 1, 2, 3],
+            PartialResults: ['done-p0', 'done-p1', 'done-p2', 'done-p3', null, null],
+            SucceededCount: 4,
+            FailedCount: 0,
+        });
+        expect(executed).toEqual([0, 1, 2, 3]);
+
+        const secondPass = await RunForEachLoop(
+            op,
+            {},
+            async ({ Index, Bindings }) => {
+                executed.push(Index);
+                return { Success: true, Output: `done-${Bindings['item']}`, CostUsd: 0.1, TokensUsed: 50 };
+            },
+            {
+                ResumeFromCursor: firstPass.LoopCursorSnapshot,
+            },
+        );
+
+        expect(secondPass.Success).toBe(true);
+        expect(executed).toEqual([0, 1, 2, 3, 4, 5]);
+        expect(secondPass.Output.results).toEqual(['done-p0', 'done-p1', 'done-p2', 'done-p3', 'done-p4', 'done-p5']);
+        expect(secondPass.Output.succeeded).toBe(6);
+    });
+
+    it('pauses While loop with LoopCursorSnapshot and resumes via ResumeFromCursor without replaying completed iterations', async () => {
+        const executed: number[] = [];
+        const op: WhileOperation = { condition: 'i < 5', maxIterations: 10 };
+
+        const firstPass = await RunWhileLoop(
+            op,
+            (iteration) => ({ Success: true, Value: iteration < 5 }),
+            async ({ Index }) => {
+                executed.push(Index);
+                return { Success: true, Output: `while-${Index}` };
+            },
+            {
+                OnIterationGovernance: async ({ CompletedIterations, LastOutcome }) =>
+                    LastOutcome && CompletedIterations >= 2
+                        ? { ShouldPause: true, Reason: 'While loop governance pause' }
+                        : { ShouldPause: false },
+            },
+        );
+
+        expect(firstPass.Success).toBe(false);
+        expect(firstPass.Paused).toBe(true);
+        expect(firstPass.LoopCursorSnapshot).toEqual({
+            LoopType: 'While',
+            NextIterationIndex: 2,
+            CompletedIndices: [0, 1],
+            PartialResults: ['while-0', 'while-1'],
+            SucceededCount: 2,
+            FailedCount: 0,
+        });
+        expect(executed).toEqual([0, 1]);
+
+        const secondPass = await RunWhileLoop(
+            op,
+            (iteration) => ({ Success: true, Value: iteration < 5 }),
+            async ({ Index }) => {
+                executed.push(Index);
+                return { Success: true, Output: `while-${Index}` };
+            },
+            {
+                ResumeFromCursor: firstPass.LoopCursorSnapshot,
+            },
+        );
+
+        expect(secondPass.Success).toBe(true);
+        expect(executed).toEqual([0, 1, 2, 3, 4]);
+        expect(secondPass.Output.results).toEqual(['while-0', 'while-1', 'while-2', 'while-3', 'while-4']);
+    });
+
+    it('CR-SEQUENTIAL-LOOP-QUADRATIC: scales near-linearly over large sequential ForEach collections with OnIterationGovernance and preserves sparse resume-cursor semantics', async () => {
+        // 1) Scaling regression: 10x input growth (500 -> 5,000) with OnIterationGovernance active must stay near-linear (never quadratic)
+        const measureSequentialRun = async (count: number): Promise<number> => {
+            const items = Array.from({ length: count }, (_, i) => i);
+            const op: ForEachOperation = { collectionPath: 'payload.items', maxIterations: count };
+            let govChecks = 0;
+            const startNs = process.hrtime.bigint();
+            const res = await RunForEachLoop(
+                op,
+                { payload: { items } },
+                async ({ Index }) => ({ Success: true, Output: Index }),
+                {
+                    OnIterationGovernance: async () => {
+                        govChecks++;
+                        return { ShouldPause: false };
+                    },
+                },
+            );
+            const elapsedMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
+            expect(res.Success).toBe(true);
+            expect(res.Output.iterations).toBe(count);
+            expect(govChecks).toBe(count * 2);
+            return elapsedMs;
+        };
+
+        // Warm up JIT once
+        await measureSequentialRun(200);
+        const smallMs = await measureSequentialRun(500);
+        const largeMs = await measureSequentialRun(5_000);
+        const ratio = largeMs / Math.max(smallMs, 0.5);
+        // Quadratic scaling on 10x N would be ~100x; linear bookkeeping stays well under 30x even under noisy CI load.
+        expect(ratio).toBeLessThan(30);
+
+        // 2) Sparse ResumeFromCursor without replaying already-completed indices
+        const executedSparse: number[] = [];
+        const sparseOp: ForEachOperation = { collectionPath: 'static:["s0","s1","s2","s3","s4"]' };
+        const pausedAgain = await RunForEachLoop(
+            sparseOp,
+            {},
+            async ({ Index }) => {
+                executedSparse.push(Index);
+                return { Success: true, Output: `sparse-${Index}` };
+            },
+            {
+                ResumeFromCursor: {
+                    LoopType: 'ForEach',
+                    NextIterationIndex: 1,
+                    CompletedIndices: [0, 2],
+                    PartialResults: ['sparse-0', null, 'sparse-2'],
+                    SucceededCount: 2,
+                    FailedCount: 0,
+                },
+                OnIterationGovernance: async ({ CompletedIterations }) =>
+                    CompletedIterations >= 4
+                        ? { ShouldPause: true, Reason: 'Pause after index 3' }
+                        : { ShouldPause: false },
+            },
+        );
+
+        expect(pausedAgain.Paused).toBe(true);
+        expect(executedSparse).toEqual([1, 3]);
+        expect(pausedAgain.LoopCursorSnapshot).toEqual({
+            LoopType: 'ForEach',
+            NextIterationIndex: 4,
+            CompletedIndices: [0, 1, 2, 3],
+            PartialResults: ['sparse-0', 'sparse-1', 'sparse-2', 'sparse-3'],
+            SucceededCount: 4,
+            FailedCount: 0,
+        });
+
+        const finishedSparse = await RunForEachLoop(
+            sparseOp,
+            {},
+            async ({ Index }) => {
+                executedSparse.push(Index);
+                return { Success: true, Output: `sparse-${Index}` };
+            },
+            {
+                ResumeFromCursor: pausedAgain.LoopCursorSnapshot,
+            },
+        );
+        expect(finishedSparse.Success).toBe(true);
+        expect(executedSparse).toEqual([1, 3, 4]);
+        expect(finishedSparse.Output.results).toEqual(['sparse-0', 'sparse-1', 'sparse-2', 'sparse-3', 'sparse-4']);
+    });
+
+    it('CR-DURABLE-LOOP-CEILING: clamps explicit op.maxIterations and op.maxConcurrency above resolved 5-tier ceiling while preserving lower explicit bounds', async () => {
+        const standardUser = { ID: 'std-user-1', Type: 'User', IsActive: true } as UserInfo;
+
+        const { seen: clampedForEach, invoke: invokeForEach } = recorder();
+        const forEachRes = await RunForEachLoop(
+            {
+                collectionPath: 'static:[1,2,3,4,5,6,7,8,9,10]',
+                maxIterations: 10,
+                executionMode: 'parallel',
+                maxConcurrency: 8,
+            },
+            {},
+            invokeForEach,
+            {
+                LimitsResolutionInput: {
+                    WorkflowMetadata: { ForEachMaxIterations: 4 },
+                    RunOverride: { ResourceGuards: { MaxLoopConcurrency: 2 } },
+                    ContextUser: standardUser,
+                },
+            },
+        );
+        expect(forEachRes.Success).toBe(true);
+        expect(clampedForEach).toHaveLength(4);
+
+        const { seen: lowerPreserved, invoke: invokeLower } = recorder();
+        await RunForEachLoop(
+            { collectionPath: 'static:[1,2,3,4,5]', maxIterations: 2 },
+            {},
+            invokeLower,
+            {
+                LimitsResolutionInput: {
+                    WorkflowMetadata: { ForEachMaxIterations: 4 },
+                    ContextUser: standardUser,
+                },
+            },
+        );
+        expect(lowerPreserved).toHaveLength(2);
+
+        const { seen: clampedWhile, invoke: invokeWhile } = recorder();
+        await RunWhileLoop(
+            { condition: 'true', maxIterations: 50 },
+            () => ({ Success: true, Value: true }),
+            invokeWhile,
+            {
+                LimitsResolutionInput: {
+                    WorkflowMetadata: { WhileLoopMaxIterations: 3 },
+                    ContextUser: standardUser,
+                },
+            },
+        );
+        expect(clampedWhile).toHaveLength(3);
     });
 });
