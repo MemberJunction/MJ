@@ -627,6 +627,7 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
         '../../../../../../Generic/conversations/src/lib/components/conversation/conversation-list.component.ts',
         '../../shell/components/record-open/records-hub-pill.component.css',
         '../../shell/components/header/app-nav.component.css',
+        '../../shell/components/header/app-switcher.component.css',
         '../../shell/shell.component.css',
         '../artifact-resource.component.ts',
       ];
@@ -652,11 +653,22 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
       );
       expect(navCss).toContain('color: var(--mj-brand-primary-active);');
       expect(navCss).toContain('background: var(--mj-status-error-text);');
+      expect(navCss).toMatch(/\.nav-list\s+\.nav-item\[aria-current="page"\][\s\S]*?color:\s*var\(--mj-brand-primary-active\);/);
+      expect(navCss).toMatch(/\.nav-more-btn\.active\s+\.more-count[\s\S]*?color:\s*var\(--mj-brand-primary-active\);/);
+      expect(navCss).toMatch(/\.nav-more-item\.active[\s\S]*?color:\s*var\(--mj-brand-primary-active\);/);
+      expect(navCss).toMatch(/\.nav-more-item\s+\.badge[\s\S]*?background:\s*var\(--mj-status-error-text\);/);
+
+      const switcherCss = readFileSync(
+        resolve(__dirname, '../../shell/components/header/app-switcher.component.css'),
+        'utf8',
+      );
+      expect(switcherCss).toMatch(/\.app-card\.active\s+\.app-card-name[\s\S]*?color:\s*var\(--mj-brand-primary-active\);/);
 
       const shellCss = readFileSync(
         resolve(__dirname, '../../shell/shell.component.css'),
         'utf8',
       );
+      expect(shellCss).toMatch(/\.nav-bar-app-btn\.active[\s\S]*?color:\s*var\(--mj-brand-primary-active\);/);
       expect(shellCss).toMatch(/\.search-btn\s+\.search-btn-kbd[\s\S]*?color:\s*var\(--mj-text-secondary\);/);
       expect(shellCss).toMatch(/\.notification-badge[\s\S]*?background:\s*var\(--mj-status-error-text\);/);
 
