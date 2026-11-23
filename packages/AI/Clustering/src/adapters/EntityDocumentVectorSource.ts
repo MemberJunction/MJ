@@ -15,13 +15,30 @@
  * because vectors from different embedding spaces are not co-clusterable.
  */
 
-import { RunView, UserInfo, LogError, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { RunView, UserInfo, LogError, Metadata, IMetadataProvider, EntityInfo } from '@memberjunction/core';
+import { IsValidUUID } from '@memberjunction/global';
 import {
     MJEntityRecordDocumentEntity,
     MJEntityDocumentEntity,
 } from '@memberjunction/core-entities';
 import { DecodeVectorBinary } from '@memberjunction/ai-vectors-memory';
 import { ClusterConfig, ClusterInputVector, IClusterVectorSource } from '../types';
+
+/** A data provider that screens caller SQL clauses for the acting user. */
+interface ClauseScreeningProvider {
+    ScreenClientClause(clause: string, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void;
+}
+
+function canScreenClauses(provider: IMetadataProvider | undefined): provider is IMetadataProvider & ClauseScreeningProvider {
+    return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
+}
+
+/** Throws unless every value is a UUID. */
+function assertUUIDs(values: string[], name: string): void {
+    if (values.some((v) => !IsValidUUID(v))) {
+        throw new Error(`${name} must be UUIDs`);
+    }
+}
 
 /**
  * Fetches clustering input vectors from persisted Entity Record Documents.
@@ -73,7 +90,9 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
      */
     private async resolveEntityDocumentIDs(config: ClusterConfig): Promise<string[]> {
         if (config.EntityDocumentIDs && config.EntityDocumentIDs.length > 0) {
-            return config.EntityDocumentIDs.filter((id) => !!id && id.trim().length > 0);
+            const ids = config.EntityDocumentIDs.filter((id) => !!id && id.trim().length > 0);
+            assertUUIDs(ids, 'EntityDocumentIDs');
+            return ids;
         }
         const single = await this.resolveSingleEntityDocumentID(config);
         return single ? [single] : [];
@@ -82,6 +101,7 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
     /** Resolve a single Entity Document ID, defaulting to the first active doc for the entity. */
     private async resolveSingleEntityDocumentID(config: ClusterConfig): Promise<string | null> {
         if (config.EntityDocumentID) {
+            assertUUIDs([config.EntityDocumentID], 'EntityDocumentID');
             return config.EntityDocumentID;
         }
         if (!config.EntityName && !config.EntityID) {
@@ -90,6 +110,7 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
 
         const filterParts: string[] = [`Status = 'Active'`];
         if (config.EntityID) {
+            assertUUIDs([config.EntityID], 'EntityID');
             filterParts.push(`EntityID = '${config.EntityID}'`);
         } else if (config.EntityName) {
             const md = this.provider ?? new Metadata();
@@ -135,7 +156,8 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
             this.contextUser,
         );
         if (!result.Success) {
-            throw new Error(`Could not validate selected entity documents: ${result.ErrorMessage}`);
+            LogError(`EntityDocumentVectorSource: could not validate selected entity documents: ${result.ErrorMessage}`);
+            throw new Error('Could not validate selected entity documents');
         }
 
         const docs = result.Results;
@@ -166,6 +188,7 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
     ): Promise<MJEntityRecordDocumentEntity[]> {
         const filterParts: string[] = [`EntityDocumentID = '${entityDocumentID}'`, `(VectorBinary IS NOT NULL OR VectorJSON IS NOT NULL)`];
         if (config.Filter && config.Filter.trim().length > 0) {
+            this.screenCallerFilter(config.Filter.trim());
             filterParts.push(`(${config.Filter.trim()})`);
         }
 
@@ -193,6 +216,19 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
             return [];
         }
         return result.Results;
+    }
+
+    /**
+     * Throws unless the data provider's client clause screen accepts the caller's `Filter` for the
+     * context user. Refuses when the provider cannot screen.
+     */
+    private screenCallerFilter(filter: string): void {
+        const provider = this.provider ?? Metadata.Provider;
+        const entityInfo = provider?.EntityByName('MJ: Entity Record Documents');
+        if (!canScreenClauses(provider) || !entityInfo) {
+            throw new Error('Filter refused: the data provider cannot screen it');
+        }
+        provider.ScreenClientClause(filter, 'Filter', this.contextUser, entityInfo);
     }
 
     /** Convert record documents to input vectors: VectorBinary when valid, else VectorJSON. */

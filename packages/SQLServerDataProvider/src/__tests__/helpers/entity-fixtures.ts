@@ -161,7 +161,7 @@ export function makeRecordChangesEntityInfo(): EntityInfo {
 /** Plain data for a saved widget row — used to load fixtures into the "existing record" state. */
 export function savedWidgetRow(): Record<string, unknown> {
   return {
-    ID: 'w-0001',
+    ID: 'b0000000-0000-4000-8000-000000000001',
     Name: 'Widget One',
     Description: 'First run',
     IsActive: true,

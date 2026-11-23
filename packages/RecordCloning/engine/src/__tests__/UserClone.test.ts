@@ -13,6 +13,8 @@ import {
 import { CloneConfigValidator } from '@memberjunction/record-cloning-base';
 import { ClonePlanner } from '../ClonePlanner';
 import { CloneExecutor } from '../CloneExecutor';
+import { RecordCloneEngine } from '../RecordCloneEngine';
+import { DependencyGraphWalker } from '@memberjunction/record-graph';
 import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 // Mock RunView
@@ -696,6 +698,28 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
         expect(roleValues?.UserID).toBe(userValues?.ID);
     });
 
+    describe('root key fields', () => {
+        it('refuses a root key whose field is not a primary key field, before any record is read', async () => {
+            const walk = vi.spyOn(DependencyGraphWalker.prototype, 'WalkDependents');
+            mockRunViewInstance.mockReset();
+            mockRunViewInstance.mockResolvedValue({ Success: true, Results: [] });
+
+            await expect(
+                new RecordCloneEngine(mockMetadataProvider).Clone(
+                    {
+                        EntityName: 'MJ: Users',
+                        SourceRecordKey: { KeyValuePairs: [{ FieldName: 'Name', Value: 'demo@company.com' }] },
+                        PromptedValues: { Email: 'new@company.com', FirstName: 'New', LastName: 'Person' },
+                    },
+                    ownerUser
+                )
+            ).rejects.toThrow("Key fields must be the primary key fields of entity 'MJ: Users'.");
+            expect(walk).not.toHaveBeenCalled();
+            expect(mockRunViewInstance).not.toHaveBeenCalled();
+            walk.mockRestore();
+        });
+    });
+
     describe('template preset', () => {
         const templatePreset = {
             Key: 'template',
@@ -735,6 +759,26 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
             expect(plan.Blocked).toBe(true);
             expect(plan.Nodes).toEqual([]);
             expect(plan.Warnings.find((w) => w.Code === 'TEMPLATE_SOURCE_REQUIRED')?.Severity).toBe('Error');
+        });
+
+        it('builds the template check from primary key fields only', async () => {
+            const filters: string[] = [];
+            mockRunViewInstance.mockImplementation(async (params: { ExtraFilter?: string }) => {
+                filters.push(params.ExtraFilter ?? '');
+                return { Success: true, Results: [] };
+            });
+            await new ClonePlanner({ Provider: mockMetadataProvider })
+                .Plan(
+                    {
+                        EntityName: 'MJ: Users',
+                        SourceRecordKey: { KeyValuePairs: [{ FieldName: 'ID IS NOT NULL AND 1=1 AND ID', Value: 'tpl-id' }] },
+                        PromptedValues: { Email: 'new@company.com', FirstName: 'New', LastName: 'Person' },
+                        Preset: 'template',
+                    },
+                    ownerUser
+                )
+                .catch(() => undefined);
+            expect(filters.filter((f) => f.includes('1=1'))).toEqual([]);
         });
 
         it('plans the copy for a template user', async () => {

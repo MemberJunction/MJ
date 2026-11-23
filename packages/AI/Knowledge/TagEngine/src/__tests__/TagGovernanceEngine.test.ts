@@ -15,7 +15,9 @@ const {
     mockGetEntityObject: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async () => ({
+    // The real validator, from its own module (the package root would load this mock).
+    IsValidUUID: (await vi.importActual<typeof import('@memberjunction/global/dist/util/UUIDUtils.js')>('@memberjunction/global/dist/util/UUIDUtils.js')).IsValidUUID,
     BaseSingleton: class BaseSingleton<T> {
         public static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
     },
@@ -123,6 +125,10 @@ function createMockEntity(fields: Record<string, unknown> = {}): Record<string, 
     });
 }
 
+const SOURCE_1 = 'aaaaaaaa-0000-0000-0000-000000000001';
+const SOURCE_2 = 'aaaaaaaa-0000-0000-0000-000000000002';
+const SURVIVING_1 = 'bbbbbbbb-0000-0000-0000-000000000001';
+
 describe('TagGovernanceEngine', () => {
     let engine: TagGovernanceEngine;
     const mockUser = { ID: 'user-1' } as never;
@@ -146,14 +152,14 @@ describe('TagGovernanceEngine', () => {
     describe('MergeTags', () => {
         it('should re-point content item tags, tagged items, and direct child tags to surviving tag', async () => {
             const mockContentItems = [
-                createMockEntity({ ID: 'ci-1', TagID: 'source-1' }),
-                createMockEntity({ ID: 'ci-2', TagID: 'source-1' }),
+                createMockEntity({ ID: 'ci-1', TagID: SOURCE_1 }),
+                createMockEntity({ ID: 'ci-2', TagID: SOURCE_1 }),
             ];
             const mockTaggedItems = [
-                createMockEntity({ ID: 'ti-1', TagID: 'source-1' }),
+                createMockEntity({ ID: 'ti-1', TagID: SOURCE_1 }),
             ];
             const mockChildTags = [
-                createMockEntity({ ID: 'child-1', ParentID: 'source-1' }),
+                createMockEntity({ ID: 'child-1', ParentID: SOURCE_1 }),
             ];
 
             // 1st call: content item tags; 2nd call: tagged items; 3rd call: child tags
@@ -170,7 +176,7 @@ describe('TagGovernanceEngine', () => {
             });
 
             // The tag Load entity for marking as merged
-            const sourceTag = createMockEntity({ ID: 'source-1', Status: 'Active', MergedIntoTagID: null });
+            const sourceTag = createMockEntity({ ID: SOURCE_1, Status: 'Active', MergedIntoTagID: null });
             // getEntityObject: first for the tag load, second for audit log
             let getEntityCallCount = 0;
             mockGetEntityObject.mockImplementation(() => {
@@ -179,22 +185,22 @@ describe('TagGovernanceEngine', () => {
                 return Promise.resolve(createMockEntity());
             });
 
-            const result = await engine.MergeTags(['source-1'], 'surviving-1', mockUser);
+            const result = await engine.MergeTags([SOURCE_1], SURVIVING_1, mockUser);
 
             expect(result.ItemsMoved).toBe(2);
             expect(result.TaggedItemsMoved).toBe(1);
-            expect(mockChildTags[0].ParentID).toBe('surviving-1');
+            expect(mockChildTags[0].ParentID).toBe(SURVIVING_1);
             // Verify source tag was marked as merged
             expect(sourceTag.Status).toBe('Merged');
-            expect(sourceTag.MergedIntoTagID).toBe('surviving-1');
+            expect(sourceTag.MergedIntoTagID).toBe(SURVIVING_1);
         });
 
         it('should create audit log entries for each source tag', async () => {
             mockRunView.mockResolvedValue({ Success: true, Results: [] });
 
             const tags = [
-                createMockEntity({ ID: 'source-1', Status: 'Active' }),
-                createMockEntity({ ID: 'source-2', Status: 'Active' }),
+                createMockEntity({ ID: SOURCE_1, Status: 'Active' }),
+                createMockEntity({ ID: SOURCE_2, Status: 'Active' }),
             ];
             let tagIdx = 0;
             const auditEntries: Record<string, unknown>[] = [];
@@ -211,19 +217,40 @@ describe('TagGovernanceEngine', () => {
                 return Promise.resolve(auditEntry);
             });
 
-            await engine.MergeTags(['source-1', 'source-2'], 'surviving-1', mockUser);
+            await engine.MergeTags([SOURCE_1, SOURCE_2], SURVIVING_1, mockUser);
 
             // Should have created 2 audit entries (one per source tag)
             expect(auditEntries.length).toBe(2);
         });
 
+        it('refuses a source tag ID that is not a UUID before any filter is built', async () => {
+            mockRunView.mockResolvedValue({ Success: true, Results: [] });
+            mockGetEntityObject.mockResolvedValue(createMockEntity({ ID: SOURCE_1, Status: 'Active' }));
+            const marker = "' OR '1'='1";
+
+            await engine.MergeTags([`${SOURCE_1}${marker}`], SURVIVING_1, mockUser).catch(() => undefined);
+
+            const filters = mockRunView.mock.calls.map((c) => String((c[0] as { ExtraFilter?: string }).ExtraFilter ?? ''));
+            expect(filters.filter((f) => f.includes(marker))).toEqual([]);
+        });
+
+        it('refuses a surviving tag ID that is not a UUID before any change is saved', async () => {
+            mockRunView.mockResolvedValue({ Success: true, Results: [createMockEntity({ ID: 'ti-1', TagID: SOURCE_1 })] });
+            mockGetEntityObject.mockResolvedValue(createMockEntity({ ID: SOURCE_1, Status: 'Active' }));
+
+            const refused = await engine.MergeTags([SOURCE_1], `${SURVIVING_1}' OR '1'='1`, mockUser).then(() => false, () => true);
+
+            expect(mockSave).not.toHaveBeenCalled();
+            expect(refused).toBe(true);
+        });
+
         it('should handle RunView failure gracefully', async () => {
             mockRunView.mockResolvedValue({ Success: false, ErrorMessage: 'DB error', Results: [] });
 
-            const sourceTag = createMockEntity({ ID: 'source-1', Status: 'Active' });
+            const sourceTag = createMockEntity({ ID: SOURCE_1, Status: 'Active' });
             mockGetEntityObject.mockResolvedValue(sourceTag);
 
-            const result = await engine.MergeTags(['source-1'], 'surviving-1', mockUser);
+            const result = await engine.MergeTags([SOURCE_1], SURVIVING_1, mockUser);
 
             expect(result.ItemsMoved).toBe(0);
             expect(result.TaggedItemsMoved).toBe(0);

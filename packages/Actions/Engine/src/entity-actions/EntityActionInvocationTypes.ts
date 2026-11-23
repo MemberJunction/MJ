@@ -1,4 +1,4 @@
-import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { IsValidUUID, MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionFilterEntity, MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { BaseEntity, DatabaseProviderBase, LogError, Metadata, RunView } from "@memberjunction/core";
 import {
@@ -503,13 +503,17 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
 
     /** Loads all records of a User View as entity objects. */
     protected async loadRecordsForView(params: EntityActionInvocationParams): Promise<BaseEntity[]> {
+        if (!IsValidUUID(params.ViewID)) {
+            throw new Error('ViewID must be a UUID');
+        }
         const rv = new RunView();
         const result = await rv.RunView<BaseEntity>({
             ViewID: params.ViewID,
             ResultType: 'entity_object'
         }, params.ContextUser);
         if (!result.Success) {
-            throw new Error(`Failed to load records for view '${params.ViewID}': ${result.ErrorMessage}`);
+            LogError(`Failed to load records for view '${params.ViewID}': ${result.ErrorMessage}`);
+            throw new Error(`Failed to load records for view '${params.ViewID}'`);
         }
         return result.Results ?? [];
     }
@@ -524,6 +528,9 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
             throw new Error(`List invocation currently supports single-primary-key entities only; '${entity.Name}' has a composite key`);
         }
 
+        if (!IsValidUUID(params.ListID)) {
+            throw new Error('ListID must be a UUID');
+        }
         const rv = new RunView();
         const memberResult = await rv.RunView<{ RecordID: string }>({
             EntityName: 'MJ: List Details',
@@ -532,7 +539,8 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
             ResultType: 'simple'
         }, params.ContextUser);
         if (!memberResult.Success) {
-            throw new Error(`Failed to load members for list '${params.ListID}': ${memberResult.ErrorMessage}`);
+            LogError(`Failed to load members for list '${params.ListID}': ${memberResult.ErrorMessage}`);
+            throw new Error(`Failed to load members for list '${params.ListID}'`);
         }
         const recordIDs = (memberResult.Results ?? []).map(r => String(r.RecordID)).filter(id => id.length > 0);
         if (recordIDs.length === 0) {
@@ -550,7 +558,8 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
             ResultType: 'entity_object'
         }, params.ContextUser);
         if (!result.Success) {
-            throw new Error(`Failed to load list member records for '${entity.Name}': ${result.ErrorMessage}`);
+            LogError(`Failed to load list member records for '${entity.Name}': ${result.ErrorMessage}`);
+            throw new Error(`Failed to load list member records for '${entity.Name}'`);
         }
         return result.Results ?? [];
     }

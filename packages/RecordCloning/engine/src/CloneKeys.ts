@@ -25,6 +25,7 @@
  */
 
 import { CompositeKey, EntityInfo, KeyValuePair } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { CompositeKeyLike } from '@memberjunction/record-cloning-base';
 
 /**
@@ -131,4 +132,42 @@ export function DeriveTargetKey(
         return new KeyValuePair(pair.FieldName, pair.Value);
     });
     return { Key: KeyFromPairs(pairs), Changed: changed };
+}
+
+/**
+ * The key with each field mapped to the metadata name of a primary key field of the entity. Throws
+ * a fixed message when a field is not a primary key field, a field appears twice, the key is empty,
+ * or a value is not text, a finite number, a Date, or null.
+ */
+export function ValidatedPrimaryKey(entity: EntityInfo, key: CompositeKeyLike | CompositeKey): CompositeKey {
+    const refusal = `Key fields must be the primary key fields of entity '${entity.Name}'.`;
+    const used = new Set<string>();
+    const pairs = (key.KeyValuePairs ?? []).map((kvp) => {
+        const pk = entity.PrimaryKeys.find((p) => p.Name.trim().toLowerCase() === String(kvp.FieldName ?? '').trim().toLowerCase());
+        if (!pk || used.has(pk.Name)) throw new Error(refusal);
+        if (!isKeyValue(kvp.Value)) throw new Error(`Invalid value for key field '${pk.Name}'.`);
+        used.add(pk.Name);
+        return new KeyValuePair(pk.Name, kvp.Value);
+    });
+    if (pairs.length === 0) throw new Error(refusal);
+    return KeyFromPairs(pairs);
+}
+
+/**
+ * The WHERE predicate that selects one record by key, built from {@link ValidatedPrimaryKey}.
+ * Text and Date values are quoted and escaped, as the database provider renders a quoted key.
+ */
+export function PrimaryKeyWhereClause(entity: EntityInfo, key: CompositeKey): string {
+    return ValidatedPrimaryKey(entity, key).KeyValuePairs.map((kvp) => keyPredicate(kvp.FieldName, kvp.Value)).join(' AND ');
+}
+
+/** True for a value a key literal can carry: text, a finite number, a Date, or null. */
+function isKeyValue(value: unknown): boolean {
+    return value === null || value === undefined || typeof value === 'string' || value instanceof Date || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function keyPredicate(fieldName: string, value: unknown): string {
+    if (value === null || value === undefined) return `${fieldName} IS NULL`;
+    if (typeof value === 'number') return `${fieldName}=${value}`;
+    return `${fieldName}='${EscapeSQLString(String(value))}'`;
 }

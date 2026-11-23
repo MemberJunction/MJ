@@ -57,17 +57,17 @@ import { SqlEquals } from '@memberjunction/record-graph';
 import { ClonePlanner } from './ClonePlanner';
 import { CloneExecutor } from './CloneExecutor';
 import { CloneAuthorizer } from './CloneAuthorization';
-import { KeyFromPairs, ToRecordKeyString } from './CloneKeys';
+import { KeyFromPairs, PrimaryKeyWhereClause, ToRecordKeyString, ValidatedPrimaryKey } from './CloneKeys';
 
 type PlanValue = string | number | boolean | null;
 
-/** Builds a CompositeKey from a wire key, keeping every primary key column. */
+/** Builds a CompositeKey from a wire key; every field must be a primary key field of the entity. */
 function toCompositeKey(entity: EntityInfo, key: RecordCloneKey | undefined): CompositeKey {
     const pairs = key?.KeyValuePairs?.filter((p) => typeof p.FieldName === 'string' && p.FieldName.length > 0) ?? [];
     if (pairs.length === 0) {
         throw new Error(`A record key with at least one field is required for entity '${entity.Name}'.`);
     }
-    return KeyFromPairs(pairs.map((p) => new KeyValuePair(p.FieldName, p.Value)));
+    return ValidatedPrimaryKey(entity, KeyFromPairs(pairs.map((p) => new KeyValuePair(p.FieldName, p.Value))));
 }
 
 /** Plan values are free-form in the engine; the contract carries primitives only. */
@@ -273,7 +273,7 @@ export class RecordCloneOperationsHandler {
     /** Whether the record has the yes/no field `field` set, as `contextUser` can read it. */
     private async isFlagged(entity: EntityInfo, key: RecordCloneKey, field: string, contextUser: UserInfo): Promise<boolean> {
         const res = await RunView.FromMetadataProvider(this.Provider).RunView<Record<string, unknown>>(
-            { EntityName: entity.Name, Fields: [field], ExtraFilter: toCompositeKey(entity, key).ToWhereClause(), ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
+            { EntityName: entity.Name, Fields: [field], ExtraFilter: PrimaryKeyWhereClause(entity, toCompositeKey(entity, key)), ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
             contextUser
         );
         const value = res?.Success ? res.Results?.[0]?.[field] : undefined;

@@ -240,7 +240,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     const result = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
     expect(mssqlState.Queries).toHaveLength(1);
-    expect(inputWithValue(mssqlState.Queries[0], 'w-0001').type).toEqual(mssql.UniqueIdentifier());
+    expect(inputWithValue(mssqlState.Queries[0], 'b0000000-0000-4000-8000-000000000001').type).toEqual(mssql.UniqueIdentifier());
     const sql = provider.LiteralSQL[0];
     const sfx = extractSuffix(sql, 'Name');
 
@@ -250,7 +250,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
 
     // PK is tail-appended by RenderSaveCallBinding from entity.PrimaryKey.KeyValuePairs
     expect(sql).toContain(`@ID${sfx} UNIQUEIDENTIFIER`);
-    expect(sql).toContain(`SET @ID${sfx} = 'w-0001'`);
+    expect(sql).toContain(`SET @ID${sfx} = 'b0000000-0000-4000-8000-000000000001'`);
     expect(sql).toContain(`@ID=@ID${sfx}`);
 
     // Untouched nullable field is omitted on delta update (retains stored value via ISNULL in spUpdate)
@@ -506,7 +506,7 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     // Logged form: spUpdate with the changed field and the key, same suffix, nothing else
     expect(simpleSQL).toBe(
       `DECLARE @Name${sfx} NVARCHAR(100),\n        @ID${sfx} UNIQUEIDENTIFIER\n\n` +
-        `SET @Name${sfx} = N'Renamed'\nSET @ID${sfx} = 'w-0001'\n\n` +
+        `SET @Name${sfx} = N'Renamed'\nSET @ID${sfx} = 'b0000000-0000-4000-8000-000000000001'\n\n` +
         `EXEC [dbo].spUpdateWidget @Name=@Name${sfx},\n                @ID=@ID${sfx}`,
     );
     expect(simpleSQL).not.toContain('IF NOT EXISTS');
@@ -532,7 +532,7 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
 
     expect(fullSQL).toContain('EXEC [dbo].spUpdateWidget');
-    expect(simpleSQL).toMatch(/^-- Widgets \(.*w-0001.*\): saved with no field changes; nothing to replay$/);
+    expect(simpleSQL).toMatch(/^-- Widgets \(.*b0000000-0000-4000-8000-000000000001.*\): saved with no field changes; nothing to replay$/);
     expect(simpleSQL).not.toContain('EXEC');
   });
 
@@ -619,22 +619,22 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
   it('emits the bare EXEC spDeleteWidget call with quoted PK when record changes are off', async () => {
     const provider = makeProvider();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001' }] });
 
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
     expect(deleted).toBe(true);
     expect(mssqlState.Queries).toHaveLength(1);
     expect(mssqlState.Queries[0].sql).toBe('EXEC [dbo].[spDeleteWidget] @ID=@p$0');
-    expect(mssqlState.Queries[0].inputs).toEqual([{ name: 'p$0', type: mssql.UniqueIdentifier(), value: 'w-0001' }]);
-    expect(provider.LiteralSQL[0]).toBe(`EXEC [dbo].[spDeleteWidget] @ID='w-0001'`);
+    expect(mssqlState.Queries[0].inputs).toEqual([{ name: 'p$0', type: mssql.UniqueIdentifier(), value: 'b0000000-0000-4000-8000-000000000001' }]);
+    expect(provider.LiteralSQL[0]).toBe(`EXEC [dbo].[spDeleteWidget] @ID='b0000000-0000-4000-8000-000000000001'`);
   });
 
   it('with TrackRecordChanges: wraps the delete in @ResultTable capture + Delete record-change EXEC', async () => {
     const provider = makeProvider();
     provider.SetTestEntities([makeRecordChangesEntityInfo()]);
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001' }] });
 
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
@@ -643,7 +643,7 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     expect(mssqlState.Queries[0].sql).toContain('@RecordID=@p$1');
     const sql = provider.LiteralSQL[0];
     expect(sql).toContain('DECLARE @ResultTable TABLE');
-    expect(sql).toContain(`EXEC [dbo].[spDeleteWidget] @ID='w-0001'`);
+    expect(sql).toContain(`EXEC [dbo].[spDeleteWidget] @ID='b0000000-0000-4000-8000-000000000001'`);
     expect(sql).toContain('spCreateRecordChange_Internal');
     expect(sql).toContain(`@Type='Delete'`);
     expect(sql).toContain(`@EntityName=N'Widgets'`);
@@ -656,7 +656,7 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }), TEST_USER);
     // Real shape: our key first, a cascaded spUpdate full row, the proc's own echo, our key last
     mssqlState.QueueResult({
-      recordsets: [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }], [{ ID: 'w-0001' }]],
+      recordsets: [[{ ID: 'b0000000-0000-4000-8000-000000000001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'b0000000-0000-4000-8000-000000000001' }], [{ ID: 'b0000000-0000-4000-8000-000000000001' }]],
     });
 
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
@@ -665,7 +665,7 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     // Executed form: the key is bound once and that one parameter is reused by the EXEC, both
     // existence checks and both key selects
     const executed = mssqlState.Queries[0];
-    expect(executed.inputs[0]).toEqual({ name: 'p$0', type: mssql.UniqueIdentifier(), value: 'w-0001' });
+    expect(executed.inputs[0]).toEqual({ name: 'p$0', type: mssql.UniqueIdentifier(), value: 'b0000000-0000-4000-8000-000000000001' });
     expect(executed.sql.split('@p$0').length - 1).toBe(5);
     // "Deleted" requires that the row existed first: a key that was never there must not count as
     // a successful delete or write a Delete record change
@@ -674,10 +674,10 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     // Rendered (literal) form, the shape a transaction group runs
     const sql = provider.LiteralSQL[0];
     expect(sql).not.toContain('INSERT INTO @ResultTable');
-    const rowGone = `NOT EXISTS (SELECT 1 FROM [dbo].[vwWidgets] WHERE [ID]='w-0001')`;
-    const exec = `EXEC [dbo].[spDeleteWidget] @ID='w-0001'`;
-    const firstKey = `SELECT CASE WHEN @MJDeleteRowExisted = 1 THEN 'w-0001' END AS [ID]`;
-    const lastKey = `SELECT CASE WHEN @MJDeleteRowDeleted = 1 THEN 'w-0001' END AS [ID]`;
+    const rowGone = `NOT EXISTS (SELECT 1 FROM [dbo].[vwWidgets] WHERE [ID]='b0000000-0000-4000-8000-000000000001')`;
+    const exec = `EXEC [dbo].[spDeleteWidget] @ID='b0000000-0000-4000-8000-000000000001'`;
+    const firstKey = `SELECT CASE WHEN @MJDeleteRowExisted = 1 THEN 'b0000000-0000-4000-8000-000000000001' END AS [ID]`;
+    const lastKey = `SELECT CASE WHEN @MJDeleteRowDeleted = 1 THEN 'b0000000-0000-4000-8000-000000000001' END AS [ID]`;
     expect(sql).toContain(rowGone);
     expect(sql).toContain(`@Type='Delete'`);
     // Order: key for transaction groups (first result set) → proc → record change only if the row is gone → key last
@@ -718,7 +718,7 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
     expect(deleted).toBe(false);
-    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+    expect(entity.LatestResult?.Message).toContain('ID=b0000000-0000-4000-8000-000000000001 not found');
   });
 
   it('returns false when the proc echoes a different PK (delete validation)', async () => {
@@ -729,7 +729,7 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
     expect(deleted).toBe(false);
-    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+    expect(entity.LatestResult?.Message).toContain('ID=b0000000-0000-4000-8000-000000000001 not found');
   });
 
   it('returns false when the proc returns no rows', async () => {
@@ -773,7 +773,7 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     // First result set: cascade-deleted children; last result set: the record itself
     mssqlState.QueueResult({
-      recordsets: [[{ ChildID: 'c-1' }, { ChildID: 'c-2' }], [{ ID: 'w-0001' }]],
+      recordsets: [[{ ChildID: 'c-1' }, { ChildID: 'c-2' }], [{ ID: 'b0000000-0000-4000-8000-000000000001' }]],
     });
 
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
@@ -811,7 +811,7 @@ describe('SQLServerDataProvider delete inside a TransactionGroup (result callbac
 
   it('CascadeDeletes: succeeds when the first result set carries the key', async () => {
     const info = makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true });
-    const entity = await deleteInGroup(info, [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }]], true);
+    const entity = await deleteInGroup(info, [[{ ID: 'b0000000-0000-4000-8000-000000000001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'b0000000-0000-4000-8000-000000000001' }]], true);
 
     expect(mssqlState.Queries[0].sql).toContain('@MJDeleteRowExisted');
     expect(entity.LatestResult?.Success).toBe(true);
@@ -824,7 +824,7 @@ describe('SQLServerDataProvider delete inside a TransactionGroup (result callbac
     expect(mssqlState.EventKinds()).toContain('rollback');
     expect(mssqlState.EventKinds()).not.toContain('commit');
     expect(entity.LatestResult?.Success).toBe(false);
-    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+    expect(entity.LatestResult?.Message).toContain('ID=b0000000-0000-4000-8000-000000000001 not found');
   });
 
   it('a failed delete in a group gives a caller denied a field of the entity the redacted message', async () => {
@@ -851,7 +851,7 @@ describe('SQLServerDataProvider delete inside a TransactionGroup (result callbac
     expect(mssqlState.EventKinds()).toContain('rollback');
     expect(mssqlState.EventKinds()).not.toContain('commit');
     expect(entity.LatestResult?.Success).toBe(false);
-    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+    expect(entity.LatestResult?.Message).toContain('ID=b0000000-0000-4000-8000-000000000001 not found');
   });
 });
 
@@ -876,7 +876,7 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     expect(sfxA).toBe(sfxB);
     expect(sfxA).toMatch(/^_[0-9a-f]{12}$/);
     expect(sfxA).toBe(
-      '_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
+      '_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['b0000000-0000-4000-8000-000000000001']),
     );
   });
 
@@ -955,7 +955,7 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
       expect(mssqlState.Queries[0].sql).not.toContain('@p$');
       expect(mssqlState.Queries[0].inputs).toEqual([]);
       const first = extractSuffix(mssqlState.Queries[0].sql, 'Name');
-      expect(first).toBe('_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']));
+      expect(first).toBe('_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['b0000000-0000-4000-8000-000000000001']));
       expect(extractSuffix(mssqlState.Queries[1].sql, 'Name')).toBe(`${first}_2`);
     });
 
@@ -996,7 +996,7 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
       expect(names.length).toBeGreaterThan(3);
       expect(new Set(names).size).toBe(names.length);
       // The allocator's ordinal keeps the two same-record items apart …
-      const hash = GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']);
+      const hash = GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['b0000000-0000-4000-8000-000000000001']);
       expect(names).toContain(`Name_${hash}_mjb0`);
       expect(names).toContain(`Name_${hash}_2_mjb1`);
       // … and scopeItemVariables scopes EVERY declared local of every item, not just the first.
@@ -1046,15 +1046,15 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
     const provider = makeProvider();
     provider.SetTestEntities([makeRecordChangesEntityInfo()]);
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001' }] });
 
     await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
     // What runs binds the record id as an NVARCHAR input; the literal form writes N'…' literals.
-    expect(inputWithValue(mssqlState.Queries[0], 'ID|w-0001').type).toEqual(mssql.NVarChar(750));
+    expect(inputWithValue(mssqlState.Queries[0], 'ID|b0000000-0000-4000-8000-000000000001').type).toEqual(mssql.NVarChar(750));
     const sql = provider.LiteralSQL[0];
     expect(sql).toContain(`@EntityName=N'Widgets'`);
-    expect(sql).toMatch(/@RecordID=N'ID\|w-0001'/);
+    expect(sql).toMatch(/@RecordID=N'ID\|b0000000-0000-4000-8000-000000000001'/);
     expect(sql).toMatch(/@ChangesJSON=N'/);
     expect(sql).toMatch(/@ChangesDescription=N'/);
     expect(sql).toMatch(/@FullRecordJSON=N'/);
@@ -1066,10 +1066,10 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
     const sibling = provider as unknown as {
       BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string) => string;
     };
-    const sql = sibling.BuildSiblingRecordChangeSQL('@_rc_prop_0', makeWidgetEntityInfo(), `{"Name":"${UNICODE_NAME}"}`, `Name changed to ${UNICODE_NAME}`, 'w-0001', TEST_USER.ID);
+    const sql = sibling.BuildSiblingRecordChangeSQL('@_rc_prop_0', makeWidgetEntityInfo(), `{"Name":"${UNICODE_NAME}"}`, `Name changed to ${UNICODE_NAME}`, 'b0000000-0000-4000-8000-000000000001', TEST_USER.ID);
 
     expect(sql).toContain(`@EntityName=N'Widgets'`);
-    expect(sql).toContain(`@RecordID=N'ID|w-0001'`);
+    expect(sql).toContain(`@RecordID=N'ID|b0000000-0000-4000-8000-000000000001'`);
     expect(sql).toContain(`@ChangesJSON=N'{"Name":"${UNICODE_NAME}"}'`);
     expect(sql).toContain(`@ChangesDescription=N'Name changed to ${UNICODE_NAME}'`);
   });
@@ -1289,7 +1289,7 @@ describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
     const createdAt = new Date('2025-01-01T00:00:00.000Z');
     const updatedAt = new Date('2026-04-17T11:30:00.000Z');
     mssqlState.QueueResult({
-      rows: [{ ID: 'w-0001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+      rows: [{ ID: 'b0000000-0000-4000-8000-000000000001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
     });
 
     const saveOpts = new EntitySaveOptions();
@@ -1302,7 +1302,7 @@ describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
     expect(sql).toContain('[Name] nvarchar(100) NOT NULL');
     expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
     expect(result).toMatchObject({
-      ID: 'w-0001',
+      ID: 'b0000000-0000-4000-8000-000000000001',
       Name: 'Delta Updated Name',
       __mj_CreatedAt: createdAt,
       __mj_UpdatedAt: updatedAt,
@@ -1318,7 +1318,7 @@ describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
     const createdAt = new Date('2025-01-01T00:00:00.000Z');
     const updatedAt = new Date('2026-04-17T11:45:00.000Z');
     mssqlState.QueueResult({
-      rows: [{ ID: 'w-0001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+      rows: [{ ID: 'b0000000-0000-4000-8000-000000000001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
     });
 
     const saveOpts = new EntitySaveOptions();
@@ -1330,7 +1330,7 @@ describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
     expect(sql).toContain('[Name] nvarchar(100) NOT NULL');
     expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
     expect(result).toMatchObject({
-      ID: 'w-0001',
+      ID: 'b0000000-0000-4000-8000-000000000001',
       Name: 'High-Write Step Update',
       __mj_CreatedAt: createdAt,
       __mj_UpdatedAt: updatedAt,
@@ -1410,7 +1410,7 @@ describe('SQLServerDataProvider Record Change snapshot of a narrowed object', ()
     await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
     expect(mssqlState.Queries).toHaveLength(2);
-    expect(mssqlState.Queries[0].sql).toBe(`SELECT [Quantity] FROM [dbo].[vwWidgets] WHERE [ID]='w-0001'`);
+    expect(mssqlState.Queries[0].sql).toBe(`SELECT [Quantity] FROM [dbo].[vwWidgets] WHERE [ID]='b0000000-0000-4000-8000-000000000001'`);
     const save = mssqlState.Queries[1];
     expectSnapshotFromResultRow(save);
     const changes = changesJSONInput(save);
@@ -1461,7 +1461,7 @@ describe('SQLServerDataProvider Record Change snapshot of a narrowed object', ()
     entity.Hydrate(row);
     entity.Set('Description', 'Second run');
     mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001', __mj_CreatedAt: new Date(), __mj_UpdatedAt: new Date() }] }); // the save
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001', __mj_CreatedAt: new Date(), __mj_UpdatedAt: new Date() }] }); // the save
 
     await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
@@ -1478,7 +1478,7 @@ describe('SQLServerDataProvider Record Change snapshot of a narrowed object', ()
     provider.SetTestEntities([makeRecordChangesEntityInfo()]);
     const entity = makeNarrowedWidget();
     mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] }); // the delete
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001' }] }); // the delete
 
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
@@ -1704,7 +1704,7 @@ describe('SQLServerDataProvider server-side concurrency check', () => {
     const saved = await provider.Save(entity, TEST_USER, opts);
     expect(saved).toEqual(updatedRow);
     expect(mssqlState.Queries).toHaveLength(2);
-    expect(mssqlState.Queries[0].sql).toBe(`SELECT [Name] FROM [dbo].[Widget] WITH (UPDLOCK, ROWLOCK) WHERE [ID]='w-0001'`);
+    expect(mssqlState.Queries[0].sql).toBe(`SELECT [Name] FROM [dbo].[Widget] WITH (UPDLOCK, ROWLOCK) WHERE [ID]='b0000000-0000-4000-8000-000000000001'`);
   });
 
   it('emits encrypted ciphertext (never plaintext) in simpleSQL (RenderReplayUpdateSQL) on delta updates', async () => {

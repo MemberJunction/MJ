@@ -119,10 +119,10 @@ describe('SQLServerTransactionGroup.Submit', () => {
     const group = new SQLServerTransactionGroup();
     const { item } = makeItem(entity, 'Update', 'UPDATE Widget SET Name = ? WHERE ID = ?', pool, [
       'Renamed',
-      'w-0001',
+      'b0000000-0000-4000-8000-000000000001',
     ]);
     group.AddTransaction(item);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001', Name: 'Renamed' }] });
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001', Name: 'Renamed' }] });
 
     const success = await group.Submit();
 
@@ -131,7 +131,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     expect(mssqlState.Queries[0].sql).toBe('UPDATE Widget SET Name = @p0 WHERE ID = @p1');
     expect(mssqlState.Queries[0].inputs).toEqual([
       { name: 'p0', value: 'Renamed' },
-      { name: 'p1', value: 'w-0001' },
+      { name: 'p1', value: 'b0000000-0000-4000-8000-000000000001' },
     ]);
     expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'commit']);
   });
@@ -240,7 +240,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     const { item } = makeItem(entity, 'Update', 'STATEMENT 1', pool);
     group.AddTransaction(item);
     group.RegisterPreprocessing(entity);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001' }] });
 
     const submitPromise = group.Submit();
     // Give the event loop a chance — Submit must be parked on preprocessing
@@ -271,7 +271,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     const completed = new SQLServerTransactionGroup();
     const okItem = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'OK', pool);
     completed.AddTransaction(okItem.item);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001' }] });
     await completed.Submit();
     await expect(completed.Submit()).rejects.toThrow('TransactionGroup has already been completed');
 
@@ -289,7 +289,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     const group = new SQLServerTransactionGroup();
     const { item } = makeItem(entity, 'Update', 'STATEMENT 1', pool);
     group.AddTransaction(item);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ rows: [{ ID: 'b0000000-0000-4000-8000-000000000001' }] });
 
     const notifications: Array<{ success: boolean; results?: TransactionResult[] }> = [];
     group.TransactionNotifications$.subscribe((n) => notifications.push(n));

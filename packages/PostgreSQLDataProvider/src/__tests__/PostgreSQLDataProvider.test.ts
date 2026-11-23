@@ -1049,7 +1049,7 @@ describe('PostgreSQLDataProvider', () => {
             const entity = new PgTestEntity(entityInfo);
             const testUser = { ID: 'u-1', Name: 'Tester', Email: 't@example.com' } as unknown as UserInfo;
             entity.ContextCurrentUser = testUser;
-            entity.SetMany({ ID: 'w-1', Name: 'Initial Name' }, false, true, true);
+            entity.SetMany({ ID: 'a1b2c3d4-0000-4000-8000-000000000001', Name: 'Initial Name' }, false, true, true);
             entity.Set('Name', 'Caller New Name');
 
             const executedSQL: string[] = [];
@@ -1067,7 +1067,7 @@ describe('PostgreSQLDataProvider', () => {
             expect(ok).toBe(false);
             expect(result.ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
             expect(executedSQL).toEqual([
-                `SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`,
+                `SELECT "Name" FROM "public"."Widget" WHERE "ID"='a1b2c3d4-0000-4000-8000-000000000001' FOR UPDATE`,
             ]);
         });
 
@@ -1093,7 +1093,7 @@ describe('PostgreSQLDataProvider', () => {
             const entity = new PgQueuedEntity(entityInfo);
             const testUser = { ID: 'u-1', Name: 'Tester', Email: 't@example.com' } as unknown as UserInfo;
             entity.ContextCurrentUser = testUser;
-            entity.SetMany({ ID: 'w-1', Name: 'Initial Name', Notes: null }, false, true, true);
+            entity.SetMany({ ID: 'a1b2c3d4-0000-4000-8000-000000000001', Name: 'Initial Name', Notes: null }, false, true, true);
             entity.Set('Name', 'Caller New Name');
 
             const executedSQL: string[] = [];
@@ -1115,7 +1115,7 @@ describe('PostgreSQLDataProvider', () => {
             entity.Set('Notes', 'edited after queueing');
             expect(await check!()).toBe(false);
             expect(result.ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
-            expect(executedSQL).toEqual([`SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`]);
+            expect(executedSQL).toEqual([`SELECT "Name" FROM "public"."Widget" WHERE "ID"='a1b2c3d4-0000-4000-8000-000000000001' FOR UPDATE`]);
         });
 
         it('defaults ConcurrencyCheck to "off" and DeltaUpdates to true on a fresh PostgreSQLDataProvider instance', () => {

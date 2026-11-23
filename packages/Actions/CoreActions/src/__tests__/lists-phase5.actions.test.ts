@@ -41,7 +41,8 @@ vi.mock('@memberjunction/actions', () => ({
     }
   },
 }));
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@memberjunction/global')>()),
   RegisterClass: () => (target: unknown) => target,
 }));
 vi.mock('@memberjunction/core-entities', () => ({
@@ -50,6 +51,10 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 import { BulkUpdateListItemStatusAction } from '../custom/lists/bulk-update-list-item-status.action';
 import { MoveListMembersAction } from '../custom/lists/move-list-members.action';
+
+const SOURCE_LIST_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
+const TARGET_LIST_ID = 'aaaaaaaa-0000-0000-0000-000000000002';
+const LIST_ID = 'aaaaaaaa-0000-0000-0000-000000000003';
 
 type ParamShape = { Name: string; Type: 'Input' | 'Output'; Value: unknown };
 
@@ -76,8 +81,8 @@ describe('Phase 5 list actions', () => {
     it('refuses move mode without ConfirmDrops', async () => {
       const action = new MoveListMembersAction();
       const params = buildParams([
-        ['SourceListID', 'src'],
-        ['TargetListID', 'tgt'],
+        ['SourceListID', SOURCE_LIST_ID],
+        ['TargetListID', TARGET_LIST_ID],
         ['RecordIDs', JSON.stringify(['a'])],
         ['Mode', 'move'],
       ]);
@@ -100,8 +105,8 @@ describe('Phase 5 list actions', () => {
       });
       const action = new MoveListMembersAction();
       const params = buildParams([
-        ['SourceListID', 'src'],
-        ['TargetListID', 'tgt'],
+        ['SourceListID', SOURCE_LIST_ID],
+        ['TargetListID', TARGET_LIST_ID],
         ['RecordIDs', JSON.stringify(['a', 'b'])],
         ['Mode', 'copy'],
       ]);
@@ -115,7 +120,7 @@ describe('Phase 5 list actions', () => {
     it('returns MISSING_PARAMETER without SourceListID', async () => {
       const action = new MoveListMembersAction();
       const params = buildParams([
-        ['TargetListID', 'tgt'],
+        ['TargetListID', TARGET_LIST_ID],
         ['RecordIDs', JSON.stringify(['a'])],
       ]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -166,7 +171,7 @@ describe('Phase 5 list actions', () => {
       runViewMock.mockResolvedValue({ Success: true, Results: [row1, row2] });
       const action = new BulkUpdateListItemStatusAction();
       const params = buildParams([
-        ['ListID', 'l1'],
+        ['ListID', LIST_ID],
         ['RecordIDs', JSON.stringify(['a', 'b'])],
         ['NewStatus', 'Complete'],
       ]);
@@ -182,7 +187,7 @@ describe('Phase 5 list actions', () => {
     it('rejects invalid NewStatus', async () => {
       const action = new BulkUpdateListItemStatusAction();
       const params = buildParams([
-        ['ListID', 'l1'],
+        ['ListID', LIST_ID],
         ['RecordIDs', JSON.stringify(['a'])],
         ['NewStatus', 'Banana'],
       ]);
@@ -208,7 +213,7 @@ describe('Phase 5 list actions', () => {
       runViewMock.mockResolvedValue({ Success: true, Results: [rowOk, rowFail] });
       const action = new BulkUpdateListItemStatusAction();
       const params = buildParams([
-        ['ListID', 'l1'],
+        ['ListID', LIST_ID],
         ['RecordIDs', JSON.stringify(['a', 'b'])],
         ['NewStatus', 'Active'],
       ]);
@@ -218,6 +223,74 @@ describe('Phase 5 list actions', () => {
       expect(result.ResultCode).toBe('PARTIAL_SUCCESS');
       expect(getOutput(params, 'Updated')).toBe(1);
       expect(getOutput(params, 'Failed')).toBe(1);
+    });
+  });
+
+  describe('list ID filters', () => {
+    const marker = "' OR '1'='1";
+    const notAUuid = `11111111-2222-3333-4444-555555555555${marker}`;
+    const goodId = '11111111-2222-3333-4444-555555555555';
+    const filtersWithMarker = (): string[] =>
+      runViewMock.mock.calls
+        .map((c) => String((c[0] as { ExtraFilter?: string }).ExtraFilter ?? ''))
+        .filter((f) => f.includes(marker));
+
+    it('Bulk Update List Item Status refuses a ListID that is not a UUID before any filter is built', async () => {
+      runViewMock.mockResolvedValue({ Success: true, Results: [] });
+      const params = buildParams([
+        ['ListID', notAUuid],
+        ['RecordIDs', JSON.stringify(['a'])],
+        ['NewStatus', 'Complete'],
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (new BulkUpdateListItemStatusAction() as any).InternalRunAction(params);
+      expect(filtersWithMarker()).toEqual([]);
+      expect(result.Success).toBe(false);
+    });
+
+    it('Bulk Update List Item Status does not return the data provider error text', async () => {
+      runViewMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider-detail-marker' });
+      const params = buildParams([
+        ['ListID', goodId],
+        ['RecordIDs', JSON.stringify(['a'])],
+        ['NewStatus', 'Complete'],
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (new BulkUpdateListItemStatusAction() as any).InternalRunAction(params);
+      expect(result.Success).toBe(false);
+      expect(result.Message).not.toContain('provider-detail-marker');
+    });
+
+    it('Move List Members refuses a TargetListID that is not a UUID before any filter is built', async () => {
+      runViewMock.mockResolvedValue({ Success: true, Results: [] });
+      getEntityObjectMock.mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(true), LatestResult: { CompleteMessage: '' } });
+      const params = buildParams([
+        ['SourceListID', goodId],
+        ['TargetListID', notAUuid],
+        ['RecordIDs', JSON.stringify(['a'])],
+        ['Mode', 'copy'],
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (new MoveListMembersAction() as any).InternalRunAction(params);
+      expect(filtersWithMarker()).toEqual([]);
+      expect(result.Success).toBe(false);
+    });
+
+    it('Move List Members refuses a SourceListID that is not a UUID before any filter is built', async () => {
+      runViewMock.mockResolvedValue({ Success: true, Results: [] });
+      computeDeltaMock.mockResolvedValue({ ToAdd: [], ToRemove: [], Unchanged: [], Counts: { Add: 0, Remove: 0, Unchanged: 0 } });
+      getEntityObjectMock.mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(true), LatestResult: { CompleteMessage: '' } });
+      const params = buildParams([
+        ['SourceListID', notAUuid],
+        ['TargetListID', goodId],
+        ['RecordIDs', JSON.stringify(['a'])],
+        ['Mode', 'move'],
+        ['ConfirmDrops', true],
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (new MoveListMembersAction() as any).InternalRunAction(params);
+      expect(filtersWithMarker()).toEqual([]);
+      expect(result.Success).toBe(false);
     });
   });
 });

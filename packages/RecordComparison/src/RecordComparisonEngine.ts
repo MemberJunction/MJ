@@ -9,6 +9,7 @@ import {
     IMetadataProvider,
     IRunViewProvider
 } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 
 /**
  * Input to {@link RecordComparisonEngine.CompareRecords}.
@@ -259,7 +260,7 @@ export class RecordComparisonEngine {
         contextUser: UserInfo | undefined,
         options?: RecordComparisonOptions
     ): Promise<Record<string, RecordFieldValue>[] | null> {
-        const filter = this.buildKeysFilter(keys);
+        const filter = this.buildKeysFilter(entity, keys);
         if (!filter) {
             return null;
         }
@@ -300,12 +301,50 @@ export class RecordComparisonEngine {
         return Array.from(names);
     }
 
-    /** Builds an OR-ed WHERE clause across all keys, e.g. "(ID='a') OR (ID='b')". */
-    protected buildKeysFilter(keys: CompositeKey[]): string | null {
+    /**
+     * Builds an OR-ed WHERE clause across all keys, e.g. "(ID='a') OR (ID='b')". Each clause is
+     * built from the entity's primary key field names; a key with any other field throws.
+     */
+    protected buildKeysFilter(entity: EntityInfo, keys: CompositeKey[]): string | null {
         const clauses = keys
             .filter(k => k.HasValue)
-            .map(k => `(${k.ToWhereClause()})`);
+            .map(k => `(${this.buildKeyClause(entity, k)})`);
         return clauses.length > 0 ? clauses.join(' OR ') : null;
+    }
+
+    /** The WHERE predicate for one key, using the metadata names of the entity's primary key fields. */
+    protected buildKeyClause(entity: EntityInfo, key: CompositeKey): string {
+        const used = new Set<string>();
+        const parts = key.KeyValuePairs.map(kvp => {
+            const pk = entity.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === String(kvp.FieldName ?? '').trim().toLowerCase());
+            if (!pk || used.has(pk.Name)) {
+                throw new Error(`Key fields must be the primary key fields of entity '${entity.Name}'`);
+            }
+            used.add(pk.Name);
+            return this.buildKeyPredicate(pk.Name, kvp.Value);
+        });
+        if (parts.length === 0) {
+            throw new Error(`Key fields must be the primary key fields of entity '${entity.Name}'`);
+        }
+        return parts.join(' AND ');
+    }
+
+    /**
+     * `Field=literal` (or `Field IS NULL`) for one key value. Text and Date values are quoted and
+     * escaped, as the database provider renders a quoted key; finite numbers are plain. Any other
+     * value throws.
+     */
+    protected buildKeyPredicate(fieldName: string, value: unknown): string {
+        if (value === null || value === undefined) {
+            return `${fieldName} IS NULL`;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return `${fieldName}=${value}`;
+        }
+        if (typeof value === 'string' || value instanceof Date) {
+            return `${fieldName}='${EscapeSQLString(String(value))}'`;
+        }
+        throw new Error(`Invalid value for key field '${fieldName}'`);
     }
 
     /**

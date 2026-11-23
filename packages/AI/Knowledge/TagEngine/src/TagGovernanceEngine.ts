@@ -1,4 +1,4 @@
-import { BaseSingleton, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { BaseSingleton, UUIDsEqual, EscapeSQLString, IsValidUUID } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { MJTagEntity, MJTagAuditLogEntity, MJContentItemTagEntity, MJTaggedItemEntity, MJTagSynonymEntity, MJTagSuggestionEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngine } from './TagEngine';
@@ -123,9 +123,12 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
      * @param survivingTagID - The tag ID that absorbs all references
      * @param contextUser - The user performing the operation
      * @returns Summary of items moved during the merge
-     * @throws Error if the surviving tag cannot be loaded or if any save operation fails
+     * @throws Error if a tag ID is not a UUID, if the surviving tag cannot be loaded or if any save operation fails
      */
     public async MergeTags(sourceTagIDs: string[], survivingTagID: string, contextUser: UserInfo): Promise<MergeResult> {
+        if (!IsValidUUID(survivingTagID) || sourceTagIDs.some((id) => !IsValidUUID(id))) {
+            throw new Error('TagGovernanceEngine.MergeTags: tag IDs must be UUIDs');
+        }
         let totalItemsMoved = 0;
         let totalTaggedItemsMoved = 0;
 
