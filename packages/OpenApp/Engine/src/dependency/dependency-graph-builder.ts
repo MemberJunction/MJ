@@ -34,7 +34,8 @@ export interface FetchedManifest {
 
 /**
  * Fetches and parses an app manifest from a repository URL, at `version` when
- * given (otherwise the default branch).
+ * given (otherwise the default branch). `appName` is given for an installed app, to find
+ * its version tag in a repository that tags by package name.
  *
  * Injected into the graph builder so it can be unit-tested without network
  * access. Returns the manifest on success, or an error message when it can't be
@@ -43,7 +44,8 @@ export interface FetchedManifest {
 export type ManifestFetcher = (
     repoUrl: string,
     subpath?: string,
-    version?: string
+    version?: string,
+    appName?: string
 ) => Promise<{ Success: boolean; Manifest?: FetchedManifest; ErrorMessage?: string }>;
 
 /**
@@ -79,6 +81,8 @@ export interface GraphResolutionResult {
     InstallOrder?: ResolvedDependency[];
     /** Error message if a cycle, version conflict, or unresolvable manifest was found */
     ErrorMessage?: string;
+    /** Installed apps whose own dependencies could not be read, and so were not checked */
+    Warnings?: string[];
 }
 
 /**
@@ -149,17 +153,17 @@ export async function ResolveDependencyGraph(
     fetchManifest: ManifestFetcher,
     resolveVersion?: DependencyVersionResolver
 ): Promise<GraphResolutionResult> {
-    const { graph, errors } = await BuildGraph(root, installedApps, fetchManifest, resolveVersion);
+    const { graph, errors, warnings } = await BuildGraph(root, installedApps, fetchManifest, resolveVersion);
 
     // Cycle detection is structural — report it first so a genuine cycle isn't
     // masked by version-conflict noise it may have produced along the way.
     const sorted = TopologicalSort(graph);
     if (sorted.CycleError) {
-        return { Success: false, ErrorMessage: sorted.CycleError };
+        return { Success: false, ErrorMessage: sorted.CycleError, Warnings: warnings };
     }
 
     if (errors.length > 0) {
-        return { Success: false, ErrorMessage: errors.join('; ') };
+        return { Success: false, ErrorMessage: errors.join('; '), Warnings: warnings };
     }
 
     const installOrder: ResolvedDependency[] = sorted.Order!
@@ -177,22 +181,23 @@ export async function ResolveDependencyGraph(
             };
         });
 
-    return { Success: true, InstallOrder: installOrder };
+    return { Success: true, InstallOrder: installOrder, Warnings: warnings };
 }
 
 /**
  * Breadth-first traversal that reads what each reachable dependency depends on and
  * assembles the complete graph. Version compatibility is validated per-edge so
- * conflicts from any requiring parent are caught. Returns the graph plus any non-structural errors encountered.
+ * conflicts from any requiring parent are caught. Returns the graph plus any non-structural errors and warnings.
  */
 async function BuildGraph(
     root: RootApp,
     installedApps: InstalledAppMap,
     fetchManifest: ManifestFetcher,
     resolveVersion: DependencyVersionResolver | undefined
-): Promise<{ graph: Map<string, GraphNode>; errors: string[] }> {
+): Promise<{ graph: Map<string, GraphNode>; errors: string[]; warnings: string[] }> {
     const graph = new Map<string, GraphNode>();
     const errors: string[] = [];
+    const warnings: string[] = [];
 
     graph.set(root.AppName, {
         AppName: root.AppName,
@@ -209,10 +214,10 @@ async function BuildGraph(
 
     while (queue.length > 0) {
         const edge = queue.shift()!;
-        await ProcessEdge(edge, graph, installedApps, fetchManifest, resolveVersion, errors, queue);
+        await ProcessEdge(edge, graph, installedApps, fetchManifest, resolveVersion, errors, warnings, queue);
     }
 
-    return { graph, errors };
+    return { graph, errors, warnings };
 }
 
 /**
@@ -229,6 +234,7 @@ async function ProcessEdge(
     fetchManifest: ManifestFetcher,
     resolveVersion: DependencyVersionResolver | undefined,
     errors: string[],
+    warnings: string[],
     queue: QueuedEdge[]
 ): Promise<void> {
     const depName = edge.name;
@@ -265,7 +271,7 @@ async function ProcessEdge(
         InstalledVersion: installed?.Version,
         RequiredVersionRange: versionRange,
         RequiredBy: edge.parent,
-        Subpath: subpath,
+        Subpath: installed?.Subpath ?? subpath,
     };
     graph.set(depName, node);
 
@@ -296,17 +302,27 @@ async function ProcessEdge(
         node.ResolvedVersion = resolved.Version;
     }
 
-    const fetched = await fetchManifest(resolvedRepo, subpath, node.ResolvedVersion ?? node.InstalledVersion);
+    const fetched = await fetchManifest(
+        resolvedRepo,
+        node.Subpath,
+        node.ResolvedVersion ?? node.InstalledVersion,
+        installed ? depName : undefined
+    );
     if (fetched.Success && fetched.Manifest) {
         node.EffectiveVersion = node.ResolvedVersion ?? fetched.Manifest.version;
         SetNodeDependencies(node, fetched.Manifest.dependencies ?? {}, queue);
-    } else if (!node.AlreadyInstalled) {
+    } else if (node.AlreadyInstalled) {
+        // A leaf: the app is already in place, so this does not stop the operation.
+        warnings.push(
+            `The dependencies of installed app '${depName}' (v${node.InstalledVersion}) are not checked: ` +
+            `its manifest could not be read from ${resolvedRepo} (${fetched.ErrorMessage ?? 'unknown error'})`
+        );
+    } else {
         // Can't resolve an uninstalled dependency's manifest — hard error.
         errors.push(
             `Failed to fetch manifest for dependency '${depName}' from ${resolvedRepo}: ${fetched.ErrorMessage ?? 'unknown error'}`
         );
     }
-    // installed + fetch failed -> treat as leaf; its subtree is already satisfied.
 }
 
 /** Records what a node depends on and enqueues an edge for each of those dependencies. */

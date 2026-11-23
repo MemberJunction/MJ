@@ -378,5 +378,39 @@ describe('ResolveDependencyGraph', () => {
             expect(result.Success).toBe(true);
             expect(calls).toEqual(['tasks@1.13.0']);
         });
+
+        it('warns, and stays successful, when the dependencies of an installed app cannot be read', async () => {
+            const result = await ResolveDependencyGraph(root, installedApps(undefined), recordingFetcher({}, []));
+
+            expect(result.Success).toBe(true);
+            expect(result.Warnings).toHaveLength(1);
+            expect(result.Warnings![0]).toContain("'tasks' (v1.13.0)");
+            expect(result.Warnings![0]).toContain('not found: tasks@1.13.0');
+        });
+
+        it('keeps the warning when resolution fails for another reason', async () => {
+            const unsatisfied: RootApp = { ...root, Dependencies: { tasks: dep('tasks'), common: dep('common', '>=9.0.0') } };
+            const result = await ResolveDependencyGraph(unsatisfied, installedApps(undefined), recordingFetcher({}, []));
+
+            expect(result.Success).toBe(false);
+            expect(result.Warnings).toHaveLength(1);
+        });
+
+        it.each([
+            ['the folder it was installed from', 'apps/tasks', 'declared/folder', 'apps/tasks'],
+            ['the folder its parent declares when none is recorded', null, 'declared/folder', 'declared/folder'],
+        ])('reads an installed app by name, in %s', async (_name, recorded, declared, expected) => {
+            const seen: Array<[string | undefined, string | undefined]> = [];
+            const fetcher: ManifestFetcher = async (url, subpath, _version, appName) => {
+                seen.push([subpath, appName]);
+                return { Success: true, Manifest: { name: 'tasks', repository: url, dependencies: {} } };
+            };
+            const apps: InstalledAppMap = { tasks: { Version: '1.13.0', Repository: repo('tasks'), Subpath: recorded } };
+            await ResolveDependencyGraph(
+                { ...root, Dependencies: { tasks: { version: '^1.0.0', repository: repo('tasks'), subpath: declared } } }, apps, fetcher,
+            );
+
+            expect(seen).toEqual([[expected, 'tasks']]);
+        });
     });
 });
