@@ -1,16 +1,78 @@
 import {
     BaseEntity,
     BaseEntityResult,
+    EntityDeleteOptions,
+    EntityFieldInfo,
     EntitySaveOptions,
+    IEntityDataProvider,
     IMetadataProvider,
     LogError,
     RunView,
+    ValidationErrorInfo,
+    ValidationErrorType,
+    ValidationResult,
     WellKnownUserSource
 } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { MJConversationDetailEntityExtended, MJConversationEntity } from "@memberjunction/core-entities";
+import {
+    DispatchConversationMentionNotifications,
+    MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
+    MJConversationEntity
+} from "@memberjunction/core-entities";
 import { InspectAndStampRestrictedFieldsForComment } from "./RestrictedFieldCommentClassifier";
 import { AgentChannelConversationDriver } from "./AgentChannelConversationDriver.server";
+import {
+    ConversationDetailWritePermissionRegistry,
+    ResolveConversationSummaryForWritePermission,
+    type ConversationDetailWriteOperation,
+    type ConversationDetailWritePermissionVerdict,
+    type ConversationSummaryForWritePermission
+} from "./ConversationDetailWritePermissionProvider";
+
+const OWNER_ONLY_RATING_FIELDS = ['UserRating', 'UserFeedback'];
+const AUTHORED_FIELDS = ['UserID', 'Role', 'Message', 'ArtifactID', 'ArtifactVersionID', 'MediaType', 'ParentID'];
+const PLACEMENT_FIELDS = ['ConversationID', 'BranchID'];
+const ACCESS_GATED_FIELDS = ['ID', 'ConversationID', 'Role', ...OWNER_ONLY_RATING_FIELDS];
+const GATED_FIELDS = [
+    ...ACCESS_GATED_FIELDS,
+    'BranchID',
+    ...AUTHORED_FIELDS.filter((field) => field !== 'Role'),
+];
+const REPLY_FIELDS = [
+    ...AUTHORED_FIELDS,
+    'ConversationID',
+    'BranchID',
+    'AgentID',
+    'Status',
+    'Error',
+    'ResponseForm',
+    'ActionableCommands',
+    'AutomaticCommands',
+    'SuggestedResponses',
+    'ReflectionInsights',
+    'CompletionTime',
+    'ExternalID',
+];
+const REPLY_REFUSAL = "Only the server writes an agent's reply.";
+
+function isPersonRole(role: string | null | undefined): boolean {
+    return role != null && EntityFieldInfo.NormalizeValueListValue(role) === 'user';
+}
+
+function isReplyRole(role: string | null | undefined): boolean {
+    const normalized = role == null ? null : EntityFieldInfo.NormalizeValueListValue(role);
+    return normalized === 'ai' || normalized === 'error';
+}
+
+function asMetadataProvider(
+    provider: IEntityDataProvider | IMetadataProvider | null | undefined
+): IMetadataProvider | null {
+    if (!provider || !('ProviderType' in provider)) {
+        return null;
+    }
+    return provider;
+}
 
 /**
  * Server-side subclass of MJConversationDetailEntity that:
@@ -27,12 +89,85 @@ import { AgentChannelConversationDriver } from "./AgentChannelConversationDriver
  */
 @RegisterClass(BaseEntity, "MJ: Conversation Details")
 export class MJConversationDetailEntityServer extends MJConversationDetailEntityExtended {
+    private preloadedConversationSummary: ConversationSummaryForWritePermission | null = null;
+    private insideSaveValidation = false;
+
+    /**
+     * Attaches preloaded conversation metadata so pluggable write permission providers
+     * can evaluate host rules in memory without issuing an extra conversation query.
+     */
+    public SetConversationWriteContext(summary: ConversationSummaryForWritePermission | null): void {
+        this.preloadedConversationSummary = summary;
+    }
+
+    /**
+     * Evaluates registered {@link ConversationDetailWritePermissionProvider} hooks for `operation`.
+     * Returns `{ Decision: 'Abstain' }` immediately when no custom provider is registered,
+     * preserving 100% backward-compatible default behavior with zero extra queries.
+     */
+    public async EvaluatePluggableWritePermission(
+        operation: ConversationDetailWriteOperation
+    ): Promise<ConversationDetailWritePermissionVerdict> {
+        const provider = asMetadataProvider(this.ProviderToUse);
+        if (provider?.ProviderType !== 'Database') {
+            return { Decision: 'Abstain' };
+        }
+        const user = this.ContextCurrentUser;
+        if (!user || !this.ConversationID) {
+            return { Decision: 'Abstain' };
+        }
+        if (!ConversationDetailWritePermissionRegistry.Instance.HasRegisteredProviders()) {
+            return { Decision: 'Abstain' };
+        }
+        const summary = await ResolveConversationSummaryForWritePermission(
+            provider,
+            user,
+            this.ConversationID,
+            this.preloadedConversationSummary
+        );
+        return ConversationDetailWritePermissionRegistry.Instance.Evaluate({
+            Provider: provider,
+            ContextUser: user,
+            Operation: operation,
+            ConversationID: this.ConversationID,
+            Conversation: summary,
+            ConversationDetail: this,
+            IsServerAuthoredReply: this.IsServerAuthoredReply,
+        });
+    }
+
+    public override async ValidateAsync(): Promise<ValidationResult> {
+        const result = await super.ValidateAsync();
+        if (!result.Success || this.insideSaveValidation) {
+            return result;
+        }
+        const evalWrite =
+            this.EvaluatePluggableWritePermission ??
+            MJConversationDetailEntityServer.prototype.EvaluatePluggableWritePermission;
+        const verdict = await evalWrite.call(this, this.IsSaved ? 'update' : 'create');
+        if (verdict.Decision === 'Deny') {
+            result.Success = false;
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    'ConversationID',
+                    verdict.Reason || 'You do not have permission to write to this conversation.',
+                    this.ConversationID,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
+        return result;
+    }
+
     /**
      * Sets the OriginalMessageChanged flag on a genuine message edit, checks a new row's fork,
-     * runs FLS restricted-field inspection for anchored conversations, then calls super.Save().
+     * checks pluggable conversation-detail write permission providers, runs FLS restricted-field
+     * inspection for anchored conversations, then saves.
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNewRecord = !this.IsSaved;
+        const callerUserID = this.UserID;
+        const previousMessage = isNewRecord ? null : this.readOriginalFieldText('Message');
         if (this.ShouldFlagOriginalMessageChanged()) {
             this.OriginalMessageChanged = true;
         }
@@ -60,7 +195,37 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
             this.recordCreateFailure(flsRefusal, this.IsSaved ? 'update' : 'create');
             return false;
         }
-        const saved = await super.Save(options);
+
+        const evalWrite =
+            this.EvaluatePluggableWritePermission ??
+            MJConversationDetailEntityServer.prototype.EvaluatePluggableWritePermission;
+        const writeVerdict = await evalWrite.call(this, isNewRecord ? 'create' : 'update');
+        if (writeVerdict.Decision === 'Deny') {
+            this.recordCreateFailure(
+                writeVerdict.Reason || 'You do not have permission to write to this conversation.',
+                isNewRecord ? 'create' : 'update'
+            );
+            return false;
+        }
+
+        let saved: boolean;
+        this.insideSaveValidation = true;
+        try {
+            if (writeVerdict.Decision === 'Allow') {
+                saved = await this.saveWithProviderAuthorization(
+                    options,
+                    isNewRecord,
+                    callerUserID,
+                    previousMessage,
+                    Boolean(writeVerdict.IsOwnerOverride)
+                );
+            } else {
+                saved = await super.Save(options);
+            }
+        } finally {
+            this.insideSaveValidation = false;
+        }
+
         if (saved && isNewRecord && this.ConversationID && !this.AgentID && this.Role === 'User') {
             await AgentChannelConversationDriver.HandleHumanMessagePosted(
                 this.ProviderToUse as unknown as IMetadataProvider,
@@ -75,6 +240,193 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
             );
         }
         return saved;
+    }
+
+    override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        const evalWrite =
+            this.EvaluatePluggableWritePermission ??
+            MJConversationDetailEntityServer.prototype.EvaluatePluggableWritePermission;
+        const writeVerdict = await evalWrite.call(this, 'delete');
+        if (writeVerdict.Decision === 'Deny') {
+            this.recordMutationFailure(
+                writeVerdict.Reason || 'You do not have permission to delete from this conversation.',
+                'delete'
+            );
+            return false;
+        }
+        if (writeVerdict.Decision === 'Allow') {
+            const refusal = this.authorAndRatingGuardRefusal('delete', Boolean(writeVerdict.IsOwnerOverride));
+            if (refusal) {
+                this.recordMutationFailure(refusal, 'delete');
+                return false;
+            }
+            return MJConversationDetailEntity.prototype.Delete.call(this, options);
+        }
+        return super.Delete(options);
+    }
+
+    private async saveWithProviderAuthorization(
+        options: EntitySaveOptions | undefined,
+        isNewRecord: boolean,
+        callerUserID: string | null,
+        previousMessage: string | null,
+        isOwnerOverride: boolean
+    ): Promise<boolean> {
+        const resultType: 'create' | 'update' = isNewRecord ? 'create' : 'update';
+        const refusal = this.authorAndRatingGuardRefusal('save', isOwnerOverride);
+        if (refusal) {
+            this.UserID = callerUserID;
+            this.recordMutationFailure(refusal, resultType);
+            return false;
+        }
+        const saved = await MJConversationDetailEntity.prototype.Save.call(this, options);
+        if (!saved) {
+            this.UserID = callerUserID;
+            return false;
+        }
+        const provider = asMetadataProvider(this.ProviderToUse);
+        const user = this.ContextCurrentUser;
+        if (
+            provider?.ProviderType === 'Database' &&
+            user &&
+            isPersonRole(this.Role) &&
+            this.Message &&
+            typeof DispatchConversationMentionNotifications === 'function'
+        ) {
+            await DispatchConversationMentionNotifications({
+                Provider: provider,
+                ContextUser: user,
+                ConversationID: this.ConversationID,
+                ConversationDetailID: this.ID,
+                AuthorUserID: this.UserID || user.ID,
+                Message: this.Message,
+                PreviousMessage: !isNewRecord ? previousMessage : null,
+            });
+        }
+        return true;
+    }
+
+    private authorAndRatingGuardRefusal(
+        operation: 'save' | 'delete',
+        isOwnerOverride: boolean
+    ): string | null {
+        const user = this.ContextCurrentUser;
+        if (!user) {
+            return null;
+        }
+        const isSystemUser = WellKnownUserSource.Instance.IsSystemUser(user);
+        const variableGated = isSystemUser ? ACCESS_GATED_FIELDS : GATED_FIELDS;
+        const touchesReply = isReplyRole(this.Role) || isReplyRole(this.readOriginalFieldText('Role'));
+        if (
+            operation === 'save' &&
+            this.hasTransactionVariableFor(
+                touchesReply && !this.IsServerAuthoredReply ? [...variableGated, ...REPLY_FIELDS] : variableGated
+            )
+        ) {
+            return 'A conversation message cannot take its values from a transaction variable.';
+        }
+        if (!this.IsSaved && operation === 'save' && this.CloneContext) {
+            return null;
+        }
+        if (!isOwnerOverride && OWNER_ONLY_RATING_FIELDS.some((name) => this.isFieldDirtyFlag(name))) {
+            return 'Only the conversation owner can set or change the rating and feedback on this message.';
+        }
+        const authorRefusal = isSystemUser ? null : this.authorshipGuardRefusal(operation, user, isOwnerOverride);
+        if (authorRefusal) {
+            return authorRefusal;
+        }
+        return this.replyGuardRefusal(operation);
+    }
+
+    private authorshipGuardRefusal(
+        operation: 'save' | 'delete',
+        user: NonNullable<MJConversationDetailEntityServer['ContextCurrentUser']>,
+        isOwner: boolean
+    ): string | null {
+        if (operation === 'delete') {
+            if (!isPersonRole(this.Role) || isOwner) {
+                return null;
+            }
+            return this.UserID && UUIDsEqual(this.UserID, user.ID)
+                ? null
+                : "Only the message's author or the conversation's owner can delete it.";
+        }
+        if (!this.IsSaved) {
+            if (!isPersonRole(this.Role)) {
+                return null;
+            }
+            if (!this.UserID) {
+                if (!isOwner) {
+                    this.UserID = user.ID;
+                }
+                return null;
+            }
+            return UUIDsEqual(this.UserID, user.ID) ? null : 'You can post a message only as yourself.';
+        }
+        const wasPerson = isPersonRole(this.readOriginalFieldText('Role'));
+        if (this.isFieldDirtyFlag('Role') && (wasPerson || isPersonRole(this.Role))) {
+            return "A message's role cannot be changed.";
+        }
+        if (!wasPerson) {
+            return null;
+        }
+        if (PLACEMENT_FIELDS.some((name) => this.isFieldDirtyFlag(name))) {
+            return 'A message cannot be moved to another conversation or fork.';
+        }
+        const changed = AUTHORED_FIELDS.filter((name) => this.isFieldDirtyFlag(name));
+        if (changed.length === 0) {
+            return null;
+        }
+        const author = this.readOriginalFieldText('UserID') ?? (isOwner ? user.ID : null);
+        if (!author || !UUIDsEqual(author, user.ID)) {
+            return 'Only the person who wrote this message can change it.';
+        }
+        if (changed.includes('UserID') && !(this.UserID && UUIDsEqual(this.UserID, user.ID))) {
+            return 'You can post a message only as yourself.';
+        }
+        return null;
+    }
+
+    private replyGuardRefusal(operation: 'save' | 'delete'): string | null {
+        if (operation === 'delete' || this.IsServerAuthoredReply) {
+            return null;
+        }
+        if (!this.IsSaved) {
+            return isReplyRole(this.Role) ? REPLY_REFUSAL : null;
+        }
+        const touchesReply = isReplyRole(this.readOriginalFieldText('Role')) || isReplyRole(this.Role);
+        return touchesReply && REPLY_FIELDS.some((name) => this.isFieldDirtyFlag(name)) ? REPLY_REFUSAL : null;
+    }
+
+    private hasTransactionVariableFor(fields: string[]): boolean {
+        return Boolean(
+            this.TransactionGroup?.Variables.some((v) => {
+                const name = v.EntityObject === this && v.Type === 'Use' ? this.GetFieldByName(v.FieldName)?.Name : null;
+                return Boolean(name && fields.includes(name));
+            })
+        );
+    }
+
+    private isFieldDirtyFlag(name: string): boolean {
+        return Boolean(typeof this.GetFieldByName === 'function' && this.GetFieldByName(name)?.Dirty);
+    }
+
+    private readOriginalFieldText(name: string): string | null {
+        if (typeof this.GetFieldByName !== 'function') {
+            return null;
+        }
+        const original = this.GetFieldByName(name)?.OldValue;
+        return typeof original === 'string' && original.length > 0 ? original : null;
+    }
+
+    private recordMutationFailure(message: string, type: 'create' | 'update' | 'delete'): void {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = type;
+        result.Message = message;
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
     }
 
     /**
