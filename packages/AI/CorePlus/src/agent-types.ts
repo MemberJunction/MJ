@@ -1286,6 +1286,10 @@ export interface InputArtifact {
     deliveryMode?: 'Inline' | 'ToolsOnly';
     /** Per-instance override that forces ToolsOnly regardless of type default. */
     forceToolsOnly?: boolean;
+    /** Optional output trust classification when the artifact originated from an action or external source. */
+    trustLevel?: ActionOutputTrustLevel;
+    /** Provenance identifier (e.g. `'action:Web Search'`) used when wrapping untrusted tool reads. */
+    sourceName?: string;
 }
 
 /**
@@ -2840,6 +2844,20 @@ export type AgentChatMessageMetadata = {
     parentId?: string | null;
     /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
     rawContent?: string;
+    /**
+     * Alpha-sequence artifact IDs (e.g. `['A']`, `['A', 'B']`) registered in `ArtifactToolManager`
+     * for this action/tool result message's large or expirable outputs. Preserved across message
+     * compaction and removal so the compacted or stubbed message can remind the model which
+     * artifact handle(s) hold the full queryable data (`get_rows`, `search_rows`, `filter`,
+     * `aggregate`, `grep`, `get_lines`, `json_path`, `json_iterate`, `get_full`).
+     */
+    artifactIds?: string[];
+    /**
+     * Internal deferred spillover registration handle IDs resolved lazily by BaseAgent
+     * right before this message is compacted, stubbed, or removed, so routine uncompacted turns
+     * never mutate `_ARTIFACT_MANIFEST` in the system prompt or bust provider KV caches.
+     */
+    pendingSpilloverIds?: string[];
     /**
      * True on the framework-authored trailing message that carries the loop agent's volatile
      * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the
