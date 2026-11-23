@@ -70,17 +70,17 @@ export const CONVERSATION_CALL_HOST_CHANNELS: readonly RealtimeHostChannelDeclar
 
 /**
  * Reason surfaced to the voice co-agent when side-panel channels (Whiteboard, Workspace, etc.) are
- * omitted on narrow/mobile viewports, so it tells the user they are desktop-only right now rather
- * than claiming a permissions/access issue.
+ * omitted below {@link REALTIME_SIDE_PANEL_MIN_WIDTH_PX}, so it explains why the surface cannot be
+ * shown on mobile or in a narrow window rather than claiming a permissions/access issue.
  */
 export const MOBILE_DESKTOP_ONLY_CHANNEL_REASON =
-  'Only available on desktop right now, not on mobile at the moment.';
+  'Requires a wider desktop view and is not available on mobile or narrow screens right now.';
 
 /**
  * The start options the conversations UI passes with every call it starts: the channels it brings, and the camera check
- * its call overlay shows the first time the user turns the camera on in a call. On narrow/mobile viewports where the
- * side panel is hidden, screen share and side-panel tab channels are omitted at mint so the agent shares common ground
- * with what the user can actually see.
+ * its call overlay shows the first time the user turns the camera on in a call. Evaluated once at call start: when the
+ * viewport is narrower than {@link REALTIME_SIDE_PANEL_MIN_WIDTH_PX} (where the side panel is hidden), screen share and
+ * side-panel tab channels are omitted at mint so the agent shares common ground with what the user can actually see.
  */
 export function ConversationCallStartOptions(): RealtimeSessionStartOptions {
   if (IsNarrowRealtimeViewport()) {

@@ -757,12 +757,18 @@ describe('RealtimeSessionRuntime — ChannelFilter (viewport/host capability gat
 
     await start(runtime, {
       ChannelFilter: (plugin) => plugin.ChannelName !== 'Form',
-      ChannelFilterReason: 'Only available on desktop right now, not on mobile at the moment.',
+      ChannelFilterReason: 'Requires a wider desktop view and is not available on mobile or narrow screens right now.',
     });
     expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual(['Echo']);
-    expect(ScopedFakeClient.Notes.some((n) => n.includes('Unavailable on this device') && n.includes('Form') && n.includes('Only available on desktop'))).toBe(true);
+    expect(
+      ScopedFakeClient.Notes.some(
+        (n) => n.includes('Unavailable in this view') && n.includes('Form') && n.includes('Requires a wider desktop view'),
+      ),
+    ).toBe(true);
     expect(runtime.GetSurfaceSnapshot()).toMatchObject({
-      UnavailableChannels: [{ ChannelKey: 'Form', Reason: 'Only available on desktop right now, not on mobile at the moment.' }],
+      UnavailableChannels: [
+        { ChannelKey: 'Form', Reason: 'Requires a wider desktop view and is not available on mobile or narrow screens right now.' },
+      ],
     });
     const echo = runtime.ActiveChannels[0] as RegisteredEcho;
     const refusal = await echo.ContextForTest!.DispatchContextAction!({
@@ -771,7 +777,48 @@ describe('RealtimeSessionRuntime — ChannelFilter (viewport/host capability gat
       Params: {},
     });
     expect(refusal.Success).toBe(false);
-    expect(refusal.ErrorMessage).toContain('Only available on desktop right now, not on mobile at the moment.');
+    expect(refusal.ErrorMessage).toContain('Requires a wider desktop view and is not available on mobile or narrow screens right now.');
+    await runtime.EndRealtimeSession();
+  });
+
+  it('resets hostUnavailableChannels on each start so filtered entries never accumulate across sessions', async () => {
+    stubRegistry([ECHO_ROW, FORM_ROW]);
+    const { runtime } = build();
+    const reason = 'Requires a wider desktop view.';
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Form',
+      ChannelFilterReason: reason,
+    });
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([{ ChannelKey: 'Form', Title: 'Form', Reason: reason }]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Echo',
+      ChannelFilterReason: reason,
+    });
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([{ ChannelKey: 'Echo', Title: 'Echo', Reason: reason }]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime);
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toBeUndefined();
+    await runtime.EndRealtimeSession();
+  });
+
+  it('does not advertise kill-switched (inactive) registry rows as unavailable when rejected by ChannelFilter', async () => {
+    stubRegistry([ECHO_ROW, { ...FORM_ROW, IsActive: false }]);
+    const { runtime } = build();
+
+    await start(runtime, {
+      ChannelFilter: () => false,
+      ChannelFilterReason: 'Requires a wider desktop view.',
+    });
+
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([
+      { ChannelKey: 'Echo', Title: 'Echo', Reason: 'Requires a wider desktop view.' },
+    ]);
+    expect(ScopedFakeClient.Notes.some((n) => n.includes('Echo'))).toBe(true);
+    expect(ScopedFakeClient.Notes.some((n) => n.includes('Form'))).toBe(false);
     await runtime.EndRealtimeSession();
   });
 });

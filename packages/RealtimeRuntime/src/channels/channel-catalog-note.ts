@@ -154,14 +154,14 @@ export function BuildChannelCatalogNote(
     return lines.join('\n');
 }
 
-/** The "unavailable on this device" section: why host-filtered channels are omitted so the agent explains honestly. */
+/** The "unavailable in this view" section: why host-filtered channels are omitted so the agent explains honestly without over-promising agent-scoped opt-in channels. */
 function renderUnavailableChannels(unavailable: ReadonlyArray<UnavailableChannelEntry>): string[] {
     if (unavailable.length === 0) {
         return [];
     }
     const lines = unavailable.map((u) => `- ${u.DisplayName} (channel "${u.Key}"): ${u.Reason}`);
     return [
-        '[channels] Unavailable on this device — do not try to open or call these; if the user asks for one, let them know why it is unavailable right now rather than saying you do not have access:',
+        '[channels] Unavailable in this view (filtered out before per-agent policy: do not try to open or call these, and do not promise an opt-in channel is enabled for you on wider screens unless your instructions say you have it; if the user asks for one, share the reason below instead of claiming a permissions error):',
         ...lines,
     ];
 }
