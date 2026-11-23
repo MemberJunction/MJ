@@ -96,4 +96,34 @@ describe('ArtifactLinkTriggerProvider', () => {
 
     expect(token).toBe(ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Pricing Policy', { ID: 'art-1' }));
   });
+
+  it('escapes LIKE wildcards with PostgreSQL/MSSQL-safe ESCAPE "!" and only interpolates valid UUID ExcludeArtifactID', async () => {
+    const selfId = '11111111-1111-4111-8111-111111111111';
+    const { provider, queries } = makeScopedProvider([]);
+    const trigger = new ArtifactLinkTriggerProvider();
+    trigger.ExcludeArtifactID = selfId;
+
+    await trigger.GetSuggestions({
+      Query: "50%_! O'Brien",
+      MaxResults: 10,
+      ContextUser: alice,
+      Provider: provider,
+    });
+
+    expect(queries).toHaveLength(1);
+    const filter = String(queries[0].params.ExtraFilter ?? '');
+    expect(filter).toContain("LOWER([Name]) LIKE '%50!%!_!! o''brien%' ESCAPE '!'");
+    expect(filter).not.toContain("ESCAPE '\\'");
+    expect(filter).toContain(`[ID] <> '${selfId}'`);
+
+    // Invalid UUID ExcludeArtifactID must not be interpolated into SQL
+    trigger.ExcludeArtifactID = 'not-a-uuid';
+    await trigger.GetSuggestions({
+      Query: 'Plan',
+      MaxResults: 10,
+      ContextUser: alice,
+      Provider: provider,
+    });
+    expect(String(queries[1].params.ExtraFilter ?? '')).not.toContain('[ID] <>');
+  });
 });

@@ -665,3 +665,446 @@ describe('ArtifactPermissionEngine Defer Fallback, >500 Items, Collection Ancest
         expect(result).toBeNull();
     });
 });
+
+describe('ArtifactPermissionEngine.ResolvePermissionsBatch', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        ArtifactPermissionEngine.Instance.UnregisterDelegate('Test: Batch Deny Host');
+        ArtifactPermissionEngine.Instance.UnregisterDelegate('Test: Batch Partial Defer Host');
+    });
+
+    interface BatchFixtureData {
+        artifacts: Array<{ ID: string; UserID: string; DelegateEntityID: string | null; DelegateRecordID: string | null }>;
+        directPerms: Array<{ ID: string; ArtifactID: string; UserID: string; CanRead: boolean; CanEdit: boolean; CanDelete: boolean; CanShare: boolean }>;
+        versions: Array<{ ID: string; ArtifactID: string }>;
+        collectionArtifacts: Array<{ ArtifactVersionID: string; CollectionID: string }>;
+        collections: Array<{ ID: string; OwnerID: string | null; ParentID: string | null }>;
+        collectionPerms: Array<{ CollectionID: string; UserID: string; CanRead: boolean; CanEdit: boolean; CanDelete: boolean; CanShare: boolean }>;
+        entities: EntityInfo[];
+    }
+
+    function createBatchProvider(data: BatchFixtureData) {
+        const runViewCalls: RunViewParams[] = [];
+        const runViewsCalls: RunViewParams[][] = [];
+
+        const matchIds = (filter: RunViewParams['ExtraFilter'], column: string): string[] => {
+            const inIds = extractInQuotedIds(filter);
+            if (inIds.length > 0) {
+                return inIds.map((id) => id.toLowerCase());
+            }
+            const eqId = extractEqUuid(filter, column);
+            return eqId ? [eqId.toLowerCase()] : [];
+        };
+
+        const execute = (params: RunViewParams) => {
+            const filter = extraFilterText(params.ExtraFilter);
+            if (params.EntityName === 'MJ: Artifacts') {
+                const ids = new Set(matchIds(filter, 'ID'));
+                const rows = data.artifacts.filter((a) => ids.has(a.ID.toLowerCase()));
+                return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 1, ErrorMessage: '' };
+            }
+            if (params.EntityName === 'MJ: Artifact Permissions') {
+                const ids = new Set(matchIds(filter, 'ArtifactID'));
+                const uid = extractEqUuid(filter, 'UserID')?.toLowerCase();
+                const rows = data.directPerms.filter(
+                    (p) => ids.has(p.ArtifactID.toLowerCase()) && (!uid || p.UserID.toLowerCase() === uid)
+                );
+                return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 1, ErrorMessage: '' };
+            }
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                const ids = new Set(matchIds(filter, 'ArtifactID'));
+                const rows = data.versions.filter((v) => ids.has(v.ArtifactID.toLowerCase()));
+                return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 1, ErrorMessage: '' };
+            }
+            if (params.EntityName === 'MJ: Collection Artifacts') {
+                const verIds = new Set(matchIds(filter, 'ArtifactVersionID'));
+                const rows = data.collectionArtifacts.filter((ca) => verIds.has(ca.ArtifactVersionID.toLowerCase()));
+                return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 1, ErrorMessage: '' };
+            }
+            if (params.EntityName === 'MJ: Collections') {
+                const colIds = new Set(matchIds(filter, 'ID'));
+                const rows = data.collections.filter((c) => colIds.has(c.ID.toLowerCase()));
+                return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 1, ErrorMessage: '' };
+            }
+            if (params.EntityName === 'MJ: Collection Permissions') {
+                const colIds = new Set(matchIds(filter, 'CollectionID'));
+                const uid = extractEqUuid(filter, 'UserID')?.toLowerCase();
+                const rows = data.collectionPerms.filter(
+                    (cp) => colIds.has(cp.CollectionID.toLowerCase()) && (!uid || cp.UserID.toLowerCase() === uid)
+                );
+                return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 1, ErrorMessage: '' };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+        };
+
+        const provider = {
+            ProviderType: 'Network',
+            Entities: data.entities,
+            EntityByID: (id: string) => data.entities.find((e) => e.ID.toLowerCase() === id.toLowerCase()),
+            EntityByName: (name: string) => data.entities.find((e) => e.Name.toLowerCase() === name.toLowerCase()),
+            RunView: vi.fn(async (params: RunViewParams) => {
+                runViewCalls.push(params);
+                return execute(params);
+            }),
+            RunViews: vi.fn(async (paramsList: RunViewParams[]) => {
+                runViewsCalls.push(paramsList);
+                return paramsList.map((p) => execute(p));
+            })
+        } as unknown as IMetadataProvider;
+
+        return { provider, runViewCalls, runViewsCalls };
+    }
+
+    it('resolves N uncollected artifacts in ONE RunViews call regardless of N, and walks collection ancestry O(depth) not O(N)', async () => {
+        const ownerId = '11111111-1111-4111-8111-111111111111';
+        const viewer = createTestUser('22222222-2222-4222-8222-222222222222', 'viewer@example.com');
+        const colChild = 'c1111111-1111-4111-8111-111111111111';
+        const colParent = 'c2222222-2222-4222-8222-222222222222';
+
+        const makeUncollectedRun = async (count: number) => {
+            const ids = Array.from({ length: count }, (_, i) => `a0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
+            const fixture = createBatchProvider({
+                artifacts: ids.map((id, i) => ({
+                    ID: id,
+                    UserID: i % 2 === 0 ? viewer.ID : ownerId,
+                    DelegateEntityID: null,
+                    DelegateRecordID: null
+                })),
+                directPerms: ids
+                    .filter((_, i) => i % 2 === 1 && i < Math.ceil(count / 2))
+                    .map((id, idx) => ({
+                        ID: `p0000000-0000-4000-8000-${String(idx + 1).padStart(12, '0')}`,
+                        ArtifactID: id,
+                        UserID: viewer.ID,
+                        CanRead: true,
+                        CanEdit: false,
+                        CanDelete: false,
+                        CanShare: false
+                    })),
+                versions: [],
+                collectionArtifacts: [],
+                collections: [],
+                collectionPerms: [],
+                entities: []
+            });
+            const res = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(fixture.provider, ids, viewer);
+            return { ids, res, fixture };
+        };
+
+        const run5 = await makeUncollectedRun(5);
+        const run20 = await makeUncollectedRun(20);
+
+        // Whether N=5 or N=20, uncollected artifacts take exactly ONE RunViews call (3 queries: Artifacts, Direct Perms, Versions).
+        expect(run5.fixture.runViewsCalls).toHaveLength(1);
+        expect(run5.fixture.runViewCalls).toHaveLength(0);
+        expect(run20.fixture.runViewsCalls).toHaveLength(1);
+        expect(run20.fixture.runViewCalls).toHaveLength(0);
+        expect(run20.fixture.runViewsCalls[0].map((p) => p.EntityName)).toEqual([
+            'MJ: Artifacts',
+            'MJ: Artifact Permissions',
+            'MJ: Artifact Versions'
+        ]);
+        expect(run20.res.get(run20.ids[0])?.Source).toBe('Owner');
+        expect(run20.res.get(run20.ids[1])?.Source).toBe('ArtifactPermission');
+        expect(run20.res.get(run20.ids[19])?.CanRead).toBe(false);
+
+        // Now verify O(depth) collection ancestry walk for N=4 vs N=12 collected artifacts across a 2-level hierarchy.
+        const makeCollectedRun = async (count: number) => {
+            const ids = Array.from({ length: count }, (_, i) => `b0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
+            const fixture = createBatchProvider({
+                artifacts: ids.map((id) => ({ ID: id, UserID: ownerId, DelegateEntityID: null, DelegateRecordID: null })),
+                directPerms: [],
+                versions: ids.map((id, i) => ({
+                    ID: `v0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+                    ArtifactID: id
+                })),
+                collectionArtifacts: ids.map((_, i) => ({
+                    ArtifactVersionID: `v0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+                    CollectionID: colChild
+                })),
+                collections: [
+                    { ID: colChild, OwnerID: ownerId, ParentID: colParent },
+                    { ID: colParent, OwnerID: ownerId, ParentID: null }
+                ],
+                collectionPerms: [
+                    { CollectionID: colParent, UserID: viewer.ID, CanRead: true, CanEdit: true, CanDelete: false, CanShare: false }
+                ],
+                entities: []
+            });
+            const res = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(fixture.provider, ids, viewer);
+            return { ids, res, fixture };
+        };
+
+        const colRun4 = await makeCollectedRun(4);
+        const colRun12 = await makeCollectedRun(12);
+
+        // Exact same number of DB round-trips for N=4 and N=12 (1 RunViews initial + 1 Collection Artifacts + 2 ancestry levels + 1 Collection Perms).
+        expect(colRun4.fixture.runViewsCalls.length).toBe(1);
+        expect(colRun12.fixture.runViewsCalls.length).toBe(1);
+        expect(colRun12.fixture.runViewCalls.length).toBe(colRun4.fixture.runViewCalls.length);
+        expect(colRun12.fixture.runViewCalls.map((p) => p.EntityName)).toEqual([
+            'MJ: Collection Artifacts',
+            'MJ: Collections',
+            'MJ: Collections',
+            'MJ: Collection Permissions'
+        ]);
+        for (const id of colRun12.ids) {
+            expect(colRun12.res.get(id)).toMatchObject({ CanRead: true, CanEdit: true, CanDelete: false, Source: 'CollectionPermission' });
+        }
+    });
+
+    it('matches ResolvePermissions exactly across owned, direct-shared, collection-inherited, delegate-denied, partial-defer, parent-delegated, missing, and unreadable artifacts', async () => {
+        const ownerId = '11111111-1111-4111-8111-111111111111';
+        const viewer = createTestUser('22222222-2222-4222-8222-222222222222', 'viewer@example.com');
+
+        const entArtifactsId = 'e1000000-0000-4000-8000-000000000001';
+        const entDenyId = 'e2000000-0000-4000-8000-000000000002';
+        const entDeferId = 'e3000000-0000-4000-8000-000000000003';
+
+        ArtifactPermissionEngine.Instance.RegisterDelegate('Test: Batch Deny Host', {
+            async CanRead(): Promise<DelegatePermissionDecision> { return 'Deny'; },
+            async CanEdit(): Promise<DelegatePermissionDecision> { return 'Deny'; }
+        });
+        ArtifactPermissionEngine.Instance.RegisterDelegate('Test: Batch Partial Defer Host', {
+            async CanRead(): Promise<DelegatePermissionDecision> { return 'Allow'; },
+            async CanEdit(): Promise<DelegatePermissionDecision> { return 'Defer'; },
+            async CanDelete(): Promise<DelegatePermissionDecision> { return 'Deny'; },
+            async CanShare(): Promise<DelegatePermissionDecision> { return 'Defer'; }
+        });
+
+        const artOwned = 'a1000000-0000-4000-8000-000000000001';
+        const artDirectRead = 'a2000000-0000-4000-8000-000000000002';
+        const artDirectPlusColEdit = 'a3000000-0000-4000-8000-000000000003';
+        const artNestedCol = 'a4000000-0000-4000-8000-000000000004';
+        const artDelegateDeniedOwner = 'a5000000-0000-4000-8000-000000000005';
+        const artPartialDefer = 'a6000000-0000-4000-8000-000000000006';
+        const artParentChildAllow = 'a7000000-0000-4000-8000-000000000007';
+        const artParentChildDeny = 'a8000000-0000-4000-8000-000000000008';
+        const artUnreadable = 'a9000000-0000-4000-8000-000000000009';
+        const artMissing = 'aa000000-0000-4000-8000-000000000010';
+        const artExternalParent = 'ab000000-0000-4000-8000-000000000011';
+
+        const colEdit = 'c1000000-0000-4000-8000-000000000001';
+        const colLeaf = 'c2000000-0000-4000-8000-000000000002';
+        const colMid = 'c3000000-0000-4000-8000-000000000003';
+        const colRootOwned = 'c4000000-0000-4000-8000-000000000004';
+
+        const data: BatchFixtureData = {
+            entities: [
+                createEntityInfoStub(entArtifactsId, 'MJ: Artifacts'),
+                createEntityInfoStub(entDenyId, 'Test: Batch Deny Host'),
+                createEntityInfoStub(entDeferId, 'Test: Batch Partial Defer Host')
+            ],
+            artifacts: [
+                { ID: artOwned, UserID: viewer.ID, DelegateEntityID: null, DelegateRecordID: null },
+                { ID: artDirectRead, UserID: ownerId, DelegateEntityID: null, DelegateRecordID: null },
+                { ID: artDirectPlusColEdit, UserID: ownerId, DelegateEntityID: null, DelegateRecordID: null },
+                { ID: artNestedCol, UserID: ownerId, DelegateEntityID: null, DelegateRecordID: null },
+                { ID: artDelegateDeniedOwner, UserID: viewer.ID, DelegateEntityID: entDenyId, DelegateRecordID: 'd1000000-0000-4000-8000-000000000001' },
+                { ID: artPartialDefer, UserID: ownerId, DelegateEntityID: entDeferId, DelegateRecordID: 'd2000000-0000-4000-8000-000000000002' },
+                { ID: artParentChildAllow, UserID: ownerId, DelegateEntityID: entArtifactsId, DelegateRecordID: artExternalParent },
+                { ID: artParentChildDeny, UserID: ownerId, DelegateEntityID: entArtifactsId, DelegateRecordID: artUnreadable },
+                { ID: artUnreadable, UserID: ownerId, DelegateEntityID: null, DelegateRecordID: null },
+                { ID: artExternalParent, UserID: viewer.ID, DelegateEntityID: null, DelegateRecordID: null }
+            ],
+            directPerms: [
+                { ID: 'p1000000-0000-4000-8000-000000000001', ArtifactID: artDirectRead, UserID: viewer.ID, CanRead: true, CanEdit: false, CanDelete: false, CanShare: false },
+                { ID: 'p2000000-0000-4000-8000-000000000002', ArtifactID: artDirectPlusColEdit, UserID: viewer.ID, CanRead: true, CanEdit: false, CanDelete: false, CanShare: false }
+            ],
+            versions: [
+                { ID: 'v1000000-0000-4000-8000-000000000001', ArtifactID: artDirectPlusColEdit },
+                { ID: 'v2000000-0000-4000-8000-000000000002', ArtifactID: artNestedCol },
+                { ID: 'v3000000-0000-4000-8000-000000000003', ArtifactID: artPartialDefer }
+            ],
+            collectionArtifacts: [
+                { ArtifactVersionID: 'v1000000-0000-4000-8000-000000000001', CollectionID: colEdit },
+                { ArtifactVersionID: 'v2000000-0000-4000-8000-000000000002', CollectionID: colLeaf },
+                { ArtifactVersionID: 'v3000000-0000-4000-8000-000000000003', CollectionID: colEdit }
+            ],
+            collections: [
+                { ID: colEdit, OwnerID: ownerId, ParentID: null },
+                { ID: colLeaf, OwnerID: ownerId, ParentID: colMid },
+                { ID: colMid, OwnerID: ownerId, ParentID: colRootOwned },
+                { ID: colRootOwned, OwnerID: viewer.ID, ParentID: null }
+            ],
+            collectionPerms: [
+                { CollectionID: colEdit, UserID: viewer.ID, CanRead: true, CanEdit: true, CanDelete: false, CanShare: true }
+            ]
+        };
+
+        const testIds = [
+            artOwned,
+            artDirectRead,
+            artDirectPlusColEdit,
+            artNestedCol,
+            artDelegateDeniedOwner,
+            artPartialDefer,
+            artParentChildAllow,
+            artParentChildDeny,
+            artUnreadable,
+            artMissing,
+            'not-a-valid-uuid'
+        ];
+
+        const batchFixture = createBatchProvider(data);
+        const batchResults = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(batchFixture.provider, testIds, viewer);
+
+        for (const id of testIds) {
+            const singleFixture = createBatchProvider(data);
+            const singleResult = await ArtifactPermissionEngine.Instance.ResolvePermissions(singleFixture.provider, id, viewer);
+            expect(batchResults.get(id)).toEqual(singleResult);
+        }
+
+        // Spot-check key outcomes explicitly
+        expect(batchResults.get(artOwned)?.Source).toBe('Owner');
+        expect(batchResults.get(artDirectRead)).toMatchObject({ CanRead: true, CanEdit: false, Source: 'ArtifactPermission' });
+        expect(batchResults.get(artDirectPlusColEdit)).toMatchObject({ CanRead: true, CanEdit: true, CanShare: true, Source: 'CollectionPermission' });
+        expect(batchResults.get(artNestedCol)).toMatchObject({ CanRead: true, CanEdit: true, CanDelete: true, CanShare: true, Source: 'CollectionPermission' });
+        expect(batchResults.get(artDelegateDeniedOwner)).toMatchObject({ CanRead: false, CanEdit: false, Source: 'Denied' });
+        expect(batchResults.get(artPartialDefer)).toMatchObject({ CanRead: true, CanEdit: true, CanDelete: false, CanShare: true, Source: 'Delegate' });
+        expect(batchResults.get(artParentChildAllow)).toMatchObject({ CanRead: true, CanEdit: true, Source: 'Delegate' });
+        expect(batchResults.get(artParentChildDeny)).toMatchObject({ CanRead: false, Source: 'Denied' });
+        expect(batchResults.get(artUnreadable)?.CanRead).toBe(false);
+        expect(batchResults.get(artMissing)?.CanRead).toBe(false);
+        expect(batchResults.get('not-a-valid-uuid')?.CanRead).toBe(false);
+
+        // Magic-link / anonymous principal fails closed for every ID with zero DB queries
+        const anonFixture = createBatchProvider(data);
+        const anonUser = Object.assign(createTestUser('33333333-3333-4333-8333-333333333333', 'guest@example.com'), {
+            IsMagicLinkAnonymous: true
+        });
+        const anonResults = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(anonFixture.provider, testIds, anonUser);
+        expect(anonFixture.runViewCalls).toHaveLength(0);
+        expect(anonFixture.runViewsCalls).toHaveLength(0);
+        for (const id of testIds) {
+            expect(anonResults.get(id)?.CanRead).toBe(false);
+            expect(anonResults.get(id)?.Source).toBe('Denied');
+        }
+    });
+
+    it('handles multi-hop intra-batch chains, order independence, indirect sibling chains without memo deadlock, depth>8 caps, and Database-provider user actor separation', async () => {
+        const ownerId = '11111111-1111-4111-8111-111111111111';
+        const viewer = createTestUser('22222222-2222-4222-8222-222222222222', 'viewer@example.com');
+        const systemActor = createTestUser('99999999-9999-4999-8999-999999999999', 'sys@example.com');
+        const entArtifactsId = 'e1000000-0000-4000-8000-000000000001';
+
+        const idA = 'a0000001-0000-4000-8000-000000000001';
+        const idB = 'a0000002-0000-4000-8000-000000000002';
+        const idC = 'a0000003-0000-4000-8000-000000000003';
+        const idP1 = 'a0000004-0000-4000-8000-000000000004';
+        const idCycX = 'a0000005-0000-4000-8000-000000000005';
+        const idCycY = 'a0000006-0000-4000-8000-000000000006';
+
+        // 10-hop chain: hop[0] (root owned) <- hop[1] <- ... <- hop[9] (depth 9 > MAX_DELEGATE_DEPTH 8)
+        const hops = Array.from({ length: 10 }, (_, i) => `a0000010-0000-4000-8000-${String(i).padStart(12, '0')}`);
+
+        const data: BatchFixtureData = {
+            entities: [createEntityInfoStub(entArtifactsId, 'MJ: Artifacts')],
+            artifacts: [
+                // 2-hop chain: A -> B -> C (owned)
+                { ID: idA, UserID: ownerId, DelegateEntityID: entArtifactsId, DelegateRecordID: idB },
+                { ID: idB, UserID: ownerId, DelegateEntityID: entArtifactsId, DelegateRecordID: idC },
+                { ID: idC, UserID: viewer.ID, DelegateEntityID: null, DelegateRecordID: null },
+                // External bridge: P1 -> C (owned) so [P1, C] tests indirect sibling with shared memo
+                { ID: idP1, UserID: ownerId, DelegateEntityID: entArtifactsId, DelegateRecordID: idC },
+                // Mutual cycle: X -> Y -> X
+                { ID: idCycX, UserID: ownerId, DelegateEntityID: entArtifactsId, DelegateRecordID: idCycY },
+                { ID: idCycY, UserID: ownerId, DelegateEntityID: entArtifactsId, DelegateRecordID: idCycX },
+                // 10-hop chain
+                { ID: hops[0], UserID: viewer.ID, DelegateEntityID: null, DelegateRecordID: null },
+                ...hops.slice(1).map((id, idx) => ({
+                    ID: id,
+                    UserID: ownerId,
+                    DelegateEntityID: entArtifactsId,
+                    DelegateRecordID: hops[idx]
+                }))
+            ],
+            directPerms: [],
+            versions: [],
+            collectionArtifacts: [],
+            collections: [],
+            collectionPerms: []
+        };
+
+        // 1. 2-hop external chain [A, B] where C is external: both A and B must succeed
+        const twoHop = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(
+            createBatchProvider(data).provider,
+            [idA, idB],
+            viewer
+        );
+        expect(twoHop.get(idA)?.CanRead).toBe(true);
+        expect(twoHop.get(idB)?.CanRead).toBe(true);
+
+        // 2. Order independence: [A, B, C] === [C, B, A]
+        const fwd = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(
+            createBatchProvider(data).provider,
+            [idA, idB, idC],
+            viewer
+        );
+        const rev = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(
+            createBatchProvider(data).provider,
+            [idC, idB, idA],
+            viewer
+        );
+        expect(fwd.get(idA)).toEqual(rev.get(idA));
+        expect(fwd.get(idB)).toEqual(rev.get(idB));
+        expect(fwd.get(idC)).toEqual(rev.get(idC));
+        expect(fwd.get(idA)?.CanRead).toBe(true);
+
+        // 3. Shared memo & indirect sibling + mutual cycle: settles without deadlock
+        const sharedMemo = new Map<string, Promise<import('../custom/ArtifactPermissionDelegate').ResolvedArtifactPermissions>>();
+        const mixed = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(
+            createBatchProvider(data).provider,
+            [idA, idP1, idC, idCycX, idCycY],
+            viewer,
+            0,
+            undefined,
+            sharedMemo
+        );
+        expect(mixed.get(idA)?.CanRead).toBe(true);
+        expect(mixed.get(idP1)?.CanRead).toBe(true);
+        expect(mixed.get(idC)?.CanRead).toBe(true);
+        expect(mixed.get(idCycX)?.CanRead).toBe(false);
+        expect(mixed.get(idCycY)?.CanRead).toBe(false);
+
+        // 4. MAX_DELEGATE_DEPTH = 8 enforced identically inside a single batch
+        const depthBatch = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(
+            createBatchProvider(data).provider,
+            hops,
+            viewer
+        );
+        expect(depthBatch.get(hops[8])?.CanRead).toBe(true);
+        expect(depthBatch.get(hops[9])?.CanRead).toBe(false);
+        const singleHop9 = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            createBatchProvider(data).provider,
+            hops[9],
+            viewer
+        );
+        expect(depthBatch.get(hops[9])).toEqual(singleHop9);
+
+        // 5. Database provider preserves `viewer` actor on MJ: Artifacts / MJ: Artifact Permissions and uses `systemUser` on MJ: Artifact Versions
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(systemActor);
+        const observedActors: Array<{ entities: string[]; actorId: string | undefined }> = [];
+        const baseDb = createBatchProvider(data);
+        const dbProvider = {
+            ...baseDb.provider,
+            ProviderType: 'Database',
+            RunView: vi.fn(async (p: RunViewParams, actor?: UserInfo) => {
+                observedActors.push({ entities: [p.EntityName ?? ''], actorId: actor?.ID });
+                return (baseDb.provider as unknown as { RunView: (p: RunViewParams) => Promise<unknown> }).RunView(p);
+            }),
+            RunViews: vi.fn(async (list: RunViewParams[], actor?: UserInfo) => {
+                observedActors.push({ entities: list.map((p) => p.EntityName ?? ''), actorId: actor?.ID });
+                return (baseDb.provider as unknown as { RunViews: (l: RunViewParams[]) => Promise<unknown[]> }).RunViews(list);
+            })
+        } as unknown as IMetadataProvider;
+
+        const dbRes = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(dbProvider, [idC, idB], viewer);
+        expect(dbRes.get(idC)?.CanRead).toBe(true);
+        expect(dbRes.get(idB)?.CanRead).toBe(true);
+        const userBatch = observedActors.find((a) => a.entities.includes('MJ: Artifacts'));
+        const verBatch = observedActors.find((a) => a.entities.includes('MJ: Artifact Versions'));
+        expect(userBatch?.actorId).toBe(viewer.ID);
+        expect(verBatch?.actorId).toBe(systemActor.ID);
+    });
+});

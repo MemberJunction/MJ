@@ -237,7 +237,8 @@ function createDocsMockProvider(opts: MockDocsProviderOptions = {}) {
     RunView: async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
       const extraFilter = String(params.ExtraFilter ?? '');
       if (params.EntityName === 'MJ: Artifacts') {
-        return okResult([{ ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', UserID: artifactOwnerId, EnvironmentID: 'env-doc-1' }]) as RunViewResult<T>;
+        const matchedId = /ID\s*=\s*'([^']+)'/i.exec(extraFilter)?.[1] ?? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        return okResult([{ ID: matchedId, UserID: artifactOwnerId, EnvironmentID: 'env-doc-1' }]) as RunViewResult<T>;
       }
       if (params.EntityName === 'MJ: Artifact Permissions') {
         return okResult(permissionGrants) as RunViewResult<T>;
@@ -2012,19 +2013,26 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     const content = `See ${readableToken} and ${unreadableToken}.`;
 
     const permSpy = vi
-      .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
-      .mockImplementation(async (_provider, artifactId) => ({
-        ArtifactID: artifactId ?? '',
-        CanRead: artifactId === readableId,
-        CanEdit: false,
-        CanDelete: false,
-        CanShare: false,
-        Source: artifactId === readableId ? 'ArtifactPermission' : 'Denied',
-        Reason: artifactId === readableId ? 'Shared' : 'Denied',
-      }));
+      .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissionsBatch')
+      .mockImplementation(async (_provider, artifactIds) => {
+        const map = new Map();
+        for (const artifactId of artifactIds) {
+          const isHostDoc = artifactId !== readableId && artifactId !== unreadableId;
+          map.set(artifactId, {
+            ArtifactID: artifactId,
+            CanRead: isHostDoc || artifactId === readableId,
+            CanEdit: isHostDoc,
+            CanDelete: isHostDoc,
+            CanShare: isHostDoc,
+            Source: isHostDoc ? 'Owner' : artifactId === readableId ? 'ArtifactPermission' : 'Denied',
+            Reason: isHostDoc ? 'Owner' : artifactId === readableId ? 'Shared' : 'Denied',
+          });
+        }
+        return map;
+      });
 
     try {
-      const f = await renderDocsViewer(content, true);
+      const f = await renderDocsViewer(content, false);
       const comp = f.componentInstance;
       comp.SetViewMode('preview');
       // Trigger access checks for both tokens and let them settle.
@@ -2032,36 +2040,62 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       await new Promise((r) => setTimeout(r, 20));
       f.detectChanges();
 
-      const previewHtml = comp.RenderPreviewMarkdown(content);
-      expect(previewHtml).toContain('mj-doc-link-chip--readable');
-      expect(previewHtml).toContain('mj-doc-link-chip--unreadable');
-      expect(previewHtml).toContain('>Pricing Policy<');
-      expect(previewHtml).toContain('>Executive Memo<');
-      expect(previewHtml).toContain('You don&#39;t have access');
+      const previewMd = comp.RenderPreviewMarkdown(content);
+      const linkBatchCalls = permSpy.mock.calls.filter(
+        (c) => c[1].includes(readableId) || c[1].includes(unreadableId),
+      );
+      expect(linkBatchCalls).toHaveLength(1);
+      expect(linkBatchCalls[0][1]).toEqual([readableId, unreadableId]);
+      expect(previewMd).toContain('#mj-doc-link-readable/');
+      expect(previewMd).toContain('#mj-doc-link-unreadable/');
+      expect(previewMd).toContain('[Pricing Policy](');
+      expect(previewMd).toContain('[Executive Memo](');
+      expect(previewMd).toContain("You don't have access");
 
-      // Clicking readable chip emits OpenEntityRecord; clicking unreadable chip does nothing.
+      // Clicking readable preview link emits OpenEntityRecord; clicking unreadable preview link does nothing.
       const opened: Array<{ entityName: string; id: string }> = [];
       comp.OpenEntityRecord.subscribe((evt) => {
         opened.push({ entityName: evt.entityName, id: String(evt.compositeKey.GetValueByFieldName('ID') ?? '') });
       });
 
-      const host = document.createElement('div');
-      host.innerHTML = previewHtml;
-      const readableChip = host.querySelector<HTMLElement>('.mj-doc-link-chip--readable');
-      const unreadableChip = host.querySelector<HTMLElement>('.mj-doc-link-chip--unreadable');
-      expect(readableChip).not.toBeNull();
-      expect(unreadableChip).not.toBeNull();
+      const readableHrefMatch = /\((#mj-doc-link-readable\/[^\s)]+)/.exec(previewMd);
+      const unreadableHrefMatch = /\((#mj-doc-link-unreadable\/[^\s)]+)/.exec(previewMd);
+      expect(readableHrefMatch).not.toBeNull();
+      expect(unreadableHrefMatch).not.toBeNull();
 
-      comp.OnDocRecordLinkClick({ target: unreadableChip, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      const previewReadableAnchor = document.createElement('a');
+      previewReadableAnchor.setAttribute('href', readableHrefMatch![1]);
+      const previewUnreadableAnchor = document.createElement('a');
+      previewUnreadableAnchor.setAttribute('href', unreadableHrefMatch![1]);
+
+      comp.OnDocRecordLinkClick({ target: previewUnreadableAnchor, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
       expect(opened).toHaveLength(0);
 
-      comp.OnDocRecordLinkClick({ target: readableChip, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      comp.OnDocRecordLinkClick({ target: previewReadableAnchor, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
       expect(opened).toEqual([{ entityName: 'MJ: Artifacts', id: readableId }]);
 
-      // Editable HTML renders atomic chips and ExtractMarkdownFromEditableElement round-trips raw tokens losslessly.
-      const editableHost = document.createElement('div');
-      editableHost.innerHTML = comp.RenderInlineEditableHtml(content);
-      expect(comp.ExtractMarkdownFromEditableElement(editableHost)).toBe(content);
+      // Real Angular-rendered Edit mode DOM ([innerHTML]="RenderInlineEditableSafeHtml(...)") preserves
+      // data-doc-link-* attributes and contenteditable="false" through Angular binding and round-trips losslessly.
+      comp.SetViewMode('edit');
+      f.detectChanges();
+      const renderedEditableBlock = (f.nativeElement as HTMLElement).querySelector('.mj-docs-editable-paragraph') as HTMLElement | null;
+      expect(renderedEditableBlock).not.toBeNull();
+      const renderedChips = Array.from(
+        renderedEditableBlock!.querySelectorAll('[data-doc-record-link="true"]'),
+      ) as HTMLElement[];
+      expect(renderedChips.length).toBe(2);
+      expect(renderedChips[0].getAttribute('data-doc-link-access')).toBe('readable');
+      expect(renderedChips[0].getAttribute('contenteditable')).toBe('false');
+      expect(renderedChips[0].getAttribute('data-doc-link-raw')).toBe(readableToken);
+      expect(renderedChips[1].getAttribute('data-doc-link-access')).toBe('unreadable');
+      expect(renderedChips[1].getAttribute('data-doc-link-raw')).toBe(unreadableToken);
+      expect(comp.ExtractMarkdownFromEditableElement(renderedEditableBlock!)).toBe(content);
+
+      // Clicking the real Angular-rendered readable Edit chip emits OpenEntityRecord; unreadable chip does not.
+      comp.OnDocRecordLinkClick({ target: renderedChips[1], preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      expect(opened).toHaveLength(1);
+      comp.OnDocRecordLinkClick({ target: renderedChips[0], preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      expect(opened).toHaveLength(2);
 
       // Markdown export and PDF export emit stored plain-text labels; Source mode retains raw tokens.
       const importExport = f.debugElement.injector.get(DocumentImportExportService);
@@ -2228,12 +2262,12 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(nonArtifactBatchQueries[0][1].Fields).toEqual(['OrderID', 'LineNumber']);
 
     const rendered = comp.RenderPreviewMarkdown(content);
-    expect(rendered).toContain('data-doc-link-access="readable"');
-    expect(rendered).toContain('data-doc-link-access="unreadable"');
-    expect(rendered).toContain('title="Open Acme"');
-    expect(rendered).toContain('title="Open Gamma"');
-    expect(rendered).toContain('title="Open Order 7 Line 2"');
-    expect(rendered).toContain('>Beta<');
-    expect(rendered).toContain('>Order 9 Line 1<');
+    expect(rendered).toContain('#mj-doc-link-readable/');
+    expect(rendered).toContain('#mj-doc-link-unreadable/');
+    expect(rendered).toContain('"Open Acme"');
+    expect(rendered).toContain('"Open Gamma"');
+    expect(rendered).toContain('"Open Order 7 Line 2"');
+    expect(rendered).toContain('[Beta](#mj-doc-link-unreadable/');
+    expect(rendered).toContain('[Order 9 Line 1](#mj-doc-link-unreadable/');
   });
 });

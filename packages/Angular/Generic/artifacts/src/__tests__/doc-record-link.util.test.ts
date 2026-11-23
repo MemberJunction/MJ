@@ -5,11 +5,13 @@ import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import {
   CheckDocRecordLinkAccess,
   CheckDocRecordLinksAccessBatch,
+  DOC_LINK_PREVIEW_HREF_READABLE,
+  DOC_LINK_PREVIEW_HREF_UNREADABLE,
   ExtractDocRecordLinks,
   FindActiveDocLinkTrigger,
   RenderDocRecordLinkChipHtml,
   ReplaceDocLinkTriggerWithToken,
-  ReplaceDocRecordLinksWithChipHtml,
+  ReplaceDocRecordLinksWithPreviewMarkdown,
   StripDocRecordLinksToPlainText,
 } from '../lib/utils/doc-record-link.util';
 
@@ -132,21 +134,107 @@ describe('doc-record-link.util', () => {
     expect(html).not.toContain('tabindex="0"');
   });
 
-  it('checks artifact access through ArtifactPermissionEngine without ever querying the target artifact name', async () => {
-    const token = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Old Title', { ID: 'art-99' });
-    const [link] = ExtractDocRecordLinks(token);
-    const { provider, runViewCalls } = makeProvider();
+  it('checks artifact access through ArtifactPermissionEngine.ResolvePermissionsBatch in one call without ever querying artifact names', async () => {
+    const id1 = '11111111-1111-4111-8111-111111111111';
+    const id2 = '22222222-2222-4222-8222-222222222222';
+    const links = ExtractDocRecordLinks(
+      `${ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Old Title 1', { ID: id1 })} ${ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Old Title 2', { ID: id2 })}`,
+    );
+    const { provider, runViewCalls, runViewsCalls } = makeProvider();
 
-    const permSpy = vi
-      .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
-      .mockResolvedValueOnce({ ArtifactID: 'art-99', CanRead: true, CanEdit: false, CanDelete: false, CanShare: false, Source: 'ArtifactPermission', Reason: 'Shared' })
-      .mockResolvedValueOnce({ ArtifactID: 'art-99', CanRead: false, CanEdit: false, CanDelete: false, CanShare: false, Source: 'Denied', Reason: 'No access' });
+    const batchSpy = vi
+      .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissionsBatch')
+      .mockResolvedValueOnce(
+        new Map([
+          [id1, { ArtifactID: id1, CanRead: true, CanEdit: false, CanDelete: false, CanShare: false, Source: 'ArtifactPermission', Reason: 'Shared' }],
+          [id2, { ArtifactID: id2, CanRead: false, CanEdit: false, CanDelete: false, CanShare: false, Source: 'Denied', Reason: 'No access' }],
+        ]),
+      );
 
-    expect(await CheckDocRecordLinkAccess(link, provider, viewer)).toBe('readable');
-    expect(await CheckDocRecordLinkAccess(link, provider, viewer)).toBe('unreadable');
-    expect(permSpy).toHaveBeenCalledTimes(2);
-    // Never issues a RunView to fetch the target artifact's current title.
+    const res = await CheckDocRecordLinksAccessBatch(links, provider, viewer);
+    expect(res.get(links[0].KeySignature)).toBe('readable');
+    expect(res.get(links[1].KeySignature)).toBe('unreadable');
+    expect(batchSpy).toHaveBeenCalledTimes(1);
+    expect(batchSpy).toHaveBeenCalledWith(provider, [id1, id2], viewer);
+    // Never issues a separate RunView to fetch the target artifact's current title.
     expect(runViewCalls).toHaveLength(0);
+    expect(runViewsCalls).toHaveLength(0);
+  });
+
+  it('triggers ONE RunViews call for N linked docs regardless of N through the real ArtifactPermissionEngine.ResolvePermissionsBatch', async () => {
+    const viewerUser = { ID: '22222222-2222-4222-8222-222222222222', Name: 'Alice', UserRoles: [] } as unknown as UserInfo;
+    const ownerId = '11111111-1111-4111-8111-111111111111';
+
+    const runBatchDocLinks = async (count: number) => {
+      const ids = Array.from({ length: count }, (_, i) => `a0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
+      const markdown = ids
+        .map((id, i) => ConversationUtility.CreateRecordLink('MJ: Artifacts', `Doc ${i + 1}`, { ID: id }))
+        .join(' ');
+      const links = ExtractDocRecordLinks(markdown);
+
+      const singleCalls: RunViewParams[] = [];
+      const batchCalls: RunViewParams[][] = [];
+      const artifactsEntity = {
+        ID: 'ent-art',
+        Name: 'MJ: Artifacts',
+        PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+        FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+        GetUserPermisions: () => ({ CanRead: true }),
+      };
+      const provider = {
+        ProviderType: 'Network',
+        Entities: [artifactsEntity],
+        EntityByName: (name: string) => (name === 'MJ: Artifacts' ? artifactsEntity : undefined),
+        EntityByID: (id: string) => (id === 'ent-art' ? artifactsEntity : undefined),
+        RunView: async (params: RunViewParams) => {
+          singleCalls.push(params);
+          return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+        },
+        RunViews: async (paramsList: RunViewParams[]) => {
+          batchCalls.push(paramsList);
+          return paramsList.map((p) => {
+            if (p.EntityName === 'MJ: Artifacts') {
+              return {
+                Success: true,
+                Results: ids.map((id, idx) => ({
+                  ID: id,
+                  UserID: idx % 2 === 0 ? viewerUser.ID : ownerId,
+                  DelegateEntityID: null,
+                  DelegateRecordID: null,
+                })),
+                RowCount: ids.length,
+                TotalRowCount: ids.length,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: '',
+              };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+          });
+        },
+      } as unknown as IMetadataProvider;
+
+      const access = await CheckDocRecordLinksAccessBatch(links, provider, viewerUser);
+      return { links, access, singleCalls, batchCalls };
+    };
+
+    const run5 = await runBatchDocLinks(5);
+    const run15 = await runBatchDocLinks(15);
+
+    // Whatever N is (5 or 15), the artifact path makes ONE RunViews call and ZERO per-artifact RunView calls.
+    expect(run5.singleCalls).toHaveLength(0);
+    expect(run5.batchCalls).toHaveLength(1);
+    expect(run15.singleCalls).toHaveLength(0);
+    expect(run15.batchCalls).toHaveLength(1);
+    expect(run15.batchCalls[0].map((p) => p.EntityName)).toEqual([
+      'MJ: Artifacts',
+      'MJ: Artifact Permissions',
+      'MJ: Artifact Versions',
+    ]);
+    // Never requests Name on MJ: Artifacts.
+    expect(run15.batchCalls[0][0].Fields).not.toContain('Name');
+    expect(run15.access.get(run15.links[0].KeySignature)).toBe('readable');
+    expect(run15.access.get(run15.links[1].KeySignature)).toBe('unreadable');
   });
 
   it('checks non-artifact access using entity CanRead plus PK-only RunView (never fetching record names)', async () => {
@@ -255,14 +343,30 @@ describe('doc-record-link.util', () => {
     expect(ReplaceDocLinkTriggerWithToken('See [[Pric', 'Pric', token)).toBe(`See ${token}`);
   });
 
-  it('escapes raw HTML tags outside inline code when rendering preview chips', () => {
-    const token = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Pricing Policy', { ID: 'art-1' });
-    const raw = `<b>bold</b> <style>x</style> \`<span>code</span>\` ${token}`;
-    const html = ReplaceDocRecordLinksWithChipHtml(raw, () => 'readable', { EscapeRawHtml: true });
+  it('renders preview links as safe markdown fragment links, skips code blocks, preserves autolinks, and escapes markdown label chars', () => {
+    const readableToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Pricing *Policy* [v2]', { ID: 'art-1' });
+    const deniedToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Secret Doc', { ID: 'art-2' });
+    const codeToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'In Code', { ID: 'art-3' });
+    const raw = [
+      `See ${readableToken}, ${deniedToken}, and <https://example.com>.`,
+      `Inline code: \`${codeToken}\`.`,
+      '~~~',
+      `<b>raw</b> ${codeToken}`,
+      '~~~',
+    ].join('\n');
 
-    expect(html).toContain('&lt;b>bold&lt;/b>');
-    expect(html).toContain('&lt;style>x&lt;/style>');
-    expect(html).toContain('`<span>code</span>`');
-    expect(html).toContain('<span class="mj-doc-link-chip mj-doc-link-chip--readable"');
+    const md = ReplaceDocRecordLinksWithPreviewMarkdown(raw, (link) =>
+      link.Keys['ID'] === 'art-1' ? 'readable' : 'unreadable',
+    );
+
+    expect(md).toContain(`[Pricing \\*Policy\\* \\[v2\\]](${DOC_LINK_PREVIEW_HREF_READABLE}`);
+    expect(md).toContain(`"Open Pricing *Policy* [v2]")`);
+    expect(md).toContain(`[Secret Doc](${DOC_LINK_PREVIEW_HREF_UNREADABLE}`);
+    expect(md).toContain(`"You don't have access")`);
+    expect(md).toContain('<https://example.com>');
+    // Tokens inside inline code and ~~~ code fences must stay untouched
+    expect(md).toContain(`Inline code: \`${codeToken}\`.`);
+    expect(md).toContain(`<b>raw</b> ${codeToken}`);
+    expect(md).not.toContain('<span');
   });
 });

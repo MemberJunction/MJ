@@ -9,7 +9,7 @@
 import { ConversationUtility } from '@memberjunction/ai-core-plus';
 import { LogError, RunView } from '@memberjunction/core';
 import { type MJArtifactEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
   ComposerTriggerProvider,
   type ComposerSuggestionRequest,
@@ -20,12 +20,12 @@ const ARTIFACTS_ENTITY = 'MJ: Artifacts';
 
 type ArtifactSuggestionRow = Pick<MJArtifactEntity, 'ID' | 'Name' | 'Description' | 'Type'>;
 
-/** Escapes SQL LIKE wildcards (`\`, `%`, `_`) and single quotes for `ESCAPE '\'` predicates. */
+/** Escapes SQL LIKE wildcards (`!`, `%`, `_`) and single quotes for `ESCAPE '!'` (MSSQL + PostgreSQL safe). */
 function escapeLikeLiteral(value: string): string {
   const escapedWildcards = value
-    .replace(/\\/g, '\\\\')
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_');
+    .replace(/!/g, '!!')
+    .replace(/%/g, '!%')
+    .replace(/_/g, '!_');
   return EscapeSQLString(escapedWildcards);
 }
 
@@ -51,9 +51,9 @@ export class ArtifactLinkTriggerProvider extends ComposerTriggerProvider {
       const filters: string[] = [];
       if (trimmed.length > 0) {
         const escaped = escapeLikeLiteral(trimmed.toLowerCase());
-        filters.push(`LOWER([Name]) LIKE '%${escaped}%' ESCAPE '\\'`);
+        filters.push(`LOWER([Name]) LIKE '%${escaped}%' ESCAPE '!'`);
       }
-      if (this.ExcludeArtifactID) {
+      if (this.ExcludeArtifactID && IsValidUUID(this.ExcludeArtifactID)) {
         filters.push(`[ID] <> '${EscapeSQLString(this.ExcludeArtifactID)}'`);
       }
 

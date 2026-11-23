@@ -9,13 +9,17 @@
 
 import { ConversationUtility, type MentionContent, type SpecialContentToken } from '@memberjunction/ai-core-plus';
 import { CompositeKey, EntityInfo, IMetadataProvider, LogError, RunView, type RunViewParams, UserInfo } from '@memberjunction/core';
-import { ArtifactPermissionEngine, type ResolvedArtifactPermissions } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { EscapeHtml } from '../components/previews/office-preview.logic';
 
 const ARTIFACTS_ENTITY = 'MJ: Artifacts';
 /** Max keys per single entity batch query to stay well below SQL IN / OR expression limits. */
 const MAX_KEYS_PER_BATCH_QUERY = 200;
+/** Safe fragment URL prefix emitted in Markdown Preview mode for readable doc-link chips (`[EnableHtml]="false"`). */
+export const DOC_LINK_PREVIEW_HREF_READABLE = '#mj-doc-link-readable/';
+/** Safe fragment URL prefix emitted in Markdown Preview mode for unreadable/checking doc-link chips (`[EnableHtml]="false"`). */
+export const DOC_LINK_PREVIEW_HREF_UNREADABLE = '#mj-doc-link-unreadable/';
 
 /** Resolved viewer access state for a durable record link chip. */
 export type DocRecordLinkAccessState = 'readable' | 'unreadable' | 'checking';
@@ -48,16 +52,152 @@ export function BuildDocRecordLinkKeySignature(entityName: string, keys: Record<
 }
 
 /**
+ * Finds byte/character ranges of Markdown fenced code blocks (`` ``` `` / `~~~`) and CommonMark
+ * inline backtick code spans in linear O(N) time without backtracking regexes.
+ */
+function findMarkdownCodeRanges(text: string): Array<{ Start: number; End: number }> {
+  const ranges: Array<{ Start: number; End: number }> = [];
+  const len = text.length;
+  let i = 0;
+  let atLineStart = true;
+
+  while (i < len) {
+    if (atLineStart) {
+      let indent = i;
+      while (indent < len && indent - i < 3 && text[indent] === ' ') {
+        indent++;
+      }
+      const fenceChar = text[indent];
+      if (fenceChar === '`' || fenceChar === '~') {
+        let fenceLen = 0;
+        while (indent + fenceLen < len && text[indent + fenceLen] === fenceChar) {
+          fenceLen++;
+        }
+        if (fenceLen >= 3) {
+          const fenceStart = i;
+          // Move past the opening fence line
+          let lineEnd = text.indexOf('\n', indent + fenceLen);
+          if (lineEnd === -1) {
+            ranges.push({ Start: fenceStart, End: len });
+            break;
+          }
+          let scan = lineEnd + 1;
+          let closed = false;
+          while (scan < len) {
+            let closeIndent = scan;
+            while (closeIndent < len && closeIndent - scan < 3 && text[closeIndent] === ' ') {
+              closeIndent++;
+            }
+            let closeLen = 0;
+            while (closeIndent + closeLen < len && text[closeIndent + closeLen] === fenceChar) {
+              closeLen++;
+            }
+            const nextNl = text.indexOf('\n', scan);
+            const currLineEnd = nextNl === -1 ? len : nextNl;
+            if (closeLen >= fenceLen) {
+              const tail = text.slice(closeIndent + closeLen, currLineEnd).trim();
+              if (tail.length === 0) {
+                const blockEnd = nextNl === -1 ? len : nextNl + 1;
+                ranges.push({ Start: fenceStart, End: blockEnd });
+                i = blockEnd;
+                atLineStart = true;
+                closed = true;
+                break;
+              }
+            }
+            if (nextNl === -1) {
+              break;
+            }
+            scan = nextNl + 1;
+          }
+          if (!closed) {
+            ranges.push({ Start: fenceStart, End: len });
+            break;
+          }
+          continue;
+        }
+      }
+    }
+
+    const ch = text[i];
+    if (ch === '\\' && i + 1 < len) {
+      atLineStart = false;
+      i += 2;
+      continue;
+    }
+    if (ch === '`') {
+      let tickLen = 0;
+      while (i + tickLen < len && text[i + tickLen] === '`') {
+        tickLen++;
+      }
+      const spanStart = i;
+      let scan = i + tickLen;
+      let foundEnd = -1;
+      while (scan < len) {
+        if (text[scan] === '`') {
+          let closeLen = 0;
+          while (scan + closeLen < len && text[scan + closeLen] === '`') {
+            closeLen++;
+          }
+          if (closeLen === tickLen) {
+            foundEnd = scan + closeLen;
+            break;
+          }
+          scan += closeLen;
+          continue;
+        }
+        scan++;
+      }
+      if (foundEnd !== -1) {
+        ranges.push({ Start: spanStart, End: foundEnd });
+        i = foundEnd;
+        atLineStart = false;
+        continue;
+      }
+      i += tickLen;
+      atLineStart = false;
+      continue;
+    }
+
+    atLineStart = ch === '\n';
+    i++;
+  }
+
+  return ranges;
+}
+
+function isInsideRanges(index: number, ranges: ReadonlyArray<{ Start: number; End: number }>): boolean {
+  for (const r of ranges) {
+    if (index >= r.Start && index < r.End) {
+      return true;
+    }
+    if (r.Start > index) {
+      break;
+    }
+  }
+  return false;
+}
+
+/**
  * Extracts all durable record-mention tokens (`@{"_mode":"mention","type":"record",...}`) from text
  * in order of appearance, reusing {@link ConversationUtility.ParseSpecialContent}.
+ * Skips tokens inside Markdown code spans and fenced code blocks by default (`SkipCode: true`).
  */
-export function ExtractDocRecordLinks(text: string): ParsedDocRecordLink[] {
+export function ExtractDocRecordLinks(
+  text: string,
+  options?: { SkipCode?: boolean },
+): ParsedDocRecordLink[] {
   if (!text || !text.includes('@{')) {
     return [];
   }
+  const skipCode = options?.SkipCode ?? true;
+  const codeRanges = skipCode && (text.includes('`') || text.includes('~')) ? findMarkdownCodeRanges(text) : [];
   const tokens = ConversationUtility.ParseSpecialContent(text);
   const out: ParsedDocRecordLink[] = [];
   for (const token of tokens) {
+    if (codeRanges.length > 0 && isInsideRanges(token.startIndex, codeRanges)) {
+      continue;
+    }
     if (token.mode !== 'mention') {
       continue;
     }
@@ -246,27 +386,24 @@ async function resolveArtifactBatchAccess(
   user: UserInfo,
   results: Map<string, 'readable' | 'unreadable'>,
 ): Promise<void> {
-  const sharedMemo = new Map<string, Promise<ResolvedArtifactPermissions>>();
-  await Promise.all(
-    entries.map(async ({ Link, ArtifactID }) => {
-      try {
-        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-          provider,
-          ArtifactID,
-          user,
-          0,
-          undefined,
-          sharedMemo,
-        );
-        results.set(Link.KeySignature, perms.CanRead ? 'readable' : 'unreadable');
-      } catch (error: unknown) {
-        LogError(
-          `DocRecordLink access check failed for ${Link.EntityName}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        results.set(Link.KeySignature, 'unreadable');
-      }
-    }),
-  );
+  try {
+    const permsById = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(
+      provider,
+      entries.map((e) => e.ArtifactID),
+      user,
+    );
+    for (const { Link, ArtifactID } of entries) {
+      const perms = permsById.get(ArtifactID);
+      results.set(Link.KeySignature, perms?.CanRead ? 'readable' : 'unreadable');
+    }
+  } catch (error: unknown) {
+    LogError(
+      `DocRecordLink batched artifact access check failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    for (const { Link } of entries) {
+      results.set(Link.KeySignature, 'unreadable');
+    }
+  }
 }
 
 async function resolveNonArtifactBatchAccess(
@@ -408,70 +545,84 @@ export function RenderDocRecordLinkChipHtml(
   );
 }
 
-/**
- * Escapes raw HTML tag openings (`<tag`, `</tag`, `<!--`) outside inline backtick code spans
- * so enabling HTML rendering for trusted record-link chips never relaxes raw HTML escaping in
- * the surrounding markdown text.
- */
-function escapeRawHtmlOutsideCode(text: string): string {
-  if (!text || !text.includes('<')) {
-    return text;
-  }
-  let out = '';
-  let inInlineCode = false;
-  let i = 0;
-  while (i < text.length) {
-    const ch = text[i];
-    if (ch === '`') {
-      inInlineCode = !inInlineCode;
-      out += ch;
-      i++;
-      continue;
-    }
-    if (!inInlineCode && ch === '<') {
-      const next = text[i + 1] ?? '';
-      if (/[A-Za-z!/]/.test(next)) {
-        out += '&lt;';
-        i++;
-        continue;
-      }
-    }
-    out += ch;
-    i++;
-  }
-  return out;
+/** Escapes Markdown inline formatting characters inside a link label so stored titles render literally. */
+function escapeMarkdownLinkLabel(label: string): string {
+  return label
+    .replace(/\\/g, '\\\\')
+    .replace(/([[\]*_`~<>])/g, '\\$1')
+    .replace(/\r?\n/g, ' ');
+}
+
+/** Escapes double quotes and backslashes inside a Markdown link title attribute (`"..."`). */
+function escapeMarkdownLinkTitle(title: string): string {
+  return title
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\r?\n/g, ' ');
 }
 
 /**
- * Replaces every record-mention token in `markdown` with its rendered HTML chip.
- * When `options.EscapeRawHtml` is true, raw HTML tag openings outside the chip tokens are escaped
- * so passing `[EnableHtml]="true"` to `<mj-markdown>` only renders the trusted chips.
+ * Replaces every durable record-mention token outside Markdown code spans/fences with a safe
+ * Markdown fragment link (`#mj-doc-link-readable/...` or `#mj-doc-link-unreadable/...`) using
+ * ONLY the stored label. Keeps `<mj-markdown [EnableHtml]="false">` strictly sanitized so raw HTML
+ * injection (`<style>`, `<form>`, `<script>`, tracking `<img>`) can never bypass Angular's sanitizer.
  */
-export function ReplaceDocRecordLinksWithChipHtml(
+export function ReplaceDocRecordLinksWithPreviewMarkdown(
   markdown: string,
   getState: (link: ParsedDocRecordLink) => DocRecordLinkAccessState,
-  options?: { Editable?: boolean; EscapeRawHtml?: boolean },
 ): string {
   if (!markdown || !markdown.includes('@{')) {
     return markdown ?? '';
   }
-  const links = ExtractDocRecordLinks(markdown);
+  const links = ExtractDocRecordLinks(markdown, { SkipCode: true });
   if (links.length === 0) {
     return markdown;
   }
-  const formatSegment = (chunk: string): string =>
-    options?.EscapeRawHtml ? escapeRawHtmlOutsideCode(chunk) : chunk;
   const parts: string[] = [];
   let cursor = 0;
   for (const link of links) {
     if (link.Token.startIndex > cursor) {
-      parts.push(formatSegment(markdown.slice(cursor, link.Token.startIndex)));
+      parts.push(markdown.slice(cursor, link.Token.startIndex));
+    }
+    const isReadable = getState(link) === 'readable';
+    const prefix = isReadable ? DOC_LINK_PREVIEW_HREF_READABLE : DOC_LINK_PREVIEW_HREF_UNREADABLE;
+    const href = `${prefix}${encodeURIComponent(link.KeySignature)}`;
+    const title = isReadable ? `Open ${link.Label}` : "You don't have access";
+    parts.push(`[${escapeMarkdownLinkLabel(link.Label)}](${href} "${escapeMarkdownLinkTitle(title)}")`);
+    cursor = link.Token.endIndex;
+  }
+  if (cursor < markdown.length) {
+    parts.push(markdown.slice(cursor));
+  }
+  return parts.join('');
+}
+
+/**
+ * Replaces every record-mention token outside Markdown code spans/fences with its rendered HTML chip.
+ */
+export function ReplaceDocRecordLinksWithChipHtml(
+  markdown: string,
+  getState: (link: ParsedDocRecordLink) => DocRecordLinkAccessState,
+  options?: { Editable?: boolean },
+): string {
+  if (!markdown || !markdown.includes('@{')) {
+    return markdown ?? '';
+  }
+  const links = ExtractDocRecordLinks(markdown, { SkipCode: true });
+  if (links.length === 0) {
+    return markdown;
+  }
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const link of links) {
+    if (link.Token.startIndex > cursor) {
+      parts.push(markdown.slice(cursor, link.Token.startIndex));
     }
     parts.push(RenderDocRecordLinkChipHtml(link, getState(link), options));
     cursor = link.Token.endIndex;
   }
   if (cursor < markdown.length) {
-    parts.push(formatSegment(markdown.slice(cursor)));
+    parts.push(markdown.slice(cursor));
   }
   return parts.join('');
 }
