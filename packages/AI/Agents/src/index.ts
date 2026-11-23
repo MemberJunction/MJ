@@ -144,3 +144,5 @@ export * from './native-tools/tool-result-turns';
 export * from './rhythm-model-tiers';
 export * from './wake-policy-guard';
 export * from './wake-coalescer';
+export * from './ChiefOfStaffTeamBriefing';
+export * from './GrowthCoachService';

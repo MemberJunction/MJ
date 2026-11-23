@@ -3055,7 +3055,7 @@ export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSu
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_43ebe705e32e9165";
+    public readonly ContractFingerprint = "ro_fp_8f1f452387b6790a";
 }
 
 // ============================================================
@@ -3258,7 +3258,7 @@ export class WorkflowDraftOperation extends BaseRemotableOperation<WorkflowDraft
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_2c3e6b17f9938bdc";
+    public readonly ContractFingerprint = "ro_fp_1453e143e70e1bae";
 }
 
 // ============================================================
@@ -3275,7 +3275,7 @@ export class WorkflowSaveOperation extends BaseRemotableOperation<WorkflowSaveIn
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:write";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_8b17634c01c7ea11";
+    public readonly ContractFingerprint = "ro_fp_4649d0191277725e";
 }
 
 // ============================================================
@@ -3292,6 +3292,6 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_e2ffa4f3bcad4e72";
+    public readonly ContractFingerprint = "ro_fp_06d97b8424f9ad49";
 }
 

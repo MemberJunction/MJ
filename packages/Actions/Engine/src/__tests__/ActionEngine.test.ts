@@ -217,6 +217,9 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
         ActionAudienceReaders: actual.ActionAudienceReaders,
         ActionAudienceAddsReader: actual.ActionAudienceAddsReader,
         AUDIENCE_UNSUPPORTED_RESULT_CODE: actual.AUDIENCE_UNSUPPORTED_RESULT_CODE,
+        EnforceServerBoundHiddenScopeParams: actual.EnforceServerBoundHiddenScopeParams,
+        RequiresReceiptOnlyChatReturn: actual.RequiresReceiptOnlyChatReturn,
+        ShapeActionReturnForChat: actual.ShapeActionReturnForChat,
     };
 });
 

@@ -97,75 +97,82 @@ const LIST_ARTIFACT_GUEST_SHARE_LINKS_GQL = `
             >
                 <div class="share-modal-content">
                     <!-- Add User Section -->
-                    <div class="add-user-section">
-                        <h3 class="section-title">
-                            <i class="fa-solid fa-user-plus"></i>
-                            Share with User
-                        </h3>
+                    @if (canModifyPermissions) {
+                        <div class="add-user-section" data-testid="artifact-share-add-section">
+                            <h3 class="section-title">
+                                <i class="fa-solid fa-user-plus"></i>
+                                Share with User
+                            </h3>
 
-                        <mj-user-picker
-                            [currentUser]="currentUser"
-                            [excludeUserIds]="getExcludedUserIds()"
-                            (userSelected)="onUserSelected($event)"
-                        ></mj-user-picker>
+                            <mj-user-picker
+                                [currentUser]="currentUser"
+                                [excludeUserIds]="getExcludedUserIds()"
+                                (userSelected)="onUserSelected($event)"
+                            ></mj-user-picker>
 
-                        @if (selectedUser) {
-                            <div class="permissions-form">
-                                <div class="selected-user-info">
-                                    <div class="user-avatar">
-                                        <i class="fa-solid fa-user"></i>
+                            @if (selectedUser) {
+                                <div class="permissions-form">
+                                    <div class="selected-user-info">
+                                        <div class="user-avatar">
+                                            <i class="fa-solid fa-user"></i>
+                                        </div>
+                                        <div class="user-details">
+                                            <div class="user-name">{{ selectedUser.name }}</div>
+                                            <div class="user-email">{{ selectedUser.email }}</div>
+                                        </div>
                                     </div>
-                                    <div class="user-details">
-                                        <div class="user-name">{{ selectedUser.name }}</div>
-                                        <div class="user-email">{{ selectedUser.email }}</div>
+
+                                    <div class="permissions-grid">
+                                        <label class="permission-checkbox disabled">
+                                            <input type="checkbox" [checked]="true" disabled>
+                                            <span class="permission-label">
+                                                <i class="fa-solid fa-eye"></i>
+                                                Read
+                                            </span>
+                                            <span class="permission-desc">View artifact content</span>
+                                        </label>
+
+                                        @if (availablePermissions.includes('Share')) {
+                                            <label class="permission-checkbox">
+                                                <input type="checkbox" [(ngModel)]="newPermissions.canShare">
+                                                <span class="permission-label">
+                                                    <i class="fa-solid fa-share-nodes"></i>
+                                                    Share
+                                                </span>
+                                                <span class="permission-desc">Share with others</span>
+                                            </label>
+                                        }
+
+                                        @if (availablePermissions.includes('Edit')) {
+                                            <label class="permission-checkbox">
+                                                <input type="checkbox" [(ngModel)]="newPermissions.canEdit">
+                                                <span class="permission-label">
+                                                    <i class="fa-solid fa-pen-to-square"></i>
+                                                    Edit
+                                                </span>
+                                                <span class="permission-desc">Edit and delete artifact</span>
+                                            </label>
+                                        }
+                                    </div>
+
+                                    <div class="form-actions">
+                                        <button mjButton variant="primary" (click)="onAddUser()" [disabled]="!selectedUser">
+                                            <i class="fa-solid fa-plus"></i>
+                                            Add User
+                                        </button>
+                                        <button mjButton (click)="onClearSelection()">
+                                            Cancel
+                                        </button>
                                     </div>
                                 </div>
-
-                                <div class="permissions-grid">
-                                    <label class="permission-checkbox disabled">
-                                        <input type="checkbox" [checked]="true" disabled>
-                                        <span class="permission-label">
-                                            <i class="fa-solid fa-eye"></i>
-                                            Read
-                                        </span>
-                                        <span class="permission-desc">View artifact content</span>
-                                    </label>
-
-                                    @if (availablePermissions.includes('Share')) {
-                                        <label class="permission-checkbox">
-                                            <input type="checkbox" [(ngModel)]="newPermissions.canShare">
-                                            <span class="permission-label">
-                                                <i class="fa-solid fa-share-nodes"></i>
-                                                Share
-                                            </span>
-                                            <span class="permission-desc">Share with others</span>
-                                        </label>
-                                    }
-
-                                    @if (availablePermissions.includes('Edit')) {
-                                        <label class="permission-checkbox">
-                                            <input type="checkbox" [(ngModel)]="newPermissions.canEdit">
-                                            <span class="permission-label">
-                                                <i class="fa-solid fa-pen-to-square"></i>
-                                                Edit
-                                            </span>
-                                            <span class="permission-desc">Edit and delete artifact</span>
-                                        </label>
-                                    }
-                                </div>
-
-                                <div class="form-actions">
-                                    <button mjButton variant="primary" (click)="onAddUser()" [disabled]="!selectedUser">
-                                        <i class="fa-solid fa-plus"></i>
-                                        Add User
-                                    </button>
-                                    <button mjButton (click)="onClearSelection()">
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        }
-                    </div>
+                            }
+                        </div>
+                    } @else {
+                        <div class="owner-only-notice" data-testid="artifact-share-readonly-notice">
+                            <i class="fa-solid fa-lock"></i>
+                            <span>You have view-only sharing visibility. Only users with Share permission or ownership can add or revoke access.</span>
+                        </div>
+                    }
 
                     <!-- Current Permissions Section -->
                     <div class="permissions-list-section">
