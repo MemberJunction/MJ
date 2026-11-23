@@ -83,6 +83,23 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             const envelopeParams = await TaskGraphEnvelopeRunParams(env ?? CLEAN_NODE_ENVELOPE, actingUser);
 
             const runner = new AgentRunner(params.Provider);
+            const effectiveWorkflowMaxCostUsd =
+                params.WorkflowBudget?.RemainingCostUsd !== undefined
+                    ? params.WorkflowBudget.RemainingCostUsd
+                    : params.WorkflowBudget?.WorkflowMaxCostUsd;
+            const workflowBudgetParams = params.WorkflowBudget
+                ? {
+                      ...(effectiveWorkflowMaxCostUsd !== undefined
+                          ? { workflowMaxCostUsd: effectiveWorkflowMaxCostUsd }
+                          : {}),
+                      ...(params.WorkflowBudget.WorkflowMaxDurationMs !== undefined
+                          ? { workflowMaxDurationMs: params.WorkflowBudget.WorkflowMaxDurationMs }
+                          : {}),
+                      ...(params.WorkflowBudget.WorkflowStartedAtMs !== undefined
+                          ? { workflowStartedAtMs: params.WorkflowBudget.WorkflowStartedAtMs }
+                          : {}),
+                  }
+                : {};
             const result = await runner.RunAgent({
                 agent,
                 provider: params.Provider,
@@ -107,6 +124,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
                 // running Agent step shows "what it is doing right now" on the workflow canvas.
                 onProgress: this.bridgeProgress(params),
+                ...workflowBudgetParams,
                 ...envelopeParams,
             });
 
@@ -167,6 +185,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 IsOutputTainted: (result?.taintedSources?.length ?? 0) > 0 || env?.IsRunTainted === true,
                 ...(costUsd !== undefined ? { CostUsd: costUsd } : {}),
                 ...(tokensUsed !== undefined ? { TokensUsed: tokensUsed } : {}),
+                ...(result?.limitExceeded ? { LimitExceeded: result.limitExceeded } : {}),
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);

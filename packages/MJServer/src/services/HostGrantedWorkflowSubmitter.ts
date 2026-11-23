@@ -111,6 +111,7 @@ export class MJServerHostGrantedWorkflowSubmitter implements HostGrantedWorkflow
                 ContextUser: payload.ContextUser,
                 Provider: provider,
                 ...(envelope ? { SecurityEnvelope: envelope } : {}),
+                ...(payload.WorkflowBudget ? { WorkflowBudget: payload.WorkflowBudget } : {}),
             });
 
             if (!result.Success) {

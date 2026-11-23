@@ -180,6 +180,11 @@ export interface HostGrantedWorkflowSubmissionPayload {
     ConversationDetailID?: string | null;
     EnvironmentID?: string | null;
     SubmittedByAgentRunID?: string | null;
+    WorkflowBudget?: {
+        MaxCostUsd?: number;
+        MaxWallClockMs?: number;
+        StartedAtMs?: number;
+    };
     ContextUser: UserInfo;
     Provider?: IMetadataProvider;
 }
