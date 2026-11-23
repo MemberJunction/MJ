@@ -157,6 +157,29 @@ Two deliberate safety behaviours: an invalid selector is skipped rather than fai
 whole clean, and if cleaning would remove *everything* the original content is returned with
 a warning — over-including beats silently dropping a document.
 
+**One source, several kinds of file.** The pipeline's Segment stage chooses the cleaner per
+item, by the file type Extract detected for it. A `Cleaners` map in the configuration JSON names
+the cleaner for a file type:
+
+```json
+{ "Cleaners": { "html": "Html", "md": "PlainText", "pdf": "MyPdfCleaner" } }
+```
+
+Keys are file types as the pipeline names them (`html`, `pdf`, `txt`; case and a leading dot do
+not matter). Segment takes the first of:
+
+1. the run's entry for the file type, then the run's `CleanerKey` (an operator's override);
+2. the Content Source's entry for the file type;
+3. the Content Type's entry for the file type (the standard cleaner for that kind of file);
+4. the Content Source's `CleanerKey`: its default for a file type nothing maps, or an item whose
+   type was not detected;
+5. the Content Type's `CleanerKey`;
+6. `Html` for markup, `PlainText` otherwise.
+
+So the content type says how each kind of file is normally cleaned, a source overrides that for
+one file type by naming it in its own map (`{ "Cleaners": { "pdf": "SpecialPdf" } }`), and a
+source's plain `CleanerKey` is its default, never an override of the content type's map.
+
 Cleaning and segmentation are separate because they change for different reasons: a new CMS
 template needs new selectors, not a new chunking strategy. Splitting them also means the
 rules apply once and benefit every consumer — embedding chunks, tagging chunks, and

@@ -80,6 +80,7 @@ function stubSource(source: {
     ContentTypeCleanerKey?: string | null;
     ContentTypeConfiguration?: Record<string, unknown>;
     Configuration?: Record<string, unknown>;
+    Settings?: Record<string, unknown>;
     TypeConfiguration?: Record<string, unknown>;
 }) {
     const engine = KnowledgeHubMetadataEngine.Instance;
@@ -91,7 +92,7 @@ function stubSource(source: {
         { ID: 'T1', SegmenterKey: null, CleanerKey: source.ContentTypeCleanerKey ?? null, ConfigurationObject: source.ContentTypeConfiguration ?? null },
     ] as never);
     vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
-        Settings: {},
+        Settings: source.Settings ?? {},
         Configuration: source.Configuration ?? {},
         TypeConfiguration: source.TypeConfiguration ?? {},
         Confidence: undefined,
@@ -234,5 +235,186 @@ describe('which cleaner runs', () => {
         await new SegmentStage().Run(record, context({ CleanerKey: 'NoSuchCleaner' }));
 
         expect(record.GetExtension('Segment', 'cleanerKey')).toBe('PlainText');
+    });
+});
+
+/** An item of one source with its detected file type, as Extract records it or the database loads it. */
+function typedItem(text: string, fileType: string, url = 'https://x.test/a'): WorkingRecord {
+    const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', url, 'I1'));
+    record.Propose('Text', text, 6, 'Extract');
+    record.Propose('FileType', fileType, 6, 'Extract');
+    record.SetExtension('Pipeline', 'contentSourceID', 'S1');
+    return record;
+}
+
+describe('which cleaner runs for an item, by its file type', () => {
+    it("follows the content type's Cleaners map, so one source cleans each kind of item as what it is", async () => {
+        stubSource({ ContentTypeConfiguration: { Cleaners: { html: 'MarkerCleaner' } } });
+        const page = typedItem(PAGE, 'html', 'https://x.test/page');
+        const notes = typedItem('Plain   notes.', 'txt', 'https://x.test/notes.txt');
+
+        await new SegmentStage().Run(page, context());
+        await new SegmentStage().Run(notes, context());
+
+        expect(page.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+        expect(notes.GetExtension('Segment', 'cleanerKey')).toBe('PlainText');
+        expect(chunkText(notes)).toBe('Plain notes.');
+    });
+
+    it("reads the type's map from the source type's configuration too", async () => {
+        stubSource({ TypeConfiguration: { Cleaners: { pdf: 'MarkerCleaner' } } });
+        const record = typedItem('Extracted PDF text.', 'pdf');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it('matches a file type loaded from the database by its Content File Type name, whatever its case', async () => {
+        stubSource({ ContentTypeConfiguration: { Cleaners: { '.Html': 'MarkerCleaner' } } });
+        const record = typedItem(PAGE, 'HTML');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("puts a level's map entry ahead of that level's single CleanerKey", async () => {
+        stubSource({ ContentTypeCleanerKey: 'Html', ContentTypeConfiguration: { Cleaners: { txt: 'MarkerCleaner' } } });
+        const record = typedItem('x', 'txt');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("puts the content type's standard cleaner for the file type ahead of the source's default", async () => {
+        stubSource({ CleanerKey: 'PlainText', ContentTypeConfiguration: { Cleaners: { html: 'MarkerCleaner' } } });
+        const record = typedItem('text', 'html');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("uses the source's default for a file type nothing maps", async () => {
+        stubSource({ CleanerKey: 'MarkerCleaner', ContentTypeConfiguration: { Cleaners: { html: 'Html' } } });
+        const record = typedItem('x', 'docx');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("uses the source's default for an item whose file type was not detected", async () => {
+        stubSource({ CleanerKey: 'MarkerCleaner', ContentTypeConfiguration: { Cleaners: { html: 'Html' } } });
+        const record = item('x', null, 'S1');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("falls to the content type's CleanerKey, then the built-in choice, when the source sets no default", async () => {
+        stubSource({ ContentTypeCleanerKey: 'MarkerCleaner', ContentTypeConfiguration: { Cleaners: { html: 'Html' } } });
+        const unmapped = typedItem('x', 'docx');
+        await new SegmentStage().Run(unmapped, context());
+        expect(unmapped.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+
+        stubSource({ ContentTypeConfiguration: { Cleaners: { pdf: 'MarkerCleaner' } } });
+        const plain = typedItem('Plain   text.', 'txt');
+        await new SegmentStage().Run(plain, context());
+        expect(plain.GetExtension('Segment', 'cleanerKey')).toBe('PlainText');
+    });
+
+    it('resolves one source in the documented order: its file-type entry, the standard one, its default', async () => {
+        stubSource({
+            CleanerKey: 'PlainText',
+            Configuration: { Cleaners: { pdf: 'MarkerCleaner' } },
+            ContentTypeConfiguration: { Cleaners: { pdf: 'Html', html: 'Html' } },
+        });
+        const pdf = typedItem('PDF text.', 'pdf', 'https://x.test/a.pdf');
+        const page = typedItem(PAGE, 'html', 'https://x.test/page');
+        const doc = typedItem('Doc text.', 'docx', 'https://x.test/a.docx');
+
+        for (const record of [pdf, page, doc]) {
+            await new SegmentStage().Run(record, context());
+        }
+
+        expect(pdf.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+        expect(page.GetExtension('Segment', 'cleanerKey')).toBe('Html');
+        expect(doc.GetExtension('Segment', 'cleanerKey')).toBe('PlainText');
+    });
+
+    it("puts the source's Configuration map over its Settings map", async () => {
+        stubSource({ Settings: { Cleaners: { html: 'Html' } }, Configuration: { Cleaners: { html: 'MarkerCleaner' } } });
+        const fromConfiguration = typedItem('text', 'html');
+        await new SegmentStage().Run(fromConfiguration, context());
+        expect(fromConfiguration.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+
+        stubSource({ Settings: { Cleaners: { html: 'MarkerCleaner' } } });
+        const fromSettings = typedItem('text', 'html');
+        await new SegmentStage().Run(fromSettings, context());
+        expect(fromSettings.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("puts the source type's map over the content type's own", async () => {
+        stubSource({ ContentTypeConfiguration: { Cleaners: { pdf: 'Html' } }, TypeConfiguration: { Cleaners: { pdf: 'MarkerCleaner' } } });
+        const record = typedItem('PDF text.', 'pdf');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("lets a run's CleanerKey override every source and content type setting", async () => {
+        stubSource({ Configuration: { Cleaners: { html: 'Html' } }, ContentTypeConfiguration: { Cleaners: { html: 'Html' } } });
+        const record = typedItem('text', 'html');
+
+        await new SegmentStage().Run(record, context({ CleanerKey: 'MarkerCleaner' }));
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("puts the source's map over the content type's", async () => {
+        stubSource({
+            ContentTypeConfiguration: { Cleaners: { html: 'Html' } },
+            Configuration: { Cleaners: { html: 'MarkerCleaner' } },
+        });
+        const record = typedItem('text', 'html');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it("lets the run's map override every level, for that file type only", async () => {
+        stubSource({ CleanerKey: 'Html' });
+        const page = typedItem('text', 'html');
+        const notes = typedItem(PAGE, 'txt');
+
+        await new SegmentStage().Run(page, context({ Cleaners: { html: 'MarkerCleaner' } }));
+        await new SegmentStage().Run(notes, context({ Cleaners: { html: 'MarkerCleaner' } }));
+
+        expect(page.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+        expect(notes.GetExtension('Segment', 'cleanerKey')).toBe('Html');
+    });
+
+    it('ignores a map entry that names nothing, and falls through to the next choice', async () => {
+        stubSource({ ContentTypeCleanerKey: 'MarkerCleaner', Configuration: { Cleaners: { html: '  ', txt: 7 } } });
+        const record = typedItem('x', 'html');
+
+        await new SegmentStage().Run(record, context());
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
+    });
+
+    it('works for an item with no source, from the run alone', async () => {
+        const record = item('x', null);
+        record.Propose('FileType', 'md', 6, 'Extract');
+
+        await new SegmentStage().Run(record, context({ Cleaners: { md: 'MarkerCleaner' } }));
+
+        expect(record.GetExtension('Segment', 'cleanerKey')).toBe('MarkerCleaner');
     });
 });
