@@ -109,7 +109,9 @@ export function EvaluateExternalEmailVerification(input: ExternalEmailVerificati
   };
 }
 
-function normalizeEmailVerifiedClaim(value: unknown): boolean | undefined {
+type EmailVerifiedClaimValue = boolean | number | string | object | null | undefined;
+
+function normalizeEmailVerifiedClaim(value: EmailVerifiedClaimValue): boolean | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }

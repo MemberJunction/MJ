@@ -1,12 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { RunActionParams } from '@memberjunction/actions-base';
 import type { TaskActionRunParams } from '@memberjunction/task-graph';
 import type { TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
 
+interface MockActionRecord {
+    ID: string;
+    Name: string;
+    DriverClass: string;
+    Type: string;
+    Config_Object: { disallowWhenTainted?: boolean; outputTrustLevel?: string } | null;
+}
+
 const harness = vi.hoisted(() => ({
-    runActionCalls: [] as Array<Record<string, unknown>>,
-    actions: [] as Array<{ ID: string; Name: string; DriverClass: string; Type: string; Config_Object: Record<string, unknown> | null }>,
+    runActionCalls: [] as RunActionParams[],
+    actions: [] as MockActionRecord[],
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -24,7 +33,7 @@ vi.mock('@memberjunction/actions', () => {
                     get Actions() {
                         return harness.actions;
                     },
-                    RunAction: async (params: Record<string, unknown>) => {
+                    RunAction: async (params: RunActionParams) => {
                         harness.runActionCalls.push(params);
                         return { Success: true, ResultCode: 'SUCCESS', Message: 'ok', Params: [] };
                     },

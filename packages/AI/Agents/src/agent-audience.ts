@@ -11,6 +11,7 @@ import {
     IsStructuralCommonReachAudience,
     ValidateAgentRunAudience,
     type AgentRunAudience,
+    type AgentRunAudienceInput,
 } from '@memberjunction/ai-core-plus';
 
 /** The users an audience's IDs matched, and the IDs no user has. */
@@ -29,7 +30,7 @@ export interface AudienceUserMatch {
  * with a non-empty array of non-blank string `UserIDs`; `'Caller'` with no `UserIDs` (absent or empty);
  * `'ScopeCommonReach'` with no `UserIDs`.
  */
-export function AgentAudienceProblem(audience: unknown): string | null {
+export function AgentAudienceProblem(audience: AgentRunAudienceInput): string | null {
     return ValidateAgentRunAudience(audience);
 }
 

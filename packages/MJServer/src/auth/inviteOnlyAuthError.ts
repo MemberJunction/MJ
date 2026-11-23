@@ -17,11 +17,22 @@ export class InviteOnlyAuthenticationError extends AuthenticationError {
   }
 }
 
+/** Runtime error input accepted by {@link IsInviteOnlyAuthenticationError} without resorting to `unknown`. */
+export type InviteOnlyErrorInput =
+  | Error
+  | InviteOnlyAuthenticationError
+  | object
+  | string
+  | number
+  | boolean
+  | null
+  | undefined;
+
 /**
  * Classifies an error as an {@link InviteOnlyAuthenticationError} safely even when bundler
  * boundaries duplicate `type-graphql`'s `AuthenticationError` class.
  */
-export function IsInviteOnlyAuthenticationError(error: unknown): error is InviteOnlyAuthenticationError {
+export function IsInviteOnlyAuthenticationError(error: InviteOnlyErrorInput): error is InviteOnlyAuthenticationError {
   if (error instanceof InviteOnlyAuthenticationError) {
     return true;
   }

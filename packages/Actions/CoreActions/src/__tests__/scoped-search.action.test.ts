@@ -1198,7 +1198,13 @@ describe('ScopedSearchAction', () => {
             streamParams.IsStructuralAudience = true;
             const streamResult = await run(new ScopedSearchAction(), streamParams);
             expect(streamResult.Success).toBe(true);
-            const progress = streamResult.Params?.find((p: { Name: string }) => p.Name === 'ProgressEvents')?.Value as Array<Record<string, unknown>>;
+            const progress = streamResult.Params?.find((p: { Name: string }) => p.Name === 'ProgressEvents')?.Value as Array<
+                | { phase: 'final'; count: number; elapsedMs: number }
+                | { phase: 'provider'; providerName: string; count: number; durationMs: number }
+                | { phase: 'fused'; count: number }
+                | { phase: 'reranked'; rerankerName: string; count: number }
+                | { phase: 'error'; error: string }
+            >;
             expect(progress).toEqual([{ phase: 'fused', count: 0 }, { phase: 'final', count: 0, elapsedMs: 12 }]);
             expect(JSON.stringify(streamResult.Params)).not.toContain('"provider"');
             expect(streamResult.Params?.some((p: { Name: string }) => p.Name === 'SourceCounts')).toBe(false);

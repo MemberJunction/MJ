@@ -439,13 +439,19 @@ function constrainingRunScope(scope: TaskRunScope | null | undefined): TaskRunSc
     };
 }
 
-function toAudienceEnvelope(raw: Record<string, unknown>): TaskAudienceEnvelope {
-    if (raw.Mode === 'ScopeCommonReach') {
+interface RawAudienceEnvelopeFields {
+    Mode?: string;
+    ReaderUserIDs?: ReadonlyArray<string>;
+}
+
+function toAudienceEnvelope(raw: object): TaskAudienceEnvelope {
+    const fields = raw as RawAudienceEnvelopeFields;
+    if (fields.Mode === 'ScopeCommonReach') {
         return { Mode: 'ScopeCommonReach' };
     }
     return {
-        ...(raw.Mode === 'Intersection' ? { Mode: 'Intersection' as const } : {}),
-        ReaderUserIDs: toStrings(raw.ReaderUserIDs),
+        ...(fields.Mode === 'Intersection' ? { Mode: 'Intersection' as const } : {}),
+        ReaderUserIDs: toStrings(fields.ReaderUserIDs),
     };
 }
 

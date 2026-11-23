@@ -1364,10 +1364,42 @@ const AGENT_AUDIENCE_MODES: Record<AgentAudienceMode, true> = {
 };
 
 /**
+ * Runtime value accepted by {@link ValidateAgentRunAudience} and {@link IsStructuralCommonReachAudience}
+ * when validating host-assembled audience payloads without resorting to `unknown`.
+ */
+export type AgentRunAudienceInput =
+    | AgentRunAudience
+    | object
+    | string
+    | number
+    | boolean
+    | null
+    | undefined;
+
+interface AgentAudienceCandidateShape {
+    Mode?: AgentAudienceMode | string | number | boolean | object | null;
+    UserIDs?: ReadonlyArray<string | number | boolean | object | null | undefined> | string | number | boolean | object | null;
+    ScopeAsserted?: boolean | string | number | object | null;
+}
+
+type AgentAudienceCandidateValue =
+    | ReadonlyArray<string | number | boolean | object | null | undefined>
+    | string
+    | number
+    | boolean
+    | object
+    | null
+    | undefined;
+
+/**
  * Type guard for {@link AgentScopeCommonReachAudience} (`Mode === 'ScopeCommonReach'`).
  */
-export function IsStructuralCommonReachAudience(audience: unknown): audience is AgentScopeCommonReachAudience {
-    return audience !== null && typeof audience === 'object' && !Array.isArray(audience) && 'Mode' in audience && audience.Mode === 'ScopeCommonReach';
+export function IsStructuralCommonReachAudience(audience: AgentRunAudienceInput): audience is AgentScopeCommonReachAudience {
+    if (audience === null || typeof audience !== 'object' || Array.isArray(audience)) {
+        return false;
+    }
+    const candidate = audience as AgentAudienceCandidateShape;
+    return 'Mode' in candidate && candidate.Mode === 'ScopeCommonReach';
 }
 
 /**
@@ -1382,31 +1414,32 @@ export function CreateScopeCommonReachAudience(): AgentScopeCommonReachAudience 
  * string otherwise. Shared single source of truth across `@memberjunction/ai-core-plus` and
  * `@memberjunction/ai-agents`.
  */
-export function ValidateAgentRunAudience(audience: unknown): string | null {
+export function ValidateAgentRunAudience(audience: AgentRunAudienceInput): string | null {
     if (audience === undefined) return null;
     if (audience === null || typeof audience !== 'object' || Array.isArray(audience)) {
         return `expected { Mode, UserIDs }, got ${describeAudienceValue(audience)}. Omit Audience for a run with no audience.`;
     }
-    const mode = 'Mode' in audience ? audience.Mode : undefined;
+    const candidate = audience as AgentAudienceCandidateShape;
+    const mode = 'Mode' in candidate ? candidate.Mode : undefined;
     if (typeof mode !== 'string' || !Object.prototype.hasOwnProperty.call(AGENT_AUDIENCE_MODES, mode)) {
         return `Mode must be 'Caller' or 'Intersection', got ${typeof mode === 'string' ? `'${mode}'` : describeAudienceValue(mode)} (or use 'ScopeCommonReach').`;
     }
-    const ids = 'UserIDs' in audience ? audience.UserIDs : undefined;
+    const ids = 'UserIDs' in candidate ? candidate.UserIDs : undefined;
     if (mode === 'Caller') {
         return callerAudienceIDsProblem(ids);
     }
     if (mode === 'ScopeCommonReach') {
-        return structuralAudienceProblem(audience, ids);
+        return structuralAudienceProblem(candidate, ids);
     }
     return intersectionAudienceIDsProblem(ids);
 }
 
-function callerAudienceIDsProblem(ids: unknown): string | null {
+function callerAudienceIDsProblem(ids: AgentAudienceCandidateValue): string | null {
     if (ids === undefined || (Array.isArray(ids) && ids.length === 0)) return null;
     return `Mode 'Caller' takes no UserIDs (got ${Array.isArray(ids) ? `${ids.length} ID(s)` : describeAudienceValue(ids)}); use 'Intersection' to name readers.`;
 }
 
-function intersectionAudienceIDsProblem(ids: unknown): string | null {
+function intersectionAudienceIDsProblem(ids: AgentAudienceCandidateValue): string | null {
     if (!Array.isArray(ids)) {
         return `Mode 'Intersection' needs UserIDs, an array of MJ: Users IDs; got ${describeAudienceValue(ids)}.`;
     }
@@ -1417,7 +1450,7 @@ function intersectionAudienceIDsProblem(ids: unknown): string | null {
     return blank === -1 ? null : `UserIDs[${blank}] is blank or not a string — every reader must be an MJ: Users ID.`;
 }
 
-function structuralAudienceProblem(audience: object, ids: unknown): string | null {
+function structuralAudienceProblem(audience: AgentAudienceCandidateShape, ids: AgentAudienceCandidateValue): string | null {
     if (ids !== undefined) {
         return "Mode 'ScopeCommonReach' takes no UserIDs; omit UserIDs when asserting structural common reach.";
     }
@@ -1427,7 +1460,7 @@ function structuralAudienceProblem(audience: object, ids: unknown): string | nul
     return null;
 }
 
-function describeAudienceValue(value: unknown): string {
+function describeAudienceValue(value: AgentAudienceCandidateValue): string {
     if (value === null) return 'null';
     if (Array.isArray(value)) return 'an array';
     return typeof value;

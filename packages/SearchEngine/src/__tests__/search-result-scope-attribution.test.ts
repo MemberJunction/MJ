@@ -11,7 +11,7 @@ const { resolvePermissionSpy } = vi.hoisted(() => ({
 }));
 
 vi.mock('../permissions/SearchScopePermissionResolver', async (importOriginal) => ({
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof import('../permissions/SearchScopePermissionResolver')>()),
     GetSearchScopePermissionResolver: () => ({ ResolveEffectivePermission: resolvePermissionSpy }),
 }));
 
@@ -43,7 +43,7 @@ vi.mock('@memberjunction/core', async () => {
     };
 });
 
-import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { UserInfo, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { MJSearchScopeEntity, ScopeBundle, SearchEngineBase } from '@memberjunction/core-entities';
 import {
     SearchFusion,
@@ -406,7 +406,7 @@ describe('MJ-2 SearchResultItem Originating Scope Attribution', () => {
             }
 
             public InjectProvider(provider: BaseSearchProvider): void {
-                const state = this as unknown as TestEngineInternalState;
+                const state = (this as object) as TestEngineInternalState;
                 state._providerEntries = [
                     {
                         Provider: provider,
@@ -423,22 +423,25 @@ describe('MJ-2 SearchResultItem Originating Scope Attribution', () => {
             }
 
             protected override get ProviderToUse(): IMetadataProvider {
-                return {
+                const entityInfo = (DOCS_ENTITY as object) as EntityInfo;
+                const provider: Partial<IMetadataProvider> = {
                     EntityByName: (name: string) =>
-                        name === DOCS_ENTITY.Name ? (DOCS_ENTITY as unknown as EntityInfo) : undefined,
-                    Entities: [DOCS_ENTITY as unknown as EntityInfo],
+                        name === DOCS_ENTITY.Name ? entityInfo : undefined,
+                    Entities: [entityInfo],
                     GetEntityRecordNames: async () => [],
-                } as unknown as IMetadataProvider;
+                };
+                return provider as IMetadataProvider;
             }
 
             protected override get Base(): SearchEngineBase {
                 const bundles = this.bundles;
-                return {
+                const base: Partial<SearchEngineBase> = {
                     GetScopeByID: (id: string) => bundles.get(id.toLowerCase())?.Scope,
                     GetActiveScopeByID: (id: string) => bundles.get(id.toLowerCase())?.Scope,
                     GetScopeBundle: (id: string) => bundles.get(id.toLowerCase()),
                     Scopes: Array.from(bundles.values()).map(b => b.Scope),
-                } as unknown as SearchEngineBase;
+                };
+                return base as SearchEngineBase;
             }
 
             protected override logSearchExecution(): void {
@@ -450,7 +453,7 @@ describe('MJ-2 SearchResultItem Originating Scope Attribution', () => {
             }
         }
 
-        const testUser = { ID: 'user-1', Name: 'Reader', Email: 'reader@example.com', UserRoles: [] } as unknown as UserInfo;
+        const testUser = new UserInfo(undefined, { ID: 'user-1', Name: 'Reader', Email: 'reader@example.com', UserRoles: [] });
 
         it('attributes single-scope and multi-scope fused results with OriginatingScopeID, OriginatingScopeName, and OriginatingScopes', async () => {
             const engine = new AttributionTestSearchEngine();

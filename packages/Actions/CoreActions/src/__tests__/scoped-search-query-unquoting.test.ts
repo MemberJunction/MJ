@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RunActionParams, ActionResultSimple } from '@memberjunction/actions-base';
+import type { UserInfo } from '@memberjunction/core';
+import type { SearchParams } from '@memberjunction/search-engine';
 import { NormalizeScopedSearchQuery } from '../custom/search/search-query.util';
 
 vi.mock('@memberjunction/global', async () => {
-    const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/global');
+    const actual = await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global');
     return {
         ...actual,
-        RegisterClass: () => (target: unknown) => target,
+        RegisterClass: () => <T>(target: T): T => target,
         UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
     };
 });
@@ -19,18 +21,18 @@ const logForbiddenSpy = vi.fn();
 vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
         Instance: {
-            Search: (...args: unknown[]) => searchSpy(...args),
-            streamSearch: (...args: unknown[]) => streamSearchSpy(...args),
-            LogForbiddenSearch: (...args: unknown[]) => logForbiddenSpy(...args),
+            Search: (params: SearchParams, user: UserInfo) => searchSpy(params, user),
+            streamSearch: (params: SearchParams, user: UserInfo) => streamSearchSpy(params, user),
+            LogForbiddenSearch: (params: object) => logForbiddenSpy(params),
         },
     },
     GetSearchScopePermissionResolver: () => ({
-        ResolveEffectivePermission: (...args: unknown[]) => permissionResolveSpy(...args),
+        ResolveEffectivePermission: (scopeID: string, user: UserInfo) => permissionResolveSpy(scopeID, user),
     }),
 }));
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
     SearchEngineBase: {
         Instance: {
             Config: vi.fn(async () => {}),
@@ -44,7 +46,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => ({
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof import('@memberjunction/core')>()),
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
     IsVerboseLoggingEnabled: () => false,
@@ -75,13 +77,19 @@ vi.mock('@memberjunction/aiengine', () => ({
 
 vi.mock('@memberjunction/actions', () => ({
     BaseAction: class {
-        protected async InternalRunAction(_p: unknown): Promise<unknown> {
-            return null;
+        protected async InternalRunAction(_p: RunActionParams): Promise<ActionResultSimple> {
+            return { Success: true, ResultCode: 'SUCCESS' };
         }
     },
 }));
 
 import { ScopedSearchAction } from '../custom/search/scoped-search.action';
+
+class TestableScopedSearchAction extends ScopedSearchAction {
+    public RunForTest(params: RunActionParams): Promise<ActionResultSimple> {
+        return this.InternalRunAction(params);
+    }
+}
 
 function makeRunParams(query: string): RunActionParams {
     return {
@@ -96,9 +104,8 @@ function makeRunParams(query: string): RunActionParams {
     } as RunActionParams;
 }
 
-async function runScopedSearch(action: ScopedSearchAction, query: string): Promise<ActionResultSimple> {
-    const runner = action as unknown as { InternalRunAction: (p: RunActionParams) => Promise<ActionResultSimple> };
-    return runner.InternalRunAction(makeRunParams(query));
+async function runScopedSearch(action: TestableScopedSearchAction, query: string): Promise<ActionResultSimple> {
+    return action.RunForTest(makeRunParams(query));
 }
 
 describe('NormalizeScopedSearchQuery', () => {
@@ -216,7 +223,7 @@ describe('ScopedSearchAction query unquoting and receipt forwarding', () => {
         ['\\"escaped phrase\\"', 'escaped phrase'],
         ['"unbalanced query', 'unbalanced query'],
     ])('normalizes Query=%s to %s before calling SearchEngine.Search', async (raw, expected) => {
-        const action = new ScopedSearchAction();
+        const action = new TestableScopedSearchAction();
         const res = await runScopedSearch(action, raw);
 
         expect(res.Success).toBe(true);
@@ -225,7 +232,7 @@ describe('ScopedSearchAction query unquoting and receipt forwarding', () => {
     });
 
     it.each<string>(['""', "''", '  "   "  ', '\\"\\"'])('rejects empty-quoted Query=%s with MISSING_QUERY', async (raw) => {
-        const action = new ScopedSearchAction();
+        const action = new TestableScopedSearchAction();
         const res = await runScopedSearch(action, raw);
 
         expect(res.Success).toBe(false);
@@ -263,7 +270,7 @@ describe('ScopedSearchAction query unquoting and receipt forwarding', () => {
             Providers: [],
         });
 
-        const action = new ScopedSearchAction();
+        const action = new TestableScopedSearchAction();
         const res = await runScopedSearch(action, '"Q3 Policy"');
 
         expect(res.Success).toBe(true);

@@ -21,7 +21,7 @@ export function ActionSupportsAudience(action: {
         return false;
     }
     const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, driverKey);
-    const subClass: unknown = registration?.SubClass;
+    const subClass: typeof BaseAction | undefined = registration?.SubClass;
     if (typeof subClass !== 'function' || subClass === BaseAction) {
         return false;
     }

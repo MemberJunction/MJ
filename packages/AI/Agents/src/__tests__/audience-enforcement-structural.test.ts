@@ -8,10 +8,13 @@ import {
     TASK_SECURITY_ENVELOPE_VERSION,
     TAINTED_EGRESS_BLOCKED,
     type AgentAction,
+    type AgentConfiguration,
     type AgentRunAudience,
+    type AgentTaintedSource,
     type BaseAgentNextStep,
     type ExecuteAgentParams,
     type MJAIAgentEntityExtended,
+    type MJAIAgentRunStepEntityExtended,
     type MJAIAgentUserPolicyEntity,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
@@ -87,6 +90,8 @@ import { BaseAction } from '@memberjunction/actions';
 import { BaseAgent, CircuitBreakerActionResult } from '../base-agent';
 import { AgentDataPreloader } from '../AgentDataPreloader';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs } from '../agent-audience';
+import type { MemoryWriteResult } from '../MemoryWriteManager';
+import type { CarryForwardStepRecord } from '../tool-result-format';
 
 @RegisterClass(BaseAction, '__Test_AudienceAwareSearch')
 class AudienceAwareTestAction extends BaseAction {
@@ -150,34 +155,50 @@ function makeParams(audience?: AgentRunAudience, extra: Partial<ExecuteAgentPara
     };
 }
 
+interface StepEntityCreateInput {
+    stepType: MJAIAgentRunStepEntityExtended['StepType'];
+    stepName: string;
+    contextUser: UserInfo;
+    targetId?: string;
+    inputData?: object;
+}
+
+interface CallerContextExtraData {
+    clientTools?: Array<{ Name: string; Description: string; InputSchema: object }>;
+    appContext?: { App: { Name: string }; AdditionalContext: Record<string, string> };
+}
+
 interface BaseAgentAudienceInternals {
     _audienceReaders: UserInfo[] | undefined;
     _audienceLockedActions: Set<string>;
     _depth: number;
+    _taintedSources: AgentTaintedSource[];
     audienceReadersFor(params: ExecuteAgentParams): Promise<{ Readers: UserInfo[] } | { Error: string }>;
+    ResolveAudienceUsers(ids: string[], params: ExecuteAgentParams): Promise<UserInfo[]>;
     injectPriorTurnToolResults(params: ExecuteAgentParams): Promise<void>;
-    loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<unknown[]>;
+    loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<CarryForwardStepRecord[]>;
     preloadAgentData(params: ExecuteAgentParams): Promise<void>;
     executeTasksStep(params: ExecuteAgentParams, previous: BaseAgentNextStep): Promise<BaseAgentNextStep>;
-    createStepEntity(input: Record<string, unknown>): Promise<Record<string, unknown>>;
-    finalizeStepEntity(step: Record<string, unknown>, success: boolean): Promise<void>;
+    createStepEntity(input: StepEntityCreateInput): Promise<MJAIAgentRunStepEntityExtended>;
+    finalizeStepEntity(step: MJAIAgentRunStepEntityExtended, success: boolean): Promise<void>;
     sessionAudienceRefusal(params: ExecuteAgentParams): string | null;
-    executeClientToolsStep(params: ExecuteAgentParams, config: Record<string, unknown>, previous: BaseAgentNextStep): Promise<BaseAgentNextStep>;
+    executeClientToolsStep(params: ExecuteAgentParams, config: AgentConfiguration, previous: BaseAgentNextStep): Promise<BaseAgentNextStep>;
     callerContextSections(
         agent: MJAIAgentEntityExtended,
-        extraData: Record<string, unknown> | undefined,
+        extraData: CallerContextExtraData | undefined,
         withhold: boolean
     ): { clientToolDetails: string; appContext: string };
     promptWithholding(params: ExecuteAgentParams): { TaskGraphs: boolean; CallerContext: boolean };
     processMemoryWritesForTurn(writes: Array<{ note: string; type: string }>, params: ExecuteAgentParams): Promise<void>;
-    executeMemoryWritesAsSteps(writes: Array<{ note: string; type: string }>, params: ExecuteAgentParams): Promise<unknown[]>;
-    raiseFeedbackRequest(params: ExecuteAgentParams, step: Record<string, unknown>, decision: BaseAgentNextStep): Promise<void>;
-    createFeedbackRequest(params: ExecuteAgentParams, step: Record<string, unknown>, decision: BaseAgentNextStep): Promise<void>;
+    executeMemoryWritesAsSteps(writes: Array<{ note: string; type: string }>, params: ExecuteAgentParams): Promise<MemoryWriteResult[]>;
+    raiseFeedbackRequest(params: ExecuteAgentParams, step: MJAIAgentRunStepEntityExtended, decision: BaseAgentNextStep): Promise<void>;
+    createFeedbackRequest(params: ExecuteAgentParams, step: MJAIAgentRunStepEntityExtended, decision: BaseAgentNextStep): Promise<void>;
     taskGraphSecurityEnvelope(params: ExecuteAgentParams): { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string };
 }
 
 function getInternals(agent: BaseAgent): BaseAgentAudienceInternals {
-    return agent as unknown as BaseAgentAudienceInternals;
+    const agentObject: object = agent;
+    return agentObject as BaseAgentAudienceInternals;
 }
 
 describe('MJ-1 Structural Audience Common-Reach Mode', () => {
@@ -226,10 +247,7 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
             // Empty UserCache simulates avoiding loading/scanning 1M workspace readers
             UserCache.Instance.SetUsers([]);
             const refreshSpy = vi.spyOn(UserCache.Instance, 'Refresh');
-            const resolveSpy = vi.spyOn(
-                agent as unknown as { ResolveAudienceUsers: () => Promise<UserInfo[]> },
-                'ResolveAudienceUsers'
-            );
+            const resolveSpy = vi.spyOn(internals, 'ResolveAudienceUsers');
 
             const result = await internals.audienceReadersFor(makeParams({ Mode: 'ScopeCommonReach' }));
             expect(result).toEqual({ Readers: [] });
@@ -360,7 +378,7 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
         });
 
         it('enforces AgentUserPolicyEngine Deny rules even for SupportsAudience actions under ScopeCommonReach', async () => {
-            const policy = {
+            const policy: Partial<MJAIAgentUserPolicyEntity> = {
                 AgentID: AGENT_ID,
                 UserID: CALLER_ID,
                 Status: 'Active',
@@ -371,8 +389,8 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
                     },
                 ],
                 EntityAccessRulesObject: [],
-            } as unknown as MJAIAgentUserPolicyEntity;
-            AgentUserPolicyEngine.Instance.SetCachedPolicy(policy);
+            };
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(policy as MJAIAgentUserPolicyEntity);
 
             const searchEntity = makeActionEntity();
             const result = await agent.ExecuteSingleAction(
@@ -392,7 +410,7 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
                 Audience: { Mode: 'ScopeCommonReach' },
                 IsRunTainted: true,
             };
-            (agent as unknown as { _taintedSources: Array<{ Source: string }> })._taintedSources = [{ Source: 'WebSearch' }];
+            internals._taintedSources = [{ stepNumber: 1, sourceName: 'WebSearch', trustLevel: 'Untrusted' }];
             const taintedSearchEntity = makeActionEntity({
                 Config_Object: { disallowWhenTainted: true, outputTrustLevel: 'Untrusted' },
             });
@@ -425,13 +443,13 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
 
             const clientStep = await internals.executeClientToolsStep(
                 makeParams(STRUCTURAL_AUDIENCE, { sessionID: 'sess-1' }),
-                {},
+                { success: true },
                 { step: 'ClientTools', clientTools: [{ Name: 'NavigateTo', Params: {} }], previousPayload: {} } as BaseAgentNextStep
             );
             expect(clientStep).toMatchObject({ step: 'Failed', terminate: true });
 
             const writerAgent = { ...AGENT, AllowMemoryWrite: true } as MJAIAgentEntityExtended;
-            vi.spyOn(internals, 'createStepEntity').mockResolvedValue({});
+            vi.spyOn(internals, 'createStepEntity').mockResolvedValue({} as MJAIAgentRunStepEntityExtended);
             vi.spyOn(internals, 'finalizeStepEntity').mockResolvedValue(undefined);
             const writeSpy = vi.spyOn(internals, 'executeMemoryWritesAsSteps').mockResolvedValue([]);
             await internals.processMemoryWritesForTurn([{ note: 'private', type: 'Context' }], makeParams(STRUCTURAL_AUDIENCE, { agent: writerAgent }));
@@ -440,7 +458,7 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
             const feedbackSpy = vi.spyOn(internals, 'createFeedbackRequest').mockResolvedValue(undefined);
             await internals.raiseFeedbackRequest(
                 makeParams(STRUCTURAL_AUDIENCE),
-                {},
+                {} as MJAIAgentRunStepEntityExtended,
                 { step: 'Chat', message: 'Clarify?' } as BaseAgentNextStep
             );
             expect(feedbackSpy).not.toHaveBeenCalled();

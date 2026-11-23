@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { JwtPayload } from 'jsonwebtoken';
+import type { JwtHeader, JwtPayload, VerifyOptions } from 'jsonwebtoken';
 import type { Request, Response } from 'express';
 import type { ConnectionPool } from 'mssql';
-import { Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
-import type { DataSourceInfo } from '../types.js';
+import { Metadata, UserInfo, type IMetadataProvider, type RoleInfo } from '@memberjunction/core';
+import type { ConfigInfo, DataSourceInfo, UserHandlingInfo } from '../types.js';
 
 const mockState = vi.hoisted(() => {
   class _MockTokenExpiredError extends Error {
@@ -15,7 +15,7 @@ const mockState = vi.hoisted(() => {
 
   return {
     MockTokenExpiredError: _MockTokenExpiredError,
-    configFile: {} as Record<string, unknown>,
+    configFile: {} as Partial<ConfigInfo> & { userHandling?: Partial<UserHandlingInfo> },
     mockConfigInfo: {
       baseUrl: 'http://localhost',
       graphqlPort: 4001,
@@ -43,7 +43,7 @@ const mockState = vi.hoisted(() => {
     mockProvider: {
       name: 'auth0',
       extractUserInfo: vi.fn(),
-      getSigningKey: vi.fn((_h: unknown, cb: (err: Error | null, key: string) => void) => cb(null, 'key')),
+      getSigningKey: vi.fn((_h: JwtHeader, cb: (err: Error | null, key: string) => void) => cb(null, 'key')),
     },
   };
 });
@@ -150,37 +150,50 @@ import { VerifyUserRecord } from '../auth/index.js';
 import { NewUserBase } from '../auth/newUsers.js';
 import { CreateUnifiedAuthMiddleware, GetUserPayload } from '../context.js';
 
+interface MockResponseJson {
+  error?: string;
+  errors?: Array<{ message: string; extensions?: { code?: string } }>;
+}
+
+interface MockResponseState {
+  _status: number;
+  _json: MockResponseJson | null;
+}
+
 function makeMockReq(headers: Record<string, string>): Request {
-  return {
+  const req: Partial<Request> = {
     method: 'POST',
     headers,
     path: '/graphql',
     url: '/graphql',
     ip: '127.0.0.1',
-    socket: { remoteAddress: '127.0.0.1' },
-  } as unknown as Request;
+    socket: { remoteAddress: '127.0.0.1' } as Request['socket'],
+  };
+  return req as Request;
 }
 
-function makeMockRes(): Response & { _status: number; _json: Record<string, unknown> | null } {
-  const res = {
+function makeMockRes(): Response & MockResponseState {
+  const res: Partial<Response> & MockResponseState = {
     _status: 0,
-    _json: null as Record<string, unknown> | null,
+    _json: null,
     status(code: number) {
       res._status = code;
-      return res;
+      return res as Response & MockResponseState;
     },
-    json(data: Record<string, unknown>) {
+    json(data: MockResponseJson) {
       res._json = data;
-      return res;
+      return res as Response & MockResponseState;
     },
   };
-  return res as unknown as Response & { _status: number; _json: Record<string, unknown> | null };
+  return res as Response & MockResponseState;
 }
+
+type CreatedNewUserResult = NonNullable<Awaited<ReturnType<NewUserBase['createNewUser']>>>;
 
 class SpyNewUserCreator extends NewUserBase {
   public override async createNewUser(firstName: string, lastName: string, email: string) {
     mockState.createNewUserSpy(firstName, lastName, email);
-    const created = {
+    const created: Partial<CreatedNewUserResult> & { GetAll: () => Record<string, string | boolean> } = {
       ID: 'auto-created-user',
       Name: email,
       Email: email,
@@ -196,7 +209,7 @@ class SpyNewUserCreator extends NewUserBase {
         LastName: lastName,
       }),
     };
-    return created as unknown as Awaited<ReturnType<NewUserBase['createNewUser']>>;
+    return created as CreatedNewUserResult;
   }
 }
 
@@ -211,7 +224,7 @@ describe('MJ-5 Invite-Only External User Config (userHandling)', () => {
     MJGlobal.Instance.ClassFactory.Register(NewUserBase, SpyNewUserCreator, undefined, 100, true);
 
     mockState.mockJwtVerify.mockImplementation(
-      (_token: string, _keyFn: unknown, _options: unknown, cb: (err: Error | null, decoded: unknown) => void) => {
+      (_token: string, _keyFn: object, _options: VerifyOptions, cb: (err: Error | null, decoded: JwtPayload) => void) => {
         cb(null, {});
       },
     );
@@ -419,7 +432,11 @@ describe('MJ-5 Invite-Only External User Config (userHandling)', () => {
   });
 
   describe('end-to-end GetUserPayload & CreateUnifiedAuthMiddleware invite-only enforcement', () => {
-    function setupJwt(token: string, claims: Record<string, unknown>, email: string): void {
+    function setupJwt(
+      token: string,
+      claims: Partial<JwtPayload> & Record<string, string | number | boolean | undefined>,
+      email: string,
+    ): void {
       mockState.mockJwtDecode.mockReturnValue({
         iss: 'https://auth0.example.com/',
         sub: 'ext-sub-1',
@@ -471,15 +488,15 @@ describe('MJ-5 Invite-Only External User Config (userHandling)', () => {
       mockState.users.push(invited);
 
       setupJwt('tok-unverified-false', { email_verified: false }, 'invited@external.org');
-      let caught: unknown;
+      let caught: Error | undefined;
       try {
         await GetUserPayload('Bearer tok-unverified-false', 's1', dataSources);
       } catch (err) {
-        caught = err;
+        caught = err instanceof Error ? err : new Error(String(err));
       }
       expect(IsInviteOnlyAuthenticationError(caught)).toBe(true);
       expect(caught).toBeInstanceOf(InviteOnlyAuthenticationError);
-      expect((caught as Error).message).toMatch(/unverified email claim/);
+      expect(caught?.message).toMatch(/unverified email claim/);
 
       setupJwt('tok-unverified-missing', {}, 'invited@external.org');
       await expect(GetUserPayload('Bearer tok-unverified-missing', 's1', dataSources)).rejects.toThrow(
@@ -490,15 +507,15 @@ describe('MJ-5 Invite-Only External User Config (userHandling)', () => {
     it('surfaces standalone Sign-in refused wording via GetUserPayload when requireVerifiedEmail=true and inviteOnly=false', async () => {
       Object.assign(configInfo.userHandling, { inviteOnly: false, requireVerifiedEmail: true });
       setupJwt('tok-standalone-unverified', { xms_edov: '0' }, 'user@external.org');
-      let caught: unknown;
+      let caught: Error | undefined;
       try {
         await GetUserPayload('Bearer tok-standalone-unverified', 's1', dataSources);
       } catch (err) {
-        caught = err;
+        caught = err instanceof Error ? err : new Error(String(err));
       }
       expect(IsInviteOnlyAuthenticationError(caught)).toBe(true);
-      expect((caught as Error).message).toMatch(/^Sign-in refused:/);
-      expect((caught as Error).message).not.toContain('Invite-only');
+      expect(caught?.message).toMatch(/^Sign-in refused:/);
+      expect(caught?.message).not.toContain('Invite-only');
     });
 
     it('admits an invited and verified external user with ZERO auto-granted UI roles', async () => {
@@ -525,9 +542,10 @@ describe('MJ-5 Invite-Only External User Config (userHandling)', () => {
 
     it('preserves default auto-provisioning and UI role grant when inviteOnly=false', async () => {
       const prevProvider = Metadata.Provider;
-      Metadata.Provider = {
-        Roles: [{ ID: 'role-ui', Name: 'UI' }],
-      } as unknown as IMetadataProvider;
+      const mockProvider: Partial<IMetadataProvider> = {
+        Roles: [{ ID: 'role-ui', Name: 'UI' } as RoleInfo],
+      };
+      Metadata.Provider = mockProvider as IMetadataProvider;
       try {
         Object.assign(configInfo.userHandling, {
           inviteOnly: false,
