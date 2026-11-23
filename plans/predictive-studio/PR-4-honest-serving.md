@@ -11438,7 +11438,13 @@ are monitored on real outcomes.
 - **Artifacts.** Stored through the Predictive Studio storage-provider artifact store, write-once, with SHA-256 on the
   model and verification at every load (supersedes #5001 by @MarceloT-BC, whose design it credits).
 - **Governance.** `MJ: ML Model Publish Records` (every publish with its approver — the automated gate or a named
-  user — time, gate decision and evidence snapshot hash; sign-offs; refusals); `MJ: ML Output Bindings`
+  user — time, gate decision and evidence snapshot hash; sign-offs; refusals), append-only and written only by the
+  sign-off operation and the lifecycle gate: any other create, update or delete is refused whatever the caller's entity
+  permissions (D4-279). A Promote's initiator is derived from the call — an agent run is `agent`, an API key or the
+  system user `system` — so agents and API keys cannot roll back or publish a kept baseline without the protocol's
+  `autoPublishKeepBaseline` (D4-280, D4-281). A scoring binding's `Status` changes only through Withdraw, which a
+  running scoring batch holds off until it commits, and its view authorization only by a holder (D4-284, D4-289);
+  `MJ: ML Output Bindings`
   drive every dashboard surface's sort and polarity; every number shown is generated from stored records.
 - **Scoring.** `MJ: ML Scoring Runs` (one row per call, including refusals and dry runs); refusals for status, artifact,
   scope entity, incomplete read, schema mismatch (naming columns) and empty columns; lineage on every score; any failed
@@ -11605,7 +11611,7 @@ failing lines are in the plan's §11):
 | G6.12 | parity tolerance widened 1e-9 → 1e-3 | `ps-gate-r1-s7-6` | 0 alerts on a planted 1e-6 skew |
 
 **Disclosed residual (F-TR-10).** A leakage-flag sign-off cannot be made with an API key, as the system user or from an
-agent run, and each one names its user, evidence hash and reason in the immutable publish ledger; a script that holds
+agent run — the ledger accepts a sign-off only from the sign-off operation (D4-279) — and each one names its user, evidence hash and reason in the immutable publish ledger; a script that holds
 an interactive user's session token can still sign off as that user, because MJServer offers no re-authentication
 (the UI's confirmation is client-side). Closing that needs a server-side proof-of-presence capability in MJServer.
 
