@@ -45,6 +45,7 @@ import {
     MINIMAL_BUNDLE_WIDTH,
 } from './fixtures/minimal-bundle.js';
 import { DescribeRenderDriverContract } from './render-driver-contract.js';
+import { CheckCanRunRealDockerTests } from './render-test-gate.js';
 
 type SandboxOutcome = 'success' | 'failure' | 'cancelled';
 
@@ -1597,26 +1598,7 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
     });
 });
 
-function checkCanRunRealDockerTests(): boolean {
-    if (process.env.VIDEO_STUDIO_DOCKER_TESTS !== '1') {
-        console.info(
-            '[docker-render-driver.test] Skipping real-Docker contract suite: set VIDEO_STUDIO_DOCKER_TESTS=1 to enable.',
-        );
-        return false;
-    }
-    const res = spawnSync('docker', ['image', 'inspect', DEFAULT_DOCKER_RENDER_IMAGE], {
-        stdio: 'ignore',
-    });
-    if (res.status !== 0) {
-        console.info(
-            `[docker-render-driver.test] Skipping real-Docker contract suite: Docker image '${DEFAULT_DOCKER_RENDER_IMAGE}' is missing. Build it with: ${DOCKER_RENDER_IMAGE_BUILD_COMMAND}`,
-        );
-        return false;
-    }
-    return true;
-}
-
-const CAN_RUN_REAL_DOCKER_TESTS = checkCanRunRealDockerTests();
+const CAN_RUN_REAL_DOCKER_TESTS = CheckCanRunRealDockerTests('docker-render-driver.test');
 
 describe.skipIf(!CAN_RUN_REAL_DOCKER_TESTS)(
     'DockerRenderDriver (opt-in real Docker container via VIDEO_STUDIO_DOCKER_TESTS=1)',

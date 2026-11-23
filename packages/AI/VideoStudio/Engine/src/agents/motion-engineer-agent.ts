@@ -7,11 +7,10 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import { LogError, type UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import {
-    RestoreStrippedFormatKeys,
-    type CheckIssue,
-    type VideoFormat,
-    type VideoGenerationSpec,
+import type {
+    CheckIssue,
+    VideoFormat,
+    VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
 import { LoadDataSnapshotValues } from '../data/data-snapshot.js';
 import {
@@ -133,57 +132,6 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
             params.payload ??
             {}) as Partial<VideoGenerationSpec>;
         const workingSpec = structuredClone(candidateSpec);
-        // INTERIM: PayloadManager drops keys that contain a dot (plan-notes 37)
-        const changeReq = nextStep.payloadChangeRequest as
-            | {
-                  newElements?: Partial<VideoGenerationSpec>;
-                  updateElements?: Partial<VideoGenerationSpec>;
-                  replaceElements?: Partial<VideoGenerationSpec>;
-              }
-            | undefined;
-        const requestedSource =
-            changeReq?.replaceElements?.Output?.Source ??
-            changeReq?.updateElements?.Output?.Source ??
-            changeReq?.newElements?.Output?.Source;
-        // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
-        RestoreStrippedFormatKeys(workingSpec);
-        if (requestedSource && typeof requestedSource === 'object') {
-            // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
-            const clonedRequested = structuredClone(requestedSource) as NonNullable<
-                VideoGenerationSpec['Output']
-            >['Source'];
-            const restoredSpec = RestoreStrippedFormatKeys({
-                Output: {
-                    Videos: {},
-                    RenderMetadata: {
-                        Renderer: 'HyperFrames',
-                        RendererVersion: '',
-                        Seed: 0,
-                        Fps: 30,
-                        DurationByFormat: {},
-                        RenderedAt: '',
-                    },
-                    Source: clonedRequested,
-                },
-            });
-            workingSpec.Output = {
-                ...(workingSpec.Output ?? {
-                    Videos: {},
-                    RenderMetadata: {
-                        Renderer: 'HyperFrames',
-                        RendererVersion: '',
-                        Seed: workingSpec.Render?.Seed ?? 0,
-                        Fps: workingSpec.Render?.Fps ?? 30,
-                        DurationByFormat: {},
-                        RenderedAt: '',
-                    },
-                }),
-                Source: {
-                    ...(workingSpec.Output?.Source ?? {}),
-                    ...(restoredSpec.Output?.Source ?? {}),
-                },
-            };
-        }
         const formats = ResolveDeliverableFormats(workingSpec);
 
         for (const fmt of formats) {
