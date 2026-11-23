@@ -15,7 +15,7 @@
  */
 import type { TenantContext } from '@memberjunction/core';
 import { NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import type { BoundActionParams, SecondaryScopeValue } from '../agent-types';
+import type { AgentAudienceMode, BoundActionParams, SecondaryScopeValue } from '../agent-types';
 
 /** The envelope format this code reads and writes. A stored envelope of any other version is refused. */
 export const TASK_SECURITY_ENVELOPE_VERSION = 1;
@@ -64,11 +64,19 @@ export interface TaskRunScope {
     readonly SearchScopeIDs?: readonly string[];
 }
 
-/** The readers a run's output reaches besides its caller (`ExecuteAgentParams.Audience`, `'Intersection'`). */
-export interface TaskAudienceEnvelope {
-    /** `MJ: Users` IDs of every reader besides the caller. Never empty. */
-    readonly ReaderUserIDs: readonly string[];
-}
+/**
+ * The audience carried in a durable task-graph security envelope: either enumerated readers
+ * (`ReaderUserIDs`) or structural common-reach mode (`Mode: 'ScopeCommonReach'`).
+ */
+export type TaskAudienceEnvelope =
+    | {
+          readonly Mode?: 'Intersection';
+          /** `MJ: Users` IDs of every reader besides the caller. Never empty. */
+          readonly ReaderUserIDs: readonly string[];
+      }
+    | {
+          readonly Mode: 'ScopeCommonReach';
+      };
 
 /** A run's security constraints, persisted on a task graph's rows and enforced on every node. */
 export interface TaskSecurityEnvelope {
@@ -106,6 +114,8 @@ export type TaskSecurityEnvelopeMerge =
 /** The run state {@link BuildTaskSecurityEnvelope} reads. */
 export interface TaskSecurityEnvelopeSource {
     BoundActionParams?: BoundActionParams;
+    /** Audience mode of the submitting run (`'Caller'`, `'Intersection'`, or `'ScopeCommonReach'`). */
+    AudienceMode?: AgentAudienceMode;
     /** Reader IDs the audience adds beyond the caller (`AgentAudienceReaderIDs`). */
     AudienceReaderUserIDs?: readonly string[];
     /** The run's validated scope. */
@@ -181,17 +191,23 @@ export function SerializeTaskSecurityEnvelope(envelope: TaskSecurityEnvelope | n
  */
 export function BuildTaskSecurityEnvelope(source: TaskSecurityEnvelopeSource): TaskSecurityEnvelope | undefined {
     const bound = nonEmptyBoundParams(source.BoundActionParams);
-    const readers = source.AudienceReaderUserIDs?.filter((id) => id.trim().length > 0) ?? [];
+    const isStructuralCommonReach = source.AudienceMode === 'ScopeCommonReach';
+    const readers = isStructuralCommonReach ? [] : (source.AudienceReaderUserIDs?.filter((id) => id.trim().length > 0) ?? []);
+    const audienceEnvelope: TaskAudienceEnvelope | undefined = isStructuralCommonReach
+        ? { Mode: 'ScopeCommonReach' }
+        : readers.length > 0
+        ? { ReaderUserIDs: [...readers] }
+        : undefined;
     const runScope = constrainingRunScope(source.RunScope);
     const tenant = source.CallerTenantContext;
     const tainted = source.IsRunTainted === true;
-    if (!bound && readers.length === 0 && !runScope && !tenant && !tainted) {
+    if (!bound && !audienceEnvelope && !runScope && !tenant && !tainted) {
         return undefined;
     }
     return {
         Version: TASK_SECURITY_ENVELOPE_VERSION,
         ...(bound ? { BoundActionParams: bound } : {}),
-        ...(readers.length > 0 ? { Audience: { ReaderUserIDs: [...readers] } } : {}),
+        ...(audienceEnvelope ? { Audience: audienceEnvelope } : {}),
         ...(runScope ? { RunScope: runScope } : {}),
         ...(tenant ? { CallerTenantContext: { ...tenant } } : {}),
         IsRunTainted: tainted,
@@ -277,19 +293,40 @@ function mergeTwo(a: TaskSecurityEnvelope, b: TaskSecurityEnvelope): TaskSecurit
     if (a.CallerTenantContext && b.CallerTenantContext && !jsonEqual(a.CallerTenantContext, b.CallerTenantContext)) {
         return { Success: false, Reason: 'the envelopes name different caller tenant contexts' };
     }
+    const audience = mergeAudienceEnvelopes(a.Audience, b.Audience);
+    if (typeof audience === 'string') return { Success: false, Reason: audience };
     const tenant = a.CallerTenantContext ?? b.CallerTenantContext;
-    const readers = unionIDs(a.Audience?.ReaderUserIDs, b.Audience?.ReaderUserIDs);
     return {
         Success: true,
         Envelope: {
             Version: TASK_SECURITY_ENVELOPE_VERSION,
             ...(bound ? { BoundActionParams: bound } : {}),
-            ...(readers.length > 0 ? { Audience: { ReaderUserIDs: readers } } : {}),
+            ...(audience ? { Audience: audience } : {}),
             ...(runScope ? { RunScope: runScope } : {}),
             ...(tenant ? { CallerTenantContext: tenant } : {}),
             IsRunTainted: a.IsRunTainted || b.IsRunTainted,
         },
     };
+}
+
+function mergeAudienceEnvelopes(
+    a: TaskAudienceEnvelope | undefined,
+    b: TaskAudienceEnvelope | undefined,
+): TaskAudienceEnvelope | undefined | string {
+    if (!a && !b) return undefined;
+    if (!a || !b) return a ?? b;
+    const aStructural = 'Mode' in a && a.Mode === 'ScopeCommonReach';
+    const bStructural = 'Mode' in b && b.Mode === 'ScopeCommonReach';
+    if (aStructural && bStructural) {
+        return { Mode: 'ScopeCommonReach' };
+    }
+    if (aStructural !== bStructural) {
+        return 'the envelopes use incompatible audience modes (ScopeCommonReach vs enumerated ReaderUserIDs)';
+    }
+    const aReaders = 'ReaderUserIDs' in a ? a.ReaderUserIDs : [];
+    const bReaders = 'ReaderUserIDs' in b ? b.ReaderUserIDs : [];
+    const readers = unionIDs(aReaders, bReaders);
+    return readers.length > 0 ? { ReaderUserIDs: readers } : undefined;
 }
 
 /** Both envelopes' bindings, or the reason they conflict (one parameter bound to two values). */
@@ -400,6 +437,16 @@ function constrainingRunScope(scope: TaskRunScope | null | undefined): TaskRunSc
     };
 }
 
+function toAudienceEnvelope(raw: Record<string, unknown>): TaskAudienceEnvelope {
+    if (raw.Mode === 'ScopeCommonReach') {
+        return { Mode: 'ScopeCommonReach' };
+    }
+    return {
+        ...(raw.Mode === 'Intersection' ? { Mode: 'Intersection' as const } : {}),
+        ReaderUserIDs: toStrings(raw.ReaderUserIDs),
+    };
+}
+
 /** Copies a parsed object, already checked part by part, into an envelope. */
 function toEnvelope(parsed: Record<string, unknown>): TaskSecurityEnvelope {
     const runScope = isPlainObject(parsed.RunScope) ? parsed.RunScope : undefined;
@@ -407,7 +454,7 @@ function toEnvelope(parsed: Record<string, unknown>): TaskSecurityEnvelope {
     return {
         Version: TASK_SECURITY_ENVELOPE_VERSION,
         ...(isPlainObject(parsed.BoundActionParams) ? { BoundActionParams: toBoundParams(parsed.BoundActionParams) } : {}),
-        ...(audience ? { Audience: { ReaderUserIDs: toStrings(audience.ReaderUserIDs) } } : {}),
+        ...(audience ? { Audience: toAudienceEnvelope(audience) } : {}),
         ...(runScope ? { RunScope: toRunScope(runScope) } : {}),
         ...(isPlainObject(parsed.CallerTenantContext) ? { CallerTenantContext: toTenantContext(parsed.CallerTenantContext) } : {}),
         IsRunTainted: parsed.IsRunTainted === true,
@@ -456,7 +503,19 @@ function boundParamsProblem(raw: unknown): string | null {
 
 function audienceProblem(raw: unknown): string | null {
     if (raw === undefined) return null;
-    if (!isPlainObject(raw) || Object.keys(raw).some((key) => key !== 'ReaderUserIDs')) {
+    if (!isPlainObject(raw)) {
+        return 'Audience is not { ReaderUserIDs }';
+    }
+    if (raw.Mode === 'ScopeCommonReach') {
+        if (Object.keys(raw).some((key) => key !== 'Mode')) {
+            return 'Audience with Mode ScopeCommonReach may not carry other keys';
+        }
+        return null;
+    }
+    if ('Mode' in raw && raw.Mode !== 'Intersection') {
+        return 'Audience.Mode is not Intersection or ScopeCommonReach';
+    }
+    if (Object.keys(raw).some((key) => key !== 'ReaderUserIDs' && key !== 'Mode')) {
         return 'Audience is not { ReaderUserIDs }';
     }
     const readers = raw.ReaderUserIDs;

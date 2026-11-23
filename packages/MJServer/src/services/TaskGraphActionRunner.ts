@@ -9,13 +9,13 @@
  *
  * @module @memberjunction/server
  */
-import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam, type ActionRunAudience, type ActionRunScope, type MJActionEntityExtended } from '@memberjunction/actions-base';
+import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
+import { ActionParam, AUDIENCE_UNSUPPORTED_RESULT_CODE, type ActionRunAudience, type ActionRunScope, type MJActionEntityExtended } from '@memberjunction/actions-base';
 import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject, TAINTED_EGRESS_BLOCKED, type TaskRunScope, type TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
 import { MatchAudienceUsers } from '@memberjunction/ai-agents';
 import { DatabaseProviderBase, LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
 
 /**
@@ -42,7 +42,17 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 return { Success: false, ErrorMessage: taintRefusal, ResultCode: TAINTED_EGRESS_BLOCKED, IsOutputTainted: true };
             }
 
-            const readerIds = envelope?.Audience?.ReaderUserIDs ?? [];
+            const envelopeAudience = envelope?.Audience;
+            const isStructuralAudience = envelopeAudience != null && 'Mode' in envelopeAudience && envelopeAudience.Mode === 'ScopeCommonReach';
+            if (isStructuralAudience && !this.actionSupportsAudience(action)) {
+                const refusal = `Action '${action.Name}' is not available under structural common-reach audience.`;
+                LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${refusal}`);
+                return { Success: false, ErrorMessage: refusal, ResultCode: AUDIENCE_UNSUPPORTED_RESULT_CODE };
+            }
+
+            const readerIds = !isStructuralAudience && envelopeAudience && 'ReaderUserIDs' in envelopeAudience
+                ? envelopeAudience.ReaderUserIDs
+                : [];
             const readers = readerIds.length > 0 ? await this.resolveAudienceReaders(readerIds, params.Provider) : { Readers: [] };
             if ('Refusal' in readers) {
                 LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${readers.Refusal}`);
@@ -199,6 +209,22 @@ export class TaskGraphActionRunner implements TaskActionRunner {
             };
         }
         return { Readers: match.Readers };
+    }
+
+    /**
+     * Checks via ClassFactory whether an action declares `SupportsAudience === true`.
+     * Runtime actions and unregistered classes fail closed under structural common-reach audience mode.
+     */
+    private actionSupportsAudience(action: MJActionEntityExtended): boolean {
+        if (action.Type === 'Runtime') {
+            return false;
+        }
+        const driverKey = action.DriverClass || action.Name;
+        if (!driverKey) {
+            return false;
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, driverKey);
+        return Boolean(instance && instance.constructor !== BaseAction && instance.SupportsAudience === true);
     }
 }
 

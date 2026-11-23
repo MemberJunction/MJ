@@ -99,7 +99,7 @@ import { ReadHostTools, ReadTrimmedString } from './realtime/bridge-host-params'
 import { RealtimeRecordingController, RealtimeRecordingMedia } from './realtime/realtime-recording-capture';
 import { ResolveRecordingStorageAccountID, StoreRealtimeRecording } from './realtime/realtime-recording-store';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ActionEngineServer } from '@memberjunction/actions';
+import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder, AgentMemoryObservability } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
@@ -169,6 +169,7 @@ import {
     AgentUserPolicyEngine,
     type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
+    IsStructuralCommonReachAudience,
     type AgentRunAudience,
     type AgentHandoffResult,
     ApplyOutputMapping,
@@ -3763,6 +3764,10 @@ export class BaseAgent {
         const problem = AgentAudienceProblem(params.Audience);
         if (problem) {
             return { Error: `Invalid Audience: ${problem}` };
+        }
+        if (IsStructuralCommonReachAudience(params.Audience)) {
+            this.logStatus('👥 Run audience: structural common-reach mode — O(1) startup without reader enumeration; audience restrictions active', true, params);
+            return { Readers: [] };
         }
         const ids = AgentAudienceReaderIDs(params.Audience, params.contextUser?.ID);
         if (ids.length === 0) {
@@ -15628,6 +15633,14 @@ The context is now within limits. Please retry your request with the recovered c
             throw new Error(audience.Error);
         }
 
+        // In structural common-reach mode, no individual readers are enumerated for ActionEngine, so BaseAgent
+        // enforces the audience tool boundary directly before dispatch: runtime actions and actions that have
+        // not declared SupportsAudience === true are refused and locked out for the run.
+        const structuralRefusal = this.checkStructuralAudienceAction(params, action, actionEntity, contextUser, skipBreaker);
+        if (structuralRefusal) {
+            return structuralRefusal;
+        }
+
         try {
             // Execute the action and return the full ActionResult
             const result = await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(
@@ -15693,6 +15706,62 @@ The context is now within limits. Please retry your request with the recovered c
                 Filters: [],
             },
         };
+    }
+
+    /**
+     * Enforces the audience action boundary when running in structural common-reach mode (`Mode: 'ScopeCommonReach'`).
+     * Only class-based actions that explicitly declare `SupportsAudience === true` may execute; runtime actions
+     * and non-audience-aware actions are refused with `AUDIENCE_UNSUPPORTED` and locked out for the run.
+     */
+    private checkStructuralAudienceAction(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser: UserInfo | undefined,
+        skipBreaker: boolean
+    ): ActionResult | null {
+        if (!IsStructuralCommonReachAudience(params.Audience)) {
+            return null;
+        }
+        if (this.resolveActionSupportsAudience(actionEntity)) {
+            return null;
+        }
+        const reason = actionEntity.Type === 'Runtime'
+            ? 'a runtime-defined action cannot declare that it honours an audience'
+            : 'it has not declared that it can limit what it returns to the shared run scope';
+        const message = `Action '${actionEntity.Name || action.name}' is not available here: its output would be shown under structural common-reach audience, and ${reason}.`;
+        this.logStatus(`   ❌ Action '${action.name}' refused under structural audience — ${reason}`, false, params);
+        if (!skipBreaker) {
+            this.lockOutAction(action, actionEntity, 'audience');
+        }
+        return {
+            Success: false,
+            ResultCode: AUDIENCE_UNSUPPORTED_RESULT_CODE,
+            Message: message,
+            Params: [],
+            RunParams: {
+                Action: actionEntity,
+                Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                ContextUser: contextUser,
+                Filters: [],
+            },
+        };
+    }
+
+    /**
+     * Checks via ClassFactory whether an action declares `SupportsAudience === true`.
+     * Overridable in subclasses/tests; fails closed for runtime actions or missing drivers.
+     */
+    protected resolveActionSupportsAudience(actionEntity: MJActionEntityExtended): boolean {
+        if (actionEntity.Type === 'Runtime') {
+            return false;
+        }
+        const driverKey = actionEntity.DriverClass || actionEntity.Name;
+        if (!driverKey) {
+            return false;
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, driverKey);
+        return Boolean(instance && instance.constructor !== BaseAction && instance.SupportsAudience === true);
     }
 
     /**
@@ -22218,6 +22287,7 @@ The context is now within limits. Please retry your request with the recovered c
         const scope = this.runScopeFor(params);
         const derived = BuildTaskSecurityEnvelope({
             BoundActionParams: params.boundActionParams,
+            AudienceMode: params.Audience?.Mode,
             AudienceReaderUserIDs: AgentAudienceReaderIDs(params.Audience, params.contextUser?.ID),
             RunScope: {
                 PrimaryScopeEntityName: scope.PrimaryScopeEntityName ?? null,

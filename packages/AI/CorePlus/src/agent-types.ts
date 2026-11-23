@@ -1285,29 +1285,152 @@ export interface InputArtifact {
  * How a run's audience bounds what the run may show. See {@link ExecuteAgentParams.Audience}.
  * - `'Caller'` — the caller's own reach, exactly as if no audience were set. `UserIDs` must be empty.
  * - `'Intersection'` — only what the caller **and** every user in `UserIDs` may see.
+ * - `'ScopeCommonReach'` — structural common-reach mode: the host asserts the run scope
+ *   (`PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` / `SearchScopeIDs`)
+ *   is already the common reach of all readers, enabling O(1) startup without enumerating `UserIDs`
+ *   while keeping all audience restrictions (classification, tool/artifact boundaries, policy checks)
+ *   unconditionally enforced.
  *
  * Union, anchor and narrowing modes are not offered: a run bounded by a shared record or a tenant
  * uses `PrimaryScope*` / `SecondaryScopes`.
  *
  * @since 6.2.0
  */
-export type AgentAudienceMode = 'Caller' | 'Intersection';
+export type AgentAudienceMode = 'Caller' | 'Intersection' | 'ScopeCommonReach';
+
+/**
+ * Caller-only audience (`Mode: 'Caller'`): behaves as if no audience were set.
+ */
+export interface AgentCallerAudience {
+    /** Caller-only reach. */
+    Mode: 'Caller';
+    /** Must be absent or empty for `'Caller'`. */
+    UserIDs?: string[];
+}
+
+/**
+ * Enumerated-reader audience (`Mode: 'Intersection'`): only what the caller and every user in
+ * `UserIDs` may see.
+ */
+export interface AgentIntersectionAudience {
+    /** Enumerated intersection reach. */
+    Mode: 'Intersection';
+    /**
+     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
+     * conversation, its other participants. Required and non-empty, with no blank entry, for
+     * `'Intersection'`. Listing the caller, or an ID twice, is harmless. Each ID must name an
+     * existing user: a run whose audience names an unknown ID is refused.
+     */
+    UserIDs: string[];
+}
+
+/**
+ * Structural common-reach audience (`Mode: 'ScopeCommonReach'`): the host asserts the run scope
+ * is already the common reach of every eligible reader. Starts in O(1) time without enumerating
+ * or hydrating a reader `UserIDs` list while unconditionally enforcing all audience restrictions.
+ *
+ * Explicitly distinct from `{ Mode: 'Intersection', UserIDs: [] }`, which remains fail-closed
+ * and rejected so an empty enumerated reader array can never silently imply common reach.
+ */
+export interface AgentScopeCommonReachAudience {
+    /** Structural scope common-reach assertion. */
+    Mode: 'ScopeCommonReach';
+    /**
+     * Optional explicit confirmation flag (`true` when supplied; `false` is rejected). Omitting
+     * it is valid because `Mode: 'ScopeCommonReach'` itself asserts scope common reach.
+     */
+    ScopeAsserted?: true;
+    /** Disallowed on `'ScopeCommonReach'`: structural mode never enumerates reader IDs. */
+    UserIDs?: never;
+}
 
 /**
  * The people, besides the caller, who will see a run's output. See {@link ExecuteAgentParams.Audience}.
  *
+ * Backwards-compatible discriminated union across `'Caller'`, `'Intersection'`, and `'ScopeCommonReach'`.
+ *
  * @since 6.2.0
  */
-export interface AgentRunAudience {
-    /** How the audience bounds the run. */
-    Mode: AgentAudienceMode;
-    /**
-     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
-     * conversation, its other participants. Required and non-empty, with no blank entry, for
-     * `'Intersection'`; empty for `'Caller'`. Listing the caller, or an ID twice, is harmless. Each ID
-     * must name an existing user: a run whose audience names an unknown ID is refused.
-     */
-    UserIDs: string[];
+export type AgentRunAudience =
+    | AgentCallerAudience
+    | AgentIntersectionAudience
+    | AgentScopeCommonReachAudience;
+
+/** Own-key lookup table so inherited Object.prototype names (`'toString'`, `'__proto__'`, ...) are never accepted. */
+const AGENT_AUDIENCE_MODES: Record<AgentAudienceMode, true> = {
+    Caller: true,
+    Intersection: true,
+    ScopeCommonReach: true,
+};
+
+/**
+ * Type guard for {@link AgentScopeCommonReachAudience} (`Mode === 'ScopeCommonReach'`).
+ */
+export function IsStructuralCommonReachAudience(audience: unknown): audience is AgentScopeCommonReachAudience {
+    return audience !== null && typeof audience === 'object' && !Array.isArray(audience) && 'Mode' in audience && audience.Mode === 'ScopeCommonReach';
+}
+
+/**
+ * Builds a well-formed structural common-reach audience (`Mode: 'ScopeCommonReach'`).
+ */
+export function CreateScopeCommonReachAudience(): AgentScopeCommonReachAudience {
+    return { Mode: 'ScopeCommonReach', ScopeAsserted: true };
+}
+
+/**
+ * Validates a run's audience, returning `null` when absent or well formed and a diagnostic error
+ * string otherwise. Shared single source of truth across `@memberjunction/ai-core-plus` and
+ * `@memberjunction/ai-agents`.
+ */
+export function ValidateAgentRunAudience(audience: unknown): string | null {
+    if (audience === undefined) return null;
+    if (audience === null || typeof audience !== 'object' || Array.isArray(audience)) {
+        return `expected { Mode, UserIDs }, got ${describeAudienceValue(audience)}. Omit Audience for a run with no audience.`;
+    }
+    const mode = 'Mode' in audience ? audience.Mode : undefined;
+    if (typeof mode !== 'string' || !Object.prototype.hasOwnProperty.call(AGENT_AUDIENCE_MODES, mode)) {
+        return `Mode must be 'Caller' or 'Intersection', got ${typeof mode === 'string' ? `'${mode}'` : describeAudienceValue(mode)} (or use 'ScopeCommonReach').`;
+    }
+    const ids = 'UserIDs' in audience ? audience.UserIDs : undefined;
+    if (mode === 'Caller') {
+        return callerAudienceIDsProblem(ids);
+    }
+    if (mode === 'ScopeCommonReach') {
+        return structuralAudienceProblem(audience, ids);
+    }
+    return intersectionAudienceIDsProblem(ids);
+}
+
+function callerAudienceIDsProblem(ids: unknown): string | null {
+    if (ids === undefined || (Array.isArray(ids) && ids.length === 0)) return null;
+    return `Mode 'Caller' takes no UserIDs (got ${Array.isArray(ids) ? `${ids.length} ID(s)` : describeAudienceValue(ids)}); use 'Intersection' to name readers.`;
+}
+
+function intersectionAudienceIDsProblem(ids: unknown): string | null {
+    if (!Array.isArray(ids)) {
+        return `Mode 'Intersection' needs UserIDs, an array of MJ: Users IDs; got ${describeAudienceValue(ids)}.`;
+    }
+    if (ids.length === 0) {
+        return "Mode 'Intersection' needs at least one ID in UserIDs; use 'Caller' (or omit Audience) for a run with no other readers.";
+    }
+    const blank = ids.findIndex(id => typeof id !== 'string' || id.trim() === '');
+    return blank === -1 ? null : `UserIDs[${blank}] is blank or not a string — every reader must be an MJ: Users ID.`;
+}
+
+function structuralAudienceProblem(audience: object, ids: unknown): string | null {
+    if (ids !== undefined) {
+        return "Mode 'ScopeCommonReach' takes no UserIDs; omit UserIDs when asserting structural common reach.";
+    }
+    if ('ScopeAsserted' in audience && audience.ScopeAsserted !== undefined && audience.ScopeAsserted !== true) {
+        return "Mode 'ScopeCommonReach' requires ScopeAsserted to be true when provided.";
+    }
+    return null;
+}
+
+function describeAudienceValue(value: unknown): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'an array';
+    return typeof value;
 }
 
 /**
