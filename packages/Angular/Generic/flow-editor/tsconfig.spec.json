@@ -4,9 +4,12 @@
     "types": ["vitest/globals", "node"]
   },
   "include": [
+    "src/lib/components/flow-editor.component.ts",
+    "src/lib/components/flow-node.component.ts",
     "src/lib/components/flow-toolbar.component.ts",
     "src/lib/components/flow-status-bar.component.ts",
     "src/lib/components/flow-palette.component.ts",
+    "src/lib/components/flow-editor.component.dom.test.ts",
     "src/lib/components/flow-toolbar.component.dom.test.ts",
     "src/lib/components/flow-status-bar.component.dom.test.ts",
     "src/lib/components/flow-palette.component.dom.test.ts"
