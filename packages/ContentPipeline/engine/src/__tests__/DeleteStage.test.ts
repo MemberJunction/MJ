@@ -165,6 +165,19 @@ describe('what is left behind once the vector is gone', () => {
         expect(await internals(new DeleteStage()).isReferenced('C1', context)).toBe(false);
     });
 
+    it('keeps a chunk a graph edge still names (a Declared edge retraction left), so the edge never dangles', async () => {
+        const reads: string[] = [];
+        const provider = {
+            EntityByName: (name: string) => ({ ID: `id:${name}`, RelatedEntities: [] }),
+            RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+                reads.push(params.EntityName);
+                return { Success: true, Results: [], TotalRowCount: params.EntityName === 'MJ: Graph Edges' ? 1 : 0 };
+            },
+        } as never;
+        expect(await internals(new DeleteStage()).isReferenced('C1', { ...contextWith(), Provider: provider })).toBe(true);
+        expect(reads).toEqual(['MJ: Graph Edges']);
+    });
+
     it('counts a failed check as referenced — losing history is worse than keeping a row', async () => {
         const context = { ...contextWith(), Provider: referencedBy(null) };
         expect(await internals(new DeleteStage()).isReferenced('C1', context)).toBe(true);

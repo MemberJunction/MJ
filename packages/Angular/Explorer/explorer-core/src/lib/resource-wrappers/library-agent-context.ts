@@ -170,13 +170,13 @@ export function BuildLibraryAgentClientTools(
     {
       Name: 'SwitchLibraryTab',
       Description:
-        'Switch the active tab in Library Hub mode ("overview", "collections", "all", "shared", or "drives").',
+        'Switch the active tab in Library Hub mode ("overview", "collections", "all", "shared", "shared-by-me", or "drives").',
       ParameterSchema: {
         type: 'object',
         properties: {
           tab: {
             type: 'string',
-            enum: ['overview', 'collections', 'all', 'shared', 'drives'],
+            enum: ['overview', 'collections', 'all', 'shared', 'shared-by-me', 'drives'],
             description: 'Hub tab key to display.',
           },
         },
@@ -184,11 +184,11 @@ export function BuildLibraryAgentClientTools(
       },
       Handler: async (params: LibraryAgentToolParams): Promise<LibraryToolOutcome> => {
         const rawTab = typeof params['tab'] === 'string' ? params['tab'].toLowerCase() : '';
-        const allowed: LibraryHubTab[] = ['overview', 'collections', 'all', 'shared', 'drives'];
+        const allowed: LibraryHubTab[] = ['overview', 'collections', 'all', 'shared', 'shared-by-me', 'drives'];
         if (!allowed.includes(rawTab as LibraryHubTab)) {
           return {
             Success: false,
-            Message: 'Parameter "tab" must be overview, collections, all, shared, or drives.',
+            Message: 'Parameter "tab" must be overview, collections, all, shared, shared-by-me, or drives.',
           };
         }
         controller.SwitchMode('hub');

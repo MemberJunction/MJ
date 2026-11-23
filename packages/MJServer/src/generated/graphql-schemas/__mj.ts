@@ -10727,6 +10727,10 @@ export class MJAIAgent_ {
     @Field(() => Int, {nullable: true, description: "Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3)."}) 
     MaxSubAgentConsultRounds?: number;
         
+    @Field({nullable: true, description: "Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation)."}) 
+    @MaxLength(20)
+    Isolation?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11041,6 +11045,9 @@ export class CreateMJAIAgentInput {
     @Field(() => Int, { nullable: true })
     MaxSubAgentConsultRounds: number | null;
 
+    @Field({ nullable: true })
+    Isolation?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -11290,6 +11297,9 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     MaxSubAgentConsultRounds?: number | null;
+
+    @Field({ nullable: true })
+    Isolation?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25045,6 +25055,10 @@ export class MJAgentChannel_ {
     @MaxLength(36)
     TypeID?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -25169,6 +25183,9 @@ export class CreateMJAgentChannelInput {
     @Field({ nullable: true })
     TypeID?: string;
 
+    @Field({ nullable: true })
+    ParentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -25292,6 +25309,9 @@ export class UpdateMJAgentChannelInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -32303,6 +32323,10 @@ export class MJComment_ {
     TypeID?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     CommentType?: string;
         
@@ -32406,6 +32430,9 @@ export class CreateMJCommentInput {
     @Field({ nullable: true })
     TypeID?: string;
 
+    @Field({ nullable: true })
+    ParentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -32505,6 +32532,9 @@ export class UpdateMJCommentInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -44650,6 +44680,10 @@ export class MJConversation_ {
     @MaxLength(36)
     TypeID?: string;
         
+    @Field({nullable: true, description: "Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations."}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
@@ -44697,6 +44731,26 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     Type?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -44795,6 +44849,9 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     TypeID?: string;
 
+    @Field({ nullable: true })
+    ParentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -44891,6 +44948,9 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -62203,6 +62263,10 @@ export class MJFieldSuggestion_ {
     TypeID?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(255)
     AIPromptRun?: string;
         
@@ -62321,6 +62385,9 @@ export class CreateMJFieldSuggestionInput {
     @Field({ nullable: true })
     TypeID?: string;
 
+    @Field({ nullable: true })
+    ParentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -62435,6 +62502,9 @@ export class UpdateMJFieldSuggestionInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

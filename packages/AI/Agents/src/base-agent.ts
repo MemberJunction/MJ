@@ -38,6 +38,8 @@ import {
     ClearCooperativePauseRequestFromRunData,
     ExtractCooperativePauseRequestFromRunData,
     ResolveAgentRunLimits,
+    ResolveEffectiveWorkflowDurationCapMs,
+    ResolveWorkflowStartedAtMs,
     type ArtifactJsonValue,
     type ArtifactToolArgs,
     type BudgetBreachDetail,
@@ -49,11 +51,12 @@ import {
     type RunawayJsonValue,
     type RunawayPauseReason,
     type RunawaySerializable,
+    type WorkflowBudgetBreachDiagnostic,
     ToRunawayJsonValue,
 } from "@memberjunction/ai-core-plus";
 import { GovernedArtifactService, MergeTouchedArtifactSummary } from './GovernedArtifactService';
 import { CollectDelegatedRunArtifactsSafely, ExtractDirectActionArtifacts } from './realtime/realtime-artifact-helpers';
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager, CODE_FALLBACK_LIMITS, LimitsConfigResolver, type MJLimitsBudgetsConfig, type MJLimitsConfig, type MJLimitsResolutionResult } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager, CODE_FALLBACK_LIMITS, LimitsConfigResolver, ValidateDecisionReadResult, type MJLimitsBudgetsConfig, type MJLimitsConfig, type MJLimitsResolutionResult } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
@@ -169,6 +172,7 @@ import {
     AgentUserPolicyEngine,
     type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
+    IsStructuralCommonReachAudience,
     type AgentRunAudience,
     type AgentHandoffResult,
     ApplyOutputMapping,
@@ -192,6 +196,7 @@ import {
 } from '@memberjunction/actions-base';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from './agent-audience';
+import { ActionSupportsAudience } from './action-audience-support';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
 import { ResolveSpecializationPlacement } from './volatile-child-prompt';
@@ -3187,6 +3192,8 @@ export class BaseAgent {
         this._activeProvider = params.provider ?? Metadata.Provider;
         this.initCurrentLateJudgeScope(params);
 
+        const treeBudget = this.ensureTreeBudget(params);
+
         // =====================================================================================
         // UNIVERSAL WALL-CLOCK TIMEOUT
         //
@@ -3209,12 +3216,30 @@ export class BaseAgent {
                 ? params.agent.MaxTimePerRun * 1000
                 : undefined;
         const resolvedMaxWallClockMs = this._activeBudgets?.PerRun.MaxWallClockMs ?? undefined;
-        const agentTimeoutMS = resolvedMaxWallClockMs ?? params.maxExecutionTimeMs ?? configuredMaxTimeMs ?? this.DefaultAgentTimeoutMS;
+        const workflowDurationCapMs = ResolveEffectiveWorkflowDurationCapMs(treeBudget);
+        const workflowStartedAtMs = ResolveWorkflowStartedAtMs(treeBudget);
+        const workflowRemainingMs = workflowDurationCapMs !== undefined
+            ? Math.max(0, workflowDurationCapMs - Math.max(0, Date.now() - workflowStartedAtMs))
+            : undefined;
+        const baseAgentTimeoutMS = resolvedMaxWallClockMs ?? params.maxExecutionTimeMs ?? configuredMaxTimeMs ?? this.DefaultAgentTimeoutMS;
+        const agentTimeoutMS = workflowRemainingMs !== undefined
+            ? Math.min(baseAgentTimeoutMS, Math.max(1, workflowRemainingMs))
+            : baseAgentTimeoutMS;
         const upstreamToken = params.cancellationToken;
+        const budgetAbortSignal = this.hasExplicitWorkflowBudgetCaps(params)
+            ? treeBudget.abortController?.signal
+            : undefined;
         const timeoutController = new AbortController();
         const relayUpstreamAbort = () => {
             if (!timeoutController.signal.aborted) {
                 timeoutController.abort(upstreamToken?.reason ?? 'upstream cancellation');
+            }
+        };
+        const relayBudgetAbort = () => {
+            if (!timeoutController.signal.aborted) {
+                timeoutController.abort(
+                    budgetAbortSignal?.reason ?? treeBudget.breachDiagnostic?.Reason ?? 'workflow budget exceeded'
+                );
             }
         };
         if (upstreamToken) {
@@ -3222,6 +3247,13 @@ export class BaseAgent {
                 relayUpstreamAbort();
             } else {
                 upstreamToken.addEventListener('abort', relayUpstreamAbort, { once: true });
+            }
+        }
+        if (budgetAbortSignal) {
+            if (budgetAbortSignal.aborted) {
+                relayBudgetAbort();
+            } else {
+                budgetAbortSignal.addEventListener('abort', relayBudgetAbort, { once: true });
             }
         }
         const timeoutId = setTimeout(() => {
@@ -3241,6 +3273,12 @@ export class BaseAgent {
         try {
             if (policyResolution.status === 'error') {
                 throw new Error(`Fail-closed: unable to verify user agent policy (${policyResolution.errorMessage})`);
+            }
+            const preRunTreeBudgetCheck = this.checkTreeBudgetLimit(params);
+            if (preRunTreeBudgetCheck.exceeded) {
+                const reason = preRunTreeBudgetCheck.reason ?? 'Workflow budget exceeded before agent execution';
+                this.logStatus(`⛔ ${reason}`, false, params);
+                return await this.createFailureResult(reason, params.contextUser);
             }
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
@@ -3658,11 +3696,14 @@ export class BaseAgent {
             });
             return await this.createFailureResult(error.message, params.contextUser);
         } finally {
-            // Release timeout / upstream-abort listeners so we don't leak
+            // Release timeout / upstream-abort / workflow-budget-abort listeners so we don't leak
             // handles when the run completes (success, failure, or cancel).
             clearTimeout(timeoutId);
             if (upstreamToken) {
                 upstreamToken.removeEventListener('abort', relayUpstreamAbort);
+            }
+            if (budgetAbortSignal) {
+                budgetAbortSignal.removeEventListener('abort', relayBudgetAbort);
             }
             // Restore the caller's original cancellationToken on `params` so
             // consumers that re-read `params` after the call see what they
@@ -3763,6 +3804,17 @@ export class BaseAgent {
         const problem = AgentAudienceProblem(params.Audience);
         if (problem) {
             return { Error: `Invalid Audience: ${problem}` };
+        }
+        if (IsStructuralCommonReachAudience(params.Audience)) {
+            const scope = this._runScope ?? this.validatedRunScope(params);
+            const hasConstrainingScope = ActionRunScopeIsBounded(scope) || (scope.SearchScopeIDs?.length ?? 0) > 0;
+            if (!hasConstrainingScope) {
+                return {
+                    Error: "Invalid Audience: Mode 'ScopeCommonReach' requires a constraining run scope (PrimaryScopeRecordID, SecondaryScopes, or SearchScopeIDs); cannot run unscoped."
+                };
+            }
+            this.logStatus('👥 Run audience: structural common-reach mode — O(1) startup without reader enumeration; audience restrictions active', true, params);
+            return { Readers: [] };
         }
         const ids = AgentAudienceReaderIDs(params.Audience, params.contextUser?.ID);
         if (ids.length === 0) {
@@ -6412,6 +6464,7 @@ export class BaseAgent {
             approvalRequestId: outcome.PauseResult.ApprovalRequestID ?? undefined,
             limitsSnapshot: this._agentRun?.LimitsDiagnosticsSnapshot ?? undefined,
             taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
+            ...(this._treeBudget?.breachDiagnostic ? { limitExceeded: this._treeBudget.breachDiagnostic } : {}),
         };
     }
 
@@ -10677,6 +10730,19 @@ export class BaseAgent {
             return nextStep;
         }
         if (nextStep.step === 'Success') {
+            if (this.hasExplicitWorkflowBudgetCaps(params)) {
+                const wfBudgetCheck = this.checkTreeBudgetLimit(params);
+                if (wfBudgetCheck.exceeded) {
+                    this.logStatus(`⛔ Workflow budget exceeded: ${wfBudgetCheck.reason}`, false, params);
+                    return {
+                        ...nextStep,
+                        step: 'Failed',
+                        terminate: true,
+                        message: wfBudgetCheck.reason,
+                        errorMessage: wfBudgetCheck.reason,
+                    };
+                }
+            }
             const checked = await this.applySelfCheck(params, nextStep, agentRun, currentPayload);
             return checked ?? nextStep;
         }
@@ -10685,8 +10751,12 @@ export class BaseAgent {
         const guardrailResult = await this.hasExceededAgentRunGuardrails(params, agentRun);
 
         if (guardrailResult.exceeded) {
-            // Route dollar/time budget breaches through unified non-destructive checkpoint pause before terminal Failed
-            if ((guardrailResult.type === 'cost' || guardrailResult.type === 'time') && this._agentRun) {
+            // Route dollar/time budget breaches through unified non-destructive checkpoint pause before terminal Failed,
+            // EXCEPT when explicit whole-workflow USD cost or wall-clock duration caps are active without runaway governance.
+            const routeToPause = (guardrailResult.type === 'cost' || guardrailResult.type === 'time')
+                && Boolean(this._agentRun)
+                && (!this.hasExplicitWorkflowBudgetCaps(params) || params.enableRunawayGovernance === true);
+            if (routeToPause) {
                 const pausedOutcome = await this.pauseGuardrailCostOrTimeBreach(
                     params,
                     nextStep,
@@ -10750,6 +10820,13 @@ export class BaseAgent {
         return nextStep;
     }
 
+    private hasExplicitWorkflowBudgetCaps(params?: ExecuteAgentParams): boolean {
+        return (
+            (params?.workflowMaxCostUsd ?? this._treeBudget?.workflowMaxCostUsd) !== undefined ||
+            (params?.workflowMaxDurationMs ?? this._treeBudget?.workflowMaxDurationMs) !== undefined
+        );
+    }
+
     /**
      * Checks if any agent run guardrails have been exceeded.
      * Override this method to implement custom guardrail logic.
@@ -10768,6 +10845,7 @@ export class BaseAgent {
         limit?: number;
         current?: number;
         reason?: string;
+        diagnostic?: WorkflowBudgetBreachDiagnostic;
     }> {
         // Refresh the run's accumulated cost/token actuals before comparing them to the agent's
         // static limits.
@@ -10822,6 +10900,7 @@ export class BaseAgent {
             limit?: number;
             current?: number;
             reason?: string;
+            diagnostic?: WorkflowBudgetBreachDiagnostic;
         },
     ): Promise<typeof this._pausedRunOutcome> {
         const directPause = await this.checkAndPauseOnBudgetBreach(params, currentPayload, nextStep);
@@ -10830,11 +10909,13 @@ export class BaseAgent {
         }
         const ledger = await this.captureCurrentBudgetLedger(params);
         const dimension = guardrailResult.type === 'time' ? 'WallClockMs' : 'CostUsd';
+        const diag = this._treeBudget?.breachDiagnostic;
+        const isMsDiagnostic = diag?.Dimension === 'WallClockMs';
         const limitVal = guardrailResult.type === 'time'
-            ? ((guardrailResult.limit ?? 0) * 1000)
+            ? (isMsDiagnostic ? diag!.Limit : ((guardrailResult.limit ?? 0) * 1000))
             : (guardrailResult.limit ?? 0);
         const currentVal = guardrailResult.type === 'time'
-            ? ((guardrailResult.current ?? 0) * 1000)
+            ? (isMsDiagnostic ? diag!.CurrentValue : ((guardrailResult.current ?? 0) * 1000))
             : (guardrailResult.current ?? 0);
         const breach: BudgetBreachDetail = {
             Scope: 'PerRun',
@@ -10897,20 +10978,24 @@ export class BaseAgent {
         params?: ExecuteAgentParams
     ): void {
         const budget = this.ensureTreeBudget(params);
-        this._budgetTracker.RecordPromptUsage(budget, promptRun, promptResult);
+        this._budgetTracker.RecordPromptUsage(budget, promptRun, promptResult, {
+            AgentName: params?.agent?.Name ?? this._agentRun?.Agent,
+            RunID: this._agentRun?.ID,
+        });
     }
 
     /**
-     * Evaluates whether any root-tree cumulative budget ceiling (`maxTreeSteps`, `maxTreeTokens`,
-     * `maxTreeCost`, `maxTreeDurationMs`) on the shared {@link AgentTreeBudget} has been reached
-     * or exceeded.
+     * Evaluates whether any root-tree or whole-workflow cumulative budget ceiling
+     * (`maxTreeSteps`, `maxTreeTokens`, `maxTreeCost`, `maxTreeDurationMs`,
+     * `workflowMaxCostUsd`, `workflowMaxDurationMs`) on the shared {@link AgentTreeBudget}
+     * has been reached or exceeded.
      *
      * When a ceiling is breached, sets `budget.breachedReason` with a descriptive diagnostic
      * message so both the breaching agent and any ancestor agents in the call tree can terminate
      * immediately with `step: 'Failed'` and `terminate: true`.
      *
      * @param params - Optional execution parameters for the current run.
-     * @returns Guardrail evaluation result indicating whether a tree budget limit was exceeded.
+     * @returns Guardrail evaluation result indicating whether a tree or workflow budget limit was exceeded.
      * @protected
      */
     protected checkTreeBudgetLimit(params?: ExecuteAgentParams): {
@@ -10919,9 +11004,13 @@ export class BaseAgent {
         limit?: number;
         current?: number;
         reason?: string;
+        diagnostic?: WorkflowBudgetBreachDiagnostic;
     } {
         const budget = this.ensureTreeBudget(params);
-        const result = this._budgetTracker.CheckTreeBudgetLimit(budget);
+        const result = this._budgetTracker.CheckTreeBudgetLimit(budget, undefined, {
+            AgentName: params?.agent?.Name ?? this._agentRun?.Agent,
+            RunID: this._agentRun?.ID,
+        });
         return this._budgetTracker.ToLegacyGuardrailVerdict(result);
     }
 
@@ -12631,8 +12720,19 @@ The context is now within limits. Please retry your request with the recovered c
             Fields: ['StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'InputData', 'OutputData'],
             ResultType: 'simple',
             BypassCache: true,
+            IgnoreMaxRows: true,
         }, params.contextUser);
-        return steps.Success ? (steps.Results || []) : [];
+        const validated = ValidateDecisionReadResult(steps, {
+            EntityName: 'MJ: AI Agent Run Steps',
+            OperationName: 'BaseAgent.loadStoppedRunStack',
+        });
+        if ('Error' in validated) {
+            if (validated.Truncated) {
+                throw validated.Error;
+            }
+            return [];
+        }
+        return validated.Results;
     }
 
     /** The completed, successful Actions and Tool steps of a stopped run, in step order. @private */
@@ -12646,8 +12746,19 @@ The context is now within limits. Please retry your request with the recovered c
             Fields: ['StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'InputData', 'OutputData'],
             ResultType: 'simple',
             BypassCache: true,
+            IgnoreMaxRows: true,
         }, params.contextUser);
-        return steps.Success ? (steps.Results || []) : [];
+        const validated = ValidateDecisionReadResult(steps, {
+            EntityName: 'MJ: AI Agent Run Steps',
+            OperationName: 'BaseAgent.loadStoppedRunResultSteps',
+        });
+        if ('Error' in validated) {
+            if (validated.Truncated) {
+                throw validated.Error;
+            }
+            return [];
+        }
+        return validated.Results;
     }
 
     /**
@@ -12799,8 +12910,19 @@ The context is now within limits. Please retry your request with the recovered c
             OrderBy: 'StartedAt ASC',
             Fields: ['OutputData'],
             ResultType: 'simple',
+            IgnoreMaxRows: true,
         }, params.contextUser);
-        return steps.Success ? (steps.Results || []) : [];
+        const validated = ValidateDecisionReadResult(steps, {
+            EntityName: 'MJ: AI Agent Run Steps',
+            OperationName: 'BaseAgent.loadPriorTurnToolResultSteps',
+        });
+        if ('Error' in validated) {
+            if (validated.Truncated) {
+                throw validated.Error;
+            }
+            return [];
+        }
+        return validated.Results;
     }
 
     /**
@@ -15483,8 +15605,9 @@ The context is now within limits. Please retry your request with the recovered c
         actionEntity: MJActionEntityExtended,
         audienceReaders: UserInfo[],
         runAs: UserInfo | undefined
-    ): Pick<RunActionParams, 'RuntimeAPIKeyResolver' | 'CredentialScope' | 'Audience' | 'RunScope'> {
+    ): Pick<RunActionParams, 'RuntimeAPIKeyResolver' | 'CredentialScope' | 'Audience' | 'IsStructuralAudience' | 'RunScope'> {
         const readers = this.dispatchReaders(params, audienceReaders, runAs);
+        const isStructuralAudience = IsStructuralCommonReachAudience(params.Audience);
         return {
             // The run's RUNTIME API KEYS, as a RESOLVER bound to this one action — see buildRuntimeAPIKeyResolver().
             // Absent when the run has no keys, so the action uses GetAIAPIKey(driverClass) exactly as before —
@@ -15497,6 +15620,9 @@ The context is now within limits. Please retry your request with the recovered c
             // that cannot honour it (AUDIENCE_UNSUPPORTED — see recordDispatchOutcome); one that can returns only
             // what every reader may see.
             Audience: readers.length > 0 ? { Readers: readers } : undefined,
+            // Explicit per-dispatch structural common-reach indicator so actions like ScopedSearchAction withhold
+            // pre-filter aggregates (SourceCounts, streaming provider counts) even with zero enumerated Readers.
+            ...(isStructuralAudience ? { IsStructuralAudience: true } : {}),
             // The run's scope (tenant + secondary dimensions), always present inside a run — nulls when it is
             // unscoped — so an action that scopes by tenant defaults to the run's and refuses one the model names.
             RunScope: this.runScopeFor(params),
@@ -15628,6 +15754,14 @@ The context is now within limits. Please retry your request with the recovered c
             throw new Error(audience.Error);
         }
 
+        // In structural common-reach mode, no individual readers are enumerated for ActionEngine, so BaseAgent
+        // enforces the audience tool boundary directly before dispatch: runtime actions and actions that have
+        // not declared SupportsAudience === true are refused and locked out for the run.
+        const structuralRefusal = this.checkStructuralAudienceAction(params, action, actionEntity, contextUser, skipBreaker);
+        if (structuralRefusal) {
+            return structuralRefusal;
+        }
+
         try {
             // Execute the action and return the full ActionResult
             const result = await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(
@@ -15693,6 +15827,54 @@ The context is now within limits. Please retry your request with the recovered c
                 Filters: [],
             },
         };
+    }
+
+    /**
+     * Enforces the audience action boundary when running in structural common-reach mode (`Mode: 'ScopeCommonReach'`).
+     * Only class-based actions that explicitly declare `SupportsAudience === true` may execute; runtime actions
+     * and non-audience-aware actions are refused with `AUDIENCE_UNSUPPORTED` and locked out for the run.
+     */
+    private checkStructuralAudienceAction(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser: UserInfo | undefined,
+        skipBreaker: boolean
+    ): ActionResult | null {
+        if (!IsStructuralCommonReachAudience(params.Audience)) {
+            return null;
+        }
+        if (this.resolveActionSupportsAudience(actionEntity)) {
+            return null;
+        }
+        const reason = actionEntity.Type === 'Runtime'
+            ? 'a runtime-defined action cannot declare that it honours an audience'
+            : 'it has not declared that it can limit what it returns to the shared run scope';
+        const message = `Action '${actionEntity.Name || action.name}' is not available here: its output would be shown under structural common-reach audience, and ${reason}.`;
+        this.logStatus(`   ❌ Action '${action.name}' refused under structural audience — ${reason}`, false, params);
+        if (!skipBreaker) {
+            this.lockOutAction(action, actionEntity, 'audience');
+        }
+        return {
+            Success: false,
+            ResultCode: AUDIENCE_UNSUPPORTED_RESULT_CODE,
+            Message: message,
+            Params: [],
+            RunParams: {
+                Action: actionEntity,
+                Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                ContextUser: contextUser,
+                Filters: [],
+            },
+        };
+    }
+
+    /**
+     * Checks via ClassFactory whether an action declares `SupportsAudience === true`.
+     * Overridable in subclasses/tests; fails closed for runtime actions or missing drivers.
+     */
+    protected resolveActionSupportsAudience(actionEntity: MJActionEntityExtended): boolean {
+        return ActionSupportsAudience(actionEntity);
     }
 
     /**
@@ -16039,6 +16221,17 @@ The context is now within limits. Please retry your request with the recovered c
         stepCount: number = 0
     ): Promise<ExecuteAgentResult<SR>> {
         try {
+            const preSubAgentBudgetCheck = this.checkTreeBudgetLimit(params);
+            if (preSubAgentBudgetCheck.exceeded) {
+                const reason = preSubAgentBudgetCheck.reason ?? 'Workflow budget exceeded before sub-agent execution';
+                const diag = this.ensureTreeBudget(params).breachDiagnostic;
+                this.logStatus(`⛔ Skipping sub-agent '${subAgentRequest.name}': ${reason}`, false, params);
+                return {
+                    success: false,
+                    agentRun: { ErrorMessage: reason, FinalStep: 'Failed' } as MJAIAgentRunEntityExtended,
+                    ...(diag ? { limitExceeded: diag } : {}),
+                } as ExecuteAgentResult<SR>;
+            }
             this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
 
             // Create a new AgentRunner instance with the same isolated provider
@@ -16146,6 +16339,9 @@ The context is now within limits. Please retry your request with the recovered c
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 treeBudget: this.ensureTreeBudget(params), // propagate shared cumulative root-tree budget to sub-agent
+                workflowMaxCostUsd: params.workflowMaxCostUsd, // propagate explicit workflow USD ceiling
+                workflowMaxDurationMs: params.workflowMaxDurationMs, // propagate explicit workflow wall-clock ceiling
+                workflowStartedAtMs: params.workflowStartedAtMs, // propagate authoritative workflow start epoch
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
                 subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
                 boundActionParams: params.boundActionParams, // every sub-agent run keeps the caller's bindings, as it keeps actionChanges
@@ -16169,6 +16365,16 @@ The context is now within limits. Please retry your request with the recovered c
             this.absorbSubAgentTaint(subAgentRequest.name, result, stepEntity?.StepNumber ?? (stepCount + 1));
             if (result.touchedArtifacts?.length) {
                 this._artifactToolManager.AbsorbTouchedArtifacts(result.touchedArtifacts);
+            }
+
+            if (result.limitExceeded) {
+                const sharedBudget = this.ensureTreeBudget(params);
+                if (!sharedBudget.breachDiagnostic) {
+                    sharedBudget.breachDiagnostic = result.limitExceeded;
+                }
+                if (!sharedBudget.breachedReason) {
+                    sharedBudget.breachedReason = result.limitExceeded.Reason;
+                }
             }
 
             // Check if execution was successful
@@ -17334,8 +17540,11 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.Steps.push(stepEntity);
         }
 
-        // Increment cumulative step count on the shared root-tree budget
-        this.ensureTreeBudget(this._executeParams).totalSteps += 1;
+        // Increment cumulative step count atomically on the shared root-tree / workflow budget
+        this._budgetTracker.RecordStepIncrement(this.ensureTreeBudget(this._executeParams), {
+            AgentName: this._executeParams?.agent?.Name ?? this._agentRun?.Agent,
+            RunID: this._agentRun?.ID,
+        });
 
         return stepEntity;
     }
@@ -19374,6 +19583,25 @@ The context is now within limits. Please retry your request with the recovered c
             } else if (!previousDecision?.artifactDirective && !shouldTerminate) {
                 this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
             }
+            const postChildBudgetCheck = this.checkTreeBudgetLimit(params);
+            if (postChildBudgetCheck.exceeded || subAgentResult.limitExceeded) {
+                const limitReason =
+                    subAgentResult.limitExceeded?.Reason ??
+                    postChildBudgetCheck.reason ??
+                    'Workflow budget exceeded during sub-agent execution';
+                return {
+                    ...subAgentResult,
+                    step: 'Failed',
+                    terminate: true,
+                    message: limitReason,
+                    errorMessage: limitReason,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    artifactDirective: previousDecision?.artifactDirective,
+                    payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID,
+                    handoff: undefined,
+                };
+            }
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
@@ -19947,6 +20175,26 @@ The context is now within limits. Please retry your request with the recovered c
     ): Promise<ParallelSubAgentExecution<SR> | undefined> {
         if (!dispatch) return undefined;
         const { request, subAgentEntity, relationship } = dispatch;
+        const preDispatchBudget = this.checkTreeBudgetLimit(params);
+        if (preDispatchBudget.exceeded) {
+            const limitReason = preDispatchBudget.reason ?? 'Workflow budget exceeded before parallel sub-agent execution';
+            const diag = this.ensureTreeBudget(params).breachDiagnostic;
+            return {
+                request,
+                result: {
+                    success: false,
+                    payload: currentPayload,
+                    agentRun: {
+                        ErrorMessage: limitReason,
+                        FinalStep: 'Failed'
+                    } as MJAIAgentRunEntityExtended,
+                    ...(diag ? { limitExceeded: diag } : {}),
+                } as ExecuteAgentResult<SR>,
+                subAgentEntity,
+                relationship,
+                upstreamPaths: [],
+            };
+        }
         const stepEntity = await this.createStepEntity({
             stepType: 'Sub-Agent',
             stepName: `Execute Parallel Sub-Agent: ${request.name}`,
@@ -20160,6 +20408,27 @@ The context is now within limits. Please retry your request with the recovered c
                 role: 'user',
                 content: `Parallel Sub-Agents Completed:\n\n${this.buildParallelSubAgentSummary(unpairable)}`
             });
+        }
+
+        const postParallelBudgetCheck = this.checkTreeBudgetLimit(params);
+        const childLimitExceeded = allExecutions.find((e) => Boolean(e.result.limitExceeded))?.result.limitExceeded;
+        if (postParallelBudgetCheck.exceeded || childLimitExceeded) {
+            const limitReason =
+                childLimitExceeded?.Reason ??
+                postParallelBudgetCheck.reason ??
+                'Workflow budget exceeded during parallel sub-agent execution';
+            if (childLimitExceeded && !this.ensureTreeBudget(params).breachDiagnostic) {
+                this.ensureTreeBudget(params).breachDiagnostic = childLimitExceeded;
+                this.ensureTreeBudget(params).breachedReason = limitReason;
+            }
+            return {
+                step: 'Failed',
+                message: limitReason,
+                errorMessage: limitReason,
+                terminate: true,
+                newPayload: mergedPayload,
+                previousPayload: previousDecision.newPayload,
+            };
         }
 
         // Termination semantics: matches the single sub-agent path —
@@ -20665,6 +20934,25 @@ The context is now within limits. Please retry your request with the recovered c
             } else if (!previousDecision?.artifactDirective && !shouldTerminate) {
                 this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
             }
+            const postChildBudgetCheck = this.checkTreeBudgetLimit(params);
+            if (postChildBudgetCheck.exceeded || subAgentResult.limitExceeded) {
+                const limitReason =
+                    subAgentResult.limitExceeded?.Reason ??
+                    postChildBudgetCheck.reason ??
+                    'Workflow budget exceeded during sub-agent execution';
+                return {
+                    ...subAgentResult,
+                    step: 'Failed',
+                    terminate: true,
+                    message: limitReason,
+                    errorMessage: limitReason,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    artifactDirective: previousDecision?.artifactDirective,
+                    payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID,
+                    handoff: undefined,
+                };
+            }
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
@@ -20837,7 +21125,19 @@ The context is now within limits. Please retry your request with the recovered c
                 const matched = this.resolveActionEntityForAgent(a?.name, availableForExecution, params, false);
                 return matched && matched.Name !== a.name ? { ...a, name: matched.Name } : { ...a };
             });
-            // Check for cancellation before starting
+            // Check for workflow budget ceiling or cancellation before starting
+            const preActionBudgetCheck = this.checkTreeBudgetLimit(params);
+            if (preActionBudgetCheck.exceeded) {
+                const limitReason = preActionBudgetCheck.reason ?? 'Workflow budget exceeded before action execution';
+                return {
+                    terminate: true,
+                    step: 'Failed',
+                    message: limitReason,
+                    errorMessage: limitReason,
+                    previousPayload: previousDecision?.previousPayload || null,
+                    newPayload: currentPayload,
+                };
+            }
             if (params.cancellationToken?.aborted) {
                 throw new Error('Cancelled before action execution');
             }
@@ -21025,8 +21325,20 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Wait for all actions to complete
             const actionResults = await Promise.all(actionPromises);
-            
-            // Check for cancellation after actions complete
+
+            // Check for workflow budget ceiling or cancellation after actions complete
+            const postActionBudgetCheck = this.checkTreeBudgetLimit(params);
+            if (postActionBudgetCheck.exceeded) {
+                const limitReason = postActionBudgetCheck.reason ?? 'Workflow budget exceeded after action execution';
+                return {
+                    terminate: true,
+                    step: 'Failed',
+                    message: limitReason,
+                    errorMessage: limitReason,
+                    previousPayload: previousDecision?.previousPayload || null,
+                    newPayload: currentPayload,
+                };
+            }
             if (params.cancellationToken?.aborted) {
                 throw new Error('Cancelled after action execution');
             }
@@ -22218,6 +22530,7 @@ The context is now within limits. Please retry your request with the recovered c
         const scope = this.runScopeFor(params);
         const derived = BuildTaskSecurityEnvelope({
             BoundActionParams: params.boundActionParams,
+            AudienceMode: params.Audience?.Mode,
             AudienceReaderUserIDs: AgentAudienceReaderIDs(params.Audience, params.contextUser?.ID),
             RunScope: {
                 PrimaryScopeEntityName: scope.PrimaryScopeEntityName ?? null,
@@ -23946,7 +24259,8 @@ The context is now within limits. Please retry your request with the recovered c
             success: false,
             ...(!this._agentRun ? { errorMessage } : {}),
             taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
-            agentRun: this._agentRun!
+            agentRun: this._agentRun!,
+            ...(this._treeBudget?.breachDiagnostic ? { limitExceeded: this._treeBudget.breachDiagnostic } : {}),
         };
     }
 
@@ -23959,6 +24273,11 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
      */
     private async createCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        // When abort was triggered by a whole-workflow USD cost or wall-clock limit breach,
+        // finalize deterministically as Failed (schema-valid Status) carrying limitExceeded diagnostics.
+        if (this._treeBudget?.breachDiagnostic && this.hasExplicitWorkflowBudgetCaps(this._executeParams)) {
+            return this.createFailureResult(this._treeBudget.breachDiagnostic.Reason, contextUser);
+        }
         // The watchdog aborts a run it force-failed with the row's own message (#4883). The row
         // already says Failed and clients were told so; finalizing Cancelled would contradict it.
         const abortReason = this._runAbortController?.signal.reason;
@@ -24014,7 +24333,8 @@ The context is now within limits. Please retry your request with the recovered c
         return {
             success: false,
             taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
-            agentRun: this._agentRun!
+            agentRun: this._agentRun!,
+            ...(this._treeBudget?.breachDiagnostic ? { limitExceeded: this._treeBudget.breachDiagnostic } : {}),
         };
     }
 
@@ -24279,7 +24599,8 @@ The context is now within limits. Please retry your request with the recovered c
             handoff: this._handoffResult || undefined,
             resolvedStorageAccountId: this._resolvedStorageAccountId || undefined,
             limitsSnapshot: this._agentRun?.LimitsDiagnosticsSnapshot ?? undefined,
-            ...(touchedArtifacts ? { touchedArtifacts } : {})
+            ...(touchedArtifacts ? { touchedArtifacts } : {}),
+            ...(this._treeBudget?.breachDiagnostic ? { limitExceeded: this._treeBudget.breachDiagnostic } : {}),
         };
     }
 

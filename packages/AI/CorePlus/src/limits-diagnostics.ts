@@ -128,7 +128,14 @@ export interface ResolveAgentRunLimitsInput {
     UserPolicyLimitsOverride?: MJLimitsOverride | null;
     RunParams?: Pick<
         ExecuteAgentParams,
-        'absoluteMaxIterations' | 'maxExecutionTimeMs' | 'maxTreeCost' | 'maxTreeTokens' | 'maxTreeDurationMs' | 'limitsOverride'
+        | 'absoluteMaxIterations'
+        | 'maxExecutionTimeMs'
+        | 'maxTreeCost'
+        | 'maxTreeTokens'
+        | 'maxTreeDurationMs'
+        | 'workflowMaxCostUsd'
+        | 'workflowMaxDurationMs'
+        | 'limitsOverride'
     > | null;
     RunOverride?: MJLimitsOverride | null;
     /** Server-side execution user checked when `RunOverride` attempts to raise enforced ceilings. */
@@ -452,7 +459,14 @@ export function ExtractUserPolicyLimitsOverride(
 export function ExtractRunOverrideLimits(
     params?: Pick<
         ExecuteAgentParams,
-        'absoluteMaxIterations' | 'maxExecutionTimeMs' | 'maxTreeCost' | 'maxTreeTokens' | 'maxTreeDurationMs' | 'limitsOverride'
+        | 'absoluteMaxIterations'
+        | 'maxExecutionTimeMs'
+        | 'maxTreeCost'
+        | 'maxTreeTokens'
+        | 'maxTreeDurationMs'
+        | 'workflowMaxCostUsd'
+        | 'workflowMaxDurationMs'
+        | 'limitsOverride'
     > | null,
     explicitOverride?: MJLimitsOverride | null,
 ): MJLimitsOverride {
@@ -463,12 +477,17 @@ export function ExtractRunOverrideLimits(
             fromParams.AgentAbsoluteIterations = Math.trunc(params.absoluteMaxIterations);
         }
         const perRun: NonNullable<NonNullable<MJLimitsOverride['Budgets']>['PerRun']> = {};
-        if (typeof params.maxTreeCost === 'number' && params.maxTreeCost >= 0) {
-            perRun.MaxCostUsd = params.maxTreeCost;
+        const costCandidates = [params.maxTreeCost, params.workflowMaxCostUsd].filter(
+            (v): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0,
+        );
+        if (costCandidates.length > 0) {
+            perRun.MaxCostUsd = Math.min(...costCandidates);
         }
-        const wallMs = params.maxExecutionTimeMs ?? params.maxTreeDurationMs;
-        if (typeof wallMs === 'number' && wallMs >= 1) {
-            perRun.MaxWallClockMs = Math.trunc(wallMs);
+        const wallCandidates = [params.maxExecutionTimeMs, params.maxTreeDurationMs, params.workflowMaxDurationMs].filter(
+            (v): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 1,
+        );
+        if (wallCandidates.length > 0) {
+            perRun.MaxWallClockMs = Math.trunc(Math.min(...wallCandidates));
         }
         if (typeof params.maxTreeTokens === 'number' && params.maxTreeTokens >= 1) {
             perRun.MaxTokens = Math.trunc(params.maxTreeTokens);

@@ -29,6 +29,8 @@ import { DurableEntityActionTaskSubmitter } from './DurableEntityActionTaskSubmi
 import { TaskGraphContinuationDeliverer } from './TaskGraphContinuationDeliverer.js';
 import { PubSubManager } from '../generic/PubSubManager.js';
 import { TaskGraphFrameBroadcaster } from '../resolvers/TaskGraphFrameResolver.js';
+import { CreateDefaultIsolationRunners } from './isolation/index.js';
+import { RecoverQueuedGraphCallerNotifications, RegisterTaskGraphWorkQueueBridge } from './TaskGraphWorkQueueService.js';
 
 /**
  * Starts one dispatcher for this process and returns it.
@@ -72,7 +74,10 @@ export async function StartTaskGraphDispatcher(
         // id defeats every `ClaimedBy=@me` guard at once: A's heartbeat renews B's lease, and A's
         // stale terminal write lands over B's live execution. An explicit `instanceID` still wins,
         // for hosts that have a real identity to supply.
-        { InstanceID: instanceID ?? defaultInstanceID() },
+        {
+            InstanceID: instanceID ?? defaultInstanceID(),
+            IsolationRunners: CreateDefaultIsolationRunners(),
+        },
         // Without this the dispatcher had nowhere to deliver: a finished graph logged its outcome,
         // marked itself delivered, and said nothing to the conversation that asked for it.
         new TaskGraphContinuationDeliverer(providerFactory, contextUser, pubSub),
@@ -88,6 +93,10 @@ export async function StartTaskGraphDispatcher(
         new TaskGraphPromptRunner(),
     );
     await dispatcher.Start();
+    RegisterTaskGraphWorkQueueBridge();
+    void RecoverQueuedGraphCallerNotifications(await providerFactory.CreateProvider(), contextUser).catch((err) => {
+        console.warn(`[TaskGraphWorkQueue] Notification recovery skipped: ${err instanceof Error ? err.message : String(err)}`);
+    });
 
     // Registered only AFTER the dispatcher is running, and only here. A submitter without a
     // dispatcher writes Task rows nobody picks up — strictly worse than staying inline, because the

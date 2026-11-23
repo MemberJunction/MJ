@@ -48,10 +48,14 @@ export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
             Invocation: request.Invocation,
             Debug: request.Debug,
             SecurityEnvelope: request.SecurityEnvelope,
+            Dispatch: request.Dispatch,
+            QueueTopic: request.QueueTopic,
         });
         return {
             Success: result.Success,
             ParentTaskID: result.ParentTaskID,
+            Dispatch: result.Dispatch,
+            QueueMessageID: result.QueueMessageID,
             ErrorMessage: result.ErrorMessage,
         };
     }
