@@ -118,7 +118,18 @@ function resolveAgent(params: RunActionParams, idParam: string, nameParam: strin
         return AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextId)) ?? null;
     }
     const explicitName = readStringParam(params, nameParam) ?? DEFAULT_AGENT_NAME;
+    const callerUserId = params.ContextUser?.ID ?? null;
+    const matches = AIEngine.Instance.Agents.filter(
+        (a) => a.Name.trim().toLowerCase() === explicitName.toLowerCase() && (a.Status == null || a.Status === 'Active')
+    );
+    if (callerUserId && matches.length > 1) {
+        const ownedMatch = matches.find((a) => a.OwnerUserID && UUIDsEqual(a.OwnerUserID, callerUserId));
+        if (ownedMatch) {
+            return ownedMatch;
+        }
+    }
     return (
+        matches[0] ??
         AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === explicitName.toLowerCase()) ??
         null
     );
@@ -186,12 +197,16 @@ export class OpenAgentChannelAction extends BaseAction {
                     ...readStringArrayParam(params, 'TargetUserID'),
                 ])
             ).filter((id) => !UUIDsEqual(id, contextUser.ID));
+            const explicitTargetAgentRef = Boolean(
+                readStringParam(params, 'TargetAgentID') || readStringParam(params, 'TargetAgentName')
+            );
 
-            if (!topic || !initialMessage || targetUserIds.length === 0) {
+            if (!topic || !initialMessage || (targetUserIds.length === 0 && !explicitTargetAgentRef)) {
                 return {
                     Success: false,
                     ResultCode: 'VALIDATION_ERROR',
-                    Message: 'Topic, InitialMessage, and at least one colleague TargetUserID/TargetUserIDs are required.',
+                    Message:
+                        'Topic, InitialMessage, and either colleague TargetUserID/TargetUserIDs or a sibling TargetAgentID/TargetAgentName are required.',
                     Params: params.Params,
                 };
             }
@@ -222,7 +237,56 @@ export class OpenAgentChannelAction extends BaseAction {
                     Params: params.Params,
                 };
             }
-            const targetAgent = resolveAgent(params, 'TargetAgentID', 'TargetAgentName') ?? senderAgent;
+            const resolvedTargetAgent = explicitTargetAgentRef
+                ? resolveAgent(params, 'TargetAgentID', 'TargetAgentName')
+                : senderAgent;
+            if (!resolvedTargetAgent) {
+                const requestedRef =
+                    readStringParam(params, 'TargetAgentName') ??
+                    readStringParam(params, 'TargetAgentID') ??
+                    'unknown';
+                return {
+                    Success: false,
+                    ResultCode: 'AGENT_NOT_FOUND',
+                    Message: `Target agent "${requestedRef}" was not found.`,
+                    Params: params.Params,
+                };
+            }
+            const targetAgent = resolvedTargetAgent;
+
+            if (targetUserIds.length === 0 && UUIDsEqual(targetAgent.ID, senderAgent.ID)) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: `Agent "${senderAgent.Name}" cannot open an Agent Channel with itself without another colleague participant.`,
+                    Params: params.Params,
+                };
+            }
+
+            // Same-user sibling channel (e.g., Pepper <-> Cato owned by or accessible to contextUser)
+            const sameUserPeerUserId =
+                targetUserIds.length === 0
+                    ? targetAgent.OwnerUserID && !UUIDsEqual(targetAgent.OwnerUserID, contextUser.ID)
+                        ? targetAgent.OwnerUserID
+                        : contextUser.ID
+                    : null;
+            if (
+                sameUserPeerUserId &&
+                UUIDsEqual(sameUserPeerUserId, contextUser.ID) &&
+                !AIEngine.Instance.CanUserViewAgent(targetAgent.ID, contextUser)
+            ) {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: `You do not have permission to include agent "${targetAgent.Name}" in an Agent Channel.`,
+                    Params: params.Params,
+                };
+            }
+            const effectiveCrossUserIds =
+                sameUserPeerUserId && !UUIDsEqual(sameUserPeerUserId, contextUser.ID)
+                    ? [sameUserPeerUserId]
+                    : targetUserIds;
+            const hasCrossUserTargets = effectiveCrossUserIds.length > 0;
 
             const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
             const senderPolicyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
@@ -258,7 +322,7 @@ export class OpenAgentChannelAction extends BaseAction {
                         Params: params.Params,
                     };
                 }
-                if (senderPolicy.CoordinationMode === 'Observer') {
+                if (hasCrossUserTargets && senderPolicy.CoordinationMode === 'Observer') {
                     return {
                         Success: false,
                         ResultCode: 'POLICY_DENIED',
@@ -267,7 +331,7 @@ export class OpenAgentChannelAction extends BaseAction {
                     };
                 }
                 const isAgentCall = Boolean(extractContextAgentId(params.Context));
-                if (isAgentCall && senderPolicy.CoordinationMode === 'Coordinator') {
+                if (hasCrossUserTargets && isAgentCall && senderPolicy.CoordinationMode === 'Coordinator') {
                     const approvalId = readStringParam(params, 'ConfirmedApprovalRequestID');
                     const approved = approvalId
                         ? await verifyApprovedRequest(approvalId, contextUser.ID, contextUser, md)
@@ -287,25 +351,28 @@ export class OpenAgentChannelAction extends BaseAction {
             const systemUser = UserCache.Instance.GetSystemUser() ?? contextUser;
             const rv = RunView.FromMetadataProvider(md);
 
-            // Validate every target user is active
-            const targetUsersRes = await rv.RunView<MJUserEntity>(
-                {
-                    EntityName: 'MJ: Users',
-                    ExtraFilter: `IsActive=1 AND ID IN (${targetUserIds
-                        .map((id) => `'${EscapeSQLString(id)}'`)
-                        .join(',')})`,
-                    ResultType: 'entity_object',
-                },
-                systemUser
-            );
-            const activeTargets = targetUsersRes.Success ? targetUsersRes.Results : [];
-            if (activeTargets.length !== targetUserIds.length) {
-                return {
-                    Success: false,
-                    ResultCode: 'VALIDATION_ERROR',
-                    Message: 'One or more TargetUserIDs do not match an active MJ user.',
-                    Params: params.Params,
-                };
+            // Validate every cross-user target is active
+            let activeTargets: MJUserEntity[] = [];
+            if (effectiveCrossUserIds.length > 0) {
+                const targetUsersRes = await rv.RunView<MJUserEntity>(
+                    {
+                        EntityName: 'MJ: Users',
+                        ExtraFilter: `IsActive=1 AND ID IN (${effectiveCrossUserIds
+                            .map((id) => `'${EscapeSQLString(id)}'`)
+                            .join(',')})`,
+                        ResultType: 'entity_object',
+                    },
+                    systemUser
+                );
+                activeTargets = targetUsersRes.Success ? targetUsersRes.Results : [];
+                if (activeTargets.length !== effectiveCrossUserIds.length) {
+                    return {
+                        Success: false,
+                        ResultCode: 'VALIDATION_ERROR',
+                        Message: 'One or more TargetUserIDs do not match an active MJ user.',
+                        Params: params.Params,
+                    };
+                }
             }
 
             const requestedMaxTurns = readOptionalPositiveIntParam(params, 'MaxConsecutiveAgentTurns');
@@ -369,14 +436,14 @@ export class OpenAgentChannelAction extends BaseAction {
                 };
             }
 
-            // Create participant records (initiator + all peers), routing each peer to their primary derived instance when present
+            // Create participant records (initiator + all peers).
+            // Preserve explicit derived instances (e.g., Cato); only redirect root templates (e.g., Chief of Staff) to the peer's primary instance.
             const resolvePeerAgentId = (baseTarget: MJAIAgentEntityExtended, userId: string): string => {
-                const rootOrTarget =
-                    baseTarget.BaseAgentID && typeof AIEngine.Instance.GetRootAgent === 'function'
-                        ? AIEngine.Instance.GetRootAgent(baseTarget.ID) ?? baseTarget
-                        : baseTarget;
+                if (baseTarget.BaseAgentID) {
+                    return baseTarget.ID;
+                }
                 if (typeof AIEngine.Instance.ResolvePrimaryUserAgentInstance === 'function') {
-                    const resolved = AIEngine.Instance.ResolvePrimaryUserAgentInstance(rootOrTarget.ID, userId);
+                    const resolved = AIEngine.Instance.ResolvePrimaryUserAgentInstance(baseTarget.ID, userId);
                     if (resolved) {
                         return resolved.ID;
                     }
@@ -385,11 +452,19 @@ export class OpenAgentChannelAction extends BaseAction {
             };
             const participantSpecs: Array<{ userId: string; agentId: string; role: MJAgentChannelParticipantEntity['Role'] }> = [
                 { userId: contextUser.ID, agentId: senderAgent.ID, role: 'Initiator' },
-                ...activeTargets.map((u) => ({
-                    userId: u.ID,
-                    agentId: resolvePeerAgentId(targetAgent, u.ID),
-                    role: 'Participant' as const,
-                })),
+                ...(activeTargets.length > 0
+                    ? activeTargets.map((u) => ({
+                          userId: u.ID,
+                          agentId: resolvePeerAgentId(targetAgent, u.ID),
+                          role: 'Participant' as const,
+                      }))
+                    : [
+                          {
+                              userId: contextUser.ID,
+                              agentId: targetAgent.ID,
+                              role: 'Participant' as const,
+                          },
+                      ]),
             ];
 
             for (const spec of participantSpecs) {

@@ -928,8 +928,16 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             };
         }
 
-        const isAgentMessage = Boolean(input.senderAgentID && input.senderAgentID.trim().length > 0);
-        const peers = participants.filter((p) => !UUIDsEqual(p.UserID, senderUserID));
+        const trimmedSenderAgentID = (input.senderAgentID ?? '').trim();
+        const isAgentMessage = trimmedSenderAgentID.length > 0;
+        const crossUserPeers = participants.filter((p) => !UUIDsEqual(p.UserID, senderUserID));
+        const peers = isAgentMessage
+            ? participants.filter(
+                  (p) => !(UUIDsEqual(p.UserID, senderUserID) && UUIDsEqual(p.AgentID, trimmedSenderAgentID))
+              )
+            : crossUserPeers.length > 0
+              ? crossUserPeers
+              : participants;
 
         if (!isAgentMessage) {
             // Human intervention resets consecutive-agent turn guard and re-opens a paused channel.
@@ -962,8 +970,13 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 };
             }
 
-            const senderParticipant = participants.find((p) => UUIDsEqual(p.UserID, senderUserID));
-            const senderAgentID = (input.senderAgentID ?? '').trim() || (senderParticipant?.AgentID ?? '').trim();
+            const senderParticipant =
+                (trimmedSenderAgentID
+                    ? participants.find(
+                          (p) => UUIDsEqual(p.UserID, senderUserID) && UUIDsEqual(p.AgentID, trimmedSenderAgentID)
+                      )
+                    : undefined) ?? participants.find((p) => UUIDsEqual(p.UserID, senderUserID));
+            const senderAgentID = trimmedSenderAgentID || (senderParticipant?.AgentID ?? '').trim();
             let senderAgent: MJAIAgentEntity | null =
                 senderAgentID
                     ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, senderAgentID)) ?? null

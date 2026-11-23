@@ -697,6 +697,94 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         expect(wakeSpy).toHaveBeenCalledTimes(1);
     });
 
+    it('OpenAgentChannelAction and SendInterAgentRequestAction support same-user sibling agent coordination (e.g., Pepper <-> Cato) without TargetUserID or external approval', async () => {
+        const pepperAgent = { ...cosAgent, ID: 'agent-pepper', Name: 'Pepper' } as typeof cosAgent;
+        const catoAgent = {
+            ...cosAgent,
+            ID: 'agent-cato',
+            Name: 'Cato',
+            BaseAgentID: cosAgent.ID,
+            OwnerUserID: alice.ID,
+        } as typeof cosAgent;
+        vi.spyOn(AIEngine.Instance, 'Agents', 'get').mockReturnValue([cosAgent, pepperAgent, catoAgent]);
+        vi.spyOn(AIEngine.Instance, 'CanUserViewAgent').mockReturnValue(true);
+        vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+        vi.spyOn(AIEngine.Instance, 'ResolveAgentRequestTypeID').mockResolvedValue('req-type-approval');
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
+            status: 'found',
+            policy: {
+                Status: 'Active',
+                AllowInterAgentCoordination: true,
+                CoordinationMode: 'Coordinator',
+            } as unknown as never,
+        });
+
+        const savedParticipants: Array<{ AgentID?: string; UserID?: string; Role?: string }> = [];
+        const md = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                const record: Record<string, unknown> = {
+                    ID: `${name}-sibling-1`,
+                    NewRecord: vi.fn(),
+                    Save: vi.fn(async () => {
+                        if (name === 'MJ: Agent Channel Participants') {
+                            savedParticipants.push({
+                                AgentID: record['AgentID'] as string,
+                                UserID: record['UserID'] as string,
+                                Role: record['Role'] as string,
+                            });
+                        }
+                        return true;
+                    }),
+                    LatestResult: null,
+                };
+                return record;
+            }),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        vi.spyOn(AgentWakeTriggerService.Instance, 'TriggerWakeOnAgentChannelMessage').mockResolvedValue({
+            channelID: 'MJ: Agent Channels-sibling-1',
+            channelStatus: 'Open',
+            pausedByGuard: false,
+            pauseReason: null,
+            results: [],
+        });
+
+        // 1) Open Agent Channel with TargetAgentName='Cato' and NO TargetUserIDs under Coordinator policy
+        const chanRes = await callAction(new OpenAgentChannelAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Context: { AgentID: pepperAgent.ID },
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'Topic', Type: 'Input', Value: 'R&D Spend Socratic Stress-Test' },
+                { Name: 'TargetAgentName', Type: 'Input', Value: 'Cato' },
+                { Name: 'InitialMessage', Type: 'Input', Value: 'Greetings Cato — poke holes in doubling R&D.' },
+            ],
+        });
+        expect(chanRes.Success).toBe(true);
+        expect(savedParticipants).toEqual([
+            { UserID: alice.ID, AgentID: pepperAgent.ID, Role: 'Initiator' },
+            { UserID: alice.ID, AgentID: catoAgent.ID, Role: 'Participant' },
+        ]);
+
+        // 2) Send Inter-Agent Request with TargetAgentName='Cato' and NO TargetUserID (exact Step 10 shape)
+        const reqRes = await callAction(new SendInterAgentRequestAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Context: { AgentID: pepperAgent.ID },
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'TargetAgentID', Type: 'Input', Value: catoAgent.ID },
+                { Name: 'TargetAgentName', Type: 'Input', Value: 'Cato' },
+                { Name: 'Subject', Type: 'Input', Value: 'Strategic Stress-Test Demonstration' },
+                { Name: 'RequestBody', Type: 'Input', Value: 'Provide a Socratic critique.' },
+            ],
+        });
+        expect(reqRes.Success).toBe(true);
+    });
+
     it('CR-CHANNEL-CEILING-BYPASS: OpenAgentChannel enforces deployment and user-policy ceilings, allows tightening, and permits authorized ceiling overrides', async () => {
         const makeChannelMd = () => {
             const capturedChannels: Array<Partial<MJAgentChannelEntity>> = [];

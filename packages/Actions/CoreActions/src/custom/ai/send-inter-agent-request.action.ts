@@ -61,26 +61,22 @@ export class SendInterAgentRequestAction extends BaseAction {
                 };
             }
 
-            const targetUserId = this.getStringParam(params, 'TargetUserID');
+            const rawTargetUserId = this.getStringParam(params, 'TargetUserID');
+            const explicitTargetAgentRef = Boolean(
+                this.getStringParam(params, 'TargetAgentID') || this.getStringParam(params, 'TargetAgentName')
+            );
             const explicitRequestForUserId = this.getStringParam(params, 'RequestForUserID');
             const subject = this.getStringParam(params, 'Subject');
             const message =
                 this.getStringParam(params, 'Message') ?? this.getStringParam(params, 'RequestBody');
-            if (!targetUserId || !subject || !message) {
+            if ((!rawTargetUserId && !explicitTargetAgentRef) || !subject || !message) {
                 return {
                     Success: false,
                     ResultCode: 'VALIDATION_ERROR',
-                    Message: 'TargetUserID, Subject, and Message (or RequestBody) are required parameters.',
+                    Message: 'TargetUserID (or TargetAgentID/TargetAgentName), Subject, and Message (or RequestBody) are required parameters.',
                     Params: params.Params,
                 };
             }
-
-            const isSystemOrOwner = this.isSystemOrOwnerUser(contextUser);
-            const effectiveRequestForUserId = explicitRequestForUserId
-                ? isSystemOrOwner
-                    ? explicitRequestForUserId
-                    : contextUser.ID
-                : targetUserId;
 
             await AIEngine.Instance.Config(false, contextUser);
             const senderResolution = this.resolveSenderAgent(params);
@@ -98,6 +94,23 @@ export class SendInterAgentRequestAction extends BaseAction {
                 };
             }
 
+            // When TargetUserID is omitted, infer from the target agent's OwnerUserID (or contextUser for same-user sibling agents)
+            let targetUserId = rawTargetUserId;
+            if (!targetUserId) {
+                const prelimTarget = this.resolveRecipientAgent(params, senderAgent, '');
+                if ('errorResult' in prelimTarget) {
+                    return prelimTarget.errorResult;
+                }
+                targetUserId = prelimTarget.agent.OwnerUserID ?? contextUser.ID;
+            }
+
+            const isSystemOrOwner = this.isSystemOrOwnerUser(contextUser);
+            const effectiveRequestForUserId = explicitRequestForUserId
+                ? isSystemOrOwner
+                    ? explicitRequestForUserId
+                    : contextUser.ID
+                : targetUserId;
+
             const targetUserActive = await this.verifyActiveTargetUser(targetUserId, contextUser, params);
             if (!targetUserActive) {
                 return {
@@ -113,6 +126,16 @@ export class SendInterAgentRequestAction extends BaseAction {
                 return targetResolution.errorResult;
             }
             const targetAgent = targetResolution.agent;
+
+            const isCrossUserRequest = !UUIDsEqual(targetUserId, contextUser.ID);
+            if (!isCrossUserRequest && UUIDsEqual(targetAgent.ID, senderAgent.ID)) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: `Agent "${senderAgent.Name}" cannot send an inter-agent request to itself.`,
+                    Params: params.Params,
+                };
+            }
 
             const senderPolicyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
                 senderAgent.ID,
@@ -146,7 +169,7 @@ export class SendInterAgentRequestAction extends BaseAction {
                         Params: params.Params,
                     };
                 }
-                if (senderPolicy.CoordinationMode === 'Observer') {
+                if (isCrossUserRequest && senderPolicy.CoordinationMode === 'Observer') {
                     return {
                         Success: false,
                         ResultCode: 'POLICY_APPROVAL_REQUIRED',
@@ -158,7 +181,7 @@ export class SendInterAgentRequestAction extends BaseAction {
                     (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() ||
                     AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID();
                 const confirmedApprovalRequestId = this.getStringParam(params, 'ConfirmedApprovalRequestID');
-                if (senderPolicy.CoordinationMode === 'Coordinator' && callingAgentId) {
+                if (isCrossUserRequest && senderPolicy.CoordinationMode === 'Coordinator' && callingAgentId) {
                     const approvalMd = params.Provider ?? Metadata.Provider;
                     const approved = confirmedApprovalRequestId
                         ? await VerifyApprovedAgentRequest(
@@ -449,9 +472,14 @@ export class SendInterAgentRequestAction extends BaseAction {
             return candidate;
         };
         if (targetAgentName) {
-            const found = AIEngine.Instance.Agents.find(
+            const preferredOwnerId = targetUserId || params.ContextUser?.ID || '';
+            const matches = AIEngine.Instance.Agents.filter(
                 (a) => a.Name.trim().toLowerCase() === targetAgentName.trim().toLowerCase()
             );
+            const found =
+                (preferredOwnerId
+                    ? matches.find((a) => a.OwnerUserID && UUIDsEqual(a.OwnerUserID, preferredOwnerId))
+                    : undefined) ?? matches[0];
             if (!found) {
                 return {
                     errorResult: {
