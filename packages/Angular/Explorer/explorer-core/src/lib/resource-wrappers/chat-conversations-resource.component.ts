@@ -1,5 +1,5 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
@@ -84,6 +84,7 @@ import { firstValueFrom, Subject, takeUntil } from 'rxjs';
               [currentUser]="currentUser"
               [conversationId]="selectedConversationId"
               [conversation]="selectedConversation"
+              [AccessDeniedMessage]="ConversationAccessDeniedMessage"
               [isNewConversation]="isNewUnsavedConversation"
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
@@ -297,14 +298,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.ChatArea = value;
   }
 
-  public CurrentUser: any = null;
+  public CurrentUser: UserInfo | null = null;
 
   /** @deprecated Use {@link CurrentUser}. */
-  public get currentUser(): any {
+  public get currentUser(): UserInfo | null {
     return this.CurrentUser;
   }
   /** @deprecated Use {@link CurrentUser}. */
-  public set currentUser(value: any) {
+  public set currentUser(value: UserInfo | null) {
     this.CurrentUser = value;
   }
   private skipUrlUpdate = true; // Skip URL updates during initialization
@@ -333,6 +334,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.SelectedConversationId = value;
   }
   public SelectedConversation: MJConversationEntity | null = null;
+  /** Non-null when a conversation deep link is denied (for example after owner revocation). */
+  public ConversationAccessDeniedMessage: string | null = null;
 
   /** @deprecated Use {@link SelectedConversation}. */
   public get selectedConversation(): MJConversationEntity | null {
@@ -618,15 +621,20 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   private async initializeEngines(): Promise<void> {
     try {
+      const currentUser = this.CurrentUser;
       // Initialize AIEngine, conversations, and mention service in parallel
       await Promise.all([
         AIEngineBase.Instance.Config(false),
-        this.engine.LoadConversations(this.EnvironmentId, this.CurrentUser, false),
-        this.mentionAutocompleteService.initialize(this.CurrentUser)
+        ...(currentUser ? [
+          this.engine.LoadConversations(this.EnvironmentId, currentUser, false),
+          this.mentionAutocompleteService.initialize(currentUser)
+        ] : [])
       ]);
 
       // Restore active tasks AFTER conversations are cached (uses in-memory lookup)
-      await this.activeTasksService.restoreFromDatabase(this.CurrentUser);
+      if (currentUser) {
+        await this.activeTasksService.restoreFromDatabase(currentUser);
+      }
 
       // Mark as ready - child components can now render
       this.IsReady = true;
@@ -646,14 +654,19 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private async loadConversationEntity(conversationId: string | undefined): Promise<void> {
     if (!conversationId) return;
 
-    // Try to get from cache first
-    const conversation = this.engine.GetConversation(conversationId);
-    if (conversation) {
-      this.SelectedConversation = conversation;
+    this.ConversationAccessDeniedMessage = null;
+    const cached = this.engine.GetConversation(conversationId);
+    const isOwnedCached = Boolean(
+      cached?.UserID && this.CurrentUser?.ID && UUIDsEqual(cached.UserID, this.CurrentUser.ID),
+    );
+    if (cached && isOwnedCached) {
+      this.SelectedConversation = cached;
       this.updateTabTitle();
       this.cdr.detectChanges();
+      return;
     }
-    // If not in cache, the chat area component will handle loading it
+
+    await this.loadUnlistedConversation(conversationId, true);
   }
 
   /**
@@ -816,13 +829,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.PendingArtifactConversationId = artifactId ? conversationId : null;
     this.PendingArtifactVersionNumber = versionNumber;
 
-    if (conversationId && conversationId !== this.SelectedConversationId) {
+    this.ConversationAccessDeniedMessage = null;
+    if (conversationId && (conversationId !== this.SelectedConversationId || _source === 'deeplink')) {
       // The URL is already the source of truth here — suppress the echo back to it.
       // selectConversation()'s body is synchronous up to its URL-update check, so
       // toggling the flag around the call reliably gates that check.
       const prevSkip = this.skipUrlUpdate;
       this.skipUrlUpdate = true;
-      void this.selectConversation(conversationId);
+      void this.selectConversation(conversationId, true);
       this.skipUrlUpdate = prevSkip;
       this.cdr.detectChanges();
     }
@@ -835,7 +849,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /**
    * Select a conversation by ID - loads the entity and updates local state
    */
-  private async selectConversation(conversationId: string): Promise<void> {
+  private async selectConversation(conversationId: string, verifyRemote = false): Promise<void> {
+    this.ConversationAccessDeniedMessage = null;
     this.SelectedConversationId = conversationId;
     this.IsNewUnsavedConversation = false;
 
@@ -843,31 +858,62 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // which conversation the workspace is viewing
     this.bridge.SetActiveFromWorkspace(conversationId);
 
-    // Load the conversation entity from the engine's list; an unlisted one is loaded below.
+    // Load the conversation entity from the engine's list; non-owned or unlisted deep-linked
+    // conversations must remain unbound until VerifyConversationAccess resolves (fail closed).
     const conversation = this.engine.GetConversation(conversationId);
-    this.SelectedConversation = conversation ?? null;
+    const isOwnedCached = Boolean(
+      conversation?.UserID && this.CurrentUser?.ID && UUIDsEqual(conversation.UserID, this.CurrentUser.ID),
+    );
+    const hasOtherOwner = Boolean(
+      conversation?.UserID && (!this.CurrentUser?.ID || !UUIDsEqual(conversation.UserID, this.CurrentUser.ID)),
+    );
+    const needsRemoteCheck = !conversation || (verifyRemote && !isOwnedCached) || hasOtherOwner;
+    this.SelectedConversation = needsRemoteCheck ? null : (conversation ?? null);
 
     // Update URL if not skipping
     if (!this.skipUrlUpdate) {
       this.updateUrl();
     }
 
-    if (!conversation) {
-      await this.loadUnlistedConversation(conversationId);
+    if (needsRemoteCheck) {
+      await this.loadUnlistedConversation(conversationId, verifyRemote || hasOtherOwner);
     }
   }
 
   /**
-   * Loads a selected conversation the engine's list does not hold. The list carries only Global
-   * and Both scope; an application-scoped conversation (a routine's wake thread, a cockpit chat)
-   * is reachable only by deep link, and without its entity the chat shows no title and no pinned
-   * agent. Applied only while the same conversation is still selected.
+   * Loads a selected conversation the engine's list does not hold (for example, an explicitly
+   * shared `ParentID` side thread or app-scoped deep link) and verifies access on the server.
+   * If access has been revoked or denied, clears selection and sets {@link ConversationAccessDeniedMessage}.
    */
-  private async loadUnlistedConversation(conversationId: string): Promise<void> {
-    const loaded = await this.engine.EnsureConversationLoaded(conversationId, this.CurrentUser);
-    if (!loaded || !UUIDsEqual(this.SelectedConversationId, conversationId)) {
+  private async loadUnlistedConversation(conversationId: string, forceVerify = false): Promise<void> {
+    let loaded: MJConversationEntity | null = null;
+    try {
+      const currentUser = this.CurrentUser;
+      if (currentUser && forceVerify && typeof this.engine.VerifyConversationAccess === 'function') {
+        loaded = await this.engine.VerifyConversationAccess(conversationId, currentUser);
+      } else if (currentUser && typeof this.engine.EnsureConversationLoaded === 'function') {
+        loaded = await this.engine.EnsureConversationLoaded(conversationId, currentUser);
+      }
+    } catch {
+      loaded = null;
+    }
+
+    if (!loaded) {
+      if (UUIDsEqual(this.SelectedConversationId, conversationId)) {
+        this.SelectedConversationId = null;
+        this.SelectedConversation = null;
+        this.ConversationAccessDeniedMessage =
+          'You do not have permission to access this conversation. Access may have been revoked by the owner.';
+        this.updateTabTitle();
+        this.cdr.detectChanges();
+      }
       return;
     }
+
+    if (!UUIDsEqual(this.SelectedConversationId, conversationId)) {
+      return;
+    }
+    this.ConversationAccessDeniedMessage = null;
     this.SelectedConversation = loaded;
     this.updateTabTitle();
     this.cdr.detectChanges();

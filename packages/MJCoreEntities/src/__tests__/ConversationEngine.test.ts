@@ -998,9 +998,9 @@ describe('ConversationEngine', () => {
             expect(engine.CanShareConversation(conversation('c-mine'), 'USER-1')).toBe(true);
         });
 
-        it('lets a person with an Owner-level grant share', async () => {
+        it('refuses a non-owner even with an Owner-level grant (owner-only conversation sharing)', async () => {
             await loadWithGrants();
-            expect(engine.CanShareConversation(conversation('c-owner'), 'user-1')).toBe(true);
+            expect(engine.CanShareConversation(conversation('c-owner'), 'user-1')).toBe(false);
         });
 
         it('refuses a person with an Edit or View grant', async () => {
@@ -3218,7 +3218,7 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
             expect(filter).toBe(
-                `EnvironmentID='env-1' AND (UserID='user-1' OR (ProjectID IN ('proj-shared-1') AND (AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%'))) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL`
+                `EnvironmentID='env-1' AND (UserID='user-1' OR (ParentID IS NULL AND ProjectID IN ('proj-shared-1') AND (AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%'))) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL`
             );
         });
 
@@ -3262,7 +3262,7 @@ describe('ConversationEngine', () => {
                 .filter((p) => p['EntityName'] === 'MJ: Conversations')
                 .at(-1)!;
             expect(String(updatedConvoQuery['ExtraFilter'])).toContain(
-                `OR (ProjectID IN ('proj-shared-1') AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
+                `OR (ParentID IS NULL AND ProjectID IN ('proj-shared-1') AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
             );
 
             // Colleague's conversation in the shared folder gets View-only access automatically

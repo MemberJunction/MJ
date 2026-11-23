@@ -11,12 +11,19 @@
 
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import type { MJLimitsBudgetsConfig } from '@memberjunction/core';
-import type {
-    AIPromptRunResult,
-    AgentTreeBudget,
-    BudgetPausedInterval,
-    ExecuteAgentParams,
-    MJAIAgentRunEntityExtended,
+import {
+    CreateWorkflowBudget,
+    EvaluateWorkflowBudgetCaps,
+    RecordWorkflowBudgetUsage,
+    SynchronizeWorkflowBudget,
+    type AIPromptRunResult,
+    type AgentTreeBudget,
+    type BudgetPausedInterval,
+    type ExecuteAgentParams,
+    type MJAIAgentRunEntityExtended,
+    type WorkflowBudgetAttributionContext,
+    type WorkflowBudgetBreachDiagnostic,
+    type WorkflowBudgetDimension,
 } from '@memberjunction/ai-core-plus';
 import { ComputeTotalPausedMs } from './BudgetEnforcementGuard';
 
@@ -48,6 +55,7 @@ export interface AgentGuardrailCheckResult {
     Limit?: number;
     Current?: number;
     Reason?: string;
+    Diagnostic?: WorkflowBudgetBreachDiagnostic;
 }
 
 /**
@@ -65,6 +73,8 @@ export interface LegacyAgentGuardrailVerdict {
     current?: number;
     // case-violation-ok-legacy-back-compat: Preserves BaseAgent protected method return shape for subclasses
     reason?: string;
+    // case-violation-ok-legacy-back-compat: Carries structured workflow budget diagnostic for limit-exceeded callers
+    diagnostic?: WorkflowBudgetBreachDiagnostic;
 }
 
 /**
@@ -92,6 +102,18 @@ export interface AgentGuardrailEvaluationInput {
      * so subclasses overriding the `protected` method are invoked.
      */
     CheckTreeBudgetLimitFn?: (params?: ExecuteAgentParams) => LegacyAgentGuardrailVerdict;
+}
+
+/**
+ * Tracks hierarchical token, cost, wall-clock duration, and step/attempt budgets
+ * across parent -> sub-agent execution trees.
+ */
+/**
+ * Summary returned by {@link AgentTreeBudgetTracker.RecordStepIncrement}.
+ */
+export interface WorkflowBudgetCheckOutcomeSummary {
+    Exceeded: boolean;
+    Diagnostic?: WorkflowBudgetBreachDiagnostic;
 }
 
 /**
@@ -183,19 +205,19 @@ export class AgentTreeBudgetTracker {
     ): AgentTreeBudget {
         const effectiveParams = params ?? fallbackParams;
         let budget = effectiveParams?.treeBudget ?? currentBudget;
+        const budgetOptions = {
+            MaxTreeSteps: effectiveParams?.maxTreeSteps,
+            MaxTreeTokens: effectiveParams?.maxTreeTokens,
+            MaxTreeCost: effectiveParams?.maxTreeCost,
+            MaxTreeDurationMs: effectiveParams?.maxTreeDurationMs,
+            WorkflowMaxCostUsd: effectiveParams?.workflowMaxCostUsd,
+            WorkflowMaxDurationMs: effectiveParams?.workflowMaxDurationMs,
+            WorkflowStartedAtMs: effectiveParams?.workflowStartedAtMs,
+        };
         if (!budget) {
-            budget = {
-                maxTreeSteps: effectiveParams?.maxTreeSteps,
-                maxTreeTokens: effectiveParams?.maxTreeTokens,
-                maxTreeCost: effectiveParams?.maxTreeCost,
-                maxTreeDurationMs: effectiveParams?.maxTreeDurationMs,
-                totalSteps: 0,
-                totalTokens: 0,
-                totalCost: 0,
-                startedAtMs: nowMs,
-            };
-        } else if (effectiveParams) {
-            this.seedMissingLimits(budget, effectiveParams);
+            budget = CreateWorkflowBudget(budgetOptions, nowMs);
+        } else {
+            SynchronizeWorkflowBudget(budget, budgetOptions);
         }
 
         if (effectiveParams) {
@@ -216,18 +238,33 @@ export class AgentTreeBudgetTracker {
      * falling back to direct `promptRun` columns (`TokensUsed` / `TokensPrompt` + `TokensCompletion`
      * and `Cost`) or the `AIPromptRunResult` summary fields when `promptRun` is not populated.
      */
-    public RecordPromptUsage(
+    public RecordPromptUsage<TResult = object>(
         budget: AgentTreeBudget,
         promptRun?: MJAIPromptRunEntity | null,
-        promptResult?: AIPromptRunResult<unknown>
+        promptResult?: AIPromptRunResult<TResult>,
+        attribution?: WorkflowBudgetAttributionContext
     ): { TokensDelta: number; CostDelta: number } {
         const tokensDelta = this.extractPromptTokensDelta(promptRun, promptResult);
         const costDelta = this.extractPromptCostDelta(promptRun, promptResult);
 
-        budget.totalTokens += tokensDelta;
-        budget.totalCost += costDelta;
+        RecordWorkflowBudgetUsage(
+            budget,
+            { Tokens: tokensDelta, CostUsd: costDelta },
+            { SourceScope: 'AgentTree', ...attribution }
+        );
 
         return { TokensDelta: tokensDelta, CostDelta: costDelta };
+    }
+
+    /**
+     * Atomically increments cumulative step count on the shared workflow/tree budget.
+     */
+    public RecordStepIncrement(
+        budget: AgentTreeBudget,
+        attribution?: WorkflowBudgetAttributionContext
+    ): WorkflowBudgetCheckOutcomeSummary {
+        const check = RecordWorkflowBudgetUsage(budget, { Steps: 1 }, { SourceScope: 'AgentTree', ...attribution });
+        return { Exceeded: check.Exceeded, Diagnostic: check.Diagnostic };
     }
 
     /**
@@ -251,86 +288,41 @@ export class AgentTreeBudgetTracker {
         if ((agentRun.TotalCost ?? 0) > budget.totalCost) {
             budget.totalCost = agentRun.TotalCost ?? 0;
         }
+        if ((budget.cumulativeCostUsd ?? 0) < budget.totalCost) {
+            budget.cumulativeCostUsd = budget.totalCost;
+        }
     }
 
     /**
-     * Evaluates whether any cumulative tree budget ceiling (`maxTreeSteps`, `maxTreeTokens`,
-     * `maxTreeCost`, `maxTreeDurationMs`) on the shared {@link AgentTreeBudget} has been reached.
+     * Evaluates whether any cumulative tree or whole-workflow budget ceiling
+     * (`maxTreeSteps`, `maxTreeTokens`, `maxTreeCost`, `maxTreeDurationMs`,
+     * `workflowMaxCostUsd`, `workflowMaxDurationMs`) on the shared {@link AgentTreeBudget}
+     * has been reached.
      *
-     * Stamps `budget.breachedReason` on breach so ancestor and sibling agents in the call tree
-     * can terminate immediately.
+     * Stamps `budget.breachedReason` and `budget.breachDiagnostic` on breach so ancestor
+     * and sibling agents in the call tree can terminate deterministically.
      */
     public CheckTreeBudgetLimit(
         budget: AgentTreeBudget,
-        nowMs: number = Date.now()
+        nowMs: number = Date.now(),
+        attribution?: WorkflowBudgetAttributionContext
     ): AgentGuardrailCheckResult {
-        if (budget.maxTreeSteps != null && budget.totalSteps >= budget.maxTreeSteps) {
-            const reason =
-                budget.breachedReason ??
-                `Agent tree step budget exceeded (${budget.totalSteps}/${budget.maxTreeSteps} total steps across tree)`;
-            budget.breachedReason = reason;
-            return {
-                Exceeded: true,
-                Type: 'iterations',
-                Limit: budget.maxTreeSteps,
-                Current: budget.totalSteps,
-                Reason: reason,
-            };
+        const check = EvaluateWorkflowBudgetCaps(
+            budget,
+            { SourceScope: 'AgentTree', ...attribution },
+            nowMs
+        );
+        if (!check.Exceeded || !check.Diagnostic) {
+            return { Exceeded: false };
         }
-
-        if (budget.maxTreeTokens != null && budget.totalTokens >= budget.maxTreeTokens) {
-            const reason =
-                budget.breachedReason ??
-                `Agent tree token budget exceeded (${budget.totalTokens}/${budget.maxTreeTokens} total tokens across tree)`;
-            budget.breachedReason = reason;
-            return {
-                Exceeded: true,
-                Type: 'tokens',
-                Limit: budget.maxTreeTokens,
-                Current: budget.totalTokens,
-                Reason: reason,
-            };
-        }
-
-        if (budget.maxTreeCost != null && budget.totalCost >= budget.maxTreeCost) {
-            const reason =
-                budget.breachedReason ??
-                `Agent tree cost budget exceeded ($${budget.totalCost.toFixed(4)}/$${budget.maxTreeCost.toFixed(4)} across tree)`;
-            budget.breachedReason = reason;
-            return {
-                Exceeded: true,
-                Type: 'cost',
-                Limit: budget.maxTreeCost,
-                Current: budget.totalCost,
-                Reason: reason,
-            };
-        }
-
-        if (budget.maxTreeDurationMs != null) {
-            const elapsedMs = nowMs - budget.startedAtMs;
-            if (elapsedMs >= budget.maxTreeDurationMs) {
-                const reason =
-                    budget.breachedReason ??
-                    `Agent tree duration budget exceeded (${elapsedMs}ms/${budget.maxTreeDurationMs}ms across tree)`;
-                budget.breachedReason = reason;
-                return {
-                    Exceeded: true,
-                    Type: 'time',
-                    Limit: budget.maxTreeDurationMs,
-                    Current: elapsedMs,
-                    Reason: reason,
-                };
-            }
-        }
-
-        if (budget.breachedReason) {
-            return {
-                Exceeded: true,
-                Reason: budget.breachedReason,
-            };
-        }
-
-        return { Exceeded: false };
+        return {
+            Exceeded: true,
+            Type: this.mapWorkflowDimensionToGuardrailType(check.Diagnostic.Dimension),
+            Limit: check.Diagnostic.Limit,
+            Current: check.Diagnostic.CurrentValue,
+            Reason: check.Diagnostic.Reason,
+            Diagnostic: check.Diagnostic,
+        };
     }
 
     /**
@@ -424,14 +416,24 @@ export class AgentTreeBudgetTracker {
             return;
         }
         budget.breachedReason = undefined;
+        budget.breachDiagnostic = undefined;
         if (budget.maxTreeCost !== undefined) {
             budget.maxTreeCost = extendedBudgets.PerRun.MaxCostUsd ?? undefined;
+        }
+        if (budget.workflowMaxCostUsd !== undefined) {
+            budget.workflowMaxCostUsd = extendedBudgets.PerRun.MaxCostUsd ?? undefined;
         }
         if (budget.maxTreeDurationMs !== undefined) {
             budget.maxTreeDurationMs = extendedBudgets.PerRun.MaxWallClockMs ?? undefined;
         }
+        if (budget.workflowMaxDurationMs !== undefined) {
+            budget.workflowMaxDurationMs = extendedBudgets.PerRun.MaxWallClockMs ?? undefined;
+        }
         if (budget.maxTreeTokens !== undefined) {
             budget.maxTreeTokens = extendedBudgets.PerRun.MaxTokens ?? undefined;
+        }
+        if (budget.abortController?.signal.aborted) {
+            budget.abortController = new AbortController();
         }
     }
 
@@ -451,24 +453,22 @@ export class AgentTreeBudgetTracker {
         return counts.get(itemId) || 0;
     }
 
-    private seedMissingLimits(budget: AgentTreeBudget, effectiveParams: ExecuteAgentParams): void {
-        if (budget.maxTreeSteps === undefined && effectiveParams.maxTreeSteps !== undefined) {
-            budget.maxTreeSteps = effectiveParams.maxTreeSteps;
-        }
-        if (budget.maxTreeTokens === undefined && effectiveParams.maxTreeTokens !== undefined) {
-            budget.maxTreeTokens = effectiveParams.maxTreeTokens;
-        }
-        if (budget.maxTreeCost === undefined && effectiveParams.maxTreeCost !== undefined) {
-            budget.maxTreeCost = effectiveParams.maxTreeCost;
-        }
-        if (budget.maxTreeDurationMs === undefined && effectiveParams.maxTreeDurationMs !== undefined) {
-            budget.maxTreeDurationMs = effectiveParams.maxTreeDurationMs;
+    private mapWorkflowDimensionToGuardrailType(dimension: WorkflowBudgetDimension): AgentGuardrailLimitType {
+        switch (dimension) {
+            case 'CostUsd':
+                return 'cost';
+            case 'WallClockMs':
+                return 'time';
+            case 'Tokens':
+                return 'tokens';
+            case 'Steps':
+                return 'iterations';
         }
     }
 
-    private extractPromptTokensDelta(
+    private extractPromptTokensDelta<TResult = object>(
         promptRun?: MJAIPromptRunEntity | null,
-        promptResult?: AIPromptRunResult<unknown>
+        promptResult?: AIPromptRunResult<TResult>
     ): number {
         if (promptRun) {
             if (promptRun.TokensUsedRollup != null && promptRun.TokensUsedRollup > 0) {
@@ -513,9 +513,9 @@ export class AgentTreeBudgetTracker {
         return 0;
     }
 
-    private extractPromptCostDelta(
+    private extractPromptCostDelta<TResult = object>(
         promptRun?: MJAIPromptRunEntity | null,
-        promptResult?: AIPromptRunResult<unknown>
+        promptResult?: AIPromptRunResult<TResult>
     ): number {
         if (promptRun) {
             if (promptRun.TotalCost != null && promptRun.TotalCost > 0) {

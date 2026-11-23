@@ -32520,6 +32520,121 @@
   },
   {
     "fields": {
+      "Name": "GPT-Live 1.1",
+      "PowerRank": 15,
+      "Description": "OpenAI's GPT-Live 1.1 speech-to-speech realtime model (released November 19, 2026), the successor to GPT-Live 1 on the same Live API (`v1/live/sessions`). Native full-duplex conversational audio over WebRTC and WebSocket, with more accurate speech transcription and improved pronunciation and accent consistency in multilingual conversations. Uses the same context events and per-minute billing as GPT-Live 1 ($0.05/min active, $0.02/min WebRTC standby); concurrent-session limits are separate from GPT-Live 1.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 5,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "FullDuplex": true,
+          "ConnectionMaxSeconds": 3600,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": false
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "99C4277E-0579-4B74-8BC8-B81695E954F8"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILiveRealtime",
+            "APIName": "gpt-live-1.1",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "2ADB70E5-6D6C-4872-A428-21ED01C59E0A"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-11-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.05,
+            "OutputPricePerUnit": 0,
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Minute",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-Live 1.1 per-minute audio list pricing: $0.05 per minute of active session duration (billed per second). WebRTC standby (inference paused via session.idle_timeout_s) bills $0.02/min; that rate is not modeled here because the driver does not configure standby."
+          },
+          "primaryKey": {
+            "ID": "370AD423-4719-43BE-8101-A0D79967DFCF"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "B4653DB7-EFD9-4E2A-9C4F-CF5A87EE2163"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Output",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "ED46876E-CA3F-46EE-AAAF-51AAD476E75A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AB381F97-3265-4925-9395-F5F2FED68DF9"
+    }
+  },
+  {
+    "fields": {
       "Name": "GPT-6.2 Astra",
       "PowerRank": 28,
       "Description": "OpenAI's GPT-6.2 point release of the flagship Astra model, released November 17, 2026 as the successor to GPT-6 Astra. 1,050,000-token context window (up to 922,000 input tokens, 128,000 output tokens). reasoning.effort accepts low, medium, high and xhigh; it does NOT accept none. Structured Outputs and streaming are supported; function/tool calling requires the Responses API. Headline price is $8/$40 per 1M in/out - a 20% cut from GPT-6 Astra's $10/$50 - with cached input at $0.40 and cache writes at $10 (30-minute retention). LONG-CONTEXT SURCHARGE, as on GPT-6 Astra: a request whose input exceeds 272,000 tokens is rebilled in its entirety at 2x input/cached-input and 1.5x output; the cost record below carries the short-context (<=272K) rate only. Generally available on the OpenAI API and in Microsoft Foundry (deployment version 2026-11-17, Global Standard). Sources: https://developers.openai.com/api/docs/models ; https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/gpt-6-2-astra-and-gpt-6-2-sol-now-generally-available-in-microsoft-foundry/4574122 ; https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/reasoning",

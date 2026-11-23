@@ -1171,6 +1171,44 @@ describe('ScopedSearchAction', () => {
             expect(permissionResolveSpy).toHaveBeenCalledOnce();
             expect(logForbiddenSpy).toHaveBeenCalledOnce();
         });
+
+        it('withholds SourceCounts and streaming provider ProgressEvents when IsStructuralAudience=true even without enumerated Audience', async () => {
+            const structuralParams = mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'ScopeID', Value: 'scope-1' },
+            ]);
+            structuralParams.IsStructuralAudience = true;
+            const syncResult = await run(new ScopedSearchAction(), structuralParams);
+            expect(syncResult.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].Audience).toBeUndefined();
+            expect(syncResult.Params?.some((p: { Name: string }) => p.Name === 'SourceCounts')).toBe(false);
+
+            streamSearchSpy.mockImplementation(async function* () {
+                yield { phase: 'provider', providerName: 'FullText', results: [], resultCount: 5, durationMs: 9 };
+                yield { phase: 'fused', results: [] };
+                yield { phase: 'final', results: [], sourceCounts: { Vector: 0, FullText: 5, Entity: 0, Storage: 0 }, elapsedMs: 12 };
+            });
+            const streamParams = mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'ScopeID', Value: 'scope-1' },
+                { Name: 'StreamingMode', Value: 'partials' },
+            ]);
+            streamParams.IsStructuralAudience = true;
+            const streamResult = await run(new ScopedSearchAction(), streamParams);
+            expect(streamResult.Success).toBe(true);
+            const progress = streamResult.Params?.find((p: { Name: string }) => p.Name === 'ProgressEvents')?.Value as Array<
+                | { phase: 'final'; count: number; elapsedMs: number }
+                | { phase: 'provider'; providerName: string; count: number; durationMs: number }
+                | { phase: 'fused'; count: number }
+                | { phase: 'reranked'; rerankerName: string; count: number }
+                | { phase: 'error'; error: string }
+            >;
+            expect(progress).toEqual([{ phase: 'fused', count: 0 }, { phase: 'final', count: 0, elapsedMs: 12 }]);
+            expect(JSON.stringify(streamResult.Params)).not.toContain('"provider"');
+            expect(streamResult.Params?.some((p: { Name: string }) => p.Name === 'SourceCounts')).toBe(false);
+        });
     });
 
 });

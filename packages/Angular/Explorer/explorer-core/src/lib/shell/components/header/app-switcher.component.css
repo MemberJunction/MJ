@@ -341,7 +341,7 @@
   outline-offset: 2px;
 }
 .launcher-sort-toggle[aria-pressed="true"] {
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 .launcher-grid {
@@ -419,7 +419,7 @@
   white-space: nowrap;
 }
 .app-card.active .app-card-name {
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
 }
 .app-card-desc {
   margin-top: var(--mj-space-0-5);
