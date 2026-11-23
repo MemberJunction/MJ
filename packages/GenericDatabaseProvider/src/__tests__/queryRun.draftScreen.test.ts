@@ -14,8 +14,10 @@ import {
     IMetadataProvider,
     Metadata,
     RegisterPostRunViewProtectedEntity,
+    QueryCacheAuthorization,
     RunQueryParams,
     RunQueryResult,
+    RunQueryWithCacheCheckParams,
     SaveSQLResult,
     UserInfo,
 } from '@memberjunction/core';
@@ -73,6 +75,11 @@ class DraftScreenProvider extends GenericDatabaseProviderTestBase {
     public Run(params: RunQueryParams, user: UserInfo): Promise<RunQueryResult> {
         return this.InternalRunQuery(params, user);
     }
+
+    /** The cache-serve seam's probe, which decides whether a cached slot may be served. */
+    public ProbeCacheServe(params: RunQueryParams, user: UserInfo): QueryCacheAuthorization {
+        return this.ResolveQueryCacheAuthorization(params, user);
+    }
 }
 
 const RUNS_ID = 'E0000000-0000-0000-0000-0000000000D1';
@@ -102,14 +109,17 @@ function user(id: string, roleId: string): UserInfo {
 const uiUser = user('U0000000-0000-0000-0000-0000000000D1', UI_ROLE);
 /** Holds Developer, which holds Queries: Approve. */
 const developer = user('U0000000-0000-0000-0000-0000000000D2', DEV_ROLE);
+/** The same Developer, through an API key whose scope puts a row filter on MJ: AI Agent Runs. */
+const developerViaFilteredKey = user('U0000000-0000-0000-0000-0000000000D2', DEV_ROLE);
+developerViaFilteredKey.APIKeyRowFilters = [{ EntityID: RUNS_ID, PermissionType: 'Read', FilterID: 'F0000000-0000-0000-0000-0000000000D1' }];
 
-function makeQuery(sql: string, status: MJQueryEntityExtended['Status'], permissionRoles: string[] = []): MJQueryEntityExtended {
+function makeQuery(sql: string, status: MJQueryEntityExtended['Status'], permissionRoles: string[] = [], validationSQL: string | null = null): MJQueryEntityExtended {
     const q = Object.create(MJQueryEntityExtended.prototype) as MJQueryEntityExtended;
     const permissions = permissionRoles.map(r => ({ QueryID: 'q-1', Role: `Role-${r}` }) as unknown as MJQueryPermissionEntity);
     const own: Record<string, unknown> = {
         ID: 'q-1', Name: 'Draft', SQL: sql, Status: status, Reusable: false, UsesTemplate: false, CacheEnabled: false,
         AuditQueryRuns: false, ExternalDataSourceID: null, CategoryID: null, CategoryPath: '', IsApproved: status === 'Approved',
-        CacheValidationSQL: null, QueryPermissions: permissions, QueryEntities: [], QueryDependencies: [], QueryParameters: [], QueryFields: [],
+        CacheValidationSQL: validationSQL, QueryPermissions: permissions, QueryEntities: [], QueryDependencies: [], QueryParameters: [], QueryFields: [],
     };
     for (const [key, value] of Object.entries(own)) {
         Object.defineProperty(q, key, { value, configurable: true });
@@ -128,9 +138,10 @@ function setUp(platform: DatabasePlatform = 'sqlserver'): DraftScreenProvider {
     RegisterPostRunViewProtectedEntity('MJ: Conversations');
     const provider = new DraftScreenProvider(platform);
     const runs = entity(RUNS_ID, 'MJ: AI Agent Runs', 'AIAgentRun', 'vwAIAgentRuns');
-    // UI: Own AI Agent Runs — the UI role reads only its own runs; Developer reads them all.
+    // UI: Own AI Agent Runs — the UI role reads only its own runs; Developer reads them all, except
+    // through an API key whose scope filters them.
     vi.spyOn(runs, 'GetEffectiveRowFilterWhereClause').mockImplementation((u: UserInfo) =>
-        u.UserRoles.some(r => r.RoleID === UI_ROLE) ? `UserID = '${u.ID}'` : '');
+        u.UserRoles.some(r => r.RoleID === UI_ROLE) || u.APIKeyRowFilters?.length ? `UserID = '${u.ID}'` : '');
     provider.SeedEntities([
         runs,
         entity(USERS_ID, 'MJ: Users', 'User', 'vwUsers'),
@@ -202,6 +213,19 @@ describe('the draft screen on saved queries', () => {
         expect(result.Success).toBe(true);
     });
 
+    it("screens a holder's session whose API key carries a row filter", async () => {
+        const result = await run(provider, 'SELECT r.ID FROM __mj.vwAIAgentRuns r', developerViaFilteredKey, 'Pending');
+        expect(result.Success).toBe(false);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it("refuses a UI user's draft at the cache-serve probe, so a cached slot is not served", () => {
+        provider.SeedQueries([makeQuery('SELECT r.ID FROM __mj.vwAIAgentRuns r', 'Pending')]);
+        expect(provider.ProbeCacheServe({ QueryID: 'q-1' }, uiUser)).toMatchObject({ resolvable: true, authorized: false });
+        provider.SeedQueries([makeQuery('SELECT r.ID FROM __mj.vwAIAgentRuns r', 'Approved')]);
+        expect(provider.ProbeCacheServe({ QueryID: 'q-1' }, uiUser)).toMatchObject({ resolvable: true, authorized: true });
+    });
+
     it('does not screen a draft with a role list, which authorizes on its own', async () => {
         const result = await run(provider, 'SELECT r.ID FROM __mj.vwAIAgentRuns r', uiUser, 'Pending', [UI_ROLE]);
         expect(result.Success).toBe(true);
@@ -236,4 +260,44 @@ describe('the draft screen on PostgreSQL', () => {
         const sql = 'SELECT r."ID" FROM __mj."vwUsers" u JOIN __mj."vwRoles" ro ON true, __mj."vwAIAgentRuns" r';
         expect((await run(provider, sql, uiUser, 'Pending')).Success).toBe(false);
     });
+});
+
+/**
+ * A query's `CacheValidationSQL` runs as written when a client checks its cache, outside the checks
+ * the query's own SQL goes through. Only an Approved query's is ever run; a draft's is ignored and
+ * the draft gets fresh rows from its normal (screened) run.
+ */
+describe('cache validation SQL on drafts', () => {
+    const VALIDATION_SQL = 'SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM __mj.AIAgentRun';
+    const QUERY_SQL = 'SELECT u.ID FROM __mj.vwUsers u';
+    let provider: DraftScreenProvider;
+
+    beforeEach(() => {
+        provider = setUp();
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    const withSlot: RunQueryWithCacheCheckParams = { params: { QueryID: 'q-1' }, cacheStatus: { maxUpdatedAt: '2026-01-01T00:00:00.000Z', rowCount: 1 } };
+    const firstFetch: RunQueryWithCacheCheckParams = { params: { QueryID: 'q-1' } };
+
+    // With a slot, a query without validation SQL answers 'no_validation'; a first fetch is 'stale'.
+    for (const [what, item, draftStatus] of [['with a cache status', withSlot, 'no_validation'], ['on a first fetch', firstFetch, 'stale']] as const) {
+        it(`never runs a UI user's Pending query's validation SQL, ${what}`, async () => {
+            provider.SeedQueries([makeQuery(QUERY_SQL, 'Pending', [], VALIDATION_SQL)]);
+            const response = await provider.RunQueriesWithCacheCheck([item], uiUser);
+            expect(response.success).toBe(true);
+            expect(response.results[0].status).toBe(draftStatus);
+            expect(provider.Executed).not.toContain(VALIDATION_SQL);
+            expect(provider.Executed.some(sql => sql.includes('vwUsers'))).toBe(true);
+        });
+
+        it(`still runs an Approved query's validation SQL, ${what}`, async () => {
+            provider.SeedQueries([makeQuery(QUERY_SQL, 'Approved', [], VALIDATION_SQL)]);
+            const response = await provider.RunQueriesWithCacheCheck([item], uiUser);
+            expect(response.success).toBe(true);
+            expect(provider.Executed).toContain(VALIDATION_SQL);
+        });
+    }
 });

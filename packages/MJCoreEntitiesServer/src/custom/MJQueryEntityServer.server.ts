@@ -24,6 +24,7 @@ import {
     QueryDefinitionRows,
     QueryEngine,
     QUERY_APPROVAL_REFUSAL,
+    QUERY_VALIDATION_SQL_REFUSAL,
     UserCanApproveQueries,
 } from "@memberjunction/core-entities";
 import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDMap, UUIDsEqual } from "@memberjunction/global";
@@ -245,6 +246,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     private async saveOnServerAsync(options: EntitySaveOptions | undefined): Promise<boolean> {
         let approving: boolean;
         try {
+            if (!options?.ReplayOnly) this.assertMayWriteValidationSQL();
             // Approving is a server act; a ReplayOnly save writes nothing, so it has nothing to stamp.
             approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'Status', this.Status, this.approverRule);
         } catch (e) {
@@ -274,6 +276,21 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             CanApprove: (user) => UserCanApproveQueries(user, this.extractionProvider),
             Refusal: QUERY_APPROVAL_REFUSAL,
         };
+    }
+
+    /**
+     * Refuses a save that sets `CacheValidationSQL` to text, unless the user this save runs as may
+     * approve queries. A client's cache check runs that SQL as written, with none of the checks the
+     * query's own SQL goes through, so writing it takes the same trust as approving. Clearing it is
+     * always allowed. A save with no context user is not checked, like the fingerprint stamp.
+     */
+    private assertMayWriteValidationSQL(): void {
+        // A new record writes every field it carries, so only a saved one can leave it unchanged.
+        if (!this.CacheValidationSQL?.trim() || (this.IsSaved && !this.FieldIsDirty('CacheValidationSQL'))) return;
+        const user = this.ContextCurrentUser;
+        if (user && !UserCanApproveQueries(user, this.extractionProvider)) {
+            throw new Error(QUERY_VALIDATION_SQL_REFUSAL);
+        }
     }
 
     /** Whether this object saves through a network (client) provider rather than to a database. */

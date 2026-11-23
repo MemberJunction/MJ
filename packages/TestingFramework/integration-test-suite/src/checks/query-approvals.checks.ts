@@ -13,7 +13,7 @@
  * SQL Server and PostgreSQL), deleted in teardown. Self-cleaning, so the deterministic tier.
  */
 import { EntityPermissionType, Metadata, RunQuery, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
-import type { EntitySaveOptions, RunQueryParams, RunQueryResult } from '@memberjunction/core';
+import type { EntitySaveOptions, IRunQueryProvider, RunQueryParams, RunQueryResult } from '@memberjunction/core';
 import { GetQueryApprovalStateAsync, QueryEngine, UserCanApproveQueries } from '@memberjunction/core-entities';
 import type { MJQueryEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
@@ -366,6 +366,42 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             await saveOrThrow(approved, 'approving the agent-runs draft as a holder', FixtureQuerySaveOptions());
             const afterApproval = await runAs(ctx, approved.ID, ui);
             Assert(afterApproval.Success, `the approved query must run for the UI user: ${afterApproval.ErrorMessage}`);
+        }
+    },
+    {
+        Id: 'query-approvals.QA8',
+        Name: "QA8: a UI user cannot set a query's CacheValidationSQL, and a draft's is never run by a cache check (#6746)",
+        Fn: async (ctx) => {
+            const ui = uiOnlyUser(ctx);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            // Never reached: the save is refused, and a draft's validation SQL is never run. If it
+            // were, the zero-row result would still read as a status, so the route is what's checked.
+            const validationSQL = `SELECT N AS TotalRows FROM ${ROWS} WHERE N = 0`;
+
+            const refused = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            refused.Name = 'IT120 UI Validation SQL Attempt';
+            refused.CategoryID = fixtures!.Category.ID;
+            refused.SQL = `SELECT N FROM ${ROWS}`;
+            refused.Status = 'Pending';
+            refused.CacheValidationSQL = validationSQL;
+            AssertEqual(await refused.Save(FixtureQuerySaveOptions()), false, 'a UI user must not be able to save CacheValidationSQL');
+            const refusal = refused.LatestResult?.CompleteMessage ?? '';
+            Assert(refusal.includes('cache validation SQL') && refusal.includes("'Queries: Approve'"),
+                `the refusal must name the field and the authorization — got: ${refusal}`);
+
+            // A holder's draft may carry it; a cache check by the UI user ignores it while it's a draft.
+            const draft = await createQuery('IT120 Draft Validation SQL', `SELECT N FROM ${ROWS}`, ctx.User);
+            draft.CacheValidationSQL = validationSQL;
+            await saveOrThrow(draft, 'adding validation SQL to the draft as a holder', FixtureQuerySaveOptions());
+            await RefreshRenderQueries(ctx.User);
+            const provider = Metadata.Provider as unknown as IRunQueryProvider; // global-provider-ok: integration test script — single-provider process by design
+            Assert(typeof provider.RunQueriesWithCacheCheck === 'function', 'provider must implement RunQueriesWithCacheCheck');
+            const checked = await provider.RunQueriesWithCacheCheck!([
+                { params: { QueryID: draft.ID }, cacheStatus: { maxUpdatedAt: '', rowCount: 3 } },
+            ], ui);
+            Assert(checked.success, `the cache check must succeed: ${checked.errorMessage}`);
+            AssertEqual(checked.results[0]?.status, 'no_validation', "a draft's validation SQL must not be used by a cache check");
+            AssertEqual(checked.results[0]?.results?.length, 3, 'the draft must return its rows from the normal run');
         }
     }
 ];

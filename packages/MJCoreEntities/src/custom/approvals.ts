@@ -189,6 +189,14 @@ export const QUERY_APPROVAL_REFUSAL =
     `Approving a query needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization. Save it as Pending, and someone who holds it can approve it.`;
 
 /**
+ * Why the server refused a save that sets a query's `CacheValidationSQL`. That SQL runs as written
+ * when a client checks its cache, outside the checks the query's own SQL goes through, so only a
+ * user who could approve the query may write it.
+ */
+export const QUERY_VALIDATION_SQL_REFUSAL =
+    `Setting a query's cache validation SQL needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization. Save it without one, and someone who holds it can add it.`;
+
+/**
  * Whether this user may approve queries: they hold {@link APPROVE_QUERIES_AUTHORIZATION}, directly
  * or through an ancestor authorization, or they are an `Owner`-type user (the platform's top
  * authority, never locked out of this).

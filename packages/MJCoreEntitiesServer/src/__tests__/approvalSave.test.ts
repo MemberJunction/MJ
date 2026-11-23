@@ -67,6 +67,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             };
         }
         public GetFieldByName(): { Dirty: boolean } { return { Dirty: false }; }
+        public FieldIsDirty(): boolean { return false; }
         public async GenerateEmbeddingsByFieldName(): Promise<boolean> { return true; }
         public async Save(options?: EntitySaveOptions): Promise<boolean> {
             writes.push({
@@ -123,6 +124,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public UsesTemplate = false;
         public ExternalDataSourceID: string | null = null;
         public Description = 'kept';
+        public CacheValidationSQL: string | null = null;
     }
 
     return {
@@ -331,6 +333,63 @@ describe('MJQueryEntityServer', () => {
         } finally {
             errors.mockRestore();
         }
+    });
+
+    it('an approving save by a holder without Update still stamps the approved fingerprint', async () => {
+        db.stored = { Status: 'Pending', ...PENDING };
+        db.canUpdateQueries = false;
+        const query = create(MJQueryEntityServer);
+        expect(await query.Save()).toBe(true);
+        expect(writes).toHaveLength(2);
+        expect(writes[1].ApprovedFingerprint).not.toBeNull();
+    });
+
+    describe('CacheValidationSQL, which a cache check runs as written', () => {
+        /** A saved query whose CacheValidationSQL this save sets (or, with `dirty` false, leaves as stored). */
+        function withValidationSQL(text: string | null, dirty = true): MJQueryEntityServer {
+            const query = create(MJQueryEntityServer);
+            query.Status = 'Pending';
+            query.CacheValidationSQL = text;
+            Object.defineProperty(query, 'FieldIsDirty', { value: (name: string) => dirty && name === 'CacheValidationSQL' });
+            return query;
+        }
+
+        it('refuses it, writing nothing, from a user who does not hold Queries: Approve', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            db.canApproveQueries = false;
+            const query = withValidationSQL('SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM __mj.User');
+            expect(await query.Save()).toBe(false);
+            expect(writes).toHaveLength(0);
+            expect(query.RegisterResultHistoryEntry).toHaveBeenCalledWith(expect.objectContaining({
+                Success: false,
+                Message: expect.stringContaining("cache validation SQL needs the 'Queries: Approve' authorization"),
+            }));
+        });
+
+        it('refuses it on a new query, whose fields are all written, from a user who does not hold Queries: Approve', async () => {
+            db.canApproveQueries = false;
+            const query = withValidationSQL('SELECT 1 AS TotalRows', false);
+            query.IsSaved = false;
+            expect(await query.Save()).toBe(false);
+            expect(writes).toHaveLength(0);
+        });
+
+        it('leaves an unchanged one alone when a user who does not hold Queries: Approve edits something else', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            db.canApproveQueries = false;
+            expect(await withValidationSQL('SELECT 1 AS TotalRows', false).Save()).toBe(true);
+        });
+
+        it('accepts it from a holder', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            expect(await withValidationSQL('SELECT 1 AS TotalRows').Save()).toBe(true);
+        });
+
+        it('lets anyone clear it', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            db.canApproveQueries = false;
+            expect(await withValidationSQL(null).Save()).toBe(true);
+        });
     });
 
     it('still saves a draft for a user who does not hold Queries: Approve', async () => {
