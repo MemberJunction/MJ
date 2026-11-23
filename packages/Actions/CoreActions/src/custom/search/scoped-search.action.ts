@@ -223,8 +223,10 @@ export class ScopedSearchAction extends BaseAction {
             const exec = await this.searchUnderTenant(params, { query, agent, scope, scopeID, skillID: skill?.ID ?? undefined, tenant });
             if ('result' in exec) return exec.result;
 
-            // 5. Build the success response (no SourceCounts for a room: they are counted before the audience pass)
-            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents, params.Audience !== undefined);
+            // 5. Build the success response (no SourceCounts for a room or structural common-reach audience:
+            // they are counted before the audience pass)
+            const underAudience = params.Audience !== undefined || params.IsStructuralAudience === true;
+            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents, underAudience);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`ScopedSearchAction error: ${msg}`);
@@ -579,6 +581,7 @@ export class ScopedSearchAction extends BaseAction {
             secondaryScopes: tenant.secondaryScopes,
             aiSkillID: skillID,
             audience: params.Audience,
+            underAudience: params.Audience !== undefined || params.IsStructuralAudience === true,
         });
     }
 
@@ -600,6 +603,7 @@ export class ScopedSearchAction extends BaseAction {
         secondaryScopes: Record<string, SecondaryScopeValue> | undefined;
         aiSkillID: string | undefined;
         audience: SearchAudience | undefined;
+        underAudience: boolean;
     }): Promise<{ ok: true; sr: SearchResult; progressEvents: Array<Record<string, unknown>> } | { ok: false; result: ActionResultSimple }> {
         // Construct a SearchContext only when the caller supplied at least
         // one runtime dimension. Leaving it undefined preserves the existing
@@ -660,7 +664,7 @@ export class ScopedSearchAction extends BaseAction {
             } else if (ev.phase === 'error') {
                 errorMsg = ev.error;
             }
-            const progress = this.progressEventFor(ev, input.audience !== undefined);
+            const progress = this.progressEventFor(ev, input.underAudience);
             if (progress) progressEvents.push(progress);
         }
         if (errorMsg || !finalEvent) {

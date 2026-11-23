@@ -193,6 +193,7 @@ import {
 } from '@memberjunction/actions-base';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from './agent-audience';
+import { ActionSupportsAudience } from './action-audience-support';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
 import { ResolveSpecializationPlacement } from './volatile-child-prompt';
@@ -3766,6 +3767,13 @@ export class BaseAgent {
             return { Error: `Invalid Audience: ${problem}` };
         }
         if (IsStructuralCommonReachAudience(params.Audience)) {
+            const scope = this._runScope ?? this.validatedRunScope(params);
+            const hasConstrainingScope = ActionRunScopeIsBounded(scope) || (scope.SearchScopeIDs?.length ?? 0) > 0;
+            if (!hasConstrainingScope) {
+                return {
+                    Error: "Invalid Audience: Mode 'ScopeCommonReach' requires a constraining run scope (PrimaryScopeRecordID, SecondaryScopes, or SearchScopeIDs); cannot run unscoped."
+                };
+            }
             this.logStatus('👥 Run audience: structural common-reach mode — O(1) startup without reader enumeration; audience restrictions active', true, params);
             return { Readers: [] };
         }
@@ -15488,8 +15496,9 @@ The context is now within limits. Please retry your request with the recovered c
         actionEntity: MJActionEntityExtended,
         audienceReaders: UserInfo[],
         runAs: UserInfo | undefined
-    ): Pick<RunActionParams, 'RuntimeAPIKeyResolver' | 'CredentialScope' | 'Audience' | 'RunScope'> {
+    ): Pick<RunActionParams, 'RuntimeAPIKeyResolver' | 'CredentialScope' | 'Audience' | 'IsStructuralAudience' | 'RunScope'> {
         const readers = this.dispatchReaders(params, audienceReaders, runAs);
+        const isStructuralAudience = IsStructuralCommonReachAudience(params.Audience);
         return {
             // The run's RUNTIME API KEYS, as a RESOLVER bound to this one action — see buildRuntimeAPIKeyResolver().
             // Absent when the run has no keys, so the action uses GetAIAPIKey(driverClass) exactly as before —
@@ -15502,6 +15511,9 @@ The context is now within limits. Please retry your request with the recovered c
             // that cannot honour it (AUDIENCE_UNSUPPORTED — see recordDispatchOutcome); one that can returns only
             // what every reader may see.
             Audience: readers.length > 0 ? { Readers: readers } : undefined,
+            // Explicit per-dispatch structural common-reach indicator so actions like ScopedSearchAction withhold
+            // pre-filter aggregates (SourceCounts, streaming provider counts) even with zero enumerated Readers.
+            ...(isStructuralAudience ? { IsStructuralAudience: true } : {}),
             // The run's scope (tenant + secondary dimensions), always present inside a run — nulls when it is
             // unscoped — so an action that scopes by tenant defaults to the run's and refuses one the model names.
             RunScope: this.runScopeFor(params),
@@ -15753,15 +15765,7 @@ The context is now within limits. Please retry your request with the recovered c
      * Overridable in subclasses/tests; fails closed for runtime actions or missing drivers.
      */
     protected resolveActionSupportsAudience(actionEntity: MJActionEntityExtended): boolean {
-        if (actionEntity.Type === 'Runtime') {
-            return false;
-        }
-        const driverKey = actionEntity.DriverClass || actionEntity.Name;
-        if (!driverKey) {
-            return false;
-        }
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, driverKey);
-        return Boolean(instance && instance.constructor !== BaseAction && instance.SupportsAudience === true);
+        return ActionSupportsAudience(actionEntity);
     }
 
     /**

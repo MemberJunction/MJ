@@ -729,11 +729,15 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       const readers = ActionAudienceReaders(params.Audience, params.ContextUser);
       if (readers !== null && readers.length === 0) {
          params.Audience = undefined;
-         return null;
+         if (params.IsStructuralAudience !== true) {
+            return null;
+         }
       }
       const reason = readers === null ? MALFORMED_AUDIENCE_REASON : this.audienceUnsupportedReason(params);
-      if (!reason && readers) {
-         params.Audience = { Readers: readers };
+      if (!reason && (readers || params.IsStructuralAudience === true)) {
+         if (readers && readers.length > 0) {
+            params.Audience = { Readers: readers };
+         }
          return null;
       }
       LogStatus(`ActionEngine: action '${params.Action.Name}' refused under an audience — ${reason}.`);
