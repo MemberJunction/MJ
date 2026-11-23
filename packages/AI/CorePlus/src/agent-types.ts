@@ -16,6 +16,7 @@ import {  } from '@memberjunction/core-entities';
 import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
 import type { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
 import type { LimitsDiagnosticsSnapshot } from './limits-diagnostics';
+import type { WorkflowBudgetBreachDiagnostic } from './workflow-budget';
 import type {
     BudgetBreachDetail,
     FastConvergenceJudgeResult,
@@ -1144,6 +1145,12 @@ export type ExecuteAgentResult<P = any> = {
      * Optional ID of the `MJ: AI Agent Requests` record created for human pause approval.
      */
     approvalRequestId?: string;
+
+    /**
+     * Structured whole-workflow or root-tree limit-exceeded diagnostics populated when execution
+     * halts or pauses due to a USD cost, wall-clock duration, token, or step ceiling breach.
+     */
+    limitExceeded?: WorkflowBudgetBreachDiagnostic;
 }
 
 /**
@@ -2538,6 +2545,25 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     maxTreeDurationMs?: number;
 
     /**
+     * Optional whole-workflow USD cost ceiling across the entire root agent + sub-agent
+     * execution (and parent TaskGraph when invoked from a workflow node). Synchronized
+     * with `treeBudget.workflowMaxCostUsd` / `maxTreeCost`.
+     */
+    workflowMaxCostUsd?: number;
+
+    /**
+     * Optional whole-workflow wall-clock duration cap in milliseconds measured from
+     * `workflowStartedAtMs` (or the root run's start timestamp). Synchronized with
+     * `treeBudget.workflowMaxDurationMs` / `maxTreeDurationMs`.
+     */
+    workflowMaxDurationMs?: number;
+
+    /**
+     * Optional epoch timestamp (`Date.now()`) marking when the enclosing workflow started.
+     */
+    workflowStartedAtMs?: number;
+
+    /**
      * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
      * configuration.
      *
@@ -2660,16 +2686,30 @@ export interface AgentTreeBudget {
     maxTreeCost?: number;
     /** Maximum wall-clock duration (in milliseconds) allowed for the entire agent tree */
     maxTreeDurationMs?: number;
+    /** Whole-workflow USD cost ceiling propagated across root and nested sub-agent invocations */
+    workflowMaxCostUsd?: number;
+    /** Whole-workflow wall-clock duration cap in milliseconds propagated from workflow start */
+    workflowMaxDurationMs?: number;
+    /** Authoritative epoch timestamp (Date.now()) when the enclosing workflow started */
+    workflowStartedAtMs?: number;
     /** Live cumulative step counter shared by reference across the agent tree (initialized to 0) */
     totalSteps: number;
     /** Live cumulative token counter shared by reference across the agent tree (initialized to 0) */
     totalTokens: number;
     /** Live cumulative cost accumulator shared by reference across the agent tree (initialized to 0) */
     totalCost: number;
+    /** Mirror of cumulative USD cost across the workflow/tree for explicit workflow budget readers */
+    cumulativeCostUsd?: number;
     /** Epoch timestamp (Date.now()) when the root agent run started */
     startedAtMs: number;
+    /** Epoch timestamp of the latest usage update on this shared budget tracker */
+    lastUpdatedAtMs?: number;
+    /** Shared AbortController fired immediately when any concurrent branch breaches the budget */
+    abortController?: AbortController;
     /** Set to the breach reason once any tree limit is exceeded */
     breachedReason?: string;
+    /** Structured breach diagnostics stamped atomically when any workflow/tree cap is breached */
+    breachDiagnostic?: WorkflowBudgetBreachDiagnostic;
 }
 
 
