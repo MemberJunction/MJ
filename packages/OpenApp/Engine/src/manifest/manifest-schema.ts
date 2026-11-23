@@ -212,6 +212,43 @@ const templateUserSchema = z.object({
     newUsers: z.enum(['offer', 'always', 'never']).optional(),
 });
 
+// ── App Dependencies ──────────────────────────────────────
+
+/**
+ * App dependencies — accepted in TWO authoring forms, normalized to the same internal record
+ * (app name -> semver range string | { version, repository, subpath? }):
+ *   (1) object/record keyed by app name (canonical), or
+ *   (2) an array of { name, repository, versionRange, subpath? } entries (the form several
+ *       published apps ship, e.g. bizapps-tasks / bizapps-issues). The array is transformed to
+ *       the record so downstream resolution sees a single shape.
+ */
+export const ManifestDependenciesSchema = z.union([
+    z.array(z.object({
+        name: z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
+        repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+        versionRange: z.string().min(1),
+        /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
+        subpath: z.string().optional(),
+    })).transform((arr) =>
+        Object.fromEntries(arr.map((d) => [
+            d.name,
+            { version: d.versionRange, repository: d.repository, ...(d.subpath ? { subpath: d.subpath } : {}) },
+        ]))
+    ),
+    z.record(
+        z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
+        z.union([
+            z.string().min(1),
+            z.object({
+                version: z.string().min(1),
+                repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+                /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
+                subpath: z.string().optional(),
+            })
+        ])
+    ),
+]);
+
 // ── Full Manifest ─────────────────────────────────────────
 
 /**
@@ -253,38 +290,8 @@ export const MjAppManifestSchema = z.object({
     // purely via metadata or schema (or is manifest-only) declares no packages at all.
     packages: packagesSchema.optional(),
 
-    // App Dependencies — accepted in TWO authoring forms, normalized to the same
-    // internal record (app name -> semver range string | { version, repository, subpath? }):
-    //   (1) object/record keyed by app name (canonical), or
-    //   (2) an array of { name, repository, versionRange, subpath? } entries (the form
-    //       several published apps ship, e.g. bizapps-tasks / bizapps-issues). The array
-    //       is transformed to the record so downstream resolution sees a single shape.
-    dependencies: z.union([
-        z.array(z.object({
-            name: z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
-            repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
-            versionRange: z.string().min(1),
-            /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
-            subpath: z.string().optional(),
-        })).transform((arr) =>
-            Object.fromEntries(arr.map((d) => [
-                d.name,
-                { version: d.versionRange, repository: d.repository, ...(d.subpath ? { subpath: d.subpath } : {}) },
-            ]))
-        ),
-        z.record(
-            z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
-            z.union([
-                z.string().min(1),
-                z.object({
-                    version: z.string().min(1),
-                    repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
-                    /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
-                    subpath: z.string().optional(),
-                })
-            ])
-        ),
-    ]).optional(),
+    // App Dependencies
+    dependencies: ManifestDependenciesSchema.optional(),
 
     // Code Visibility
     code: codeSchema.optional(),
