@@ -10388,6 +10388,9 @@ importers:
       '@babel/core':
         specifier: 7.29.7
         version: 7.29.7
+      '@fontsource-variable/montserrat':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@memberjunction/ng-test-utils':
         specifier: workspace:*
         version: link:../test-utils
@@ -20923,6 +20926,9 @@ packages:
 
   '@foblex/utils@1.1.1':
     resolution: {integrity: sha512-w4g49vLAIogIXNYHWQzcv2p5jJKi/XAoTw7LvuEzKvEXDJ8ezL0BZJfbeg43q2+PyKvlUfu+6ySvNxnXYrb/Bg==}
+
+  '@fontsource-variable/montserrat@5.3.0':
+    resolution: {integrity: sha512-7PaZoxaxrWLAyrhO46v65An9LhUhfkTExWLhfbywYZCnZEgg/W1rEHnlNmZKjNZ3nJTVYyicqxlJt10z/26yTA==}
 
   '@fortawesome/fontawesome-free@6.7.2':
     resolution: {integrity: sha512-JUOtgFW6k9u4Y+xeIaEiLr3+cjoUPiAuLXoyKOJSia6Duzb7pq+A76P9ZdPDoAoxHdHzq6gE9/jKBGXlZT8FbA==}
@@ -38409,6 +38415,8 @@ snapshots:
   '@foblex/utils@1.1.1':
     dependencies:
       tslib: 2.8.1
+
+  '@fontsource-variable/montserrat@5.3.0': {}
 
   '@fortawesome/fontawesome-free@6.7.2': {}
 
