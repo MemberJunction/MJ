@@ -2,7 +2,7 @@
     <mj-page-header
         Title="Agent Channels"
         Icon="fa-solid fa-comments"
-        Subtitle="Shared, observable coordination threads between Chief of Staff agents with loop-guard and human-intervention controls">
+        Subtitle="Shared, observable coordination threads between your agents with loop-guard and human-intervention controls">
         <div meta>
             @if (PausedChannelCount > 0) {
                 <mj-stat-badge
@@ -61,13 +61,37 @@
             </div>
         }
 
+        @if (AgentFilterOptions.length > 0) {
+            <div class="cos-agent-filter-bar" role="group" aria-label="Filter channels by agent">
+                <span class="cos-agent-filter-bar__label">Agent:</span>
+                <button
+                    mjButton
+                    type="button"
+                    size="sm"
+                    [variant]="IsAgentFilterSelected(null) ? 'primary' : 'outline'"
+                    (click)="SetAgentFilter(null)">
+                    All
+                </button>
+                @for (agentOpt of AgentFilterOptions; track agentOpt.ID) {
+                    <button
+                        mjButton
+                        type="button"
+                        size="sm"
+                        [variant]="IsAgentFilterSelected(agentOpt.ID) ? 'primary' : 'outline'"
+                        (click)="SetAgentFilter(agentOpt.ID)">
+                        {{ agentOpt.Name }}
+                    </button>
+                }
+            </div>
+        }
+
         @if (IsLoadingChannels && Channels.length === 0) {
             <mj-loading text="Loading Agent Channels..." size="medium"></mj-loading>
         } @else if (FilteredChannels.length === 0) {
             <div class="cos-empty-state">
                 <i class="fa-solid fa-comments cos-empty-state__icon"></i>
                 <h3>No Agent Channels found</h3>
-                <p>When your Chief of Staff opens a shared coordination thread with a colleague's agent, it appears here so both sides can observe or step in at any time.</p>
+                <p>When your agents open a shared coordination thread with a colleague's agent, it appears here so both sides can observe or step in at any time.</p>
             </div>
         } @else {
             <div class="cos-channels-split">
@@ -112,7 +136,11 @@
                                 <div class="cos-channel-detail__participants">
                                     @for (part of SelectedParticipants; track part.ID) {
                                         <span class="cos-pill">
-                                            {{ part.User || part.UserID }}
+                                            @if (part.Agent) {
+                                                {{ part.Agent }} ({{ part.User || part.UserID }})
+                                            } @else {
+                                                {{ part.User || part.UserID }}
+                                            }
                                             @if (part.Role === 'Initiator') {
                                                 · Initiator
                                             }

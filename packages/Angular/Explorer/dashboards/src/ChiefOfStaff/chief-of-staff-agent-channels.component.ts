@@ -49,6 +49,8 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
         'Paused For Human',
         'Resolved',
     ];
+    /** Optional agent filter pill selection (`null` = All agents). */
+    public AgentFilterID: string | null = null;
 
     public IsLoadingChannels = false;
     public IsLoadingMessages = false;
@@ -57,17 +59,54 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
     public ChannelErrorMessage: string | null = null;
     public ChannelStatusMessage: string | null = null;
 
+    /** User's personal agents that appear as participants in any loaded channel (or owned instances). */
+    public get AgentFilterOptions(): ReadonlyArray<{ ID: string; Name: string }> {
+        const seen = new Map<string, string>();
+        for (const agent of this.MyOwnedAgents) {
+            seen.set(agent.ID.toLowerCase(), agent.Name);
+        }
+        for (const list of this.ParticipantsByChannel.values()) {
+            for (const p of list) {
+                if (p.AgentID && !seen.has(p.AgentID.toLowerCase())) {
+                    seen.set(p.AgentID.toLowerCase(), p.Agent || this.GetAgentDisplayNameById(p.AgentID));
+                }
+            }
+        }
+        return Array.from(seen.entries())
+            .map(([id, name]) => ({ ID: id, Name: name }))
+            .sort((a, b) => a.Name.localeCompare(b.Name));
+    }
+
+    public IsAgentFilterSelected(agentId: string | null): boolean {
+        if (agentId === null) {
+            return this.AgentFilterID === null;
+        }
+        return Boolean(this.AgentFilterID && UUIDsEqual(this.AgentFilterID, agentId));
+    }
+
+    public SetAgentFilter(agentId: string | null): void {
+        this.AgentFilterID = agentId;
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+    }
+
     public get FilteredChannels(): MJAgentChannelEntity[] {
         const search = this.SearchText.trim().toLowerCase();
         return this.Channels.filter((c) => {
             if (this.StatusFilter !== 'All' && c.ChannelStatus !== this.StatusFilter) {
                 return false;
             }
+            const participants = this.ParticipantsByChannel.get(c.ID) ?? [];
+            if (
+                this.AgentFilterID &&
+                !participants.some((p) => p.AgentID && UUIDsEqual(p.AgentID, this.AgentFilterID))
+            ) {
+                return false;
+            }
             if (!search) {
                 return true;
             }
             const topicMatch = c.Topic.toLowerCase().includes(search);
-            const participants = this.ParticipantsByChannel.get(c.ID) ?? [];
             const participantMatch = participants.some(
                 (p) =>
                     (p.User ?? '').toLowerCase().includes(search) ||

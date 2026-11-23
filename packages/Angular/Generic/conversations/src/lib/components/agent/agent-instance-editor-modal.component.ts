@@ -28,7 +28,6 @@ import {
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 
 export interface CuratedAgentIconOption {
   IconClass: string;
@@ -328,7 +327,7 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     try {
       const md = this.ProviderToUse;
       const engine = this.aiEngine;
-      const entity = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', user);
+      const entity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', user);
 
       if (this.Mode === 'edit' && this.EditingAgent) {
         const loaded = await entity.InnerLoad(CompositeKey.FromID(this.EditingAgent.ID));
@@ -363,10 +362,8 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
         throw new Error(entity.LatestResult?.CompleteMessage || 'Failed to save agent instance.');
       }
 
-      // Refresh AIEngineBase BEFORE saving AIAgentPersona / AIAgentUserPolicy so server guards see the child
-      await engine.Config(true, user, md);
-
-      // Save Persona + StyleOverride (Tone / SpeakingStyle)
+      // AIEngineBase has AutoRefresh enabled on _agents, _agentPersonas, and _agentPermissions,
+      // so entity.Save() updates the in-memory cache automatically without a manual Config(true).
       await this.savePersonaConfiguration(entity.ID, user);
 
       // Save optional CoordinationMode / onboarding policy for Chief of Staff or when chosen
@@ -374,15 +371,9 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
         await this.saveUserPolicy(entity.ID, entity.Name, user);
       }
 
-      // Final refresh of AIEngineBase + MentionAutocomplete so sidebar, picker, and @mentions update live
-      await engine.Config(true, user, md);
-      await MentionAutocompleteService.Instance.Refresh(user);
-
-      const refreshed = engine.GetAgentByID(entity.ID);
+      const refreshed = engine.GetAgentByID(entity.ID) ?? entity;
       this.closeInternal(false);
-      if (refreshed) {
-        this.Saved.emit(refreshed);
-      }
+      this.Saved.emit(refreshed);
     } catch (err) {
       this.ErrorMessage = err instanceof Error ? err.message : String(err);
       LogError(`AgentInstanceEditorModal.OnSave: ${this.ErrorMessage}`);
@@ -426,8 +417,6 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
       }
 
       const archivedId = entity.ID;
-      await this.aiEngine.Config(true, user, md);
-      await MentionAutocompleteService.Instance.Refresh(user);
       this.closeInternal(false);
       this.Archived.emit(archivedId);
     } catch (err) {

@@ -1,5 +1,5 @@
 import { PermissionConstrainedError } from '@memberjunction/core';
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { IsBrowser, UUIDsEqual, NormalizeUUID, MJGlobal, IndexByUUID, UUIDSet } from "@memberjunction/global";
 import { AIModelConfiguration, ApplyPlattCalibration, DecisionCalibrationEntry, ModelUsage, PlattCalibration, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
@@ -352,6 +352,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentInheritanceChainCache: Map<string, MJAIAgentEntityExtended[]> = new Map();
     private _agentsIndexedRef: MJAIAgentEntityExtended[] | null = null;
     private _agentsIndexedLen = -1;
+    /** Tracks the most recently saved/invalidated primary agent ID per `(OwnerUserID, RootBaseAgentID)` group. */
+    private _preferredPrimaryByGroup: Map<string, string> = new Map();
 
     private _agentRelationshipsByAgentID: Map<string, MJAIAgentRelationshipEntity[]> | null = null;
     private _agentRelationshipsIndexedRef: MJAIAgentRelationshipEntity[] | null = null;
@@ -712,7 +714,40 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return super.canUseImmediateMutation(config, skipAdditionalLoadingCheck || independent);
     }
 
+    /**
+     * Intercepts `MJ: AI Agents` save and `remote-invalidate` events so that promoting a derived
+     * agent instance to `IsPrimaryInstance = true` immediately demotes any cached sibling sharing
+     * the same `(OwnerUserID, RootBaseAgentID)` — eliminating the transient dual-primary window
+     * when the new primary arrives before the server's sibling-demotion `remote-invalidate`.
+     */
+    protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
+        let shouldEmitAgentsChange = false;
+        const isSave = event.type === 'save';
+        const isRemoteInvalidate = event.type === 'remote-invalidate';
+
+        if (isSave && event.baseEntity?.EntityInfo?.Name?.trim().toLowerCase() === 'mj: ai agents') {
+            const savedAgent = event.baseEntity as MJAIAgentEntityExtended;
+            if (this.isActiveDerivedPrimaryAgent(savedAgent)) {
+                shouldEmitAgentsChange = this.demotePrimarySiblingsForAgent(savedAgent);
+            }
+        } else if (isRemoteInvalidate && event.entityName?.trim().toLowerCase() === 'mj: ai agents') {
+            this.recordPreferredPrimaryFromRemotePayload(event.payload);
+        }
+
+        const result = await super.HandleIndividualBaseEntityEvent(event);
+
+        if (shouldEmitAgentsChange) {
+            this.emitPropertyChange('_agents');
+        }
+
+        return result;
+    }
+
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // Ensure at most one active derived primary instance exists per (OwnerUserID, RootBaseAgentID)
+        this.normalizeExclusivePrimaryInstances();
+        this._preferredPrimaryByGroup.clear();
+
         // Clear the configuration chain cache and user runnable agent directory cache when data is reloaded
         this._configurationChainCache.clear();
         this._userRunnableAgentDirectoryCache.clear();
@@ -832,6 +867,233 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         for (const model of this._models) {
             if (model.ModelVendors) replaceContents(model.ModelVendors, vendorsByModel.get(keyFor(model.ID)) ?? []);
         }
+    }
+
+    private isActiveDerivedPrimaryAgent(agent: Partial<Pick<MJAIAgentEntityExtended, 'Status' | 'BaseAgentID' | 'OwnerUserID' | 'IsPrimaryInstance'>> | null | undefined): boolean {
+        return Boolean(
+            agent &&
+            agent.Status === 'Active' &&
+            agent.BaseAgentID != null &&
+            agent.BaseAgentID.length > 0 &&
+            agent.OwnerUserID != null &&
+            agent.OwnerUserID.length > 0 &&
+            agent.IsPrimaryInstance === true
+        );
+    }
+
+    /**
+     * Resolves the top-level root base agent ID for a derived agent by walking `BaseAgentID` links
+     * through `agentsById` with cycle protection. When an ancestor row is not present in `agentsById`,
+     * returns the highest referenced `BaseAgentID` so siblings pointing to the same template still match.
+     */
+    private resolveRootBaseAgentIdForSync(
+        agent: Pick<MJAIAgentEntityExtended, 'ID' | 'BaseAgentID'>,
+        agentsById: ReadonlyMap<string, MJAIAgentEntityExtended>
+    ): string | null {
+        let currentBaseId = agent.BaseAgentID;
+        if (!currentBaseId) {
+            return null;
+        }
+        const visited = new Set<string>([NormalizeUUID(agent.ID)]);
+        let depth = 0;
+        while (currentBaseId && depth < MAX_AGENT_INHERITANCE_DEPTH) {
+            const normCurrent = NormalizeUUID(currentBaseId);
+            if (visited.has(normCurrent)) {
+                break;
+            }
+            visited.add(normCurrent);
+            const parent = agentsById.get(normCurrent);
+            if (!parent || !parent.BaseAgentID) {
+                return currentBaseId;
+            }
+            currentBaseId = parent.BaseAgentID;
+            depth++;
+        }
+        return currentBaseId;
+    }
+
+    private primaryGroupKey(ownerUserId: string, rootBaseAgentId: string): string {
+        return `${NormalizeUUID(ownerUserId)}::${NormalizeUUID(rootBaseAgentId)}`;
+    }
+
+    /**
+     * Sets `IsPrimaryInstance = false` on a cached agent without leaving a real `BaseEntity` marked dirty.
+     */
+    private setCachedAgentPrimaryFlag(agent: MJAIAgentEntityExtended, isPrimary: boolean): void {
+        agent.IsPrimaryInstance = isPrimary;
+        if (typeof agent.GetFieldByName === 'function') {
+            agent.GetFieldByName('IsPrimaryInstance')?.ResetOldValue();
+        }
+    }
+
+    /**
+     * Records an incoming remote-invalidate save payload as the preferred primary winner for its
+     * `(OwnerUserID, RootBaseAgentID)` group before `applyRemoteRecordData` invokes `AdditionalLoading`.
+     */
+    private recordPreferredPrimaryFromRemotePayload(payload: BaseEntityEvent['payload']): void {
+        if (typeof payload !== 'object' || payload === null) {
+            return;
+        }
+        const remote = payload as { action?: string; recordData?: string };
+        if (remote.action !== 'save' || typeof remote.recordData !== 'string') {
+            return;
+        }
+        try {
+            const parsed = JSON.parse(remote.recordData) as Partial<
+                Pick<MJAIAgentEntityExtended, 'ID' | 'Status' | 'BaseAgentID' | 'OwnerUserID' | 'IsPrimaryInstance'>
+            > | null;
+            if (!parsed || !parsed.ID || !this.isActiveDerivedPrimaryAgent(parsed)) {
+                return;
+            }
+            const agentsById = new Map<string, MJAIAgentEntityExtended>();
+            for (const a of this._agents) {
+                agentsById.set(NormalizeUUID(a.ID), a);
+            }
+            const rootId = this.resolveRootBaseAgentIdForSync(
+                { ID: parsed.ID, BaseAgentID: parsed.BaseAgentID ?? null },
+                agentsById
+            );
+            if (rootId && parsed.OwnerUserID) {
+                this._preferredPrimaryByGroup.set(
+                    this.primaryGroupKey(parsed.OwnerUserID, rootId),
+                    NormalizeUUID(parsed.ID)
+                );
+            }
+        } catch {
+            // Ignore malformed remote payload JSON
+        }
+    }
+
+    /**
+     * Immediately demotes all active cached siblings sharing `(OwnerUserID, RootBaseAgentID)` with
+     * `savedAgent` and records `savedAgent.ID` as the preferred primary winner for upcoming reloads.
+     */
+    private demotePrimarySiblingsForAgent(savedAgent: MJAIAgentEntityExtended): boolean {
+        if (!this.isActiveDerivedPrimaryAgent(savedAgent) || !savedAgent.OwnerUserID) {
+            return false;
+        }
+
+        const agentsById = new Map<string, MJAIAgentEntityExtended>();
+        for (const a of this._agents) {
+            agentsById.set(NormalizeUUID(a.ID), a);
+        }
+        agentsById.set(NormalizeUUID(savedAgent.ID), savedAgent);
+
+        const targetRootId = this.resolveRootBaseAgentIdForSync(savedAgent, agentsById);
+        if (!targetRootId) {
+            return false;
+        }
+
+        const groupKey = this.primaryGroupKey(savedAgent.OwnerUserID, targetRootId);
+        this._preferredPrimaryByGroup.set(groupKey, NormalizeUUID(savedAgent.ID));
+
+        let mutated = false;
+        for (const candidate of this._agents) {
+            if (UUIDsEqual(candidate.ID, savedAgent.ID)) {
+                if (candidate.IsPrimaryInstance !== true) {
+                    this.setCachedAgentPrimaryFlag(candidate, true);
+                    mutated = true;
+                }
+                continue;
+            }
+            if (!this.isActiveDerivedPrimaryAgent(candidate) || !candidate.OwnerUserID) {
+                continue;
+            }
+            if (!UUIDsEqual(candidate.OwnerUserID, savedAgent.OwnerUserID)) {
+                continue;
+            }
+            const candidateRootId = this.resolveRootBaseAgentIdForSync(candidate, agentsById);
+            if (candidateRootId && UUIDsEqual(candidateRootId, targetRootId)) {
+                this.setCachedAgentPrimaryFlag(candidate, false);
+                mutated = true;
+            }
+        }
+        return mutated;
+    }
+
+    /**
+     * Ensures at most one active derived agent per `(OwnerUserID, RootBaseAgentID)` has
+     * `IsPrimaryInstance === true` inside `this._agents`. Prefers any agent recorded via
+     * `_preferredPrimaryByGroup` (from a just-saved or remote-invalidated row), otherwise keeps
+     * the most recently updated row (`__mj_UpdatedAt`, falling back to `__mj_CreatedAt`).
+     */
+    private normalizeExclusivePrimaryInstances(): boolean {
+        if (!this._agents || this._agents.length < 2) {
+            return false;
+        }
+
+        const agentsById = new Map<string, MJAIAgentEntityExtended>();
+        for (const agent of this._agents) {
+            agentsById.set(NormalizeUUID(agent.ID), agent);
+        }
+
+        const primaryGroups = new Map<string, MJAIAgentEntityExtended[]>();
+        for (const agent of this._agents) {
+            if (!this.isActiveDerivedPrimaryAgent(agent) || !agent.OwnerUserID) {
+                continue;
+            }
+            const rootId = this.resolveRootBaseAgentIdForSync(agent, agentsById);
+            if (!rootId) {
+                continue;
+            }
+            const key = this.primaryGroupKey(agent.OwnerUserID, rootId);
+            const bucket = primaryGroups.get(key);
+            if (bucket) {
+                bucket.push(agent);
+            } else {
+                primaryGroups.set(key, [agent]);
+            }
+        }
+
+        let mutated = false;
+        for (const [groupKey, bucket] of primaryGroups.entries()) {
+            if (bucket.length < 2) {
+                continue;
+            }
+
+            const preferredId = this._preferredPrimaryByGroup.get(groupKey);
+            let winner = preferredId
+                ? bucket.find(a => UUIDsEqual(a.ID, preferredId))
+                : undefined;
+
+            if (!winner) {
+                const sorted = [...bucket].sort((a, b) => {
+                    const updatedDiff =
+                        this.agentTimestampMs(b.__mj_UpdatedAt) - this.agentTimestampMs(a.__mj_UpdatedAt);
+                    if (updatedDiff !== 0) {
+                        return updatedDiff;
+                    }
+                    const createdDiff =
+                        this.agentTimestampMs(b.__mj_CreatedAt) - this.agentTimestampMs(a.__mj_CreatedAt);
+                    if (createdDiff !== 0) {
+                        return createdDiff;
+                    }
+                    return a.ID.localeCompare(b.ID);
+                });
+                winner = sorted[0];
+            }
+
+            for (const agent of bucket) {
+                if (!UUIDsEqual(agent.ID, winner.ID)) {
+                    this.setCachedAgentPrimaryFlag(agent, false);
+                    mutated = true;
+                }
+            }
+        }
+
+        return mutated;
+    }
+
+    private agentTimestampMs(value: Date | string | null | undefined): number {
+        if (!value) {
+            return 0;
+        }
+        if (value instanceof Date) {
+            const ms = value.getTime();
+            return Number.isFinite(ms) ? ms : 0;
+        }
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : 0;
     }
 
     /**

@@ -275,3 +275,29 @@ flowchart TB
   - `node .github/scripts/sweep-limits-literals.mjs --check-standards`
   - `pnpm run check:standards` / `pnpm run check:guards` (verify exact root script names in `package.json`)
   - Verify `git status` before every commit so no local host artifacts (`mj.config.cjs`, `.env`, `environment.development.ts`) are ever staged.
+
+
+---
+
+## Wave 2 — "My Agents" App Rethink, Default Chat Agent, Smart `@Mention` Frecency/FK Search, AutoRefresh Optimization & Local JSON Mock Email/Calendar Provider
+
+### Locked Decisions (2026-11-23)
+1. **Application Rename & Variant A Navigation (`metadata/applications/.chief-of-staff-application.json`)**:
+   - Preserve Application primary key `C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E70`.
+   - Rename `Name` to `"My Agents"` (`Icon: "fa-solid fa-wand-magic-sparkles"`), with 3 `DefaultNavItems` (no `Reports` tab):
+     1. **`Overview`** (`isDefault: true`): Full-width Executive Bento Canvas across **all** of the user's personal instances and shared agents (interactive My Agent cards at top + unified `Pending Approvals Across All Agents` with per-agent avatar/name attribution + unified `Upcoming Wakes & Briefings` + `Active Agent Channels` summary).
+     2. **`Agents`**: Option B Master-Detail workspace with left rail split into **`My Agents`** (personal instances + `+ New`) and **`Shared`** (root catalog & shared team agents), and right detail pane with `Make Default Chat Agent` (`chat.defaultAgentId` via `UserInfoEngine`), `Primary` star toggle, `+ Create My Own Instance` on instantiable shared agents, and 4 accessible tabs (`Approvals & Wakes`, `Persona & Instructions`, `Governance Policy`, `Sharing`).
+     3. **`Agent Channels`**: Multi-agent coordination threads across all agents with optional agent filter.
+2. **Ditch `MY AGENTS` Left Rail in Chat + Per-User `Default Chat Agent`**:
+   - Remove `<mj-my-agents-section>` from `ChatConversationsResource` sidebar.
+   - Persist `chat.defaultAgentId` via `UserInfoEngine.Instance` (`MJ: User Settings`) and bind `[DefaultAgentId]` on `<mj-conversation-chat-area>`, reacting live when updated in `My Agents`.
+3. **Exclusive `IsPrimaryInstance` + `AIEngineBase` / `MentionAutocomplete` AutoRefresh**:
+   - Remove manual `engine.Config(true)` and `MentionAutocompleteService.Refresh()` calls on save; rely on `BaseEngine` `AutoRefresh` + reactive `ObserveProperty` / `BaseEntityEvent` listeners.
+   - Ensure `AIEngineBase` immediately clears `IsPrimaryInstance` on in-memory siblings sharing `(OwnerUserID, RootBaseAgentID)` whenever an active derived agent is saved with `IsPrimaryInstance = true`, matching `MJAIAgentEntityServer.clearOtherPrimaryInstances`.
+   - Subscribe `MentionAutocomplete` to `MJGlobal` `BaseEntity` events (`MJ: AI Agents`, `MJ: AI Agent Permissions`, `MJ: AI Skills`) so caches update incrementally with zero full reloads.
+4. **Smart `@Mention` Autocomplete (Frecency + FK-Style Multi-Field Search & Scope Pills)**:
+   - Rank `@` suggestions using `UserInfoEngine`-persisted Frecency (`chat.mentionFrecency`: `uses * 6 * exp(-hoursAgo / 72)`) + context boosts (`InCurrentThread`, `DefaultChatAgent`, `MyAgentInstance`).
+   - Add FK-dropdown-inspired population filter pills (`All | My Agents | Shared | People`), search-field scope selector (`All Fields | Name | Capabilities | Template`), acronym matching (`@fcs`), capability matching (`@sql`), grouped empty-query headers, and `<mark>` match highlights.
+5. **Local JSON Mock Email & Calendar Provider + SQL Integration Tests**:
+   - Implement `LocalJsonCommunicationProvider` inside `@memberjunction/communication-engine` (`@RegisterClass(BaseCommunicationProvider, 'Local JSON Mock')`) backed by local JSON files per mailbox under `MJ_MOCK_COMM_DIR`, supporting full Inbox (`GetMessages`, `SendSingleMessage`, `DraftMessage`, `ReplyToMessage`, `ForwardMessage`) and Calendar (`ListCalendarEvents`, `CreateCalendarEvent`, `UpdateCalendarEvent`, `DeleteCalendarEvent`, `GetFreeBusy`, `VerifyMailboxAccess`).
+   - Exercise derived agent calendar availability/events, inbox reading, and policy-gated draft/approval flows end-to-end in the live SQL Server Integration Test suite (`IT186`).

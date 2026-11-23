@@ -245,11 +245,17 @@ async function createPersonalChiefOfStaff(user: UserInfo, conversationId?: strin
 }
 ```
 
-### Angular UX Components
+### Angular UX, Smart `@Mention` & Local Mock Communication Testing
 
-- **`MyAgentsSectionComponent` (`mj-my-agents-section`)** (`@memberjunction/ng-conversations`): Harmonized dark-navy left-rail section in `ConversationSidebarComponent` and `ChatConversationsResource`, sorting primary and `Required`-template instances first (*Pepper ★*, *Cato*, *FDA Clinical Scout*), reusing the user's most recent pinned thread on click, offering hover `+` (new thread) and Tailor slider actions, and showing a `"Set up My Chief of Staff"` CTA when un-onboarded.
+- **`My Agents` Explorer Application** (`@memberjunction/ng-dashboards`): Replaces the single-agent Chief of Staff shell with a multi-instance workspace (`Overview`, `Agents`, `Agent Channels`):
+  - **`Overview`**: Full-width Executive Bento Canvas aggregating approvals, scheduled wake routines, briefings, and Agent Channels across **all** personal instances and shared agents, with an interactive `My Agents` card strip for 1-click filtering or deep-linking into `Agents?agent=<Name>`.
+  - **`Agents`**: Master-Detail workspace separating **`My Agents`** (user-owned derived instances) and **`Shared`** (org/team & catalog agents), featuring per-user **`Default Chat Agent`** selection (`chat.defaultAgentId` via `UserInfoEngine`), **`Make Primary`** toggle with immediate `AIEngineBase` sibling normalization, inline Persona/Instructions, Governance Policy (with ancestor ceiling enforcement), and 2×2 RBAC Sharing (`MJ: AI Agent Permissions` role grants).
+  - **`Agent Channels`**: Observable multi-agent coordination threads across all user and shared agents with per-agent filter pills.
+- **Per-User Default Chat Agent & Smart `@Mention` Autocomplete** (`@memberjunction/ng-explorer-core`, `@memberjunction/conversations-runtime`, `@memberjunction/ng-composer`):
+  - `ChatConversationsResource` binds `UserInfoEngine`'s `chat.defaultAgentId` setting to `<mj-conversation-chat-area [DefaultAgentId]="...">` (preserving a clean Conversations + Routines sidebar).
+  - `MentionAutocomplete` ranks `@` suggestions by `UserInfoEngine`-persisted Frecency (`chat.mentionFrecency`) + context boosts (`In Thread`, `Default Chat Agent`, `My Agent`), supports acronym (`@fcs`) and multi-field capability search (`@sql`), auto-syncs caches via `BaseEntity` events without manual `Config(true)` reloads, and surfaces FK-inspired population pills (`All | My Agents | Shared | People`) and search-scope controls (`All Fields | Name | Capabilities | Template`).
 - **`AgentInstanceEditorModalComponent` (`mj-agent-instance-editor-modal`)** (`@memberjunction/ng-conversations`): Dual-mode studio supporting **"Chat to Onboard"** and direct interactive creation/tailoring (template cards, name suggestion chips, icon grid, avatar URL, voice persona selector, personality presets writing `StyleOverride`, standing instructions, autonomy mode, and primary toggle).
-- **Chief of Staff App Switcher** (`@memberjunction/ng-dashboards`): Surfaces all user Chief of Staff instances (*Pepper*, *Cato*) with their custom icons/avatars in the Overview hero and Governance toolbar switcher, defaulting to `IsPrimaryInstance` with per-instance policies, wakes, and inline Personalize / New Instance controls.
+- **`LocalJsonCommunicationProvider` (`Local JSON Mock`)** (`@memberjunction/communication-engine`): Opt-in local JSON-file-backed Email Inbox and Calendar provider activated when `MJ_MOCK_COMM_DIR` is set, enabling full deterministic integration testing (`IT186`) and local smoke-testing of derived-instance calendar availability, event proposals, inbox triage, drafts, and policy-gated approval requests without external cloud OAuth credentials.
 
 ---
 

@@ -22,6 +22,9 @@ describe('IsChiefOfStaffEntityChange', () => {
     expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: AI Agent Requests'))).toBe(true);
     expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: User Routines'))).toBe(true);
     expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: AI Agent User Policies'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: AI Agent Permissions'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: User Settings'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: Agent Channels'))).toBe(true);
   });
 
   it('does not match an Open App entity: an app that adds a page reloads that page itself', () => {

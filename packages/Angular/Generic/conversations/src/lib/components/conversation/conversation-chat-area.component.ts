@@ -1286,11 +1286,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async handleAgentCatalogInvalidated(): Promise<void> {
     try {
       const user = this.CurrentUser ?? this.ProviderToUse.CurrentUser;
-      const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
-      await engine.Config(true, user ?? undefined, this.ProviderToUse);
-      if (user) {
-        await MentionAutocompleteService.Instance.Refresh(user);
-      }
+      // AIEngineBase auto-refreshes _agents/_agentPersonas/_agentPermissions in-memory on
+      // BaseEntity events; only reload the active conversation's DefaultAgentID if needed.
       if (this.Conversation?.ID && user) {
         const refreshed = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
         const loaded = await refreshed.InnerLoad(CompositeKey.FromID(this.Conversation.ID));
@@ -3578,9 +3575,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           const args = event.args as BaseEntityEvent;
           const entityName = args.type === 'remote-invalidate' ? args.entityName : args.baseEntity?.EntityInfo?.Name;
           const norm = entityName?.trim().toLowerCase() ?? '';
-          return norm === 'mj: ai agents' || norm === 'mj: ai agent personas';
+          return (
+            norm === 'mj: ai agents' ||
+            norm === 'mj: ai agent personas' ||
+            norm === 'mj: ai agent permissions' ||
+            norm === 'mj: user settings'
+          );
         }),
-        debounceTime(400),
+        debounceTime(150),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {

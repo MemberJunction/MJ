@@ -1015,3 +1015,621 @@ mj-page-body {
 }
 
 
+
+/* ========================================================================= */
+/* My Agents App: Overview Executive Bento & Agents Master-Detail Workspace  */
+/* ========================================================================= */
+
+.cos-pill--info {
+    background-color: var(--mj-status-info-bg);
+    color: var(--mj-status-info);
+}
+
+.cos-primary-star {
+    color: var(--mj-status-warning);
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.cos-agent-avatar {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--mj-radius-md, 8px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-border-default);
+    color: var(--mj-brand-primary);
+    font-size: 15px;
+    overflow: hidden;
+}
+
+.cos-agent-avatar--sm {
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+}
+
+.cos-agent-avatar--lg {
+    flex: 0 0 48px;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--mj-radius-lg, 10px);
+    font-size: 20px;
+}
+
+.cos-agent-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Overview — My Agents Top Strip */
+.cos-strip-section {
+    margin-bottom: 20px;
+}
+
+.cos-strip-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.cos-strip-section__title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.cos-strip-section__title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+}
+
+.cos-strip-section__hint {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}
+
+.cos-agent-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.cos-agent-card {
+    background-color: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg, 10px);
+    padding: 14px 15px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.cos-agent-card:hover {
+    border-color: var(--mj-brand-primary);
+}
+
+.cos-agent-card--selected {
+    border-color: var(--mj-brand-primary);
+    background-color: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-card));
+}
+
+.cos-agent-card__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.cos-agent-card__identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.cos-agent-card__titles {
+    min-width: 0;
+}
+
+.cos-agent-card__name {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.cos-agent-card__lineage {
+    font-size: 11.5px;
+    color: var(--mj-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cos-agent-card__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* Overview — 2-Column Executive Bento Grid */
+.cos-bento-grid {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+@media (max-width: 960px) {
+    .cos-bento-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Attribution chip on approvals and routines */
+.cos-agent-chip {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px 3px 4px;
+    border-radius: 999px;
+    border: 1px solid var(--mj-border-default);
+    background-color: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    max-width: 100%;
+    transition: border-color 0.15s ease;
+}
+
+.cos-agent-chip:hover {
+    border-color: var(--mj-brand-primary);
+}
+
+.cos-agent-chip__avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    font-size: 10px;
+    overflow: hidden;
+    flex: none;
+}
+
+.cos-agent-chip__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.cos-agent-chip__name {
+    white-space: nowrap;
+}
+
+.cos-agent-chip__lineage {
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    white-space: nowrap;
+}
+
+.cos-routine-mini--stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.cos-routine-mini__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.cos-routine-mini__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.cos-channel-summary-row {
+    padding: 11px 13px;
+    border-radius: 8px;
+    border: 1px solid var(--mj-border-default);
+    background-color: var(--mj-bg-surface);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    transition: border-color 0.15s ease;
+}
+
+.cos-channel-summary-row:hover {
+    border-color: var(--mj-brand-primary);
+}
+
+.cos-channel-summary-row__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.cos-channel-summary-row__topic {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.cos-channel-summary-row__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--mj-text-secondary);
+}
+
+/* Agents Page — Master-Detail Split Grid */
+.cos-agents-workspace {
+    display: grid;
+    grid-template-columns: 288px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+    min-height: 520px;
+}
+
+@media (max-width: 900px) {
+    .cos-agents-workspace {
+        grid-template-columns: 1fr;
+    }
+}
+
+.cos-roster-rail {
+    background-color: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg, 10px);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cos-roster-search {
+    position: relative;
+}
+
+.cos-roster-search__icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--mj-text-muted);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.cos-roster-search__input {
+    padding-left: 30px;
+}
+
+.cos-roster-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cos-roster-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 4px 2px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--mj-text-muted);
+}
+
+.cos-roster-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cos-roster-empty {
+    padding: 8px 6px;
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}
+
+.cos-roster-item {
+    appearance: none;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--mj-radius-md, 8px);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--mj-text-primary);
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cos-roster-item:hover {
+    background-color: var(--mj-bg-surface-hover);
+}
+
+.cos-roster-item--selected {
+    background-color: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: var(--mj-brand-primary);
+}
+
+.cos-roster-item__left {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.cos-roster-item__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.cos-roster-item__name {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cos-roster-item__sub {
+    font-size: 11px;
+    color: var(--mj-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Right Detail Pane — Hero & Accessible Sub-Tabs */
+.cos-agent-detail-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.cos-agent-hero {
+    background-color: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg, 10px);
+    padding: 18px 20px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.cos-agent-hero__identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    min-width: 0;
+    flex: 1 1 300px;
+}
+
+.cos-agent-hero__meta {
+    min-width: 0;
+}
+
+.cos-agent-hero__title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cos-agent-hero__name {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+}
+
+.cos-agent-hero__desc {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    line-height: 1.45;
+}
+
+.cos-agent-hero__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cos-subtabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--mj-border-default);
+    overflow-x: auto;
+}
+
+.cos-subtab-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--mj-text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 14px;
+    cursor: pointer;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+}
+
+.cos-subtab-btn:hover {
+    color: var(--mj-text-primary);
+}
+
+.cos-subtab-btn[aria-selected="true"] {
+    color: var(--mj-brand-primary);
+}
+
+.cos-subtab-btn[aria-selected="true"]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-bottom: 3px solid var(--mj-brand-primary);
+}
+
+.cos-subtab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.cos-info-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--mj-status-info);
+    background-color: var(--mj-status-info-bg);
+    color: var(--mj-text-primary);
+    font-size: 12.5px;
+}
+
+.cos-info-callout i {
+    color: var(--mj-status-info);
+    margin-top: 2px;
+}
+
+.cos-info-callout strong {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.cos-info-callout p {
+    margin: 0;
+    color: var(--mj-text-secondary);
+}
+
+.cos-panel--danger {
+    border-color: var(--mj-status-error);
+}
+
+.cos-readonly-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.cos-readonly-field {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background-color: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-subtle);
+}
+
+.cos-readonly-value {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--mj-text-primary);
+}
+
+/* Sharing add-role box */
+.cos-share-add-box {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--mj-border-subtle);
+}
+
+.cos-share-add-box__title {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.cos-share-add-box__controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.cos-share-add-box__dropdown {
+    min-width: 220px;
+}
+
+.cos-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--mj-text-primary);
+    cursor: pointer;
+}
+
+/* Agent Channels — Agent Filter Pill Bar */
+.cos-agent-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.cos-agent-filter-bar__label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    margin-right: 4px;
+}

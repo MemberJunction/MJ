@@ -21,6 +21,7 @@
  */
 
 import type {
+    MJAIAgentEntity,
     MJAIAgentUserPolicyEntity,
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
@@ -42,25 +43,79 @@ import {
  */
 export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 
+/** User setting key (`MJ: User Settings`) storing the user's preferred default chat agent ID. */
+export const DEFAULT_CHAT_AGENT_SETTING_KEY = 'chat.defaultAgentId';
+
 export interface SelectableGovernanceAgent {
     ID: string;
     Name: string;
+    Description?: string | null;
     BaseAgentID?: string | null;
+    BaseAgentName?: string | null;
+    OwnerUserID?: string | null;
+    InstantiationMode?: MJAIAgentEntity['InstantiationMode'] | null;
     IsDerivedInstance?: boolean;
+    IsOwnedByCurrentUser?: boolean;
     IsPrimaryInstance?: boolean;
     IconClass?: string | null;
+    LogoURL?: string | null;
 }
 
 export interface GovernanceAgentCandidate {
     ID: string;
     Name: string | null;
+    Description?: string | null;
     ParentID?: string | null;
     BaseAgentID?: string | null;
     OwnerUserID?: string | null;
-    InstantiationMode?: string | null;
+    InstantiationMode?: MJAIAgentEntity['InstantiationMode'] | string | null;
     IsPrimaryInstance?: boolean | null;
     IconClass?: string | null;
+    LogoURL?: string | null;
     Status?: string | null;
+}
+
+export interface PartitionedAgentRoster {
+    MyAgents: SelectableGovernanceAgent[];
+    SharedAgents: SelectableGovernanceAgent[];
+}
+
+/**
+ * Normalizes a Font Awesome icon class string (e.g. `fa-robot` -> `fa-solid fa-robot`),
+ * falling back to `fallback` when empty.
+ */
+export function NormalizeAgentIconClass(
+    icon: string | null | undefined,
+    fallback: string = 'fa-solid fa-robot',
+): string {
+    const trimmed = icon?.trim() ?? '';
+    if (!trimmed) {
+        return fallback;
+    }
+    if (/\bfa-(solid|regular|brands|light|thin|duotone)\b|\bfa[srbltd]\b/.test(trimmed)) {
+        return trimmed;
+    }
+    return `fa-solid ${trimmed}`;
+}
+
+/**
+ * Partitions selectable agents into:
+ * - `MyAgents`: active derived instances owned by the current user (Primary first, then A–Z)
+ * - `SharedAgents`: runnable shared/catalog agents (shared derived instances + root platform agents)
+ */
+export function PartitionAgentRoster(
+    agents: readonly SelectableGovernanceAgent[],
+): PartitionedAgentRoster {
+    const myAgents: SelectableGovernanceAgent[] = [];
+    const sharedAgents: SelectableGovernanceAgent[] = [];
+    for (const agent of agents) {
+        if (agent.IsDerivedInstance && agent.IsOwnedByCurrentUser) {
+            myAgents.push(agent);
+        } else {
+            sharedAgents.push(agent);
+        }
+    }
+    return { MyAgents: myAgents, SharedAgents: sharedAgents };
 }
 
 /**
@@ -176,12 +231,28 @@ export function SelectableAgentsForGovernance(
         }
 
         seen.add(key);
+        const directBase = a.BaseAgentID ? byId.get(a.BaseAgentID.trim().toLowerCase()) : undefined;
+        const isOwned = Boolean(
+            isDerived && currentUserId && a.OwnerUserID && UUIDsEqual(a.OwnerUserID, currentUserId),
+        );
+        const mode =
+            a.InstantiationMode === 'Required' ||
+            a.InstantiationMode === 'Optional' ||
+            a.InstantiationMode === 'None'
+                ? a.InstantiationMode
+                : null;
         out.push({
             ID: a.ID,
             Name: name,
+            ...(a.Description ? { Description: a.Description } : {}),
             ...(isDerived ? { BaseAgentID: a.BaseAgentID, IsDerivedInstance: true } : {}),
+            ...(directBase?.Name ? { BaseAgentName: directBase.Name } : {}),
+            ...(a.OwnerUserID ? { OwnerUserID: a.OwnerUserID } : {}),
+            ...(isOwned ? { IsOwnedByCurrentUser: true } : {}),
+            ...(mode ? { InstantiationMode: mode } : {}),
             ...(a.IsPrimaryInstance ? { IsPrimaryInstance: true } : {}),
             ...(a.IconClass ? { IconClass: a.IconClass } : {}),
+            ...(a.LogoURL ? { LogoURL: a.LogoURL } : {}),
             _sortGroup: sortGroup,
         });
     }
@@ -221,10 +292,16 @@ export function ResolveSelectableAgent(
     return partial.length === 1 ? partial[0] : null;
 }
 
-/** The name of the Chief of Staff application whose nav items open the pages. */
-export const CHIEF_OF_STAFF_APP_NAME = 'Chief of Staff';
+/** Primary name of the My Agents application (formerly "Chief of Staff"). */
+export const MY_AGENTS_APP_NAME = 'My Agents';
 
-/** The Chief of Staff application's own pages; each is one nav item. */
+/** Legacy application name retained as fallback when looking up the app in older metadata snapshots. */
+export const LEGACY_CHIEF_OF_STAFF_APP_NAME = 'Chief of Staff';
+
+/** Alias pointing to the current application name (`My Agents`). */
+export const CHIEF_OF_STAFF_APP_NAME = MY_AGENTS_APP_NAME;
+
+/** The My Agents application's pages; each maps to a nav item (with `approvals-wakes` kept for deep-link compat). */
 export type ChiefOfStaffPage = 'overview' | 'approvals-wakes' | 'agent-channels' | 'governance';
 export const CHIEF_OF_STAFF_PAGES: readonly ChiefOfStaffPage[] = [
     'overview',
@@ -238,7 +315,7 @@ export const CHIEF_OF_STAFF_PAGE_LABELS: Readonly<Record<ChiefOfStaffPage, strin
     overview: 'Overview',
     'approvals-wakes': 'Approvals & Wakes',
     'agent-channels': 'Agent Channels',
-    governance: 'Governance',
+    governance: 'Agents',
 };
 
 /** Each page's Font Awesome icon; matches the application's `DefaultNavItems`. */
@@ -246,7 +323,7 @@ export const CHIEF_OF_STAFF_PAGE_ICONS: Readonly<Record<ChiefOfStaffPage, string
     overview: 'fa-solid fa-compass',
     'approvals-wakes': 'fa-solid fa-bell-concierge',
     'agent-channels': 'fa-solid fa-comments',
-    governance: 'fa-solid fa-shield-halved',
+    governance: 'fa-solid fa-robot',
 };
 
 /** Character threshold above which `InstructionsOverride` bloat triggers a governance warning. */
@@ -599,9 +676,20 @@ export interface ChiefOfStaffScopeFilters {
     Requests: string;
 }
 
-export function BuildChiefOfStaffScopeFilters(currentUserId: string, selectedAgentId: string): ChiefOfStaffScopeFilters {
+export function BuildChiefOfStaffScopeFilters(
+    currentUserId: string,
+    selectedAgentId: string | null,
+): ChiefOfStaffScopeFilters {
     const user = EscapeSQLString(currentUserId);
-    const agent = EscapeSQLString(selectedAgentId);
+    const trimmedAgent = selectedAgentId?.trim() ?? '';
+    if (!trimmedAgent) {
+        return {
+            Policy: `UserID = '${user}'`,
+            Routines: `UserID = '${user}'`,
+            Requests: `RequestForUserID = '${user}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
+        };
+    }
+    const agent = EscapeSQLString(trimmedAgent);
     return {
         Policy: `AgentID = '${agent}' AND UserID = '${user}'`,
         Routines: `UserID = '${user}' AND TargetID = '${agent}'`,

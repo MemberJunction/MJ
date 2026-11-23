@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentActionEntity,
     MJAIAgentConfigurationEntity,
@@ -485,5 +485,212 @@ describe('AIEngineBase Prototype Inheritance (BaseAgentID)', () => {
         // Primary instance resolution
         expect(engine.ResolvePrimaryUserAgentInstance('Chief of Staff', ALICE)?.ID).toBe(L2_PEPPER);
         expect(engine.ResolvePrimaryUserAgentInstance(L0_COS, BOB)?.ID).toBe(L2_CATO);
+    });
+
+    describe('Exclusive IsPrimaryInstance sibling normalization in AIEngineBase', () => {
+        async function triggerEntityEvent(engine: AIEngineBase, event: BaseEntityEvent): Promise<boolean> {
+            const fn = Reflect.get(engine, 'HandleIndividualBaseEntityEvent') as (
+                e: BaseEntityEvent
+            ) => Promise<boolean>;
+            return fn.call(engine, event);
+        }
+
+        async function triggerAdditionalLoading(engine: AIEngineBase): Promise<void> {
+            const fn = Reflect.get(engine, 'AdditionalLoading') as () => Promise<void>;
+            return fn.call(engine);
+        }
+
+        function makeSaveEvent(agent: MJAIAgentEntityExtended): BaseEntityEvent {
+            Reflect.set(agent, 'EntityInfo', { Name: 'MJ: AI Agents' });
+            return {
+                type: 'save',
+                saveSubType: 'create',
+                payload: null,
+                baseEntity: agent as BaseEntity,
+            };
+        }
+
+        it('demotes existing primary sibling immediately on local save of a 2nd derived instance without touching other owners or roots', async () => {
+            const L2_JARVIS = '00000000-0000-0000-0000-000000000025';
+            const ALICE_SAGE = '00000000-0000-0000-0000-000000000026';
+
+            const cos = makeAgent({ ID: L0_COS, Name: 'Chief of Staff', InstantiationMode: 'Required' });
+            const rootSage = makeAgent({ ID: ROOT_SAGE, Name: 'Sage', InstantiationMode: 'Optional' });
+            const alicePepper = makeAgent({
+                ID: L2_PEPPER,
+                Name: 'Pepper',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+                __mj_UpdatedAt: new Date('2026-11-20T10:00:00.000Z'),
+            });
+            const bobCato = makeAgent({
+                ID: L2_CATO,
+                Name: 'Cato',
+                BaseAgentID: L0_COS,
+                OwnerUserID: BOB,
+                IsPrimaryInstance: true,
+            });
+            const aliceSage = makeAgent({
+                ID: ALICE_SAGE,
+                Name: 'My Sage',
+                BaseAgentID: ROOT_SAGE,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+            });
+
+            const engine = seedEngine({ _agents: [cos, rootSage, alicePepper, bobCato, aliceSage] });
+
+            const aliceJarvis = makeAgent({
+                ID: L2_JARVIS,
+                Name: 'Jarvis',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+                __mj_UpdatedAt: new Date('2026-11-23T12:00:00.000Z'),
+            });
+
+            await triggerEntityEvent(engine, makeSaveEvent(aliceJarvis));
+
+            // Pepper is immediately demoted in memory; Bob's CoS and Alice's Sage primary stay intact
+            expect(alicePepper.IsPrimaryInstance).toBe(false);
+            expect(bobCato.IsPrimaryInstance).toBe(true);
+            expect(aliceSage.IsPrimaryInstance).toBe(true);
+        });
+
+        it('walks multi-level BaseAgentID chains so L2 and L1 siblings sharing a root base agent demote each other', async () => {
+            const L2_JARVIS = '00000000-0000-0000-0000-000000000027';
+
+            const cos = makeAgent({ ID: L0_COS, Name: 'Chief of Staff', InstantiationMode: 'Required' });
+            const regionalCos = makeAgent({
+                ID: L1_SALES,
+                Name: 'Executive CoS',
+                BaseAgentID: L0_COS,
+                InstantiationMode: 'Optional',
+            });
+            const alicePepper = makeAgent({
+                ID: L2_PEPPER,
+                Name: 'Pepper',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+            });
+            const aliceJarvis = makeAgent({
+                ID: L2_JARVIS,
+                Name: 'Jarvis',
+                BaseAgentID: L1_SALES,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+            });
+
+            const engine = seedEngine({ _agents: [cos, regionalCos, alicePepper] });
+            await triggerEntityEvent(engine, makeSaveEvent(aliceJarvis));
+
+            expect(alicePepper.IsPrimaryInstance).toBe(false);
+        });
+
+        it('normalizes duplicate primary siblings on AdditionalLoading preferring the most recently updated row', async () => {
+            const L2_JARVIS = '00000000-0000-0000-0000-000000000028';
+
+            const cos = makeAgent({ ID: L0_COS, Name: 'Chief of Staff', InstantiationMode: 'Required' });
+            const alicePepper = makeAgent({
+                ID: L2_PEPPER,
+                Name: 'Pepper',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+                __mj_UpdatedAt: new Date('2026-11-20T08:00:00.000Z'),
+            });
+            const aliceJarvis = makeAgent({
+                ID: L2_JARVIS,
+                Name: 'Jarvis',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+                __mj_UpdatedAt: new Date('2026-11-23T09:30:00.000Z'),
+            });
+
+            const engine = seedEngine({ _agents: [cos, alicePepper, aliceJarvis] });
+            await triggerAdditionalLoading(engine);
+
+            expect(aliceJarvis.IsPrimaryInstance).toBe(true);
+            expect(alicePepper.IsPrimaryInstance).toBe(false);
+            expect(engine.ResolvePrimaryUserAgentInstance(L0_COS, ALICE)?.ID).toBe(L2_JARVIS);
+        });
+
+        it('lets an incoming remote-invalidate save payload win over an existing primary sibling during AdditionalLoading', async () => {
+            const L2_JARVIS = '00000000-0000-0000-0000-000000000029';
+
+            const cos = makeAgent({ ID: L0_COS, Name: 'Chief of Staff', InstantiationMode: 'Required' });
+            const sameTime = new Date('2026-11-23T10:00:00.000Z');
+            const alicePepper = makeAgent({
+                ID: L2_PEPPER,
+                Name: 'Pepper',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+                __mj_UpdatedAt: sameTime,
+            });
+            const aliceJarvis = makeAgent({
+                ID: L2_JARVIS,
+                Name: 'Jarvis',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+                __mj_UpdatedAt: sameTime,
+            });
+
+            const engine = seedEngine({ _agents: [cos, alicePepper, aliceJarvis] });
+
+            // Simulate Jarvis's remote-invalidate arriving before Pepper's remote-invalidate
+            const remoteEvent: BaseEntityEvent = {
+                type: 'remote-invalidate',
+                entityName: 'MJ: AI Agents',
+                baseEntity: null,
+                payload: {
+                    action: 'save',
+                    recordData: JSON.stringify({
+                        ID: L2_JARVIS,
+                        Status: 'Active',
+                        BaseAgentID: L0_COS,
+                        OwnerUserID: ALICE,
+                        IsPrimaryInstance: true,
+                    }),
+                },
+            };
+
+            await triggerEntityEvent(engine, remoteEvent);
+            await triggerAdditionalLoading(engine);
+
+            expect(aliceJarvis.IsPrimaryInstance).toBe(true);
+            expect(alicePepper.IsPrimaryInstance).toBe(false);
+        });
+
+        it('does not demote an active primary sibling when saving an Inactive/Disabled derived agent', async () => {
+            const L2_DISABLED = '00000000-0000-0000-0000-000000000030';
+
+            const cos = makeAgent({ ID: L0_COS, Name: 'Chief of Staff', InstantiationMode: 'Required' });
+            const alicePepper = makeAgent({
+                ID: L2_PEPPER,
+                Name: 'Pepper',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+            });
+            const disabledSibling = makeAgent({
+                ID: L2_DISABLED,
+                Name: 'Old Jarvis',
+                Status: 'Disabled',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                IsPrimaryInstance: true,
+            });
+
+            const engine = seedEngine({ _agents: [cos, alicePepper, disabledSibling] });
+            await triggerEntityEvent(engine, makeSaveEvent(disabledSibling));
+            await triggerAdditionalLoading(engine);
+
+            expect(alicePepper.IsPrimaryInstance).toBe(true);
+        });
     });
 });

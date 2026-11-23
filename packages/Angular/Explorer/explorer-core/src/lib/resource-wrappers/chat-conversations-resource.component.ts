@@ -1,6 +1,6 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Metadata, CompositeKey } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, Metadata, CompositeKey } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal, RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
@@ -16,6 +16,7 @@ import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import type { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { firstValueFrom, Subject, takeUntil } from 'rxjs';
+import { debounceTime, filter } from 'rxjs/operators';
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -45,14 +46,6 @@ import { firstValueFrom, Subject, takeUntil } from 'rxjs';
             [class.no-transition]="!sidebarTransitionsEnabled"
             [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
             @if (currentUser) {
-              <!-- My Agents — Grok-Bot-style personal agent instances rail -->
-              <mj-my-agents-section
-                [CurrentUser]="currentUser"
-                [ActiveAgentId]="selectedConversation?.DefaultAgentID ?? null"
-                (StartChatWithAgent)="OnStartChatWithAgent($event)"
-                (StartNewChatWithAgent)="OnStartNewChatWithAgent($event)"
-                (StartOnboardingWithTemplate)="OnStartOnboardingWithTemplate($event)">
-              </mj-my-agents-section>
               <mj-conversation-list
                 #conversationList
                 [environmentId]="environmentId"
@@ -92,6 +85,7 @@ import { firstValueFrom, Subject, takeUntil } from 'rxjs';
               [currentUser]="currentUser"
               [conversationId]="selectedConversationId"
               [conversation]="selectedConversation"
+              [DefaultAgentId]="defaultChatAgentId"
               [isNewConversation]="isNewUnsavedConversation"
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
@@ -510,7 +504,16 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // User Settings persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
+  private readonly USER_SETTING_DEFAULT_CHAT_AGENT_KEY = 'chat.defaultAgentId';
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  /** Per-user preferred default chat agent ID from `UserInfoEngine` (`chat.defaultAgentId`), or null for stock Sage default. */
+  public DefaultChatAgentId: string | null = null;
+
+  /** Lowercase accessor for template binding `[DefaultAgentId]="defaultChatAgentId"`. */
+  public get defaultChatAgentId(): string | null {
+    return this.DefaultChatAgentId;
+  }
 
   private engine = ConversationEngine.Instance;
 
@@ -587,6 +590,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Notify the bridge that the workspace is active
     this.bridge.NotifyWorkspaceActive(true);
 
+    // React live when user changes their Default Chat Agent in My Agents (or archives an agent)
+    this.subscribeToDefaultChatAgentChanges();
+
     // Enable URL updates after initialization
     this.skipUrlUpdate = false;
 
@@ -626,12 +632,16 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   private async initializeEngines(): Promise<void> {
     try {
-      // Initialize AIEngine, conversations, and mention service in parallel
+      // Initialize AIEngine, UserInfoEngine, conversations, and mention service in parallel
       await Promise.all([
         AIEngineBase.Instance.Config(false),
+        UserInfoEngine.Instance.Config(false),
         this.engine.LoadConversations(this.EnvironmentId, this.CurrentUser, false),
         this.mentionAutocompleteService.initialize(this.CurrentUser)
       ]);
+
+      // Resolve user's preferred Default Chat Agent (falls back to null -> Sage)
+      this.refreshDefaultChatAgentId();
 
       // Restore active tasks AFTER conversations are cached (uses in-memory lookup)
       await this.activeTasksService.restoreFromDatabase(this.CurrentUser);
@@ -645,6 +655,90 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       this.IsReady = true;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Resolves the user's preferred Default Chat Agent ID from `UserInfoEngine` (`chat.defaultAgentId`),
+   * validating that it points to an active, runnable top-level agent in `AIEngineBase`.
+   * Returns `null` when unset or invalid so the default `Sage` routing applies.
+   */
+  private resolveDefaultChatAgentId(explicitRawValue?: string | null): string | null {
+    const raw = (
+      explicitRawValue !== undefined
+        ? explicitRawValue
+        : UserInfoEngine.Instance.GetSetting(this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY)
+    )?.trim() ?? '';
+    if (!raw || !IsValidUUID(raw)) {
+      return null;
+    }
+    const aiEngine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
+    const agent = aiEngine.GetAgentByID(raw);
+    if (!agent || agent.Status !== 'Active' || agent.ParentID != null || agent.InstantiationMode === 'Required') {
+      return null;
+    }
+    const user = this.CurrentUser ?? this.ProviderToUse.CurrentUser;
+    if (user && !aiEngine.CanUserRunAgentSync(agent, user)) {
+      return null;
+    }
+    return agent.ID;
+  }
+
+  private refreshDefaultChatAgentId(explicitRawValue?: string | null): void {
+    const nextId = this.resolveDefaultChatAgentId(explicitRawValue);
+    if (nextId !== this.DefaultChatAgentId) {
+      this.DefaultChatAgentId = nextId;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Listens for BaseEntity save/delete/remote-invalidate events on `MJ: User Settings`
+   * (specifically `chat.defaultAgentId`) and `MJ: AI Agents` / `MJ: AI Agent Permissions`
+   * so updating Default Chat Agent in the My Agents app updates open Chat tabs live.
+   */
+  private subscribeToDefaultChatAgentChanges(): void {
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(
+        filter((event: MJEvent) => {
+          if (
+            event.event !== MJEventType.ComponentEvent ||
+            event.eventCode !== BaseEntity.BaseEventCode ||
+            !event.args
+          ) {
+            return false;
+          }
+          const args = event.args as BaseEntityEvent;
+          const entityName =
+            args.type === 'remote-invalidate'
+              ? args.entityName
+              : args.baseEntity?.EntityInfo?.Name;
+          const norm = entityName?.trim().toLowerCase() ?? '';
+          if (norm === 'mj: user settings') {
+            if (args.type === 'remote-invalidate') {
+              return true;
+            }
+            const settingEntity = args.baseEntity as MJUserSettingEntity | null | undefined;
+            return settingEntity?.Setting === this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY;
+          }
+          return norm === 'mj: ai agents' || norm === 'mj: ai agent permissions';
+        }),
+        debounceTime(75),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((event: MJEvent) => {
+        const args = event.args as BaseEntityEvent;
+        if (args.type === 'save' || args.type === 'delete') {
+          const entityName = args.baseEntity?.EntityInfo?.Name?.trim().toLowerCase() ?? '';
+          if (entityName === 'mj: user settings') {
+            const settingEntity = args.baseEntity as MJUserSettingEntity;
+            if (settingEntity.Setting === this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY) {
+              this.refreshDefaultChatAgentId(args.type === 'delete' ? null : (settingEntity.Value ?? null));
+              return;
+            }
+          }
+        }
+        this.refreshDefaultChatAgentId();
+      });
   }
 
   /**

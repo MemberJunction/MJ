@@ -111,8 +111,6 @@ const mockPolicyEngine = {
   SetCachedPolicy: vi.fn(),
 };
 
-const mockMentionRefresh = vi.fn(async () => undefined);
-
 vi.mock('@memberjunction/ai-engine-base', () => ({
   AIEngineBase: {
     GetProviderInstance: () => mockEngine,
@@ -133,14 +131,6 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
     },
   };
 });
-
-vi.mock('../../services/mention-autocomplete.service', () => ({
-  MentionAutocompleteService: {
-    get Instance() {
-      return { Refresh: mockMentionRefresh };
-    },
-  },
-}));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -505,7 +495,10 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
     );
     expect(mockState.savedPolicies).toHaveLength(1);
     expect(mockState.savedPolicies[0].CoordinationMode).toBe('Coordinator');
-    expect(mockMentionRefresh).toHaveBeenCalledTimes(1);
+    // Must rely on AIEngineBase AutoRefresh instead of manual Config(true) reloads
+    expect(mockEngine.Config).not.toHaveBeenCalledWith(true);
+    expect(mockEngine.Config).not.toHaveBeenCalledWith(true, expect.anything());
+    expect(mockEngine.Config).not.toHaveBeenCalledWith(true, expect.anything(), expect.anything());
     expect(savedEvents.map((a) => a.Name)).toEqual(['Pepper']);
   });
 

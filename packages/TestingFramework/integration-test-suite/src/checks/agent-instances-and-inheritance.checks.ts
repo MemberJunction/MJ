@@ -14,22 +14,41 @@
  *           and `AIAgentNote` org-note inheritance with sibling per-user memory isolation.
  *   - AII5: `MJAIAgentEntityServer` sandbox guards blocking non-Owner root agent creation,
  *           cross-user modification of derived instances, and inheritance chains exceeding MaxDepth (5).
+ *   - AII6: Real `GetMyCalendarAndAvailabilityAction`, `ManageMyCalendarEventAction`, and
+ *           `ManageMyEmailInboxAction` executed as a derived Chief of Staff instance (`Pepper`)
+ *           against `LocalJsonCommunicationProvider` (`MJ_MOCK_COMM_DIR`), verifying calendar &
+ *           free/busy reads under `ProposeWithApproval`, real `MJ: AI Agent Requests` approval row
+ *           creation attributed to `Pepper.ID`, and `DraftOnly` draft persistence to disk.
+ *   - AII7: Saving a 2nd derived Chief of Staff instance (`Jarvis`) with `IsPrimaryInstance = true`
+ *           flips the 1st instance (`Pepper`) to `IsPrimaryInstance = false` in SQL and in
+ *           `AIEngineBase` cache.
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { CompositeKey, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentActionEntity,
     MJAIAgentEntity,
     MJAIAgentNoteEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentRequestEntity,
     MJAIAgentSkillEntity,
     MJAIAgentUserPolicyEntity,
     MJRoleEntity,
     MJUserEntity,
     MJUserRoleEntity,
 } from '@memberjunction/core-entities';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { ActionParam, ActionResult, RunActionParams } from '@memberjunction/actions-base';
 import { AgentUserPolicyEngine, ApplyDefaultAgentUserPolicyValues } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentContextInjector } from '@memberjunction/ai-agents';
+import {
+    CommunicationEngine,
+    LocalJsonCommunicationProvider,
+    MJ_MOCK_COMM_DIR_ENV,
+} from '@memberjunction/communication-engine';
 import { EscapeSQLString, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
@@ -60,12 +79,16 @@ interface AgentInstancesFixture {
     CreatedPermIDs: string[];
     CreatedPolicyIDs: string[];
     CreatedNoteIDs: string[];
+    CreatedRequestIDs: string[];
+    CreatedLogIDs: string[];
     CreatedUserRoleIDs: string[];
     CreatedUserIDs: string[];
     CreatedRoleIDs: string[];
     L0_ID?: string;
     L1_ID?: string;
     L2_ID?: string;
+    CoSRoot_ID?: string;
+    CoSPepper_ID?: string;
 }
 
 let fixture: AgentInstancesFixture | undefined;
@@ -520,6 +543,274 @@ async function checkAii5ServerSandboxGuards(ctx: IntegrationCheckContext): Promi
     console.log('      → non-Owner root block, cross-user isolation, and MaxDepth=5 enforcement verified');
 }
 
+function makeActionInput(name: string, value: unknown): ActionParam {
+    return { Name: name, Type: 'Input', Value: value } as ActionParam;
+}
+
+async function runNamedAction(
+    ctx: IntegrationCheckContext,
+    actionName: string,
+    actor: UserInfo,
+    params: ActionParam[]
+): Promise<{ result: ActionResult; runParams: RunActionParams }> {
+    const action = ActionEngineServer.Instance.Actions.find(
+        (a) => a.Name === actionName && a.Status === 'Active'
+    );
+    Assert(action != null, `IT186: expected Active action '${actionName}' in ActionEngineServer`);
+
+    const run = new RunActionParams();
+    run.Action = action!;
+    run.ContextUser = actor;
+    run.Provider = ctx.Provider;
+    run.Params = params;
+    run.Filters = [];
+
+    const result = await ActionEngineServer.Instance.RunAction(run);
+    if (result.LogEntry?.ID) {
+        fx().CreatedLogIDs.push(result.LogEntry.ID);
+    }
+    return { result, runParams: run };
+}
+
+async function checkAii6MockCommCalendarEmailAndApprovalAttribution(ctx: IntegrationCheckContext): Promise<void> {
+    const f = fx();
+
+    // Use ctx.User if it has a valid email so ActionEngineServer/Request writes have full DB permissions,
+    // while using a dedicated CoS root template and Pepper instance that never collide with existing rows.
+    const actor = ctx.User.Email?.trim() ? ctx.User : f.AliceUser;
+    Assert(Boolean(actor.Email?.trim()), 'AII6: acting test user must have an email address');
+
+    const cosRoot = await createAgentRow(ctx, ctx.User, {
+        Name: `${f.Prefix}-CoS-Template`,
+        InstantiationMode: 'Optional',
+    });
+    const pepper = await createAgentRow(ctx, ctx.User, {
+        Name: `${f.Prefix}-CoS-Pepper`,
+        BaseAgentID: cosRoot.ID,
+        OwnerUserID: actor.ID,
+        IsPrimaryInstance: true,
+        IconClass: 'fa-solid fa-pepper-hot',
+    });
+    AssertEqual(pepper.IsPrimaryInstance, true, 'AII6: Pepper must start as IsPrimaryInstance=true');
+    f.CoSRoot_ID = cosRoot.ID;
+    f.CoSPepper_ID = pepper.ID;
+
+    // Configure Pepper's user policy: CalendarChannelMode=ProposeWithApproval, EmailChannelMode=DraftOnly
+    const policy = await ctx.Provider.GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', ctx.User);
+    policy.NewRecord();
+    policy.AgentID = pepper.ID;
+    policy.UserID = actor.ID;
+    ApplyDefaultAgentUserPolicyValues(policy);
+    policy.CalendarChannelMode = 'ProposeWithApproval';
+    policy.EmailChannelMode = 'DraftOnly';
+    policy.RequireApprovalForExternalComms = true;
+    Assert(
+        await policy.Save(),
+        `AII6: failed to save Pepper user policy: ${policy.LatestResult?.CompleteMessage ?? 'unknown'}`
+    );
+    f.CreatedPolicyIDs.push(policy.ID);
+
+    const prevMockDir = process.env[MJ_MOCK_COMM_DIR_ENV];
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-it186-mock-comm-'));
+    process.env[MJ_MOCK_COMM_DIR_ENV] = tempDir;
+
+    try {
+        // Deterministically seed mailbox + calendar JSON for actor.Email
+        const mockProvider = new LocalJsonCommunicationProvider(tempDir);
+        const seededState = mockProvider.LoadOrSeedMailbox(actor.Email!);
+        Assert(seededState.Messages.length >= 4, 'AII6: mock mailbox should auto-seed >= 4 messages');
+        Assert(seededState.Events.length >= 4, 'AII6: mock calendar should auto-seed >= 4 events');
+
+        await ActionEngineServer.Instance.Config(false, ctx.User);
+        await AIEngine.Instance.Config(true, ctx.User);
+        await CommunicationEngine.Instance.Config(false, ctx.User);
+        AgentUserPolicyEngine.Instance.ClearCache();
+
+        const windowStart = new Date(Date.now() - 24 * 3_600_000).toISOString();
+        const windowEnd = new Date(Date.now() + 72 * 3_600_000).toISOString();
+
+        // 1. Read calendar events via GetMyCalendarAndAvailabilityAction as Pepper
+        const eventsExec = await runNamedAction(ctx, 'Get My Calendar Events and Availability', actor, [
+            makeActionInput('AgentID', pepper.ID),
+            makeActionInput('Operation', 'GetEvents'),
+            makeActionInput('StartDateTime', windowStart),
+            makeActionInput('EndDateTime', windowEnd),
+        ]);
+        Assert(
+            eventsExec.result.Success,
+            `AII6: GetEvents failed: ${eventsExec.result.Message}`
+        );
+        const eventsOut = eventsExec.runParams.Params.find((p) => p.Name === 'Events')?.Value as
+            | Array<{ Subject: string }>
+            | undefined;
+        Assert(
+            Array.isArray(eventsOut) && eventsOut.length >= 4,
+            `AII6: expected >= 4 seeded calendar events from Local JSON Mock, got ${eventsOut?.length ?? 0}`
+        );
+
+        // 2. Read Free/Busy slots via GetMyCalendarAndAvailabilityAction as Pepper
+        const fbExec = await runNamedAction(ctx, 'Get My Calendar Events and Availability', actor, [
+            makeActionInput('AgentID', pepper.ID),
+            makeActionInput('Operation', 'GetFreeBusy'),
+            makeActionInput('StartDateTime', windowStart),
+            makeActionInput('EndDateTime', windowEnd),
+        ]);
+        Assert(fbExec.result.Success, `AII6: GetFreeBusy failed: ${fbExec.result.Message}`);
+        const schedulesOut = fbExec.runParams.Params.find((p) => p.Name === 'Schedules')?.Value as
+            | Array<{ ScheduleID: string; Slots: Array<{ Status: string }> }>
+            | undefined;
+        Assert(
+            Array.isArray(schedulesOut) && schedulesOut.length === 1 && schedulesOut[0].Slots.length >= 4,
+            `AII6: expected FreeBusy schedule with >= 4 busy slots for ${actor.Email}`
+        );
+
+        // 3. Create calendar event under ProposeWithApproval -> creates real MJ: AI Agent Requests row attributed to Pepper.ID
+        const calCreateExec = await runNamedAction(ctx, 'Manage My Calendar Event', actor, [
+            makeActionInput('AgentID', pepper.ID),
+            makeActionInput('Operation', 'Create'),
+            makeActionInput('Subject', `${f.Prefix} Board Follow-Up`),
+            makeActionInput('StartTime', '2026-12-03T16:00:00.000Z'),
+            makeActionInput('EndTime', '2026-12-03T16:30:00.000Z'),
+            makeActionInput('AttendeeEmails', 'sarah.chen@bluecypress.io'),
+        ]);
+        const calCode = calCreateExec.result.Result?.ResultCode ?? calCreateExec.result.ResultCode;
+        AssertEqual(
+            calCode,
+            'APPROVAL_REQUIRED',
+            `AII6: Create calendar event under ProposeWithApproval must return APPROVAL_REQUIRED (got ${calCode}: ${calCreateExec.result.Message})`
+        );
+        const approvalId = calCreateExec.runParams.Params.find((p) => p.Name === 'ApprovalRequestID')
+            ?.Value as string | null | undefined;
+        Assert(Boolean(approvalId), 'AII6: ApprovalRequestID output param must be populated');
+        f.CreatedRequestIDs.push(approvalId!);
+
+        const reqRow = await ctx.Provider.GetEntityObject<MJAIAgentRequestEntity>('MJ: AI Agent Requests', ctx.User);
+        Assert(
+            await reqRow.InnerLoad(CompositeKey.FromID(approvalId!)),
+            `AII6: failed to load persisted approval request ${approvalId}`
+        );
+        Assert(
+            UUIDsEqual(reqRow.AgentID, pepper.ID),
+            `AII6: approval request AgentID must be attributed to Pepper (${pepper.ID}), got ${reqRow.AgentID}`
+        );
+        Assert(
+            UUIDsEqual(reqRow.RequestForUserID, actor.ID),
+            `AII6: approval request RequestForUserID must match acting user ${actor.ID}`
+        );
+        AssertEqual(reqRow.Status, 'Requested', 'AII6: approval request must be in Requested status');
+
+        // 4. ManageMyEmailInboxAction: ListMessages succeeds, CreateDraft writes JSON draft under DraftOnly, Send is POLICY_DENIED
+        const listExec = await runNamedAction(ctx, 'Manage My Email Inbox and Drafts', actor, [
+            makeActionInput('AgentID', pepper.ID),
+            makeActionInput('Operation', 'ListMessages'),
+        ]);
+        Assert(listExec.result.Success, `AII6: ListMessages failed: ${listExec.result.Message}`);
+        const messagesOut = listExec.runParams.Params.find((p) => p.Name === 'Messages')?.Value as
+            | Array<{ Subject?: string }>
+            | undefined;
+        Assert(
+            Array.isArray(messagesOut) && messagesOut.length >= 4,
+            `AII6: expected >= 4 seeded inbox threads, got ${messagesOut?.length ?? 0}`
+        );
+
+        const draftSubject = `${f.Prefix} Draft Follow-Up`;
+        const draftExec = await runNamedAction(ctx, 'Manage My Email Inbox and Drafts', actor, [
+            makeActionInput('AgentID', pepper.ID),
+            makeActionInput('Operation', 'CreateDraft'),
+            makeActionInput('To', 'sarah.chen@bluecypress.io'),
+            makeActionInput('Subject', draftSubject),
+            makeActionInput('Body', 'Draft created by Pepper under DraftOnly mode.'),
+        ]);
+        Assert(draftExec.result.Success, `AII6: CreateDraft failed: ${draftExec.result.Message}`);
+        const draftId = draftExec.runParams.Params.find((p) => p.Name === 'DraftID')?.Value as
+            | string
+            | undefined;
+        Assert(Boolean(draftId), 'AII6: CreateDraft must return DraftID');
+
+        const reloadedMailbox = mockProvider.LoadOrSeedMailbox(actor.Email!);
+        Assert(
+            reloadedMailbox.Messages.some(
+                (m) => m.ID === draftId && m.Folder === 'Drafts' && m.Subject === draftSubject
+            ),
+            `AII6: persisted draft '${draftId}' must appear in JSON mailbox file`
+        );
+
+        const sendExec = await runNamedAction(ctx, 'Manage My Email Inbox and Drafts', actor, [
+            makeActionInput('AgentID', pepper.ID),
+            makeActionInput('Operation', 'Send'),
+            makeActionInput('To', 'board@bluecypress.io'),
+            makeActionInput('Subject', `${f.Prefix} Should Block`),
+            makeActionInput('Body', 'Blocked under DraftOnly'),
+        ]);
+        const sendCode = sendExec.result.Result?.ResultCode ?? sendExec.result.ResultCode;
+        AssertEqual(
+            sendCode,
+            'POLICY_DENIED',
+            `AII6: Send under DraftOnly must return POLICY_DENIED (got ${sendCode})`
+        );
+
+        console.log(
+            '      → derived Pepper calendar/free-busy read, Pepper-attributed SQL approval row, and DraftOnly JSON draft verified'
+        );
+    } finally {
+        if (prevMockDir === undefined) {
+            delete process.env[MJ_MOCK_COMM_DIR_ENV];
+        } else {
+            process.env[MJ_MOCK_COMM_DIR_ENV] = prevMockDir;
+        }
+        fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+}
+
+async function checkAii7SecondPrimaryCoSInstanceFlipsFirstInSqlAndCache(ctx: IntegrationCheckContext): Promise<void> {
+    const f = fx();
+    Assert(Boolean(f.CoSRoot_ID && f.CoSPepper_ID), 'AII7 requires AII6 CoS fixtures');
+    const actor = ctx.User.Email?.trim() ? ctx.User : f.AliceUser;
+
+    // Ensure AIEngine cache is warm with Pepper as IsPrimaryInstance=true before creating Jarvis
+    await AIEngine.Instance.Config(true, ctx.User);
+    const cachedPepperBefore = AIEngine.Instance.GetAgentByID(f.CoSPepper_ID!);
+    Assert(cachedPepperBefore != null, 'AII7: Pepper should be in AIEngine cache');
+    AssertEqual(cachedPepperBefore!.IsPrimaryInstance, true, 'AII7: Pepper must be primary before creating Jarvis');
+
+    // Create a 2nd derived CoS instance (Jarvis) directly with IsPrimaryInstance = true
+    const jarvis = await createAgentRow(ctx, ctx.User, {
+        Name: `${f.Prefix}-CoS-Jarvis`,
+        BaseAgentID: f.CoSRoot_ID!,
+        OwnerUserID: actor.ID,
+        IsPrimaryInstance: true,
+        IconClass: 'fa-solid fa-wand-magic-sparkles',
+    });
+    AssertEqual(jarvis.IsPrimaryInstance, true, 'AII7: newly created Jarvis must have IsPrimaryInstance=true');
+
+    // 1. Verify in-memory AIEngineBase cache immediately demoted Pepper's IsPrimaryInstance to false
+    const cachedPepperAfterSave = AIEngine.Instance.GetAgentByID(f.CoSPepper_ID!);
+    AssertEqual(
+        cachedPepperAfterSave?.IsPrimaryInstance,
+        false,
+        'AII7: AIEngineBase in-memory cache must demote Pepper.IsPrimaryInstance to false immediately on Jarvis save'
+    );
+
+    // 2. Verify live SQL Server row for Pepper was flipped to IsPrimaryInstance = 0 and Jarvis = 1
+    const rv = RunView.FromMetadataProvider(ctx.Provider);
+    const sqlRes = await rv.RunView<{ ID: string; Name: string; IsPrimaryInstance: boolean }>(
+        {
+            EntityName: 'MJ: AI Agents',
+            ExtraFilter: `ID IN ('${EscapeSQLString(f.CoSPepper_ID!)}','${EscapeSQLString(jarvis.ID)}')`,
+            Fields: ['ID', 'Name', 'IsPrimaryInstance'],
+            ResultType: 'simple',
+        },
+        ctx.User
+    );
+    Assert(sqlRes.Success && sqlRes.Results.length === 2, 'AII7: SQL verification query for Pepper & Jarvis failed');
+
+    const sqlPepper = sqlRes.Results.find((r) => UUIDsEqual(r.ID, f.CoSPepper_ID!));
+    const sqlJarvis = sqlRes.Results.find((r) => UUIDsEqual(r.ID, jarvis.ID));
+    AssertEqual(sqlPepper?.IsPrimaryInstance, false, 'AII7: SQL must flip 1st CoS instance (Pepper) IsPrimaryInstance to false');
+    AssertEqual(sqlJarvis?.IsPrimaryInstance, true, 'AII7: SQL must keep 2nd CoS instance (Jarvis) IsPrimaryInstance as true');
+    console.log('      → 2nd derived CoS instance (Jarvis) flipped 1st instance (Pepper) IsPrimaryInstance=false in SQL & AIEngine cache');
+}
+
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Setup: async (ctx: IntegrationCheckContext) => {
         if (!MutationTierOn(ctx)) {
@@ -612,6 +903,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             CreatedPermIDs: [],
             CreatedPolicyIDs: [],
             CreatedNoteIDs: [],
+            CreatedRequestIDs: [],
+            CreatedLogIDs: [],
             CreatedUserRoleIDs: createdUserRoleIDs,
             CreatedUserIDs: createdUserIDs,
             CreatedRoleIDs: createdRoleIDs,
@@ -633,6 +926,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             }
         };
 
+        await del('MJ: Action Execution Logs', f.CreatedLogIDs);
+        await del('MJ: AI Agent Requests', f.CreatedRequestIDs);
         await del('MJ: AI Agent Notes', f.CreatedNoteIDs);
         await del('MJ: AI Agent User Policies', f.CreatedPolicyIDs);
         await del('MJ: AI Agent Permissions', f.CreatedPermIDs);
@@ -711,6 +1006,18 @@ export const AgentInstancesAndInheritanceChecks: NamedCheck[] = [
         Id: `${BUNDLE}.AII5`,
         Name: 'AII5: MJAIAgentEntityServer sandbox blocks non-Owner root create, cross-user edit, and depth > 5',
         Fn: checkAii5ServerSandboxGuards,
+        RequiresMutation: true,
+    },
+    {
+        Id: `${BUNDLE}.AII6`,
+        Name: 'AII6: derived CoS Pepper reads Calendar/FreeBusy via Local JSON Mock, creates Pepper-attributed SQL approval row, and persists DraftOnly email draft',
+        Fn: checkAii6MockCommCalendarEmailAndApprovalAttribution,
+        RequiresMutation: true,
+    },
+    {
+        Id: `${BUNDLE}.AII7`,
+        Name: 'AII7: saving 2nd derived CoS instance with IsPrimaryInstance=true flips 1st instance to false in SQL and AIEngine cache',
+        Fn: checkAii7SecondPrimaryCoSInstanceFlipsFirstInSqlAndCache,
         RequiresMutation: true,
     },
 ];

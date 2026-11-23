@@ -15,6 +15,10 @@ import {
     EvaluateInstructionsOverrideSize,
     INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD,
     IsApprovalRequest,
+    LEGACY_CHIEF_OF_STAFF_APP_NAME,
+    MY_AGENTS_APP_NAME,
+    NormalizeAgentIconClass,
+    PartitionAgentRoster,
     PolicyGovernanceSummary,
     RequestSummaryItem,
     ResolveSelectableAgent,
@@ -205,6 +209,15 @@ describe('BuildChiefOfStaffScopeFilters', () => {
     it('escapes the agent id like any other bound value', () => {
         expect(BuildChiefOfStaffScopeFilters(USER, "x'y").Policy).toContain("AgentID = 'x''y'");
     });
+
+    it('builds user-scoped all-agent filters when selectedAgentId is null (Overview multi-instance mode)', () => {
+        const all = BuildChiefOfStaffScopeFilters(USER, null);
+        expect(all.Policy).toBe(`UserID = '${USER}'`);
+        expect(all.Routines).toBe(`UserID = '${USER}'`);
+        expect(all.Requests).toBe(
+            `RequestForUserID = '${USER}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
+        );
+    });
 });
 
 describe('CHIEF_OF_STAFF_AGENT_NAME', () => {
@@ -295,17 +308,22 @@ describe('Email approval payload: the draft travels in the request Comments as J
     });
 });
 
-describe('Chief of Staff pages', () => {
-    it('gives every page a nav item label and icon', () => {
+describe('My Agents pages', () => {
+    it('gives every page a nav item label and icon and exposes My Agents app name + legacy fallback', () => {
+        expect(MY_AGENTS_APP_NAME).toBe('My Agents');
+        expect(LEGACY_CHIEF_OF_STAFF_APP_NAME).toBe('Chief of Staff');
         expect(CHIEF_OF_STAFF_PAGES.map((p) => CHIEF_OF_STAFF_PAGE_LABELS[p])).toEqual([
             'Overview',
             'Approvals & Wakes',
             'Agent Channels',
-            'Governance',
+            'Agents',
         ]);
         for (const page of CHIEF_OF_STAFF_PAGES) {
             expect(CHIEF_OF_STAFF_PAGE_ICONS[page]).toMatch(/^fa-/);
         }
+        expect(NormalizeAgentIconClass('fa-robot')).toBe('fa-solid fa-robot');
+        expect(NormalizeAgentIconClass('fa-regular fa-star')).toBe('fa-regular fa-star');
+        expect(NormalizeAgentIconClass(null)).toBe('fa-solid fa-robot');
     });
 
     it('EvaluateInstructionsOverrideSize flags overrides over the 4,000-character threshold', () => {
@@ -448,7 +466,13 @@ describe('Multi-agent picker helpers (Chief of Staff + Software Factory)', () =>
         expect(selectable.map((a) => a.Name)).toEqual(['Pepper', 'Cato', 'Software Factory']);
         expect(selectable[0].IsDerivedInstance).toBe(true);
         expect(selectable[0].IsPrimaryInstance).toBe(true);
+        expect(selectable[0].IsOwnedByCurrentUser).toBe(true);
+        expect(selectable[0].BaseAgentName).toBe('Chief of Staff');
         expect(selectable[1].IsDerivedInstance).toBe(true);
         expect(selectable[1].IsPrimaryInstance).toBeUndefined();
+
+        const partitioned = PartitionAgentRoster(selectable);
+        expect(partitioned.MyAgents.map((a) => a.Name)).toEqual(['Pepper', 'Cato']);
+        expect(partitioned.SharedAgents.map((a) => a.Name)).toEqual(['Software Factory']);
     });
 });

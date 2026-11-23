@@ -291,13 +291,18 @@ export class MyAgentsSectionComponent
               ? args.entityName
               : args.baseEntity?.EntityInfo?.Name;
           const norm = entityName?.trim().toLowerCase() ?? '';
-          return norm === 'mj: ai agents' || norm === 'mj: ai agent personas';
+          return (
+            norm === 'mj: ai agents' ||
+            norm === 'mj: ai agent personas' ||
+            norm === 'mj: ai agent permissions' ||
+            norm === 'mj: user settings'
+          );
         }),
-        debounceTime(400),
+        debounceTime(75),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        void this.loadAgents(true);
+        this.rebuildDisplayList();
       });
   }
 }
