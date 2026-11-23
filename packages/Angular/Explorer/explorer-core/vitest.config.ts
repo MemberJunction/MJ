@@ -14,7 +14,12 @@ export default defineConfig({
       mergeConfig(
         nodeSharedConfig,
         defineConfig({
-          test: { name: 'explorer-core (node)', environment: 'node', exclude: ['**/*.dom.test.ts'] },
+          test: {
+            name: 'explorer-core (node)',
+            environment: 'node',
+            include: ['src/**/__tests__/**/*.spec.ts'],
+            exclude: ['**/*.dom.test.ts'],
+          },
         }),
       ),
       mergeConfig(

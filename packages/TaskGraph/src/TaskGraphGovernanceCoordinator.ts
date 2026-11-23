@@ -233,6 +233,7 @@ interface GraphGovernanceState {
     CompletedNodeCount: number;
     CompletedNodeIDs: string[];
     CompletedNodeSet: Set<string>;
+    IngestedTerminalNodeSet: Set<string>;
     SettledNodeAccounting: Map<string, SettledNodeMetrics>;
     SettledCostSumUsd: number;
     SettledTokensSum: number;
@@ -2147,6 +2148,7 @@ export class TaskGraphGovernanceCoordinator {
             CompletedNodeCount: 0,
             CompletedNodeIDs: [],
             CompletedNodeSet: new Set<string>(),
+            IngestedTerminalNodeSet: new Set<string>(),
             SettledNodeAccounting: new Map<string, SettledNodeMetrics>(),
             SettledCostSumUsd: 0,
             SettledTokensSum: 0,
@@ -2783,6 +2785,26 @@ export class TaskGraphGovernanceCoordinator {
             if (!row?.ID) {
                 continue;
             }
+            const nodeKey = this.normId(row.ID);
+            if (!nodeKey) {
+                continue;
+            }
+            const isTerminal = row.Status === 'Complete' || row.Status === 'Failed';
+            if (isTerminal) {
+                if (state.IngestedTerminalNodeSet.has(nodeKey)) {
+                    continue;
+                }
+            } else {
+                state.IngestedTerminalNodeSet.delete(nodeKey);
+                if (
+                    row.Status === 'Pending' &&
+                    !row.AgentRunID &&
+                    !row.StartedAt &&
+                    (!row.Configuration || !row.Configuration.includes('"runtime"'))
+                ) {
+                    continue;
+                }
+            }
             const rowRefs = this.collectRunRefs({
                 AgentRunID: row.AgentRunID,
                 Configuration: row.Configuration,
@@ -2793,10 +2815,6 @@ export class TaskGraphGovernanceCoordinator {
                 if (Number.isFinite(startMs) && startMs < state.StartedAtMs) {
                     state.StartedAtMs = startMs;
                 }
-            }
-            const nodeKey = this.normId(row.ID);
-            if (!nodeKey) {
-                continue;
             }
             if (this.isActiveOrPausedLoopStatus(row.Status)) {
                 const pausedLoop = this.extractPausedLoopDetails(row.Configuration);
@@ -2870,6 +2888,7 @@ export class TaskGraphGovernanceCoordinator {
                 continue;
             }
             if (state.CompletedNodeSet.has(nodeKey) && state.SettledNodeAccounting.has(nodeKey)) {
+                state.IngestedTerminalNodeSet.add(nodeKey);
                 continue;
             }
             if (!state.CompletedNodeSet.has(nodeKey)) {
@@ -2918,6 +2937,7 @@ export class TaskGraphGovernanceCoordinator {
                     state.NodeCostEvents.set(nodeKey, events);
                 }
             }
+            state.IngestedTerminalNodeSet.add(nodeKey);
         }
         state.CompletedNodeCount = state.CompletedNodeSet.size;
         const totals = this.computeSettlementTotals(state);
@@ -3076,8 +3096,12 @@ export class TaskGraphGovernanceCoordinator {
             if (!isLoop && !isTerminal) {
                 continue;
             }
-            const attemptsSummary = this.extractPersistedAttemptsSummary(row.Configuration);
             const existing = state.SettledNodeAccounting.get(nodeKey);
+            const hasAttemptsKey = typeof row.Configuration === 'string' && row.Configuration.includes('"attempts"');
+            if (existing && (existing.CostUsd > 0 || existing.TokensUsed > 0) && !hasAttemptsKey) {
+                continue;
+            }
+            const attemptsSummary = hasAttemptsKey ? this.extractPersistedAttemptsSummary(row.Configuration) : null;
             if (existing && (existing.CostUsd > 0 || existing.TokensUsed > 0) && !attemptsSummary?.HasUnpricedRunRef) {
                 continue;
             }
@@ -3364,7 +3388,11 @@ export class TaskGraphGovernanceCoordinator {
     }
 
     private parseRuntimeObject(configurationJson: string | null | undefined): Record<string, RunawayJsonValue> | null {
-        if (typeof configurationJson !== 'string' || configurationJson.trim().length === 0) {
+        if (
+            typeof configurationJson !== 'string' ||
+            configurationJson.trim().length === 0 ||
+            !configurationJson.includes('"runtime"')
+        ) {
             return null;
         }
         const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(configurationJson);
