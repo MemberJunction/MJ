@@ -21,7 +21,7 @@ All fifteen deterministic bundles honor the family's **anti-vacuity / loud-skip 
 
 | Bundle | Checks | IDs | Tier | Transport | IT record | Suite |
 |---|---|---|---|---|---|---|
-| `ai-skills` | 21 | AS1–AS21 | deterministic | server | IT12 | Deterministic |
+| `ai-skills` | 22 | AS1–AS22 | deterministic | server | IT12 | Deterministic |
 | `ai-cost` | 6 | AC1–AC6 | deterministic | client | IT43 | Deterministic |
 | `ai-permissions` | 6 | APM1–APM6 | deterministic | client | IT44 | Deterministic |
 | `ai-embeddings` | 5 | AE1–AE5 | deterministic | client | IT45 | Deterministic |
@@ -47,13 +47,13 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 
 ---
 
-## 1. `ai-skills` (AS1–AS21) — skills governance, observability, permissions, SKILL.md
+## 1. `ai-skills` (AS1–AS22) — skills governance, observability, permissions, SKILL.md
 
 **Machinery under test.** The full deterministic data layer of the AI Skills feature (see `guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md`), without a single model call: `AIEngine.GetSkillsForAgent` resolution through the **three-layer availability gate** (agent `AcceptsSkills` None/All/Limited × skill `Status` × per-agent grant `Status`); the **v5.45 double activation gate** (`GetAutoActivatableSkillsForAgent`: self-activation requires `Auto` on BOTH `AISkill.ActivationMode` and `AIAgent.SkillActivationMode`, both defaulting `RequestedOnly`, with the requested `/skill` path deliberately ungated by ActivationMode); the **observability round-trip** (`AIAgentRun.PlanMode` bit + `AIAgentRunStep.Skills` as typed `AgentSkillInvocation[]` JSON); the **skill-permission model** (the `MJAISkillPermissionEntityServer` grantee-exclusivity validator — exactly one of UserID/RoleID — and the optional-user permission filter on `GetSkillsForAgent`: owner-override, closed-once-rows-exist, open-by-default); bundle resolution (`GetSkillActionIDs`/`GetSkillSubAgentIDs`); and SKILL.md portability (`SkillImportExportService` + `SkillMarkdownConverter` round-trip, non-fatal unknown-name warnings, and the `AISkill.ExportMarkdown`/`ImportMarkdown` Remote Operations executed in-process exactly as a client would call them). Why it matters: these gates are the entire governance story for what an agent may activate and what a user may run — a regression here is a silent capability escalation or a silently empty skill catalog.
 
 **Transport.** Server (in-process `AIEngine` + `ActionEngineServer` caches; the Remote Operations route in-process).
 
-**Fixtures / lifecycle.** Registered `BundleLifecycle`. Setup creates four tagged skills — `Report Builder` (Active, RequestedOnly by DB default, bundled with one Action + one sub-agent), `Old Skill` (Deprecated), `Open Skill` (Active, zero permission rows — the open-by-default control), `Auto Skill` (Active, `ActivationMode='Auto'`) — plus one Active grant to a "grant target" agent, then hard-refreshes `AIEngine`. It **references, never mutates** one existing Active Action and two existing Active Agents for valid FKs. The fixture handle is published up-front with by-reference accumulator arrays, so a mid-Setup crash still tears down whatever was created. Teardown deletes FK-safe: run steps/runs → grants → junctions → permissions → skills. Checks use lightweight agent stand-ins (`{ID, AcceptsSkills, SkillActivationMode} as MJAIAgentEntityExtended`) and a fabricated role-less `nonOwner` UserInfo rather than provisioning real accounts. AS13 creates a real permission row (tracked + engine refresh) that flips `Report Builder` closed for AS14–AS16; AS18/AS19/AS21 create import-product skills (tracked).
+**Fixtures / lifecycle.** Registered `BundleLifecycle`. Setup creates four tagged skills — `Report Builder` (Active, RequestedOnly by DB default, bundled with one Action + one sub-agent), `Old Skill` (Deprecated), `Open Skill` (Active, zero permission rows — the open-by-default control), `Auto Skill` (Active, `ActivationMode='Auto'`) — plus one Active grant to a "grant target" agent, then hard-refreshes `AIEngine`. It **references, never mutates** one existing Active Action and two existing Active Agents for valid FKs. The fixture handle is published up-front with by-reference accumulator arrays, so a mid-Setup crash still tears down whatever was created. Teardown deletes FK-safe: run steps/runs → grants → junctions → permissions → skills. Checks use lightweight agent stand-ins (`{ID, AcceptsSkills, SkillActivationMode} as MJAIAgentEntityExtended`) and a fabricated role-less `nonOwner` UserInfo rather than provisioning real accounts. AS13 creates a real permission row (tracked + engine refresh) that flips `Report Builder` closed for AS14–AS16; AS18/AS19/AS21 create import-product skills (tracked). AS22 creates a templated skill (tracked) and a stored template it deletes itself in a `finally`.
 
 **Tier.** All 21 checks deterministic, ungated (the bundle mutates its own tagged fixtures only).
 
@@ -80,6 +80,7 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 | `ai-skills.AS19` | Unknown Action name warns non-fatally | warning names the missing action; skill still created | unresolved bundle members becoming fatal (or silent) |
 | `ai-skills.AS20` | ExportMarkdown remote op | `Success`, markdown includes the skill body, `suggestedFileName` sanitized (no parens) | remote-op wrapper drift vs. the service |
 | `ai-skills.AS21` | ImportMarkdown remote op | `Success`, returns created `skillID` + `skillName` | remote-op import path broken while the service passes |
+| `ai-skills.AS22` | Templated instructions at activation | A `{# mj:template #}` skill activated through `BaseAgent`'s real request path renders `params.data`, a loop, a payload conditional and a stored template via `{% template %}`; the plain skill in the same activation stays verbatim. Creates and deletes its own template + skill | activation inserts template source, the template engine isn't configured, or the embed extension isn't reachable from the skill render |
 
 **Known gaps.** None pinned to bug-register IDs; the runtime legs this bundle deliberately cannot reach (real `Skill` step emission, runtime demotion, plan pause/resume) are the proposed `agent-skills-live` bundle SL1–SL5 in the [agents-extended proposal](../../../../plans/integration-test-expansion/agents-extended-suite-proposal.md) section 9.1.
 
