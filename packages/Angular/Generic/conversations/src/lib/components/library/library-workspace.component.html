@@ -212,6 +212,19 @@
               <button
                 type="button"
                 class="rail-item"
+                [class.active]="UnifiedScope === 'shared-by-me'"
+                (click)="SetUnifiedScope('shared-by-me')"
+                data-testid="rail-nav-shared-by-me"
+              >
+                <i class="fa-solid fa-paper-plane rail-item-icon"></i>
+                <span class="rail-item-label">Shared by Me</span>
+                @if (SharedByMeCount > 0) {
+                  <span class="rail-badge">{{ SharedByMeCount }}</span>
+                }
+              </button>
+              <button
+                type="button"
+                class="rail-item"
                 [class.active]="UnifiedScope === 'starred'"
                 (click)="SetUnifiedScope('starred')"
                 data-testid="rail-nav-starred"
@@ -765,7 +778,11 @@
 
 <!-- Navigator Subfolders + Items -->
 <ng-template #navigatorSubfoldersAndItemsTemplate>
-  @if (NavigatorSection === 'collections') {
+  @if (UnifiedScope === 'shared' || UnifiedScope === 'shared-by-me') {
+    <ng-container
+      *ngTemplateOutlet="sharedEntriesTemplate; context: { $implicit: ActiveSharedEntries, isSharedByMe: UnifiedScope === 'shared-by-me' }"
+    ></ng-container>
+  } @else if (NavigatorSection === 'collections') {
     @if (FilteredCollections.length === 0) {
       <mj-empty-state
         [Variant]="SearchQuery ? 'no-results' : 'empty'"
@@ -804,6 +821,138 @@
     <ng-container
       *ngTemplateOutlet="itemsBrowserBodyTemplate; context: { $implicit: FilteredItems, emptyTitle: 'No items in this view' }"
     ></ng-container>
+  }
+</ng-template>
+
+<!-- Shared with Me / Shared by Me Unified View (Conversations + Side Threads + Artifacts) -->
+<ng-template #sharedEntriesTemplate let-entries let-isSharedByMe="isSharedByMe">
+  @if (entries.length === 0) {
+    <mj-empty-state
+      [Variant]="SearchQuery ? 'no-results' : 'empty'"
+      [Icon]="isSharedByMe ? 'fa-solid fa-paper-plane' : 'fa-solid fa-user-group'"
+      [Title]="isSharedByMe ? 'Nothing shared by you yet' : 'Nothing shared with you yet'"
+      [Message]="isSharedByMe ? 'Share a conversation or artifact with a teammate to manage access here.' : 'Conversations, private side threads, and artifacts shared with you will appear here.'"
+    ></mj-empty-state>
+  } @else if (UnifiedLayout === 'list') {
+    <div class="library-table-wrap" [attr.data-testid]="isSharedByMe ? 'shared-by-me-table' : 'shared-with-me-table'">
+      <table class="library-table shared-entries-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Type</th>
+            <th>{{ isSharedByMe ? 'Recipient' : 'Shared by' }}</th>
+            <th>Share Date</th>
+            <th>Permission</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of entries; track entry.Id) {
+            <tr
+              class="library-table-row shared-entry-row"
+              [attr.data-testid]="'shared-entry-' + entry.ResourceId"
+              (click)="OpenSharedEntry(entry, $event)"
+            >
+              <td>
+                <div class="row-name-cell">
+                  <i [class]="entry.Icon + ' row-type-icon'"></i>
+                  <div class="row-title-stack">
+                    <span class="row-title">{{ entry.Title }}</span>
+                    @if (entry.IsSideThread) {
+                      <span class="shared-side-thread-tag">
+                        <i class="fa-solid fa-code-branch"></i>
+                        Side thread
+                      </span>
+                    }
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="shared-kind-pill" [attr.data-kind]="entry.ItemKind">
+                  {{ entry.ItemKind === 'conversation' ? 'Conversation' : 'Artifact' }}
+                </span>
+              </td>
+              <td class="row-muted">{{ isSharedByMe ? entry.RecipientName : entry.SharerName }}</td>
+              <td class="row-muted">{{ FormatShareDate(entry.ShareDate) }}</td>
+              <td>
+                <span class="shared-level-pill" [attr.data-level]="entry.PermissionLevel">
+                  {{ entry.PermissionLevel }}
+                </span>
+              </td>
+              <td class="row-actions">
+                @if (isSharedByMe && entry.CanRevoke) {
+                  <button
+                    type="button"
+                    mjButton
+                    variant="danger"
+                    size="sm"
+                    [disabled]="entry.IsRevoking"
+                    [attr.data-testid]="'revoke-share-' + entry.ResourceId"
+                    (click)="RevokeSharedEntry(entry, $event)"
+                  >
+                    <i class="fa-solid fa-ban"></i>
+                    {{ entry.IsRevoking ? 'Revoking...' : 'Revoke' }}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <div class="shared-entries-grid" [attr.data-testid]="isSharedByMe ? 'shared-by-me-grid' : 'shared-with-me-grid'">
+      @for (entry of entries; track entry.Id) {
+        <article
+          class="shared-entry-card"
+          [attr.data-testid]="'shared-entry-' + entry.ResourceId"
+          (click)="OpenSharedEntry(entry, $event)"
+        >
+          <div class="shared-entry-card-top">
+            <span class="shared-kind-pill" [attr.data-kind]="entry.ItemKind">
+              <i [class]="entry.Icon"></i>
+              {{ entry.ItemKind === 'conversation' ? 'Conversation' : 'Artifact' }}
+            </span>
+            @if (entry.IsSideThread) {
+              <span class="shared-side-thread-tag">
+                <i class="fa-solid fa-code-branch"></i>
+                Side thread
+              </span>
+            }
+            <span class="shared-level-pill" [attr.data-level]="entry.PermissionLevel">
+              {{ entry.PermissionLevel }}
+            </span>
+          </div>
+          <h3 class="shared-entry-title" [title]="entry.Title">{{ entry.Title }}</h3>
+          <div class="shared-entry-meta">
+            <span class="shared-entry-person">
+              <i class="fa-solid fa-user"></i>
+              {{ isSharedByMe ? ('To: ' + entry.RecipientName) : ('From: ' + entry.SharerName) }}
+            </span>
+            <span class="shared-entry-date">
+              <i class="fa-regular fa-calendar"></i>
+              {{ FormatShareDate(entry.ShareDate) }}
+            </span>
+          </div>
+          @if (isSharedByMe && entry.CanRevoke) {
+            <div class="shared-entry-actions">
+              <button
+                type="button"
+                mjButton
+                variant="danger"
+                size="sm"
+                [disabled]="entry.IsRevoking"
+                [attr.data-testid]="'revoke-share-' + entry.ResourceId"
+                (click)="RevokeSharedEntry(entry, $event)"
+              >
+                <i class="fa-solid fa-ban"></i>
+                {{ entry.IsRevoking ? 'Revoking...' : 'Revoke' }}
+              </button>
+            </div>
+          }
+        </article>
+      }
+    </div>
   }
 </ng-template>
 

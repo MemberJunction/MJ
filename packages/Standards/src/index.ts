@@ -41,6 +41,8 @@ export * from './checks/polymorphic-fk.js';
 export * from './checks/migration-existence-guards.js';
 export * from './checks/readable-status-values.js';
 export * from './checks/migration-string-collation.js';
+export * from './checks/agent-skill-governance.js';
+export * from './checks/limits-literals.js';
 export * from './lib/migrations.js';
 export * from './lib/markers.js';
 export * from './lib/walk.js';

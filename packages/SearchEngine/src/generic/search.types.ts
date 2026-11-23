@@ -83,6 +83,12 @@ export interface SearchParams {
     /** Search mode: 'full' applies enrichment, 'preview' skips it for speed */
     Mode?: SearchMode;
     /**
+     * When true, enrichment attaches entity icons and display names from in-memory metadata
+     * but skips the batched `GetEntityRecordNames` database lookup. Useful for callers
+     * (such as retrieval pipelines) that only consume IDs/snippets or hydrate records separately.
+     */
+    SkipNameEnrichment?: boolean;
+    /**
      * Optional array of `MJ: Search Scopes` record IDs. When provided, the engine resolves
      * each scope's metadata (providers, external indexes, entities, storage accounts) and
      * runs only those constrained providers. Results from multiple scopes are combined via
@@ -516,6 +522,17 @@ export interface ScopeStorageConstraint {
 }
 
 /**
+ * Identifies an originating search scope (`MJ: Search Scopes`) that contributed a
+ * {@link SearchResultItem}.
+ */
+export interface SearchResultScopeAttribution {
+    /** ID of the originating `MJ: Search Scopes` record. */
+    ScopeID: string;
+    /** Display name of the originating `MJ: Search Scopes` record, when resolved. */
+    ScopeName?: string;
+}
+
+/**
  * A single search result with provenance and scoring information.
  */
 export interface SearchResultItem {
@@ -590,6 +607,22 @@ export interface SearchResultItem {
      * being merged into a tagged lane by raw score, which would compare scales again.
      */
     FusionLane?: string;
+    /**
+     * Primary/winning originating `MJ: Search Scopes` record ID when this result came from a
+     * scoped search. Undefined for unscoped searches.
+     */
+    OriginatingScopeID?: string;
+    /**
+     * Display name of the primary/winning originating `MJ: Search Scopes` record, when available.
+     * Undefined for unscoped searches.
+     */
+    OriginatingScopeName?: string;
+    /**
+     * Deduplicated list of all originating scopes that surfaced this item across RRF fusion
+     * and deduplication (ordered with the primary/winning scope first, followed by additional
+     * contributing scopes). Undefined for unscoped searches.
+     */
+    OriginatingScopes?: SearchResultScopeAttribution[];
 }
 
 /**

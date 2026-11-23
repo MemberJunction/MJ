@@ -18,7 +18,7 @@
   },
   "scripts": {
     "build": "ngc && npm run copy-assets",
-    "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat && cpy 'node_modules/@memberjunction/ng-conversations/dist/assets/edge-ai.worker.js' dist/assets --flat",
+    "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat && cpy 'node_modules/@memberjunction/ng-conversations/dist/assets/edge-ai.worker.js' dist/assets --flat && cpy 'node_modules/@fortawesome/fontawesome-free/css/all.min.css' dist/styles/fontawesome/css --flat && cpy 'node_modules/@fortawesome/fontawesome-free/webfonts/*' dist/styles/fontawesome/webfonts --flat",
     "watch": "ngc --watch",
     "clean": "rimraf dist",
     "build:clean": "npm run clean && npm run build",
@@ -35,6 +35,7 @@
   "author": "MemberJunction",
   "license": "BUSL-1.1",
   "dependencies": {
+    "@fortawesome/fontawesome-free": "6.7.2",
     "@memberjunction/ai-agent-client": "6.3.0-edge.1",
     "@memberjunction/ai-core-plus": "6.3.0-edge.1",
     "@memberjunction/core": "6.3.0-edge.1",

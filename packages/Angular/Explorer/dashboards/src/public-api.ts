@@ -268,10 +268,14 @@ export * from './VideoStudio';
 export { BaseChiefOfStaffPage, type ChiefOfStaffClientTool } from './ChiefOfStaff/chief-of-staff-page-base';
 export { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
 export { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
+export { ChiefOfStaffAgentChannelsComponent, LoadChiefOfStaffAgentChannels } from './ChiefOfStaff/chief-of-staff-agent-channels.component';
 export { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
 export * from './ChiefOfStaff/chief-of-staff-agent-context';
 export * from './ChiefOfStaff/chief-of-staff-live-refresh';
 
 // Health & Telemetry Observatory
 export * from './HealthObservatory';
+
+// Admin Limits Governance Resource
+export * from './AdminLimits';
 

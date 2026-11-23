@@ -1,12 +1,15 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
     BuildPolicyDraftFromEntity,
     CHIEF_OF_STAFF_AGENT_NAME,
     ChiefOfStaffPage,
+    EvaluateInstructionsOverrideSize,
+    INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD,
+    InstructionsOverrideSizeReport,
     PolicyCalendarChannelModeValue,
     PolicyCoordinationModeValue,
     PolicyDataAccessModeValue,
@@ -16,6 +19,14 @@ import {
     PolicyStatusValue,
 } from './chief-of-staff-agent-context';
 import { BaseChiefOfStaffPage } from './chief-of-staff-page-base';
+
+export interface PolicySizeAuditRow {
+    PolicyID: string;
+    UserName: string;
+    Status: PolicyStatusValue;
+    Length: number;
+    ExceedsThreshold: boolean;
+}
 
 /**
  * The Chief of Staff application's Governance page: edits the user's
@@ -35,6 +46,40 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
 
     public IsSavingPolicy = false;
     public PolicyDirty = false;
+    public readonly InstructionsWarningThreshold = INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD;
+    public AdminPolicySizeRows: PolicySizeAuditRow[] = [];
+    public IsLoadingPolicySizeAudit = false;
+
+    public get DraftInstructionsSize(): InstructionsOverrideSizeReport {
+        return EvaluateInstructionsOverrideSize(
+            this.DraftPolicy.InstructionsOverride,
+            this.InstructionsWarningThreshold,
+        );
+    }
+
+    public get IsAdminUser(): boolean {
+        const user = this.ProviderToUse?.CurrentUser;
+        if (!user) {
+            return false;
+        }
+        if (user.Type?.trim().toLowerCase() === 'owner') {
+            return true;
+        }
+        const roles = user.UserRoles ?? [];
+        return roles.some((ur) => {
+            const name = ur.Role?.trim().toLowerCase() ?? '';
+            return (
+                name === 'administrator' ||
+                name === 'system administrator' ||
+                name === 'admin' ||
+                name === 'administration'
+            );
+        });
+    }
+
+    public get OversizedPolicyCount(): number {
+        return this.AdminPolicySizeRows.filter((r) => r.ExceedsThreshold).length;
+    }
 
     public readonly StatusOptions: readonly PolicyStatusValue[] = ['Active', 'Paused', 'Disabled'];
     public readonly CoordinationModeOptions: readonly {
@@ -107,6 +152,53 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
     /** A reload replaces the draft with the saved policy. */
     protected override OnDataLoaded(): void {
         this.PolicyDirty = false;
+        if (this.IsAdminUser) {
+            void this.LoadAdminPolicySizeAudit();
+        }
+    }
+
+    public async LoadAdminPolicySizeAudit(): Promise<void> {
+        const targetAgentId = this.SelectedAgentID ?? this.chiefOfStaffAgentId;
+        if (!targetAgentId || !this.IsAdminUser || this.IsLoadingPolicySizeAudit) {
+            return;
+        }
+        this.IsLoadingPolicySizeAudit = true;
+        this.cdr.markForCheck();
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const res = await rv.RunView<MJAIAgentUserPolicyEntity>({
+                EntityName: 'MJ: AI Agent User Policies',
+                ExtraFilter: `AgentID='${EscapeSQLString(targetAgentId)}'`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 200,
+                ResultType: 'entity_object',
+            });
+            if (res.Success) {
+                this.AdminPolicySizeRows = res.Results.map((p) => {
+                    const report = EvaluateInstructionsOverrideSize(
+                        p.InstructionsOverride,
+                        this.InstructionsWarningThreshold,
+                    );
+                    return {
+                        PolicyID: p.ID,
+                        UserName: p.User || p.UserID,
+                        Status: p.Status,
+                        Length: report.Length,
+                        ExceedsThreshold: report.ExceedsThreshold,
+                    };
+                }).sort((a, b) => b.Length - a.Length);
+            }
+        } finally {
+            this.IsLoadingPolicySizeAudit = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    public OpenAuditPolicyRecord(policyId: string): void {
+        this.navigationService.OpenEntityRecord(
+            'MJ: AI Agent User Policies',
+            CompositeKey.FromID(policyId),
+        );
     }
 
     protected override HasUnsavedPageEdits(): boolean {

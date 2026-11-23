@@ -26,9 +26,18 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import {
+    CODE_FALLBACK_LIMITS,
+    IsTaskGraphIsolationLevel,
+    LimitsConfigResolver,
+    TASK_GRAPH_ISOLATION_LEVELS,
+    type MJLimitsOverride,
+    type TaskGraphIsolationLevel,
+} from '@memberjunction/core';
 import type { AgentDecisionAnswerSummary, AgentDecisionQuestion } from '../agent-decisions';
 import type { ForEachOperation } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
+import type { WorkflowBudgetCapsConfig } from '../workflow-budget';
 
 /** A conditional dependency edge. */
 export type TaskGraphDependency = {
@@ -139,7 +148,25 @@ export function NormalizeDependency(dep: string | TaskGraphDependency): TaskGrap
  * Adding a kind is one entry in {@link TaskGraphNodeConfigMap} plus one runner — the compiler then
  * forces every exhaustive `switch` over kinds to be updated, which is the point of the union.
  */
-export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
+export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
+
+/** Execution dispatch mode when submitting a task graph (`'Inline'` default or `'Queue'`). */
+export type TaskGraphDispatchMode = 'Inline' | 'Queue';
+
+/**
+ * Builds a deterministic correlation key tying a queued message and `CompleteWaitingStep`
+ * back to a specific graph run, step invocation, and optional fan-out item key.
+ */
+export function BuildEnqueueCorrelationKey(
+    graphRunId: string,
+    stepInvocationId: string,
+    correlationKey?: string,
+    itemKey?: string | number,
+): string {
+    const trimmed = correlationKey?.trim();
+    const base = trimmed && trimmed.length > 0 ? trimmed : `${graphRunId}:${stepInvocationId}`;
+    return itemKey !== undefined ? `${base}:item:${String(itemKey)}` : base;
+}
 
 /**
  * One question a `Decision` node asks: the LLM-facing shape agents already use for decisions, plus
@@ -282,6 +309,29 @@ export type TaskGraphNodeConfigMap = {
         correlationKey?: string;
         /** Hours to wait before the step fails. Omitted means no deadline. */
         expiresInHours?: number;
+    };
+    /**
+     * A node that durably registers waiting state, publishes a work item onto a WorkQueue topic
+     * with a deterministic correlation key (`graphRunId`, `stepInvocationId`, `correlationKey`),
+     * and pauses as an `External` step until an external worker settles it via `CompleteWaitingStep`.
+     */
+    Enqueue: {
+        /** Destination WorkQueue topic name (defaults to `Limits.TaskGraphQueue.DefaultEnqueueTopicName`). */
+        topic?: string;
+        /** Logical domain label for filtering/diagnostics (defaults to `'work-queue'`). */
+        domain?: string;
+        /** WorkQueue `BaseWorkHandler` key or worker routing identifier. */
+        handlerKey?: string;
+        /** Optional action name executed by the default queue item worker. */
+        actionName?: string;
+        /** Optional payload merged with upstream payload and sent in the WorkQueue message. */
+        payload?: Record<string, unknown>;
+        /** Optional correlation key literal or `payload.<path>` expression; omitted derives `<graphRunId>:<stepInvocationId>`. */
+        correlationKey?: string;
+        /** Hours to wait before expiring if never completed. Omitted means no deadline. */
+        expiresInHours?: number;
+        /** Maximum redelivery/retry attempts before terminal failure propagates. */
+        maxRetries?: number;
     };
     /**
      * A node that waits for a moment in time, then completes. Exactly one of the two is set.
@@ -460,6 +510,28 @@ export type TaskGraphSpec = {
      *   completed compensatable `Action` steps.
      */
     failurePolicy?: TaskGraphFailurePolicy;
+
+    /** Optional routine or scheduled workstream identifier used for `PerRoutine` budget enforcement. */
+    routineId?: string | null;
+
+    /** Optional Tier-5 limits override carried on the workflow spec. */
+    limitsOverride?: MJLimitsOverride;
+
+    /** Optional whole-workflow USD cost and wall-clock duration budget caps. */
+    workflowBudget?: WorkflowBudgetCapsConfig;
+
+    /**
+     * Per-graph execution isolation level (`'InProcess' | 'Worker' | 'Process' | 'Container'`).
+     * Derived from the owning workflow entity or `LimitsConfigResolver` (`'InProcess'` default for
+     * upgraded workflows/graphs; `'Worker'` default for newly drafted `Workflow.Draft` graphs).
+     */
+    isolation?: TaskGraphIsolationLevel;
+
+    /** Optional default dispatch mode (`'Inline'` or `'Queue'`) when submitted. */
+    dispatch?: TaskGraphDispatchMode;
+
+    /** Optional override destination WorkQueue topic when `dispatch === 'Queue'`. */
+    queueTopic?: string;
 };
 
 /**
@@ -484,6 +556,8 @@ export const TaskNode = {
         ({ ...base, kind: 'While', configuration }),
     External: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['External']): TaskGraphSpecNode<'External'> =>
         ({ ...base, kind: 'External', configuration }),
+    Enqueue: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Enqueue']): TaskGraphSpecNode<'Enqueue'> =>
+        ({ ...base, kind: 'Enqueue', configuration }),
     Wait: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Wait']): TaskGraphSpecNode<'Wait'> =>
         ({ ...base, kind: 'Wait', configuration }),
     Decision: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Decision']): TaskGraphSpecNode<'Decision'> =>
@@ -545,7 +619,9 @@ export type TaskGraphValidationError = {
          * so whether `payload.x` resolves is a question about a run that has not happened yet;
          * whether `payload.x >` parses is not.
          */
-        | 'InvalidCondition';
+        | 'InvalidCondition'
+        /** `spec.isolation` was supplied with a value outside `InProcess | Worker | Process | Container`. */
+        | 'InvalidIsolation';
     Message: string;
     /** The offending node, when the error is attributable to one. */
     TempId?: string;
@@ -559,25 +635,28 @@ export type TaskGraphValidationResult = {
 /**
  * Maximum nodes in a graph a MODEL authored — a Loop agent's `nextStep.tasks`, or a `Workflow.Draft`.
  *
- * Matches `scratchpadMaxTasks` so an agent that can hold N items in its scratchpad cannot emit a graph
- * larger than it can reason about, and bounds what a runaway model can put on the dispatcher. It is a
- * limit on *model output*, not on workflows: a graph a person drew, or code built, is not subject to
- * it. Callers that validate model output pass it as {@link TaskGraphValidationOptions.MaxTasks}.
+ * Defaults to {@link CODE_FALLBACK_LIMITS.MaxTasksPerAgentGraph} (`10_000`) and resolves dynamically
+ * via {@link GetMaxTasksPerAgentGraph} through `LimitsConfigResolver.Instance`.
  */
-export const MAX_TASKS_PER_AGENT_GRAPH = 50;
+export const MAX_TASKS_PER_AGENT_GRAPH = CODE_FALLBACK_LIMITS.MaxTasksPerAgentGraph;
 
 /**
  * The ceiling for ANY submitted graph — a blast-radius bound, not a design limit.
  *
- * `TaskGraph.Submit` is a remote operation, so something has to stop one request from writing an
- * unbounded number of rows. It is set far above any real workflow (a software-factory epic is
- * hundreds of nodes). Work that genuinely fans out wider than this is one node repeated over a
- * collection, which is what `ForEach` and Record Processes are for.
- *
- * This used to be 50 for every producer, which capped drawn and code-built workflows at the size of
- * an LLM scratchpad. That limit now lives on {@link MAX_TASKS_PER_AGENT_GRAPH}, where it belongs.
+ * Defaults to {@link CODE_FALLBACK_LIMITS.MaxTasksPerGraph} (`100_000`) and resolves dynamically
+ * via {@link GetMaxTasksPerGraph} through `LimitsConfigResolver.Instance`.
  */
-export const MAX_TASKS_PER_GRAPH = 10_000;
+export const MAX_TASKS_PER_GRAPH = CODE_FALLBACK_LIMITS.MaxTasksPerGraph;
+
+/** Resolves the effective model-authored task graph ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxTasksPerAgentGraph(): number {
+    return LimitsConfigResolver.Resolve().Limits.MaxTasksPerAgentGraph;
+}
+
+/** Resolves the effective global task graph blast-radius ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxTasksPerGraph(): number {
+    return LimitsConfigResolver.Resolve().Limits.MaxTasksPerGraph;
+}
 
 /** Options for `ValidateTaskGraphSpec`. */
 export type TaskGraphValidationOptions = {

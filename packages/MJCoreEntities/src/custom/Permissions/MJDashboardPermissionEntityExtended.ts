@@ -1,12 +1,14 @@
-import { BaseEntity, EntityPermissionType, EntitySaveOptions } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, EntityPermissionType, EntitySaveOptions, IMetadataProvider, RunView } from '@memberjunction/core';
+import { EscapeSQLString, IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { DashboardEngine } from '../../engines/dashboards';
 import { MJDashboardPermissionEntity } from '../../generated/entity_subclasses';
 import {
+    AsShareMetadataProvider,
     AssertCallerMayCreateShare,
     BuildActionsSummary,
     CheckShareManagePermission,
+    DeriveSharePermissionLevel,
     DispatchShareNotificationAfterSave,
 } from './BaseShareEntityExtended';
 
@@ -48,18 +50,33 @@ export class MJDashboardPermissionEntityExtended extends MJDashboardPermissionEn
 
         const saved = await super.Save(options);
         if (saved) {
-            await DispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, (provider, grantorId) => ({
-                Provider: provider,
-                ContextUser: this.ContextCurrentUser,
-                GrantorUserID: grantorId,
-                GranteeUserID: this.UserID,
-                ResourceTypeLabel: 'Dashboard',
-                ResourceTypeName: 'Dashboards',
-                ResourceName: this.Dashboard ?? null,
-                ResourceRecordID: this.DashboardID,
-                ActionsSummary: this.actionsSummary(),
-                ExtraConfiguration: { PermissionID: this.ID },
-            }));
+            await DispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, async (provider, grantorId) => {
+                const dashboardName = this.Dashboard?.trim() ? this.Dashboard : await this.fetchDashboardName(provider);
+                const permissionLevel = DeriveSharePermissionLevel({
+                    canEdit: this.CanEdit,
+                    canDelete: this.CanDelete,
+                    canShare: this.CanShare,
+                });
+                return {
+                    Provider: provider,
+                    ContextUser: this.ContextCurrentUser,
+                    GrantorUserID: grantorId,
+                    GranteeUserID: this.UserID,
+                    ResourceTypeLabel: 'Dashboard',
+                    ResourceTypeName: 'Dashboards',
+                    ResourceName: dashboardName,
+                    ResourceRecordID: this.DashboardID,
+                    PermissionLevel: permissionLevel,
+                    ActionsSummary: this.actionsSummary(),
+                    ExtraConfiguration: {
+                        type: 'dashboard',
+                        dashboardId: this.DashboardID,
+                        ResourceRecordID: this.DashboardID,
+                        PermissionID: this.ID,
+                        PermissionLevel: permissionLevel,
+                    },
+                };
+            });
         }
         return saved;
     }
@@ -73,18 +90,70 @@ export class MJDashboardPermissionEntityExtended extends MJDashboardPermissionEn
      * Authorization for CREATING a new DashboardPermission row. Matches the
      * `MJResourcePermissionEntityExtended.callerMayGrantShare` pattern:
      * caller is either the dashboard owner, or holds an existing DashboardPermission
-     * on the same dashboard with `CanShare=true`.
+     * on the same dashboard with `CanShare=true`. Falls back to direct `RunView`
+     * queries if `DashboardEngine.Instance` has not been loaded yet.
      */
-    private callerMayShareDashboard(): boolean {
+    private async callerMayShareDashboard(): Promise<boolean> {
         const user = this.ContextCurrentUser;
         if (!user) return false;
         if (this.isDashboardOwner(user.ID)) return true;
-        return DashboardEngine.Instance.DashboardPermissions.some(
+        if (DashboardEngine.Instance.DashboardPermissions.some(
             (p) =>
                 UUIDsEqual(p.DashboardID, this.DashboardID) &&
                 UUIDsEqual(p.UserID, user.ID) &&
                 p.CanShare === true
-        );
+        )) {
+            return true;
+        }
+
+        const provider = AsShareMetadataProvider(this.ProviderToUse);
+        if (!provider || !IsValidUUID(this.DashboardID)) {
+            return false;
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const escapedDashId = EscapeSQLString(this.DashboardID);
+        const dashRes = await rv.RunView<{ ID: string; UserID?: string | null }>({
+            EntityName: 'MJ: Dashboards',
+            ExtraFilter: `ID='${escapedDashId}'`,
+            Fields: ['ID', 'UserID'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+        }, user);
+        const ownerId = dashRes.Success ? dashRes.Results?.[0]?.UserID : null;
+        if (ownerId && UUIDsEqual(ownerId, user.ID)) {
+            return true;
+        }
+
+        const permRes = await rv.RunView<{ ID: string; CanShare?: boolean }>({
+            EntityName: 'MJ: Dashboard Permissions',
+            ExtraFilter: `DashboardID='${escapedDashId}' AND UserID='${EscapeSQLString(user.ID)}' AND CanShare=1`,
+            Fields: ['ID', 'CanShare'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+        }, user);
+        return Boolean(permRes.Success && permRes.Results?.some((r) => r.CanShare === true));
+    }
+
+    private async fetchDashboardName(provider: IMetadataProvider): Promise<string | null> {
+        const cached = DashboardEngine.Instance.Dashboards?.find((d) => UUIDsEqual(d.ID, this.DashboardID));
+        if (cached?.Name) {
+            return cached.Name;
+        }
+        if (!IsValidUUID(this.DashboardID)) {
+            return null;
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ ID: string; Name?: string | null }>({
+            EntityName: 'MJ: Dashboards',
+            ExtraFilter: `ID='${EscapeSQLString(this.DashboardID)}'`,
+            Fields: ['ID', 'Name'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+        }, this.ContextCurrentUser);
+        return res.Success ? res.Results?.[0]?.Name ?? null : null;
     }
 
     private actionsSummary(): string {

@@ -4,32 +4,43 @@
  * `Get Graph Context` action, and the data-scale edge providers. (IT162 covers the graph tables and the
  * content-pipeline overlay.) Server transport.
  *
- * GR1–GR4 save nothing. GR3 attempts real saves that the approval gate must refuse before any write.
- * GR5–GR6 (`RequiresMutation`) create a temporary graph, provider row and query, and delete them in a
- * `finally`, so a failure still cleans up.
+ * GR1–GR4, GR7 and GR8 save nothing. GR3 attempts real saves that the approval gate must refuse before any write.
+ * GR5–GR6 (`RequiresMutation`) create a temporary graph, provider row and query, and GR9 (`RequiresMutation`)
+ * creates temporary concepts; each deletes what it made in a `finally`, so a failure still cleans up.
  *
  * Registered check IDs:
  *   - `graph-runtime.GR1` — the seeded "MJ Canon" graph (Preload, its three metadata edge providers) traverses
  *     entity-metadata `References` edges from a real entity
  *   - `graph-runtime.GR2` — a user without run permission on a query never sees its node: not through
  *     `FilterNodesForUser`, not as a traversal seed, and not as an audience reader of someone who can
- *   - `graph-runtime.GR3` — a real `Save()` of an edge that starts `Approved` (Declared or Inferred), by a user
- *     who may create edges but does not hold `Graph: Approve Edges`, is refused by the gate and writes nothing
+ *   - `graph-runtime.GR3` — a real `Save()` of an edge or concept that starts `Approved` (or `Deprecated` concept), by a user
+ *     who may create rows but does not hold `Graph: Approve Edges`, is refused by the gate and writes nothing
  *   - `graph-runtime.GR4` — `Get Graph Context` resolves to its registered class, has its metadata row, and
  *     runs: unknown graph → `GRAPH_NOT_FOUND`, real seed → nodes
  *   - `graph-runtime.GR5` — (`RequiresMutation`) a `JoinEntityEdgeProvider` over `MJ: User Roles` expands a user
  *     to exactly their roles
  *   - `graph-runtime.GR6` — (`RequiresMutation`) a `QueryEdgeProvider` yields edges only for a principal who may
  *     run its query: the caller, not a user without the query's run permission, alone or as an audience reader
+ *   - `graph-runtime.GR7` — `GraphEngine.FindPath` finds a real metadata path, and a user who cannot see an
+ *     endpoint gets the same `Found: false` answer as a record that does not exist; the `Find Graph Path`
+ *     action resolves to its class, has its metadata row, and runs
+ *   - `graph-runtime.GR8` — `Propose Canon Domains` with its default dry run proposes domains over the core
+ *     schema and writes no concept
+ *   - `graph-runtime.GR9` — (`RequiresMutation`) Workstream 5a live concept lifecycle: unratified creates/Draft↔Proposed
+ *     allowed without `Graph: Approve Edges`; approving/deprecating/editing-approved/deleting-approved refused;
+ *     curator approval succeeds; `EntityGraphOverlayStore.UpsertConcept` creates new `Approved` concepts via the
+ *     pipeline scope and preserves already-`Approved` concepts
  */
 import { randomUUID } from 'node:crypto';
 import { UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     GraphEngine,
+    GraphFindPathOperation,
     LoadGraphEdgeProviders,
     QueryEngine,
     type GraphEdgeView,
+    type MJGraphConceptEntity,
     type MJGraphEdgeEntity,
     type MJGraphEdgeProviderEntity,
     type MJGraphEntity,
@@ -38,7 +49,8 @@ import {
     type MJQueryEntityExtended,
     type MJQueryPermissionEntity,
 } from '@memberjunction/core-entities';
-import { GRAPH_APPROVE_EDGES_AUTHORIZATION } from '@memberjunction/core-entities-server';
+import { GRAPH_APPROVE_EDGES_AUTHORIZATION, LoadGraphFindPathServerOperation } from '@memberjunction/core-entities-server';
+import { EntityGraphOverlayStore } from '@memberjunction/content-pipeline';
 import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { RunActionParams } from '@memberjunction/actions-base';
 import {
@@ -55,6 +67,8 @@ import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 const CANON = 'MJ Canon';
 const APPROVE_EDGES = GRAPH_APPROVE_EDGES_AUTHORIZATION;
 const GRAPH_CONTEXT_ACTION = 'Get Graph Context';
+const FIND_PATH_ACTION = 'Find Graph Path';
+const PROPOSE_DOMAINS_ACTION = 'Propose Canon Domains';
 const BUNDLE = 'graph-runtime';
 
 /** A never-persisted principal with no roles: it may read, run and approve nothing. */
@@ -185,6 +199,21 @@ async function queryOnlyTheCallerCanRun(ctx: IntegrationCheckContext, roleless: 
     return query!;
 }
 
+/** Run the registered, Active action `name` as the caller, with no execution log. */
+async function runActionAsCaller(ctx: IntegrationCheckContext, name: string, params: Array<{ Name: string; Value: unknown }>) {
+    await ActionEngineServer.Instance.Config(false, ctx.User);
+    const action = ActionEngineServer.Instance.Actions.find((a) => a.Name === name && a.Status === 'Active');
+    Assert(action != null, `the "${name}" action row must be seeded and Active`);
+    AssertEqual(action!.DriverClass, name, 'the action row points at the registered class');
+    const p = new RunActionParams();
+    p.Action = action!;
+    p.ContextUser = ctx.User;
+    p.Params = params.map((x) => ({ ...x, Type: 'Input' as const }));
+    p.Filters = [];
+    p.SkipActionLog = true;
+    return ActionEngineServer.Instance.RunAction(p);
+}
+
 export const GraphRuntimeChecks: NamedCheck[] = [
     {
         Id: 'graph-runtime.GR1',
@@ -280,7 +309,33 @@ export const GraphRuntimeChecks: NamedCheck[] = [
                     }
                 }
             }
-            console.log('      → pre-approved Declared and Inferred edges refused on Save() for a user without the authorization');
+
+            const conceptsEntity = ctx.Provider.EntityByName('MJ: Graph Concepts');
+            const conceptType = engine.ConceptTypes[0];
+            Assert(conceptsEntity?.GetUserPermisions(writer).CanCreate === true, 'fixture invalid: the Integration role must be able to create MJ: Graph Concepts');
+            Assert(conceptType != null, 'a seeded MJ: Graph Concept Types row is required');
+            for (const status of ['Approved', 'Deprecated'] as const) {
+                const concept = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', writer);
+                concept.NewRecord();
+                concept.GraphID = canon!.ID;
+                concept.Name = `__IT167 Refused ${status} (mj-integration-test — safe to delete) ${randomUUID().slice(0, 8)}`;
+                concept.ConceptTypeID = conceptType!.ID;
+                concept.Description = 'Must be refused before writing.';
+                concept.Status = status;
+                let saved = false;
+                try {
+                    saved = await concept.Save();
+                    Assert(!saved, `a pre-${status} concept saved by a user without "${APPROVE_EDGES}" must be refused`);
+                    const message = concept.LatestResult?.CompleteMessage ?? '';
+                    Assert(message.includes(APPROVE_EDGES), `expected the concept approval gate to refuse it, got: ${message}`);
+                    Assert(!concept.IsSaved, 'the refused concept must not have been written');
+                } finally {
+                    if (saved || concept.IsSaved) {
+                        await concept.Delete();
+                    }
+                }
+            }
+            console.log('      → pre-approved Declared/Inferred edges and Approved/Deprecated concepts refused on Save() without Graph: Approve Edges');
         },
     },
     {
@@ -426,6 +481,205 @@ export const GraphRuntimeChecks: NamedCheck[] = [
                     }
                 }
                 await QueryEngine.Instance.Config(true, ctx.User);
+            }
+        },
+    },
+    {
+        Id: 'graph-runtime.GR7',
+        Name: 'GR7: FindPath finds a real metadata path, hides an endpoint the caller cannot see, and the Find Graph Path action runs',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const engine = await configuredGraphEngine(ctx);
+            const from = entityNode(ctx, 'MJ: Entity Fields');
+            const to = entityNode(ctx, 'MJ: Entities');
+            const path = await engine.FindPath(CANON, from, to, { EdgeTypes: ['References'] }, ctx.User);
+            Assert(path.Found, `MJ: Entity Fields must reach MJ: Entities: ${path.Message ?? ''}`);
+            AssertEqual(path.Edges.length, 1, 'one References hop');
+            Assert(UUIDsEqual(path.Nodes[path.Nodes.length - 1].RecordID, to.RecordID), 'the path ends at MJ: Entities');
+
+            // The same user must not be able to tell a record they cannot see from one that does not exist.
+            const roleless = rolelessUser(ctx);
+            const hidden = await engine.FindPath(CANON, from, to, {}, roleless);
+            const missing = await engine.FindPath(CANON, from, { EntityName: 'MJ: Entities', RecordID: randomUUID().toUpperCase() }, {}, roleless);
+            AssertEqual(hidden.Found, false, 'a user who cannot see the endpoints finds no path');
+            AssertEqual(hidden.Message, missing.Message, 'for one user, a hidden endpoint and a missing one give the same answer');
+
+            const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, FIND_PATH_ACTION);
+            Assert(registration != null, `no BaseAction is registered as "${FIND_PATH_ACTION}"`);
+            const run = await runActionAsCaller(ctx, FIND_PATH_ACTION, [
+                { Name: 'From', Value: from },
+                { Name: 'To', Value: to },
+            ]);
+            const findAction = ActionEngineServer.Instance.Actions.find((a) => a.Name === FIND_PATH_ACTION && a.Status === 'Active');
+            Assert(findAction != null, `"${FIND_PATH_ACTION}" metadata row must be loaded`);
+            const findParams = ActionEngineServer.Instance.ActionParams.filter((p) => UUIDsEqual(p.ActionID, findAction!.ID));
+            Assert(
+                findParams.some((p) => p.Name === 'GraphName' && p.Type === 'Input'),
+                `"${FIND_PATH_ACTION}" must own its seeded GraphName input param`,
+            );
+            AssertEqual(run.ResultCode, 'SUCCESS', `Find Graph Path between two real entities: ${run.Message}`);
+            const hops = (run.Params ?? []).find((x) => x.Name === 'HopCount' && x.Type === 'Output')?.Value;
+            Assert(typeof hops === 'number' && hops >= 1, `expected HopCount >= 1, got ${String(hops)}`);
+
+            LoadGraphFindPathServerOperation();
+            const opResult = await new GraphFindPathOperation().Execute(
+                { From: from, To: { Concept: '__no_such_concept_6667__' } },
+                { provider: ctx.Provider, user: ctx.User },
+            );
+            Assert(opResult.Success, `Graph.FindPath remote op failed unexpectedly: ${opResult.ErrorMessage ?? ''}`);
+            AssertEqual(opResult.Output?.Status, 'EndpointNotFound', 'Graph.FindPath reports EndpointNotFound for an unknown endpoint');
+            AssertEqual(opResult.Output?.Endpoint, 'To', 'Graph.FindPath names the missing endpoint side as To');
+
+            console.log(`      → ${path.Edges.length}-hop path found; hidden endpoint answered like a missing one; action returned ${String(hops)} hop(s); remote op Endpoint=To`);
+        },
+    },
+    {
+        Id: 'graph-runtime.GR8',
+        Name: 'GR8: Propose Canon Domains (dry run by default) proposes domains over the core schema and writes nothing',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const engine = await configuredGraphEngine(ctx, true);
+            const before = engine.Concepts.length;
+            const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, PROPOSE_DOMAINS_ACTION);
+            Assert(registration != null, `no BaseAction is registered as "${PROPOSE_DOMAINS_ACTION}"`);
+            const run = await runActionAsCaller(ctx, PROPOSE_DOMAINS_ACTION, [{ Name: 'SchemaNames', Value: [ctx.Provider.ConfigData.MJCoreSchemaName] }]);
+            const proposeAction = ActionEngineServer.Instance.Actions.find((a) => a.Name === PROPOSE_DOMAINS_ACTION && a.Status === 'Active');
+            Assert(proposeAction != null, `"${PROPOSE_DOMAINS_ACTION}" metadata row must be loaded`);
+            const proposeParams = ActionEngineServer.Instance.ActionParams.filter((p) => UUIDsEqual(p.ActionID, proposeAction!.ID));
+            Assert(
+                proposeParams.some((p) => p.Name === 'GraphName' && p.Type === 'Input'),
+                `"${PROPOSE_DOMAINS_ACTION}" must own its seeded GraphName input param without colliding with "${FIND_PATH_ACTION}"`,
+            );
+            AssertEqual(run.ResultCode, 'SUCCESS', `a dry run over the core schema proposes domains: ${run.Message}`);
+            const proposals = (run.Params ?? []).find((x) => x.Name === 'Proposals' && x.Type === 'Output')?.Value;
+            Assert(Array.isArray(proposals) && proposals.length >= 2, `expected at least two proposed domains, got ${Array.isArray(proposals) ? proposals.length : 'none'}`);
+            AssertEqual((await configuredGraphEngine(ctx, true)).Concepts.length, before, 'a dry run writes no concept');
+            console.log(`      → ${(proposals as unknown[]).length} domain(s) proposed over the core schema; nothing written`);
+        },
+    },
+    {
+        Id: 'graph-runtime.GR9',
+        Name: 'GR9: live concept approval gate: Proposed/Draft allowed without Grant, Approved/Deprecated/Edit/Delete gated, pipeline scope creates and preserves Approved concepts',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const engine = await configuredGraphEngine(ctx);
+            const canon = engine.GetGraph(CANON);
+            const conceptType = engine.ConceptTypes.find((t) => t.Name === 'Policy') ?? engine.ConceptTypes[0];
+            Assert(canon != null && conceptType != null, `"${CANON}" and a seeded ConceptType are required`);
+
+            const writer = integrationOnlyUser(ctx);
+            Assert(
+                !ctx.Provider.Authorizations.find((a) => a.Name === APPROVE_EDGES)!.UserCanExecute(writer),
+                `fixture invalid: Integration alone must not hold "${APPROVE_EDGES}"`,
+            );
+
+            const suffix = randomUUID().slice(0, 8);
+            const createdIds: string[] = [];
+            try {
+                // 1. Writer can create Proposed, toggle Proposed -> Draft -> Proposed, and gets refused on Approved / Deprecated
+                const proposed = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', writer);
+                proposed.NewRecord();
+                proposed.GraphID = canon!.ID;
+                proposed.Name = `__IT167 Concept ${suffix} (mj-integration-test — safe to delete)`;
+                proposed.ConceptTypeID = conceptType!.ID;
+                proposed.Description = 'Initial proposal text.';
+                proposed.Status = 'Proposed';
+                Assert(await proposed.Save(), `writer should save Proposed concept: ${proposed.LatestResult?.CompleteMessage}`);
+                createdIds.push(proposed.ID);
+
+                proposed.Status = 'Draft';
+                Assert(await proposed.Save(), `writer should move Proposed -> Draft: ${proposed.LatestResult?.CompleteMessage}`);
+
+                for (const gatedTarget of ['Approved', 'Deprecated'] as const) {
+                    proposed.Status = gatedTarget;
+                    const allowed = await proposed.Save();
+                    Assert(!allowed, `writer must not transition Draft -> ${gatedTarget} without "${APPROVE_EDGES}"`);
+                }
+
+                proposed.Status = 'Proposed';
+                Assert(await proposed.Save(), `writer should move Draft -> Proposed: ${proposed.LatestResult?.CompleteMessage}`);
+
+                // 2. Authorized steward approves the concept; writer then cannot edit, deprecate, or delete it
+                const asSteward = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', ctx.User);
+                Assert(await asSteward.Load(proposed.ID), 'steward must load the Proposed concept');
+                asSteward.Status = 'Approved';
+                Assert(await asSteward.Save(), `steward should approve concept: ${asSteward.LatestResult?.CompleteMessage}`);
+
+                const writerCopy = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', writer);
+                Assert(await writerCopy.Load(proposed.ID), 'writer loads Approved concept');
+                writerCopy.Description = 'Unauthorized overwrite';
+                Assert(!(await writerCopy.Save()), `writer must not edit an Approved concept without "${APPROVE_EDGES}"`);
+
+                const writerDeprecate = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', writer);
+                Assert(await writerDeprecate.Load(proposed.ID), 'writer reloads Approved concept');
+                writerDeprecate.Status = 'Deprecated';
+                Assert(!(await writerDeprecate.Save()), `writer must not deprecate an Approved concept without "${APPROVE_EDGES}"`);
+
+                const writerDelete = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', writer);
+                Assert(await writerDelete.Load(proposed.ID), 'writer reloads Approved concept for Delete');
+                Assert(!(await writerDelete.Delete()), `writer must not delete an Approved concept without "${APPROVE_EDGES}"`);
+
+                // 3. EntityGraphOverlayStore.UpsertConcept as writer creates a new Approved concept in pipeline scope and preserves existing Approved ones
+                const store = new EntityGraphOverlayStore();
+                const pipelineName = `__IT167 Pipeline Concept ${suffix} (mj-integration-test — safe to delete)`;
+                const pipelineConceptId = await store.UpsertConcept(
+                    canon!.ID,
+                    {
+                        Name: pipelineName,
+                        ConceptType: conceptType!.Name,
+                        ConceptTypeID: conceptType!.ID,
+                        AuthorityTier: 'Reference',
+                        Description: 'Original pipeline description.',
+                        Specification: '### Rule\nOriginal pipeline specification.',
+                        Synonyms: [],
+                        Confidence: 0.9,
+                        Citations: [],
+                    },
+                    'Approved',
+                    writer,
+                    ctx.Provider,
+                );
+                createdIds.push(pipelineConceptId);
+
+                const reloaded = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', ctx.User);
+                Assert(await reloaded.Load(pipelineConceptId), 'must load pipeline-created Approved concept');
+                AssertEqual(reloaded.Status, 'Approved', 'pipeline-created concept Status');
+
+                // Re-running UpsertConcept matching ExistingConceptID leaves Approved description intact
+                const returnedId = await store.UpsertConcept(
+                    canon!.ID,
+                    {
+                        Name: pipelineName,
+                        ConceptType: conceptType!.Name,
+                        ConceptTypeID: conceptType!.ID,
+                        AuthorityTier: 'Reference',
+                        Description: 'Attempted overwrite from re-ingest.',
+                        Specification: '### Rule\nAttempted overwrite specification.',
+                        Synonyms: [],
+                        Confidence: 0.9,
+                        Citations: [],
+                        ExistingConceptID: pipelineConceptId,
+                        ExistingStatus: 'Approved',
+                    },
+                    'Approved',
+                    writer,
+                    ctx.Provider,
+                );
+                AssertEqual(returnedId, pipelineConceptId, 'UpsertConcept returns preserved ExistingConceptID');
+                Assert(await reloaded.Load(pipelineConceptId), 'reload preserved Approved concept');
+                AssertEqual(reloaded.Description, 'Original pipeline description.', 'Approved concept description must stay preserved');
+                console.log('      → concept Create/Transition/Edit/Delete gated; pipeline scope creates and preserves Approved concepts');
+            } finally {
+                for (const id of createdIds) {
+                    try {
+                        const row = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', ctx.User);
+                        if (await row.Load(id)) {
+                            if (!(await row.Delete())) {
+                                console.error(`${BUNDLE} GR9 teardown warning: ${row.LatestResult?.CompleteMessage}`);
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`${BUNDLE} GR9 teardown warning: ${e instanceof Error ? e.message : String(e)}`);
+                    }
+                }
             }
         },
     },

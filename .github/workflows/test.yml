@@ -143,6 +143,8 @@ jobs:
             .github/scripts/migration-validator-seeds-baseline.json
             # The dynamic-import gate runs in the Source guards job; an edit to it alone must run it and its suite.
             .github/scripts/check-dynamic-imports.mjs
+            # The RunawayGuard limits-literals guard runs in Source guards; an edit to it alone must run it too.
+            .github/scripts/sweep-limits-literals.mjs
             # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
             # vitest suite lives in __tests__ — so an edit to the guard script alone must run it too.
             .github/scripts/check-exact-pins.mjs
@@ -429,6 +431,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
 
+      - name: RunawayGuard limits-literals guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/sweep-limits-literals.mjs --check-standards
+
       # Dynamic-replace guard (#3171): `.replace(search, replacement)` expands
       # $$, $&, $` and $' when `replacement` is a STRING, so any '$' in runtime
       # data passed there is silently executed instead of inserted. That wrote
@@ -562,19 +568,22 @@ jobs:
       #
       # Backed by org-level secrets/variables: SECRET `TURBO_TOKEN`, VARIABLE `TURBO_TEAM`, and
       # SECRET `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. `TURBO_API` is only for a self-hosted cache
-      # server and is deliberately unset. Fork PRs never receive the secrets, so they degrade to a
-      # cold local cache rather than failing — the same inert behavior this block had before the
-      # credentials existed.
+      # server and is deliberately unset. PR-triggered runs (fork or same-repo) never receive the
+      # secrets: the token can WRITE cache entries and the signature key signs them, so handing both
+      # to unreviewed PR code would let it upload poisoned, correctly-signed artifacts keyed to
+      # next's or a release commit's task hashes — which release-test.yml would then replay as a
+      # passing gate. PR runs therefore degrade to a cold local cache rather than failing — the
+      # same inert behavior this block had before the credentials existed.
       #
       # turbo.json sets `remoteCache.signature`, so artifacts are HMAC-signed on upload and
       # verified on download; anything that fails verification is treated as a cache miss. Every
       # job that runs turbo needs ALL FOUR vars. A job holding the token but missing the signature
       # key does NOT fail — it logs `signing artifact failed` and silently uploads nothing, so a
       # missed job degrades to write-nothing rather than breaking the run.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     outputs:
       turbo_filter: ${{ steps.scope.outputs.turbo_filter }}
       shards: ${{ steps.plan.outputs.shards }}
@@ -883,10 +892,10 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
       # Consumed by the Redis-gated suites. No key prefix is set here: those suites choose their
       # own (`test-integration`), and each job gets its own Redis service container, so there is no
       # keyspace to share with anyone.
@@ -1007,10 +1016,10 @@ jobs:
     permissions:
       contents: read
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -1282,10 +1291,10 @@ jobs:
     permissions:
       contents: read
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7

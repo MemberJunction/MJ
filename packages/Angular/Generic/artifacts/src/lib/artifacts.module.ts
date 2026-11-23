@@ -65,6 +65,7 @@ import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewe
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
 import { ArtifactVersionHistoryComponent } from './components/artifact-version-history.component';
 import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
+import { ArtifactRelatedPanelComponent } from './components/artifact-related-panel.component';
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
 import { ArtifactAgentPresenceBarComponent } from './components/presence/artifact-agent-presence-bar.component';
 import { ArtifactAgentRegionIndicatorComponent } from './components/presence/artifact-agent-region-indicator.component';
@@ -135,6 +136,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     VideoProductionArtifactPreviewComponent,
   ],
   imports: [
+    ArtifactRelatedPanelComponent,
     CommonModule,
     FormsModule,
     MarkdownModule,
@@ -171,6 +173,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     ArtifactCommandPaletteComponent,
   ],
   exports: [
+    ArtifactRelatedPanelComponent,
     // Export artifact type plugin viewer
     ArtifactTypePluginViewerComponent,
 
