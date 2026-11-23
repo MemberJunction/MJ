@@ -90,6 +90,17 @@ describe('ng-flow-editor spatial-first hybrid upgrades', () => {
     expect(list.GetStepTypeLabel(s2)).toBe('Person');
   });
 
+  it('orders Playbook steps topologically when step and path UUID casing differs', () => {
+    const list = new AgentStepListComponent();
+    const s2 = { ID: '00000000-0000-0000-0000-0000000000ab', Name: 'Approve', StepType: 'Human', Status: 'Active', StartingStep: false } as Partial<MJAIAgentStepEntity> as MJAIAgentStepEntity;
+    const s1 = { ID: '00000000-0000-0000-0000-0000000000aa', Name: 'Fetch', StepType: 'Action', Status: 'Active', StartingStep: true } as Partial<MJAIAgentStepEntity> as MJAIAgentStepEntity;
+    const p1 = { ID: '00000000-0000-0000-0000-000000000010', OriginStepID: s1.ID.toUpperCase(), DestinationStepID: s2.ID.toUpperCase() } as Partial<MJAIAgentStepPathEntity> as MJAIAgentStepPathEntity;
+
+    list.Steps = [s2, s1];
+    list.Paths = [p1];
+    expect(list.OrderedSteps.map(s => s.Name)).toEqual(['Fetch', 'Approve']);
+  });
+
   it('filters pickers, inserts upstream variable pills, and stores Saga rollback config in AgentPropertiesPanelComponent', () => {
     const panel = new AgentPropertiesPanelComponent();
     const step = {
