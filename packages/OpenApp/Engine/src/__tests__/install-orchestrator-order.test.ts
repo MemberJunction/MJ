@@ -1833,17 +1833,117 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
         expect(warnings.some((w) => w.includes("'app-tasks'") && w.includes('1.0.0'))).toBe(true);
     });
 
-    it('does not follow a file: dependency recorded for an app installed from GitHub', async () => {
+    /** An install of app-root where app-tasks has `record` as its ManifestJSON and app-common is at 1.0.0. */
+    async function installOver(record: string, refs: Record<string, string> = {}) {
         vi.mocked(ListInstalledApps).mockResolvedValue([
-            installedRow('app-tasks', manifestJSON('app-tasks', { 'app-local': { version: '^1.0.0', repository: 'file:apps/app-local' } })),
+            installedRow('app-tasks', record),
             installedRow('app-common', manifestJSON('app-common', {})),
         ]);
-        serveRefs({ [repoUrl('app-root')]: root });
+        serveRefs({ [repoUrl('app-root')]: root, ...refs });
+        return InstallApp({ Source: repoUrl('app-root') }, ctx);
+    }
+    const recordWith = (changes: Record<string, unknown>) => JSON.stringify({ ...JSON.parse(manifestJSON('app-tasks', {})), ...changes });
+    const tasksWarnings = () => warnings.filter((w) => w.includes("'app-tasks'"));
+    const fetchedVersions = (url: string) => vi.mocked(FetchManifestFromGitHub).mock.calls.filter(([u]) => u === url).map(([, version]) => version);
 
-        const result = await InstallApp({ Source: repoUrl('app-root') }, ctx);
+    it('refuses on an array-form record that is not satisfied', async () => {
+        const result = await installOver(recordWith({
+            dependencies: [{ name: 'app-common', repository: repoUrl('app-common'), versionRange: '>=1.5.0 <2.0.0' }],
+        }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("Dependency 'app-common' is installed (v1.0.0) but does not satisfy required range '>=1.5.0 <2.0.0'");
+        expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+    });
+
+    it.each([
+        ['dependencies that are not a map', recordWith({ dependencies: 'bad' })],
+        ['a dependency without a range', recordWith({ dependencies: { 'app-common': { repository: repoUrl('app-common') } } })],
+        ['a record that is not an object', 'null'],
+    ])('warns and reads the installed version for %s', async (_name, record) => {
+        const result = await installOver(record, { [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion });
 
         expect(result.ErrorMessage).toBeUndefined();
         expect(installSequence).toEqual(['app-root']);
-        expect(warnings.some((w) => w.includes('file:apps/app-local'))).toBe(true);
+        expect(fetchedVersions(repoUrl('app-tasks'))).toEqual(['1.0.0']);
+        expect(tasksWarnings()).toHaveLength(1);
+        expect(tasksWarnings()[0]).toContain('they are read from');
+        expect(tasksWarnings()[0]).not.toContain('Cannot read properties');
+    });
+
+    it('uses the recorded dependencies when another field no longer passes validation', async () => {
+        const result = await installOver(recordWith({ tags: ['Not A Valid Tag'], dependencies: needs('app-common', '>=1.5.0 <2.0.0') }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("does not satisfy required range '>=1.5.0 <2.0.0'");
+        expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+    });
+
+    it('ignores only the file: dependency recorded for an app installed from GitHub', async () => {
+        const fileDependency = { 'app-local': { version: '^1.0.0', repository: 'file:apps/app-local' } };
+        const result = await installOver(
+            manifestJSON('app-tasks', { ...fileDependency, ...needs('app-common', '>=1.5.0 <2.0.0') }),
+            { [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion },
+        );
+
+        // The rest of the record is still checked, and the source is not asked instead.
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("does not satisfy required range '>=1.5.0 <2.0.0'");
+        expect(result.ErrorMessage).not.toContain('app-local');
+        expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+        expect(tasksWarnings()).toHaveLength(1);
+        expect(tasksWarnings()[0]).toContain('file:apps/app-local');
+    });
+
+    it('reads an unreadable record from the folder and by the name the app was installed with', async () => {
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            { ...installedRow('app-tasks', '{not json'), Subpath: 'apps/tasks' },
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [repoUrl('app-root')]: root, [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion });
+
+        await InstallApp({ Source: repoUrl('app-root') }, ctx);
+
+        const call = vi.mocked(FetchManifestFromGitHub).mock.calls.find(([url]) => url === repoUrl('app-tasks'));
+        expect(call?.slice(3)).toEqual(['apps/tasks', 'app-tasks']);
+    });
+
+    it('warns that requirements are unchecked when neither the record nor the source can be read', async () => {
+        const result = await installOver('{not json');
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(warnings.some((w) => w.includes("'app-tasks'") && w.includes('not checked') && w.includes('no manifest for'))).toBe(true);
+    });
+
+    it('does not mark the app being upgraded as Error when reading a dependency is rate limited', async () => {
+        const rootRow = installedRow('app-root', root, '0.9.0');
+        vi.mocked(FindInstalledApp).mockResolvedValue(rootRow);
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            rootRow, installedRow('app-tasks', '{not json'), installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        vi.mocked(FetchManifestFromGitHub).mockImplementation(async (url) => {
+            if (url === repoUrl('app-tasks')) throw new Error('GitHub rate limit hit');
+            return { Success: true, ManifestJSON: root };
+        });
+
+        const result = await UpgradeApp({ AppName: 'app-root', Version: '1.0.0' }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(result.Success).toBe(true);
+        expect(warnings.some((w) => w.includes('not checked') && w.includes('GitHub rate limit hit'))).toBe(true);
+    });
+
+    it('does not read the record of the app being upgraded', async () => {
+        const rootRow = installedRow('app-root', '{not json', '0.9.0');
+        vi.mocked(FindInstalledApp).mockResolvedValue(rootRow);
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            rootRow, installedRow('app-tasks', tasksAtInstalledVersion), installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root });
+
+        const result = await UpgradeApp({ AppName: 'app-root', Version: '1.0.0' }, ctx);
+
+        expect(result.Success).toBe(true);
+        expect(warnings.filter((w) => w.includes("installed app 'app-root'"))).toEqual([]);
     });
 });

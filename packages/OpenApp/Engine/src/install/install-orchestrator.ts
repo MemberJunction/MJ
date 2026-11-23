@@ -9,13 +9,13 @@ import { readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
-import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
+import { ParseAndValidateManifest, ParseManifestDependencies } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import type { GitHubClientOptions, MigrationDownloadResult } from '../github/github-client.js';
-import { ResolveAppSource, SubpathFromLocator, type OpenAppSource } from '../source/open-app-source.js';
+import type { GitHubClientOptions, ManifestFetchResult, MigrationDownloadResult } from '../github/github-client.js';
+import { ResolveAppSource, SubpathFromLocator, type OpenAppSource, type SourceContext } from '../source/open-app-source.js';
 import { IsLocalAppLocator } from '../source/local-app-source.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation, type SchemaOperationResult, type ValidateSchemaNameOptions } from './schema-manager.js';
@@ -1745,7 +1745,16 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     if (app.Status !== 'Active' && app.Status !== 'Disabled') {
       continue;
     }
-    installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL, Dependencies: ReadInstalledDependencies(app, context) };
+    // The app being upgraded: its new manifest is the graph's root, and its record is about to be replaced.
+    if (app.Name === manifest.name) {
+      continue;
+    }
+    installedMap[app.Name] = {
+      Version: app.Version,
+      Repository: app.RepositoryURL,
+      Subpath: app.Subpath,
+      Dependencies: ReadInstalledDependencies(app, context),
+    };
   }
 
   // Zod infers object variant fields as optional; DependencyValue requires them.
@@ -1764,6 +1773,9 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     BuildManifestFetcher(context, localManifests),
     (repoUrl, versionRange) => ResolveDependencyVersion(repoUrl, versionRange, context.GitHubOptions, context.RepoRoot),
   );
+  for (const warning of result.Warnings ?? []) {
+    context.Callbacks?.OnWarn?.('Dependencies', warning);
+  }
   if (!result.Success) {
     return { Success: false, ErrorMessage: result.ErrorMessage };
   }
@@ -1783,27 +1795,28 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 /**
  * What an installed app depends on, read from its persisted `ManifestJSON` (the documented source
  * of truth, saved in the same write as `Version`). Returns undefined, after a warning, when that
- * manifest cannot be parsed or names a local dependency the app may not declare: the graph then
- * reads the installed version's manifest from the app's source, which applies the same rules.
+ * cannot be read: the graph then reads the installed version's manifest from the app's source. A
+ * `file:` dependency the app may not declare is left out, after a warning.
  */
 function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorContext): Record<string, DependencyValue> | undefined {
-  let dependencies: MJAppManifest['dependencies'];
-  try {
-    dependencies = (JSON.parse(app.ManifestJSON) as MJAppManifest).dependencies;
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+  const recorded = ParseManifestDependencies(app.ManifestJSON);
+  if (!recorded.Success || !recorded.Dependencies) {
     context.Callbacks?.OnWarn?.(
       'Dependencies',
-      `Could not parse the recorded manifest of installed app '${app.Name}' (${message}). If this operation needs its dependencies, they are read from ${app.RepositoryURL} at version ${app.Version}.`,
+      `Could not read the recorded dependencies of installed app '${app.Name}' (${recorded.Errors?.join(', ')}). If this operation needs them, they are read from ${app.RepositoryURL} at version ${app.Version}.`,
     );
     return undefined;
   }
-  const localDependencyError = DescribeUntrustedLocalDependency(app.Name, app.RepositoryURL, dependencies);
-  if (localDependencyError) {
-    context.Callbacks?.OnWarn?.('Dependencies', `The recorded dependencies of installed app '${app.Name}' are ignored. ${localDependencyError}`);
-    return undefined;
+  const dependencies = recorded.Dependencies as Record<string, DependencyValue>;
+  const untrusted = FindUntrustedLocalDependencies(app.RepositoryURL, dependencies);
+  if (untrusted.length === 0) {
+    return dependencies;
   }
-  return (dependencies ?? {}) as Record<string, DependencyValue>;
+  context.Callbacks?.OnWarn?.(
+    'Dependencies',
+    `${DescribeUntrustedLocalDependency(app.Name, app.RepositoryURL, dependencies)} They are ignored.`,
+  );
+  return Object.fromEntries(Object.entries(dependencies).filter(([name]) => !untrusted.includes(name)));
 }
 
 /**
@@ -1813,8 +1826,8 @@ function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorC
  * `localManifests`, keyed by its locator.
  */
 function BuildManifestFetcher(context: OrchestratorContext, localManifests: Map<string, MJAppManifest>): ManifestFetcher {
-  return async (repoUrl: string, subpath?: string, version?: string) => {
-    const fetched = await ResolveAppSource(repoUrl, { GitHubOptions: context.GitHubOptions, Subpath: subpath, RepoRoot: context.RepoRoot }).FetchManifest(version);
+  return async (repoUrl: string, subpath?: string, version?: string, appName?: string) => {
+    const fetched = await FetchDependencyManifest(repoUrl, { GitHubOptions: context.GitHubOptions, Subpath: subpath, AppName: appName, RepoRoot: context.RepoRoot }, version);
     if (!fetched.Success || !fetched.ManifestJSON) {
       return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
     }
@@ -1842,6 +1855,19 @@ function BuildManifestFetcher(context: OrchestratorContext, localManifests: Map<
 }
 
 /**
+ * Fetches a dependency's manifest. A source that throws (a rate limit while it looks for a version
+ * tag) is a failed fetch: thrown out of {@link UpgradeApp} it would mark the app being upgraded as
+ * `Error`, although nothing has changed yet.
+ */
+async function FetchDependencyManifest(repoUrl: string, sourceContext: SourceContext, version?: string): Promise<ManifestFetchResult> {
+  try {
+    return await ResolveAppSource(repoUrl, sourceContext).FetchManifest(version);
+  } catch (error: unknown) {
+    return { Success: false, ErrorMessage: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
  * Returns why an app may not declare its `file:` dependencies, or undefined when it may. Only an
  * app read from a local folder may name another folder of the consumer repository; an app from
  * GitHub may not reach into the repository it is installed into.
@@ -1851,17 +1877,25 @@ function DescribeUntrustedLocalDependency(
   appLocator: string,
   dependencies: MJAppManifest['dependencies'],
 ): string | undefined {
-  if (IsLocalAppLocator(appLocator)) {
-    return undefined;
-  }
-  const local = Object.entries(dependencies ?? {})
-    .filter(([, value]) => typeof value !== 'string' && IsLocalAppLocator(value.repository ?? ''))
-    .map(([name, value]) => `${name} (${typeof value === 'string' ? value : value.repository})`);
+  const local = FindUntrustedLocalDependencies(appLocator, dependencies).map((name) => {
+    const value = dependencies?.[name];
+    return `${name} (${typeof value === 'string' ? value : value?.repository})`;
+  });
   if (local.length === 0) {
     return undefined;
   }
   return `App '${appName}' from ${appLocator} declares local dependencies: ${local.join(', ')}. `
     + `Only an app installed from a local folder may depend on a file: locator.`;
+}
+
+/** The names of the `file:` dependencies that an app read from `appLocator` may not declare. */
+function FindUntrustedLocalDependencies(appLocator: string, dependencies: MJAppManifest['dependencies']): string[] {
+  if (IsLocalAppLocator(appLocator)) {
+    return [];
+  }
+  return Object.entries(dependencies ?? {})
+    .filter(([, value]) => typeof value !== 'string' && IsLocalAppLocator(value.repository ?? ''))
+    .map(([name]) => name);
 }
 
 /**
