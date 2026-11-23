@@ -99,7 +99,7 @@ cd packages/Angular/Explorer/explorer-app && npm run build
 - [`@memberjunction/ng-explorer-core`](../explorer-core) - Shell, routing, and resource components
 - [`@memberjunction/ng-workspace-initializer`](../workspace-initializer) - Workspace initialization service
 - [`@memberjunction/ng-explorer-modules`](../explorer-modules) - Consolidated module bundle
-- [`@memberjunction/ng-auth-services`](../auth-services) - Authentication abstraction
+- [`@memberjunction/ng-auth-services`](../../Generic/auth-services) - Authentication abstraction
 
 ## License
 

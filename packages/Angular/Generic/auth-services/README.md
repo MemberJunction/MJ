@@ -1,6 +1,6 @@
 # @memberjunction/ng-auth-services
 
-Angular authentication services for MemberJunction Explorer applications. Provides a unified abstraction layer supporting multiple OAuth providers (Auth0, Microsoft MSAL, Okta, Cognito, WorkOS) through a consistent, type-safe API.
+Angular authentication services for MemberJunction applications, usable in MJ Explorer or any other Angular app. Provides a unified abstraction layer supporting multiple OAuth providers (Auth0, Microsoft MSAL, Okta, Cognito, WorkOS) through a consistent, type-safe API.
 
 ## Overview
 
