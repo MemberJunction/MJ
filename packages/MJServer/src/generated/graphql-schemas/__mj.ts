@@ -33982,55 +33982,6 @@ export class CreateMJCommunicationConsentAuditLogInput {
     RestoreContext___?: RestoreContextInput;
 }
     
-
-//****************************************************************************
-// INPUT TYPE for MJ: Communication Consent Audit Logs
-//****************************************************************************
-@InputType()
-export class UpdateMJCommunicationConsentAuditLogInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    CommunicationSuppressionID?: string | null;
-
-    @Field({ nullable: true })
-    CommunicationPrincipalPreferenceID?: string | null;
-
-    @Field({ nullable: true })
-    Action?: string;
-
-    @Field({ nullable: true })
-    PreviousValue?: string | null;
-
-    @Field({ nullable: true })
-    NewValue?: string | null;
-
-    @Field({ nullable: true })
-    Source?: string;
-
-    @Field({ nullable: true })
-    CommunicationLogID?: string | null;
-
-    @Field({ nullable: true })
-    IPAddress?: string | null;
-
-    @Field({ nullable: true })
-    UserAgent?: string | null;
-
-    @Field({ nullable: true })
-    ChangedByUserID?: string | null;
-
-    @Field({ nullable: true })
-    ChangedAt?: Date;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
 //****************************************************************************
 // RESOLVER for MJ: Communication Consent Audit Logs
 //****************************************************************************
@@ -34098,23 +34049,6 @@ export class MJCommunicationConsentAuditLogResolver extends ResolverBase {
         return this.CreateRecord('MJ: Communication Consent Audit Logs', input, provider, userPayload, pubSub)
     }
         
-    @Mutation(() => MJCommunicationConsentAuditLog_)
-    async UpdateMJCommunicationConsentAuditLog(
-        @Arg('input', () => UpdateMJCommunicationConsentAuditLogInput) input: UpdateMJCommunicationConsentAuditLogInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: Communication Consent Audit Logs', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => MJCommunicationConsentAuditLog_)
-    async DeleteMJCommunicationConsentAuditLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: Communication Consent Audit Logs', key, options, provider, userPayload, pubSub);
-    }
-    
 }
 
 //****************************************************************************

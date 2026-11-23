@@ -17,12 +17,12 @@ export class MJCommunicationSenderFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressions', sectionName: 'Communication Suppressions', isExpanded: false },
+            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
+            { sectionKey: 'mJCommunicationSenderPermissions', sectionName: 'Communication Sender Permissions', isExpanded: false },
             { sectionKey: 'mJCommunicationActivities', sectionName: 'Communication Activities', isExpanded: false },
             { sectionKey: 'mJCommunicationPreferences', sectionName: 'Communication Preferences', isExpanded: false },
             { sectionKey: 'mJCommunicationSenders', sectionName: 'Communication Senders', isExpanded: false },
-            { sectionKey: 'mJCommunicationSenderPermissions', sectionName: 'Communication Sender Permissions', isExpanded: false },
             { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false }
         ]);
     }

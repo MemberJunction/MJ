@@ -1,7 +1,7 @@
 # MJ Comms V2 — Phase 2: Core Deliverability Primitive & Compliance Gate
 
 **Phase:** 2 of 6 (`packages/Communication/base-types` & `@memberjunction/communication-engine`)  
-**Prerequisite:** **Phase 1** ([V202611201300__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql) + `mj codegen`)
+**Prerequisite:** **Phase 1** ([V202611231029__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611231029__v6.3.x__Communications_V2_Schema.sql) + `mj codegen`)
 
 ---
 
@@ -22,7 +22,7 @@ Comms V2 explicitly separates **deliverability** from **template rendering**:
 
 | Workstream | Exact Dependency / Seam | How Phase 2 Stays Isolated Now |
 | :--- | :--- | :--- |
-| **Phase 1 (Schema + CodeGen)** *(Hard Prereq)* | `V202611201300__v6.3.x__Communications_V2_Schema.sql` + `mj codegen` | Must run first so `@memberjunction/core-entities` exports strongly-typed entities and `CHECK`-derived unions. |
+| **Phase 1 (Schema + CodeGen)** *(Hard Prereq)* | `V202611231029__v6.3.x__Communications_V2_Schema.sql` + `mj codegen` | Must run first so `@memberjunction/core-entities` exports strongly-typed entities and `CHECK`-derived unions. |
 | **Phase 3 (Providers & Endpoints)** | `SendGridProvider` headers/`mj_log_id`, webhook & open-pixel routes | Phase 2 defines `MessageResult.ProviderMessageID`, `NormalizedActivityEvent`, and `BaseCommunicationProvider` guardrails; verified via `DryRun: true` and mock providers. |
 | **Phase 4 (Metadata Seed)** | Starter `Jurisdiction`s, `RuleType`s, `CAN-SPAM`/`GDPR`, `MJ: Users`, default `Company` sender | Phase 2 unit tests use in-memory metadata fixtures; engine degrades gracefully when regime tables are empty. |
 | **Phase 6 (WorkQueue Enhancements)** | `PublishRequest.ScheduledAt` (for `QuietHours` deferral / `SendAt`) + per-key rate limiting | Phase 2 publishes immediate `comms.dispatch` / `comms.send` jobs now and records `CommunicationLog.ScheduledAt` for Phase 6. |

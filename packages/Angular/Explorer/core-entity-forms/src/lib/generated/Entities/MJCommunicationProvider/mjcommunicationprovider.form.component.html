@@ -329,31 +329,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Communication Provider Events Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationProviderEvents"
-        SectionName="Communication Provider Events"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationProviderEvents')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Provider Events','CommunicationProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Provider Events','CommunicationProviderID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationProviderEvents')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationProviderEvents', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Communication Activities Section -->
     <mj-collapsible-panel
         SectionKey="mJCommunicationActivities"
@@ -373,6 +348,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationActivities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Sending Domains Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationSendingDomains"
+        SectionName="Communication Sending Domains"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationSendingDomains')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Sending Domains','CommunicationProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Sending Domains','CommunicationProviderID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationSendingDomains')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSendingDomains', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -404,25 +404,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Communication Sending Domains Section -->
+    <!-- Communication Provider Events Section -->
     <mj-collapsible-panel
-        SectionKey="mJCommunicationSendingDomains"
-        SectionName="Communication Sending Domains"
+        SectionKey="mJCommunicationProviderEvents"
+        SectionName="Communication Provider Events"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationSendingDomains')"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationProviderEvents')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Sending Domains','CommunicationProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Sending Domains','CommunicationProviderID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationSendingDomains')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Provider Events','CommunicationProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Provider Events','CommunicationProviderID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationProviderEvents')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSendingDomains', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationProviderEvents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

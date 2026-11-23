@@ -85,7 +85,7 @@ function isUnset(value: unknown): boolean {
 
 /**
  * CHECK constraints on CommunicationSuppression that the real database enforces
- * (migrations/v6/V202611221416__v6.3.x__Communications_V2_Schema.sql).
+ * (migrations/v6/V202611231029__v6.3.x__Communications_V2_Schema.sql).
  */
 function suppressionConstraintViolation(row: MockRecord): string | null {
   const prefix = 'The INSERT statement conflicted with the CHECK constraint';

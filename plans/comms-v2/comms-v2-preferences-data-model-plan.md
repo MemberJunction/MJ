@@ -1,7 +1,7 @@
 # MJ Comms V2 — Phase 1: Preferences, Senders & Compliance Data Model Plan
 
 **Status:** Implemented. Where this plan and the code differ, the generated entities and [`guides/COMMUNICATIONS_V2_GUIDE.md`](../../guides/COMMUNICATIONS_V2_GUIDE.md) are authoritative.  
-**Migration:** [V202611201300__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql)  
+**Migration:** [V202611231029__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611231029__v6.3.x__Communications_V2_Schema.sql)  
 ---
 
 ## Phase 1–6 Implementation Sequence (At a Glance)
@@ -19,7 +19,7 @@
 
 ## 1. Summary of Model Updates & Refinements
 
-All schema updates are incorporated directly into `CREATE TABLE` / `ALTER TABLE CommunicationLog` in [V202611201300__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql):
+All schema updates are incorporated directly into `CREATE TABLE` / `ALTER TABLE CommunicationLog` in [V202611231029__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611231029__v6.3.x__Communications_V2_Schema.sql):
 
 1. **`Pending` State + Single vs. Double Opt-In Tracking (`CommunicationPrincipalPreference`):**
    * `State` `CHECK` constraint: `('Pending', 'Opted In', 'Opted Out')`. `'Pending'` blocks `Marketing` and `Operational` sends only (allowing transactional confirmation emails).
