@@ -80,12 +80,13 @@ Three things hold across all six:
 ## Controls
 
 ### `button[mjButton]` / `a[mjButton]` — MJButtonDirective
-Attribute directive that styles a **native** button or anchor. Variants: `primary | secondary (default) | outline | flat | danger | icon | success | warning`. Sizes: `sm | md (default) | lg`. Toggle mode via `[toggleable]` + `[(selected)]` (sets `aria-pressed`). Dev-mode warns when an `icon` button lacks an accessible name — pass `ariaLabel`.
+Attribute directive that styles a **native** button or anchor. Variants: `primary | secondary (default) | outline | flat | danger | icon | success | warning`. Sizes: `sm | md (default) | lg`. Shapes: `default | circle`. Layout & state: `[FullWidth]` (`width: 100%`), `[Disabled]` (sets `aria-disabled="true"`, `tabindex="-1"`, and blocks pointer/keyboard activation on `a[mjButton]`; forwards to `disabled` on `<button>` without clobbering native `[disabled]`), `[Toggleable]` + `[(Selected)]` (sets `aria-pressed`). Dev-mode warns when an `icon` or `circle` button lacks an accessible name; pass `AriaLabel`. Themeable via Tier 3 `--mj-button-*` CSS custom properties (`button.scss`, unset on `:root` per `plans/ui-foundation/NAMING.md`).
 
 ```html
-<button mjButton variant="primary" (click)="save()">Save</button>
-<button mjButton variant="icon" ariaLabel="Remove" (click)="remove()"><i class="fa-solid fa-xmark"></i></button>
-<button mjButton variant="flat" [toggleable]="true" [(selected)]="isActive">Toggle</button>
+<button mjButton Variant="primary" (click)="save()">Save</button>
+<button mjButton Variant="icon" AriaLabel="Remove" (click)="remove()"><i class="fa-solid fa-xmark"></i></button>
+<button mjButton Variant="flat" [Toggleable]="true" [(Selected)]="isActive">Toggle</button>
+<a mjButton Variant="outline" [href]="reportUrl" [Disabled]="!canExport" FullWidth>Export report</a>
 ```
 
 ### `mj-combobox` — MJComboboxComponent
