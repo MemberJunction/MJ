@@ -707,7 +707,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      *
      * If AdditionalLoading starts deriving anything from one of these, remove it from this set.
      */
-    private static readonly IMMEDIATE_MUTATION_PROPERTIES: ReadonlySet<string> = new Set(['_vectorIndexes']);
+    private static readonly IMMEDIATE_MUTATION_PROPERTIES: ReadonlySet<string> = new Set([
+        '_vectorIndexes',
+        '_agentPersonas',
+        '_agentPermissions',
+    ]);
 
     protected override canUseImmediateMutation(config: BaseEnginePropertyConfig, skipAdditionalLoadingCheck: boolean = false): boolean {
         const independent = AIEngineBase.IMMEDIATE_MUTATION_PROPERTIES.has(config.PropertyName);
@@ -715,23 +719,37 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * Intercepts `MJ: AI Agents` save and `remote-invalidate` events so that promoting a derived
-     * agent instance to `IsPrimaryInstance = true` immediately demotes any cached sibling sharing
-     * the same `(OwnerUserID, RootBaseAgentID)` — eliminating the transient dual-primary window
-     * when the new primary arrives before the server's sibling-demotion `remote-invalidate`.
+     * Intercepts `MJ: AI Agents`, `MJ: AI Agent Personas`, and `MJ: AI Agent Permissions` events so
+     * in-memory caches (`_agents`, `_agentsByID`, `_userRunnableAgentDirectoryCache`, and sibling
+     * `IsPrimaryInstance` flags) update synchronously at `t = 0ms` without waiting for BaseEngine's
+     * 1.5s debounced full reload — enabling immediate UI reflection of avatar (`LogoURL` / `IconClass`),
+     * name, persona, and primary-instance edits without a browser refresh.
      */
     protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         let shouldEmitAgentsChange = false;
         const isSave = event.type === 'save';
+        const isDelete = event.type === 'delete';
         const isRemoteInvalidate = event.type === 'remote-invalidate';
+        const localEntityName = event.baseEntity?.EntityInfo?.Name?.trim().toLowerCase() ?? '';
+        const remoteEntityName = event.entityName?.trim().toLowerCase() ?? '';
 
-        if (isSave && event.baseEntity?.EntityInfo?.Name?.trim().toLowerCase() === 'mj: ai agents') {
+        if (isSave && localEntityName === 'mj: ai agents' && event.baseEntity) {
             const savedAgent = event.baseEntity as MJAIAgentEntityExtended;
+            this.applyImmediateAgentUpsert(savedAgent);
             if (this.isActiveDerivedPrimaryAgent(savedAgent)) {
-                shouldEmitAgentsChange = this.demotePrimarySiblingsForAgent(savedAgent);
+                this.demotePrimarySiblingsForAgent(savedAgent);
             }
-        } else if (isRemoteInvalidate && event.entityName?.trim().toLowerCase() === 'mj: ai agents') {
+            shouldEmitAgentsChange = true;
+        } else if (isDelete && localEntityName === 'mj: ai agents' && event.baseEntity) {
+            const deletedAgent = event.baseEntity as MJAIAgentEntityExtended;
+            shouldEmitAgentsChange = this.applyImmediateAgentDelete(deletedAgent.ID);
+        } else if (isRemoteInvalidate && remoteEntityName === 'mj: ai agents') {
             this.recordPreferredPrimaryFromRemotePayload(event.payload);
+        } else if (
+            (isSave || isDelete || isRemoteInvalidate) &&
+            (localEntityName === 'mj: ai agent permissions' || remoteEntityName === 'mj: ai agent permissions')
+        ) {
+            this.invalidateUserRunnableAgentDirectoryCache();
         }
 
         const result = await super.HandleIndividualBaseEntityEvent(event);
@@ -741,6 +759,141 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
 
         return result;
+    }
+
+    /**
+     * Synchronously patches or inserts a just-saved `MJ: AI Agents` entity into `this._agents` and
+     * invalidates derived agent indexes so `GetAgentByID` / `Agents` immediately reflect updated
+     * `LogoURL`, `IconClass`, `Name`, `Description`, `AdditionalInstructions`, `Status`, and
+     * `IsPrimaryInstance` before BaseEngine's background reload settles.
+     */
+    private applyImmediateAgentUpsert(savedAgent: MJAIAgentEntityExtended): void {
+        if (!savedAgent?.ID) {
+            return;
+        }
+        const existingIdx = this._agents.findIndex((a) => UUIDsEqual(a.ID, savedAgent.ID));
+        if (existingIdx >= 0) {
+            const existing = this._agents[existingIdx];
+            if (existing !== savedAgent) {
+                this.syncAgentScalarFieldsInPlace(existing, savedAgent);
+                if (typeof (savedAgent as Partial<MJAIAgentEntityExtended>).Actions !== 'undefined') {
+                    if (existing.Notes?.length && (!savedAgent.Notes || savedAgent.Notes.length === 0)) {
+                        savedAgent.Notes.splice(0, savedAgent.Notes.length, ...existing.Notes);
+                    }
+                    this._agents[existingIdx] = savedAgent;
+                }
+            }
+        } else {
+            this._agents.push(savedAgent);
+        }
+        this.invalidateAgentLookupIndexes();
+    }
+
+    private applyImmediateAgentDelete(agentId: string | null | undefined): boolean {
+        if (!agentId) {
+            return false;
+        }
+        const existingIdx = this._agents.findIndex((a) => UUIDsEqual(a.ID, agentId));
+        if (existingIdx < 0) {
+            return false;
+        }
+        this._agents.splice(existingIdx, 1);
+        this.invalidateAgentLookupIndexes();
+        return true;
+    }
+
+    private syncAgentScalarFieldsInPlace(
+        target: MJAIAgentEntityExtended,
+        source: Partial<MJAIAgentEntityExtended>,
+    ): void {
+        const touchedFields: string[] = [];
+        if (source.Name !== undefined) {
+            target.Name = source.Name;
+            touchedFields.push('Name');
+        }
+        if (source.Description !== undefined) {
+            target.Description = source.Description;
+            touchedFields.push('Description');
+        }
+        if (source.LogoURL !== undefined) {
+            target.LogoURL = source.LogoURL;
+            touchedFields.push('LogoURL');
+        }
+        if (source.IconClass !== undefined) {
+            target.IconClass = source.IconClass;
+            touchedFields.push('IconClass');
+        }
+        if (source.ParentID !== undefined) {
+            target.ParentID = source.ParentID;
+            touchedFields.push('ParentID');
+        }
+        if (source.BaseAgentID !== undefined) {
+            target.BaseAgentID = source.BaseAgentID;
+            touchedFields.push('BaseAgentID');
+        }
+        if (source.OwnerUserID !== undefined) {
+            target.OwnerUserID = source.OwnerUserID;
+            touchedFields.push('OwnerUserID');
+        }
+        if (source.InstantiationMode !== undefined) {
+            target.InstantiationMode = source.InstantiationMode;
+            touchedFields.push('InstantiationMode');
+        }
+        if (source.IsPrimaryInstance !== undefined) {
+            target.IsPrimaryInstance = source.IsPrimaryInstance;
+            touchedFields.push('IsPrimaryInstance');
+        }
+        if (source.AdditionalInstructions !== undefined) {
+            target.AdditionalInstructions = source.AdditionalInstructions;
+            touchedFields.push('AdditionalInstructions');
+        }
+        if (source.Status !== undefined) {
+            target.Status = source.Status;
+            touchedFields.push('Status');
+        }
+        if (source.TypeID !== undefined) {
+            target.TypeID = source.TypeID;
+            touchedFields.push('TypeID');
+        }
+        if (source.TypeConfiguration !== undefined) {
+            target.TypeConfiguration = source.TypeConfiguration;
+            touchedFields.push('TypeConfiguration');
+        }
+        if (source.InvocationMode !== undefined) {
+            target.InvocationMode = source.InvocationMode;
+            touchedFields.push('InvocationMode');
+        }
+        if (source.CategoryID !== undefined) {
+            target.CategoryID = source.CategoryID;
+            touchedFields.push('CategoryID');
+        }
+        if (source.IsRestricted !== undefined) {
+            target.IsRestricted = source.IsRestricted;
+            touchedFields.push('IsRestricted');
+        }
+        if (typeof target.GetFieldByName === 'function') {
+            for (const fieldName of touchedFields) {
+                target.GetFieldByName(fieldName)?.ResetOldValue();
+            }
+        }
+    }
+
+    private invalidateAgentLookupIndexes(): void {
+        this._agentsByID = null;
+        this._agentsByName = null;
+        this._childAgentsByParentID = null;
+        this._agentInheritanceChainCache.clear();
+        this._agentsIndexedRef = null;
+        this._agentsIndexedLen = -1;
+        this.invalidateUserRunnableAgentDirectoryCache();
+    }
+
+    private invalidateUserRunnableAgentDirectoryCache(): void {
+        this._userRunnableAgentDirectoryCache.clear();
+        this._userRunnableAgentsRef = null;
+        this._userRunnableAgentsLen = -1;
+        this._userRunnablePermissionsRef = null;
+        this._userRunnablePermissionsLen = -1;
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {

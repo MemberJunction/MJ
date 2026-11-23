@@ -20,9 +20,11 @@ import {
   TemplateRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
-import { Subscription } from 'rxjs';
-import { UserInfo, CompositeKey } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { Observable, Subscription, merge } from 'rxjs';
+import { debounceTime, filter, map, skip } from 'rxjs/operators';
+import { BaseEntity, BaseEntityEvent, UserInfo, CompositeKey } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePendingArtifactRef } from './message-item.component';
 import {
@@ -1132,9 +1134,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   // Track whether initial render has happened
   private _initialRenderComplete = false;
+  private _agentAvatarChangesSub: Subscription | null = null;
 
   ngOnInit() {
     // Initial render will happen in ngAfterViewInit when ViewContainerRef is available
+    this.subscribeToAgentAvatarChanges();
   }
 
   ngAfterViewInit() {
@@ -1335,6 +1339,52 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         entry.ref.changeDetectorRef.markForCheck();
       }
     }
+  }
+
+  private subscribeToAgentAvatarChanges(): void {
+    const entityEvents$ = MJGlobal.Instance.GetEventListener(false).pipe(
+      filter((event: MJEvent) => {
+        if (
+          event.event !== MJEventType.ComponentEvent ||
+          event.eventCode !== BaseEntity.BaseEventCode ||
+          !event.args
+        ) {
+          return false;
+        }
+        const args = event.args as BaseEntityEvent;
+        const entityName =
+          args.type === 'remote-invalidate'
+            ? args.entityName
+            : args.baseEntity?.EntityInfo?.Name;
+        const norm = entityName?.trim().toLowerCase() ?? '';
+        return norm === 'mj: ai agents' || norm === 'mj: ai agent personas';
+      })
+    );
+
+    const engine = AIEngineBase.Instance;
+    const streams: Observable<void>[] = [entityEvents$.pipe(map(() => undefined))];
+    if (typeof engine?.ObserveProperty === 'function') {
+      streams.push(
+        engine.ObserveProperty('_agents').pipe(skip(1), map(() => undefined)),
+        engine.ObserveProperty('_agentPersonas').pipe(skip(1), map(() => undefined))
+      );
+    }
+
+    this._agentAvatarChangesSub = merge(...streams)
+      .pipe(debounceTime(40))
+      .subscribe(() => {
+        this.refreshRenderedAgentAvatars();
+      });
+  }
+
+  private refreshRenderedAgentAvatars(): void {
+    for (const entry of this._renderedMessages.values()) {
+      if (entry.kind === 'component') {
+        entry.ref.instance.AssistantAvatarFailed = false;
+        entry.ref.changeDetectorRef.markForCheck();
+      }
+    }
+    this.cdRef.markForCheck();
   }
 
   ngAfterViewChecked() {
@@ -1582,6 +1632,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   ngOnDestroy() {
+    this._agentAvatarChangesSub?.unsubscribe();
+    this._agentAvatarChangesSub = null;
     this.detachScrollListener();
     this._olderObserver?.disconnect();
     this._olderObserver = undefined;

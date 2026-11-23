@@ -39,87 +39,134 @@
                 <!-- Section 1: MY AGENTS -->
                 <div class="cos-roster-section">
                     <div class="cos-roster-section__header">
-                        <span>My Agents ({{ FilteredMyOwnedAgents.length }})</span>
                         <button
-                            mjButton
-                            variant="outline"
-                            size="sm"
                             type="button"
+                            class="cos-roster-section__toggle"
+                            [attr.aria-expanded]="MyAgentsSectionExpanded"
+                            (click)="ToggleMyAgentsSection()">
+                            <i class="fa-solid cos-roster-section__chevron"
+                               [class.fa-chevron-down]="MyAgentsSectionExpanded"
+                               [class.fa-chevron-right]="!MyAgentsSectionExpanded"
+                               aria-hidden="true"></i>
+                            <i class="fa-solid fa-wand-magic-sparkles cos-roster-section__icon" aria-hidden="true"></i>
+                            <span>My Agents</span>
+                            <span class="cos-roster-count">{{ FilteredMyOwnedAgents.length }}</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="cos-roster-header-icon-btn"
+                            title="Create new personal agent instance"
+                            aria-label="Create new personal agent instance"
                             (click)="OpenCreateInstanceModal()">
-                            <i class="fa-solid fa-plus"></i> New
+                            <i class="fa-solid fa-plus"></i>
                         </button>
                     </div>
 
-                    @if (FilteredMyOwnedAgents.length === 0) {
-                        <div class="cos-roster-empty">
-                            @if (MyOwnedAgents.length === 0) {
-                                <span>No personal instances yet.</span>
-                            } @else {
-                                <span>No personal instances match "{{ RosterSearchText }}".</span>
-                            }
-                        </div>
-                    } @else {
-                        <div class="cos-roster-list">
-                            @for (agent of FilteredMyOwnedAgents; track agent.ID) {
-                                @let avatarUrl = GetAgentAvatarUrlById(agent.ID);
-                                <button
-                                    type="button"
-                                    class="cos-roster-item"
-                                    [class.cos-roster-item--selected]="IsRosterAgentSelected(agent.ID)"
-                                    [attr.aria-current]="IsRosterAgentSelected(agent.ID) ? 'true' : null"
-                                    (click)="SelectRosterAgent(agent)">
-                                    <span class="cos-roster-item__left">
-                                        <span class="cos-agent-avatar cos-agent-avatar--sm" aria-hidden="true">
-                                            @if (avatarUrl) {
-                                                <img [src]="avatarUrl" [alt]="agent.Name" (error)="OnAgentAvatarError(agent.ID)" />
-                                            } @else {
-                                                <i [class]="GetAgentIconClassById(agent.ID)"></i>
-                                            }
-                                        </span>
-                                        <span class="cos-roster-item__text">
-                                            <span class="cos-roster-item__name">
-                                                <span>{{ agent.Name }}</span>
-                                                @if (agent.IsPrimaryInstance) {
-                                                    <i class="fa-solid fa-star cos-primary-star" title="Primary instance" aria-label="Primary"></i>
+                    @if (MyAgentsSectionExpanded) {
+                        @if (FilteredMyOwnedAgents.length === 0) {
+                            <div class="cos-roster-empty">
+                                @if (MyOwnedAgents.length === 0) {
+                                    <span>No personal instances yet.</span>
+                                } @else {
+                                    <span>No personal instances match "{{ RosterSearchText }}".</span>
+                                }
+                            </div>
+                        } @else {
+                            <div class="cos-roster-list">
+                                @for (agent of FilteredMyOwnedAgents; track agent.ID) {
+                                    @let avatarUrl = GetAgentAvatarUrlById(agent.ID);
+                                    <div
+                                        class="cos-roster-item"
+                                        role="button"
+                                        tabindex="0"
+                                        [class.cos-roster-item--selected]="IsRosterAgentSelected(agent.ID)"
+                                        [attr.aria-current]="IsRosterAgentSelected(agent.ID) ? 'true' : null"
+                                        (click)="SelectRosterAgent(agent)"
+                                        (keydown.enter)="SelectRosterAgent(agent)"
+                                        (keydown.space)="SelectRosterAgent(agent); $event.preventDefault()">
+                                        <span class="cos-roster-item__left">
+                                            <span class="cos-agent-avatar cos-agent-avatar--sm" aria-hidden="true">
+                                                @if (avatarUrl) {
+                                                    <img [src]="avatarUrl" [alt]="agent.Name" (error)="OnAgentAvatarError(agent.ID)" />
+                                                } @else {
+                                                    <i [class]="GetAgentIconClassById(agent.ID)"></i>
                                                 }
                                             </span>
-                                            <span class="cos-roster-item__sub">
-                                                {{ agent.BaseAgentName || 'Personal Instance' }}
+                                            <span class="cos-roster-item__text">
+                                                <span class="cos-roster-item__name">
+                                                    <span>{{ agent.Name }}</span>
+                                                    @if (agent.IsPrimaryInstance) {
+                                                        <i class="fa-solid fa-star cos-primary-star" title="Primary instance" aria-label="Primary"></i>
+                                                    }
+                                                </span>
+                                                <span class="cos-roster-item__sub">
+                                                    {{ agent.BaseAgentName || 'Personal Instance' }}
+                                                </span>
                                             </span>
                                         </span>
-                                    </span>
-                                    <span class="cos-roster-item__right">
-                                        @if (IsDefaultChatAgent(agent.ID)) {
-                                            <span class="cos-pill cos-pill--ok">Chat Default</span>
-                                        }
-                                        <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
-                                    </span>
-                                </button>
-                            }
-                        </div>
+                                        <span class="cos-roster-item__right">
+                                            @if (IsDefaultChatAgent(agent.ID)) {
+                                                <span class="cos-pill cos-pill--ok">Chat Default</span>
+                                            }
+                                            <button
+                                                type="button"
+                                                class="cos-roster-item__action-btn"
+                                                [title]="'Personalize ' + agent.Name"
+                                                [attr.aria-label]="'Personalize ' + agent.Name"
+                                                (click)="OnRosterPersonalizeClick(agent, $event)">
+                                                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                            </button>
+                                            <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        }
                     }
                 </div>
 
                 <!-- Section 2: SHARED -->
                 <div class="cos-roster-section">
                     <div class="cos-roster-section__header">
-                        <span>Shared ({{ FilteredSharedAgents.length }})</span>
+                        <button
+                            type="button"
+                            class="cos-roster-section__toggle"
+                            [attr.aria-expanded]="SharedSectionExpanded"
+                            (click)="ToggleSharedSection()">
+                            <i class="fa-solid cos-roster-section__chevron"
+                               [class.fa-chevron-down]="SharedSectionExpanded"
+                               [class.fa-chevron-right]="!SharedSectionExpanded"
+                               aria-hidden="true"></i>
+                            <span>Shared</span>
+                            <span class="cos-roster-count">{{ FilteredSharedAgents.length }}</span>
+                        </button>
+                        @if (HiddenSystemAndDemoCount > 0) {
+                            <button
+                                type="button"
+                                class="cos-roster-filter-pill"
+                                [class.cos-roster-filter-pill--active]="ShowSystemAndDemo"
+                                [attr.aria-pressed]="ShowSystemAndDemo"
+                                [title]="ShowSystemAndDemo ? 'Hide System & Demo agents' : 'Show System & Demo agents (' + HiddenSystemAndDemoCount + ')'"
+                                (click)="ToggleShowSystemAndDemo($event)">
+                                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                                <span>{{ ShowSystemAndDemo ? 'All' : '+' + HiddenSystemAndDemoCount }}</span>
+                            </button>
+                        }
                     </div>
 
-                    @if (FilteredSharedAgents.length === 0) {
-                        <div class="cos-roster-empty">
-                            <span>No shared agents match "{{ RosterSearchText }}".</span>
-                        </div>
-                    } @else {
+                    @if (!SharedSectionExpanded && PinnedCollapsedSharedAgents.length > 0) {
                         <div class="cos-roster-list">
-                            @for (agent of FilteredSharedAgents; track agent.ID) {
+                            @for (agent of PinnedCollapsedSharedAgents; track agent.ID) {
                                 @let avatarUrl = GetAgentAvatarUrlById(agent.ID);
-                                <button
-                                    type="button"
+                                <div
                                     class="cos-roster-item"
+                                    role="button"
+                                    tabindex="0"
                                     [class.cos-roster-item--selected]="IsRosterAgentSelected(agent.ID)"
                                     [attr.aria-current]="IsRosterAgentSelected(agent.ID) ? 'true' : null"
-                                    (click)="SelectRosterAgent(agent)">
+                                    (click)="SelectRosterAgent(agent)"
+                                    (keydown.enter)="SelectRosterAgent(agent)"
+                                    (keydown.space)="SelectRosterAgent(agent); $event.preventDefault()">
                                     <span class="cos-roster-item__left">
                                         <span class="cos-agent-avatar cos-agent-avatar--sm" aria-hidden="true">
                                             @if (avatarUrl) {
@@ -131,7 +178,7 @@
                                         <span class="cos-roster-item__text">
                                             <span class="cos-roster-item__name">{{ agent.Name }}</span>
                                             <span class="cos-roster-item__sub">
-                                                {{ agent.BaseAgentName ? ('Shared · ' + agent.BaseAgentName) : 'Shared · Platform Agent' }}
+                                                {{ agent.BaseAgentName ? ('Shared · ' + agent.BaseAgentName) : (agent.Category ? ('Shared · ' + agent.Category) : 'Shared · Specialist') }}
                                             </span>
                                         </span>
                                     </span>
@@ -139,11 +186,91 @@
                                         @if (IsDefaultChatAgent(agent.ID)) {
                                             <span class="cos-pill cos-pill--ok">Chat Default</span>
                                         }
+                                        @if (CanCreateInstanceFromSharedRosterItem(agent)) {
+                                            <button
+                                                type="button"
+                                                class="cos-roster-item__action-btn"
+                                                [title]="'Create personal ' + agent.Name + ' instance'"
+                                                [attr.aria-label]="'Create personal ' + agent.Name + ' instance'"
+                                                (click)="OnRosterCreateFromTemplateClick(agent, $event)">
+                                                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                            </button>
+                                        }
                                         <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
                                     </span>
-                                </button>
+                                </div>
                             }
                         </div>
+                    }
+
+                    @if (SharedSectionExpanded) {
+                        @if (FilteredSharedAgents.length === 0) {
+                            <div class="cos-roster-empty">
+                                <span>No shared agents match "{{ RosterSearchText }}".</span>
+                            </div>
+                        } @else {
+                            <div class="cos-roster-list">
+                                @for (agent of FilteredSharedAgents; track agent.ID) {
+                                    @let avatarUrl = GetAgentAvatarUrlById(agent.ID);
+                                    <div
+                                        class="cos-roster-item"
+                                        role="button"
+                                        tabindex="0"
+                                        [class.cos-roster-item--selected]="IsRosterAgentSelected(agent.ID)"
+                                        [attr.aria-current]="IsRosterAgentSelected(agent.ID) ? 'true' : null"
+                                        (click)="SelectRosterAgent(agent)"
+                                        (keydown.enter)="SelectRosterAgent(agent)"
+                                        (keydown.space)="SelectRosterAgent(agent); $event.preventDefault()">
+                                        <span class="cos-roster-item__left">
+                                            <span class="cos-agent-avatar cos-agent-avatar--sm" aria-hidden="true">
+                                                @if (avatarUrl) {
+                                                    <img [src]="avatarUrl" [alt]="agent.Name" (error)="OnAgentAvatarError(agent.ID)" />
+                                                } @else {
+                                                    <i [class]="GetAgentIconClassById(agent.ID)"></i>
+                                                }
+                                            </span>
+                                            <span class="cos-roster-item__text">
+                                                <span class="cos-roster-item__name">{{ agent.Name }}</span>
+                                                <span class="cos-roster-item__sub">
+                                                    {{ agent.BaseAgentName ? ('Shared · ' + agent.BaseAgentName) : (agent.Category ? ('Shared · ' + agent.Category) : 'Shared · Specialist') }}
+                                                </span>
+                                            </span>
+                                        </span>
+                                        <span class="cos-roster-item__right">
+                                            @if (IsDefaultChatAgent(agent.ID)) {
+                                                <span class="cos-pill cos-pill--ok">Chat Default</span>
+                                            }
+                                            @if (CanCreateInstanceFromSharedRosterItem(agent)) {
+                                                <button
+                                                    type="button"
+                                                    class="cos-roster-item__action-btn"
+                                                    [title]="'Create personal ' + agent.Name + ' instance'"
+                                                    [attr.aria-label]="'Create personal ' + agent.Name + ' instance'"
+                                                    (click)="OnRosterCreateFromTemplateClick(agent, $event)">
+                                                    <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                                </button>
+                                            }
+                                            <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (HiddenSystemAndDemoCount > 0) {
+                            <button
+                                type="button"
+                                class="cos-roster-more-toggle"
+                                (click)="ToggleShowSystemAndDemo($event)">
+                                @if (ShowSystemAndDemo) {
+                                    <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+                                    <span>Hide System &amp; Demo ({{ HiddenSystemAndDemoCount }})</span>
+                                } @else {
+                                    <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                                    <span>Show System &amp; Demo (+{{ HiddenSystemAndDemoCount }})</span>
+                                }
+                            </button>
+                        }
                     }
                 </div>
             </aside>

@@ -11,8 +11,8 @@ import {
   SimpleChanges,
   inject,
 } from '@angular/core';
-import { Subject } from 'rxjs';
-import { debounceTime, filter, takeUntil } from 'rxjs/operators';
+import { Observable, Subject, merge } from 'rxjs';
+import { debounceTime, filter, map, skip, takeUntil } from 'rxjs/operators';
 import { BaseEntity, BaseEntityEvent, LogError, UserInfo } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -275,33 +275,44 @@ export class MyAgentsSectionComponent
   }
 
   private subscribeToAgentChanges(): void {
-    MJGlobal.Instance.GetEventListener(false)
-      .pipe(
-        filter((event: MJEvent) => {
-          if (
-            event.event !== MJEventType.ComponentEvent ||
-            event.eventCode !== BaseEntity.BaseEventCode ||
-            !event.args
-          ) {
-            return false;
-          }
-          const args = event.args as BaseEntityEvent;
-          const entityName =
-            args.type === 'remote-invalidate'
-              ? args.entityName
-              : args.baseEntity?.EntityInfo?.Name;
-          const norm = entityName?.trim().toLowerCase() ?? '';
-          return (
-            norm === 'mj: ai agents' ||
-            norm === 'mj: ai agent personas' ||
-            norm === 'mj: ai agent permissions' ||
-            norm === 'mj: user settings'
-          );
-        }),
-        debounceTime(75),
-        takeUntil(this.destroy$)
-      )
+    const entityEvents$ = MJGlobal.Instance.GetEventListener(false).pipe(
+      filter((event: MJEvent) => {
+        if (
+          event.event !== MJEventType.ComponentEvent ||
+          event.eventCode !== BaseEntity.BaseEventCode ||
+          !event.args
+        ) {
+          return false;
+        }
+        const args = event.args as BaseEntityEvent;
+        const entityName =
+          args.type === 'remote-invalidate'
+            ? args.entityName
+            : args.baseEntity?.EntityInfo?.Name;
+        const norm = entityName?.trim().toLowerCase() ?? '';
+        return (
+          norm === 'mj: ai agents' ||
+          norm === 'mj: ai agent personas' ||
+          norm === 'mj: ai agent permissions' ||
+          norm === 'mj: user settings'
+        );
+      })
+    );
+
+    const streams: Observable<void>[] = [entityEvents$.pipe(map(() => undefined))];
+    const engine = this.aiEngine;
+    if (typeof engine?.ObserveProperty === 'function') {
+      streams.push(
+        engine.ObserveProperty('_agents').pipe(skip(1), map(() => undefined)),
+        engine.ObserveProperty('_agentPersonas').pipe(skip(1), map(() => undefined)),
+        engine.ObserveProperty('_agentPermissions').pipe(skip(1), map(() => undefined))
+      );
+    }
+
+    merge(...streams)
+      .pipe(debounceTime(40), takeUntil(this.destroy$))
       .subscribe(() => {
+        this.failedAvatars.clear();
         this.rebuildDisplayList();
       });
   }

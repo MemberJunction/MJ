@@ -94,12 +94,34 @@
                                     Show All Agents
                                 </button>
                             } @else {
-                                <span class="cos-strip-section__hint">Click an agent card to filter approvals and wakes, or configure its policy</span>
+                                <span class="cos-strip-section__hint">Click an agent card to filter approvals and wakes, or personalize directly</span>
                             }
+                        </div>
+                        <div class="cos-layout-density-toggle" role="group" aria-label="My Agents layout density">
+                            <button
+                                type="button"
+                                class="cos-density-btn"
+                                [class.cos-density-btn--active]="StripDensity === 'cards'"
+                                [attr.aria-pressed]="StripDensity === 'cards'"
+                                title="Cards layout"
+                                (click)="SetStripDensity('cards')">
+                                <i class="fa-solid fa-grip" aria-hidden="true"></i>
+                                <span>Cards</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="cos-density-btn"
+                                [class.cos-density-btn--active]="StripDensity === 'compact'"
+                                [attr.aria-pressed]="StripDensity === 'compact'"
+                                title="Compact strip layout"
+                                (click)="SetStripDensity('compact')">
+                                <i class="fa-solid fa-bars" aria-hidden="true"></i>
+                                <span>Compact</span>
+                            </button>
                         </div>
                     </div>
 
-                    <div class="cos-agent-strip">
+                    <div class="cos-agent-strip" [class.cos-agent-strip--compact]="StripDensity === 'compact'">
                         @for (agent of MyOwnedAgents; track agent.ID) {
                             @let approvalCount = PendingApprovalCountForAgent(agent.ID);
                             @let wakeCount = ActiveWakeCountForAgent(agent.ID);
@@ -190,9 +212,18 @@
                                     All Agents ({{ PendingRequests.length }})
                                 </button>
                             }
+                            <button
+                                type="button"
+                                class="cos-panel__collapse-btn"
+                                [attr.aria-expanded]="!IsOverviewPanelCollapsed('approvals')"
+                                [title]="IsOverviewPanelCollapsed('approvals') ? 'Expand Pending Approvals' : 'Collapse Pending Approvals'"
+                                (click)="ToggleOverviewPanel('approvals')">
+                                <i class="fa-solid" [class.fa-chevron-up]="!IsOverviewPanelCollapsed('approvals')" [class.fa-chevron-down]="IsOverviewPanelCollapsed('approvals')" aria-hidden="true"></i>
+                            </button>
                         </div>
 
-                        @if (ScopedPendingRequests.length === 0) {
+                        @if (!IsOverviewPanelCollapsed('approvals')) {
+                            @if (ScopedPendingRequests.length === 0) {
                             <mj-empty-state
                                 Size="compact"
                                 Variant="success"
@@ -287,6 +318,7 @@
                                 }
                             </div>
                         }
+                        }
                     </section>
                 </div>
 
@@ -307,9 +339,18 @@
                                     }
                                 </p>
                             </div>
+                            <button
+                                type="button"
+                                class="cos-panel__collapse-btn"
+                                [attr.aria-expanded]="!IsOverviewPanelCollapsed('wakes')"
+                                [title]="IsOverviewPanelCollapsed('wakes') ? 'Expand Upcoming Wakes' : 'Collapse Upcoming Wakes'"
+                                (click)="ToggleOverviewPanel('wakes')">
+                                <i class="fa-solid" [class.fa-chevron-up]="!IsOverviewPanelCollapsed('wakes')" [class.fa-chevron-down]="IsOverviewPanelCollapsed('wakes')" aria-hidden="true"></i>
+                            </button>
                         </div>
 
-                        @if (ScopedUpcomingRoutines.length === 0) {
+                        @if (!IsOverviewPanelCollapsed('wakes')) {
+                            @if (ScopedUpcomingRoutines.length === 0) {
                             <mj-empty-state Size="compact" Icon="fa-regular fa-clock" Message="No upcoming wake routines configured yet." />
                         } @else {
                             <div class="cos-stack">
@@ -380,6 +421,7 @@
                                 }
                             </div>
                         }
+                        }
                     </section>
 
                     <!-- Active Agent Channels Summary Card -->
@@ -393,12 +435,23 @@
                                     {{ OpenChannelCount }} open · {{ PausedChannelCount }} paused for human review
                                 </p>
                             </div>
-                            <button mjButton variant="outline" size="sm" type="button" (click)="OpenAgentChannels()">
-                                Open Channels
-                            </button>
+                            <div class="cos-panel__header-actions">
+                                <button mjButton variant="outline" size="sm" type="button" (click)="OpenAgentChannels()">
+                                    Open Channels
+                                </button>
+                                <button
+                                    type="button"
+                                    class="cos-panel__collapse-btn"
+                                    [attr.aria-expanded]="!IsOverviewPanelCollapsed('channels')"
+                                    [title]="IsOverviewPanelCollapsed('channels') ? 'Expand Active Agent Channels' : 'Collapse Active Agent Channels'"
+                                    (click)="ToggleOverviewPanel('channels')">
+                                    <i class="fa-solid" [class.fa-chevron-up]="!IsOverviewPanelCollapsed('channels')" [class.fa-chevron-down]="IsOverviewPanelCollapsed('channels')" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
 
-                        @if (IsLoadingChannels && Channels.length === 0) {
+                        @if (!IsOverviewPanelCollapsed('channels')) {
+                            @if (IsLoadingChannels && Channels.length === 0) {
                             <mj-loading text="Loading agent channels..." size="small"></mj-loading>
                         } @else if (RecentChannels.length === 0) {
                             <mj-empty-state Size="compact" Icon="fa-regular fa-comments" Message="No agent-to-agent coordination threads yet." />
@@ -421,6 +474,7 @@
                                     </div>
                                 }
                             </div>
+                        }
                         }
                     </section>
                 </div>

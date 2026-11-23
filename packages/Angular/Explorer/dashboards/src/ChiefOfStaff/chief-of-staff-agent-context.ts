@@ -46,6 +46,111 @@ export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 /** User setting key (`MJ: User Settings`) storing the user's preferred default chat agent ID. */
 export const DEFAULT_CHAT_AGENT_SETTING_KEY = 'chat.defaultAgentId';
 
+/** User setting key (`MJ: User Settings`) storing My Agents roster filter and dashboard layout preferences. */
+export const MY_AGENTS_PREFERENCES_SETTING_KEY = 'myAgents.dashboardPreferences';
+
+export type AgentWorkspaceSubTab = 'activity' | 'persona' | 'governance' | 'sharing';
+export type OverviewStripDensity = 'cards' | 'compact';
+export type OverviewCollapsiblePanel = 'approvals' | 'wakes' | 'channels';
+
+export interface MyAgentsDashboardPreferences {
+    /** Whether the "My Agents" section in the left rail is expanded (default: true). */
+    myAgentsExpanded: boolean;
+    /** Whether the "Shared" section in the left rail is expanded (default: false). */
+    sharedExpanded: boolean;
+    /** Whether System, Demo, and Restricted catalog agents are shown in "Shared" (default: false). */
+    showSystemAndDemo: boolean;
+    /** Last active sub-tab in the Agents detail workspace (default: 'activity'). */
+    activeAgentSubTab: AgentWorkspaceSubTab;
+    /** Last selected agent ID in the Agents workspace when no `?agent=` query param overrides it. */
+    selectedAgentId: string | null;
+    /** Overview "My Agents" top strip layout density ('cards' | 'compact'). */
+    overviewStripDensity: OverviewStripDensity;
+    /** Overview panels collapsed by the user. */
+    overviewCollapsedPanels: OverviewCollapsiblePanel[];
+}
+
+export const DEFAULT_MY_AGENTS_PREFERENCES: Readonly<MyAgentsDashboardPreferences> = {
+    myAgentsExpanded: true,
+    sharedExpanded: false,
+    showSystemAndDemo: false,
+    activeAgentSubTab: 'activity',
+    selectedAgentId: null,
+    overviewStripDensity: 'cards',
+    overviewCollapsedPanels: [],
+};
+
+const VALID_SUB_TABS: ReadonlySet<AgentWorkspaceSubTab> = new Set([
+    'activity',
+    'persona',
+    'governance',
+    'sharing',
+]);
+const VALID_OVERVIEW_PANELS: ReadonlySet<OverviewCollapsiblePanel> = new Set([
+    'approvals',
+    'wakes',
+    'channels',
+]);
+
+/**
+ * Parses a `MJ: User Settings` JSON string into strongly-typed {@link MyAgentsDashboardPreferences},
+ * falling back cleanly per field to {@link DEFAULT_MY_AGENTS_PREFERENCES}.
+ */
+export function ParseMyAgentsDashboardPreferences(
+    raw: string | null | undefined,
+): MyAgentsDashboardPreferences {
+    const base: MyAgentsDashboardPreferences = {
+        ...DEFAULT_MY_AGENTS_PREFERENCES,
+        overviewCollapsedPanels: [],
+    };
+    const trimmed = raw?.trim() ?? '';
+    if (!trimmed) {
+        return base;
+    }
+    try {
+        const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+        if (!parsed || typeof parsed !== 'object') {
+            return base;
+        }
+        if (typeof parsed['myAgentsExpanded'] === 'boolean') {
+            base.myAgentsExpanded = parsed['myAgentsExpanded'];
+        }
+        if (typeof parsed['sharedExpanded'] === 'boolean') {
+            base.sharedExpanded = parsed['sharedExpanded'];
+        }
+        if (typeof parsed['showSystemAndDemo'] === 'boolean') {
+            base.showSystemAndDemo = parsed['showSystemAndDemo'];
+        }
+        const rawTab = parsed['activeAgentSubTab'];
+        if (typeof rawTab === 'string' && VALID_SUB_TABS.has(rawTab as AgentWorkspaceSubTab)) {
+            base.activeAgentSubTab = rawTab as AgentWorkspaceSubTab;
+        }
+        if (typeof parsed['selectedAgentId'] === 'string' && parsed['selectedAgentId'].trim().length > 0) {
+            base.selectedAgentId = parsed['selectedAgentId'].trim();
+        } else if (parsed['selectedAgentId'] === null) {
+            base.selectedAgentId = null;
+        }
+        if (parsed['overviewStripDensity'] === 'cards' || parsed['overviewStripDensity'] === 'compact') {
+            base.overviewStripDensity = parsed['overviewStripDensity'];
+        }
+        if (Array.isArray(parsed['overviewCollapsedPanels'])) {
+            base.overviewCollapsedPanels = parsed['overviewCollapsedPanels'].filter(
+                (p): p is OverviewCollapsiblePanel =>
+                    typeof p === 'string' && VALID_OVERVIEW_PANELS.has(p as OverviewCollapsiblePanel),
+            );
+        }
+        return base;
+    } catch {
+        return base;
+    }
+}
+
+export function SerializeMyAgentsDashboardPreferences(
+    prefs: MyAgentsDashboardPreferences,
+): string {
+    return JSON.stringify(prefs);
+}
+
 export interface SelectableGovernanceAgent {
     ID: string;
     Name: string;
@@ -54,6 +159,10 @@ export interface SelectableGovernanceAgent {
     BaseAgentName?: string | null;
     OwnerUserID?: string | null;
     InstantiationMode?: MJAIAgentEntity['InstantiationMode'] | null;
+    InvocationMode?: MJAIAgentEntity['InvocationMode'] | null;
+    Category?: string | null;
+    IsRestricted?: boolean;
+    IsSystemOrDemo?: boolean;
     IsDerivedInstance?: boolean;
     IsOwnedByCurrentUser?: boolean;
     IsPrimaryInstance?: boolean;
@@ -69,10 +178,41 @@ export interface GovernanceAgentCandidate {
     BaseAgentID?: string | null;
     OwnerUserID?: string | null;
     InstantiationMode?: MJAIAgentEntity['InstantiationMode'] | string | null;
+    InvocationMode?: MJAIAgentEntity['InvocationMode'] | string | null;
+    Category?: string | null;
+    Type?: string | null;
+    IsRestricted?: boolean | null;
     IsPrimaryInstance?: boolean | null;
     IconClass?: string | null;
     LogoURL?: string | null;
     Status?: string | null;
+}
+
+/**
+ * Classifies non-derived shared catalog agents that are system plumbing, voice co-agents, or demos
+ * so the Shared roster stays focused on user-facing specialists by default while remaining viewable
+ * via the user's "Show System & Demo" filter preference.
+ */
+export function IsSystemOrDemoCatalogAgent(candidate: GovernanceAgentCandidate): boolean {
+    if (candidate.BaseAgentID) {
+        return false;
+    }
+    if (candidate.IsRestricted === true) {
+        return true;
+    }
+    const category = candidate.Category?.trim().toLowerCase() ?? '';
+    if (category === 'system' || category === 'demo' || category === 'internal') {
+        return true;
+    }
+    const agentType = candidate.Type?.trim().toLowerCase() ?? '';
+    if (agentType === 'realtime') {
+        return true;
+    }
+    const name = candidate.Name?.trim().toLowerCase() ?? '';
+    if (name.startsWith('demo ')) {
+        return true;
+    }
+    return false;
 }
 
 export interface PartitionedAgentRoster {
@@ -201,6 +341,11 @@ export function SelectableAgentsForGovernance(
         const isCosTemplate =
             !isDerived && name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
 
+        // Unconditionally exclude Sub-Agent delegates from standalone top-level roster unless explicitly referenced
+        if (!isDerived && a.InvocationMode === 'Sub-Agent' && !isReferenced) {
+            continue;
+        }
+
         // Suppress a Required template once the user has derived instances under it (unless referenced)
         const suppressRequiredTemplate =
             !isDerived &&
@@ -241,6 +386,13 @@ export function SelectableAgentsForGovernance(
             a.InstantiationMode === 'None'
                 ? a.InstantiationMode
                 : null;
+        const invocationMode =
+            a.InvocationMode === 'Any' ||
+            a.InvocationMode === 'Sub-Agent' ||
+            a.InvocationMode === 'Top-Level'
+                ? a.InvocationMode
+                : null;
+        const isSystemOrDemo = !isDerived && IsSystemOrDemoCatalogAgent(a);
         out.push({
             ID: a.ID,
             Name: name,
@@ -250,6 +402,10 @@ export function SelectableAgentsForGovernance(
             ...(a.OwnerUserID ? { OwnerUserID: a.OwnerUserID } : {}),
             ...(isOwned ? { IsOwnedByCurrentUser: true } : {}),
             ...(mode ? { InstantiationMode: mode } : {}),
+            ...(invocationMode ? { InvocationMode: invocationMode } : {}),
+            ...(a.Category ? { Category: a.Category } : {}),
+            ...(a.IsRestricted ? { IsRestricted: true } : {}),
+            ...(isSystemOrDemo ? { IsSystemOrDemo: true } : {}),
             ...(a.IsPrimaryInstance ? { IsPrimaryInstance: true } : {}),
             ...(a.IconClass ? { IconClass: a.IconClass } : {}),
             ...(a.LogoURL ? { LogoURL: a.LogoURL } : {}),

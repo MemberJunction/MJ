@@ -96,6 +96,7 @@ const AVATAR_STYLE_PRESETS: readonly string[] = [
   'Minimal Geometric',
   'Flat Vector Badge',
   'Cyberpunk Bot',
+  'Watercolor Portrait',
 ];
 
 const AVATAR_QUICK_REFINEMENTS: readonly string[] = [
@@ -213,15 +214,16 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   public SelectedTemplateCategory = 'All';
   public AdvancedExpanded = false;
 
-  // Inline AI Avatar Studio state
+  // Full-dialog overlay AI Avatar Studio state
   public AvatarStudioOpen = false;
   public AvatarStudioTab: AvatarStudioTab = 'ai';
   public AvatarPrompt = '';
-  public SelectedAvatarStyle = '';
+  public SelectedAvatarStyle = '3D Clay Mascot';
   public AvatarRefinePrompt = '';
   public IsGeneratingAvatar = false;
   public AvatarErrorMessage: string | null = null;
   public AvatarHistory: string[] = [];
+  private avatarPromptEditedByUser = false;
   private lastGeneratedPngSource: { dataUri: string; pngBase64: string } | null = null;
   private cachedGenerateImageActionId: string | null = null;
 
@@ -271,11 +273,36 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   }
 
   public get DialogTitle(): string {
+    if (this.AvatarStudioOpen) {
+      const targetName =
+        this.InstanceName.trim() ||
+        this.EditingAgent?.Name?.trim() ||
+        this.SelectedBaseAgent?.Name?.trim() ||
+        'Agent';
+      return `Avatar Studio — ${targetName}`;
+    }
     if (this.Mode === 'edit' && this.EditingAgent) {
       return `Tailor ${this.EditingAgent.Name}`;
     }
     const base = this.SelectedBaseAgent;
     return base ? `Create Personal ${base.Name}` : 'Create Personal Agent';
+  }
+
+  public get StudioSubjectSubtitle(): string {
+    const parts: string[] = [];
+    if (this.SelectedBaseAgent?.Name) {
+      parts.push(this.SelectedBaseAgent.Name);
+    }
+    const activeVibe = this.VibeOptions.find((v) => this.IsVibeActive(v));
+    if (activeVibe) {
+      parts.push(activeVibe.Label);
+    } else if (this.Tone.trim()) {
+      parts.push(this.truncateContextSnippet(this.Tone, 48));
+    }
+    if (this.Description.trim()) {
+      parts.push(this.truncateContextSnippet(this.Description, 64));
+    }
+    return parts.length > 0 ? parts.join(' · ') : 'Personal AI Agent';
   }
 
   public get SaveButtonLabel(): string {
@@ -509,11 +536,42 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   }
 
   public ToggleAvatarStudio(): void {
-    this.AvatarStudioOpen = !this.AvatarStudioOpen;
     if (this.AvatarStudioOpen) {
-      this.TemplatePickerOpen = false;
-      this.AvatarErrorMessage = null;
+      this.CloseAvatarStudio();
+    } else {
+      this.OpenAvatarStudio();
     }
+  }
+
+  public OpenAvatarStudio(): void {
+    this.AvatarStudioOpen = true;
+    this.TemplatePickerOpen = false;
+    this.AvatarErrorMessage = null;
+    if (!this.SelectedAvatarStyle) {
+      this.SelectedAvatarStyle = '3D Clay Mascot';
+    }
+    if (!this.AvatarPrompt.trim() || !this.avatarPromptEditedByUser) {
+      this.AvatarPrompt = this.BuildContextualAvatarPrompt(this.SelectedAvatarStyle);
+      this.avatarPromptEditedByUser = false;
+    }
+    this.cdr.markForCheck();
+  }
+
+  public CloseAvatarStudio(): void {
+    this.AvatarStudioOpen = false;
+    this.AvatarErrorMessage = null;
+    this.cdr.markForCheck();
+  }
+
+  public OnAvatarPromptUserInput(): void {
+    this.avatarPromptEditedByUser = this.AvatarPrompt.trim().length > 0;
+  }
+
+  public RefreshAvatarPromptFromAgent(): void {
+    const style = this.SelectedAvatarStyle || '3D Clay Mascot';
+    this.SelectedAvatarStyle = style;
+    this.AvatarPrompt = this.BuildContextualAvatarPrompt(style);
+    this.avatarPromptEditedByUser = false;
     this.cdr.markForCheck();
   }
 
@@ -525,8 +583,9 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
 
   public SelectAvatarStylePreset(style: string): void {
     this.SelectedAvatarStyle = this.SelectedAvatarStyle === style ? '' : style;
-    if (!this.AvatarPrompt.trim() && this.SelectedAvatarStyle) {
-      this.AvatarPrompt = this.buildDefaultAvatarPrompt(this.SelectedAvatarStyle);
+    if (!this.avatarPromptEditedByUser || !this.AvatarPrompt.trim()) {
+      this.AvatarPrompt = this.BuildContextualAvatarPrompt(this.SelectedAvatarStyle || 'Minimal Geometric');
+      this.avatarPromptEditedByUser = false;
     }
     this.cdr.markForCheck();
   }
@@ -848,10 +907,11 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     this.AvatarStudioOpen = false;
     this.AvatarStudioTab = 'ai';
     this.AvatarPrompt = '';
-    this.SelectedAvatarStyle = '';
+    this.SelectedAvatarStyle = '3D Clay Mascot';
     this.AvatarRefinePrompt = '';
     this.AvatarErrorMessage = null;
     this.AvatarHistory = [];
+    this.avatarPromptEditedByUser = false;
     this.lastGeneratedPngSource = null;
     this.cdr.markForCheck();
 
@@ -1014,23 +1074,68 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   private composeGenerationPrompt(): string {
     const manual = this.AvatarPrompt.trim();
     if (!manual) {
-      return this.buildDefaultAvatarPrompt(this.SelectedAvatarStyle || '3D Clay Mascot');
+      return this.BuildContextualAvatarPrompt(this.SelectedAvatarStyle || '3D Clay Mascot');
     }
     if (
       this.SelectedAvatarStyle &&
       !manual.toLowerCase().includes(this.SelectedAvatarStyle.toLowerCase())
     ) {
-      return `${manual}, ${this.SelectedAvatarStyle} style, square avatar icon, centered, no text`;
+      return `${manual} Visual style: ${this.SelectedAvatarStyle}. Square avatar icon, centered, no text.`;
     }
     return manual;
   }
 
-  private buildDefaultAvatarPrompt(style: string): string {
-    const name = this.InstanceName.trim() || this.SelectedBaseAgent?.Name || 'AI Assistant';
+  /**
+   * Synthesizes a rich, agent-aware avatar generation prompt combining the agent's name,
+   * base template domain, custom role/focus, personality/tone, standing instructions cues,
+   * and selected visual style so generated avatars reflect what the agent actually does.
+   */
+  public BuildContextualAvatarPrompt(styleOverride?: string): string {
+    const base = this.SelectedBaseAgent;
+    const rawName = this.InstanceName.trim() || this.EditingAgent?.Name?.trim() || '';
+    const baseName = base?.Name?.trim() || 'AI Assistant';
+    const displaySubject = rawName ? `"${rawName}" (${baseName})` : baseName;
+
+    const segments: string[] = [`Avatar portrait for personal AI agent ${displaySubject}.`];
+
+    const customRole = this.Description.trim();
+    const baseDesc = base?.Description?.trim() ?? '';
+    const isGenericBoilerplateRole = /^personal\s+.+\s+instance\.?$/i.test(customRole);
+    if (customRole && !isGenericBoilerplateRole) {
+      segments.push(`Role & focus: ${this.truncateContextSnippet(customRole, 140)}.`);
+    } else if (baseDesc) {
+      segments.push(`Domain: ${this.truncateContextSnippet(baseDesc, 130)}.`);
+    }
+
     const activeVibe = this.VibeOptions.find((v) => this.IsVibeActive(v));
-    const vibeHint = activeVibe ? `, ${activeVibe.Label.toLowerCase()} personality` : '';
-    const styleHint = style ? `, ${style} style` : ', minimal vector avatar style';
-    return `Stylized friendly avatar emblem for personal AI agent "${name}"${vibeHint}${styleHint}, centered square composition, clean background, no text`;
+    const toneText = this.Tone.trim();
+    if (activeVibe && toneText) {
+      segments.push(`Personality: ${activeVibe.Label} (${this.truncateContextSnippet(toneText, 90)}).`);
+    } else if (activeVibe) {
+      segments.push(`Personality: ${activeVibe.Label} — ${this.truncateContextSnippet(activeVibe.Subtitle, 90)}.`);
+    } else if (toneText) {
+      segments.push(`Personality & tone: ${this.truncateContextSnippet(toneText, 100)}.`);
+    }
+
+    const standing = this.AdditionalInstructions.trim();
+    if (standing) {
+      segments.push(`Specialties: ${this.truncateContextSnippet(standing, 120)}.`);
+    }
+
+    const chosenStyle = (styleOverride ?? this.SelectedAvatarStyle).trim() || '3D Clay Mascot';
+    segments.push(
+      `Visual style: ${chosenStyle}. Centered square avatar icon with expressive character/motif matching this role, clean contrasting background, crisp at 128x128px, no text, no letters, no watermarks.`
+    );
+
+    return segments.join(' ');
+  }
+
+  private truncateContextSnippet(raw: string, maxLen: number): string {
+    const singleLine = raw.replace(/\s+/g, ' ').trim().replace(/[.]+$/, '');
+    if (singleLine.length <= maxLen) {
+      return singleLine;
+    }
+    return `${singleLine.slice(0, maxLen - 1).trimEnd()}…`;
   }
 
   private async runAvatarImageAction(prompt: string, sourceImage: string | null): Promise<void> {

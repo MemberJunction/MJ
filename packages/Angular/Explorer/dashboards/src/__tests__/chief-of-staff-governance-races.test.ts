@@ -6,12 +6,19 @@ import { Subject } from 'rxjs';
 import { BaseEntity, IMetadataProvider, RunView, RunViewResult } from '@memberjunction/core';
 import { MJGlobal, MJEventType, UUIDMap } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import type { MJAIAgentUserPolicyEntity, MJAgentChannelEntity } from '@memberjunction/core-entities';
+import {
+    UserInfoEngine,
+    type MJAIAgentUserPolicyEntity,
+    type MJAgentChannelEntity,
+} from '@memberjunction/core-entities';
 import { ChiefOfStaffGovernanceComponent } from '../ChiefOfStaff/chief-of-staff-governance.component';
 import { ChiefOfStaffAgentChannelsComponent } from '../ChiefOfStaff/chief-of-staff-agent-channels.component';
+import { ChiefOfStaffOverviewComponent } from '../ChiefOfStaff/chief-of-staff-overview.component';
 import {
     BuildPolicyDraftFromEntity,
     CalculateChiefOfStaffMetrics,
+    MY_AGENTS_PREFERENCES_SETTING_KEY,
+    ParseMyAgentsDashboardPreferences,
     type EmailApprovalDraft,
     type SelectableGovernanceAgent,
 } from '../ChiefOfStaff/chief-of-staff-agent-context';
@@ -341,5 +348,89 @@ describe('ChiefOfStaffGovernanceComponent — generation token, agent mismatch g
 
         channelsComp.ShowMobileThreadList();
         expect(channelsComp.MobileShowingDetail).toBe(false);
+    });
+
+    it('simplifies Shared left rail by default, persists roster & Overview layout prefs via UserInfoEngine, and opens Personalize on hover icon click', () => {
+        const setSettingDebounced = vi.fn();
+        vi.spyOn(UserInfoEngine, 'Instance', 'get').mockReturnValue({
+            SetSettingDebounced: setSettingDebounced,
+            GetSetting: vi.fn(() => undefined),
+            Config: vi.fn(async () => true),
+        } as Partial<UserInfoEngine> as UserInfoEngine);
+
+        const { component } = createGovernanceHarness();
+        const pepperAgent: SelectableGovernanceAgent = {
+            ID: 'A0000000-0000-0000-0000-000000000010',
+            Name: 'Pepper',
+            BaseAgentID: AGENT_COS.ID,
+            BaseAgentName: 'Chief of Staff',
+            IsDerivedInstance: true,
+            IsOwnedByCurrentUser: true,
+            IsPrimaryInstance: true,
+        };
+        const demoAgent: SelectableGovernanceAgent = {
+            ID: 'A0000000-0000-0000-0000-000000000011',
+            Name: 'Demo Loop Agent',
+            Category: 'Demo',
+            IsSystemOrDemo: true,
+        };
+        component.AvailableAgents = [pepperAgent, AGENT_SF, demoAgent];
+        component.SelectedAgentID = pepperAgent.ID;
+        component.RosterSearchText = '';
+
+        // Default: Shared collapsed, My Agents expanded, System/Demo hidden
+        expect(component.MyAgentsSectionExpanded).toBe(true);
+        expect(component.SharedSectionExpanded).toBe(false);
+        expect(component.HiddenSystemAndDemoCount).toBe(1);
+        expect(component.FilteredSharedAgents.map((a) => a.Name)).toEqual(['Software Factory']);
+
+        // Expanding Shared and toggling Show System & Demo persists via UserInfoEngine
+        component.ToggleSharedSection();
+        expect(component.SharedSectionExpanded).toBe(true);
+        component.ToggleShowSystemAndDemo();
+        expect(component.ShowSystemAndDemo).toBe(true);
+        expect(component.FilteredSharedAgents.map((a) => a.Name)).toEqual([
+            'Software Factory',
+            'Demo Loop Agent',
+        ]);
+
+        component.SetActiveSubTab('persona');
+        expect(setSettingDebounced).toHaveBeenCalledTimes(3);
+        const lastArgs = setSettingDebounced.mock.calls[2];
+        expect(lastArgs[0]).toBe(MY_AGENTS_PREFERENCES_SETTING_KEY);
+        const savedPrefs = ParseMyAgentsDashboardPreferences(lastArgs[1] as string);
+        expect(savedPrefs.sharedExpanded).toBe(true);
+        expect(savedPrefs.showSystemAndDemo).toBe(true);
+        expect(savedPrefs.activeAgentSubTab).toBe('persona');
+
+        // Hover Personalize icon button stops propagation and opens edit modal for that agent
+        const stopProp = vi.fn();
+        const stubPepperEntity = { ID: pepperAgent.ID, Name: 'Pepper', BaseAgentID: AGENT_COS.ID };
+        component.GetAgentById = vi.fn(
+            () => stubPepperEntity as ReturnType<ChiefOfStaffGovernanceComponent['GetAgentById']>,
+        );
+        component.OpenEditInstanceModal = vi.fn();
+        component.OnRosterPersonalizeClick(pepperAgent, {
+            stopPropagation: stopProp,
+        } as Partial<Event> as Event);
+        expect(stopProp).toHaveBeenCalledTimes(1);
+        expect(component.OpenEditInstanceModal).toHaveBeenCalledWith(stubPepperEntity);
+
+        // Overview dashboard layout density & collapsed panels also persist via UserInfoEngine
+        const overviewRaw: object = Object.create(ChiefOfStaffOverviewComponent.prototype) as object;
+        const overviewComp = overviewRaw as ChiefOfStaffOverviewComponent;
+        (overviewRaw as { cdr: { markForCheck: () => void } }).cdr = { markForCheck: vi.fn() };
+        Object.defineProperty(overviewComp, 'ProviderToUse', {
+            get: () =>
+                ({
+                    CurrentUser: { ID: 'U0000000-0000-0000-0000-000000000099' },
+                }) as Partial<IMetadataProvider> as IMetadataProvider,
+            configurable: true,
+        });
+        expect(overviewComp.StripDensity).toBe('cards');
+        overviewComp.SetStripDensity('compact');
+        overviewComp.ToggleOverviewPanel('channels');
+        expect(overviewComp.StripDensity).toBe('compact');
+        expect(overviewComp.IsOverviewPanelCollapsed('channels')).toBe(true);
     });
 });

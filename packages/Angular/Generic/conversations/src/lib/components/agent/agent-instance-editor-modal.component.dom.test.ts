@@ -699,11 +699,41 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
     vi.stubGlobal('Image', MockImage);
 
     try {
-      // 1. Clicking the 68x68 avatar button opens the Avatar Studio
+      // Populate agent details BEFORE opening Avatar Studio so contextual prompt enrichment is exercised
+      const nameInput = el.querySelector('#aie-instance-name') as HTMLInputElement;
+      nameInput.value = 'Pepper';
+      nameInput.dispatchEvent(new Event('input'));
+      comp.Description = 'Tracks executive priorities and clinical milestones';
+      comp.Tone = 'Direct, playful, a touch sarcastic and funny';
+      comp.AdditionalInstructions = 'Focus on oncology Phase III briefings.';
+      fixture.detectChanges();
+
+      // 1. Clicking the 68x68 avatar button overlays the entire dialog with Avatar Studio
       expect(el.querySelector('.aie-avatar-studio')).toBeNull();
       (el.querySelector('.aie-avatar-trigger') as HTMLButtonElement).click();
+      await settle(fixture);
+      expect(el.querySelector('.aie-avatar-studio--overlay')).not.toBeNull();
+      // Main form inputs are hidden while Avatar Studio overlays the dialog
+      expect(el.querySelector('#aie-instance-name')).toBeNull();
+
+      // Prompt textarea is multiline and pre-populated with rich agent context + style
+      const promptTextarea = el.querySelector('#aie-avatar-prompt') as HTMLTextAreaElement;
+      expect(promptTextarea).not.toBeNull();
+      expect(promptTextarea.tagName).toBe('TEXTAREA');
+      expect(promptTextarea.value).toContain('"Pepper" (Chief of Staff)');
+      expect(promptTextarea.value).toContain('Tracks executive priorities and clinical milestones');
+      expect(promptTextarea.value).toContain('Focus on oncology Phase III briefings');
+      expect(promptTextarea.value).toContain('3D Clay Mascot');
+
+      // Clicking another style preset before manual edit updates the contextual prompt
+      const cyberChip = Array.from(el.querySelectorAll('.aie-studio-generate-bar .aie-chip')).find((b) =>
+        b.textContent?.includes('Cyberpunk Bot')
+      ) as HTMLButtonElement | undefined;
+      expect(cyberChip).toBeDefined();
+      cyberChip!.click();
       fixture.detectChanges();
-      expect(el.querySelector('.aie-avatar-studio')).not.toBeNull();
+      expect(comp.AvatarPrompt).toContain('Cyberpunk Bot');
+      expect(comp.AvatarPrompt).toContain('"Pepper"');
 
       // 2. Generate Avatar via Generate Image action (index-keyed object ResultData shape from ActionResolver.RunAction)
       mockState.runActionQueue.push({
@@ -727,28 +757,19 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
         RunParams: null,
       });
 
-      const nameInput = el.querySelector('#aie-instance-name') as HTMLInputElement;
-      nameInput.value = 'Pepper';
-      nameInput.dispatchEvent(new Event('input'));
-
-      const promptInput = el.querySelector(
-        '.aie-studio-pane .aie-studio-prompt-row input'
-      ) as HTMLInputElement;
-      promptInput.value = 'Sleek chili mascot badge';
-      promptInput.dispatchEvent(new Event('input'));
+      promptTextarea.value = 'Sleek chili mascot badge, Cyberpunk Bot style';
+      promptTextarea.dispatchEvent(new Event('input'));
       fixture.detectChanges();
 
-      const genBtn = Array.from(el.querySelectorAll('.aie-studio-pane .aie-studio-prompt-row button')).find((b) =>
-        b.textContent?.includes('Generate')
-      ) as HTMLButtonElement | undefined;
-      expect(genBtn).toBeDefined();
+      const genBtn = el.querySelector('.aie-studio-generate-btn') as HTMLButtonElement | null;
+      expect(genBtn).not.toBeNull();
       genBtn!.click();
       await settle(fixture);
 
       expect(mockState.runActionCalls).toHaveLength(1);
       expect(mockState.runActionCalls[0].actionId).toBe(GENERATE_IMAGE_ACTION_ID);
       expect(mockState.runActionCalls[0].params.find((p) => p.Name === 'Prompt')?.Value).toBe(
-        'Sleek chili mascot badge'
+        'Sleek chili mascot badge, Cyberpunk Bot style'
       );
       expect(mockState.runActionCalls[0].params.find((p) => p.Name === 'NumberOfImages')?.Value).toBe('1');
       for (const param of mockState.runActionCalls[0].params) {
@@ -784,8 +805,9 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
         RunParams: null,
       });
 
-      const refineInput = el.querySelector('#aie-avatar-refine-input') as HTMLInputElement;
+      const refineInput = el.querySelector('#aie-avatar-refine-input') as HTMLTextAreaElement;
       expect(refineInput).not.toBeNull();
+      expect(refineInput.tagName).toBe('TEXTAREA');
       refineInput.value = 'Add glasses and teal background';
       refineInput.dispatchEvent(new Event('input'));
       fixture.detectChanges();
@@ -831,6 +853,17 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       expect(mockState.notifications).toHaveLength(1);
       expect(mockState.notifications[0].style).toBe('warning');
       expect(mockState.notifications[0].message).toContain('No active image generator API key configured');
+
+      // 6. Clicking "Done — Use This Avatar" closes the overlay and restores the main form with new avatar intact
+      const doneBtn = Array.from(el.querySelectorAll('.aie-actions-primary button')).find((b) =>
+        b.textContent?.includes('Done')
+      ) as HTMLButtonElement | undefined;
+      expect(doneBtn).toBeDefined();
+      doneBtn!.click();
+      fixture.detectChanges();
+      expect(el.querySelector('.aie-avatar-studio')).toBeNull();
+      expect(el.querySelector('#aie-instance-name')).not.toBeNull();
+      expect(comp.LogoURL).toBe('data:image/webp;base64,d2VicC1hdmF0YXItMTI4-1');
     } finally {
       getContextSpy.mockRestore();
       toDataUrlSpy.mockRestore();

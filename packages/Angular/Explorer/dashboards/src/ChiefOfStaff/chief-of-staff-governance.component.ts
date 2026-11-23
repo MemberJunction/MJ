@@ -13,6 +13,7 @@ import {
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
+    AgentWorkspaceSubTab,
     BuildPolicyDraftFromEntity,
     ChiefOfStaffPage,
     EvaluateInstructionsOverrideSize,
@@ -20,6 +21,7 @@ import {
     InstructionsOverrideSizeReport,
     IsApprovalRequest,
     IsSpentOneShotRoutine,
+    MyAgentsDashboardPreferences,
     PolicyCalendarChannelModeValue,
     PolicyCoordinationModeValue,
     PolicyDataAccessModeValue,
@@ -31,7 +33,7 @@ import {
 } from './chief-of-staff-agent-context';
 import { BaseChiefOfStaffPage } from './chief-of-staff-page-base';
 
-export type AgentDetailSubTab = 'activity' | 'persona' | 'governance' | 'sharing';
+export type AgentDetailSubTab = AgentWorkspaceSubTab;
 
 export interface PolicySizeAuditRow {
     PolicyID: string;
@@ -176,18 +178,104 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
         { Value: 'Enabled', Label: 'Enabled' },
     ];
 
-    // ── Roster Filtering ─────────────────────────────────────────────────────────────────
+    // ── Roster Filtering & Persisted Left-Rail Preferences ───────────────────────────────
+
+    public get MyAgentsSectionExpanded(): boolean {
+        if (this.RosterSearchText?.trim()) {
+            return true;
+        }
+        return this.effectiveDashboardPrefs.myAgentsExpanded;
+    }
+
+    public get SharedSectionExpanded(): boolean {
+        if (this.RosterSearchText?.trim()) {
+            return true;
+        }
+        return this.effectiveDashboardPrefs.sharedExpanded;
+    }
+
+    public get ShowSystemAndDemo(): boolean {
+        return this.effectiveDashboardPrefs.showSystemAndDemo;
+    }
+
+    public get HiddenSystemAndDemoCount(): number {
+        return this.SharedCatalogAgents.filter((a) => Boolean(a.IsSystemOrDemo)).length;
+    }
 
     public get FilteredMyOwnedAgents(): SelectableGovernanceAgent[] {
         return this.filterRosterList(this.MyOwnedAgents);
     }
 
+    /**
+     * Shared agents visible in the left rail: hides `IsSystemOrDemo` items by default unless the
+     * user toggled "Show System & Demo" ON (or unless that agent is currently selected or the
+     * user's Default Chat Agent).
+     */
+    public get VisibleSharedAgents(): SelectableGovernanceAgent[] {
+        const showAll = this.ShowSystemAndDemo;
+        return this.SharedCatalogAgents.filter((agent) => {
+            if (showAll || !agent.IsSystemOrDemo) {
+                return true;
+            }
+            return this.IsRosterAgentSelected(agent.ID) || this.IsDefaultChatAgent(agent.ID);
+        });
+    }
+
     public get FilteredSharedAgents(): SelectableGovernanceAgent[] {
-        return this.filterRosterList(this.SharedCatalogAgents);
+        return this.filterRosterList(this.VisibleSharedAgents);
+    }
+
+    /**
+     * Shared agents that stay pinned and visible even while the `Shared` section is collapsed
+     * (when a shared agent is currently selected or set as the user's Default Chat Agent).
+     */
+    public get PinnedCollapsedSharedAgents(): SelectableGovernanceAgent[] {
+        if (this.SharedSectionExpanded) {
+            return [];
+        }
+        return this.SharedCatalogAgents.filter(
+            (a) => this.IsRosterAgentSelected(a.ID) || this.IsDefaultChatAgent(a.ID),
+        );
+    }
+
+    public ToggleMyAgentsSection(): void {
+        const next = !this.effectiveDashboardPrefs.myAgentsExpanded;
+        this.persistDashboardPreferences({ myAgentsExpanded: next });
+        this.cdr.markForCheck();
+    }
+
+    public ToggleSharedSection(): void {
+        const next = !this.effectiveDashboardPrefs.sharedExpanded;
+        this.persistDashboardPreferences({ sharedExpanded: next });
+        this.cdr.markForCheck();
+    }
+
+    public ToggleShowSystemAndDemo(event?: Event): void {
+        event?.stopPropagation();
+        const next = !this.effectiveDashboardPrefs.showSystemAndDemo;
+        this.persistDashboardPreferences({ showSystemAndDemo: next });
+        this.cdr.markForCheck();
+    }
+
+    public CanCreateInstanceFromSharedRosterItem(agent: SelectableGovernanceAgent): boolean {
+        return agent.InstantiationMode === 'Optional' || agent.InstantiationMode === 'Required';
+    }
+
+    public OnRosterPersonalizeClick(agent: SelectableGovernanceAgent, event: Event): void {
+        event.stopPropagation();
+        const entity = this.GetAgentById(agent.ID);
+        if (entity) {
+            this.OpenEditInstanceModal(entity);
+        }
+    }
+
+    public OnRosterCreateFromTemplateClick(agent: SelectableGovernanceAgent, event: Event): void {
+        event.stopPropagation();
+        this.OpenCreateInstanceModal(agent.ID);
     }
 
     private filterRosterList(list: SelectableGovernanceAgent[]): SelectableGovernanceAgent[] {
-        const q = this.RosterSearchText.trim().toLowerCase();
+        const q = this.RosterSearchText?.trim().toLowerCase() ?? '';
         if (!q) {
             return list;
         }
@@ -195,8 +283,18 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
             (a) =>
                 a.Name.toLowerCase().includes(q) ||
                 (a.BaseAgentName ?? '').toLowerCase().includes(q) ||
+                (a.Category ?? '').toLowerCase().includes(q) ||
                 (a.Description ?? '').toLowerCase().includes(q),
         );
+    }
+
+    protected override OnDashboardPreferencesLoaded(prefs: MyAgentsDashboardPreferences): void {
+        if (prefs.activeAgentSubTab && this.ActiveSubTab !== prefs.activeAgentSubTab) {
+            this.ActiveSubTab = prefs.activeAgentSubTab;
+            if (prefs.activeAgentSubTab === 'sharing' && this.SelectedAgentID) {
+                void this.LoadAgentPermissions();
+            }
+        }
     }
 
     public OnRosterSearchInput(event: Event): void {
@@ -256,6 +354,7 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
             return;
         }
         this.ActiveSubTab = tab;
+        this.persistDashboardPreferences({ activeAgentSubTab: tab });
         if (tab === 'sharing') {
             void this.LoadAgentPermissions();
         }

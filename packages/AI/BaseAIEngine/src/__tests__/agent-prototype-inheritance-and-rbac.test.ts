@@ -692,5 +692,68 @@ describe('AIEngineBase Prototype Inheritance (BaseAgentID)', () => {
 
             expect(alicePepper.IsPrimaryInstance).toBe(true);
         });
+
+        it('immediately reflects updated LogoURL, IconClass, and Name in GetAgentByID and ObserveProperty without waiting for full reload', async () => {
+            const cos = makeAgent({ ID: L0_COS, Name: 'Chief of Staff', InstantiationMode: 'Required' });
+            const alicePepper = makeAgent({
+                ID: L2_PEPPER,
+                Name: 'Pepper',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                LogoURL: null,
+                IconClass: 'fa-solid fa-pepper-hot',
+                IsPrimaryInstance: true,
+            });
+
+            const engine = seedEngine({ _agents: [cos, alicePepper] });
+            // Prime lazy lookup index before the save arrives
+            expect(engine.GetAgentByID(L2_PEPPER)?.LogoURL).toBeNull();
+
+            const observedSnapshots: number[] = [];
+            const sub = engine.ObserveProperty('_agents').subscribe((list) => {
+                observedSnapshots.push(list.length);
+            });
+
+            const updatedEntity = makeAgent({
+                ID: L2_PEPPER,
+                Name: 'Pepper Prime',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                LogoURL: 'data:image/webp;base64,UklGRkIAAABXRUJQVlA4WAoAAAAQAAAAfwAAfwAAQUxQSA==',
+                IconClass: 'fa-solid fa-bolt',
+                IsPrimaryInstance: true,
+            });
+
+            await triggerEntityEvent(engine, makeSaveEvent(updatedEntity));
+            sub.unsubscribe();
+
+            const cached = engine.GetAgentByID(L2_PEPPER);
+            expect(cached?.LogoURL).toBe('data:image/webp;base64,UklGRkIAAABXRUJQVlA4WAoAAAAQAAAAfwAAfwAAQUxQSA==');
+            expect(cached?.IconClass).toBe('fa-solid fa-bolt');
+            expect(cached?.Name).toBe('Pepper Prime');
+            expect(alicePepper.LogoURL).toBe('data:image/webp;base64,UklGRkIAAABXRUJQVlA4WAoAAAAQAAAAfwAAfwAAQUxQSA==');
+            expect(observedSnapshots.length).toBeGreaterThanOrEqual(2);
+        });
+
+        it('immediately inserts a newly created derived agent instance into _agents on save', async () => {
+            const L2_SCOUT = '00000000-0000-0000-0000-000000000099';
+            const cos = makeAgent({ ID: L0_COS, Name: 'Chief of Staff', InstantiationMode: 'Required' });
+            const engine = seedEngine({ _agents: [cos] });
+            expect(engine.GetAgentByID(L2_SCOUT)).toBeUndefined();
+
+            const createdScout = makeAgent({
+                ID: L2_SCOUT,
+                Name: 'Clinical Scout',
+                BaseAgentID: L0_COS,
+                OwnerUserID: ALICE,
+                LogoURL: 'data:image/webp;base64,NEWAVATAR==',
+                IsPrimaryInstance: true,
+            });
+
+            await triggerEntityEvent(engine, makeSaveEvent(createdScout));
+
+            expect(engine.GetAgentByID(L2_SCOUT)?.Name).toBe('Clinical Scout');
+            expect(engine.GetAgentByID(L2_SCOUT)?.LogoURL).toBe('data:image/webp;base64,NEWAVATAR==');
+        });
     });
 });

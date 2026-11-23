@@ -10,6 +10,229 @@
         <div class="aie-loading">
           <mj-loading text="Loading agent studio..." size="medium"></mj-loading>
         </div>
+      } @else if (AvatarStudioOpen) {
+        <!-- Full-Dialog Overlay AI Avatar Studio -->
+        <div class="aie-avatar-studio aie-avatar-studio--overlay" role="region" aria-label="Avatar Studio">
+          <div class="aie-studio-topbar">
+            <button
+              type="button"
+              class="aie-studio-back-btn"
+              [disabled]="IsGeneratingAvatar"
+              (click)="CloseAvatarStudio()">
+              <i class="fa-solid fa-arrow-left"></i>
+              <span>Back to Agent</span>
+            </button>
+            <span class="aie-pill">{{ AvatarStatusLabel }}</span>
+          </div>
+
+          <div class="aie-studio-hero">
+            <div class="aie-studio-hero-avatar" [class.aie-studio-hero-avatar--busy]="IsGeneratingAvatar">
+              @if (PreviewAvatarUrl) {
+                <img
+                  [src]="PreviewAvatarUrl"
+                  [alt]="InstanceName || EditingAgent?.Name || 'Agent avatar'"
+                  (error)="AvatarPreviewError = true" />
+              } @else {
+                <i [class]="IconClass || 'fa-solid fa-wand-magic-sparkles'"></i>
+              }
+              @if (IsGeneratingAvatar) {
+                <span class="aie-studio-hero-spinner" aria-hidden="true">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                </span>
+              }
+            </div>
+
+            <div class="aie-studio-hero-meta">
+              <div class="aie-studio-hero-name">
+                {{ InstanceName.trim() || EditingAgent?.Name || SelectedBaseAgent?.Name || 'Your Personal Agent' }}
+              </div>
+              <div class="aie-studio-hero-sub">{{ StudioSubjectSubtitle }}</div>
+            </div>
+          </div>
+
+          <div class="aie-studio-tabs" role="tablist" aria-label="Avatar source">
+            <button
+              type="button"
+              role="tab"
+              class="aie-studio-tab"
+              [class.aie-studio-tab--active]="AvatarStudioTab === 'ai'"
+              [attr.aria-selected]="AvatarStudioTab === 'ai'"
+              (click)="SetAvatarStudioTab('ai')">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> AI Generate
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="aie-studio-tab"
+              [class.aie-studio-tab--active]="AvatarStudioTab === 'icon'"
+              [attr.aria-selected]="AvatarStudioTab === 'icon'"
+              (click)="SetAvatarStudioTab('icon')">
+              <i class="fa-solid fa-icons"></i> Curated Icons
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="aie-studio-tab"
+              [class.aie-studio-tab--active]="AvatarStudioTab === 'upload'"
+              [attr.aria-selected]="AvatarStudioTab === 'upload'"
+              (click)="SetAvatarStudioTab('upload')">
+              <i class="fa-solid fa-upload"></i> Upload / URL
+            </button>
+          </div>
+
+          @if (AvatarErrorMessage) {
+            <div class="aie-studio-error" role="alert">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span>{{ AvatarErrorMessage }}</span>
+            </div>
+          }
+
+          <!-- Tab 1: AI Generate & Iterative Refinement -->
+          @if (AvatarStudioTab === 'ai') {
+            <div class="aie-studio-pane" role="tabpanel">
+              <div class="aie-label-row">
+                <label class="aie-sublabel aie-sublabel--flush" for="aie-avatar-prompt">
+                  Avatar Prompt
+                </label>
+                <button
+                  type="button"
+                  class="aie-link-btn"
+                  [disabled]="IsGeneratingAvatar"
+                  (click)="RefreshAvatarPromptFromAgent()"
+                  title="Rebuild prompt using this agent's name, role, personality, and instructions">
+                  <i class="fa-solid fa-rotate"></i> Rebuild from agent details
+                </button>
+              </div>
+
+              <textarea
+                id="aie-avatar-prompt"
+                class="aie-textarea aie-studio-prompt-textarea"
+                rows="4"
+                [(ngModel)]="AvatarPrompt"
+                (input)="OnAvatarPromptUserInput()"
+                [disabled]="IsGeneratingAvatar"
+                placeholder="Describe your agent's avatar — automatically tailored to your agent's name, role, personality, and instructions..."
+                aria-label="Avatar generation prompt"></textarea>
+
+              <div class="aie-studio-generate-bar">
+                <div class="aie-chip-row" role="group" aria-label="Avatar style presets">
+                  <span class="aie-chip-hint">Style:</span>
+                  @for (style of AvatarStylePresets; track style) {
+                    <button
+                      type="button"
+                      class="aie-chip"
+                      [class.aie-chip--active]="SelectedAvatarStyle === style"
+                      [disabled]="IsGeneratingAvatar"
+                      (click)="SelectAvatarStylePreset(style)">
+                      {{ style }}
+                    </button>
+                  }
+                </div>
+
+                <button
+                  mjButton
+                  variant="primary"
+                  size="sm"
+                  type="button"
+                  class="aie-studio-generate-btn"
+                  [disabled]="IsGeneratingAvatar"
+                  (click)="GenerateAvatar()">
+                  @if (IsGeneratingAvatar) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Generating...
+                  } @else {
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Avatar
+                  }
+                </button>
+              </div>
+
+              @if (HasImageAvatar) {
+                <div class="aie-refine-box">
+                  <label class="aie-refine-label" for="aie-avatar-refine-input">
+                    <i class="fa-solid fa-arrows-rotate"></i> Refine current avatar
+                  </label>
+                  <div class="aie-studio-refine-row">
+                    <textarea
+                      id="aie-avatar-refine-input"
+                      class="aie-textarea aie-studio-refine-textarea"
+                      rows="2"
+                      [(ngModel)]="AvatarRefinePrompt"
+                      [disabled]="IsGeneratingAvatar"
+                      placeholder='Describe tweaks — e.g., "Add sleek glasses", "Make background deep teal"'></textarea>
+                    <button
+                      mjButton
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      [disabled]="IsGeneratingAvatar || !AvatarRefinePrompt.trim()"
+                      (click)="RefineAvatar()">
+                      <i class="fa-solid fa-sliders"></i> Refine
+                    </button>
+                  </div>
+                  <div class="aie-chip-row">
+                    @for (quick of AvatarQuickRefinements; track quick) {
+                      <button
+                        type="button"
+                        class="aie-chip"
+                        [disabled]="IsGeneratingAvatar"
+                        (click)="ApplyQuickRefinement(quick)">
+                        {{ quick }}
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Tab 2: Curated Icon Grid -->
+          @if (AvatarStudioTab === 'icon') {
+            <div class="aie-studio-pane" role="tabpanel">
+              <div class="aie-icon-grid aie-icon-grid--roomy">
+                @for (opt of IconOptions; track opt.IconClass) {
+                  <button
+                    type="button"
+                    class="aie-icon-tile aie-icon-tile--labeled"
+                    [class.aie-icon-tile--selected]="!HasImageAvatar && IconClass === opt.IconClass"
+                    [title]="opt.Label"
+                    [attr.aria-label]="opt.Label"
+                    (click)="SelectIcon(opt.IconClass)">
+                    <i [class]="opt.IconClass"></i>
+                    <span class="aie-icon-tile-label">{{ opt.Label }}</span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Tab 3: Local File Upload & Image URL -->
+          @if (AvatarStudioTab === 'upload') {
+            <div class="aie-studio-pane" role="tabpanel">
+              <label class="aie-upload-dropzone">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span>
+                  <strong>Upload image</strong>
+                  <span class="aie-upload-sub">Auto-cropped &amp; compressed to 128×128 WebP</span>
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="aie-file-input"
+                  (change)="OnAvatarFileSelected($event)" />
+              </label>
+
+              <div>
+                <label class="aie-sublabel" for="aie-logo-url">Or paste an image URL</label>
+                <input
+                  id="aie-logo-url"
+                  type="url"
+                  class="aie-input"
+                  [(ngModel)]="LogoURL"
+                  (ngModelChange)="OnLogoUrlChanged()"
+                  placeholder="https://example.com/avatar.png" />
+              </div>
+            </div>
+          }
+        </div>
       } @else {
         <!-- 1. Compact Identity Header: 68x68 Avatar Studio Trigger + Base Template Pill + Chat to Onboard -->
         <div class="aie-identity-header">
@@ -145,219 +368,6 @@
                 }
               }
             </div>
-          </div>
-        }
-
-        <!-- Inline Collapsible AI Avatar Studio -->
-        @if (AvatarStudioOpen) {
-          <div class="aie-avatar-studio" role="region" aria-label="Avatar Studio">
-            <div class="aie-studio-head">
-              <div class="aie-studio-title">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <strong>Avatar Studio</strong>
-                <span class="aie-pill">{{ AvatarStatusLabel }}</span>
-              </div>
-              <button
-                type="button"
-                class="aie-studio-close"
-                aria-label="Close Avatar Studio"
-                (click)="ToggleAvatarStudio()">
-                <i class="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            <div class="aie-studio-tabs" role="tablist" aria-label="Avatar source">
-              <button
-                type="button"
-                role="tab"
-                class="aie-studio-tab"
-                [class.aie-studio-tab--active]="AvatarStudioTab === 'ai'"
-                [attr.aria-selected]="AvatarStudioTab === 'ai'"
-                (click)="SetAvatarStudioTab('ai')">
-                <i class="fa-solid fa-wand-magic-sparkles"></i> AI Generate
-              </button>
-              <button
-                type="button"
-                role="tab"
-                class="aie-studio-tab"
-                [class.aie-studio-tab--active]="AvatarStudioTab === 'icon'"
-                [attr.aria-selected]="AvatarStudioTab === 'icon'"
-                (click)="SetAvatarStudioTab('icon')">
-                <i class="fa-solid fa-icons"></i> Icon
-              </button>
-              <button
-                type="button"
-                role="tab"
-                class="aie-studio-tab"
-                [class.aie-studio-tab--active]="AvatarStudioTab === 'upload'"
-                [attr.aria-selected]="AvatarStudioTab === 'upload'"
-                (click)="SetAvatarStudioTab('upload')">
-                <i class="fa-solid fa-upload"></i> Upload / URL
-              </button>
-            </div>
-
-            @if (AvatarErrorMessage) {
-              <div class="aie-studio-error" role="alert">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <span>{{ AvatarErrorMessage }}</span>
-              </div>
-            }
-
-            <!-- Tab 1: AI Generate & Iterative Refinement -->
-            @if (AvatarStudioTab === 'ai') {
-              <div class="aie-studio-pane" role="tabpanel">
-                <div class="aie-studio-prompt-row">
-                  <input
-                    type="text"
-                    class="aie-input"
-                    [(ngModel)]="AvatarPrompt"
-                    [disabled]="IsGeneratingAvatar"
-                    placeholder="Describe your agent avatar (or leave blank for a smart default)..."
-                    aria-label="Avatar generation prompt"
-                    (keydown.enter)="GenerateAvatar()" />
-                  <button
-                    mjButton
-                    variant="primary"
-                    size="sm"
-                    type="button"
-                    [disabled]="IsGeneratingAvatar"
-                    (click)="GenerateAvatar()">
-                    @if (IsGeneratingAvatar) {
-                      <i class="fa-solid fa-spinner fa-spin"></i> Generating...
-                    } @else {
-                      <i class="fa-solid fa-wand-magic-sparkles"></i> Generate
-                    }
-                  </button>
-                </div>
-
-                <div class="aie-chip-row" role="group" aria-label="Avatar style presets">
-                  <span class="aie-chip-hint">Style:</span>
-                  @for (style of AvatarStylePresets; track style) {
-                    <button
-                      type="button"
-                      class="aie-chip"
-                      [class.aie-chip--active]="SelectedAvatarStyle === style"
-                      [disabled]="IsGeneratingAvatar"
-                      (click)="SelectAvatarStylePreset(style)">
-                      {{ style }}
-                    </button>
-                  }
-                </div>
-
-                @if (HasImageAvatar) {
-                  <div class="aie-refine-box">
-                    <label class="aie-refine-label" for="aie-avatar-refine-input">
-                      <i class="fa-solid fa-arrows-rotate"></i> Refine current avatar
-                    </label>
-                    <div class="aie-studio-prompt-row">
-                      <input
-                        id="aie-avatar-refine-input"
-                        type="text"
-                        class="aie-input"
-                        [(ngModel)]="AvatarRefinePrompt"
-                        [disabled]="IsGeneratingAvatar"
-                        placeholder='e.g., "Add glasses", "Make background teal"'
-                        (keydown.enter)="RefineAvatar()" />
-                      <button
-                        mjButton
-                        variant="outline"
-                        size="sm"
-                        type="button"
-                        [disabled]="IsGeneratingAvatar || !AvatarRefinePrompt.trim()"
-                        (click)="RefineAvatar()">
-                        <i class="fa-solid fa-sliders"></i> Refine
-                      </button>
-                    </div>
-                    <div class="aie-chip-row">
-                      @for (quick of AvatarQuickRefinements; track quick) {
-                        <button
-                          type="button"
-                          class="aie-chip"
-                          [disabled]="IsGeneratingAvatar"
-                          (click)="ApplyQuickRefinement(quick)">
-                          {{ quick }}
-                        </button>
-                      }
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-
-            <!-- Tab 2: Curated Icon Grid -->
-            @if (AvatarStudioTab === 'icon') {
-              <div class="aie-studio-pane" role="tabpanel">
-                <div class="aie-icon-grid">
-                  @for (opt of IconOptions; track opt.IconClass) {
-                    <button
-                      type="button"
-                      class="aie-icon-tile"
-                      [class.aie-icon-tile--selected]="!HasImageAvatar && IconClass === opt.IconClass"
-                      [title]="opt.Label"
-                      [attr.aria-label]="opt.Label"
-                      (click)="SelectIcon(opt.IconClass)">
-                      <i [class]="opt.IconClass"></i>
-                    </button>
-                  }
-                </div>
-              </div>
-            }
-
-            <!-- Tab 3: Local File Upload & Image URL -->
-            @if (AvatarStudioTab === 'upload') {
-              <div class="aie-studio-pane" role="tabpanel">
-                <label class="aie-upload-dropzone">
-                  <i class="fa-solid fa-cloud-arrow-up"></i>
-                  <span>
-                    <strong>Upload image</strong>
-                    <span class="aie-upload-sub">Auto-cropped &amp; compressed to 128×128 WebP</span>
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    class="aie-file-input"
-                    (change)="OnAvatarFileSelected($event)" />
-                </label>
-
-                <div>
-                  <label class="aie-sublabel" for="aie-logo-url">Or paste an image URL</label>
-                  <input
-                    id="aie-logo-url"
-                    type="url"
-                    class="aie-input"
-                    [(ngModel)]="LogoURL"
-                    (ngModelChange)="OnLogoUrlChanged()"
-                    placeholder="https://example.com/avatar.png" />
-                </div>
-              </div>
-            }
-
-            @if (AvatarHistory.length > 0 || HasImageAvatar) {
-              <div class="aie-studio-footer">
-                @if (AvatarHistory.length > 0) {
-                  <button
-                    mjButton
-                    variant="flat"
-                    size="sm"
-                    type="button"
-                    [disabled]="IsGeneratingAvatar"
-                    (click)="UndoAvatar()">
-                    <i class="fa-solid fa-rotate-left"></i> Undo ({{ AvatarHistory.length }})
-                  </button>
-                }
-                @if (HasImageAvatar) {
-                  <button
-                    mjButton
-                    variant="flat"
-                    size="sm"
-                    type="button"
-                    [disabled]="IsGeneratingAvatar"
-                    (click)="ClearAvatarImage()">
-                    <i class="fa-solid fa-icons"></i> Use Icon Instead
-                  </button>
-                }
-              </div>
-            }
           </div>
         }
 
@@ -585,38 +595,78 @@
     </div>
 
     <mj-dialog-actions>
-      <div class="aie-actions-bar">
-        <div class="aie-actions-primary">
-          <button
-            mjButton
-            variant="primary"
-            type="button"
-            [disabled]="!CanSave"
-            (click)="OnSave()">
-            <i class="fa-solid fa-check"></i>
-            {{ SaveButtonLabel }}
-          </button>
-          <button
-            mjButton
-            variant="outline"
-            type="button"
-            [disabled]="IsSaving || IsArchiving"
-            (click)="OnCancel()">
-            Cancel
-          </button>
+      @if (AvatarStudioOpen) {
+        <div class="aie-actions-bar">
+          <div class="aie-actions-primary">
+            <button
+              mjButton
+              variant="primary"
+              type="button"
+              [disabled]="IsGeneratingAvatar"
+              (click)="CloseAvatarStudio()">
+              <i class="fa-solid fa-check"></i>
+              Done — Use This Avatar
+            </button>
+          </div>
+          <div class="aie-studio-footer">
+            @if (AvatarHistory.length > 0) {
+              <button
+                mjButton
+                variant="outline"
+                size="sm"
+                type="button"
+                [disabled]="IsGeneratingAvatar"
+                (click)="UndoAvatar()">
+                <i class="fa-solid fa-rotate-left"></i> Undo ({{ AvatarHistory.length }})
+              </button>
+            }
+            @if (HasImageAvatar) {
+              <button
+                mjButton
+                variant="flat"
+                size="sm"
+                type="button"
+                [disabled]="IsGeneratingAvatar"
+                (click)="ClearAvatarImage()">
+                <i class="fa-solid fa-icons"></i> Use Icon Instead
+              </button>
+            }
+          </div>
         </div>
-        @if (Mode === 'edit' && !ConfirmArchiveOpen) {
-          <button
-            mjButton
-            variant="flat"
-            size="sm"
-            type="button"
-            [disabled]="IsSaving || IsArchiving"
-            (click)="RequestArchive()">
-            <i class="fa-solid fa-box-archive"></i> Archive
-          </button>
-        }
-      </div>
+      } @else {
+        <div class="aie-actions-bar">
+          <div class="aie-actions-primary">
+            <button
+              mjButton
+              variant="primary"
+              type="button"
+              [disabled]="!CanSave"
+              (click)="OnSave()">
+              <i class="fa-solid fa-check"></i>
+              {{ SaveButtonLabel }}
+            </button>
+            <button
+              mjButton
+              variant="outline"
+              type="button"
+              [disabled]="IsSaving || IsArchiving"
+              (click)="OnCancel()">
+              Cancel
+            </button>
+          </div>
+          @if (Mode === 'edit' && !ConfirmArchiveOpen) {
+            <button
+              mjButton
+              variant="flat"
+              size="sm"
+              type="button"
+              [disabled]="IsSaving || IsArchiving"
+              (click)="RequestArchive()">
+              <i class="fa-solid fa-box-archive"></i> Archive
+            </button>
+          }
+        </div>
+      }
     </mj-dialog-actions>
   </mj-dialog>
 }

@@ -8,7 +8,11 @@ import {
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ChiefOfStaffPage } from './chief-of-staff-agent-context';
+import {
+    ChiefOfStaffPage,
+    OverviewCollapsiblePanel,
+    OverviewStripDensity,
+} from './chief-of-staff-agent-context';
 import { BaseChiefOfStaffPage } from './chief-of-staff-page-base';
 
 /**
@@ -43,6 +47,31 @@ export class ChiefOfStaffOverviewComponent extends BaseChiefOfStaffPage {
     public Channels: MJAgentChannelEntity[] = [];
     public ChannelParticipantsByChannel = new Map<string, MJAgentChannelParticipantEntity[]>();
     public IsLoadingChannels = false;
+
+    public get StripDensity(): OverviewStripDensity {
+        return this.effectiveDashboardPrefs.overviewStripDensity;
+    }
+
+    public SetStripDensity(density: OverviewStripDensity): void {
+        if (this.StripDensity === density) {
+            return;
+        }
+        this.persistDashboardPreferences({ overviewStripDensity: density });
+        this.cdr.markForCheck();
+    }
+
+    public IsOverviewPanelCollapsed(panel: OverviewCollapsiblePanel): boolean {
+        return this.effectiveDashboardPrefs.overviewCollapsedPanels.includes(panel);
+    }
+
+    public ToggleOverviewPanel(panel: OverviewCollapsiblePanel): void {
+        const current = this.effectiveDashboardPrefs.overviewCollapsedPanels;
+        const next = current.includes(panel)
+            ? current.filter((p) => p !== panel)
+            : [...current, panel];
+        this.persistDashboardPreferences({ overviewCollapsedPanels: next });
+        this.cdr.markForCheck();
+    }
 
     public get SelectedScopeAgentName(): string | null {
         if (!this.SelectedScopeAgentID) {

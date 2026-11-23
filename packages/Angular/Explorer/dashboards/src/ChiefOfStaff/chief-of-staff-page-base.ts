@@ -1,6 +1,6 @@
 import { ChangeDetectorRef, Directive, OnDestroy, OnInit, inject } from '@angular/core';
-import { Subject } from 'rxjs';
-import { debounceTime, filter, takeUntil } from 'rxjs/operators';
+import { Subject, merge } from 'rxjs';
+import { debounceTime, filter, skip, takeUntil } from 'rxjs/operators';
 import { CompositeKey, LogError, RunView, RunViewParams } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
@@ -45,24 +45,29 @@ import {
     ChiefOfStaffMetrics,
     ChiefOfStaffPage,
     DEFAULT_CHAT_AGENT_SETTING_KEY,
+    DEFAULT_MY_AGENTS_PREFERENCES,
     FormatEmailDraftForClipboard,
     GovernancePolicyDraft,
     IsApprovalRequest,
     IsSpentOneShotRoutine,
     LEGACY_CHIEF_OF_STAFF_APP_NAME,
     MY_AGENTS_APP_NAME,
+    MY_AGENTS_PREFERENCES_SETTING_KEY,
     NormalizeAgentIconClass,
     ParseEmailApprovalPayload,
+    ParseMyAgentsDashboardPreferences,
     PartitionAgentRoster,
     RequestSummaryItem,
     ResolveSelectableAgent,
     RoutineDisplayStatus,
     RoutineSummaryItem,
     SelectableAgentsForGovernance,
+    SerializeMyAgentsDashboardPreferences,
     SortRoutinesForDisplay,
     ValidateChiefOfStaffPageParam,
     ValidateSearchQueryParam,
     type EmailApprovalDraft,
+    type MyAgentsDashboardPreferences,
     type RoutineDisplayStatusValue,
     type SelectableGovernanceAgent,
 } from './chief-of-staff-agent-context';
@@ -109,6 +114,13 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
 
     /** User's preferred Default Chat Agent ID (`UserInfoEngine` setting `chat.defaultAgentId`), or null for Sage default. */
     public DefaultChatAgentID: string | null = null;
+
+    /** Persisted roster filter & dashboard layout preferences (`UserInfoEngine` setting `myAgents.dashboardPreferences`). */
+    public DashboardPrefs: MyAgentsDashboardPreferences = {
+        ...DEFAULT_MY_AGENTS_PREFERENCES,
+        overviewCollapsedPanels: [],
+    };
+    private dashboardPrefsLoaded = false;
 
     /** Filters requests and routines on pages that show a search box. */
     public SearchText = '';
@@ -289,6 +301,61 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             this.IsSavingDefaultChatAgent = false;
             this.cdr.markForCheck();
         }
+    }
+
+    protected get effectiveDashboardPrefs(): MyAgentsDashboardPreferences {
+        if (!this.DashboardPrefs) {
+            this.DashboardPrefs = {
+                ...DEFAULT_MY_AGENTS_PREFERENCES,
+                overviewCollapsedPanels: [],
+            };
+        }
+        return this.DashboardPrefs;
+    }
+
+    protected loadDashboardPreferencesFromEngine(explicitRaw?: string | null): void {
+        try {
+            const raw =
+                explicitRaw !== undefined
+                    ? explicitRaw
+                    : UserInfoEngine.Instance.GetSetting(MY_AGENTS_PREFERENCES_SETTING_KEY);
+            this.DashboardPrefs = ParseMyAgentsDashboardPreferences(raw);
+            this.dashboardPrefsLoaded = true;
+            this.OnDashboardPreferencesLoaded(this.DashboardPrefs);
+        } catch {
+            if (!this.DashboardPrefs) {
+                this.DashboardPrefs = {
+                    ...DEFAULT_MY_AGENTS_PREFERENCES,
+                    overviewCollapsedPanels: [],
+                };
+            }
+        }
+    }
+
+    protected persistDashboardPreferences(patch: Partial<MyAgentsDashboardPreferences>): void {
+        const current = this.effectiveDashboardPrefs;
+        const next: MyAgentsDashboardPreferences = {
+            ...current,
+            ...patch,
+            overviewCollapsedPanels: patch.overviewCollapsedPanels
+                ? [...patch.overviewCollapsedPanels]
+                : [...current.overviewCollapsedPanels],
+        };
+        this.DashboardPrefs = next;
+        try {
+            UserInfoEngine.Instance.SetSettingDebounced(
+                MY_AGENTS_PREFERENCES_SETTING_KEY,
+                SerializeMyAgentsDashboardPreferences(next),
+                this.ProviderToUse?.CurrentUser,
+            );
+        } catch {
+            // Safe no-op in unbootstrapped test harnesses
+        }
+    }
+
+    /** Hook invoked whenever `DashboardPrefs` loads or updates from `UserInfoEngine`. */
+    protected OnDashboardPreferencesLoaded(_prefs: MyAgentsDashboardPreferences): void {
+        // subclasses override as needed
     }
 
     protected refreshDefaultChatAgentId(explicitRaw?: string | null): void {
@@ -565,6 +632,9 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         this.SelectedAgentName = targetAgent.Name;
         this.chiefOfStaffAgentId = targetAgent.ID;
         this.requestedAgentQueryParam = null;
+        if (!this.ScopeAllAgents) {
+            this.persistDashboardPreferences({ selectedAgentId: targetAgent.ID });
+        }
         if (syncQueryParam) {
             this.syncSelectedAgentQueryParam();
         }
@@ -680,12 +750,41 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
                         this.cdr?.markForCheck();
                         return;
                     }
+                    if (setting.Setting === MY_AGENTS_PREFERENCES_SETTING_KEY) {
+                        this.loadDashboardPreferencesFromEngine(args.type === 'delete' ? null : (setting.Value ?? null));
+                        this.cdr?.markForCheck();
+                        return;
+                    }
                 }
             }
+            this.failedAgentAvatarIds.clear();
             this.syncAvailableAgentsFromCache();
             this.refreshDefaultChatAgentId();
             this.cdr?.markForCheck();
         });
+
+        try {
+            const engine = this.aiEngine;
+            if (typeof engine?.ObserveProperty === 'function') {
+                merge(
+                    engine.ObserveProperty('_agents').pipe(skip(1)),
+                    engine.ObserveProperty('_agentPersonas').pipe(skip(1)),
+                    engine.ObserveProperty('_agentPermissions').pipe(skip(1)),
+                )
+                    .pipe(debounceTime(40), takeUntil(this.destroy$))
+                    .subscribe(() => {
+                        if (!this.ProviderToUse?.CurrentUser) {
+                            return;
+                        }
+                        this.failedAgentAvatarIds.clear();
+                        this.syncAvailableAgentsFromCache();
+                        this.refreshDefaultChatAgentId();
+                        this.cdr?.markForCheck();
+                    });
+            }
+        } catch {
+            // Engine may not be initialized in lightweight unit tests
+        }
 
         entityStream$.pipe(
             debounceTime(750),
@@ -881,6 +980,9 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             engine.EnsureLoaded(this.ProviderToUse.CurrentUser, this.ProviderToUse),
             UserInfoEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse).catch(() => false),
         ]);
+        if (!this.dashboardPrefsLoaded) {
+            this.loadDashboardPreferencesFromEngine();
+        }
         this.syncAvailableAgentsFromCache();
 
         if (this.requestedAgentQueryParam) {
@@ -895,6 +997,14 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             const existing = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, this.SelectedAgentID));
             if (existing) {
                 return existing;
+            }
+        }
+
+        const savedAgentId = !this.ScopeAllAgents ? this.effectiveDashboardPrefs.selectedAgentId : null;
+        if (savedAgentId) {
+            const fromPrefs = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, savedAgentId));
+            if (fromPrefs) {
+                return fromPrefs;
             }
         }
 
