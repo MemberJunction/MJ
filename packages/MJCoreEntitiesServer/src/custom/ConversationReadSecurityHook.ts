@@ -43,6 +43,8 @@ export interface ConversationSecurityRow {
     ID?: string;
     UserID?: string | null;
     ParentID?: string | null;
+    RootParentID?: string | null;
+    Parent?: string | null;
     ProjectID?: string | null;
     AdditionalData?: string | null;
     AnchorType?: MJConversationEntity['AnchorType'] | null;
@@ -59,6 +61,7 @@ const REQUIRED_SECURITY_FIELDS: readonly string[] = [
     'ID',
     'UserID',
     'ParentID',
+    'RootParentID',
     'ProjectID',
     'AdditionalData',
     'AnchorType',
@@ -568,8 +571,15 @@ async function filterReadableConversations(
 
     const batchContext = await buildBatchReadContext(provider, contextUser, candidates);
     const originalFields = getOriginalFieldsMap().get(params);
-    const keptRows: unknown[] = [];
+    const candidateById = new Map<string, ConversationSecurityRow>();
+    for (const c of candidates) {
+        if (c.ID) {
+            candidateById.set(NormalizeUUID(c.ID), c);
+        }
+    }
 
+    const readablePairs: Array<{ row: unknown; candidate: ConversationSecurityRow }> = [];
+    const readableIds = new Set<string>();
     for (const row of rawRows) {
         const parsed = toConversationSecurityRow(row);
         if (!parsed?.ID) {
@@ -577,12 +587,32 @@ async function filterReadableConversations(
         }
         const candidate = hydrated.get(NormalizeUUID(parsed.ID)) ?? parsed;
         if (await UserCanReadConversation(provider, contextUser, candidate, batchContext)) {
-            keptRows.push(stripSyntheticFields(row, originalFields));
+            readableIds.add(NormalizeUUID(candidate.ID!));
+            readablePairs.push({ row, candidate });
         }
     }
 
+    const ancestorIdsToVerify = collectReferencedAncestorIds(readablePairs, readableIds);
+    const readableAncestors = await resolveReadableAncestorIds(
+        provider,
+        contextUser,
+        ancestorIdsToVerify,
+        candidateById,
+        readableIds
+    );
+
+    let anyRedacted = false;
+    const keptRows: unknown[] = [];
+    for (const { row, candidate } of readablePairs) {
+        const { Row: redactedRow, Redacted } = redactUnreadableParentFields(row, candidate, readableAncestors);
+        if (Redacted) {
+            anyRedacted = true;
+        }
+        keptRows.push(stripSyntheticFields(redactedRow, originalFields));
+    }
+
     const removedCount = rawRows.length - keptRows.length;
-    if (removedCount === 0 && !originalFields) {
+    if (removedCount === 0 && !originalFields && !anyRedacted) {
         return results;
     }
     return {
@@ -594,6 +624,124 @@ async function filterReadableConversations(
             (results.TotalRowCount ?? results.RowCount ?? rawRows.length) - removedCount
         ),
     };
+}
+
+function collectReferencedAncestorIds(
+    readablePairs: ReadonlyArray<{ row: unknown; candidate: ConversationSecurityRow }>,
+    alreadyReadableIds: ReadonlySet<string>
+): string[] {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    const pushIfNeeded = (rawId: string | null | undefined, selfId: string | undefined): void => {
+        if (!rawId || !IsValidUUID(rawId)) {
+            return;
+        }
+        const norm = NormalizeUUID(rawId);
+        if (selfId && NormalizeUUID(selfId) === norm) {
+            return;
+        }
+        if (alreadyReadableIds.has(norm) || seen.has(norm)) {
+            return;
+        }
+        seen.add(norm);
+        ids.push(rawId.trim());
+    };
+    for (const { row, candidate } of readablePairs) {
+        const raw = toConversationSecurityRow(row);
+        pushIfNeeded(candidate.ParentID, candidate.ID);
+        pushIfNeeded(candidate.RootParentID ?? raw?.RootParentID, candidate.ID);
+    }
+    return ids;
+}
+
+async function resolveReadableAncestorIds(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    ancestorIds: readonly string[],
+    candidateById: ReadonlyMap<string, ConversationSecurityRow>,
+    alreadyReadableIds: ReadonlySet<string>
+): Promise<Set<string>> {
+    const readable = new Set<string>(alreadyReadableIds);
+    if (ancestorIds.length === 0) {
+        return readable;
+    }
+    const missingIds = ancestorIds.filter((id) => !candidateById.has(NormalizeUUID(id)));
+    const hydratedAncestors =
+        missingIds.length > 0 ? await hydrateConversationRows(provider, contextUser, missingIds) : new Map<string, ConversationSecurityRow>();
+
+    const rowsToEvaluate: ConversationSecurityRow[] = [];
+    for (const id of ancestorIds) {
+        const norm = NormalizeUUID(id);
+        const meta = candidateById.get(norm) ?? hydratedAncestors.get(norm);
+        if (meta) {
+            rowsToEvaluate.push(meta);
+        }
+    }
+    if (rowsToEvaluate.length === 0) {
+        return readable;
+    }
+    const ancestorBatchContext = await buildBatchReadContext(provider, contextUser, rowsToEvaluate);
+    for (const ancestor of rowsToEvaluate) {
+        if (ancestor.ID && (await UserCanReadConversation(provider, contextUser, ancestor, ancestorBatchContext))) {
+            readable.add(NormalizeUUID(ancestor.ID));
+        }
+    }
+    return readable;
+}
+
+function redactUnreadableParentFields(
+    row: unknown,
+    candidate: ConversationSecurityRow,
+    readableAncestors: ReadonlySet<string>
+): { Row: unknown; Redacted: boolean } {
+    const raw = toConversationSecurityRow(row);
+    const parentId = candidate.ParentID;
+    const rootParentId = candidate.RootParentID ?? raw?.RootParentID ?? null;
+    const parentUnreadable = Boolean(parentId && (!IsValidUUID(parentId) || !readableAncestors.has(NormalizeUUID(parentId))));
+    const rootUnreadable = Boolean(
+        rootParentId &&
+            (!candidate.ID || !UUIDsEqual(rootParentId, candidate.ID)) &&
+            (!IsValidUUID(rootParentId) || !readableAncestors.has(NormalizeUUID(rootParentId)))
+    );
+
+    if (!parentUnreadable && !rootUnreadable) {
+        return { Row: row, Redacted: false };
+    }
+
+    if (row instanceof BaseEntity) {
+        let changed = false;
+        if (parentUnreadable) {
+            const parentField = row.GetFieldByName('Parent');
+            if (parentField && parentField.Value !== null) {
+                parentField.Value = null;
+                changed = true;
+            }
+        }
+        if (rootUnreadable) {
+            const rootField = row.GetFieldByName('RootParentID');
+            if (rootField && rootField.Value !== null) {
+                rootField.Value = null;
+                changed = true;
+            }
+        }
+        return { Row: row, Redacted: changed };
+    }
+
+    if (row && typeof row === 'object') {
+        const copy: ConversationSecurityRow = { ...(row as ConversationSecurityRow) };
+        let changed = false;
+        if (parentUnreadable && Object.prototype.hasOwnProperty.call(copy, 'Parent') && copy.Parent !== null) {
+            copy.Parent = null;
+            changed = true;
+        }
+        if (rootUnreadable && Object.prototype.hasOwnProperty.call(copy, 'RootParentID') && copy.RootParentID !== null) {
+            copy.RootParentID = null;
+            changed = true;
+        }
+        return { Row: copy, Redacted: changed };
+    }
+
+    return { Row: row, Redacted: false };
 }
 
 /**

@@ -151,13 +151,6 @@ GO
          )
       END;
 
-      UPDATE [${flyway:defaultSchema}].[EntityField]
-      SET [Configuration] = N'{"Hierarchy":{"IsHierarchy":true}}',
-          [RelatedEntityNameFieldMap] = N'Parent'
-      WHERE [EntityID] = '13248F34-2837-EF11-86D4-6045BDEE16E6'
-        AND [Name] = 'ParentID'
-        AND ([Configuration] IS NULL OR [RelatedEntityNameFieldMap] IS NULL);
-
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '90b13c1d-86ed-4d61-b632-f375fb63e41e' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Parent')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (

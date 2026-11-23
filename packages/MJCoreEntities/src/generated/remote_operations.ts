@@ -1547,7 +1547,7 @@ export interface TaskGraphSubmitInput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
@@ -1556,6 +1556,7 @@ export interface TaskGraphSubmitInput {
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
                 | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
                 | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
@@ -1958,7 +1959,7 @@ export interface WorkflowDraftOutput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
@@ -1967,6 +1968,7 @@ export interface WorkflowDraftOutput {
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
                 | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
                 | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
@@ -2002,7 +2004,7 @@ export interface WorkflowSaveInput {
                 tempId: string;
                 name: string;
                 description: string;
-                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
                 configuration:
                     | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                     | { actionName: string; inputMapping?: string; outputMapping?: string }
@@ -2011,6 +2013,7 @@ export interface WorkflowSaveInput {
                     | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                     | { condition: string; itemVariable?: string; maxIterations?: number }
                     | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                    | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
                 | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
                 dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
                 policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };

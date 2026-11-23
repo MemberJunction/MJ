@@ -689,6 +689,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
     if (this.NavigatorSection === 'collections') return 'Collections';
     if (this.NavigatorSection === 'shared') return 'Shared with Me';
+    if (this.NavigatorSection === 'shared-by-me') return 'Shared by Me';
     if (this.NavigatorSection === 'starred') return 'Starred Items';
     return 'All Library Items';
   }
@@ -705,6 +706,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
     if (this.NavigatorSection === 'shared') {
       return 'Documents, spreadsheets, slides, and collections shared with you';
+    }
+    if (this.NavigatorSection === 'shared-by-me') {
+      return 'Conversations and artifacts you have shared with teammates';
     }
     if (this.NavigatorSection === 'starred') {
       return 'Pinned items for instant access';

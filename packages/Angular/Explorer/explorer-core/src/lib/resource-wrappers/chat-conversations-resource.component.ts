@@ -853,20 +853,25 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // which conversation the workspace is viewing
     this.bridge.SetActiveFromWorkspace(conversationId);
 
-    // Load the conversation entity from the engine's list; an unlisted or deep-linked one is verified below.
+    // Load the conversation entity from the engine's list; non-owned or unlisted deep-linked
+    // conversations must remain unbound until VerifyConversationAccess resolves (fail closed).
     const conversation = this.engine.GetConversation(conversationId);
-    this.SelectedConversation = conversation ?? null;
+    const isOwnedCached = Boolean(
+      conversation?.UserID && this.CurrentUser?.ID && UUIDsEqual(conversation.UserID, this.CurrentUser.ID),
+    );
+    const hasOtherOwner = Boolean(
+      conversation?.UserID && (!this.CurrentUser?.ID || !UUIDsEqual(conversation.UserID, this.CurrentUser.ID)),
+    );
+    const needsRemoteCheck = !conversation || (verifyRemote && !isOwnedCached) || hasOtherOwner;
+    this.SelectedConversation = needsRemoteCheck ? null : (conversation ?? null);
 
     // Update URL if not skipping
     if (!this.skipUrlUpdate) {
       this.updateUrl();
     }
 
-    const isOwnedCached = Boolean(
-      conversation?.UserID && this.CurrentUser?.ID && UUIDsEqual(conversation.UserID, this.CurrentUser.ID),
-    );
-    if (!conversation || (verifyRemote && !isOwnedCached)) {
-      await this.loadUnlistedConversation(conversationId, verifyRemote);
+    if (needsRemoteCheck) {
+      await this.loadUnlistedConversation(conversationId, verifyRemote || hasOtherOwner);
     }
   }
 
@@ -877,10 +882,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   private async loadUnlistedConversation(conversationId: string, forceVerify = false): Promise<void> {
     let loaded: MJConversationEntity | null = null;
-    if (forceVerify && typeof this.engine.VerifyConversationAccess === 'function') {
-      loaded = await this.engine.VerifyConversationAccess(conversationId, this.CurrentUser);
-    } else if (typeof this.engine.EnsureConversationLoaded === 'function') {
-      loaded = await this.engine.EnsureConversationLoaded(conversationId, this.CurrentUser);
+    try {
+      if (forceVerify && typeof this.engine.VerifyConversationAccess === 'function') {
+        loaded = await this.engine.VerifyConversationAccess(conversationId, this.CurrentUser);
+      } else if (typeof this.engine.EnsureConversationLoaded === 'function') {
+        loaded = await this.engine.EnsureConversationLoaded(conversationId, this.CurrentUser);
+      }
+    } catch {
+      loaded = null;
     }
 
     if (!loaded) {

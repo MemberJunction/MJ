@@ -123,13 +123,6 @@ BEGIN
         );
     END IF;
 
-    UPDATE "__mj"."EntityField"
-    SET "Configuration" = '{"Hierarchy":{"IsHierarchy":true}}',
-        "RelatedEntityNameFieldMap" = 'Parent'
-    WHERE "EntityID" = '13248F34-2837-EF11-86D4-6045BDEE16E6'
-      AND "Name" = 'ParentID'
-      AND ("Configuration" IS NULL OR "RelatedEntityNameFieldMap" IS NULL);
-
     IF NOT EXISTS (
         SELECT 1 FROM "__mj"."EntityField"
         WHERE "ID" = '90b13c1d-86ed-4d61-b632-f375fb63e41e'
@@ -834,8 +827,8 @@ SELECT
     __mj_isa_p1."ResolvedByUserID",
     __mj_isa_p1."ResolvedAt",
     __mj_isa_p1."TypeID",
-    __mj_isa_p1."ParentID",
-    MJCommentType_CommentTypeID."Name" AS "CommentType"
+    MJCommentType_CommentTypeID."Name" AS "CommentType",
+    __mj_isa_p1."ParentID"
 FROM
     "__mj"."Comment" AS c
 INNER JOIN
@@ -886,8 +879,8 @@ SELECT
     __mj_isa_p2."ResolvedByUserID",
     __mj_isa_p2."ResolvedAt",
     __mj_isa_p2."TypeID",
-    __mj_isa_p2."ParentID",
-    MJAIPromptRun_AIPromptRunID."RunName" AS "AIPromptRun"
+    MJAIPromptRun_AIPromptRunID."RunName" AS "AIPromptRun",
+    __mj_isa_p2."ParentID"
 FROM
     "__mj"."FieldSuggestion" AS f
 INNER JOIN

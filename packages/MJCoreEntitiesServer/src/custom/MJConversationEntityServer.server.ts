@@ -13,9 +13,10 @@ import {
     ValidationResult,
     WellKnownUserSource
 } from '@memberjunction/core';
-import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     BUILT_IN_CONVERSATION_TYPE_IDS,
+    CONVERSATIONS_RESOURCE_TYPE_ID,
     CONVERSATION_TYPE_CODES,
     CanonicalizeConversationAdditionalData,
     ConversationEngine,
@@ -26,6 +27,7 @@ import {
     MJConversationEntity,
     MergeRestrictedFieldsIntoAnchorMetadata,
     ParseConversationAnchorMetadata,
+    ResourcePermissionEngine,
     UserCanReadLinkedRecord,
     UserMayDeleteConversation
 } from '@memberjunction/core-entities';
@@ -135,6 +137,13 @@ export class MJConversationEntityServer extends MJConversationEntity {
 
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
+        const parentOwnerMessage = await checkParentTargetOwnership(this);
+        if (parentOwnerMessage) {
+            result.Errors.push(
+                new ValidationErrorInfo('ParentID', parentOwnerMessage, this.ParentID ?? null, ValidationErrorType.Failure)
+            );
+            result.Success = false;
+        }
         const cycleViolation = await this.checkParentCycle();
         if (cycleViolation) {
             result.Errors.push(cycleViolation);
@@ -236,9 +245,19 @@ export class MJConversationEntityServer extends MJConversationEntity {
                 additionalData.Value = canonical;
             }
         }
-        const refusal = await this.checkAnchoredConversationAccessAndStampMetadata();
-        if (refusal) {
-            this.recordSaveDenied(refusal);
+        const anchoredRefusal = await this.checkAnchoredConversationAccessAndStampMetadata();
+        if (anchoredRefusal) {
+            this.recordSaveDenied(anchoredRefusal);
+            return false;
+        }
+        const parentOwnerRefusal = await checkParentTargetOwnership(this);
+        if (parentOwnerRefusal) {
+            this.recordSaveDenied(parentOwnerRefusal);
+            return false;
+        }
+        const writeRefusal = await checkConversationWriteAuthorization(this);
+        if (writeRefusal) {
+            this.recordSaveDenied(writeRefusal);
             return false;
         }
         return super.Save(options);
@@ -481,4 +500,102 @@ function checkParentOwnerOnlyChange(entity: MJConversationEntity): ValidationErr
         entity.ParentID ?? null,
         ValidationErrorType.Failure,
     );
+}
+
+/**
+ * Enforces that whenever `ParentID` is set on create or changed on update by a non-system user,
+ * the target parent conversation exists AND belongs to `ContextCurrentUser` (`parent.UserID`).
+ */
+async function checkParentTargetOwnership(entity: MJConversationEntityServer): Promise<string | null> {
+    const provider = entity.ProviderToUse as unknown as IMetadataProvider | undefined;
+    if (provider?.ProviderType !== 'Database') {
+        return null;
+    }
+    const user = entity.ContextCurrentUser;
+    if (!user || WellKnownUserSource.Instance.IsSystemUser(user)) {
+        return null;
+    }
+    const parentField = typeof entity.GetFieldByName === 'function' ? entity.GetFieldByName('ParentID') : undefined;
+    const parentChanged = !entity.IsSaved || Boolean(parentField?.Dirty) || IsSetByTransactionVariable(entity, ['ParentID', 'ID']);
+    if (!entity.ParentID || !parentChanged) {
+        return null;
+    }
+    if (entity.ID && UUIDsEqual(entity.ParentID, entity.ID)) {
+        return 'A conversation cannot be its own parent.';
+    }
+    const readUser =
+        (await WellKnownUserSource.Instance.GetSystemUser(provider)) ??
+        UserCache.Instance.GetSystemUser() ??
+        user;
+    const rv = new RunView(entity.RunViewProviderToUse);
+    const queryParams: RunViewParams = {
+        EntityName: 'MJ: Conversations',
+        ExtraFilter: `ID='${EscapeSQLString(entity.ParentID)}'`,
+        Fields: ['ID', 'UserID'],
+        ResultType: 'simple',
+    };
+    MarkInternalConversationSecurityQuery(queryParams);
+    const read = await rv.RunView<{ ID: string; UserID: string | null }>(queryParams, readUser);
+    if (!read.Success) {
+        return `Could not verify parent conversation ownership: ${read.ErrorMessage}`;
+    }
+    const parentRow = read.Results[0];
+    if (!parentRow) {
+        return 'The target parent conversation does not exist.';
+    }
+    if (!parentRow.UserID || !UUIDsEqual(parentRow.UserID, user.ID)) {
+        return 'You can only nest a conversation under a parent conversation that you own.';
+    }
+    return null;
+}
+
+/**
+ * Enforces View vs Edit/Owner write authorization on updates to saved conversations:
+ * View-only share recipients and Shared/Public folder viewers cannot mutate conversation
+ * metadata (`Name`, `Description`, `Status`, `IsArchived`, `DefaultAgentID`, `DataContextID`).
+ */
+async function checkConversationWriteAuthorization(entity: MJConversationEntityServer): Promise<string | null> {
+    if (!entity.IsSaved) {
+        return null;
+    }
+    const provider = entity.ProviderToUse as unknown as IMetadataProvider | undefined;
+    if (provider?.ProviderType !== 'Database') {
+        return null;
+    }
+    const user = entity.ContextCurrentUser;
+    if (!user || WellKnownUserSource.Instance.IsSystemUser(user)) {
+        return null;
+    }
+    if (entity.AnchorType && entity.LinkedEntityID && entity.LinkedRecordID) {
+        return null;
+    }
+    const ownerUserId =
+        (typeof entity.GetFieldByName === 'function'
+            ? (entity.GetFieldByName('UserID')?.OldValue as string | null | undefined)
+            : undefined) ?? entity.UserID;
+    if (ownerUserId && UUIDsEqual(ownerUserId, user.ID)) {
+        return null;
+    }
+    const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(
+        provider,
+        ResourcePermissionEngine
+    ) as ResourcePermissionEngine;
+    await engine.Config(false, user);
+    const now = new Date();
+    const userRoleIds = new UUIDSet((user.UserRoles ?? []).map((ur) => ur.RoleID));
+    const hasEditOrOwnerGrant = engine.Permissions.some(
+        (p) =>
+            UUIDsEqual(p.ResourceTypeID, CONVERSATIONS_RESOURCE_TYPE_ID) &&
+            Boolean(p.ResourceRecordID && UUIDsEqual(p.ResourceRecordID, entity.ID)) &&
+            p.Status === 'Approved' &&
+            (p.PermissionLevel === 'Edit' || p.PermissionLevel === 'Owner') &&
+            (!p.StartSharingAt || new Date(p.StartSharingAt) <= now) &&
+            (!p.EndSharingAt || new Date(p.EndSharingAt) > now) &&
+            ((p.Type === 'User' && Boolean(p.UserID && UUIDsEqual(p.UserID, user.ID))) ||
+                (p.Type === 'Role' && Boolean(p.RoleID && userRoleIds.Has(p.RoleID))))
+    );
+    if (!hasEditOrOwnerGrant) {
+        return 'You do not have permission to edit this conversation. Only the owner or recipients with Edit or Owner access may save changes.';
+    }
+    return null;
 }

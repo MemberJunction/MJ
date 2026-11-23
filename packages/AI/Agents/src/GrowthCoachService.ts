@@ -14,16 +14,18 @@
  * @module @memberjunction/ai-agents
  */
 
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { EntityFieldInfo, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     BUILT_IN_CONVERSATION_TYPE_IDS,
     CONVERSATION_TYPE_CODES,
     ConversationEngine,
     MJConversationDetailEntityExtended,
     MJConversationEntity,
+    MJEmployeeEntity,
     MJEnvironmentEntityExtended,
     MJAIAgentSuggestionEntity,
     MJAIAgentUserPolicyEntity,
+    MJUserEntity,
     MJUserRoutineEntity,
 } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, ResolveAgentRunLimits } from '@memberjunction/ai-core-plus';
@@ -545,7 +547,7 @@ export class GrowthCoachService extends BaseSingleton<GrowthCoachService> {
             }
 
             this.completedPeriodKeys.set(dedupeKey, sideConvID);
-            this.recordPeriodOnRoutine(params.Routine, periodKey);
+            await this.recordPeriodOnRoutine(params.Routine, periodKey, sideConvID);
 
             return {
                 Success: true,
@@ -688,6 +690,7 @@ export class GrowthCoachService extends BaseSingleton<GrowthCoachService> {
                 EntityName: 'MJ: Conversations',
                 ExtraFilter: `UserID='${EscapeSQLString(contextUser.ID)}' AND ParentID='${EscapeSQLString(parentConversationID)}'`,
                 Fields: ['ID', 'AdditionalData'],
+                OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 50,
                 ResultType: 'simple',
             },
@@ -788,14 +791,20 @@ export class GrowthCoachService extends BaseSingleton<GrowthCoachService> {
         maxRows: number,
         md: IMetadataProvider
     ): Promise<{ available: boolean; rows: GrowthCoachEvidenceMoment[] }> {
-        if (typeof md.EntityByName !== 'function' || !md.EntityByName(entityName)) {
+        const entityInfo = typeof md.EntityByName === 'function' ? md.EntityByName(entityName) : undefined;
+        if (!entityInfo || !Array.isArray(entityInfo.Fields) || entityInfo.Fields.length === 0) {
+            return { available: false, rows: [] };
+        }
+        const userScopeFilter = await this.buildBizAppsUserScopeFilter(entityInfo.Fields, contextUser, md);
+        if (!userScopeFilter) {
+            // Fail closed: never execute an unscoped multi-tenant/cross-user query when no user column exists.
             return { available: false, rows: [] };
         }
         const rv = createRunView(md);
         const res = await rv.RunView<RawBizAppsRecordRow>(
             {
                 EntityName: entityName,
-                ExtraFilter: `__mj_UpdatedAt >= '${EscapeSQLString(windowStart.toISOString())}'`,
+                ExtraFilter: `${userScopeFilter} AND __mj_UpdatedAt >= '${EscapeSQLString(windowStart.toISOString())}'`,
                 OrderBy: '__mj_UpdatedAt DESC',
                 MaxRows: maxRows,
                 ResultType: 'simple',
@@ -813,6 +822,154 @@ export class GrowthCoachService extends BaseSingleton<GrowthCoachService> {
             Excerpt: (r.Summary ?? r.Body ?? r.Transcript ?? r.Notes ?? r.Description ?? r.Status ?? '').trim(),
         }));
         return { available: true, rows };
+    }
+
+    private async buildBizAppsUserScopeFilter(
+        fields: readonly EntityFieldInfo[],
+        contextUser: UserInfo,
+        md: IMetadataProvider
+    ): Promise<string | null> {
+        const userFieldNames = new Set([
+            'userid',
+            'assignedtouserid',
+            'owneruserid',
+            'createdbyuserid',
+            'authoruserid',
+            'submittedbyuserid',
+            'presenteruserid',
+            'organizeruserid',
+        ]);
+        const employeeFieldNames = new Set([
+            'employeeid',
+            'assignedtoemployeeid',
+            'owneremployeeid',
+            'authoremployeeid',
+            'submittedbyemployeeid',
+        ]);
+        const personFieldNames = new Set([
+            'personid',
+            'assignedtopersonid',
+            'ownerpersonid',
+            'organizerid',
+            'authorid',
+            'submittedbyid',
+        ]);
+        const ambiguousIdFieldNames = new Set(['assignedtoid', 'ownerid']);
+
+        const needsEmployee = fields.some(
+            (f) =>
+                employeeFieldNames.has(f.Name.toLowerCase()) ||
+                (ambiguousIdFieldNames.has(f.Name.toLowerCase()) && (f.RelatedEntity ?? '').toLowerCase().includes('employee'))
+        );
+        const needsPerson = fields.some(
+            (f) =>
+                personFieldNames.has(f.Name.toLowerCase()) ||
+                (ambiguousIdFieldNames.has(f.Name.toLowerCase()) &&
+                    ((f.RelatedEntity ?? '').toLowerCase().includes('people') || (f.RelatedEntity ?? '').toLowerCase().includes('person')))
+        );
+
+        const employeeId = needsEmployee ? await this.resolveEmployeeIdForUser(contextUser, md) : null;
+        const personId = needsPerson ? await this.resolvePersonIdForUser(contextUser, md) : null;
+
+        const clauses: string[] = [];
+        for (const field of fields) {
+            const lower = field.Name.toLowerCase();
+            if (userFieldNames.has(lower)) {
+                clauses.push(`${field.Name}='${EscapeSQLString(contextUser.ID)}'`);
+            } else if (employeeFieldNames.has(lower)) {
+                if (employeeId) {
+                    clauses.push(`${field.Name}='${EscapeSQLString(employeeId)}'`);
+                }
+            } else if (personFieldNames.has(lower)) {
+                if (personId) {
+                    clauses.push(`${field.Name}='${EscapeSQLString(personId)}'`);
+                }
+            } else if (ambiguousIdFieldNames.has(lower)) {
+                const related = (field.RelatedEntity ?? '').toLowerCase();
+                if (related.includes('employee')) {
+                    if (employeeId) {
+                        clauses.push(`${field.Name}='${EscapeSQLString(employeeId)}'`);
+                    }
+                } else if (related.includes('people') || related.includes('person')) {
+                    if (personId) {
+                        clauses.push(`${field.Name}='${EscapeSQLString(personId)}'`);
+                    }
+                } else {
+                    clauses.push(`${field.Name}='${EscapeSQLString(contextUser.ID)}'`);
+                }
+            }
+        }
+
+        if (clauses.length === 0) {
+            return null;
+        }
+        return clauses.length === 1 ? clauses[0] : `(${clauses.join(' OR ')})`;
+    }
+
+    private async resolveEmployeeIdForUser(contextUser: UserInfo, md: IMetadataProvider): Promise<string | null> {
+        const direct = contextUser.EmployeeID != null ? String(contextUser.EmployeeID).trim() : '';
+        if (direct.length > 0 && direct !== '0') {
+            return direct;
+        }
+        const rv = createRunView(md);
+        const userRes = await rv.RunView<Pick<MJUserEntity, 'ID' | 'EmployeeID'>>(
+            {
+                EntityName: 'MJ: Users',
+                ExtraFilter: `ID='${EscapeSQLString(contextUser.ID)}'`,
+                Fields: ['ID', 'EmployeeID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        const fromUser = userRes.Success ? userRes.Results[0]?.EmployeeID : null;
+        if (fromUser && fromUser.trim().length > 0) {
+            return fromUser.trim();
+        }
+        const email = (contextUser.Email ?? '').trim();
+        if (!email) {
+            return null;
+        }
+        const empRes = await rv.RunView<Pick<MJEmployeeEntity, 'ID'>>(
+            {
+                EntityName: 'MJ: Employees',
+                ExtraFilter: `LOWER(Email)=LOWER('${EscapeSQLString(email)}') AND Active=1`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        return empRes.Success && empRes.Results[0]?.ID ? empRes.Results[0].ID : null;
+    }
+
+    private async resolvePersonIdForUser(contextUser: UserInfo, md: IMetadataProvider): Promise<string | null> {
+        const peopleEntity = typeof md.EntityByName === 'function' ? md.EntityByName('MJ_BizApps_Common: People') : undefined;
+        if (!peopleEntity) {
+            return null;
+        }
+        const rv = createRunView(md);
+        const hasUserCol = Array.isArray(peopleEntity.Fields) && peopleEntity.Fields.some((f) => f.Name.toLowerCase() === 'userid');
+        const email = (contextUser.Email ?? '').trim();
+        const filter = hasUserCol
+            ? `UserID='${EscapeSQLString(contextUser.ID)}'`
+            : email
+              ? `LOWER(Email)=LOWER('${EscapeSQLString(email)}')`
+              : '';
+        if (!filter) {
+            return null;
+        }
+        const res = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ_BizApps_Common: People',
+                ExtraFilter: filter,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        return res.Success && res.Results[0]?.ID ? res.Results[0].ID : null;
     }
 
     private async readConversationsFromEntities(
@@ -1211,7 +1368,11 @@ export class GrowthCoachService extends BaseSingleton<GrowthCoachService> {
         return sideConversation.ID;
     }
 
-    private recordPeriodOnRoutine(routine: MJUserRoutineEntity | null | undefined, periodKey: string): void {
+    private async recordPeriodOnRoutine(
+        routine: MJUserRoutineEntity | null | undefined,
+        periodKey: string,
+        sideConvID: string
+    ): Promise<void> {
         if (!routine) {
             return;
         }
@@ -1222,8 +1383,17 @@ export class GrowthCoachService extends BaseSingleton<GrowthCoachService> {
             resumeState: {
                 ...existingResume,
                 lastCoachingPeriodKey: periodKey,
+                lastCoachingConversationID: sideConvID,
             },
         };
+        if (routine.IsSaved && typeof routine.Save === 'function') {
+            const saved = await routine.Save();
+            if (!saved) {
+                LogError(
+                    `[GrowthCoachService] Failed persisting routine resumeState for ${routine.ID}: ${routine.LatestResult?.CompleteMessage ?? 'unknown'}`
+                );
+            }
+        }
     }
 
     private buildFailureResult(

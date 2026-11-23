@@ -48,7 +48,7 @@ function isGqlCapableProvider(provider: IMetadataProvider | null | undefined): p
             Title="Access Denied"
             [Message]="AccessDeniedMessage" />
         </div>
-      } @else if (currentUser && artifactId) {
+      } @else if (currentUser && artifactId && IsPermissionResolved && CanRead) {
         <mj-artifact-viewer-panel
           [artifactId]="artifactId"
           [currentUser]="currentUser"
@@ -137,12 +137,17 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
       this._artifactId = next;
       this.CanEdit = false;
       this.CanShare = false;
+      this.CanRead = false;
+      this.IsPermissionResolved = false;
+      this.AccessDeniedMessage = null;
       if (this.CurrentUser && this._artifactId) {
         void this.ResolveArtifactPermissions();
       }
     }
   }
 
+  public CanRead = false;
+  public IsPermissionResolved = false;
   public CanEdit = false;
   /** @deprecated Use {@link CanEdit}. */
   public get canEdit(): boolean {
@@ -234,6 +239,8 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
     const user = this.CurrentUser;
     this.CanEdit = false;
     this.CanShare = false;
+    this.CanRead = false;
+    this.IsPermissionResolved = false;
 
     if (!targetArtifactId || !user) {
       this.cdr?.markForCheck();
@@ -248,20 +255,28 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
       if (reqId !== this.permissionRequestSeq || this._artifactId !== targetArtifactId) {
         return;
       }
-      if (perms.CanRead === false) {
+      if (perms.CanRead !== true) {
+        this.CanRead = false;
         this.CanEdit = false;
         this.CanShare = false;
+        this.IsPermissionResolved = true;
         this.AccessDeniedMessage =
           'You do not have permission to view this artifact. Access may have been revoked by the owner.';
         return;
       }
       this.AccessDeniedMessage = null;
+      this.CanRead = true;
+      this.IsPermissionResolved = true;
       this.CanEdit = perms.CanEdit === true;
       this.CanShare = perms.CanShare === true;
     } catch {
       if (reqId === this.permissionRequestSeq) {
+        this.CanRead = false;
         this.CanEdit = false;
         this.CanShare = false;
+        this.IsPermissionResolved = true;
+        this.AccessDeniedMessage =
+          'Unable to verify your permission to view this artifact.';
       }
     } finally {
       if (reqId === this.permissionRequestSeq) {

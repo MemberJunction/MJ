@@ -288,7 +288,7 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
       };
       const tools = BuildLibraryAgentClientTools(controller);
       const switchTool = tools.find((t) => t.Name === 'SwitchLibraryTab')!;
-      const outcome = await switchTool.Handler({ tab: 'shared-by-me' });
+      const outcome = (await switchTool.Handler({ tab: 'shared-by-me' })) as { Success?: boolean };
       expect(outcome.Success).toBe(true);
       expect(switchMode).toHaveBeenCalledWith('hub');
       expect(switchHubTab).toHaveBeenCalledWith('shared-by-me');
@@ -409,7 +409,13 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
       const modal = new ShareModalComponent(
         {} as ConstructorParameters<typeof ShareModalComponent>[0],
         {} as ConstructorParameters<typeof ShareModalComponent>[1],
-        { detectChanges: vi.fn() } as ConstructorParameters<typeof ShareModalComponent>[2],
+        {
+          detectChanges: vi.fn(),
+          markForCheck: vi.fn(),
+          detach: vi.fn(),
+          checkNoChanges: vi.fn(),
+          reattach: vi.fn(),
+        } as ConstructorParameters<typeof ShareModalComponent>[2],
       );
       expect(modal.AccessLevels.map((l) => l.value)).toEqual(['View', 'Edit']);
       modal.Conversation = sideOwned;
@@ -496,7 +502,6 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
 
     it('denies artifact deep link access cleanly when ResolveArtifactUserPermissions returns CanRead=false after revocation', async () => {
       const artifactRes = Object.create(ArtifactResource.prototype) as ArtifactResource;
-      const resInternals = artifactRes as Partial<ArtifactResource> as TestArtifactResourceHarness;
 
       const executeGql = vi
         .fn()
@@ -509,7 +514,7 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
 
       const user = createTestUser('recipient-2', 'Recipient Two');
       const fakeGqlProvider = { CurrentUser: user, ExecuteGQL: executeGql };
-      resInternals.cdr = { markForCheck: vi.fn() };
+      Reflect.set(artifactRes, 'cdr', { markForCheck: vi.fn() });
       Object.defineProperty(artifactRes, 'ProviderToUse', {
         get: () => fakeGqlProvider as Partial<IMetadataProvider> as IMetadataProvider,
         configurable: true,
@@ -526,6 +531,83 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
       expect(artifactRes.AccessDeniedMessage).toContain('permission');
       expect(artifactRes.CanEdit).toBe(false);
       expect(artifactRes.CanShare).toBe(false);
+      expect(artifactRes.CanRead).toBe(false);
+      expect(artifactRes.IsPermissionResolved).toBe(true);
+    });
+
+    it('CR-5: ArtifactResource fails closed while loading and when permission check throws an error', async () => {
+      const artifactRes = Object.create(ArtifactResource.prototype) as ArtifactResource;
+      const user = createTestUser('recipient-2', 'Recipient Two');
+
+      let rejectGql!: (err: Error) => void;
+      const pendingPromise = new Promise<never>((_resolve, reject) => {
+        rejectGql = reject;
+      });
+      const fakeGqlProvider = {
+        CurrentUser: user,
+        ExecuteGQL: vi.fn(() => pendingPromise),
+      };
+      Reflect.set(artifactRes, 'cdr', { markForCheck: vi.fn() });
+      Object.defineProperty(artifactRes, 'ProviderToUse', {
+        get: () => fakeGqlProvider as Partial<IMetadataProvider> as IMetadataProvider,
+        configurable: true,
+      });
+      artifactRes.CurrentUser = user;
+      artifactRes.artifactId = 'art-err-1';
+
+      const inFlight = artifactRes.ResolveArtifactPermissions();
+      // While permission check is still loading, CanRead & IsPermissionResolved MUST remain false (fail closed)
+      expect(artifactRes.IsPermissionResolved).toBe(false);
+      expect(artifactRes.CanRead).toBe(false);
+
+      // Even if fallback ArtifactPermissionEngine throws after GQL fails, catch block fails closed
+      rejectGql(new Error('Network error'));
+      await inFlight;
+      expect(artifactRes.IsPermissionResolved).toBe(true);
+      expect(artifactRes.CanRead).toBe(false);
+      expect(artifactRes.CanEdit).toBe(false);
+      expect(artifactRes.CanShare).toBe(false);
+      expect(artifactRes.AccessDeniedMessage).toBeTruthy();
+
+      // Template must gate <mj-artifact-viewer-panel> on IsPermissionResolved && CanRead
+      const artifactTs = readFileSync(resolve(__dirname, '../artifact-resource.component.ts'), 'utf8');
+      expect(artifactTs).toContain('IsPermissionResolved && CanRead');
+    });
+
+    it('CR-5: ChatConversationsResource does NOT bind non-owned cached SelectedConversation synchronously before VerifyConversationAccess resolves and fails closed on error', async () => {
+      const chatRes = Object.create(ChatConversationsResource.prototype) as ChatConversationsResource;
+      const nonOwnedCached = createConversationStub({
+        ID: 'conv-cached-shared',
+        UserID: 'owner-1',
+        Name: 'Cached Shared Thread',
+      });
+      const resInternals = chatRes as Partial<ChatConversationsResource> as TestChatResourceHarness & {
+        selectConversation: (id: string, verifyRemote?: boolean) => Promise<void>;
+      };
+
+      let rejectVerify!: (err: Error) => void;
+      const verifyPromise = new Promise<MJConversationEntity | null>((_resolve, reject) => {
+        rejectVerify = reject;
+      });
+      resInternals.engine = {
+        GetConversation: () => nonOwnedCached,
+        VerifyConversationAccess: vi.fn(() => verifyPromise),
+      };
+      resInternals.bridge = { SetActiveFromWorkspace: vi.fn() };
+      resInternals.cdr = { detectChanges: vi.fn() };
+      resInternals.applyAgentParam = vi.fn();
+      chatRes.CurrentUser = createTestUser('recipient-2', 'Recipient Two');
+
+      const pendingSelect = resInternals.selectConversation('conv-cached-shared', false);
+      // Synchronously before verification resolves, SelectedConversation MUST remain null
+      expect(chatRes.SelectedConversation).toBeNull();
+
+      // If VerifyConversationAccess rejects, fail closed with access denied message
+      rejectVerify(new Error('Verification failed'));
+      await pendingSelect;
+      expect(chatRes.SelectedConversationId).toBeNull();
+      expect(chatRes.SelectedConversation).toBeNull();
+      expect(chatRes.ConversationAccessDeniedMessage).toContain('permission');
     });
   });
 

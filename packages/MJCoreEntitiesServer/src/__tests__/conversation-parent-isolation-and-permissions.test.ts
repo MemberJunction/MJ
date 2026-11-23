@@ -51,7 +51,9 @@ interface StoredConversationRow {
     ID: string;
     UserID: string | null;
     Name: string;
+    Description?: string | null;
     ParentID: string | null;
+    Parent?: string | null;
     RootParentID: string | null;
     ProjectID: string | null;
     AdditionalData: string | null;
@@ -251,12 +253,15 @@ function createConversationServerEntity(
     }
 
     let isSaved = opts.saved ?? Boolean(row);
+    const history: Array<{ Success: boolean; Message: string; Type: string }> = [];
 
     Object.defineProperties(entity, {
         ID: { get: () => state.ID, set: (v: string) => { state.ID = v; }, configurable: true },
         UserID: { get: () => state.UserID, set: (v: string | null) => { state.UserID = v; }, configurable: true },
         Name: { get: () => state.Name, set: (v: string) => { state.Name = v; }, configurable: true },
+        Description: { get: () => state.Description ?? null, set: (v: string | null) => { state.Description = v; }, configurable: true },
         ParentID: { get: () => state.ParentID, set: (v: string | null) => { state.ParentID = v; }, configurable: true },
+        Parent: { get: () => state.Parent ?? null, configurable: true },
         RootParentID: { get: () => state.RootParentID, set: (v: string | null) => { state.RootParentID = v; }, configurable: true },
         ProjectID: { get: () => state.ProjectID, set: (v: string | null) => { state.ProjectID = v; }, configurable: true },
         AdditionalData: { get: () => state.AdditionalData, set: (v: string | null) => { state.AdditionalData = v; }, configurable: true },
@@ -275,6 +280,7 @@ function createConversationServerEntity(
         ProviderToUse: { get: () => provider, configurable: true },
         RunViewProviderToUse: { get: () => provider, configurable: true },
         Fields: { get: () => Array.from(fieldMap.values()), configurable: true },
+        LatestResult: { get: () => history[history.length - 1], configurable: true },
         EntityInfo: {
             get: () =>
                 new EntityInfo({
@@ -290,6 +296,9 @@ function createConversationServerEntity(
     });
 
     entity.GetFieldByName = ((name: string) => fieldMap.get(name)) as MJConversationEntityServer['GetFieldByName'];
+    entity.RegisterResultHistoryEntry = ((entry: { Success: boolean; Message: string; Type: string }) => {
+        history.push(entry);
+    }) as MJConversationEntityServer['RegisterResultHistoryEntry'];
     entity.NewRecord = (() => {
         isSaved = false;
         state.ID = '';
@@ -949,5 +958,199 @@ describe('Epic 4a Slice 1 (AC-2): Conversation Sharing & ParentID Authorization 
         const asyncRes = await cycleParent.ValidateAsync();
         expect(asyncRes.Success).toBe(false);
         expect(JSON.stringify(asyncRes.Errors)).toContain('descendants');
+    });
+
+    it('CR-1: rejects Save() by View-only recipients and folder viewers while allowing Edit recipients and owner', async () => {
+        permissions.set('perm-view-bob', {
+            ID: 'perm-view-bob',
+            ResourceTypeID: CONVERSATIONS_RESOURCE_TYPE_ID,
+            ResourceRecordID: CONV_PARENT_ID,
+            Type: 'User',
+            UserID: BOB_ID,
+            RoleID: null,
+            PermissionLevel: 'View',
+            Status: 'Approved',
+            SharedByUserID: ALICE_ID,
+            StartSharingAt: null,
+            EndSharingAt: null,
+        });
+
+        // View-only recipient Bob tries to update Name/Description -> DENIED
+        const bobViewEdit = createConversationServerEntity(
+            provider,
+            bob,
+            { ...conversations.get(CONV_PARENT_ID)!, Name: 'Tampered Name', Description: 'Tampered Desc' },
+            { saved: true, dirtyFields: [{ name: 'Name', oldValue: 'Parent Thread', value: 'Tampered Name' }] }
+        );
+        expect(await bobViewEdit.Save()).toBe(false);
+        expect(bobViewEdit.LatestResult?.Message).toContain('do not have permission to edit');
+
+        // Unshared folder viewer Charlie tries to update Name -> DENIED
+        const charlieFolderViewerEdit = createConversationServerEntity(
+            provider,
+            charlie,
+            {
+                ...conversations.get(CONV_PARENT_ID)!,
+                ProjectID: FOLDER_PUBLIC_ID,
+                AdditionalData: '{"inheritFolderAccess":true}',
+                Name: 'Folder Viewer Tamper',
+            },
+            { saved: true, dirtyFields: [{ name: 'Name', oldValue: 'Parent Thread', value: 'Folder Viewer Tamper' }] }
+        );
+        expect(await charlieFolderViewerEdit.Save()).toBe(false);
+        expect(charlieFolderViewerEdit.LatestResult?.Message).toContain('do not have permission to edit');
+
+        // Promote Bob to Edit -> ALLOWED
+        permissions.get('perm-view-bob')!.PermissionLevel = 'Edit';
+        const bobEdit = createConversationServerEntity(
+            provider,
+            bob,
+            { ...conversations.get(CONV_PARENT_ID)!, Name: 'Collaborative Rename' },
+            { saved: true, dirtyFields: [{ name: 'Name', oldValue: 'Parent Thread', value: 'Collaborative Rename' }] }
+        );
+        expect(await bobEdit.Save()).toBe(true);
+
+        // Owner Alice -> ALLOWED
+        const aliceEdit = createConversationServerEntity(
+            provider,
+            alice,
+            { ...conversations.get(CONV_PARENT_ID)!, Description: 'Updated by owner' },
+            { saved: true, dirtyFields: [{ name: 'Description', oldValue: null, value: 'Updated by owner' }] }
+        );
+        expect(await aliceEdit.Save()).toBe(true);
+    });
+
+    it('CR-2: rejects creating or reparenting a conversation under another user’s ParentID and redacts unreadable Parent titles in PostRunView', async () => {
+        // 1. Bob tries to CREATE a new conversation with ParentID = Alice's private conversation -> DENIED on Save() & ValidateAsync()
+        const bobCreateWithAliceParent = createConversationServerEntity(
+            provider,
+            bob,
+            {
+                ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9',
+                UserID: BOB_ID,
+                Name: 'Probe Child',
+                ParentID: CONV_PARENT_ID,
+                RootParentID: null,
+                ProjectID: null,
+                AdditionalData: null,
+                AnchorType: null,
+                LinkedEntityID: null,
+                LinkedRecordID: null,
+                AnchorKey: null,
+                AnchorMetadata: null,
+                TypeID: null,
+                ExternalID: null,
+            },
+            { saved: false, dirtyFields: [{ name: 'ParentID', oldValue: null, value: CONV_PARENT_ID }] }
+        );
+        expect((await bobCreateWithAliceParent.ValidateAsync()).Success).toBe(false);
+        expect(await bobCreateWithAliceParent.Save()).toBe(false);
+        expect(bobCreateWithAliceParent.LatestResult?.Message).toContain('parent conversation that you own');
+
+        // 2. Bob tries to REPARENT his own existing conversation under Alice's private conversation -> DENIED
+        const bobOwnConvId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10';
+        conversations.set(bobOwnConvId, {
+            ID: bobOwnConvId,
+            UserID: BOB_ID,
+            Name: 'Bob Own Thread',
+            ParentID: null,
+            RootParentID: bobOwnConvId,
+            ProjectID: null,
+            AdditionalData: null,
+            AnchorType: null,
+            LinkedEntityID: null,
+            LinkedRecordID: null,
+            AnchorKey: null,
+            AnchorMetadata: null,
+            TypeID: null,
+            ExternalID: null,
+        });
+        const bobReparentToAlice = createConversationServerEntity(
+            provider,
+            bob,
+            { ...conversations.get(bobOwnConvId)!, ParentID: CONV_PARENT_ID },
+            { saved: true, dirtyFields: [{ name: 'ParentID', oldValue: null, value: CONV_PARENT_ID }] }
+        );
+        expect((await bobReparentToAlice.ValidateAsync()).Success).toBe(false);
+        expect(await bobReparentToAlice.Save()).toBe(false);
+
+        // 3. Alice CAN create a side conversation under her own ParentID
+        const aliceCreateChild = createConversationServerEntity(
+            provider,
+            alice,
+            {
+                ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11',
+                UserID: ALICE_ID,
+                Name: 'Alice Owned Child',
+                ParentID: CONV_PARENT_ID,
+                RootParentID: CONV_PARENT_ID,
+                ProjectID: null,
+                AdditionalData: null,
+                AnchorType: null,
+                LinkedEntityID: null,
+                LinkedRecordID: null,
+                AnchorKey: null,
+                AnchorMetadata: null,
+                TypeID: null,
+                ExternalID: null,
+            },
+            { saved: false, dirtyFields: [{ name: 'ParentID', oldValue: null, value: CONV_PARENT_ID }] }
+        );
+        expect((await aliceCreateChild.ValidateAsync()).Success).toBe(true);
+        expect(await aliceCreateChild.Save()).toBe(true);
+
+        // 4. Shared child row returned to Charlie redacts Parent title and RootParentID when parent is unreadable
+        permissions.set('perm-child-charlie-redact', {
+            ID: 'perm-child-charlie-redact',
+            ResourceTypeID: CONVERSATIONS_RESOURCE_TYPE_ID,
+            ResourceRecordID: CONV_CHILD_SHARED_ID,
+            Type: 'User',
+            UserID: CHARLIE_ID,
+            RoleID: null,
+            PermissionLevel: 'View',
+            Status: 'Approved',
+            SharedByUserID: ALICE_ID,
+            StartSharingAt: null,
+            EndSharingAt: null,
+        });
+        const childRowWithParentTitle: StoredConversationRow = {
+            ...conversations.get(CONV_CHILD_SHARED_ID)!,
+            Parent: 'Secret Parent Title',
+            RootParentID: CONV_PARENT_ID,
+        };
+        const charlieRes = await ConversationPostRunViewHook(
+            { EntityName: 'MJ: Conversations', ResultType: 'simple' },
+            {
+                Success: true,
+                Results: [childRowWithParentTitle],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+            },
+            charlie
+        );
+        expect(charlieRes.Results).toHaveLength(1);
+        const redacted = charlieRes.Results[0] as StoredConversationRow;
+        expect(redacted.ID).toBe(CONV_CHILD_SHARED_ID);
+        expect(redacted.Parent).toBeNull();
+        expect(redacted.RootParentID).toBeNull();
+
+        // Owner Alice still sees Parent and RootParentID unredacted
+        const aliceRes = await ConversationPostRunViewHook(
+            { EntityName: 'MJ: Conversations', ResultType: 'simple' },
+            {
+                Success: true,
+                Results: [{ ...childRowWithParentTitle }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+            },
+            alice
+        );
+        const unredacted = aliceRes.Results[0] as StoredConversationRow;
+        expect(unredacted.Parent).toBe('Parent Thread' ? 'Secret Parent Title' : 'Secret Parent Title');
+        expect(unredacted.RootParentID).toBe(CONV_PARENT_ID);
     });
 });

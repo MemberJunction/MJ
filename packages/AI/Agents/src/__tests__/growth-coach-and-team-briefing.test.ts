@@ -456,16 +456,18 @@ describe('Epic 4a Slice 2 — Team Briefing Section & Opt-In Growth Coach', () =
             expect(growthRhythm?.fields.DefaultAgentConfigurationID).toBe('@lookup:MJ: AI Configurations.Name=High Power');
             expect(growthRhythm?.fields.OfferAt).toBe('Both');
 
-            interface CosAgentMetadataRow {
-                relatedEntities: {
-                    'MJ: AI Agent Skills': Array<{ fields: { SkillID: string; Status: string } }>;
-                };
+            interface AgentSkillGrantRow {
+                fields: { AgentID: string; SkillID: string; Status: string };
+                primaryKey: { ID: string };
             }
-            const cosAgents = JSON.parse(fs.readFileSync(cosAgentFile, 'utf8')) as CosAgentMetadataRow[];
-            const grantedSkills = cosAgents[0]?.relatedEntities['MJ: AI Agent Skills'] ?? [];
+            const grantFile = path.join(repoRoot, 'metadata/ai-agent-skills/.chief-of-staff-growth-coach.json');
+            const grants = JSON.parse(fs.readFileSync(grantFile, 'utf8')) as AgentSkillGrantRow[];
             expect(
-                grantedSkills.some(
-                    (s) => s.fields.SkillID === '@lookup:MJ: AI Skills.Name=Growth Coach' && s.fields.Status === 'Active'
+                grants.some(
+                    (s) =>
+                        s.fields.AgentID === '@lookup:MJ: AI Agents.Name=Chief of Staff' &&
+                        s.fields.SkillID === '@lookup:MJ: AI Skills.Name=Growth Coach' &&
+                        s.fields.Status === 'Active'
                 )
             ).toBe(true);
 
@@ -909,6 +911,125 @@ describe('Epic 4a Slice 2 — Team Briefing Section & Opt-In Growth Coach', () =
             expect(result.Success).toBe(false);
             expect(result.ResultCode).toBe('CONVERSATION_OWNERSHIP_DENIED');
             expect(savedConversations).toHaveLength(0);
+        });
+
+        it('CR-3: scopes BizApps sources strictly to contextUser and refuses unscoped queries when no user-scoping column exists', async () => {
+            const observedQueries: Array<{ EntityName: string; ExtraFilter?: string }> = [];
+            const runViewHandler: RunView['RunView'] = async (params) => {
+                observedQueries.push({ EntityName: params.EntityName ?? '', ExtraFilter: typeof params.ExtraFilter === 'string' ? params.ExtraFilter : undefined });
+                if (params.EntityName === 'MJ: Users') {
+                    return { Success: true, Results: [{ ID: IC_USER.ID, EmployeeID: 'emp-bob' }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 1, UserNotifications: [], ErrorMessage: '' };
+                }
+                if (params.EntityName === 'MJ_BizApps_Common: People') {
+                    return { Success: true, Results: [{ ID: 'person-bob' }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 1, UserNotifications: [], ErrorMessage: '' };
+                }
+                if (params.EntityName === 'MJ_BizApps_Tasks: Tasks') {
+                    return { Success: true, Results: [{ ID: 'task-bob-1', Title: 'Bob Task', __mj_UpdatedAt: '2026-11-20T12:00:00Z' }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 1, UserNotifications: [], ErrorMessage: '' };
+                }
+                if (params.EntityName === 'MJ_BizApps_Tasks: Meeting Notes') {
+                    return { Success: true, Results: [{ ID: 'mn-bob-1', Title: 'Bob Meeting Note', __mj_UpdatedAt: '2026-11-20T12:00:00Z' }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 1, UserNotifications: [], ErrorMessage: '' };
+                }
+                if (params.EntityName === 'MJ_BizApps_Tasks: Work Reports') {
+                    return { Success: true, Results: [{ ID: 'wr-bob-1', Title: 'Bob Work Report', __mj_UpdatedAt: '2026-11-20T12:00:00Z' }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 1, UserNotifications: [], ErrorMessage: '' };
+                }
+                return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, UserNotifications: [], ErrorMessage: '' };
+            };
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(new StubRunView(runViewHandler));
+
+            const scopedProvider = {
+                EntityByName: (name: string) => {
+                    if (name === 'MJ_BizApps_Tasks: Tasks') {
+                        return { ID: 'e-tasks', Name: name, Fields: [{ Name: 'ID' }, { Name: 'AssignedToUserID' }, { Name: 'OwnerUserID' }] };
+                    }
+                    if (name === 'MJ_BizApps_Tasks: Meeting Notes') {
+                        return { ID: 'e-notes', Name: name, Fields: [{ Name: 'ID' }, { Name: 'CreatedByUserID' }] };
+                    }
+                    if (name === 'MJ_BizApps_Tasks: Meetings') {
+                        return { ID: 'e-meetings', Name: name, Fields: [{ Name: 'ID' }, { Name: 'Title' }] }; // NO user-scoping column!
+                    }
+                    if (name === 'MJ_BizApps_Tasks: Work Reports') {
+                        // Work Reports with no user-scoping column -> MUST refuse (fail closed)
+                        return { ID: 'e-wr', Name: name, Fields: [{ Name: 'ID' }, { Name: 'Summary' }] };
+                    }
+                    return undefined;
+                },
+            } as Partial<IMetadataProvider> as IMetadataProvider;
+
+            const { Moments, Telemetry } = await GrowthCoachService.Instance.RetrieveBoundedCoachingEvidence({
+                ContextUser: IC_USER,
+                Now: new Date('2026-11-21T16:00:00Z'),
+                MetadataProvider: scopedProvider,
+            });
+
+            // Tasks & Meeting Notes queried with explicit user-scoping ExtraFilter
+            const tasksQuery = observedQueries.find((q) => q.EntityName === 'MJ_BizApps_Tasks: Tasks');
+            expect(tasksQuery?.ExtraFilter).toContain(`AssignedToUserID='${IC_USER.ID}'`);
+            expect(tasksQuery?.ExtraFilter).toContain(`OwnerUserID='${IC_USER.ID}'`);
+            expect(tasksQuery?.ExtraFilter).toContain('__mj_UpdatedAt >=');
+
+            const notesQuery = observedQueries.find((q) => q.EntityName === 'MJ_BizApps_Tasks: Meeting Notes');
+            expect(notesQuery?.ExtraFilter).toContain(`CreatedByUserID='${IC_USER.ID}'`);
+
+            // Work Reports has no user-scoping column -> MUST NOT query at all and reports Available=false
+            expect(observedQueries.some((q) => q.EntityName === 'MJ_BizApps_Tasks: Work Reports')).toBe(false);
+            expect(Telemetry.Sources.work_reports.Available).toBe(false);
+            expect(Moments.some((m) => m.RecordID === 'task-bob-1')).toBe(true);
+            expect(Moments.some((m) => m.RecordID === 'mn-bob-1')).toBe(true);
+        });
+
+        it('CR-6: passes OrderBy __mj_CreatedAt DESC in checkDeduplication and persists lastCoachingConversationID on routine', async () => {
+            const { md } = makeInMemoryMetadataProvider();
+            const convRunViewOrders: Array<string | undefined> = [];
+            const origFromMd = RunView.FromMetadataProvider(md);
+            const origRunView = origFromMd.RunView.bind(origFromMd);
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(
+                new StubRunView(async (params, user) => {
+                    if (params.EntityName === 'MJ: Conversations') {
+                        convRunViewOrders.push(params.OrderBy);
+                    }
+                    return origRunView(params, user);
+                })
+            );
+
+            const routineSaveSpy = vi.fn(async () => true);
+            const savedRoutine = {
+                ID: 'routine-cr6',
+                UserID: IC_USER.ID,
+                TargetID: COS_AGENT_ID,
+                Status: 'Active',
+                IsSaved: true,
+                WakeConfigurationObject: { workstreamKey: GROWTH_COACH_WORKSTREAM_KEY },
+                Save: routineSaveSpy,
+                LatestResult: null,
+            } as Partial<MJUserRoutineEntity> as MJUserRoutineEntity;
+
+            const result = await GrowthCoachService.Instance.RunBiweeklyCoaching({
+                ContextUser: IC_USER,
+                AgentID: COS_AGENT_ID,
+                Routine: savedRoutine,
+                ChiefOfStaffConversation: {
+                    ID: 'cos-parent-bob',
+                    UserID: IC_USER.ID,
+                    ApplicationScope: 'Global',
+                    ApplicationID: null,
+                    EnvironmentID: 'env-1',
+                },
+                Now: new Date('2026-11-21T16:00:00Z'),
+                Timezone: 'UTC',
+                MetadataProvider: md,
+                SourceProvider: {
+                    ReadTasks: async () => [{ Source: 'tasks', RecordID: 't-cr6', Title: 'Task CR6', OccurredAtISO: '2026-11-20T10:00:00Z', Excerpt: 'Done' }],
+                    ReadMeetingTranscripts: async () => [],
+                    ReadWorkReports: async () => [],
+                    ReadAgentConversations: async () => [],
+                },
+            });
+
+            expect(result.Success).toBe(true);
+            expect(convRunViewOrders).toContain('__mj_CreatedAt DESC');
+            expect(savedRoutine.WakeConfigurationObject?.resumeState?.['lastCoachingPeriodKey']).toBe('2026-11-BW2');
+            expect(savedRoutine.WakeConfigurationObject?.resumeState?.['lastCoachingConversationID']).toBe(result.SideConversationID);
+            expect(routineSaveSpy).toHaveBeenCalledTimes(1);
         });
     });
 });
