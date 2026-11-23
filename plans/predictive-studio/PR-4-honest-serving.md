@@ -13785,6 +13785,42 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   TaskGraph 594 · MCPServer 241. **IT186** on the claude DB (MJAPI :4041, sidecar :64203) **✓ Z1–Z8**, census equal.
   OF4-58 not fixed by next yet; its cause recorded there (next's #6817).
 
+### 2026-11-23 — Claude (Opus 5.5) — Robert's review of `1ced84f945` (D4-279…D4-292) — R5
+
+- **Review:** rkihm-BC, CHANGES_REQUESTED — three blocking items (sign-off ledger integrity; the Promote initiator
+  always a person; the view-gate RLS filter's PostgreSQL text), five non-blocking items, five questions
+  (`.superpowers/sdd/PR-4-honest-serving/rkihm-review-r4.md`). Three fix agents worked in one checkout on disjoint files
+  (governance, initiator, scoring; reports `r5-{A,B,C}-report.md`); the controller integrated, fixed what the DB tiers
+  found and closed the residuals the agents proposed as follow-ups.
+- **Rulings:** D4-279 (ledger writers + append-only), D4-280 (initiator derived), D4-281 (chat is not a person's
+  publish), D4-282 (reject is not a veto), D4-283 (UI role does not sign off), D4-284 (binding guard), D4-285 (Upsert keeps
+  the view authorization; backfill one-shot), D4-286 (ModelID on the binding path), D4-287 (FLS `unresolved-column`),
+  D4-288 (retention keeps the newest Champion row), D4-289 (withdraw mid-run, the binding lock), D4-290
+  (`onUncoveredRow` at scoring), D4-291 (`UQ_FeatureValue_ModelRow` race), D4-292 (the PG variant; overrides the
+  no-PostgreSQL rule for this item, flagged to the owner).
+- **Controller findings in the DB tiers:** (1) the gate harness's cleanup runs over GraphQL, so MJAPI's ledger guard
+  refused its publish-record deletes (8 leaked rows per run) → `HarnessPublishLedger` deletes the run's ledger rows over
+  the harness's own pool first (8 unit tests); (2) with API keys now `system`, every KeepBaseline fixture publish was
+  refused `keep-baseline-not-auto-published` (G3.1, G3.2, G3.5, G3.6, G5.1–G5.3, then all 8 monitoring checks red) →
+  fixture protocols set `autoPublishKeepBaseline` (the gate harness's migrated pipelines get the next protocol
+  version), and a monitored pipeline moves to the product default once its incumbent is published
+  (`UseProductPromotion`); (3) the retention backfill of a missing view authorization was refused by the new binding
+  guard → `ScoringBindingAuthorizationBackfills` (3 tests red first); (4) the withdraw residual under RCSI → the binding
+  lock Query (D4-289; 1 test red first; measured on the agent DB with RCSI on); (5) the tail's hand edits had no guard
+  → `serving-migration-hand-edits.test.ts` (2 mutations caught). The aborted runs' leaked fixtures (10 pipelines and
+  what hung off them) were swept with the harness's own cleanup, in-process.
+- **Verification:** unit (0 failed) Core 593 · Engine 1950 · TruthSuite 197 · FeaturePipelines 314 ·
+  MJCoreEntitiesServer 1675 · integration-test-suite 1131/1132 after the merge (`rig-harness-shim`'s 60 s dynamic
+  import of the rigs harness overruns under full-suite load on this machine — another session's SQL Server container at
+  ~290% CPU — and passes alone in 30 s; it passed in the full suite before the merge); TruthSuite DB lane **157/157**
+  (MJAPI stopped); gate suites against a restarted MJAPI :4041 and sidecar :64203: Registry and Gate **9/9**, Scoring
+  **7/7**, Containment **79/79**, Monitoring **10/10**, Prediction Units **12/12**, Training **35/35**, 0 cleanup
+  warnings. Earlier Containment timeouts (G0.7, G0.10, G0.2; G0.3's rows deleted by an overrunning check's teardown)
+  were SQL compile-gateway starvation while `mj-sqlserver` (another session) ran at 230–290% CPU — G0.7 alone then
+  85 s, Containment 79/79 on rerun. Root build 354/354 after merging next (112 commits; migration retimed to
+  `V202611222146`, flyway rows renamed on the claude and review DBs; next's three migrations applied); `check:guards`,
+  `check:changeset` pass. Commits `be06f67fea`, `8547fbc725`, merge `f435e36222`.
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — refresh (written; equivalent to trigger d baseline) — Claude (Opus 5.5)
