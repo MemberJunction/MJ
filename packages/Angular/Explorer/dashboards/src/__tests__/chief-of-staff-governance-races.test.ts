@@ -355,7 +355,7 @@ describe('ChiefOfStaffGovernanceComponent — generation token, agent mismatch g
         vi.spyOn(UserInfoEngine, 'Instance', 'get').mockReturnValue({
             SetSettingDebounced: setSettingDebounced,
             GetSetting: vi.fn(() => undefined),
-            Config: vi.fn(async () => true),
+            Config: vi.fn(async () => undefined),
         } as Partial<UserInfoEngine> as UserInfoEngine);
 
         const { component } = createGovernanceHarness();

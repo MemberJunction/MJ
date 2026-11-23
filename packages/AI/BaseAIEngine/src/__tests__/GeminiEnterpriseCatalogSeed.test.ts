@@ -286,7 +286,7 @@ describe('Gemini 3.8 Live on Vertex AI — voices and the avatar', () => {
             (r) => resolveReference(r.fields['VendorID'], '') === VERTEX,
         );
         const vertexBindings = allVertexBindings.filter((r) =>
-            geminiLivePersonaIds.has(resolveReference(r.fields['PersonaID'], '')),
+            geminiLivePersonaIds.has(String(resolveReference(r.fields['PersonaID'], ''))),
         );
 
         expect(vertexBindings).toHaveLength(GEMINI_VOICES.length + 2);
@@ -297,7 +297,7 @@ describe('Gemini 3.8 Live on Vertex AI — voices and the avatar', () => {
         }
 
         const crossVendorVertexBindings = allVertexBindings.filter(
-            (r) => !geminiLivePersonaIds.has(resolveReference(r.fields['PersonaID'], '')),
+            (r) => !geminiLivePersonaIds.has(String(resolveReference(r.fields['PersonaID'], ''))),
         );
         for (const alias of crossVendorVertexBindings) {
             expect(GEMINI_VOICES as readonly string[]).toContain(String(alias.fields['APIName']));
