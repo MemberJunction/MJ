@@ -4,6 +4,7 @@ import { type IMetadataProvider, type RunViewParams, type UserInfo } from '@memb
 import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import {
   CheckDocRecordLinkAccess,
+  CheckDocRecordLinksAccessBatch,
   ExtractDocRecordLinks,
   FindActiveDocLinkTrigger,
   RenderDocRecordLinkChipHtml,
@@ -16,47 +17,86 @@ const viewer = { ID: 'user-1', Name: 'Alice', UserRoles: [] } as unknown as User
 
 function makeProvider(options: {
   entityReadable?: boolean;
-  recordCount?: number;
+  accountsReadable?: boolean;
+  readableAccountIds?: string[];
+  readableOrderLines?: Array<{ OrderID: string; LineNumber: number }>;
 } = {}) {
   const runViewCalls: Array<{ params: RunViewParams; user?: UserInfo }> = [];
+  const runViewsCalls: Array<{ params: RunViewParams[]; user?: UserInfo }> = [];
+  const accountsPk = { Name: 'ID', NeedsQuotes: true };
+  const orderLinesPks = [
+    { Name: 'OrderID', NeedsQuotes: true },
+    { Name: 'LineNumber', NeedsQuotes: false },
+  ];
   const entities: Record<
     string,
     {
       ID: string;
       Name: string;
-      PrimaryKeys: Array<{ Name: string }>;
+      PrimaryKeys: Array<{ Name: string; NeedsQuotes?: boolean }>;
+      FirstPrimaryKey: { Name: string; NeedsQuotes?: boolean };
       GetUserPermisions: (u: UserInfo) => { CanRead: boolean };
     }
   > = {
     'MJ: Artifacts': {
       ID: 'ent-art',
       Name: 'MJ: Artifacts',
-      PrimaryKeys: [{ Name: 'ID' }],
+      PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+      FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
       GetUserPermisions: () => ({ CanRead: true }),
+    },
+    Accounts: {
+      ID: 'ent-accounts',
+      Name: 'Accounts',
+      PrimaryKeys: [accountsPk],
+      FirstPrimaryKey: accountsPk,
+      GetUserPermisions: () => ({ CanRead: options.accountsReadable ?? true }),
     },
     'Order Lines': {
       ID: 'ent-order-lines',
       Name: 'Order Lines',
-      PrimaryKeys: [{ Name: 'OrderID' }, { Name: 'LineNumber' }],
+      PrimaryKeys: orderLinesPks,
+      FirstPrimaryKey: orderLinesPks[0],
       GetUserPermisions: () => ({ CanRead: options.entityReadable ?? true }),
     },
+    'Restricted Records': {
+      ID: 'ent-restricted',
+      Name: 'Restricted Records',
+      PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+      FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+      GetUserPermisions: () => ({ CanRead: false }),
+    },
+  };
+  const executeSingle = (params: RunViewParams) => {
+    let rows: Record<string, unknown>[] = [];
+    if (params.EntityName === 'Accounts') {
+      const allowed = options.readableAccountIds ?? [];
+      rows = allowed.map((id) => ({ ID: id }));
+    } else if (params.EntityName === 'Order Lines') {
+      rows = options.readableOrderLines ?? [{ OrderID: '7', LineNumber: 2 }];
+    }
+    return {
+      Success: true,
+      Results: rows,
+      RowCount: rows.length,
+      TotalRowCount: rows.length,
+      ExecutionTime: 0,
+      ErrorMessage: '',
+      UserViewRunID: '',
+    };
   };
   const provider = {
     EntityByName: (name: string) => entities[name],
     RunView: async (params: RunViewParams, contextUser?: UserInfo) => {
       runViewCalls.push({ params, user: contextUser });
-      return {
-        Success: true,
-        Results: [],
-        RowCount: 0,
-        TotalRowCount: options.recordCount ?? 1,
-        ExecutionTime: 0,
-        ErrorMessage: '',
-        UserViewRunID: '',
-      };
+      return executeSingle(params);
+    },
+    RunViews: async (paramsList: RunViewParams[], contextUser?: UserInfo) => {
+      runViewsCalls.push({ params: paramsList, user: contextUser });
+      return paramsList.map((p) => executeSingle(p));
     },
   } as unknown as IMetadataProvider;
-  return { provider, runViewCalls };
+  return { provider, runViewCalls, runViewsCalls };
 }
 
 describe('doc-record-link.util', () => {
@@ -109,22 +149,94 @@ describe('doc-record-link.util', () => {
     expect(runViewCalls).toHaveLength(0);
   });
 
-  it('checks non-artifact access using entity CanRead plus count_only RunView (never fetching record fields)', async () => {
+  it('checks non-artifact access using entity CanRead plus PK-only RunView (never fetching record names)', async () => {
     const token = ConversationUtility.CreateRecordLink('Order Lines', 'Order 7 Line 2', { OrderID: '7', LineNumber: 2 });
     const [link] = ExtractDocRecordLinks(token);
 
-    const readable = makeProvider({ entityReadable: true, recordCount: 1 });
+    const readable = makeProvider({ entityReadable: true, readableOrderLines: [{ OrderID: '7', LineNumber: 2 }] });
     expect(await CheckDocRecordLinkAccess(link, readable.provider, viewer)).toBe('readable');
     expect(readable.runViewCalls).toHaveLength(1);
-    expect(readable.runViewCalls[0].params.ResultType).toBe('count_only');
+    expect(readable.runViewCalls[0].params.ResultType).toBe('simple');
+    expect(readable.runViewCalls[0].params.Fields).toEqual(['OrderID', 'LineNumber']);
+    expect(readable.runViewCalls[0].params.SkipTotalRowCount).toBe(true);
     expect(readable.runViewCalls[0].user).toBe(viewer);
 
-    const deniedEntity = makeProvider({ entityReadable: false, recordCount: 1 });
+    const deniedEntity = makeProvider({ entityReadable: false, readableOrderLines: [{ OrderID: '7', LineNumber: 2 }] });
     expect(await CheckDocRecordLinkAccess(link, deniedEntity.provider, viewer)).toBe('unreadable');
     expect(deniedEntity.runViewCalls).toHaveLength(0);
+    expect(deniedEntity.runViewsCalls).toHaveLength(0);
 
-    const missingOrRlsFiltered = makeProvider({ entityReadable: true, recordCount: 0 });
+    const missingOrRlsFiltered = makeProvider({ entityReadable: true, readableOrderLines: [] });
     expect(await CheckDocRecordLinkAccess(link, missingOrRlsFiltered.provider, viewer)).toBe('unreadable');
+  });
+
+  it('batches multiple links to the same single-PK entity into one IN RunView projecting only the PK column', async () => {
+    const id1 = '11111111-1111-4111-8111-111111111111';
+    const id2 = '22222222-2222-4222-8222-222222222222';
+    const id3 = '33333333-3333-4333-8333-333333333333';
+    const id4 = '44444444-4444-4444-8444-444444444444';
+    const links = ExtractDocRecordLinks(
+      [
+        ConversationUtility.CreateRecordLink('Accounts', 'Acme', { ID: id1 }),
+        ConversationUtility.CreateRecordLink('Accounts', 'Beta', { ID: id2 }),
+        ConversationUtility.CreateRecordLink('Accounts', 'Gamma', { ID: id3 }),
+        ConversationUtility.CreateRecordLink('Accounts', 'Delta', { ID: id4 }),
+      ].join(' '),
+    );
+
+    // SQL Server uppercase vs token lowercase must match case-insensitively.
+    const { provider, runViewCalls, runViewsCalls } = makeProvider({
+      readableAccountIds: [id1.toUpperCase(), id3],
+    });
+    const batch = await CheckDocRecordLinksAccessBatch(links, provider, viewer);
+
+    expect(runViewCalls).toHaveLength(1);
+    expect(runViewsCalls).toHaveLength(0);
+    expect(runViewCalls[0].params.EntityName).toBe('Accounts');
+    expect(runViewCalls[0].params.Fields).toEqual(['ID']);
+    expect(runViewCalls[0].params.ExtraFilter).toContain('[ID] IN (');
+    expect(runViewCalls[0].params.ExtraFilter).toContain(id1);
+    expect(runViewCalls[0].params.ExtraFilter).toContain(id4);
+
+    expect(batch.get(links[0].KeySignature)).toBe('readable');
+    expect(batch.get(links[1].KeySignature)).toBe('unreadable');
+    expect(batch.get(links[2].KeySignature)).toBe('readable');
+    expect(batch.get(links[3].KeySignature)).toBe('unreadable');
+  });
+
+  it('batches links across multiple non-artifact entities into one RunViews call with one query per readable entity', async () => {
+    const acctOk = 'aaaa1111-1111-4111-8111-111111111111';
+    const acctDenied = 'bbbb2222-2222-4222-8222-222222222222';
+    const links = ExtractDocRecordLinks(
+      [
+        ConversationUtility.CreateRecordLink('Accounts', 'Acme', { ID: acctOk }),
+        ConversationUtility.CreateRecordLink('Accounts', 'Hidden Account', { ID: acctDenied }),
+        ConversationUtility.CreateRecordLink('Order Lines', 'Order 7 Line 2', { OrderID: '7', LineNumber: 2 }),
+        ConversationUtility.CreateRecordLink('Order Lines', 'Order 9 Line 1', { OrderID: '9', LineNumber: 1 }),
+        ConversationUtility.CreateRecordLink('Restricted Records', 'No Entity Perms', { ID: 'r-1' }),
+      ].join(' '),
+    );
+
+    const { provider, runViewCalls, runViewsCalls } = makeProvider({
+      readableAccountIds: [acctOk],
+      readableOrderLines: [{ OrderID: '7', LineNumber: 2 }],
+    });
+    const batch = await CheckDocRecordLinksAccessBatch(links, provider, viewer);
+
+    expect(runViewCalls).toHaveLength(0);
+    expect(runViewsCalls).toHaveLength(1);
+    expect(runViewsCalls[0].params).toHaveLength(2);
+    expect(runViewsCalls[0].params.map((p) => p.EntityName)).toEqual(['Accounts', 'Order Lines']);
+    expect(runViewsCalls[0].params[0].Fields).toEqual(['ID']);
+    expect(runViewsCalls[0].params[0].ExtraFilter).toContain('[ID] IN (');
+    expect(runViewsCalls[0].params[1].Fields).toEqual(['OrderID', 'LineNumber']);
+    expect(runViewsCalls[0].params[1].ExtraFilter).toContain(' OR ');
+
+    expect(batch.get(links[0].KeySignature)).toBe('readable');
+    expect(batch.get(links[1].KeySignature)).toBe('unreadable');
+    expect(batch.get(links[2].KeySignature)).toBe('readable');
+    expect(batch.get(links[3].KeySignature)).toBe('unreadable');
+    expect(batch.get(links[4].KeySignature)).toBe('unreadable');
   });
 
   it('strips record-mention tokens to their stored display labels for export while leaving plain text intact', () => {

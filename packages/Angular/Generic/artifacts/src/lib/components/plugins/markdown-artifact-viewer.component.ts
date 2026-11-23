@@ -70,7 +70,7 @@ import {
 import { DocumentImportExportService } from '../../services/document-import-export.service';
 import { ArtifactLinkTriggerProvider } from '../../services/artifact-link-trigger.provider';
 import {
-  CheckDocRecordLinkAccess,
+  CheckDocRecordLinksAccessBatch,
   ExtractDocRecordLinks,
   FindActiveDocLinkTrigger,
   HasDocRecordLinks,
@@ -5456,6 +5456,9 @@ export class MarkdownArtifactViewerComponent
   private readonly docLinkTriggerProvider = new ArtifactLinkTriggerProvider();
   private readonly docLinkAccessCache = new Map<string, DocRecordLinkAccessState>();
   private readonly docLinkAccessPending = new Set<string>();
+  private readonly docLinkAccessQueue = new Map<string, ParsedDocRecordLink>();
+  private docLinkAccessFlushScheduled = false;
+  private docLinkAccessEpoch = 0;
   private activeDocLinkSegmentID: string | null = null;
   private activeDocLinkQuery = '';
   private activeDocLinkElement: HTMLElement | null = null;
@@ -5915,8 +5918,11 @@ export class MarkdownArtifactViewerComponent
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
     this.docLinkSearchSeq++;
+    this.docLinkAccessEpoch++;
     this.docLinkAccessCache.clear();
     this.docLinkAccessPending.clear();
+    this.docLinkAccessQueue.clear();
+    this.docLinkAccessFlushScheduled = false;
     this.clearPendingSocketSaveTimeout();
     this.detachTouchPointerListeners();
     this.touchMenuMonitor.Destroy();
@@ -9488,22 +9494,36 @@ export class MarkdownArtifactViewerComponent
 
   /**
    * Returns the cached access state for a durable record link (`'readable'`, `'unreadable'`, or
-   * `'checking'`), kicking off a background permission check on first sight. Fails closed until
-   * proven readable. Cache entries are scoped to the current viewer ID.
+   * `'checking'`), queuing any uncached link into a microtask-coalesced batch so every render
+   * resolves all links in one DB-optimal pass (one `RunView` per entity via `RunViews`).
+   * Fails closed until proven readable. Cache entries are scoped to the current viewer ID.
    */
   public GetDocRecordLinkAccessState(link: ParsedDocRecordLink): DocRecordLinkAccessState {
-    const user = this.getSafeCurrentUser();
-    const cacheKey = `${(user?.ID ?? '').trim().toLowerCase()}|${link.KeySignature}`;
+    const cacheKey = this.buildDocLinkAccessCacheKey(link);
     const cached = this.docLinkAccessCache.get(cacheKey);
     if (cached) {
       return cached;
     }
-    this.scheduleDocRecordLinkAccessCheck(link, cacheKey);
+    this.queueDocRecordLinkAccessCheck(link, cacheKey);
     return 'checking';
   }
 
-  private scheduleDocRecordLinkAccessCheck(link: ParsedDocRecordLink, cacheKey: string): void {
-    if (this.docLinkAccessPending.has(cacheKey)) {
+  private buildDocLinkAccessCacheKey(link: ParsedDocRecordLink): string {
+    const user = this.getSafeCurrentUser();
+    return `${(user?.ID ?? '').trim().toLowerCase()}|${link.KeySignature}`;
+  }
+
+  private queueDocRecordLinkAccessChecks(links: ReadonlyArray<ParsedDocRecordLink>): void {
+    for (const link of links) {
+      const cacheKey = this.buildDocLinkAccessCacheKey(link);
+      if (!this.docLinkAccessCache.has(cacheKey)) {
+        this.queueDocRecordLinkAccessCheck(link, cacheKey);
+      }
+    }
+  }
+
+  private queueDocRecordLinkAccessCheck(link: ParsedDocRecordLink, cacheKey: string): void {
+    if (this.docLinkAccessPending.has(cacheKey) || this.docLinkAccessQueue.has(cacheKey)) {
       return;
     }
     const provider = this.getSafeProvider();
@@ -9512,20 +9532,62 @@ export class MarkdownArtifactViewerComponent
       this.docLinkAccessCache.set(cacheKey, 'unreadable');
       return;
     }
-    this.docLinkAccessPending.add(cacheKey);
-    void CheckDocRecordLinkAccess(link, provider, user)
-      .then((state) => {
-        this.docLinkAccessCache.set(cacheKey, state);
-      })
-      .catch(() => {
+    this.docLinkAccessQueue.set(cacheKey, link);
+    if (!this.docLinkAccessFlushScheduled) {
+      this.docLinkAccessFlushScheduled = true;
+      const epoch = this.docLinkAccessEpoch;
+      void Promise.resolve().then(() => this.flushDocRecordLinkAccessBatch(epoch));
+    }
+  }
+
+  private async flushDocRecordLinkAccessBatch(epoch: number): Promise<void> {
+    this.docLinkAccessFlushScheduled = false;
+    if (this.isComponentDestroyed || epoch !== this.docLinkAccessEpoch || this.docLinkAccessQueue.size === 0) {
+      return;
+    }
+    const entries = Array.from(this.docLinkAccessQueue.entries());
+    this.docLinkAccessQueue.clear();
+
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user) {
+      for (const [cacheKey] of entries) {
         this.docLinkAccessCache.set(cacheKey, 'unreadable');
-      })
-      .finally(() => {
-        this.docLinkAccessPending.delete(cacheKey);
-        if (!this.isComponentDestroyed) {
-          this.cdr.markForCheck();
+      }
+      this.cdr.markForCheck();
+      return;
+    }
+
+    for (const [cacheKey] of entries) {
+      this.docLinkAccessPending.add(cacheKey);
+    }
+
+    try {
+      const batchResults = await CheckDocRecordLinksAccessBatch(
+        entries.map(([, link]) => link),
+        provider,
+        user,
+      );
+      if (this.isComponentDestroyed || epoch !== this.docLinkAccessEpoch) {
+        return;
+      }
+      for (const [cacheKey, link] of entries) {
+        this.docLinkAccessCache.set(cacheKey, batchResults.get(link.KeySignature) ?? 'unreadable');
+      }
+    } catch {
+      if (!this.isComponentDestroyed && epoch === this.docLinkAccessEpoch) {
+        for (const [cacheKey] of entries) {
+          this.docLinkAccessCache.set(cacheKey, 'unreadable');
         }
-      });
+      }
+    } finally {
+      for (const [cacheKey] of entries) {
+        this.docLinkAccessPending.delete(cacheKey);
+      }
+      if (!this.isComponentDestroyed && epoch === this.docLinkAccessEpoch) {
+        this.cdr.markForCheck();
+      }
+    }
   }
 
   /** Handles click or Enter on a rendered durable record-link chip in preview or edit mode. */
@@ -14813,8 +14875,11 @@ export class MarkdownArtifactViewerComponent
     this.embeddedArtifactVersions.clear();
     this.inFlightEmbeddedVersionKeys.clear();
     this.failedEmbeddedVersionMessages.clear();
+    this.docLinkAccessEpoch++;
     this.docLinkAccessCache.clear();
     this.docLinkAccessPending.clear();
+    this.docLinkAccessQueue.clear();
+    this.docLinkAccessFlushScheduled = false;
     this.ShowDocLinkMenu = false;
     this.DocLinkSuggestions = [];
     this.activeDocLinkSegmentID = null;
@@ -14873,6 +14938,10 @@ export class MarkdownArtifactViewerComponent
     this.OutlineItems = this.collabService.ExtractOutline(this.MarkdownContent);
     this.WordStats = this.collabService.ComputeWordStats(this.MarkdownContent);
     this.FrontmatterHeader = ParseMarkdownFrontmatterHeader(this.MarkdownContent);
+    const docLinks = ExtractDocRecordLinks(this.MarkdownContent);
+    if (docLinks.length > 0) {
+      this.queueDocRecordLinkAccessChecks(docLinks);
+    }
     for (const seg of this.DocumentSegments) {
       if (seg.Kind === 'mj-block' && seg.Descriptor) {
         if (this.isGuestSnapshotMode) {

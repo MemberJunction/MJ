@@ -2148,4 +2148,92 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     comp.OnDocLinkSuggestionSelected(comp.DocLinkSuggestions[0]);
     expect(comp.Suggestions.some((s) => s.ProposedMarkdown.includes(expectedToken))).toBe(true);
   });
+
+  it('batches all non-artifact doc-link access checks across a document into one RunViews call (one query per entity)', async () => {
+    const acct1 = 'aaaa1111-1111-4111-8111-111111111111';
+    const acct2 = 'bbbb2222-2222-4222-8222-222222222222';
+    const acct3 = 'cccc3333-3333-4333-8333-333333333333';
+    const content = [
+      `Accounts: ${ConversationUtility.CreateRecordLink('Accounts', 'Acme', { ID: acct1 })}, ${ConversationUtility.CreateRecordLink('Accounts', 'Beta', { ID: acct2 })}, ${ConversationUtility.CreateRecordLink('Accounts', 'Gamma', { ID: acct3 })}.`,
+      '',
+      `Orders: ${ConversationUtility.CreateRecordLink('Order Lines', 'Order 7 Line 2', { OrderID: '7', LineNumber: 2 })} and ${ConversationUtility.CreateRecordLink('Order Lines', 'Order 9 Line 1', { OrderID: '9', LineNumber: 1 })}.`,
+    ].join('\n');
+
+    const baseMock = createDocsMockProvider();
+    const originalEntityByName = baseMock.provider.EntityByName.bind(baseMock.provider);
+    const originalRunView = baseMock.provider.RunView.bind(baseMock.provider);
+    const nonArtifactSingleQueries: RunViewParams[] = [];
+    const nonArtifactBatchQueries: RunViewParams[][] = [];
+
+    const accountsPk = { Name: 'ID', NeedsQuotes: true };
+    const orderLinesPks = [
+      { Name: 'OrderID', NeedsQuotes: true },
+      { Name: 'LineNumber', NeedsQuotes: false },
+    ];
+    const extraEntities: Record<string, unknown> = {
+      Accounts: {
+        ID: 'ent-accounts',
+        Name: 'Accounts',
+        PrimaryKeys: [accountsPk],
+        FirstPrimaryKey: accountsPk,
+        GetUserPermisions: () => ({ CanRead: true }),
+      },
+      'Order Lines': {
+        ID: 'ent-order-lines',
+        Name: 'Order Lines',
+        PrimaryKeys: orderLinesPks,
+        FirstPrimaryKey: orderLinesPks[0],
+        GetUserPermisions: () => ({ CanRead: true }),
+      },
+    };
+
+    const customProvider = {
+      ...baseMock.provider,
+      EntityByName: (name: string) => extraEntities[name] ?? originalEntityByName(name),
+      RunView: async (params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> => {
+        if (params.EntityName === 'Accounts' || params.EntityName === 'Order Lines') {
+          nonArtifactSingleQueries.push(params);
+        }
+        return originalRunView(params, contextUser);
+      },
+      RunViews: async (paramsList: RunViewParams[]): Promise<RunViewResult[]> => {
+        if (paramsList.some((p) => p.EntityName === 'Accounts' || p.EntityName === 'Order Lines')) {
+          nonArtifactBatchQueries.push(paramsList);
+        }
+        return paramsList.map((p) => {
+          if (p.EntityName === 'Accounts') {
+            return { Success: true, Results: [{ ID: acct1 }, { ID: acct3 }], RowCount: 2, TotalRowCount: 2, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+          }
+          if (p.EntityName === 'Order Lines') {
+            return { Success: true, Results: [{ OrderID: '7', LineNumber: 2 }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+          }
+          return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+        });
+      },
+    } as unknown as IMetadataProvider;
+
+    const f = await renderDocsViewer(content, true, customProvider);
+    const comp = f.componentInstance;
+    comp.SetViewMode('preview');
+    comp.RenderPreviewMarkdown(content);
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+
+    // 5 distinct chips across 2 entities must execute as ONE RunViews call with 2 entity queries (0 per-chip RunView calls).
+    expect(nonArtifactSingleQueries).toHaveLength(0);
+    expect(nonArtifactBatchQueries).toHaveLength(1);
+    expect(nonArtifactBatchQueries[0]).toHaveLength(2);
+    expect(nonArtifactBatchQueries[0].map((p) => p.EntityName)).toEqual(['Accounts', 'Order Lines']);
+    expect(nonArtifactBatchQueries[0][0].Fields).toEqual(['ID']);
+    expect(nonArtifactBatchQueries[0][1].Fields).toEqual(['OrderID', 'LineNumber']);
+
+    const rendered = comp.RenderPreviewMarkdown(content);
+    expect(rendered).toContain('data-doc-link-access="readable"');
+    expect(rendered).toContain('data-doc-link-access="unreadable"');
+    expect(rendered).toContain('title="Open Acme"');
+    expect(rendered).toContain('title="Open Gamma"');
+    expect(rendered).toContain('title="Open Order 7 Line 2"');
+    expect(rendered).toContain('>Beta<');
+    expect(rendered).toContain('>Order 9 Line 1<');
+  });
 });

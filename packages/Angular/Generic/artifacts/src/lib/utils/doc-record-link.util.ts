@@ -8,11 +8,14 @@
  */
 
 import { ConversationUtility, type MentionContent, type SpecialContentToken } from '@memberjunction/ai-core-plus';
-import { CompositeKey, EntityInfo, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
-import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
+import { CompositeKey, EntityInfo, IMetadataProvider, LogError, RunView, type RunViewParams, UserInfo } from '@memberjunction/core';
+import { ArtifactPermissionEngine, type ResolvedArtifactPermissions } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import { EscapeHtml } from '../components/previews/office-preview.logic';
 
 const ARTIFACTS_ENTITY = 'MJ: Artifacts';
+/** Max keys per single entity batch query to stay well below SQL IN / OR expression limits. */
+const MAX_KEYS_PER_BATCH_QUERY = 200;
 
 /** Resolved viewer access state for a durable record link chip. */
 export type DocRecordLinkAccessState = 'readable' | 'unreadable' | 'checking';
@@ -113,56 +116,241 @@ export function ResolveDocRecordLinkCompositeKey(
   };
 }
 
+interface ResolvedBatchEntry {
+  Link: ParsedDocRecordLink;
+  Entity: EntityInfo;
+  Key: CompositeKey;
+  CompactKey: string;
+}
+
+interface NonArtifactBatchQuery {
+  Entity: EntityInfo;
+  Entries: ResolvedBatchEntry[];
+  Params: RunViewParams;
+}
+
+/** Formats a single-column primary-key value safely for an `IN (...)` predicate. */
+function formatSinglePkSqlLiteral(value: unknown, needsQuotes: boolean | undefined): string {
+  if (needsQuotes === false) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+    if (typeof value === 'string' && /^-?\d+$/.test(value.trim())) {
+      return value.trim();
+    }
+  }
+  return `'${EscapeSQLString(String(value))}'`;
+}
+
+/** Builds a single batched SQL `ExtraFilter` covering all keys in `entries` for one entity. */
+function buildBatchEntityWhereClause(entity: EntityInfo, entries: ReadonlyArray<ResolvedBatchEntry>): string {
+  if (entries.length === 1) {
+    return entries[0].Key.ToWhereClause();
+  }
+  if (entity.PrimaryKeys.length === 1) {
+    const pkField = entity.FirstPrimaryKey; // first-pk-ok: guarded by PrimaryKeys.length === 1; composite PKs use OR of ToWhereClause() below
+    const pkName = pkField.Name;
+    const literals = Array.from(
+      new Set(
+        entries
+          .map((e) => e.Key.GetValueByFieldName(pkName))
+          .filter((v) => v !== null && v !== undefined)
+          .map((v) => formatSinglePkSqlLiteral(v, pkField.NeedsQuotes)),
+      ),
+    );
+    if (literals.length > 0) {
+      return `[${pkName}] IN (${literals.join(', ')})`;
+    }
+  }
+  return `(${entries.map((e) => `(${e.Key.ToWhereClause()})`).join(' OR ')})`;
+}
+
 /**
- * Checks whether `user` can open the target of a durable record link:
- * - For `MJ: Artifacts`: uses {@link ArtifactPermissionEngine.ResolvePermissions}.
- * - For all other entities: checks entity `CanRead` plus record readability via `count_only`
- *   `RunView` (never fetches the target's current name/fields, so renames can never leak).
+ * Checks whether `user` can open each target in `links` in a batched, DB-optimal pass:
+ * - For `MJ: Artifacts`: resolves via {@link ArtifactPermissionEngine.ResolvePermissions} with a
+ *   shared memo across the batch (never querying artifact names).
+ * - For all other entities: checks entity `CanRead`, groups readable entities' links by entity,
+ *   and executes **one `RunView` per entity** (all sent together in a single `RunViews` batch when
+ *   multiple entities are present), projecting **only** primary-key columns (`Fields: pkNames`) so
+ *   current record titles/fields can never leak.
  *
  * Fails closed (`'unreadable'`) on missing provider/user, unknown entity, incomplete PK, or error.
+ */
+export async function CheckDocRecordLinksAccessBatch(
+  links: ReadonlyArray<ParsedDocRecordLink>,
+  provider: IMetadataProvider | null | undefined,
+  user: UserInfo | null | undefined,
+): Promise<Map<string, 'readable' | 'unreadable'>> {
+  const results = new Map<string, 'readable' | 'unreadable'>();
+  const uniqueLinks = new Map<string, ParsedDocRecordLink>();
+  for (const link of links) {
+    if (!uniqueLinks.has(link.KeySignature)) {
+      uniqueLinks.set(link.KeySignature, link);
+      results.set(link.KeySignature, 'unreadable');
+    }
+  }
+  if (uniqueLinks.size === 0 || !provider || !user) {
+    return results;
+  }
+
+  const artifactEntries: Array<{ Link: ParsedDocRecordLink; ArtifactID: string }> = [];
+  const entityGroups = new Map<string, { Entity: EntityInfo; Entries: ResolvedBatchEntry[] }>();
+
+  for (const link of uniqueLinks.values()) {
+    const resolved = ResolveDocRecordLinkCompositeKey(link, provider);
+    if (!resolved) {
+      continue;
+    }
+    if (resolved.Entity.Name.trim().toLowerCase() === ARTIFACTS_ENTITY.toLowerCase()) {
+      const artifactId = resolved.Key.GetValueByFieldName('ID');
+      if (artifactId) {
+        artifactEntries.push({ Link: link, ArtifactID: String(artifactId) });
+      }
+      continue;
+    }
+    const entityPerms = resolved.Entity.GetUserPermisions(user);
+    if (!entityPerms?.CanRead) {
+      continue;
+    }
+    const groupKey = resolved.Entity.Name.trim().toLowerCase();
+    let group = entityGroups.get(groupKey);
+    if (!group) {
+      group = { Entity: resolved.Entity, Entries: [] };
+      entityGroups.set(groupKey, group);
+    }
+    group.Entries.push({
+      Link: link,
+      Entity: resolved.Entity,
+      Key: resolved.Key,
+      CompactKey: resolved.CompactKey,
+    });
+  }
+
+  const tasks: Promise<void>[] = [];
+
+  if (artifactEntries.length > 0) {
+    tasks.push(resolveArtifactBatchAccess(artifactEntries, provider, user, results));
+  }
+
+  if (entityGroups.size > 0) {
+    tasks.push(resolveNonArtifactBatchAccess(Array.from(entityGroups.values()), provider, user, results));
+  }
+
+  await Promise.all(tasks);
+  return results;
+}
+
+async function resolveArtifactBatchAccess(
+  entries: ReadonlyArray<{ Link: ParsedDocRecordLink; ArtifactID: string }>,
+  provider: IMetadataProvider,
+  user: UserInfo,
+  results: Map<string, 'readable' | 'unreadable'>,
+): Promise<void> {
+  const sharedMemo = new Map<string, Promise<ResolvedArtifactPermissions>>();
+  await Promise.all(
+    entries.map(async ({ Link, ArtifactID }) => {
+      try {
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+          provider,
+          ArtifactID,
+          user,
+          0,
+          undefined,
+          sharedMemo,
+        );
+        results.set(Link.KeySignature, perms.CanRead ? 'readable' : 'unreadable');
+      } catch (error: unknown) {
+        LogError(
+          `DocRecordLink access check failed for ${Link.EntityName}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        results.set(Link.KeySignature, 'unreadable');
+      }
+    }),
+  );
+}
+
+async function resolveNonArtifactBatchAccess(
+  groups: ReadonlyArray<{ Entity: EntityInfo; Entries: ResolvedBatchEntry[] }>,
+  provider: IMetadataProvider,
+  user: UserInfo,
+  results: Map<string, 'readable' | 'unreadable'>,
+): Promise<void> {
+  const queries: NonArtifactBatchQuery[] = [];
+  for (const group of groups) {
+    const pkNames = group.Entity.PrimaryKeys.map((pk) => pk.Name);
+    if (pkNames.length === 0) {
+      continue;
+    }
+    for (let offset = 0; offset < group.Entries.length; offset += MAX_KEYS_PER_BATCH_QUERY) {
+      const chunk = group.Entries.slice(offset, offset + MAX_KEYS_PER_BATCH_QUERY);
+      queries.push({
+        Entity: group.Entity,
+        Entries: chunk,
+        Params: {
+          EntityName: group.Entity.Name,
+          Fields: pkNames,
+          ExtraFilter: buildBatchEntityWhereClause(group.Entity, chunk),
+          ResultType: 'simple',
+          IgnoreMaxRows: true,
+          SkipTotalRowCount: true,
+        },
+      });
+    }
+  }
+  if (queries.length === 0) {
+    return;
+  }
+
+  try {
+    const rv = RunView.FromMetadataProvider(provider);
+    const batchResults =
+      queries.length === 1
+        ? [await rv.RunView<Record<string, unknown>>(queries[0].Params, user)]
+        : await rv.RunViews(
+            queries.map((q) => q.Params),
+            user,
+          );
+
+    for (let i = 0; i < queries.length; i++) {
+      const query = queries[i];
+      const res = batchResults[i];
+      if (!res?.Success || !Array.isArray(res.Results)) {
+        continue;
+      }
+      const readableCompactKeys = new Set<string>();
+      for (const rawRow of res.Results as Record<string, unknown>[]) {
+        if (!rawRow || typeof rawRow !== 'object') {
+          continue;
+        }
+        const key = CompositeKey.FromEntityRecord(query.Entity, rawRow);
+        const compact = key.ToCompactURLSegment().trim().toLowerCase();
+        if (compact) {
+          readableCompactKeys.add(compact);
+        }
+      }
+      for (const entry of query.Entries) {
+        if (readableCompactKeys.has(entry.CompactKey.trim().toLowerCase())) {
+          results.set(entry.Link.KeySignature, 'readable');
+        }
+      }
+    }
+  } catch (error: unknown) {
+    LogError(
+      `DocRecordLink batched access check failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+/**
+ * Convenience single-link wrapper over {@link CheckDocRecordLinksAccessBatch}.
  */
 export async function CheckDocRecordLinkAccess(
   link: ParsedDocRecordLink,
   provider: IMetadataProvider | null | undefined,
   user: UserInfo | null | undefined,
 ): Promise<'readable' | 'unreadable'> {
-  if (!provider || !user) {
-    return 'unreadable';
-  }
-  const resolved = ResolveDocRecordLinkCompositeKey(link, provider);
-  if (!resolved) {
-    return 'unreadable';
-  }
-
-  try {
-    if (resolved.Entity.Name.trim().toLowerCase() === ARTIFACTS_ENTITY.toLowerCase()) {
-      const artifactId = resolved.Key.GetValueByFieldName('ID');
-      if (!artifactId) {
-        return 'unreadable';
-      }
-      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user);
-      return perms.CanRead ? 'readable' : 'unreadable';
-    }
-
-    const entityPerms = resolved.Entity.GetUserPermisions(user);
-    if (!entityPerms?.CanRead) {
-      return 'unreadable';
-    }
-
-    const rv = RunView.FromMetadataProvider(provider);
-    const res = await rv.RunView(
-      {
-        EntityName: resolved.Entity.Name,
-        ExtraFilter: resolved.Key.ToWhereClause(),
-        ResultType: 'count_only',
-      },
-      user,
-    );
-    return res.Success && (res.TotalRowCount ?? 0) > 0 ? 'readable' : 'unreadable';
-  } catch (error: unknown) {
-    LogError(`DocRecordLink access check failed for ${link.EntityName}: ${error instanceof Error ? error.message : String(error)}`);
-    return 'unreadable';
-  }
+  const batch = await CheckDocRecordLinksAccessBatch([link], provider, user);
+  return batch.get(link.KeySignature) ?? 'unreadable';
 }
 
 /**
