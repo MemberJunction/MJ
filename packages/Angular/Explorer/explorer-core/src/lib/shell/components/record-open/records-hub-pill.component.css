@@ -66,11 +66,11 @@
 /* Shared active-tint recipe — keep in sync with .nav-item.active */
 .records-pill.active {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
 }
 
 .records-pill.active i {
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
 }
 
 .records-pill i {

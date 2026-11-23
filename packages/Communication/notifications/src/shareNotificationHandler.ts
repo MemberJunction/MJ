@@ -35,14 +35,16 @@ export function CreateResourceSharedHandler(): ShareNotificationHandler {
             // Ensure the engine is configured. Safe to call repeatedly — BaseEngine
             // short-circuits when already loaded. Guards against calls that arrive
             // before the server's explicit startup Config().
-            await NotificationEngine.Instance.Config(false, input.ContextUser);
+            await NotificationEngine.Instance.Config(false, input.ContextUser, input.Provider);
 
             const grantor = await resolveGrantor(input);
             const grantorName = grantor.name;
             const resourceTypeLabel = input.ResourceTypeLabel || 'resource';
             const resourceName = input.ResourceName ?? `a ${resourceTypeLabel.toLowerCase()}`;
             const actionsSummary = input.ActionsSummary ?? '';
+            const permissionLevel = resolvePermissionLevel(input);
             const resourceTypeId = await resolveResourceTypeId(input);
+            const resourceUrl = buildShareResourceUrl(input);
 
             const defaultTitle = `${grantorName} shared ${resourceTypeLabel} with you`;
             const defaultMessage = actionsSummary
@@ -59,14 +61,20 @@ export function CreateResourceSharedHandler(): ShareNotificationHandler {
                     resourceRecordId: input.ResourceRecordID,
                     resourceConfiguration: {
                         DomainName: input.ResourceTypeLabel,
+                        ...(input.ResourceTypeName ? { ResourceTypeName: input.ResourceTypeName } : {}),
+                        ResourceRecordID: input.ResourceRecordID,
+                        ...(permissionLevel ? { PermissionLevel: permissionLevel } : {}),
                         ...input.ExtraConfiguration
                     },
                     templateData: {
                         grantorName,
                         resourceName,
                         resourceTypeLabel,
+                        ...(input.ResourceTypeName ? { resourceTypeName: input.ResourceTypeName } : {}),
+                        resourceRecordId: input.ResourceRecordID,
+                        permissionLevel: permissionLevel ?? actionsSummary,
                         actionsSummary,
-                        resourceUrl: null // TODO: build deep link once navigation registry exposes a server-side helper
+                        resourceUrl
                     },
                     // Who caused the share: the system (Owner-type) user writing a grant as plumbing, or a person.
                     // `MJ: Scoped Notification Configs` can quiet one and not the other.
@@ -119,12 +127,58 @@ export function OriginForUserType(userType: string | null | undefined): Notifica
     return (userType ?? '').trim().toLowerCase() === 'owner' ? 'System' : 'Person';
 }
 
+function resolvePermissionLevel(input: ShareNotificationInput): string | undefined {
+    if (input.PermissionLevel && input.PermissionLevel.trim().length > 0) {
+        return input.PermissionLevel.trim();
+    }
+    const extraLevel = input.ExtraConfiguration?.['PermissionLevel'];
+    if (typeof extraLevel === 'string' && extraLevel.trim().length > 0) {
+        return extraLevel.trim();
+    }
+    return undefined;
+}
+
+function buildShareResourceUrl(input: ShareNotificationInput): string | null {
+    const rawBase =
+        process.env.APP_BASE_URL?.trim() ||
+        process.env.MJ_MAGIC_LINK_EXPLORER_URL?.trim() ||
+        '';
+    if (!rawBase) {
+        return null;
+    }
+    const baseUrl = rawBase.replace(/\/+$/, '');
+    const recordId = encodeURIComponent(input.ResourceRecordID);
+    const key = (input.ResourceTypeName ?? input.ResourceTypeLabel ?? '').trim().toLowerCase();
+
+    switch (key) {
+        case 'artifacts':
+        case 'artifact':
+            return `${baseUrl}/resource/artifact/${recordId}`;
+        case 'dashboards':
+        case 'dashboard':
+            return `${baseUrl}/resource/dashboard/${recordId}`;
+        case 'conversations':
+        case 'conversation':
+            return `${baseUrl}/app/chat/conversations?conversationId=${recordId}`;
+        case 'lists':
+        case 'list':
+            return `${baseUrl}/resource/record/MJ%3A%20Lists/${recordId}`;
+        case 'collections':
+        case 'collection':
+            return `${baseUrl}/resource/record/MJ%3A%20Collections/${recordId}`;
+        default:
+            return null;
+    }
+}
+
 async function resolveResourceTypeId(input: ShareNotificationInput): Promise<string | undefined> {
     const name = input.ResourceTypeName;
     if (!name) return undefined;
     try {
-        const engine = ResourcePermissionEngine.Instance;
-        await engine.Config(false, input.ContextUser);
+        const engine = input.Provider && typeof ResourcePermissionEngine.GetProviderInstance === 'function'
+            ? (ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(input.Provider, ResourcePermissionEngine) as ResourcePermissionEngine)
+            : ResourcePermissionEngine.Instance;
+        await engine.Config(false, input.ContextUser, input.Provider);
         return engine.ResourceTypeIdByName(name) ?? undefined;
     } catch {
         return undefined;

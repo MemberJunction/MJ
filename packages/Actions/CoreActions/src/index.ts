@@ -185,6 +185,7 @@ export * from './custom/github';
 
 export * from './custom/search/search.action';
 export * from './custom/search/scoped-search.action';
+export * from './custom/search/search-query.util';
 
 // Governed Artifact Actions
 export * from './custom/artifacts';

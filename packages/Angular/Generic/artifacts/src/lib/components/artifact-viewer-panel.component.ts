@@ -1221,7 +1221,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
 
       if (!loaded) {
-        this.error = 'Failed to load artifact';
+        this.error = 'Access denied or artifact unavailable: you do not have permission to view this artifact.';
         return;
       }
 

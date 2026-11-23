@@ -37,6 +37,7 @@ import {
 import type { AgentDecisionAnswerSummary, AgentDecisionQuestion } from '../agent-decisions';
 import type { ForEachOperation } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
+import type { WorkflowBudgetCapsConfig } from '../workflow-budget';
 
 /** A conditional dependency edge. */
 export type TaskGraphDependency = {
@@ -515,6 +516,9 @@ export type TaskGraphSpec = {
 
     /** Optional Tier-5 limits override carried on the workflow spec. */
     limitsOverride?: MJLimitsOverride;
+
+    /** Optional whole-workflow USD cost and wall-clock duration budget caps. */
+    workflowBudget?: WorkflowBudgetCapsConfig;
 
     /**
      * Per-graph execution isolation level (`'InProcess' | 'Worker' | 'Process' | 'Container'`).

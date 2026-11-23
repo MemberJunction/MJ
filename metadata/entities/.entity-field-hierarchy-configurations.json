@@ -1023,5 +1023,29 @@
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Criteria"
     }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Conversations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversations&Name=ParentID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    }
   }
 ]
