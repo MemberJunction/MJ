@@ -23,6 +23,7 @@ export class MJConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'applicationIntegration', sectionName: 'Application Integration', isExpanded: true },
             { sectionKey: 'meetingMedia', sectionName: 'Meeting Media', isExpanded: true },
             { sectionKey: 'inlineCommentsAnchors', sectionName: 'Inline Comments & Anchors', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJConversationArtifacts', sectionName: 'Conversation Artifacts', isExpanded: false },
@@ -30,11 +31,12 @@ export class MJConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
-            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJConversationsLastConversationID', sectionName: 'Conversations (Last Conversation ID)', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
             { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
             { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false },
-            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false }
+            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false },
+            { sectionKey: 'mJConversationsParentID', sectionName: 'Conversations (Parent ID)', isExpanded: false }
         ]);
     }
 }

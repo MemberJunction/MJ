@@ -44740,16 +44740,16 @@ export class MJConversation_ {
     @MaxLength(36)
     RootParentID?: string;
         
-    @Field({nullable: true}) 
+    @Field(() => Int, {nullable: true}) 
     ParentIDDepth?: number;
         
     @Field({nullable: true}) 
     ParentIDPath?: string;
         
-    @Field({nullable: true}) 
+    @Field(() => Boolean, {nullable: true}) 
     ParentIDIsLeaf?: boolean;
         
-    @Field({nullable: true}) 
+    @Field(() => Int, {nullable: true}) 
     ParentIDChildCount?: number;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })

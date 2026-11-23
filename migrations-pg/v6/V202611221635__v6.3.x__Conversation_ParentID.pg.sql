@@ -298,8 +298,8 @@ BEGIN
             (SELECT COALESCE(MAX("Sequence"), 0) + 1 FROM "__mj"."EntityField" WHERE "EntityID" = 'B46E1990-487D-45D6-B91E-A77D58ED0229'),
             'ParentID', 'Parent ID', NULL,
             'uniqueidentifier', 16, 0, 0, TRUE, NULL,
-            FALSE, FALSE, TRUE, FALSE,
-            NULL, NULL, FALSE, FALSE, FALSE,
+            FALSE, TRUE, TRUE, FALSE,
+            '13248F34-2837-EF11-86D4-6045BDEE16E6', 'ID', FALSE, FALSE, FALSE,
             FALSE, FALSE, FALSE, 'Search',
             NOW(), NOW()
         );
@@ -324,8 +324,8 @@ BEGIN
             (SELECT COALESCE(MAX("Sequence"), 0) + 1 FROM "__mj"."EntityField" WHERE "EntityID" = '02E26617-130C-4A5A-B4D2-76F06F01C6A1'),
             'ParentID', 'Parent ID', NULL,
             'uniqueidentifier', 16, 0, 0, TRUE, NULL,
-            FALSE, FALSE, TRUE, FALSE,
-            NULL, NULL, FALSE, FALSE, FALSE,
+            FALSE, TRUE, TRUE, FALSE,
+            '13248F34-2837-EF11-86D4-6045BDEE16E6', 'ID', FALSE, FALSE, FALSE,
             FALSE, FALSE, FALSE, 'Search',
             NOW(), NOW()
         );
@@ -353,8 +353,8 @@ BEGIN
             (SELECT COALESCE(MAX("Sequence"), 0) + 1 FROM "__mj"."EntityField" WHERE "EntityID" = '1615C276-3021-4A0B-B2E8-0121273577E8'),
             'ParentID', 'Parent ID', NULL,
             'uniqueidentifier', 16, 0, 0, TRUE, NULL,
-            FALSE, FALSE, TRUE, FALSE,
-            NULL, NULL, FALSE, FALSE, FALSE,
+            FALSE, TRUE, TRUE, FALSE,
+            '13248F34-2837-EF11-86D4-6045BDEE16E6', 'ID', FALSE, FALSE, FALSE,
             FALSE, FALSE, FALSE, 'Search',
             NOW(), NOW()
         );

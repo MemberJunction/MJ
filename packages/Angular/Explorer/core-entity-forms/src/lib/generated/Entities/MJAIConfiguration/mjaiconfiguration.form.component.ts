@@ -29,7 +29,9 @@ export class MJAIConfigurationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJAIConfigurations', sectionName: 'AI Configurations', isExpanded: false },
-            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false }
+            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
+            { sectionKey: 'mJAIAgentRhythmTemplates', sectionName: 'AI Agent Rhythm Templates', isExpanded: false },
+            { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false }
         ]);
     }
 }

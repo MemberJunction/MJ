@@ -33218,7 +33218,7 @@ export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
     * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
-    * * Description: Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations.
+    * * IS-A Source: Inherited from MJ: Conversations
     */
     get ParentID(): string | null {
         return this.Get('ParentID');
@@ -40551,7 +40551,7 @@ export class MJCommentEntity extends BaseEntity<MJCommentEntityType> {
     * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
-    * * Description: Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations.
+    * * IS-A Source: Inherited from MJ: Conversations
     */
     get ParentID(): string | null {
         return this.Get('ParentID');
@@ -73155,7 +73155,7 @@ export class MJFieldSuggestionEntity extends BaseEntity<MJFieldSuggestionEntityT
     * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
-    * * Description: Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations.
+    * * IS-A Source: Inherited from MJ: Conversations
     */
     get ParentID(): string | null {
         return this.Get('ParentID');
