@@ -13838,6 +13838,11 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   `predictive-studio-lock-scoring-binding-for-batch.sql` (D4-289) and the IT186-renamed
   `predictive-studio-schema-fingerprint.sql` were not in them. Snapshots regenerated (29 files; the diff names only
   those two queries) → SQLParser 2175/2175.
+- **CI at `a2778d4ef1` (the reviewer's merge of next):** unit shard 3 red on the Engine's R0 scan: next's new
+  `@memberjunction/ng-clustering` is imported by the generated Angular Bootstrap class manifest, which the scan
+  type-checked (it names `MJMLModelEntity`) and which does not resolve on that shard. The generated class-registration
+  manifests (imports and a class list, no statement that can write a field) are no longer candidates; a planted-manifest
+  test red first → R0 5/5.
 
 ## 12. Refresh log (append-only)
 

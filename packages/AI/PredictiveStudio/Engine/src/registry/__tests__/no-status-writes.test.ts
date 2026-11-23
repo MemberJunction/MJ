@@ -33,7 +33,7 @@ interface ScanProgram {
 /**
  * The R0 scan. A file under a root is a candidate when it is production TypeScript under a `src/` directory (not
  * `.d.ts`, not under `node_modules`, `dist` or `__tests__`, not `*.test.ts`/`*.spec.ts` — the Engine tsconfig's own
- * `exclude`) and its text matches {@link CANDIDATE_TEXT} (it names `MJMLModelEntity` or assigns a `Status` member). One
+ * `exclude` — and not a generated class-registration manifest) and its text matches {@link CANDIDATE_TEXT} (it names `MJMLModelEntity` or assigns a `Status` member). One
  * `ts.Program` is built over every candidate with the Engine's compiler options (no emit, `skipLibCheck`); in each
  * candidate, a `=` `BinaryExpression` is flagged when a target it writes is `<expr>.Status`, `<expr>['Status']` or
  * `<expr>[key]` with a key whose type is the literal `'Status'` — its left side itself, or any target of an object or
@@ -136,9 +136,17 @@ export class StatusAssignments {
     }
   }
 
+  /**
+   * The generated class-registration manifests (`mj:manifest`): an import of every registered class and a list of them,
+   * no statement that could write a field. Each imports every package of its app, so one not built in the scanning
+   * environment would fail the scan on a file that cannot hold what it looks for.
+   */
+  private static readonly GENERATED_MANIFEST = /\/src\/generated\/(mj-class-registrations|class-registrations-manifest)\.ts$/;
+
   private static isProductionSource(file: string): boolean {
     const posix = file.split(path.sep).join('/');
-    return posix.endsWith('.ts') && !posix.endsWith('.d.ts') && !/\.(test|spec)\.ts$/.test(posix) && posix.includes('/src/');
+    return posix.endsWith('.ts') && !posix.endsWith('.d.ts') && !/\.(test|spec)\.ts$/.test(posix) && posix.includes('/src/')
+      && !StatusAssignments.GENERATED_MANIFEST.test(posix);
   }
 
   /** Throws naming the file when one of its `@memberjunction/*` imports has no module symbol (its types would be unknown). */
@@ -293,6 +301,16 @@ describe('R0 one publish function: no Status write outside the lifecycle gate (s
       const file = path.relative(StatusAssignments.RepositoryRoot(), path.join(scratch, 'src', 'planted.ts')).split(path.sep).join('/');
       expect(StatusAssignments.Scan([scratch], { Allow: [] })).toEqual([6, 7, 11, 12, 14].map((line) => ({ File: file, Line: line })));
       expect(StatusAssignments.Scan([scratch], { Allow: ['src/planted.ts'] })).toEqual([]);
+    }, 60_000);
+
+    it('does not type-check a generated class-registration manifest, which only imports and lists classes', () => {
+      const generated = path.join(scratch, 'src', 'generated');
+      fs.mkdirSync(generated, { recursive: true });
+      for (const name of ['mj-class-registrations.ts', 'class-registrations-manifest.ts']) {
+        fs.writeFileSync(path.join(generated, name), "import { MJMLModelEntity } from '@memberjunction/not-built-here';\nexport const CLASSES = [MJMLModelEntity];\n");
+      }
+      const candidates = StatusAssignments.Candidates(scratch).map((f) => path.basename(f));
+      expect(candidates).toEqual(['planted.ts']);
     }, 60_000);
 
     it('reports the Set / SetMany / Object.assign calls on an ML model with their form, and not those on another entity', () => {
