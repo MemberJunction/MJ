@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output } from '@angular/core';
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { MJTaskDependencyEntity, MJTaskEntity, WorkflowDraftOperation } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { ProjectTaskRowsToSpec, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import {
     DEFAULT_WORKFLOW_START_MODE,
@@ -304,7 +305,7 @@ export class CreateWorkflowComponent {
                     BypassCache: true,
                 }),
             ]);
-            if (this.SelectedRunID !== run.ID) return;
+            if (!UUIDsEqual(this.SelectedRunID, run.ID)) return;
             const childTasks = tasksRes.Success ? (tasksRes.Results ?? []) : [];
             const deps = depsRes.Success ? (depsRes.Results ?? []) : [];
             const projection = ProjectTaskRowsToSpec(
