@@ -444,7 +444,41 @@ f-line-alignment {
 }
 
 .mj-flow-context-menu-item--danger:hover {
-  background-color: var(--mj-status-error-subtle);
+  background-color: var(--mj-status-error-bg);
+}
+
+.mj-flow-connection-untaken path {
+  opacity: 0.45;
+  stroke-dasharray: 5 4;
+}
+
+.mj-flow-connection-forced path {
+  stroke-dasharray: 3 4;
+}
+
+.mj-flow-editor-legend-box--start {
+  border-color: var(--mj-status-success);
+  background: var(--mj-status-success-bg);
+}
+
+.mj-flow-editor-legend-box--warn {
+  border-color: var(--mj-status-warning);
+  background: var(--mj-status-warning-bg);
+}
+
+.mj-flow-editor-legend-icon--ok {
+  color: var(--mj-status-success);
+  font-size: 10px;
+}
+
+.mj-flow-editor-legend-icon--err {
+  color: var(--mj-status-error);
+  font-size: 10px;
+}
+
+.mj-flow-editor-legend-icon--warn {
+  color: var(--mj-status-warning);
+  font-size: 10px;
 }
 
 .mj-flow-context-menu-item--danger i {

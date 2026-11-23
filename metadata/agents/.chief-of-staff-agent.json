@@ -6,6 +6,7 @@
       "Description": "Personal, always-on Chief of Staff agent (one per user) that coordinates across organizational workstreams, keeps the user's stated priorities, sets reminders as one-shot wakes, writes executive briefings, manages approvals under narrowed per-user policies (MJ: AI Agent User Policies), schedules its own wake cycles via the 3-Tier Wake Gate on MJ: User Routines, and follows up across chat, email, and voice/telephony. Installed apps extend it with skills (for example business priorities and tasks).",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "InstantiationMode": "Required",
       "AcceptsSkills": "Limited",
       "SkillActivationMode": "Auto",
       "ExecutionOrder": 0,
@@ -57,6 +58,7 @@
               "Scoped Search",
               "Schedule Next Agent Wake",
               "Configure Agent User Policy",
+              "Manage My Agent Instance",
               "Verify My Communication Capabilities",
               "Get My Calendar Events and Availability",
               "Manage My Calendar Event",
@@ -66,6 +68,61 @@
               "Web Search"
             ]
           }
+        },
+        "instantiation": {
+          "suggestedNames": [
+            "Pepper",
+            "Atlas",
+            "Friday",
+            "Maya",
+            "Cato"
+          ],
+          "suggestedIcons": [
+            "fa-solid fa-pepper-hot",
+            "fa-solid fa-bolt",
+            "fa-solid fa-chess-knight",
+            "fa-solid fa-compass",
+            "fa-solid fa-brain",
+            "fa-solid fa-rocket",
+            "fa-solid fa-wand-magic-sparkles",
+            "fa-solid fa-shield-halved"
+          ],
+          "suggestedPersonaNames": [
+            "Sage",
+            "Nova",
+            "Onyx",
+            "Coral",
+            "Verse",
+            "Alloy"
+          ],
+          "onboardingGreeting": "Hi! Before we dive in, let's make your Chief of Staff truly yours — pick a name (like Pepper, Atlas, or Cato), a voice and personality vibe, and any standing instructions you want me to remember.",
+          "personalityPresets": [
+            {
+              "label": "Direct & Witty",
+              "tone": "Direct, sharp, and dryly witty",
+              "speakingStyle": "Concise, zero corporate fluff, punchy insights with light dry humor"
+            },
+            {
+              "label": "Touch Sarcastic & Funny",
+              "tone": "Direct, playful, a touch sarcastic and genuinely funny",
+              "speakingStyle": "Candid banter with dry wit and clever quips — cuts straight to the point while keeping things fun"
+            },
+            {
+              "label": "Crisp Executive",
+              "tone": "Calm, authoritative, and executive-ready",
+              "speakingStyle": "Structured, crisp, bottom-line-up-front with clear options and recommendations"
+            },
+            {
+              "label": "Warm Coach",
+              "tone": "Warm, encouraging, and thoughtful",
+              "speakingStyle": "Supportive, reflective, collaborative, and steady under pressure"
+            },
+            {
+              "label": "Socratic Challenger",
+              "tone": "Incisive, skeptical, and constructively challenging",
+              "speakingStyle": "Pressure-tests assumptions with sharp questions, devil's-advocate framing, and structured trade-offs"
+            }
+          ]
         }
       }
     },
@@ -247,7 +304,7 @@
           },
           "deleteRecord": {
             "delete": true,
-            "deletedAt": "2026-11-20T22:04:56.376Z"
+            "deletedAt": "2026-11-22T23:13:32.530Z"
           }
         },
         {
@@ -261,7 +318,7 @@
           },
           "deleteRecord": {
             "delete": true,
-            "deletedAt": "2026-11-20T22:04:56.393Z"
+            "deletedAt": "2026-11-22T23:13:32.556Z"
           }
         },
         {
@@ -275,7 +332,7 @@
           },
           "deleteRecord": {
             "delete": true,
-            "deletedAt": "2026-11-20T22:04:56.411Z"
+            "deletedAt": "2026-11-22T23:13:32.583Z"
           }
         },
         {
@@ -289,7 +346,7 @@
           },
           "deleteRecord": {
             "delete": true,
-            "deletedAt": "2026-11-20T22:04:56.428Z"
+            "deletedAt": "2026-11-22T23:13:32.607Z"
           }
         },
         {
@@ -303,7 +360,7 @@
           },
           "deleteRecord": {
             "delete": true,
-            "deletedAt": "2026-11-20T22:04:56.445Z"
+            "deletedAt": "2026-11-22T23:13:32.631Z"
           }
         },
         {
@@ -598,6 +655,16 @@
           "sync": {
             "lastModified": "2026-10-20T23:19:38.359Z",
             "checksum": "ce17b3e2fd835ff1bbfc1d7fd4038e7e3a0cf81f71ff2ac5570758d06480e55a"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Manage My Agent Instance",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0FAF156D-7434-48E1-9790-7992535081FF"
           }
         }
       ],

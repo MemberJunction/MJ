@@ -119,6 +119,73 @@ export class AgentPropertiesPanelComponent {
 
   // ── Collapsible section state ─────────────────────────────
   protected collapsedSections: Record<string, boolean> = {};
+  public ActionSearchQuery = '';
+  public PromptSearchQuery = '';
+  public AgentSearchQuery = '';
+  public ShowRawLoopJson = false;
+
+  public get FilteredActions(): Array<{ ID: string; Name: string; IconClass?: string | null }> {
+    const q = this.ActionSearchQuery.trim().toLowerCase();
+    if (!q) return this.Actions;
+    const selectedId = this.Step?.ActionID ?? '';
+    return this.Actions.filter(a => UUIDsEqual(a.ID, selectedId) || a.Name.toLowerCase().includes(q));
+  }
+
+  public get FilteredPrompts(): PromptOption[] {
+    const q = this.PromptSearchQuery.trim().toLowerCase();
+    if (!q) return this.Prompts;
+    const selectedId = this.Step?.PromptID ?? '';
+    return this.Prompts.filter(p => UUIDsEqual(p.ID, selectedId) || p.Name.toLowerCase().includes(q));
+  }
+
+  public get FilteredAgents(): Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }> {
+    const q = this.AgentSearchQuery.trim().toLowerCase();
+    if (!q) return this.Agents;
+    const selectedId = this.Step?.SubAgentID ?? '';
+    return this.Agents.filter(a => UUIDsEqual(a.ID, selectedId) || a.Name.toLowerCase().includes(q));
+  }
+
+  /** Clickable upstream variable pills for visual Data Mapping insertion. */
+  public get UpstreamVariablePills(): Array<{ Label: string; Token: string }> {
+    const pills: Array<{ Label: string; Token: string }> = [
+      { Label: 'trigger.input', Token: '{{ trigger.input }}' },
+      { Label: 'payload', Token: '{{ payload }}' }
+    ];
+    const currentId = this.Step?.ID ?? '';
+    for (const step of this.AllSteps) {
+      if (UUIDsEqual(step.ID, currentId)) continue;
+      const slug = step.Name.trim().replace(/[^a-zA-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'step';
+      pills.push({ Label: `${step.Name}.output`, Token: `{{ ${slug}.output }}` });
+    }
+    return pills.slice(0, 8);
+  }
+
+  /** Inserts an upstream variable pill into the step's ActionInputMapping JSON. */
+  public OnInsertVariablePill(pill: { Label: string; Token: string }): void {
+    if (!this.Step || this.ReadOnly) return;
+    const bag = ReadStepConfigBag(this.Step.ActionInputMapping);
+    const baseKey = pill.Label.split('.')[0].replace(/[^a-zA-Z0-9_]+/g, '_').toLowerCase() || 'input';
+    let key = baseKey;
+    let i = 2;
+    while (Object.prototype.hasOwnProperty.call(bag, key)) {
+      key = `${baseKey}_${i++}`;
+    }
+    bag[key] = pill.Token;
+    this.Step.ActionInputMapping = JSON.stringify(bag, null, 2);
+    this.StepChanged.emit(this.Step);
+  }
+
+  public OnLoopExecutionModeChange(mode: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'executionMode', mode || undefined));
+  }
+
+  public OnSagaCompensationActionChange(actionId: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'compensationActionId', actionId || undefined));
+  }
+
+  public OnSagaFailurePolicyChange(policy: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'compensationFailurePolicy', policy || undefined));
+  }
 
   // ── Computed Properties ─────────────────────────────────────
 

@@ -39,7 +39,11 @@ import { UUIDsEqual } from '@memberjunction/global';
                 [title]="ButtonTitle"
                 [disabled]="Disabled || (!Conversation && !AllowUnboundSelection)"
                 (click)="Toggle($event)">
-                <i [class]="CurrentAgentIconClass" aria-hidden="true"></i>
+                @if (CurrentAgentLogoUrl) {
+                    <img [src]="CurrentAgentLogoUrl" [alt]="CurrentAgentLabel" class="mj-cv-agent-picker__avatar" />
+                } @else {
+                    <i [class]="CurrentAgentIconClass" aria-hidden="true"></i>
+                }
                 <span class="mj-cv-agent-picker__label">{{ CurrentAgentLabel }}</span>
                 <i class="fa-solid fa-caret-down mj-cv-agent-picker__caret" aria-hidden="true"></i>
             </button>
@@ -66,10 +70,9 @@ import { UUIDsEqual } from '@memberjunction/global';
                         <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
                         <span>{{ DefaultMenuOptionLabel }}</span>
                     </button>
-                    @if (EligibleAgents.length === 0) {
-                        <div class="mj-cv-agent-picker__empty">No agents available</div>
-                    } @else {
-                        @for (agent of EligibleAgents; track agent.ID) {
+                    @if (MyEligibleAgents.length > 0) {
+                        <div class="mj-cv-agent-picker__section-label">My Agents</div>
+                        @for (agent of MyEligibleAgents; track agent.ID) {
                             <button
                                 type="button"
                                 role="menuitemradio"
@@ -78,10 +81,40 @@ import { UUIDsEqual } from '@memberjunction/global';
                                 [attr.aria-checked]="IsSelected(agent)"
                                 [title]="agent.Description || agent.Name"
                                 (click)="PickAgent(agent)">
-                                <i [class]="IconClassFor(agent)" aria-hidden="true"></i>
-                                <span>{{ agent.Name }}</span>
+                                @if (agent.LogoURL) {
+                                    <img [src]="agent.LogoURL" [alt]="agent.Name" class="mj-cv-agent-picker__avatar" />
+                                } @else {
+                                    <i [class]="IconClassFor(agent)" aria-hidden="true"></i>
+                                }
+                                <span class="mj-cv-agent-picker__item-name">{{ agent.Name }}</span>
+                                @if (BaseAgentNameFor(agent)) {
+                                    <span class="mj-cv-agent-picker__base-tag">{{ BaseAgentNameFor(agent) }}</span>
+                                }
                             </button>
                         }
+                    }
+                    @if (CatalogEligibleAgents.length > 0) {
+                        @if (MyEligibleAgents.length > 0) {
+                            <div class="mj-cv-agent-picker__section-label">Catalog Agents</div>
+                        }
+                        @for (agent of CatalogEligibleAgents; track agent.ID) {
+                            <button
+                                type="button"
+                                class="mj-cv-agent-picker__item"
+                                [class.mj-cv-agent-picker__item--selected]="IsSelected(agent)"
+                                [title]="agent.Description || agent.Name"
+                                (click)="PickAgent(agent)">
+                                @if (agent.LogoURL) {
+                                    <img [src]="agent.LogoURL" [alt]="agent.Name" class="mj-cv-agent-picker__avatar" />
+                                } @else {
+                                    <i [class]="IconClassFor(agent)"></i>
+                                }
+                                <span class="mj-cv-agent-picker__item-name">{{ agent.Name }}</span>
+                            </button>
+                        }
+                    }
+                    @if (EligibleAgents.length === 0) {
+                        <div class="mj-cv-agent-picker__empty">No agents available</div>
                     }
                 </div>
             </ng-template>
@@ -113,8 +146,12 @@ import { UUIDsEqual } from '@memberjunction/global';
         .mj-cv-agent-picker__label { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .mj-cv-agent-picker--compact .mj-cv-agent-picker__label { max-width: 130px; }
         .mj-cv-agent-picker__caret { font-size: 10px; opacity: 0.7; }
+        .mj-cv-agent-picker__avatar {
+            width: 16px; height: 16px; border-radius: var(--mj-radius-full, 999px);
+            object-fit: cover; flex-shrink: 0;
+        }
         .mj-cv-agent-picker__menu {
-            min-width: 220px; max-height: 300px; overflow-y: auto;
+            min-width: 240px; max-height: 340px; overflow-y: auto;
             background: var(--mj-bg-surface-elevated); border: 1px solid var(--mj-border-default);
             border-radius: 6px; box-shadow: var(--mj-shadow-lg);
             padding: 4px 0;
@@ -123,12 +160,22 @@ import { UUIDsEqual } from '@memberjunction/global';
             padding: 6px 12px 4px; font-size: 11px; text-transform: uppercase;
             letter-spacing: 0.04em; color: var(--mj-text-muted);
         }
+        .mj-cv-agent-picker__section-label {
+            padding: 6px 12px 3px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.05em; color: var(--mj-text-muted);
+            border-top: 1px solid var(--mj-border-default); margin-top: 4px;
+        }
         .mj-cv-agent-picker__item {
             display: flex; align-items: center; gap: 8px; width: 100%;
             padding: 6px 12px; background: transparent; border: none; cursor: pointer;
             color: var(--mj-text-primary); font-size: 13px; text-align: left;
         }
-        .mj-cv-agent-picker__item i { width: 14px; text-align: center; color: var(--mj-text-secondary); }
+        .mj-cv-agent-picker__item i { width: 14px; text-align: center; color: var(--mj-text-secondary); flex-shrink: 0; }
+        .mj-cv-agent-picker__item-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mj-cv-agent-picker__base-tag {
+            font-size: 10px; padding: 1px 6px; border-radius: var(--mj-radius-full, 999px);
+            background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); flex-shrink: 0;
+        }
         .mj-cv-agent-picker__item:hover { background: var(--mj-bg-surface-hover); }
         .mj-cv-agent-picker__item--selected { background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); }
         .mj-cv-agent-picker__item--selected i { color: var(--mj-brand-primary); }
@@ -201,17 +248,22 @@ export class ConversationAgentPickerComponent implements OnInit {
     public async ngOnInit(): Promise<void> {
         try {
             await AIEngineBase.Instance.Config(false);
-            this.catalogAgents = (AIEngineBase.Instance.ReadableAgents ?? [])
-                .filter(a =>
-                    !a.ParentID &&
-                    a.Status === 'Active' &&
-                    a.InvocationMode !== 'Sub-Agent'
-                )
-                .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
-            this.applyAllowedAgents();
+            this.rebuildCatalog();
         } catch (err) {
             LogError(`ConversationAgentPicker.ngOnInit: ${err instanceof Error ? err.message : String(err)}`);
         }
+    }
+
+    private rebuildCatalog(): void {
+        this.catalogAgents = (AIEngineBase.Instance.ReadableAgents ?? [])
+            .filter(a =>
+                !a.ParentID &&
+                a.Status === 'Active' &&
+                a.InvocationMode !== 'Sub-Agent' &&
+                a.InstantiationMode !== 'Required'
+            )
+            .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
+        this.applyAllowedAgents();
     }
 
     /** Narrows the catalog to the allowed agents. */
@@ -230,23 +282,41 @@ export class ConversationAgentPickerComponent implements OnInit {
         return this.Conversation?.DefaultAgentID ?? this.SelectedAgentId ?? null;
     }
 
-    public get CurrentAgentLabel(): string {
+    public get MyEligibleAgents(): MJAIAgentEntityExtended[] {
+        return this.EligibleAgents.filter(a => Boolean(a.BaseAgentID));
+    }
+
+    public get CatalogEligibleAgents(): MJAIAgentEntityExtended[] {
+        return this.EligibleAgents.filter(a => !a.BaseAgentID);
+    }
+
+    private get currentPinnedAgent(): MJAIAgentEntityExtended | undefined {
         const id = this.EffectiveAgentId;
-        if (!id) return this.DefaultLabel;
-        const match = this.EligibleAgents.find(a => UUIDsEqual(a.ID, id));
-        const fromCache = match
+        if (!id) return undefined;
+        return this.EligibleAgents.find(a => UUIDsEqual(a.ID, id))
             ?? (AIEngineBase.Instance.ReadableAgents ?? []).find(a => UUIDsEqual(a.ID, id));
-        return fromCache?.Name ?? 'Pinned agent';
+    }
+
+    public get CurrentAgentLabel(): string {
+        if (!this.EffectiveAgentId) return this.DefaultLabel;
+        return this.currentPinnedAgent?.Name ?? 'Pinned agent';
+    }
+
+    public get CurrentAgentLogoUrl(): string | null {
+        const url = this.currentPinnedAgent?.LogoURL?.trim();
+        return url ? url : null;
+    }
+
+    public BaseAgentNameFor(agent: MJAIAgentEntityExtended): string | null {
+        if (!agent.BaseAgentID) return null;
+        return AIEngineBase.Instance.GetAgentByID(agent.BaseAgentID)?.Name ?? null;
     }
 
     public get CurrentAgentIconClass(): string {
-        const id = this.EffectiveAgentId;
-        if (!id) {
+        if (!this.EffectiveAgentId) {
             return this.Compact ? 'fa-solid fa-wand-magic-sparkles' : 'fa-solid fa-robot';
         }
-        const match = this.EligibleAgents.find(a => UUIDsEqual(a.ID, id))
-            ?? (AIEngineBase.Instance.ReadableAgents ?? []).find(a => UUIDsEqual(a.ID, id));
-        return match?.IconClass?.trim() || 'fa-solid fa-robot';
+        return this.currentPinnedAgent ? this.IconClassFor(this.currentPinnedAgent) : 'fa-solid fa-robot';
     }
 
     public get ButtonTitle(): string {
@@ -256,7 +326,12 @@ export class ConversationAgentPickerComponent implements OnInit {
     }
 
     public IconClassFor(agent: MJAIAgentEntityExtended): string {
-        return agent.IconClass?.trim() || 'fa-solid fa-robot';
+        const raw = agent.IconClass?.trim();
+        if (!raw) return 'fa-solid fa-robot';
+        if (/\bfa-(solid|regular|brands|light|thin|duotone)\b|\bfa[srbltd]\b/.test(raw)) {
+            return raw;
+        }
+        return `fa-solid ${raw}`;
     }
 
     public IsSelected(agent: MJAIAgentEntityExtended): boolean {
@@ -268,6 +343,9 @@ export class ConversationAgentPickerComponent implements OnInit {
         event.stopPropagation();
         if (this.Disabled || (!this.Conversation && !this.AllowUnboundSelection)) return;
         this.IsOpen = !this.IsOpen;
+        if (this.IsOpen) {
+            this.rebuildCatalog();
+        }
         this.cdr?.markForCheck?.();
     }
 

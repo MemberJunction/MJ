@@ -62,6 +62,7 @@ import { ConversationMessageRatingComponent } from './components/message/convers
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
 import { ConversationSidebarComponent } from './components/sidebar/conversation-sidebar.component';
+import { MyAgentsSectionComponent } from './components/sidebar/my-agents-section.component';
 import { RoutinesSectionComponent } from './components/sidebar/routines-section.component';
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
@@ -88,6 +89,7 @@ import { TasksDropdownComponent } from './components/tasks/tasks-dropdown.compon
 import { TaskWidgetComponent } from './components/tasks/task-widget.component';
 import { AgentProcessPanelComponent } from './components/agent/agent-process-panel.component';
 import { ActiveAgentIndicatorComponent } from './components/agent/active-agent-indicator.component';
+import { AgentInstanceEditorModalComponent } from './components/agent/agent-instance-editor-modal.component';
 import { ActiveTasksPanelComponent } from './components/active-tasks/active-tasks-panel.component';
 import { ShareModalComponent } from './components/share/share-modal.component';
 import { MembersModalComponent } from './components/members/members-modal.component';
@@ -181,6 +183,7 @@ const COMPONENTS = [
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
   ConversationSidebarComponent,
+  MyAgentsSectionComponent,
   RoutinesSectionComponent,
   ConversationListComponent,
   ConversationChatAreaComponent,
@@ -205,6 +208,7 @@ const COMPONENTS = [
   TaskWidgetComponent,
   AgentProcessPanelComponent,
   ActiveAgentIndicatorComponent,
+  AgentInstanceEditorModalComponent,
   ActiveTasksPanelComponent,
   ShareModalComponent,
   MembersModalComponent,

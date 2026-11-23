@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RunActionParams } from '@memberjunction/actions-base';
 import { UserInfo } from '@memberjunction/core';
@@ -6,6 +9,7 @@ import {
     MJCommunicationProviderEntity,
 } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { LocalJsonCommunicationProvider, MJ_MOCK_COMM_DIR_ENV } from '@memberjunction/communication-engine';
 
 const {
     mockGetProvider,
@@ -42,6 +46,14 @@ vi.mock('@memberjunction/aiengine', () => ({
                 {
                     ID: 'agent-cos-id',
                     Name: 'Chief of Staff',
+                    BaseAgentID: null,
+                    OwnerUserID: null,
+                },
+                {
+                    ID: 'agent-pepper-id',
+                    Name: 'Pepper',
+                    BaseAgentID: 'agent-cos-id',
+                    OwnerUserID: 'user-alice-1',
                 },
             ],
             ResolveAgentRequestTypeID: async (name: string) => (name === 'Approval' ? 'approval-type-id' : null),
@@ -49,17 +61,21 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-vi.mock('@memberjunction/communication-engine', () => ({
-    CommunicationEngine: {
-        Instance: {
-            Config: vi.fn().mockResolvedValue(undefined),
-            get Providers() {
-                return mockProvidersList;
+vi.mock('@memberjunction/communication-engine', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/communication-engine')>();
+    return {
+        ...actual,
+        CommunicationEngine: {
+            Instance: {
+                Config: vi.fn().mockResolvedValue(undefined),
+                get Providers() {
+                    return mockProvidersList;
+                },
+                GetProvider: mockGetProvider,
             },
-            GetProvider: mockGetProvider,
         },
-    },
-}));
+    };
+});
 
 import {
     BaseUserScopedCommunicationAction,
@@ -123,10 +139,12 @@ function buildPolicy(
 describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Actions', () => {
     const originalFetch = globalThis.fetch;
 
-    const savedApprovalRequests: Array<{ ID: string; RequestTypeID: string | null }> = [];
+    const savedApprovalRequests: Array<{ ID: string; AgentID: string | null; RequestTypeID: string | null }> = [];
+    const originalMockCommDir = process.env[MJ_MOCK_COMM_DIR_ENV];
 
     beforeEach(() => {
         vi.clearAllMocks();
+        delete process.env[MJ_MOCK_COMM_DIR_ENV];
         AgentUserPolicyEngine.Instance.ClearCache();
         mockProvidersList.length = 0;
         mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
@@ -134,6 +152,7 @@ describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Ac
         mockGetEntityObjectFn.mockImplementation(async () => {
             const stub = {
                 ID: 'approval-req-123',
+                AgentID: null as string | null,
                 RequestTypeID: null as string | null,
                 Save: vi.fn(async () => {
                     savedApprovalRequests.push(stub);
@@ -146,6 +165,11 @@ describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Ac
 
     afterEach(() => {
         globalThis.fetch = originalFetch;
+        if (originalMockCommDir === undefined) {
+            delete process.env[MJ_MOCK_COMM_DIR_ENV];
+        } else {
+            process.env[MJ_MOCK_COMM_DIR_ENV] = originalMockCommDir;
+        }
     });
 
     describe('Domain Verification & EnterpriseMailboxSecurityGate', () => {
@@ -796,6 +820,153 @@ describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Ac
 
             expect(res.ResultCode).toBe('POLICY_DENIED');
             expect(savedApprovalRequests.length).toBe(0);
+        });
+    });
+
+    describe('Derived Agent Policy Inheritance & Local JSON Mock Provider Integration', () => {
+        let tempDir: string;
+
+        beforeEach(() => {
+            tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-core-actions-mock-comm-'));
+            process.env[MJ_MOCK_COMM_DIR_ENV] = tempDir;
+            mockGetProvider.mockImplementation((name: string) => {
+                if (name === 'Local JSON Mock') {
+                    return new LocalJsonCommunicationProvider();
+                }
+                throw new Error(`Provider ${name} not found.`);
+            });
+        });
+
+        afterEach(() => {
+            delete process.env[MJ_MOCK_COMM_DIR_ENV];
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        });
+
+        it('reads auto-seeded calendar events and free/busy slots via Local JSON Mock as derived agent Pepper and attributes approvals to Pepper.ID', async () => {
+            const pepperPolicy = Object.assign(
+                buildPolicy({
+                    EmailChannelMode: 'DraftOnly',
+                    CalendarChannelMode: 'ProposeWithApproval',
+                }),
+                { ID: 'policy-pepper-1', AgentID: 'agent-pepper-id' }
+            );
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(pepperPolicy);
+
+            // 1. Preflight reports Local JSON Mock as active even when DB provider list is empty
+            const verifyParams: RunActionParams = {
+                ContextUser: aliceUser,
+                Params: [{ Name: 'AgentID', Value: 'agent-pepper-id', Type: 'Input' }],
+            } as RunActionParams;
+            const verifyRes = await new VerifyMyCommunicationCapabilitiesAction()['InternalRunAction'](verifyParams);
+            expect(verifyRes.Success).toBe(true);
+            const report = verifyParams.Params.find((p) => p.Name === 'CapabilitiesReport')?.Value as {
+                EnterpriseProviders: Array<{ ProviderName: string; CalendarGate: { Allowed: boolean } | null }>;
+            };
+            expect(report.EnterpriseProviders.some((p) => p.ProviderName === 'Local JSON Mock' && p.CalendarGate?.Allowed)).toBe(true);
+
+            // 2. Read calendar events + free/busy from auto-seeded JSON file
+            const windowStart = new Date(Date.now() - 24 * 3_600_000).toISOString();
+            const windowEnd = new Date(Date.now() + 72 * 3_600_000).toISOString();
+            const getEventsParams: RunActionParams = {
+                ContextUser: aliceUser,
+                Params: [
+                    { Name: 'AgentID', Value: 'agent-pepper-id', Type: 'Input' },
+                    { Name: 'Operation', Value: 'GetEvents', Type: 'Input' },
+                    { Name: 'StartDateTime', Value: windowStart, Type: 'Input' },
+                    { Name: 'EndDateTime', Value: windowEnd, Type: 'Input' },
+                ],
+            } as RunActionParams;
+            const eventsRes = await new GetMyCalendarAndAvailabilityAction()['InternalRunAction'](getEventsParams);
+            expect(eventsRes.Success).toBe(true);
+            const events = getEventsParams.Params.find((p) => p.Name === 'Events')?.Value as Array<{ Subject: string }>;
+            expect(events).toHaveLength(4);
+
+            const fbParams: RunActionParams = {
+                ContextUser: aliceUser,
+                Params: [
+                    { Name: 'AgentID', Value: 'agent-pepper-id', Type: 'Input' },
+                    { Name: 'Operation', Value: 'GetFreeBusy', Type: 'Input' },
+                    { Name: 'StartDateTime', Value: windowStart, Type: 'Input' },
+                    { Name: 'EndDateTime', Value: windowEnd, Type: 'Input' },
+                ],
+            } as RunActionParams;
+            const fbRes = await new GetMyCalendarAndAvailabilityAction()['InternalRunAction'](fbParams);
+            expect(fbRes.Success).toBe(true);
+            const schedules = fbParams.Params.find((p) => p.Name === 'Schedules')?.Value as Array<{
+                ScheduleID: string;
+                Slots: Array<{ Subject?: string }>;
+            }>;
+            expect(schedules[0].ScheduleID).toBe('alice@bluecypress.io');
+            expect(schedules[0].Slots.length).toBeGreaterThanOrEqual(4);
+
+            // 3. Propose calendar invite -> queues approval request attributed specifically to Pepper.ID
+            const createParams: RunActionParams = {
+                ContextUser: aliceUser,
+                Params: [
+                    { Name: 'AgentID', Value: 'agent-pepper-id', Type: 'Input' },
+                    { Name: 'Operation', Value: 'Create', Type: 'Input' },
+                    { Name: 'Subject', Value: 'Rescheduled Renewal Sync', Type: 'Input' },
+                    { Name: 'StartTime', Value: '2026-12-02T15:30:00.000Z', Type: 'Input' },
+                    { Name: 'EndTime', Value: '2026-12-02T16:00:00.000Z', Type: 'Input' },
+                ],
+            } as RunActionParams;
+            const createRes = await new ManageMyCalendarEventAction()['InternalRunAction'](createParams);
+            expect(createRes.Success).toBe(true);
+            expect(createRes.ResultCode).toBe('APPROVAL_REQUIRED');
+            expect(savedApprovalRequests).toHaveLength(1);
+            expect(savedApprovalRequests[0].AgentID).toBe('agent-pepper-id');
+        });
+
+        it('enforces ancestor Chief of Staff policy ceiling on derived Pepper and writes DraftOnly drafts to JSON file', async () => {
+            // Ancestor CoS caps EmailChannelMode at DraftOnly; derived Pepper attempts SendAsUser
+            const cosCeiling = Object.assign(
+                buildPolicy({ EmailChannelMode: 'DraftOnly', CalendarChannelMode: 'ProposeWithApproval' }),
+                { ID: 'policy-cos-ceiling', AgentID: 'agent-cos-id' }
+            );
+            const pepperWider = Object.assign(
+                buildPolicy({
+                    EmailChannelMode: 'SendAsUser',
+                    CalendarChannelMode: 'Autonomous',
+                    RequireApprovalForExternalComms: false,
+                }),
+                { ID: 'policy-pepper-wide', AgentID: 'agent-pepper-id' }
+            );
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(cosCeiling);
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(pepperWider);
+
+            // Send is DENIED because ancestor CoS enforces DraftOnly ceiling
+            const sendRes = await new ManageMyEmailInboxAction()['InternalRunAction']({
+                ContextUser: aliceUser,
+                Params: [
+                    { Name: 'AgentID', Value: 'agent-pepper-id', Type: 'Input' },
+                    { Name: 'Operation', Value: 'Send', Type: 'Input' },
+                    { Name: 'To', Value: 'board@bluecypress.io', Type: 'Input' },
+                    { Name: 'Subject', Value: 'Bypass attempt', Type: 'Input' },
+                    { Name: 'Body', Value: 'Should be blocked by CoS ceiling', Type: 'Input' },
+                ],
+            } as RunActionParams);
+            expect(sendRes.Success).toBe(false);
+            expect(sendRes.ResultCode).toBe('POLICY_DENIED');
+
+            // CreateDraft SUCCEEDS and writes directly into <tempDir>/alice@bluecypress.io.json
+            const draftParams: RunActionParams = {
+                ContextUser: aliceUser,
+                Params: [
+                    { Name: 'AgentID', Value: 'agent-pepper-id', Type: 'Input' },
+                    { Name: 'Operation', Value: 'CreateDraft', Type: 'Input' },
+                    { Name: 'To', Value: 'sarah.chen@bluecypress.io', Type: 'Input' },
+                    { Name: 'Subject', Value: 'Q4 Board Deck Follow-Up', Type: 'Input' },
+                    { Name: 'Body', Value: 'Drafted by Pepper under DraftOnly ceiling.', Type: 'Input' },
+                ],
+            } as RunActionParams;
+            const draftRes = await new ManageMyEmailInboxAction()['InternalRunAction'](draftParams);
+            expect(draftRes.Success).toBe(true);
+            const draftId = draftParams.Params.find((p) => p.Name === 'DraftID')?.Value as string;
+            expect(draftId).toBeTruthy();
+
+            const rawFile = fs.readFileSync(path.join(tempDir, 'alice@bluecypress.io.json'), 'utf8');
+            const parsed = JSON.parse(rawFile) as { Messages: Array<{ ID: string; Folder: string; Subject: string }> };
+            expect(parsed.Messages.some((m) => m.ID === draftId && m.Folder === 'Drafts' && m.Subject === 'Q4 Board Deck Follow-Up')).toBe(true);
         });
     });
 });

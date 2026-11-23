@@ -6,11 +6,19 @@
         [Busy]="Busy"
         [Settled]="IsSettled"
         [Enabled]="Enabled && !Busy"
+        [ShowXRayToggle]="true"
+        [XRayEnabled]="XRayEnabled"
+        [ShowBlastRadiusToggle]="true"
+        [BlastRadiusEnabled]="BlastRadiusEnabled"
+        [BreakpointCount]="Breakpoints.length"
+        [EnginePulseText]="EnginePulseText"
         (Pause)="Pause()"
         (Resume)="Resume()"
         (Step)="Step('one')"
         (StepWave)="Step('wave')"
-        (Cancel)="Cancel()">
+        (Cancel)="Cancel()"
+        (XRayToggled)="OnToggleXRay($event)"
+        (BlastRadiusToggled)="OnToggleBlastRadius($event)">
       </mj-task-graph-debug-toolbar>
       @if (ControlError) {
         <mj-alert Variant="error" [Message]="ControlError"></mj-alert>
@@ -25,6 +33,11 @@
       [LiveUpdates]="LiveUpdates"
       [PollIntervalSeconds]="PollIntervalSeconds"
       [Height]="'100%'"
+      [Density]="Density"
+      [XRayEnabled]="XRayEnabled"
+      [BlastRadiusTaskIDs]="BlastRadiusTaskIDs"
+      [CanStepSingle]="Paused && !IsSettled"
+      [ShowReplayScrubber]="ShowReplayScrubber"
       [ShowLegend]="ShowLegend"
       [ShowToolbar]="ShowCanvasToolbar"
       [ToolbarVisibility]="ToolbarVisibility"
@@ -46,7 +59,11 @@
       [RememberedStepIDs]="RememberedStepIDs"
       [AllowRememberBreakpoints]="AllowRememberBreakpoints"
       (RememberBreakpointToggled)="RememberBreakpointToggled.emit($event)"
-      (EdgeOverrideRequested)="OnRunEdgeOverride($event)">
+      (EdgeOverrideRequested)="OnRunEdgeOverride($event)"
+      (RunStepRequested)="OnRunStepRequested($event)"
+      (RetryStepRequested)="OnRetryStepRequested($event)"
+      (BlastRadiusRequested)="OnBlastRadiusRequested($event)"
+      (ExpandRequested)="ExpandRequested.emit()">
     </mj-task-graph-run-view>
   </div>
 </div>

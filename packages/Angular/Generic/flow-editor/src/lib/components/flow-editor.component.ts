@@ -3,6 +3,7 @@ import {
   ChangeDetectorRef, ElementRef, ViewEncapsulation, ChangeDetectionStrategy, HostListener
 } from '@angular/core';
 import { Subject } from 'rxjs';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { FFlowComponent, FCanvasComponent, FZoomDirective, FCreateConnectionEvent,
          FCreateNodeEvent, FSelectionChangeEvent, FCanvasChangeEvent, FMoveNodesEvent,
          FReassignConnectionEvent } from '@foblex/flow';
@@ -17,6 +18,11 @@ import {
 } from '../interfaces/flow-types';
 import { FlowStateService } from '../services/flow-state.service';
 import { FlowLayoutService } from '../services/flow-layout.service';
+import {
+  ComputeCappedFitViewport,
+  FlowViewportStore,
+  MAX_FIT_SCALE,
+} from '../services/flow-viewport.util';
 import { UUIDsEqual, UUIDMap, UUIDSet, FilterByUUIDs, ExcludeByUUIDs, IndexByUUID } from '@memberjunction/global';
 
 /**
@@ -65,6 +71,29 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Input() ShowLegend = true;
   @Input() GridSize = 20;
   @Input() AutoLayoutDirection: FlowLayoutDirection = 'vertical';
+  /** Expand inline X-Ray telemetry slots on nodes that supply telemetry. */
+  @Input() XRayEnabled = false;
+  /** Enable left-gutter breakpoint clicking directly on nodes. */
+  @Input() AllowBreakpointClick = false;
+  /**
+   * Optional persistence key (e.g. `'agent:<id>'` or `'run:<id>'`). When set, pan `{ x, y }`
+   * and zoom `scale` are automatically restored on mount and saved per-user via `UserInfoEngine`.
+   */
+  private _viewportKey: string | null = null;
+  @Input()
+  set ViewportKey(value: string | null) {
+    const normalized = value?.trim() || null;
+    if (normalized === this._viewportKey) return;
+    this._viewportKey = normalized;
+    this.hasAutoFitted = false;
+    this.viewportOwnedByUser = false;
+    if (this.initialized && this.fCanvas && this.Nodes.length > 0) {
+      this.applyInitialViewport();
+    }
+  }
+  get ViewportKey(): string | null {
+    return this._viewportKey;
+  }
   /** Background color for connection labels */
   // Design tokens, not literals — the canvas renders on both themes, and a near-white pill on a
   // dark canvas made the least important element the most visually dominant thing on screen.
@@ -74,11 +103,16 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   /** Text color for connection labels */
   @Input() ConnectionLabelTextColor = 'var(--mj-text-secondary)';
 
+  /** Only draggable/authorable node types appear in the authoring palette sidebar. */
+  public get PaletteNodeTypes(): FlowNodeTypeConfig[] {
+    return this.NodeTypes.filter(nt => nt.Draggable !== false);
+  }
+
   /** Title for the canvas empty-state overlay — depends on read-only mode. */
   public get EmptyStateTitle(): string {
     return this.ReadOnly
-      ? 'No steps defined for this flow'
-      : 'Click a step in the palette — or drag one onto the canvas — to start building your flow';
+      ? 'No steps defined for this workflow'
+      : 'Click a step in the palette — or drag one onto the canvas — to start building your workflow';
   }
 
   // ── Outputs ─────────────────────────────────────────────────
@@ -102,6 +136,14 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Output() GridToggled = new EventEmitter<boolean>();
   @Output() MinimapToggled = new EventEmitter<boolean>();
   @Output() LegendToggled = new EventEmitter<boolean>();
+  /** Emitted when the user flips layout orientation (LR ⇄ TB) from the canvas toolbar. */
+  @Output() LayoutDirectionChanged = new EventEmitter<FlowLayoutDirection>();
+  /** Emitted when the user clicks a node's left-gutter breakpoint dot. */
+  @Output() NodeBreakpointClicked = new EventEmitter<FlowNode>();
+  /** Emitted when the user clicks the `+` quick-add affordance on a node's output port. */
+  @Output() NodeQuickAddClicked = new EventEmitter<FlowNode>();
+  /** Emitted when the user clicks the inline `Run This Step` action inside a node's X-Ray slot. */
+  @Output() NodeRunStepClicked = new EventEmitter<FlowNode>();
   /** The person changed shown / minimized / hidden from the canvas chrome. */
   @Output() ToolbarVisibilityChanged = new EventEmitter<FlowToolbarVisibility>();
 
@@ -135,10 +177,11 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   protected selectedNodeIDs: string[] = [];
   protected selectedConnectionIDs: string[] = [];
   protected panMode = false;
+  protected spacePressed = false;
 
-  /** Trigger function for canvas panning — only allows panning in pan mode */
+  /** Trigger function for canvas panning — allows panning in pan mode OR while holding Space. */
   protected canvasMoveTriggerFn = (_event: MouseEvent | TouchEvent): boolean => {
-    return this.panMode;
+    return this.panMode || this.spacePressed;
   };
 
   /* Context menu state */
@@ -160,6 +203,15 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   private static readonly CLICK_CASCADE_OFFSET = 40;
   private clickPlacementIndex = 0;
 
+  private viewportStore = new FlowViewportStore({
+    Get: (key) => {
+      try { return UserInfoEngine.Instance.GetSetting(key); } catch { return undefined; }
+    },
+    Set: (key, value) => {
+      try { UserInfoEngine.Instance.SetSettingDebounced(key, value); } catch { /* noop */ }
+    },
+  });
+
   constructor(
     private cdr: ChangeDetectorRef,
     private stateService: FlowStateService,
@@ -179,10 +231,44 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   // ── Public Methods ──────────────────────────────────────────
 
-  /** Fit all nodes within the viewport */
-  ZoomToFit(): void {
+  /** Restores saved viewport if `ViewportKey` has one, otherwise fits capped at MAX_FIT_SCALE. */
+  FitOrRestoreViewport(): void {
+    const saved = this.viewportStore.Load(this._viewportKey);
+    if (saved) {
+      this.hasAutoFitted = true;
+      this.applyProgrammaticViewport(saved.x, saved.y, saved.scale);
+      return;
+    }
+    this.ZoomToFit(false);
+  }
+
+  /**
+   * Fit all steps within the viewport, capped at MAX_FIT_SCALE (95%) so small 1–5 step workflows
+   * stay crisp and centered instead of over-zooming to 200%+. Persists when triggered explicitly.
+   */
+  ZoomToFit(persist: boolean = true): void {
+    const el = this.canvasArea?.nativeElement;
+    const vw = el?.clientWidth ?? 0;
+    const vh = el?.clientHeight ?? 0;
+    const fitted = ComputeCappedFitViewport(this.Nodes, vw, vh);
+    if (fitted) {
+      this.applyProgrammaticViewport(fitted.x, fitted.y, fitted.scale);
+      this.hasAutoFitted = true;
+      if (persist && this._viewportKey) {
+        this.viewportStore.Save(this._viewportKey, fitted);
+      }
+      return;
+    }
+
+    // Fallback when container dimensions are not measurable yet (e.g., jsdom tests)
     this.applyingProgrammaticViewport = true;
-    this.fCanvas?.fitToScreen({ x: 150, y: 150 }, true);
+    this.fCanvas?.fitToScreen({ x: 120, y: 120 }, false);
+    const currentScale = this.fCanvas?.getScale() ?? this.canvasScale;
+    if (currentScale > MAX_FIT_SCALE) {
+      this.canvasScale = MAX_FIT_SCALE;
+      this.updateZoomLevel(MAX_FIT_SCALE);
+      this.fCanvas?.setScale(MAX_FIT_SCALE);
+    }
     this.hasAutoFitted = true;
     queueMicrotask(() => { this.applyingProgrammaticViewport = false; });
   }
@@ -211,10 +297,12 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Run auto-layout using dagre */
+  /** Run auto-layout using dagre and align node port sides to the active flow direction. */
   AutoArrange(direction?: FlowLayoutDirection): void {
     const dir = direction ?? this.AutoLayoutDirection;
+    this.AutoLayoutDirection = dir;
     this.pushUndoState();
+    this.syncPortSidesToDirection(dir);
     const result = this.layoutService.CalculateLayout(this.Nodes, this.Connections, dir);
     for (const node of this.Nodes) {
       const newPos = result.Positions.get(node.ID);
@@ -224,8 +312,20 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     }
     this.NodesChanged.emit(this.Nodes);
     this.cdr.detectChanges();
-    // Fit to screen after layout
     setTimeout(() => this.ZoomToFit(), 100);
+  }
+
+  /** Aligns input/output port sides with LR ('left'/'right') or TB ('top'/'bottom') layout direction. */
+  private syncPortSidesToDirection(dir: FlowLayoutDirection): void {
+    const inputSide = dir === 'horizontal' ? 'left' : 'top';
+    const outputSide = dir === 'horizontal' ? 'right' : 'bottom';
+    this.Nodes = this.Nodes.map(node => ({
+      ...node,
+      Ports: node.Ports.map(port => ({
+        ...port,
+        Side: port.Direction === 'input' ? inputSide : outputSide
+      }))
+    }));
   }
 
   /** Center the canvas on a specific node */
@@ -364,8 +464,30 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
       this.restoreViewport();
       return;
     }
+    this.applyInitialViewport();
+  }
+
+  /** Restores persisted viewport for `ViewportKey` when available, otherwise fits with max-zoom cap. */
+  private applyInitialViewport(): void {
+    const saved = this.viewportStore.Load(this._viewportKey);
+    if (saved) {
+      this.hasAutoFitted = true;
+      this.applyProgrammaticViewport(saved.x, saved.y, saved.scale);
+      return;
+    }
     this.hasAutoFitted = true;
-    setTimeout(() => this.ZoomToFit(), 200);
+    setTimeout(() => this.ZoomToFit(false), 120);
+  }
+
+  private applyProgrammaticViewport(x: number, y: number, scale: number): void {
+    this.applyingProgrammaticViewport = true;
+    this.canvasPosition = { x, y };
+    this.canvasScale = scale;
+    this.updateZoomLevel(scale);
+    this.fCanvas?.setScale(scale);
+    this.fCanvas?.redraw();
+    this.cdr.markForCheck();
+    queueMicrotask(() => { this.applyingProgrammaticViewport = false; });
   }
 
   /** Canvas zoom/pan changed */
@@ -373,14 +495,21 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     this.canvasPosition = event.position;
     this.canvasScale = event.scale;
     this.updateZoomLevel(event.scale);
-    if (!this.applyingProgrammaticViewport) this.viewportOwnedByUser = true;
+    if (!this.applyingProgrammaticViewport) {
+      this.viewportOwnedByUser = true;
+      if (this._viewportKey) {
+        this.viewportStore.Save(this._viewportKey, {
+          x: event.position.x,
+          y: event.position.y,
+          scale: event.scale,
+        });
+      }
+    }
   }
 
   private restoreViewport(): void {
     if (!this.fCanvas) return;
-    this.applyingProgrammaticViewport = true;
-    this.fCanvas.setScale(this.canvasScale);
-    queueMicrotask(() => { this.applyingProgrammaticViewport = false; });
+    this.applyProgrammaticViewport(this.canvasPosition.x, this.canvasPosition.y, this.canvasScale);
   }
 
   /** User drew a new connection */
@@ -615,6 +744,16 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  protected onLayoutDirectionToggled(direction: FlowLayoutDirection): void {
+    this.AutoLayoutDirection = direction;
+    this.LayoutDirectionChanged.emit(direction);
+    if (this.Nodes.length > 0) {
+      this.AutoArrange(direction);
+    } else {
+      this.cdr.detectChanges();
+    }
+  }
+
   // ── Context Menu ───────────────────────────────────────────
 
   protected onNodeContextMenu(event: MouseEvent, node: FlowNode): void {
@@ -743,16 +882,24 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   @HostListener('keydown', ['$event'])
   protected onKeyDown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    const isTyping = target != null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+
+    if (event.code === 'Space' && !isTyping) {
+      if (!this.spacePressed) {
+        this.spacePressed = true;
+        this.cdr.detectChanges();
+      }
+      event.preventDefault();
+      return;
+    }
+
     if (this.ReadOnly) return;
 
     const isCtrlOrMeta = event.ctrlKey || event.metaKey;
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
-      // Don't delete if user is typing in an input
-      const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
-        return;
-      }
+      if (isTyping) return;
       event.preventDefault();
       this.DeleteSelected();
     } else if (isCtrlOrMeta && event.key === 'z' && !event.shiftKey) {
@@ -764,6 +911,14 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     } else if (isCtrlOrMeta && event.key === 'a') {
       event.preventDefault();
       this.fFlow?.selectAll();
+    }
+  }
+
+  @HostListener('document:keyup', ['$event'])
+  protected onKeyUp(event: KeyboardEvent): void {
+    if (event.code === 'Space' && this.spacePressed) {
+      this.spacePressed = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -848,9 +1003,11 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   private createDefaultNode(config: FlowNodeTypeConfig, position: FlowPosition): FlowNode {
     const id = this.generateId();
+    const inputSide = this.AutoLayoutDirection === 'horizontal' ? 'left' as const : 'top' as const;
+    const outputSide = this.AutoLayoutDirection === 'horizontal' ? 'right' as const : 'bottom' as const;
     const defaultPorts = config.DefaultPorts ?? [
-      { ID: `${id}-input`, Direction: 'input' as const, Side: 'top' as const, Multiple: true },
-      { ID: `${id}-output`, Direction: 'output' as const, Side: 'bottom' as const, Multiple: true }
+      { ID: `${id}-input`, Direction: 'input' as const, Side: inputSide, Multiple: true },
+      { ID: `${id}-output`, Direction: 'output' as const, Side: outputSide, Multiple: true }
     ];
 
     return {
@@ -862,6 +1019,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
       Position: position,
       Ports: defaultPorts.map(p => ({
         ...p,
+        Side: p.Direction === 'input' ? inputSide : outputSide,
         ID: p.ID.startsWith(id) ? p.ID : `${id}-${p.ID}`
       }))
     };
@@ -907,7 +1065,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 }
 
 function defaultContextMenuItems(target: FlowContextMenuTarget): FlowContextMenuItem[] {
-    const noun = target === 'node' ? 'Node' : 'Connection';
+    const noun = target === 'node' ? 'Step' : 'Path';
     return [
         { ID: 'edit', Label: `Edit ${noun}`, Icon: 'fa-pen-to-square' },
         { ID: 'remove', Label: `Remove ${noun}`, Icon: 'fa-trash-can', Danger: true },
