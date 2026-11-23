@@ -715,12 +715,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.AssistantAvatarFailed = value;
   }
 
-  /** The avatar image URL actually rendered: trimmed, and null after a load error
-   *  so a broken/whitespace URL degrades to the agent icon instead of a broken-image glyph. */
+  /** The avatar image URL actually rendered: host override -> agent LogoURL ->
+   *  default Persona PreviewImageURL, and null after a load error so a broken/whitespace
+   *  URL degrades cleanly to the agent icon instead of a broken-image glyph. */
   public get EffectiveAssistantAvatarUrl(): string | null {
     if (this.AssistantAvatarFailed) return null;
-    const url = this._assistantAvatarUrl?.trim();
-    return url ? url : null;
+    const hostUrl = this._assistantAvatarUrl?.trim();
+    if (hostUrl) return hostUrl;
+    if (!this.IsAIMessage) return null;
+    const agentID = this.message?.AgentID;
+    if (!agentID) return null;
+    const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentID));
+    const logoUrl = agent?.LogoURL?.trim();
+    if (logoUrl) return logoUrl;
+    if (typeof AIEngineBase.Instance.ResolveAgentPersona === 'function') {
+      const personaUrl = AIEngineBase.Instance.ResolveAgentPersona(agentID)?.Persona?.PreviewImageURL?.trim();
+      if (personaUrl) return personaUrl;
+    }
+    return null;
   }
 
   /** @deprecated Use {@link EffectiveAssistantAvatarUrl}. */
@@ -1619,6 +1631,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.AiAgentInfo;
   }
 
+  /** Normalized Font Awesome icon class for the assistant avatar fallback. */
+  public get EffectiveAssistantIconClass(): string {
+    return this.normalizeIconClass(this.AiAgentInfo?.iconClass || 'fa-robot');
+  }
+
+  /** @deprecated Use {@link EffectiveAssistantIconClass}. */
+  public get effectiveAssistantIconClass(): string {
+    return this.EffectiveAssistantIconClass;
+  }
+
   /** The engine-resolved agent identity — no host display overrides applied.
    *  Protected (not private) so the template's run-details header — which labels
    *  the REAL agent's diagnostics and record link — can read it directly. */
@@ -1638,6 +1660,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
           role: agent.Description || 'AI Assistant'
         };
       } else {
+        // Fallback to denormalized message.Agent name when a brand-new instance hasn't refreshed cache yet
+        if (this.message.Agent) {
+          return {
+            name: this.message.Agent,
+            iconClass: 'fa-robot',
+            role: 'AI Assistant'
+          };
+        }
         // Only log if the message is complete (should have AgentID by then)
         if (this.message.Status === 'Complete') {
           console.warn('⚠️ Agent not found in cache for ID:', agentID);

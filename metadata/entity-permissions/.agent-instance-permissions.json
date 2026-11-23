@@ -1,0 +1,33 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UserAccessibleAIAgents",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UserOwnedDerivedAIAgents",
+      "DeleteRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UserOwnedDerivedAIAgents"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Personas",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Personas&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    }
+  }
+]
