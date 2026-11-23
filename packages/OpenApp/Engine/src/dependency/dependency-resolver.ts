@@ -52,6 +52,11 @@ export interface InstalledAppMap {
     [appName: string]: {
         Version: string;
         Repository: string;
+        /**
+         * What the installed version depends on, from its recorded manifest. `{}` means it has no
+         * dependencies; undefined means they are not known locally.
+         */
+        Dependencies?: Record<string, DependencyValue>;
     };
 }
 

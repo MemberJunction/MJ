@@ -1,9 +1,10 @@
 /**
  * Transitive dependency graph construction for MJ Open Apps.
  *
- * Builds the COMPLETE dependency graph for an app by recursively fetching each
- * dependency's manifest from its repository, then runs cycle detection and a
- * topological sort over the full graph. This is the up-front pass that lets the
+ * Builds the COMPLETE dependency graph for an app by recursively reading what each
+ * dependency itself depends on (an installed app's recorded dependencies, otherwise the
+ * manifest in its repository), then runs cycle detection and a topological sort over
+ * the full graph. This is the up-front pass that lets the
  * installer detect cross-repo cycles (e.g. A -> B -> A) *before* doing any work,
  * rather than discovering them via runaway recursion partway through an install.
  *
@@ -86,7 +87,7 @@ export interface GraphResolutionResult {
 interface GraphNode {
     AppName: string;
     Repository: string;
-    /** The node's own dependency edges (empty when its manifest couldn't be fetched) */
+    /** The node's own dependency edges (empty when they couldn't be read) */
     Dependencies: Record<string, DependencyValue>;
     AlreadyInstalled: boolean;
     InstalledVersion?: string;
@@ -127,13 +128,12 @@ function ParseDependencyValue(value: DependencyValue): { versionRange: string; r
 /**
  * Resolves the complete transitive dependency graph for an app.
  *
- * Fetches every reachable dependency's manifest (via the injected fetcher),
- * validates version compatibility for already-installed dependencies, resolves
- * each not-yet-installed dependency to a concrete version (via the injected
- * resolver) and fetches its manifest at that version, fails when two parents
- * require ranges the resolved version can't both satisfy, detects
- * circular dependency chains across the full graph, and returns the leaf-first
- * install order.
+ * Validates version compatibility for already-installed dependencies and follows
+ * the dependencies of the version that is installed, resolves each not-yet-installed
+ * dependency to a concrete version (via the injected resolver) and fetches its
+ * manifest at that version, fails when two parents require ranges the resolved
+ * version can't both satisfy, detects circular dependency chains across the full
+ * graph, and returns the leaf-first install order.
  *
  * @param root - The app being installed and its direct dependency declarations
  * @param installedApps - Map of apps already installed in the MJ instance
@@ -181,7 +181,7 @@ export async function ResolveDependencyGraph(
 }
 
 /**
- * Breadth-first traversal that fetches each reachable dependency's manifest and
+ * Breadth-first traversal that reads what each reachable dependency depends on and
  * assembles the complete graph. Version compatibility is validated per-edge so
  * conflicts from any requiring parent are caught. Returns the graph plus any non-structural errors encountered.
  */
@@ -219,8 +219,8 @@ async function BuildGraph(
  * Processes a single dependency edge: validates version compatibility for
  * installed dependencies and against the version already chosen for a node seen
  * on an earlier edge, and — the first time a node is seen — resolves its version
- * (when uninstalled), creates it and fetches its manifest at that version to
- * enqueue its own transitive edges.
+ * (when uninstalled), creates it and reads that version's dependencies to enqueue
+ * its own transitive edges.
  */
 async function ProcessEdge(
     edge: QueuedEdge,
@@ -269,6 +269,13 @@ async function ProcessEdge(
     };
     graph.set(depName, node);
 
+    // The installed version's own record. A repository cannot answer this reliably: its default
+    // branch moves ahead of the release, and the installed version may have no tag (#6877).
+    if (installed?.Dependencies) {
+        SetNodeDependencies(node, installed.Dependencies, queue);
+        return;
+    }
+
     if (!resolvedRepo) {
         // No repository to fetch from. If the dep isn't installed, the install
         // step emits the actionable "no repository URL" error; here we leave it
@@ -289,13 +296,10 @@ async function ProcessEdge(
         node.ResolvedVersion = resolved.Version;
     }
 
-    const fetched = await fetchManifest(resolvedRepo, subpath, node.ResolvedVersion);
+    const fetched = await fetchManifest(resolvedRepo, subpath, node.ResolvedVersion ?? node.InstalledVersion);
     if (fetched.Success && fetched.Manifest) {
         node.EffectiveVersion = node.ResolvedVersion ?? fetched.Manifest.version;
-        node.Dependencies = fetched.Manifest.dependencies ?? {};
-        for (const [name, value] of Object.entries(node.Dependencies)) {
-            queue.push({ name, value, parent: depName });
-        }
+        SetNodeDependencies(node, fetched.Manifest.dependencies ?? {}, queue);
     } else if (!node.AlreadyInstalled) {
         // Can't resolve an uninstalled dependency's manifest — hard error.
         errors.push(
@@ -303,6 +307,14 @@ async function ProcessEdge(
         );
     }
     // installed + fetch failed -> treat as leaf; its subtree is already satisfied.
+}
+
+/** Records what a node depends on and enqueues an edge for each of those dependencies. */
+function SetNodeDependencies(node: GraphNode, dependencies: Record<string, DependencyValue>, queue: QueuedEdge[]): void {
+    node.Dependencies = dependencies;
+    for (const [name, value] of Object.entries(dependencies)) {
+        queue.push({ name, value, parent: node.AppName });
+    }
 }
 
 /** True when a declared range puts no constraint on the version. */
