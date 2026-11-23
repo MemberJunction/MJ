@@ -4,6 +4,9 @@ import type { UserHandlingInfo } from '../config.js';
 /** Canonical prefix on invite-only authentication refusal messages for bundler-safe error classification. */
 export const INVITE_ONLY_AUTH_ERROR_PREFIX = 'Invite-only sign-in refused:';
 
+/** Canonical prefix when `requireVerifiedEmail` rejects sign-in in non-invite-only deployments. */
+export const EMAIL_VERIFICATION_AUTH_ERROR_PREFIX = 'Sign-in refused:';
+
 /** Input to {@link EvaluateExternalEmailVerification}. */
 export interface ExternalEmailVerificationInput {
   /** Verified JWT payload from the identity provider. */
@@ -75,36 +78,61 @@ export function EvaluateExternalEmailVerification(input: ExternalEmailVerificati
     return { Allowed: true };
   }
 
-  const emailVerified = input.Payload.email_verified;
-  const entraVerified = input.Payload['xms_edov'];
+  const prefix = IsInviteOnlyMode(input.UserHandling)
+    ? INVITE_ONLY_AUTH_ERROR_PREFIX
+    : EMAIL_VERIFICATION_AUTH_ERROR_PREFIX;
+  const emailVerified = normalizeEmailVerifiedClaim(input.Payload.email_verified);
+  const entraVerified = normalizeEmailVerifiedClaim(input.Payload['xms_edov']);
 
   if (emailVerified === false || entraVerified === false) {
     return {
       Allowed: false,
-      Reason: `${INVITE_ONLY_AUTH_ERROR_PREFIX} external identity provider reports an unverified email claim.`,
+      Reason: `${prefix} external identity provider reports an unverified email claim.`,
     };
   }
 
-  if (emailVerified === true) {
+  if (emailVerified === true || entraVerified === true) {
     return { Allowed: true };
   }
 
-  if (emailVerified === undefined && entraVerified === true) {
+  if (input.Payload['mj_magic_link'] === true) {
     return { Allowed: true };
   }
 
-  if (emailVerified === undefined && input.Payload['mj_magic_link'] === true) {
-    return { Allowed: true };
-  }
-
-  if (emailVerified === undefined && isOptionalVerifiedProvider(input.UserHandling, input.ProviderName, input.Issuer)) {
+  if (isOptionalVerifiedProvider(input.UserHandling, input.ProviderName, input.Issuer)) {
     return { Allowed: true };
   }
 
   return {
     Allowed: false,
-    Reason: `${INVITE_ONLY_AUTH_ERROR_PREFIX} external identity provider token is missing a verified email claim (email_verified: true).`,
+    Reason: `${prefix} external identity provider token is missing a verified email claim (email_verified: true).`,
   };
+}
+
+function normalizeEmailVerifiedClaim(value: unknown): boolean | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length === 0) {
+      return undefined;
+    }
+    if (normalized === 'true' || normalized === '1') {
+      return true;
+    }
+    if (normalized === 'false' || normalized === '0') {
+      return false;
+    }
+    return false;
+  }
+  return false;
 }
 
 function isOptionalVerifiedProvider(
