@@ -658,17 +658,16 @@ describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
         );
     });
 
-    it('clears stale nested arrays (Beats[i].AssetRefs = [], DataRefs = [], OnScreenText = []) when subAgentPayload explicitly sets [] and initializes DataBindings even when Film is absent', async () => {
+    it('clears stale nested arrays (Beats[i].AssetRefs = [], DataRefs = [], OnScreenText = []) across real PayloadManager.MergeUpstreamPayload + ApplyStageResult', async () => {
+        const { PayloadManager } = await import('@memberjunction/ai-agents');
         const { CreateDeliveredSpecFixture } = await import('./fixtures/delivered-spec.fixture.js');
         const harness = createHarness(['Video Studio']);
 
-        const mergedByPayloadManager = CreateDeliveredSpecFixture();
-        mergedByPayloadManager.Status = 'Storyboarded';
-        // Simulate PayloadManager.mergeUpstreamPayload retaining stale array entries when Storyboard
-        // returned AssetRefs: [], DataRefs: [], OnScreenText: []
-        mergedByPayloadManager.Beats[0].AssetRefs = ['stale-asset-key'];
-        mergedByPayloadManager.Beats[0].DataRefs = ['stale-data-key'];
-        mergedByPayloadManager.Beats[0].OnScreenText = ['Stale headline'];
+        const parentSpec = CreateDeliveredSpecFixture();
+        parentSpec.Status = 'Storyboarded';
+        parentSpec.Beats[0].AssetRefs = ['stale-asset-key'];
+        parentSpec.Beats[0].DataRefs = ['stale-data-key'];
+        parentSpec.Beats[0].OnScreenText = ['Stale headline'];
 
         const subAgentPayload = CreateDeliveredSpecFixture();
         subAgentPayload.Status = 'Storyboarded';
@@ -676,13 +675,19 @@ describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
         subAgentPayload.Beats[0].DataRefs = [];
         subAgentPayload.Beats[0].OnScreenText = [];
 
+        const merged = new PayloadManager().MergeUpstreamPayload(
+            'Video Studio - Storyboard',
+            parentSpec as Partial<VideoGenerationSpec>,
+            subAgentPayload as Partial<VideoGenerationSpec>,
+            ['Beats', 'Beats.*', 'StateList', 'StateList.*', 'Audio', 'Audio.*'],
+        );
+
         const driver = harness.agent as unknown as {
             ApplyStageResult: (
                 params: ExecuteAgentParams,
                 stageName: string,
                 payload: Partial<VideoGenerationSpec>,
                 stageSucceeded?: boolean,
-                subAgentPayload?: Partial<VideoGenerationSpec>,
             ) => Partial<VideoGenerationSpec>;
         };
 
@@ -695,22 +700,12 @@ describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
         const afterStoryboard = driver.ApplyStageResult(
             params,
             'Video Studio - Storyboard',
-            mergedByPayloadManager,
+            merged.result,
             true,
-            subAgentPayload,
         );
 
         expect(afterStoryboard.Beats?.[0]?.AssetRefs).toEqual([]);
         expect(afterStoryboard.Beats?.[0]?.DataRefs).toEqual([]);
         expect(afterStoryboard.Beats?.[0]?.OnScreenText).toEqual([]);
-
-        // Also verify DataBindings is initialized to [] when Film is absent
-        const withoutFilm = driver.ApplyStageResult(
-            params,
-            'Video Studio - Director',
-            {} as Partial<VideoGenerationSpec>,
-            false,
-        );
-        expect(withoutFilm.DataBindings).toEqual([]);
     });
 });

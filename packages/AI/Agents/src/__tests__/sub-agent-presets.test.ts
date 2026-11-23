@@ -239,12 +239,12 @@ class TestablePresetAgent extends BaseAgent {
         return (
             this as unknown as {
                 gatherPromptTemplateData: (
-                    p: ExecuteAgentParams,
+                    a: MJAIAgentEntityExtended,
                     u?: UserInfo,
                     c?: AgentContextData
                 ) => Promise<AgentContextData>;
             }
-        ).gatherPromptTemplateData(params, params.contextUser, contextData);
+        ).gatherPromptTemplateData(params.agent, params.contextUser, contextData);
     }
 
     public invokeApplyNativeTools(

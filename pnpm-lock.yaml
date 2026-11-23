@@ -5281,6 +5281,9 @@ importers:
       '@memberjunction/ng-filter-builder':
         specifier: 6.3.0-edge.1
         version: link:../../Generic/filter-builder
+      '@memberjunction/ng-flow-editor':
+        specifier: 6.3.0-edge.1
+        version: link:../../Generic/flow-editor
       '@memberjunction/ng-graph-view':
         specifier: 6.3.0-edge.1
         version: link:../../Generic/graph-view

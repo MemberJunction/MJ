@@ -19,11 +19,11 @@
 
 .mj-tge__validation {
   flex: 0 0 auto;
-  margin: var(--mj-space-sm, 0.5rem);
+  margin: var(--mj-space-2);
 }
 
 .mj-tge__validation-list {
-  margin: var(--mj-space-xs, 0.25rem) 0 0;
+  margin: var(--mj-space-1) 0 0;
   padding-inline-start: 1.25rem;
 }
 

@@ -8,7 +8,7 @@ Return ONLY JSON adhering to the interface `LoopAgentResponse`
 interface LoopAgentResponse {
     /** Task completion status. true = terminate loop, false = continue */
     taskComplete?: boolean;
-    /** Plain text message (<100 words). Required for 'Chat' type, omit for others */
+    /** User-facing reply text. Include when completing a conversational reply (taskComplete: true) or pausing for 'Chat'; omit on intermediate turns */
     message?: string;
 
     /** Optional response form to collect structured user input */
@@ -436,7 +436,7 @@ Static values need no syntax: `"Welcome!"`
 **Next step types:**
 - `"Actions"`: Execute one or more actions
 - `"Sub-Agent"`: Invoke a sub-agent
-- `"Chat"`: Send message to user
+- `"Chat"`: Pause mid-task to ask the user a blocking question (for normal completed replies, set `taskComplete: true` with `message` and omit `nextStep`)
 - `"Retry"`: Continue processing (set `messageIndex` to expand a compacted message first)
 - `"ForEach"`: Iterate over a collection, executing action/sub-agent per item
 - `"While"`: Loop while condition is true, executing action/sub-agent per iteration

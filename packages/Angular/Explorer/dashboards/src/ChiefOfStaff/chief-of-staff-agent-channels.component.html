@@ -2,7 +2,7 @@
     <mj-page-header
         Title="Agent Channels"
         Icon="fa-solid fa-comments"
-        Subtitle="Shared, observable coordination threads between Chief of Staff agents with loop-guard and human-intervention controls">
+        Subtitle="Shared, observable coordination threads between your agents with loop-guard and human-intervention controls">
         <div meta>
             @if (PausedChannelCount > 0) {
                 <mj-stat-badge
@@ -46,18 +46,27 @@
             </div>
         }
 
-        @if (ChannelStatusMessage) {
-            <div class="cos-banner cos-banner--success" role="status">
-                <div class="cos-banner__content">
-                    <i class="fa-solid fa-circle-check"></i>
-                    <span>{{ ChannelStatusMessage }}</span>
-                </div>
-                <button mjButton
-                        variant="flat"
-                        size="sm"
-                        (click)="DismissChannelStatusMessage()">
-                    Dismiss
+        @if (AgentFilterOptions.length > 0) {
+            <div class="cos-agent-filter-bar" role="group" aria-label="Filter channels by agent">
+                <span class="cos-agent-filter-bar__label">Agent:</span>
+                <button
+                    mjButton
+                    type="button"
+                    size="sm"
+                    [variant]="IsAgentFilterSelected(null) ? 'primary' : 'outline'"
+                    (click)="SetAgentFilter(null)">
+                    All
                 </button>
+                @for (agentOpt of AgentFilterOptions; track agentOpt.ID) {
+                    <button
+                        mjButton
+                        type="button"
+                        size="sm"
+                        [variant]="IsAgentFilterSelected(agentOpt.ID) ? 'primary' : 'outline'"
+                        (click)="SetAgentFilter(agentOpt.ID)">
+                        {{ agentOpt.Name }}
+                    </button>
+                }
             </div>
         }
 
@@ -67,11 +76,11 @@
             <div class="cos-empty-state">
                 <i class="fa-solid fa-comments cos-empty-state__icon"></i>
                 <h3>No Agent Channels found</h3>
-                <p>When your Chief of Staff opens a shared coordination thread with a colleague's agent, it appears here so both sides can observe or step in at any time.</p>
+                <p>When your agents open a shared coordination thread with a colleague's agent, it appears here so both sides can observe or step in at any time.</p>
             </div>
         } @else {
-            <div class="cos-channels-split">
-                <aside class="cos-channels-list">
+            <div class="cos-channels-split" [class.cos-channels-split--mobile-detail]="MobileShowingDetail">
+                <aside class="cos-channels-list" aria-label="Agent Channel threads">
                     @for (ch of FilteredChannels; track ch.ID) {
                         <button type="button"
                                 class="cos-channel-item"
@@ -80,10 +89,13 @@
                                 (click)="SelectChannel(ch)">
                             <div class="cos-channel-item__top">
                                 <span class="cos-channel-item__topic">{{ ch.Topic }}</span>
-                                <span class="cos-pill"
-                                      [class.cos-pill--warn]="ch.ChannelStatus === 'Paused For Human'"
-                                      [class.cos-pill--ok]="ch.ChannelStatus === 'Open'">
-                                    {{ ch.ChannelStatus }}
+                                <span class="cos-channel-item__top-right">
+                                    <span class="cos-pill"
+                                          [class.cos-pill--warn]="ch.ChannelStatus === 'Paused For Human'"
+                                          [class.cos-pill--ok]="ch.ChannelStatus === 'Open'">
+                                        {{ ch.ChannelStatus }}
+                                    </span>
+                                    <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
                                 </span>
                             </div>
                             <div class="cos-channel-item__meta">
@@ -104,7 +116,18 @@
                     }
                 </aside>
 
-                <section class="cos-channel-detail">
+                <section class="cos-channel-detail" aria-label="Selected Agent Channel transcript">
+                    <div class="cos-mobile-back-bar">
+                        <button
+                            mjButton
+                            variant="flat"
+                            size="sm"
+                            type="button"
+                            (click)="ShowMobileThreadList()">
+                            <i class="fa-solid fa-arrow-left"></i> All Threads
+                        </button>
+                        <span class="cos-mobile-back-bar__title">{{ SelectedChannel?.Topic || 'Channel' }}</span>
+                    </div>
                     @if (SelectedChannel; as ch) {
                         <header class="cos-channel-detail__header">
                             <div>
@@ -112,7 +135,11 @@
                                 <div class="cos-channel-detail__participants">
                                     @for (part of SelectedParticipants; track part.ID) {
                                         <span class="cos-pill">
-                                            {{ part.User || part.UserID }}
+                                            @if (part.Agent) {
+                                                {{ part.Agent }} ({{ part.User || part.UserID }})
+                                            } @else {
+                                                {{ part.User || part.UserID }}
+                                            }
                                             @if (part.Role === 'Initiator') {
                                                 · Initiator
                                             }

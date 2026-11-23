@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>MemberJunction Workflows — Locked Spatial-First Hybrid Master Blueprint</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <style>
+    /* =====================================================================
+       AUTHENTIC MEMBERJUNCTION TOKENS — LIGHT THEME (:root)
+       Verbatim from packages/Angular/Generic/shared/src/lib/_tokens.scss
+       ===================================================================== */
+    :root {
+      color-scheme: light;
+      --mj-color-brand-50: #e6f3f9;
+      --mj-color-brand-100: #b3dbed;
+      --mj-color-brand-200: #80c3e1;
+      --mj-color-brand-300: #4dabd5;
+      --mj-color-brand-350: #3395c8;
+      --mj-color-brand-400: #2699cc;
+      --mj-color-brand-500: #0076b6;
+      --mj-color-brand-600: #006aa3;
+      --mj-color-brand-700: #005a8a;
+      --mj-color-brand-900: #092340;
+      --mj-color-accent-50: #f0faff;
+      --mj-color-accent-300: #aae7fd;
+      --mj-color-accent-400: #5cc0ed;
+      --mj-color-accent-500: #38a9d9;
+      --mj-color-tertiary-50: #ecfeff;
+      --mj-color-tertiary-500: #06b6d4;
+      --mj-color-tertiary-600: #0891b2;
+      --mj-color-violet-50: #f5f3ff;
+      --mj-color-violet-300: #c4b5fd;
+      --mj-color-violet-400: #a78bfa;
+      --mj-color-violet-500: #8b5cf6;
+      --mj-color-violet-700: #6d28d9;
+      --mj-color-indigo-50: #eef2ff;
+      --mj-color-indigo-400: #818cf8;
+      --mj-color-indigo-500: #6366f1;
+      --mj-color-neutral-0: #ffffff;
+      --mj-color-neutral-50: #f8fafc;
+      --mj-color-neutral-100: #f1f5f9;
+      --mj-color-neutral-200: #e2e8f0;
+      --mj-color-neutral-300: #cbd5e1;
+      --mj-color-neutral-400: #94a3b8;
+      --mj-color-neutral-500: #64748b;
+      --mj-color-neutral-600: #475569;
+      --mj-color-neutral-700: #334155;
+      --mj-color-neutral-800: #1e293b;
+      --mj-color-neutral-900: #0f172a;
+      --mj-color-neutral-950: #020617;
+
+      --mj-bg-page: #f8fafc;
+      --mj-bg-canvas: #f1f5f9;
+      --mj-bg-surface: #ffffff;
+      --mj-bg-surface-elevated: #ffffff;
+      --mj-bg-surface-card: #f8fafc;
+      --mj-bg-surface-sunken: #f1f5f9;
+      --mj-bg-surface-hover: #f1f5f9;
+      --mj-bg-surface-active: #e2e8f0;
+      --mj-bg-overlay: rgba(15, 23, 42, 0.5);
+
+      --mj-text-primary: #1e293b;
+      --mj-text-secondary: #475569;
+      --mj-text-muted: #64748b;
+      --mj-text-disabled: #94a3b8;
+      --mj-text-inverse: #ffffff;
+      --mj-text-link: #0076b6;
+      --mj-text-link-hover: #006aa3;
+      --mj-text-violet: #6d28d9;
+
+      --mj-border-default: #e2e8f0;
+      --mj-border-subtle: #f1f5f9;
+      --mj-border-strong: #cbd5e1;
+      --mj-border-focus: #0076b6;
+      --mj-border-error: #ef4444;
+
+      --mj-brand-primary: #0076b6;
+      --mj-brand-primary-hover: #006aa3;
+      --mj-brand-primary-active: #005a8a;
+      --mj-brand-primary-light: #3395c8;
+      --mj-brand-secondary: #092340;
+      --mj-brand-on-primary: #ffffff;
+      --mj-brand-accent: #5cc0ed;
+      --mj-brand-accent-hover: #38a9d9;
+      --mj-brand-accent-subtle: #f0faff;
+      --mj-brand-tertiary: #06b6d4;
+      --mj-brand-tertiary-subtle: #ecfeff;
+
+      --mj-agent-accent-brand: #0076b6;
+      --mj-agent-accent-accent: #38a9d9;
+      --mj-agent-accent-indigo: #6366f1;
+      --mj-agent-accent-violet: #8b5cf6;
+      --mj-agent-accent-tertiary: #06b6d4;
+      --mj-agent-accent-info: #3b82f6;
+
+      --mj-status-success: #22c55e;
+      --mj-status-success-bg: #f0fdf4;
+      --mj-status-success-text: #15803d;
+      --mj-status-success-border: #22c55e;
+      --mj-status-warning: #f59e0b;
+      --mj-status-warning-bg: #fffbeb;
+      --mj-status-warning-text: #b45309;
+      --mj-status-warning-border: #f59e0b;
+      --mj-status-on-warning: #0f172a;
+      --mj-status-error: #ef4444;
+      --mj-status-error-bg: #fef2f2;
+      --mj-status-error-text: #b91c1c;
+      --mj-status-error-border: #ef4444;
+      --mj-status-info: #3b82f6;
+      --mj-status-info-bg: #eff6ff;
+      --mj-status-info-text: #1d4ed8;
+      --mj-status-info-border: #3b82f6;
+
+      --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mj-font-family-mono: 'JetBrains Mono', 'SF Mono', Consolas, Menlo, monospace;
+      --mj-text-xs: 0.75rem;
+      --mj-text-sm: 0.875rem;
+      --mj-text-base: 1rem;
+      --mj-text-lg: 1.125rem;
+      --mj-text-xl: 1.25rem;
+      --mj-text-2xl: 1.5rem;
+      --mj-font-normal: 400;
+      --mj-font-medium: 500;
+      --mj-font-semibold: 600;
+      --mj-font-bold: 700;
+      --mj-leading-tight: 1.25;
+      --mj-leading-snug: 1.375;
+      --mj-leading-normal: 1.5;
+      --mj-leading-relaxed: 1.625;
+
+      --mj-space-1: 0.25rem;
+      --mj-space-1-5: 0.375rem;
+      --mj-space-2: 0.5rem;
+      --mj-space-2-5: 0.625rem;
+      --mj-space-3: 0.75rem;
+      --mj-space-4: 1rem;
+      --mj-space-5: 1.25rem;
+      --mj-space-6: 1.5rem;
+      --mj-space-8: 2rem;
+
+      --mj-radius-sm: 4px;
+      --mj-radius-md: 8px;
+      --mj-radius-lg: 12px;
+      --mj-radius-xl: 16px;
+      --mj-radius-full: 9999px;
+      --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+      --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+      --mj-focus-ring-color: var(--mj-brand-primary);
+      --mj-focus-ring: 0 0 0 2px var(--mj-bg-surface), 0 0 0 4px var(--mj-brand-primary);
+      --mj-transition-fast: 150ms ease;
+      --mj-transition-base: 200ms ease;
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --mj-bg-page: #0f172a;
+      --mj-bg-canvas: #0f172a;
+      --mj-bg-surface: #1e293b;
+      --mj-bg-surface-card: #253347;
+      --mj-bg-surface-elevated: #334155;
+      --mj-bg-surface-sunken: #020617;
+      --mj-bg-surface-hover: #475569;
+      --mj-bg-surface-active: #64748b;
+      --mj-bg-overlay: rgba(0, 0, 0, 0.7);
+
+      --mj-text-primary: #f1f5f9;
+      --mj-text-secondary: #cbd5e1;
+      --mj-text-muted: #94a3b8;
+      --mj-text-disabled: #475569;
+      --mj-text-inverse: #0f172a;
+      --mj-text-link: #4dabd5;
+      --mj-text-link-hover: #80c3e1;
+      --mj-text-violet: #c4b5fd;
+
+      --mj-border-default: #334155;
+      --mj-border-subtle: #1e293b;
+      --mj-border-strong: #475569;
+      --mj-border-focus: #2699cc;
+      --mj-border-error: #f87171;
+
+      --mj-brand-primary: #2699cc;
+      --mj-brand-primary-hover: #4dabd5;
+      --mj-brand-primary-active: #80c3e1;
+      --mj-brand-accent: #aae7fd;
+      --mj-brand-accent-subtle: rgba(92, 192, 237, 0.15);
+      --mj-brand-tertiary: #22d3ee;
+      --mj-brand-tertiary-subtle: rgba(6, 182, 212, 0.15);
+
+      --mj-agent-accent-brand: #2699cc;
+      --mj-agent-accent-accent: #aae7fd;
+      --mj-agent-accent-indigo: #818cf8;
+      --mj-agent-accent-violet: #a78bfa;
+      --mj-agent-accent-tertiary: #22d3ee;
+      --mj-agent-accent-info: #60a5fa;
+
+      --mj-status-success-bg: rgba(34, 197, 94, 0.15);
+      --mj-status-success-text: #86efac;
+      --mj-status-success-border: #16a34a;
+      --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
+      --mj-status-warning-text: #fcd34d;
+      --mj-status-warning-border: #d97706;
+      --mj-status-on-warning: #0f172a;
+      --mj-status-error-bg: rgba(239, 68, 68, 0.15);
+      --mj-status-error-text: #fca5a5;
+      --mj-status-error-border: #dc2626;
+      --mj-status-info-bg: rgba(59, 130, 246, 0.15);
+      --mj-status-info-text: #93c5fd;
+      --mj-status-info-border: #2563eb;
+
+      --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+      --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+      --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; font-family: var(--mj-font-family); background: var(--mj-bg-page); color: var(--mj-text-primary); font-size: var(--mj-text-sm); -webkit-font-smoothing: antialiased; }
+    button { font-family: inherit; cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; box-shadow: var(--mj-focus-ring); }
+
+    /* App Shell Chrome */
+    .shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .topbar { height: 50px; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--mj-space-4); gap: var(--mj-space-3); flex-shrink: 0; z-index: 50; }
+    .brand { display: flex; align-items: center; gap: var(--mj-space-2-5); font-weight: var(--mj-font-semibold); font-size: var(--mj-text-sm); }
+    .brand-mark { width: 28px; height: 28px; border-radius: var(--mj-radius-md); background: linear-gradient(135deg, var(--mj-brand-primary), var(--mj-brand-tertiary)); color: var(--mj-brand-on-primary); display: flex; align-items: center; justify-content: center; font-size: 13px; }
+    .brand-tag { font-size: 11px; font-weight: var(--mj-font-semibold); padding: 2px 8px; border-radius: var(--mj-radius-full); background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); }
+
+    .surface-tabs { display: flex; align-items: center; gap: 2px; background: var(--mj-bg-surface-sunken); padding: 3px; border-radius: var(--mj-radius-md); border: 1px solid var(--mj-border-default); overflow-x: auto; }
+    .surface-tab { border: none; background: transparent; color: var(--mj-text-secondary); padding: 5px 11px; border-radius: 6px; font-size: var(--mj-text-xs); font-weight: var(--mj-font-medium); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: all var(--mj-transition-fast); }
+    .surface-tab:hover { color: var(--mj-text-primary); background: var(--mj-bg-surface-hover); }
+    .surface-tab.active { background: var(--mj-bg-surface); color: var(--mj-brand-primary); font-weight: var(--mj-font-semibold); box-shadow: var(--mj-shadow-sm); }
+
+    .topbar-right { display: flex; align-items: center; gap: var(--mj-space-2); }
+    .theme-btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); padding: 5px 10px; border-radius: var(--mj-radius-md); font-size: var(--mj-text-xs); font-weight: var(--mj-font-medium); display: inline-flex; align-items: center; gap: 6px; }
+    .theme-btn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+
+    /* Shared Buttons & Badges */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border-radius: var(--mj-radius-md); font-size: var(--mj-text-xs); font-weight: var(--mj-font-semibold); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-primary); transition: all var(--mj-transition-fast); }
+    .btn:hover:not(:disabled) { background: var(--mj-bg-surface-hover); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: var(--mj-brand-on-primary); }
+    .btn-primary:hover:not(:disabled) { background: var(--mj-brand-primary-hover); }
+    .btn-warning { background: var(--mj-status-warning-bg); border-color: var(--mj-status-warning-border); color: var(--mj-status-warning-text); }
+    .btn-danger { background: var(--mj-status-error-bg); border-color: var(--mj-status-error-border); color: var(--mj-status-error-text); }
+    .btn-ghost { border-color: transparent; background: transparent; color: var(--mj-text-secondary); }
+    .btn-ghost:hover:not(:disabled) { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+    .btn-sm { padding: 4px 9px; font-size: 11px; }
+
+    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--mj-radius-full); font-size: 11px; font-weight: var(--mj-font-semibold); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); }
+    .pill-success { background: var(--mj-status-success-bg); border-color: color-mix(in srgb, var(--mj-status-success-border) 45%, transparent); color: var(--mj-status-success-text); }
+    .pill-warning { background: var(--mj-status-warning-bg); border-color: color-mix(in srgb, var(--mj-status-warning-border) 50%, transparent); color: var(--mj-status-warning-text); }
+    .pill-error { background: var(--mj-status-error-bg); border-color: color-mix(in srgb, var(--mj-status-error-border) 50%, transparent); color: var(--mj-status-error-text); }
+    .pill-info { background: var(--mj-status-info-bg); border-color: color-mix(in srgb, var(--mj-status-info-border) 45%, transparent); color: var(--mj-status-info-text); }
+    .pill-violet { background: color-mix(in srgb, var(--mj-agent-accent-violet) 14%, transparent); border-color: color-mix(in srgb, var(--mj-agent-accent-violet) 40%, transparent); color: var(--mj-text-violet); }
+
+    .surface { display: none; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
+    .surface.active { display: flex; }
+
+    /* MJ Page Header Chrome */
+    .page-header { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: var(--mj-space-3) var(--mj-space-5); display: flex; flex-direction: column; gap: var(--mj-space-2-5); flex-shrink: 0; }
+    .page-header-row { display: flex; align-items: center; justify-content: space-between; gap: var(--mj-space-3); flex-wrap: wrap; }
+    .page-identity { display: flex; align-items: center; gap: var(--mj-space-3); }
+    .page-icon { width: 34px; height: 34px; border-radius: var(--mj-radius-md); background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+    .page-title { margin: 0; font-size: var(--mj-text-lg); font-weight: var(--mj-font-bold); letter-spacing: -0.01em; }
+    .page-sub { margin: 1px 0 0; font-size: var(--mj-text-xs); color: var(--mj-text-muted); }
+    .page-meta, .page-actions, .page-toolbar { display: flex; align-items: center; gap: var(--mj-space-2); flex-wrap: wrap; }
+    .search-box { position: relative; display: flex; align-items: center; }
+    .search-box i { position: absolute; left: 10px; font-size: 12px; color: var(--mj-text-muted); pointer-events: none; }
+    .search-box input { padding: 6px 10px 6px 30px; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); background: var(--mj-bg-surface-card); color: var(--mj-text-primary); font-size: var(--mj-text-xs); width: 240px; }
+    .seg-toggle { display: inline-flex; background: var(--mj-bg-surface-sunken); padding: 2px; border-radius: var(--mj-radius-md); border: 1px solid var(--mj-border-default); }
+    .seg-btn { border: none; background: transparent; color: var(--mj-text-secondary); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: var(--mj-font-semibold); display: inline-flex; align-items: center; gap: 5px; }
+    .seg-btn.active { background: var(--mj-bg-surface); color: var(--mj-brand-primary); box-shadow: var(--mj-shadow-sm); }
+
+    /* Surface 1: Catalog (Blueprint Gallery + Ops Table + Decision Inbox) */
+    .catalog-body { flex: 1; overflow-y: auto; padding: var(--mj-space-5); display: flex; flex-direction: column; gap: var(--mj-space-4); }
+    .decision-banner { background: var(--mj-status-warning-bg); border: 1px solid color-mix(in srgb, var(--mj-status-warning-border) 50%, transparent); border-radius: var(--mj-radius-lg); padding: var(--mj-space-3) var(--mj-space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--mj-space-4); flex-wrap: wrap; }
+    .decision-left { display: flex; align-items: center; gap: var(--mj-space-3); }
+    .decision-icon { width: 36px; height: 36px; border-radius: var(--mj-radius-md); background: color-mix(in srgb, var(--mj-status-warning) 22%, transparent); color: var(--mj-status-warning-text); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .decision-title { font-weight: var(--mj-font-bold); color: var(--mj-text-primary); font-size: var(--mj-text-sm); }
+    .decision-desc { color: var(--mj-text-secondary); font-size: var(--mj-text-xs); margin-top: 2px; }
+
+    .blueprint-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: var(--mj-space-4); }
+    .bp-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); overflow: hidden; display: flex; flex-direction: column; transition: border-color var(--mj-transition-fast), box-shadow var(--mj-transition-fast), transform var(--mj-transition-fast); cursor: pointer; }
+    .bp-card:hover { border-color: var(--mj-brand-primary); box-shadow: var(--mj-shadow-md); transform: translateY(-1px); }
+    .bp-stage { height: 132px; background-color: var(--mj-bg-surface-sunken); background-image: radial-gradient(color-mix(in srgb, var(--mj-text-muted) 22%, transparent) 1px, transparent 1px); background-size: 14px 14px; border-bottom: 1px solid var(--mj-border-subtle); position: relative; display: flex; align-items: center; justify-content: center; padding: var(--mj-space-3); }
+    .bp-stage svg { width: 100%; height: 100%; overflow: visible; }
+    .bp-hover-actions { position: absolute; right: 10px; bottom: 8px; display: flex; gap: 5px; opacity: 0; transition: opacity var(--mj-transition-fast); }
+    .bp-card:hover .bp-hover-actions { opacity: 1; }
+    .bp-body { padding: var(--mj-space-3-5, 14px) var(--mj-space-4); display: flex; flex-direction: column; gap: var(--mj-space-2); flex: 1; }
+    .bp-head { display: flex; align-items: flex-start; gap: var(--mj-space-2-5); }
+    .squircle { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .bp-name { font-weight: var(--mj-font-semibold); font-size: var(--mj-text-sm); color: var(--mj-text-primary); }
+    .bp-desc { font-size: var(--mj-text-xs); color: var(--mj-text-muted); line-height: var(--mj-leading-normal); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .bp-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--mj-space-2); padding-top: var(--mj-space-2); border-top: 1px solid var(--mj-border-subtle); margin-top: auto; flex-wrap: wrap; }
+    .bp-metrics { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mj-font-family-mono); font-size: 11px; color: var(--mj-text-muted); }
+
+    /* Ops Table + 10-Run Spark-Barcodes */
+    .ops-table-wrap { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); overflow: hidden; }
+    .ops-table { width: 100%; border-collapse: collapse; font-size: var(--mj-text-xs); }
+    .ops-table th { text-align: left; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mj-text-muted); background: var(--mj-bg-surface-card); border-bottom: 1px solid var(--mj-border-default); font-weight: var(--mj-font-semibold); }
+    .ops-table td { padding: 11px 14px; border-bottom: 1px solid var(--mj-border-subtle); vertical-align: middle; }
+    .ops-table tbody tr { cursor: pointer; transition: background var(--mj-transition-fast); }
+    .ops-table tbody tr:hover { background: var(--mj-bg-surface-hover); }
+    .spark-barcode { display: inline-flex; align-items: flex-end; gap: 2px; height: 18px; }
+    .spark-bar { width: 5px; border-radius: 2px; }
+    .spark-bar.ok { background: var(--mj-status-success); }
+    .spark-bar.warn { background: var(--mj-status-warning); }
+    .spark-bar.err { background: var(--mj-status-error); }
+    .spark-bar.none { background: var(--mj-border-strong); opacity: 0.4; }
+    .mono { font-family: var(--mj-font-family-mono); }
+
+    /* Surface 2: Create Front Door (Split Compiler + Live Spatial Preview) */
+    .create-split { flex: 1; min-height: 0; display: grid; grid-template-columns: 440px 1fr; overflow: hidden; }
+    .create-left { background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); padding: var(--mj-space-5); overflow-y: auto; display: flex; flex-direction: column; gap: var(--mj-space-4); }
+    .door-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mj-space-2); }
+    .door-tile { text-align: left; padding: 10px; border-radius: var(--mj-radius-md); border: 1.5px solid var(--mj-border-default); background: var(--mj-bg-surface-card); display: flex; flex-direction: column; gap: 4px; transition: all var(--mj-transition-fast); }
+    .door-tile:hover { border-color: var(--mj-brand-primary-light); background: var(--mj-bg-surface-hover); }
+    .door-tile.selected { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface)); }
+    .door-tile i { color: var(--mj-brand-primary); font-size: 14px; }
+    .door-tile b { font-size: var(--mj-text-xs); color: var(--mj-text-primary); }
+    .door-tile span { font-size: 11px; color: var(--mj-text-muted); line-height: 1.3; }
+    .field-label { font-size: 11px; font-weight: var(--mj-font-semibold); color: var(--mj-text-secondary); margin-bottom: 5px; display: block; }
+    .text-input, .text-area { width: 100%; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); background: var(--mj-bg-surface-card); color: var(--mj-text-primary); padding: 8px 10px; font-size: var(--mj-text-xs); font-family: inherit; }
+    .recipe-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .recipe-chip { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); padding: 4px 9px; border-radius: var(--mj-radius-full); font-size: 11px; font-weight: var(--mj-font-medium); }
+    .recipe-chip:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent); }
+    .past-run-item { padding: 9px 11px; border-radius: var(--mj-radius-md); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; }
+    .past-run-item.selected { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface)); }
+    .past-run-item.disabled { opacity: 0.55; cursor: not-allowed; }
+    .create-right { background-color: var(--mj-bg-canvas); background-image: radial-gradient(color-mix(in srgb, var(--mj-text-muted) 22%, transparent) 1px, transparent 1px); background-size: 18px 18px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    .preview-banner { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 10px var(--mj-space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--mj-space-3); flex-wrap: wrap; }
+    .preview-canvas { flex: 1; padding: var(--mj-space-6); overflow: auto; display: flex; flex-direction: column; justify-content: center; gap: var(--mj-space-4); }
+    .reasoning-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-left: 3px solid var(--mj-brand-primary); border-radius: var(--mj-radius-md); padding: 10px 14px; font-size: var(--mj-text-xs); color: var(--mj-text-secondary); max-width: 780px; }
+
+    /* Spatial Canvas Nodes, Loop Enclosures & Paths */
+    .canvas-stage { position: relative; flex: 1; min-height: 0; overflow: auto; background-color: var(--mj-bg-canvas); background-image: radial-gradient(color-mix(in srgb, var(--mj-text-muted) 24%, transparent) 1px, transparent 1px); background-size: 20px 20px; padding: var(--mj-space-6); }
+    .spatial-row { display: flex; align-items: center; gap: 22px; flex-wrap: nowrap; min-width: max-content; }
+    .spatial-col { flex-direction: column; align-items: flex-start; }
+    .step-node { width: 236px; background: var(--mj-bg-surface); border: 1.5px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); box-shadow: var(--mj-shadow-sm); position: relative; transition: all var(--mj-transition-fast); cursor: pointer; flex-shrink: 0; }
+    .step-node:hover { border-color: var(--mj-brand-primary-light); box-shadow: var(--mj-shadow-md); }
+    .step-node.selected { border-color: var(--mj-brand-primary); box-shadow: var(--mj-focus-ring); }
+    .step-node.skipped { opacity: 0.58; border-style: dashed; }
+    .step-node.skipped .step-title { text-decoration: line-through; }
+    .step-node.blast { border-color: var(--mj-status-error); border-style: dashed; box-shadow: 0 0 0 3px var(--mj-status-error-bg); }
+    .step-node.running { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent); }
+    .step-node.paused-here { border-color: var(--mj-status-warning); box-shadow: 0 0 0 3px var(--mj-status-warning-bg); }
+    .step-head { padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+    .step-sq { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+    .step-title { font-weight: var(--mj-font-semibold); font-size: var(--mj-text-xs); color: var(--mj-text-primary); line-height: 1.3; }
+    .step-sub { font-size: 11px; color: var(--mj-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 158px; }
+    .step-bp-gutter { position: absolute; left: -11px; top: 14px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--mj-border-strong); background: var(--mj-bg-surface); display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.4; transition: opacity var(--mj-transition-fast), transform var(--mj-transition-fast); }
+    .step-node:hover .step-bp-gutter, .step-bp-gutter.single, .step-bp-gutter.remembered { opacity: 1; }
+    .step-bp-gutter.single { background: var(--mj-status-error); border-color: var(--mj-status-error); }
+    .step-bp-gutter.remembered { background: var(--mj-bg-surface); border-color: var(--mj-status-error); box-shadow: inset 0 0 0 2px var(--mj-status-error); }
+    .step-port-plus { position: absolute; right: -11px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--mj-brand-primary); background: var(--mj-bg-surface); color: var(--mj-brand-primary); display: flex; align-items: center; justify-content: center; font-size: 10px; opacity: 0; transition: opacity var(--mj-transition-fast); }
+    .step-node:hover .step-port-plus { opacity: 1; }
+    .step-progress { height: 4px; background: var(--mj-bg-surface-sunken); overflow: hidden; }
+    .step-progress-bar { height: 100%; background: var(--mj-brand-primary); transition: width 250ms ease; }
+    .step-xray { border-top: 1px solid var(--mj-border-subtle); padding: 8px 11px; background: var(--mj-bg-surface-card); border-radius: 0 0 var(--mj-radius-lg) var(--mj-radius-lg); display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+    .xray-kv { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mj-font-family-mono); font-size: 10.5px; }
+    .xray-k { color: var(--mj-text-muted); }
+    .xray-v { color: var(--mj-text-primary); font-weight: var(--mj-font-medium); }
+    .xray-v.changed { color: var(--mj-brand-tertiary); }
+    .conf-track { height: 6px; background: var(--mj-bg-surface-sunken); border-radius: var(--mj-radius-full); position: relative; overflow: hidden; }
+    .conf-fill { height: 100%; background: var(--mj-agent-accent-violet); border-radius: var(--mj-radius-full); }
+    .conf-thresh { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--mj-status-warning); }
+
+    .loop-enclosure { border: 1.5px dashed var(--mj-brand-tertiary); background: color-mix(in srgb, var(--mj-brand-tertiary) 6%, var(--mj-bg-surface)); border-radius: var(--mj-radius-xl); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; position: relative; flex-shrink: 0; }
+    .loop-enclosure-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11px; font-weight: var(--mj-font-semibold); color: var(--mj-brand-tertiary); }
+    .loop-enclosure-foot { font-family: var(--mj-font-family-mono); font-size: 10.5px; color: var(--mj-text-muted); }
+
+    .path-arrow { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; min-width: 66px; }
+    .path-line { width: 100%; height: 2px; background: var(--mj-border-strong); position: relative; }
+    .path-line.taken { background: var(--mj-status-success); height: 2.5px; }
+    .path-line.skipped { border-top: 2px dashed var(--mj-text-disabled); background: transparent; height: 0; }
+    .path-line.forced { border-top: 2.5px dotted var(--mj-status-warning); background: transparent; height: 0; }
+    .path-line.saga { border-top: 2px dashed var(--mj-status-warning); background: transparent; height: 0; }
+    .path-chip { font-size: 10px; font-weight: var(--mj-font-semibold); padding: 2px 7px; border-radius: var(--mj-radius-full); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); white-space: nowrap; }
+    .path-chip.forced { background: var(--mj-status-warning-bg); border-color: var(--mj-status-warning-border); color: var(--mj-status-warning-text); }
+    .path-chip.skipped { opacity: 0.65; }
+
+    /* Surface 3: Studio Dual-Lens (Canvas | Split Playbook | Playbook | Triggers) */
+    .studio-header { height: 52px; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 0 var(--mj-space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--mj-space-3); flex-shrink: 0; }
+    .studio-body { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+    .playbook-pane { width: 390px; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); overflow-y: auto; padding: var(--mj-space-4); display: flex; flex-direction: column; gap: var(--mj-space-2-5); flex-shrink: 0; }
+    .playbook-pane.full { width: 100%; max-width: 780px; margin: 0 auto; border-right: none; }
+    .sop-card { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); padding: 10px 12px; background: var(--mj-bg-surface-card); display: flex; gap: 10px; align-items: flex-start; cursor: pointer; transition: all var(--mj-transition-fast); }
+    .sop-card:hover { border-color: var(--mj-brand-primary-light); background: var(--mj-bg-surface-hover); }
+    .sop-card.selected { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
+    .sop-num { width: 22px; height: 22px; border-radius: 6px; background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); font-family: var(--mj-font-family-mono); font-size: 11px; font-weight: var(--mj-font-bold); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .inspector-pane { width: 336px; background: var(--mj-bg-surface); border-left: 1px solid var(--mj-border-default); overflow-y: auto; padding: var(--mj-space-4); display: flex; flex-direction: column; gap: var(--mj-space-3); flex-shrink: 0; }
+    .var-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: var(--mj-radius-sm); background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); font-family: var(--mj-font-family-mono); font-size: 11px; border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent); }
+
+    /* Surface 4 & 5: Runs Flight Deck + Co-Pilot + VCR + Waterfall + Diff */
+    .runs-shell { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+    .run-rail { width: 280px; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; flex-shrink: 0; transition: width var(--mj-transition-base); overflow: hidden; }
+    .run-rail.collapsed { width: 44px; }
+    .run-rail-list { flex: 1; overflow-y: auto; padding: var(--mj-space-2); display: flex; flex-direction: column; gap: 6px; }
+    .run-card { text-align: left; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); border-radius: var(--mj-radius-md); padding: 9px 10px; display: flex; flex-direction: column; gap: 5px; }
+    .run-card.selected { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface)); }
+    .flight-deck { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .copilot-banner { background: var(--mj-status-warning-bg); border-bottom: 1px solid color-mix(in srgb, var(--mj-status-warning-border) 50%, transparent); padding: 10px var(--mj-space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--mj-space-3); flex-wrap: wrap; flex-shrink: 0; }
+    .vcr-bar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 8px var(--mj-space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--mj-space-3); flex-wrap: wrap; flex-shrink: 0; }
+    .vcr-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .approval-card { margin: var(--mj-space-3) var(--mj-space-4) 0; background: var(--mj-bg-surface); border: 1.5px solid var(--mj-status-warning-border); border-radius: var(--mj-radius-lg); padding: var(--mj-space-3) var(--mj-space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--mj-space-4); flex-wrap: wrap; flex-shrink: 0; }
+    .scrubber-dock { background: var(--mj-bg-surface); border-top: 1px solid var(--mj-border-default); padding: 8px var(--mj-space-4); display: flex; align-items: center; gap: var(--mj-space-3); flex-shrink: 0; }
+    .scrubber-dock input[type="range"] { flex: 1; accent-color: var(--mj-brand-primary); }
+    .waterfall-drawer { background: var(--mj-bg-surface); border-top: 1px solid var(--mj-border-default); flex-shrink: 0; display: flex; flex-direction: column; max-height: 210px; }
+    .waterfall-head { padding: 7px var(--mj-space-4); border-bottom: 1px solid var(--mj-border-subtle); display: flex; align-items: center; justify-content: space-between; font-size: var(--mj-text-xs); font-weight: var(--mj-font-semibold); }
+    .waterfall-body { overflow-y: auto; padding: 8px var(--mj-space-4); display: flex; flex-direction: column; gap: 6px; }
+    .wf-gantt-row { display: grid; grid-template-columns: 180px 1fr 64px; align-items: center; gap: 10px; font-size: 11px; padding: 3px 6px; border-radius: var(--mj-radius-sm); cursor: pointer; }
+    .wf-gantt-row:hover, .wf-gantt-row.selected { background: var(--mj-bg-surface-hover); }
+    .wf-gantt-track { height: 14px; background: var(--mj-bg-surface-sunken); border-radius: 4px; position: relative; overflow: hidden; }
+    .wf-gantt-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; }
+
+    /* Diff Inspector */
+    .diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .diff-col { background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); padding: 8px; font-family: var(--mj-font-family-mono); font-size: 11px; }
+    .diff-line { padding: 2px 4px; border-radius: 3px; }
+    .diff-line.added { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+    .diff-line.changed { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+
+    /* 360px Embedded Density Showcase */
+    .embed-stage { flex: 1; display: flex; align-items: flex-start; justify-content: center; gap: var(--mj-space-6); padding: var(--mj-space-6); overflow: auto; flex-wrap: wrap; }
+    .embed-frame { width: 360px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-xl); box-shadow: var(--mj-shadow-lg); overflow: hidden; display: flex; flex-direction: column; }
+    .spatial-hud { position: absolute; left: 16px; bottom: 16px; background: var(--mj-bg-surface-elevated); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); padding: 5px 8px; display: flex; align-items: center; gap: 4px; box-shadow: var(--mj-shadow-md); }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><i class="fa-solid fa-diagram-project"></i></div>
+      <span>MemberJunction Workflows</span>
+      <span class="brand-tag">Locked Spatial-First Hybrid</span>
+    </div>
+    <nav class="surface-tabs" role="tablist" aria-label="Workflows surfaces">
+      <button type="button" class="surface-tab active" data-surface="catalog"><i class="fa-solid fa-grid-2"></i>1. Catalog</button>
+      <button type="button" class="surface-tab" data-surface="create"><i class="fa-solid fa-wand-magic-sparkles"></i>2. Create</button>
+      <button type="button" class="surface-tab" data-surface="studio"><i class="fa-solid fa-bezier-curve"></i>3. Studio (Dual-Lens)</button>
+      <button type="button" class="surface-tab" data-surface="runs"><i class="fa-solid fa-timeline"></i>4 &amp; 5. Runs &amp; X-Ray Debugger</button>
+      <button type="button" class="surface-tab" data-surface="embed"><i class="fa-solid fa-mobile-screen"></i>5b. 360px Embed</button>
+    </nav>
+    <div class="topbar-right">
+      <button type="button" class="theme-btn" id="themeToggle"><i class="fa-solid fa-moon"></i><span>Dark Mode</span></button>
+    </div>
+  </header>
+
+  <!-- ===================================================================
+       SURFACE 1: WORKFLOWS CATALOG (Blueprint Gallery + Ops Table + Decision Inbox)
+       =================================================================== -->
+  <section class="surface active" id="surface-catalog">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div class="page-identity">
+          <div class="page-icon"><i class="fa-solid fa-diagram-project"></i></div>
+          <div>
+            <h1 class="page-title">Workflows</h1>
+            <p class="page-sub">Repeatable pathways that always follow the same route.</p>
+          </div>
+        </div>
+        <div class="page-meta">
+          <span class="pill" id="catalogCountPill">4 of 4 workflows</span>
+          <span class="pill pill-warning" style="cursor:pointer" onclick="switchSurface('runs')"><i class="fa-solid fa-user-check"></i> 1 waiting on person</span>
+          <span class="pill pill-info" style="cursor:pointer" onclick="switchSurface('runs')"><i class="fa-solid fa-spinner fa-spin"></i> 1 running</span>
+        </div>
+        <div class="page-actions">
+          <button type="button" class="btn"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          <button type="button" class="btn btn-primary" onclick="switchSurface('create')"><i class="fa-solid fa-plus"></i> Create Workflow</button>
+        </div>
+      </div>
+      <div class="page-toolbar">
+        <div class="search-box">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="catalogSearch" placeholder="Search workflows, triggers, or steps..." oninput="renderCatalog()" />
+        </div>
+        <select class="text-input" id="catalogStatusFilter" style="width:auto" onchange="renderCatalog()">
+          <option value="all">All statuses</option>
+          <option value="Active">Active</option>
+          <option value="Draft">Draft</option>
+          <option value="Disabled">Disabled</option>
+        </select>
+        <div class="seg-toggle" style="margin-left:auto">
+          <button type="button" class="seg-btn active" id="viewBlueprintsBtn" onclick="setCatalogView('blueprints')"><i class="fa-solid fa-grip"></i> Blueprints</button>
+          <button type="button" class="seg-btn" id="viewTableBtn" onclick="setCatalogView('table')"><i class="fa-solid fa-table-list"></i> Ops Table</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="catalog-body">
+      <!-- Option C Transplant: Conditional "Needs Your Decision" Banner -->
+      <div class="decision-banner" id="decisionBanner">
+        <div class="decision-left">
+          <div class="decision-icon"><i class="fa-solid fa-user-check"></i></div>
+          <div>
+            <div class="decision-title">Needs Your Decision · 1 Person Step Waiting</div>
+            <div class="decision-desc"><b>Schema Documentation Sweep</b> (Run #4081) generated 14 field descriptions and is waiting on your review to clear external-data safety checks.</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button type="button" class="btn btn-primary btn-sm" onclick="switchSurface('runs')"><i class="fa-solid fa-check-double"></i> Review &amp; Approve</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('decisionBanner').style.display='none'">Dismiss</button>
+        </div>
+      </div>
+
+      <div id="catalogBlueprints" class="blueprint-grid"></div>
+      <div id="catalogTableWrap" class="ops-table-wrap" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       SURFACE 2: CREATE FRONT DOOR (Split Compiler + Live Spatial Preview)
+       =================================================================== -->
+  <section class="surface" id="surface-create">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div class="page-identity">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="switchSurface('catalog')"><i class="fa-solid fa-arrow-left"></i> Workflows</button>
+          <div>
+            <h1 class="page-title">Create Workflow</h1>
+            <p class="page-sub">Draft, promote a settled past run, or start blank — preview live before saving.</p>
+          </div>
+        </div>
+        <div class="page-meta">
+          <span class="pill pill-warning"><i class="fa-solid fa-shield-halved"></i> Preview only — nothing saved until Approve &amp; Enter Studio</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="create-split">
+      <div class="create-left">
+        <div>
+          <span class="field-label">1. Choose how to start</span>
+          <div class="door-grid" role="radiogroup">
+            <button type="button" class="door-tile selected" data-door="describe" onclick="selectDoor('describe')">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <b>Describe with AI</b>
+              <span>Sketch steps from plain English</span>
+            </button>
+            <button type="button" class="door-tile" data-door="past-run" onclick="selectDoor('past-run')">
+              <i class="fa-solid fa-rotate"></i>
+              <b>Promote a Past Run</b>
+              <span>Reuse a finished run's real steps</span>
+            </button>
+            <button type="button" class="door-tile" data-door="blank" onclick="selectDoor('blank')">
+              <i class="fa-solid fa-table-cells-large"></i>
+              <b>Blank Canvas</b>
+              <span>Build steps from scratch</span>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label" for="cwNameInput">Workflow Name</label>
+          <input id="cwNameInput" class="text-input" value="Invoice Triage & Approval" />
+        </div>
+
+        <div id="doorDescribePane">
+          <span class="field-label">Starter Recipes</span>
+          <div class="recipe-chips" style="margin-bottom:10px">
+            <button type="button" class="recipe-chip" onclick="applyRecipe('invoice')">Invoice Gate &amp; Rollback</button>
+            <button type="button" class="recipe-chip" onclick="applyRecipe('schema')">Schema Docs Sweep</button>
+            <button type="button" class="recipe-chip" onclick="applyRecipe('content')">Content Polish Loop</button>
+            <button type="button" class="recipe-chip" onclick="applyRecipe('triage')">Support AI Triage</button>
+          </div>
+          <label class="field-label" for="cwPrompt">Describe what should happen</label>
+          <textarea id="cwPrompt" class="text-area" rows="4">Fetch new incoming invoices, run a parallel ForEach to validate each line item, ask an AI Decision step if total risk is low, route medium risk to a Person step for VP Finance approval, and attach a rollback undo action if ERP posting fails.</textarea>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button type="button" class="btn btn-primary" onclick="compilePreview()"><i class="fa-solid fa-wand-magic-sparkles"></i> Draft Preview</button>
+          </div>
+
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--mj-border-subtle)">
+            <label class="field-label" for="cwRefine">Iterative AI Refinement (updates preview only)</label>
+            <div style="display:flex;gap:6px">
+              <input id="cwRefine" class="text-input" placeholder="e.g. Add a Person approval before posting to ERP" />
+              <button type="button" class="btn btn-sm" onclick="refinePreview()">Refine</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="doorPastRunPane" style="display:none;flex-direction:column;gap:8px">
+          <span class="field-label">Select a settled past run (with real child step counts)</span>
+          <div class="past-run-item selected" onclick="selectPastRun('run-schema', this)">
+            <div>
+              <div style="font-weight:600;font-size:12px">Schema Documentation Sweep</div>
+              <div style="font-size:11px;color:var(--mj-text-muted)">3 steps · 4.1s · finished today · Flow Runner</div>
+            </div>
+            <span class="pill pill-success">Complete</span>
+          </div>
+          <div class="past-run-item" onclick="selectPastRun('run-content', this)">
+            <div>
+              <div style="font-weight:600;font-size:12px">Content Pipeline</div>
+              <div style="font-size:11px;color:var(--mj-text-muted)">6 steps · 18.4s · finished yesterday · Content Agent</div>
+            </div>
+            <span class="pill pill-success">Complete</span>
+          </div>
+          <div class="past-run-item disabled" title="Only settled runs can be promoted">
+            <div>
+              <div style="font-weight:600;font-size:12px">Quarterly Audit Sweep</div>
+              <div style="font-size:11px;color:var(--mj-status-warning-text)">4 steps · 1 waiting on a person</div>
+            </div>
+            <span class="pill pill-warning">In Progress</span>
+          </div>
+        </div>
+
+        <div id="doorBlankPane" style="display:none">
+          <div class="reasoning-card">Starts as a clean Draft workflow with an <b>On demand</b> trigger. You can add steps, loops, AI decisions, and schedules inside Studio.</div>
+        </div>
+
+        <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--mj-border-default);display:flex;gap:8px">
+          <button type="button" class="btn btn-primary" onclick="approveAndEnterStudio()"><i class="fa-solid fa-check"></i> Approve &amp; Enter Studio</button>
+          <button type="button" class="btn btn-ghost" onclick="switchSurface('catalog')">Cancel</button>
+        </div>
+      </div>
+
+      <div class="create-right">
+        <div class="preview-banner">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="pill pill-success"><i class="fa-solid fa-circle-check"></i> Valid · <span id="previewStepCount">5</span> steps</span>
+            <span class="pill">Draft · On demand</span>
+          </div>
+          <span style="font-size:11px;color:var(--mj-text-muted)">Live Spatial Preview (`&lt;mj-task-graph-editor [ReadOnly]="true"&gt;`)</span>
+        </div>
+        <div class="preview-canvas">
+          <div class="reasoning-card" id="previewReasoning">
+            <b>AI Reasoning:</b> Structured into a deterministic intake action, parallel ForEach validation loop, AI confidence decision split, and a Person step gate that clears untrusted external input before ERP posting (with Saga rollback).
+          </div>
+          <div class="spatial-row" id="previewGraphRow"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       SURFACE 3: IN-APP AUTHORING STUDIO (Canvas | Split Playbook | Playbook | Triggers)
+       =================================================================== -->
+  <section class="surface" id="surface-studio">
+    <div class="studio-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="switchSurface('catalog')"><i class="fa-solid fa-arrow-left"></i> Workflows</button>
+        <div class="squircle" style="background:color-mix(in srgb,var(--mj-brand-primary) 14%,transparent);color:var(--mj-brand-primary);width:28px;height:28px;font-size:12px"><i class="fa-solid fa-book-open-reader"></i></div>
+        <strong id="studioWorkflowTitle">Schema Documentation Sweep</strong>
+        <span class="pill pill-success">Active</span>
+        <span class="pill"><i class="fa-solid fa-clock"></i> Mon 8:00 AM ET</span>
+      </div>
+
+      <div class="seg-toggle">
+        <button type="button" class="seg-btn" data-lens="canvas" onclick="setStudioLens('canvas')"><i class="fa-solid fa-diagram-project"></i> Canvas</button>
+        <button type="button" class="seg-btn active" data-lens="split" onclick="setStudioLens('split')"><i class="fa-solid fa-table-columns"></i> Split Playbook</button>
+        <button type="button" class="seg-btn" data-lens="playbook" onclick="setStudioLens('playbook')"><i class="fa-solid fa-list-ol"></i> Playbook</button>
+        <button type="button" class="seg-btn" data-lens="triggers" onclick="setStudioLens('triggers')"><i class="fa-solid fa-bolt"></i> Triggers (2)</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="pill pill-success"><i class="fa-solid fa-check"></i> Valid · 0 issues</span>
+        <button type="button" class="btn btn-primary btn-sm"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+        <button type="button" class="btn btn-sm" onclick="switchSurface('runs')"><i class="fa-solid fa-bug"></i> Debug Run</button>
+        <button type="button" class="btn btn-ghost btn-sm" title="Open Advanced Agent Record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+      </div>
+    </div>
+
+    <div class="studio-body" id="studioMainBody">
+      <!-- Option C Transplant: Synchronized Numbered SOP Playbook Outline -->
+      <aside class="playbook-pane" id="studioPlaybookPane">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--mj-text-muted)">Playbook Outline (Synced 1:1)</span>
+          <span class="pill">4 steps · 4 paths</span>
+        </div>
+        <div id="studioPlaybookList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </aside>
+
+      <!-- Option B Spine: Spatial Infinite Canvas with LR⇄TB, Loop Enclosure, Multi-Port Decision, + Quick-Add -->
+      <div class="canvas-stage" id="studioCanvasPane">
+        <div class="spatial-row" id="studioCanvasRow"></div>
+        <div class="spatial-hud">
+          <button type="button" class="btn btn-ghost btn-sm" title="Zoom Out"><i class="fa-solid fa-minus"></i></button>
+          <span class="mono" style="font-size:11px;padding:0 4px">100%</span>
+          <button type="button" class="btn btn-ghost btn-sm" title="Zoom In"><i class="fa-solid fa-plus"></i></button>
+          <button type="button" class="btn btn-ghost btn-sm" id="studioDirBtn" onclick="toggleStudioDirection()"><i class="fa-solid fa-arrows-left-right"></i> LR</button>
+          <span style="width:1px;height:16px;background:var(--mj-border-default);margin:0 2px"></span>
+          <span style="font-size:11px;color:var(--mj-text-muted);padding:0 6px">4 steps · 4 paths</span>
+        </div>
+      </div>
+
+      <!-- Properties Inspector with Searchable Pickers, {{ step.output }} Variable Pills, Loop Controls & Saga Rollback -->
+      <aside class="inspector-pane" id="studioInspectorPane"></aside>
+    </div>
+
+    <!-- In-App Triggers & Entry Points Tab (mounting <mj-agent-invocations> + Trigger summary) -->
+    <div class="catalog-body" id="studioTriggersTab" style="display:none">
+      <div class="ops-table-wrap" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <strong style="font-size:14px">Triggers &amp; Entry Points (`&lt;mj-agent-invocations&gt;`)</strong>
+            <div style="font-size:12px;color:var(--mj-text-muted)">Every schedule, record event, routine, or parent workflow that starts this workflow automatically.</div>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> Add Schedule or Event Trigger</button>
+        </div>
+        <table class="ops-table">
+          <thead><tr><th>Source</th><th>Trigger Name</th><th>Schedule / Condition</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill pill-info">Scheduled Job</span></td><td><b>Weekly Schema Sweep</b></td><td class="mono">0 8 * * 1 (America/New_York)</td><td><span class="pill pill-success">Active</span></td></tr>
+            <tr><td><span class="pill pill-violet">Entity Action</span></td><td><b>On New Entity Metadata</b></td><td class="mono">AfterSave · Entities</td><td><span class="pill pill-success">Active</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       SURFACES 4 & 5: RUNS FLIGHT DECK + GENERIC X-RAY DEBUGGER
+       =================================================================== -->
+  <section class="surface" id="surface-runs">
+    <div class="page-header" style="padding-bottom:10px">
+      <div class="page-header-row">
+        <div class="page-identity">
+          <button type="button" class="btn btn-sm" onclick="toggleRunRail()" title="Collapse / expand run rail"><i class="fa-solid fa-sidebar"></i> Runs</button>
+          <div>
+            <h1 class="page-title">Workflow Runs &amp; Live Flight Deck</h1>
+            <p class="page-sub">Real-time execution triage, inline person approvals, X-Ray debugging, and synchronized waterfall.</p>
+          </div>
+        </div>
+        <div class="page-toolbar">
+          <div class="seg-toggle">
+            <button type="button" class="seg-btn active" onclick="filterRuns('all', this)">All (4)</button>
+            <button type="button" class="seg-btn" onclick="filterRuns('In Progress', this)">In Progress (1)</button>
+            <button type="button" class="seg-btn" onclick="filterRuns('Waiting on Person', this)">Waiting on Person (1)</button>
+            <button type="button" class="seg-btn" onclick="filterRuns('Held', this)">Held (1)</button>
+            <button type="button" class="seg-btn" onclick="filterRuns('Complete', this)">Complete (1)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="runs-shell">
+      <!-- Option A Transplant: Collapsible 280px Left Run Rail -->
+      <aside class="run-rail" id="runRail">
+        <div class="run-rail-list" id="runRailList"></div>
+      </aside>
+
+      <!-- Option B Spine + Option C Co-Pilot/Approval + Option A Waterfall/Diff -->
+      <div class="flight-deck">
+        <!-- Option C Transplant: Plain-English Diagnostic Co-Pilot Banner -->
+        <div class="copilot-banner" id="copilotBanner">
+          <div style="display:flex;align-items:center;gap:10px">
+            <i class="fa-solid fa-compass" style="color:var(--mj-status-warning-text);font-size:16px"></i>
+            <div style="font-size:12px">
+              <b>Diagnostic Co-Pilot:</b> <span id="copilotCopy">Path <code>decisions.risk.confidence &gt;= 0.80</code> is <b>held</b> (confidence 0.62 &lt; 0.80 threshold). Choose a branch or inspect downstream blast radius.</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-primary btn-sm" onclick="forceDecision('true')"><i class="fa-solid fa-hand"></i> Answer Yes</button>
+            <button type="button" class="btn btn-sm" onclick="forceDecision('false')"><i class="fa-solid fa-hand"></i> Answer No</button>
+            <button type="button" class="btn btn-danger btn-sm" id="blastBtn" onclick="toggleBlastRadius()"><i class="fa-solid fa-radiation"></i> Highlight Blocked Steps</button>
+          </div>
+        </div>
+
+        <!-- Option B/A DAG-Native Time-Machine VCR Bar -->
+        <div class="vcr-bar">
+          <div class="vcr-group">
+            <span class="pill pill-warning" id="vcrStatePill"><i class="fa-solid fa-pause"></i> Paused</span>
+            <button type="button" class="btn btn-primary btn-sm" onclick="vcrAction('Continue')"><i class="fa-solid fa-play"></i> Continue <span class="mono" style="opacity:0.75">F5</span></button>
+            <button type="button" class="btn btn-sm" onclick="vcrAction('Step Next')"><i class="fa-solid fa-forward-step"></i> Step Next <span class="mono" style="opacity:0.75">F10</span></button>
+            <button type="button" class="btn btn-sm" onclick="vcrAction('Step Wave')"><i class="fa-solid fa-layer-group"></i> Step Wave <span class="mono" style="opacity:0.75">F11</span></button>
+            <button type="button" class="btn btn-sm" onclick="vcrAction('Pause')"><i class="fa-solid fa-pause"></i> Pause</button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="vcrAction('Stop')"><i class="fa-solid fa-stop"></i> Stop</button>
+          </div>
+          <div class="vcr-group">
+            <span class="pill pill-info"><i class="fa-solid fa-heart-pulse"></i> Engine #418 · 2/5 slots</span>
+            <span class="pill pill-error" id="bpCountPill"><i class="fa-solid fa-circle"></i> 2 breakpoints</span>
+            <button type="button" class="btn btn-sm btn-primary" id="xrayToggleBtn" onclick="toggleXRay()"><i class="fa-solid fa-bolt"></i> X-Ray: ON (X)</button>
+            <button type="button" class="btn btn-sm" onclick="toggleWaterfall()"><i class="fa-solid fa-chart-gantt"></i> Waterfall</button>
+          </div>
+        </div>
+
+        <!-- Option C Transplant: Inline Person Approval Card -->
+        <div class="approval-card" id="inlineApprovalCard">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="step-sq" style="background:color-mix(in srgb,#7b1fa2 15%,transparent);color:#7b1fa2"><i class="fa-solid fa-user-check"></i></div>
+            <div>
+              <div style="font-weight:700;font-size:13px">Person Step Waiting: VP Finance Review</div>
+              <div style="font-size:12px;color:var(--mj-text-secondary)">Approving clears <span class="pill pill-warning" style="padding:1px 6px"><i class="fa-solid fa-shield-halved"></i> External Data Safety Flag</span> and unlocks ERP posting.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="btn btn-primary btn-sm" onclick="approveHumanStep()"><i class="fa-solid fa-check"></i> Approve &amp; Clear Safety Flag</button>
+            <button type="button" class="btn btn-sm" onclick="document.getElementById('inlineApprovalCard').style.display='none'">Request Changes</button>
+          </div>
+        </div>
+
+        <!-- Main Spatial Flight Deck Canvas + Right Before⇄After Payload Diff Drawer -->
+        <div style="flex:1;min-height:0;display:flex;overflow:hidden">
+          <div class="canvas-stage" style="flex:1">
+            <div class="spatial-row" id="debugCanvasRow"></div>
+          </div>
+          <aside class="inspector-pane" style="width:340px" id="debugInspectorPane"></aside>
+        </div>
+
+        <!-- Docked Interactive Replay Scrubber -->
+        <div class="scrubber-dock">
+          <button type="button" class="btn btn-sm" id="replayPlayBtn" onclick="toggleReplay()"><i class="fa-solid fa-play"></i></button>
+          <span class="mono" style="font-size:11px;min-width:95px" id="replayTimeLabel">00:04.2 / 00:05.0</span>
+          <input type="range" id="replaySlider" min="0" max="100" value="84" oninput="onScrub(this.value)" aria-label="Replay timeline scrubber" />
+          <span class="pill">Wave 3 of 4</span>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="onScrub(100)">Now</button>
+        </div>
+
+        <!-- Option A Transplant: Collapsible Synchronized Execution Waterfall / Gantt -->
+        <div class="waterfall-drawer" id="waterfallDrawer">
+          <div class="waterfall-head">
+            <span><i class="fa-solid fa-chart-gantt" style="color:var(--mj-brand-primary)"></i> Synchronized Execution Waterfall (Click any bar to focus step)</span>
+            <span class="mono" style="color:var(--mj-text-muted)">0.0s ——————— 2.5s ——————— 5.0s</span>
+          </div>
+          <div class="waterfall-body" id="waterfallRows"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       SURFACE 5b: ADAPTIVE 360px EMBEDDED DENSITY (Conversations / Step Detail)
+       =================================================================== -->
+  <section class="surface" id="surface-embed">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div class="page-identity">
+          <div class="page-icon"><i class="fa-solid fa-mobile-screen"></i></div>
+          <div>
+            <h1 class="page-title">Adaptive Embedded Density (`Density="embedded"`)</h1>
+            <p class="page-sub">Same `&lt;mj-task-graph-run-view&gt;` / `&lt;mj-task-graph-debugger&gt;` automatically adapting to 360px Chat right-rail &amp; Agent Run detail panes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="embed-stage">
+      <div class="embed-frame">
+        <div style="padding:10px 12px;border-bottom:1px solid var(--mj-border-default);display:flex;align-items:center;justify-content:space-between;background:var(--mj-bg-surface-card)">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:12px">
+            <i class="fa-solid fa-diagram-project" style="color:var(--mj-brand-primary)"></i>
+            <span>Invoice Triage Run</span>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="switchSurface('runs')" title="Expand to Flight Deck"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div style="padding:8px 12px;background:var(--mj-status-warning-bg);border-bottom:1px solid color-mix(in srgb,var(--mj-status-warning-border) 45%,transparent);font-size:11px;display:flex;flex-direction:column;gap:6px">
+          <div><b>Held:</b> Confidence 62% &lt; 80% threshold.</div>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="btn btn-primary btn-sm">Answer Yes</button>
+            <button type="button" class="btn btn-sm">Answer No</button>
+          </div>
+        </div>
+        <div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:var(--mj-bg-canvas)">
+          <div class="step-node" style="width:100%"><div class="step-head"><div class="step-sq" style="background:color-mix(in srgb,#3b82f6 15%,transparent);color:#3b82f6"><i class="fa-solid fa-bolt"></i></div><div><div class="step-title">Fetch Incoming Invoices</div><div class="step-sub">Complete · 0.6s · 14 items</div></div></div></div>
+          <div class="step-node running" style="width:100%"><div class="step-head"><div class="step-sq" style="background:color-mix(in srgb,#d97706 15%,transparent);color:#d97706"><i class="fa-solid fa-repeat"></i></div><div><div class="step-title">Validate Line Items (ForEach)</div><div class="step-sub">Running · 9/14 validated…</div></div></div><div class="step-progress"><div class="step-progress-bar" style="width:64%"></div></div></div>
+          <div class="step-node paused-here" style="width:100%"><div class="step-head"><div class="step-sq" style="background:color-mix(in srgb,#7b1fa2 15%,transparent);color:#7b1fa2"><i class="fa-solid fa-user-check"></i></div><div><div class="step-title">VP Finance Approval</div><div class="step-sub">Person step · Waiting on review</div></div></div></div>
+          <div class="step-node skipped" style="width:100%"><div class="step-head"><div class="step-sq" style="background:color-mix(in srgb,#10b981 15%,transparent);color:#10b981"><i class="fa-solid fa-robot"></i></div><div><div class="step-title">Auto-Post Fast Track</div><div class="step-sub">Skipped · Untaken branch</div></div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+  const WORKFLOWS = [
+    {
+      id: 'wf-schema', name: 'Schema Documentation Sweep', icon: 'fa-book-open-reader', color: '#0076b6',
+      desc: 'Scans undocumented entity columns, drafts descriptions in parallel, and pauses at a Person step for steward approval.',
+      status: 'Active', trigger: 'Mon 8:00 AM ET', triggerKind: 'schedule', steps: 4, health: 98, p50: '4.1s',
+      bars: ['ok','ok','ok','ok','ok','ok','ok','warn','ok','ok'],
+      svg: `<rect x="8" y="34" width="46" height="26" rx="6" fill="var(--mj-bg-surface)" stroke="#3b82f6" stroke-width="1.5"/>
+            <line x1="54" y1="47" x2="76" y2="47" stroke="var(--mj-border-strong)" stroke-width="1.5"/>
+            <rect x="76" y="18" width="92" height="58" rx="10" fill="color-mix(in srgb,var(--mj-brand-tertiary) 10%,transparent)" stroke="var(--mj-brand-tertiary)" stroke-dasharray="4 3" stroke-width="1.5"/>
+            <rect x="92" y="34" width="60" height="26" rx="6" fill="var(--mj-bg-surface)" stroke="#8b5cf6" stroke-width="1.5"/>
+            <line x1="168" y1="47" x2="192" y2="47" stroke="var(--mj-border-strong)" stroke-width="1.5"/>
+            <rect x="192" y="34" width="58" height="26" rx="6" fill="var(--mj-status-warning-bg)" stroke="#7b1fa2" stroke-width="1.5"/>`
+    },
+    {
+      id: 'wf-content', name: 'Content Pipeline', icon: 'fa-pen-nib', color: '#8b5cf6',
+      desc: 'Runs broad and focused web searches, drafts copy, polishes in a While loop (max 3x), and forks on brand approval.',
+      status: 'Active', trigger: 'On demand', triggerKind: 'manual', steps: 6, health: 92, p50: '18.4s',
+      bars: ['ok','ok','err','ok','ok','ok','ok','ok','ok','ok'],
+      svg: `<rect x="8" y="34" width="40" height="24" rx="6" fill="var(--mj-bg-surface)" stroke="#3b82f6" stroke-width="1.5"/>
+            <line x1="48" y1="46" x2="66" y2="46" stroke="var(--mj-border-strong)" stroke-width="1.5"/>
+            <rect x="66" y="20" width="76" height="52" rx="10" fill="color-mix(in srgb,#f97316 10%,transparent)" stroke="#f97316" stroke-dasharray="4 3" stroke-width="1.5"/>
+            <rect x="78" y="34" width="52" height="24" rx="6" fill="var(--mj-bg-surface)" stroke="#8b5cf6" stroke-width="1.5"/>
+            <line x1="142" y1="46" x2="164" y2="30" stroke="#22c55e" stroke-width="1.5"/>
+            <line x1="142" y1="46" x2="164" y2="62" stroke="var(--mj-text-disabled)" stroke-dasharray="3 3" stroke-width="1.5"/>
+            <rect x="164" y="18" width="56" height="22" rx="5" fill="var(--mj-bg-surface)" stroke="#10b981" stroke-width="1.5"/>
+            <rect x="164" y="52" width="56" height="22" rx="5" fill="var(--mj-bg-surface)" stroke="var(--mj-border-strong)" stroke-width="1.5"/>`
+    },
+    {
+      id: 'wf-invoice', name: 'Invoice Triage & Approval', icon: 'fa-file-invoice-dollar', color: '#0891b2',
+      desc: 'Validates line items in parallel ForEach, routes medium risk via AI Decision to VP Finance Person step, with Saga rollback.',
+      status: 'Active', trigger: 'On Invoice -> Created', triggerKind: 'event', steps: 5, health: 96, p50: '5.0s',
+      bars: ['ok','ok','ok','warn','ok','ok','ok','ok','ok','ok'],
+      svg: `<rect x="8" y="34" width="44" height="24" rx="6" fill="var(--mj-bg-surface)" stroke="#3b82f6" stroke-width="1.5"/>
+            <line x1="52" y1="46" x2="72" y2="46" stroke="var(--mj-border-strong)" stroke-width="1.5"/>
+            <polygon points="94,24 116,46 94,68 72,46" fill="var(--mj-bg-surface)" stroke="#0891b2" stroke-width="1.5"/>
+            <line x1="116" y1="46" x2="146" y2="32" stroke="#22c55e" stroke-width="1.5"/>
+            <line x1="116" y1="46" x2="146" y2="62" stroke="#f59e0b" stroke-dasharray="3 3" stroke-width="1.5"/>
+            <rect x="146" y="20" width="54" height="22" rx="5" fill="var(--mj-bg-surface)" stroke="#7b1fa2" stroke-width="1.5"/>
+            <rect x="146" y="52" width="54" height="22" rx="5" fill="var(--mj-bg-surface)" stroke="#10b981" stroke-width="1.5"/>
+            <path d="M173 74 Q 110 92 30 58" fill="none" stroke="#f59e0b" stroke-dasharray="3 3" stroke-width="1.3"/>`
+    },
+    {
+      id: 'wf-onboard', name: 'User Onboarding Flow', icon: 'fa-user-plus', color: '#10b981',
+      desc: 'Provisions workspace roles, sends welcome digest, and schedules a 7-day check-in Wait step.',
+      status: 'Draft', trigger: 'On demand', triggerKind: 'manual', steps: 3, health: 100, p50: '2.3s',
+      bars: ['none','none','none','none','none','none','ok','ok','ok','ok'],
+      svg: `<rect x="16" y="34" width="56" height="26" rx="6" fill="var(--mj-bg-surface)" stroke="#3b82f6" stroke-width="1.5"/>
+            <line x1="72" y1="47" x2="98" y2="47" stroke="var(--mj-border-strong)" stroke-width="1.5"/>
+            <rect x="98" y="34" width="56" height="26" rx="6" fill="var(--mj-bg-surface)" stroke="#64748b" stroke-width="1.5"/>
+            <line x1="154" y1="47" x2="180" y2="47" stroke="var(--mj-border-strong)" stroke-width="1.5"/>
+            <rect x="180" y="34" width="56" height="26" rx="6" fill="var(--mj-bg-surface)" stroke="#10b981" stroke-width="1.5"/>`
+    }
+  ];
+
+  const STUDIO_STEPS = [
+    { id: 's1', num: 1, name: 'Fetch Undocumented Columns', type: 'Action', icon: 'fa-bolt', color: '#3b82f6', sub: 'Action: Get Records', mapping: '{{ trigger.schema }}', saga: 'None', desc: 'Queries entities missing descriptions.' },
+    { id: 's2', num: 2, name: 'Draft Column Descriptions', type: 'ForEach', icon: 'fa-repeat', color: '#06b6d4', sub: 'ForEach · Parallel ×4 · Prompt', mapping: '{{ s1.output.rows }}', saga: 'None', desc: 'Runs AI Prompt over each column batch.' },
+    { id: 's3', num: 3, name: 'Assess Quality Confidence', type: 'Decision', icon: 'fa-scale-balanced', color: '#0891b2', sub: 'Decision · minConfidence 0.80', mapping: '{{ s2.output.results }}', saga: 'None', desc: 'Checks clarity and accuracy score.' },
+    { id: 's4', num: 4, name: 'Steward Approval Gate', type: 'Human', icon: 'fa-user-check', color: '#7b1fa2', sub: 'Person step · Clears safety flag', mapping: '{{ s2.output.drafts }}', saga: 'Revert Draft Tags', desc: 'Waits for data steward sign-off before publishing.' }
+  ];
+
+  const RUNS_DATA = [
+    { id: 'run-4082', name: 'Invoice Triage & Approval', status: 'Held', started: '2m ago', dur: '4.2s', trigger: 'On Invoice -> Created' },
+    { id: 'run-4081', name: 'Schema Documentation Sweep', status: 'Waiting on Person', started: '14m ago', dur: '3.8s', trigger: 'Mon 8:00 AM ET' },
+    { id: 'run-4080', name: 'Content Pipeline', status: 'In Progress', started: '1m ago', dur: '9.1s', trigger: 'On demand' },
+    { id: 'run-4079', name: 'User Onboarding Flow', status: 'Complete', started: '1h ago', dur: '2.3s', trigger: 'On demand' }
+  ];
+
+  const DEBUG_STEPS = [
+    { id: 'd1', name: 'Fetch Incoming Invoices', type: 'Action', icon: 'fa-bolt', color: '#3b82f6', status: 'Complete', dur: '0.6s', startPct: 0, widthPct: 14, bp: 'none', taint: true, input: { source: 'ERP Webhook', batchLimit: 25 }, output: { count: 14, totalUSD: 48200, tainted: true } },
+    { id: 'd2', name: 'Validate Line Items', type: 'ForEach', icon: 'fa-repeat', color: '#06b6d4', status: 'In Progress', dur: '2.1s', startPct: 14, widthPct: 42, bp: 'single', progress: 72, progressMsg: 'Validating item 10 of 14...', input: { items: '14 line items' }, output: { validated: 10, flagged: 2 } },
+    { id: 'd3', name: 'Risk Score Decision', type: 'Decision', icon: 'fa-scale-balanced', color: '#0891b2', status: 'Complete', dur: '0.8s', startPct: 56, widthPct: 16, bp: 'none', confidence: 62, threshold: 80, input: { flagged: 2, totalUSD: 48200 }, output: { verdict: 'manual_review', confidence: 0.62 } },
+    { id: 'd4', name: 'VP Finance Approval', type: 'Human', icon: 'fa-user-check', color: '#7b1fa2', status: 'Paused', dur: '0.7s', startPct: 72, widthPct: 18, bp: 'remembered', clearsTaint: true, saga: 'Void ERP Draft', input: { invoiceId: 'INV-9021', confidence: 0.62 }, output: { approved: null, reviewer: 'Waiting...' } },
+    { id: 'd5', name: 'Auto-Post Fast Track', type: 'Sub-Agent', icon: 'fa-robot', color: '#10b981', status: 'Skipped', dur: '—', startPct: 72, widthPct: 12, bp: 'none', input: { invoiceId: 'INV-9021' }, output: { skippedReason: 'Confidence 0.62 < 0.80' } }
+  ];
+
+  const state = {
+    catalogView: 'blueprints',
+    studioLens: 'split',
+    studioDir: 'LR',
+    studioSelected: 's2',
+    runFilter: 'all',
+    selectedRun: 'run-4082',
+    selectedDebugStep: 'd3',
+    xray: true,
+    blastRadius: false,
+    forcedEdge: null,
+    humanApproved: false,
+    waterfallOpen: true,
+    replayPlaying: false,
+    replayTimer: null
+  };
+
+  function switchSurface(name) {
+    document.querySelectorAll('.surface').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.surface-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('surface-' + name).classList.add('active');
+    document.querySelector(`.surface-tab[data-surface="${name}"]`).classList.add('active');
+  }
+  document.querySelectorAll('.surface-tab').forEach(btn => btn.addEventListener('click', () => switchSurface(btn.dataset.surface)));
+
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const root = document.documentElement;
+    const isDark = root.getAttribute('data-theme') === 'dark';
+    root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    document.getElementById('themeToggle').innerHTML = isDark
+      ? '<i class="fa-solid fa-moon"></i><span>Dark Mode</span>'
+      : '<i class="fa-solid fa-sun"></i><span>Light Mode</span>';
+  });
+
+  function setCatalogView(view) {
+    state.catalogView = view;
+    document.getElementById('viewBlueprintsBtn').classList.toggle('active', view === 'blueprints');
+    document.getElementById('viewTableBtn').classList.toggle('active', view === 'table');
+    renderCatalog();
+  }
+
+  function renderCatalog() {
+    const q = (document.getElementById('catalogSearch').value || '').toLowerCase();
+    const st = document.getElementById('catalogStatusFilter').value;
+    const list = WORKFLOWS.filter(w =>
+      (st === 'all' || w.status === st) &&
+      (!q || w.name.toLowerCase().includes(q) || w.desc.toLowerCase().includes(q) || w.trigger.toLowerCase().includes(q))
+    );
+    document.getElementById('catalogCountPill').textContent = `${list.length} of ${WORKFLOWS.length} workflows`;
+    const grid = document.getElementById('catalogBlueprints');
+    const wrap = document.getElementById('catalogTableWrap');
+    grid.style.display = state.catalogView === 'blueprints' ? 'grid' : 'none';
+    wrap.style.display = state.catalogView === 'table' ? 'block' : 'none';
+
+    grid.innerHTML = list.map(w => `
+      <div class="bp-card" onclick="openInStudio('${w.name}')">
+        <div class="bp-stage">
+          <svg viewBox="0 0 260 96">${w.svg}</svg>
+          <div class="bp-hover-actions" onclick="event.stopPropagation()">
+            <button type="button" class="btn btn-sm btn-primary" onclick="switchSurface('runs')"><i class="fa-solid fa-play"></i> Run</button>
+            <button type="button" class="btn btn-sm" onclick="switchSurface('runs')"><i class="fa-solid fa-bug"></i> Debug</button>
+            <button type="button" class="btn btn-sm" onclick="openInStudio('${w.name}')">Studio</button>
+          </div>
+        </div>
+        <div class="bp-body">
+          <div class="bp-head">
+            <div class="squircle" style="background:color-mix(in srgb,${w.color} 15%,transparent);color:${w.color}"><i class="fa-solid ${w.icon}"></i></div>
+            <div style="flex:1;min-width:0">
+              <div class="bp-name">${w.name}</div>
+              <div class="bp-desc">${w.desc}</div>
+            </div>
+            <span class="pill ${w.status === 'Active' ? 'pill-success' : ''}">${w.status}</span>
+          </div>
+          <div class="bp-foot">
+            <span class="pill"><i class="fa-solid ${w.triggerKind === 'schedule' ? 'fa-clock' : w.triggerKind === 'event' ? 'fa-bolt' : 'fa-hand-pointer'}"></i> ${w.trigger}</span>
+            <span class="bp-metrics"><span>${w.steps} steps</span><span>·</span><span>${w.health}% ok</span><span>·</span><span>${w.p50}</span></span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    wrap.innerHTML = `<table class="ops-table">
+      <thead><tr><th>Workflow</th><th>Trigger</th><th>Status</th><th>10-Run Health</th><th>p50</th><th>Actions</th></tr></thead>
+      <tbody>${list.map(w => `
+        <tr onclick="openInStudio('${w.name}')">
+          <td><div style="display:flex;align-items:center;gap:10px">
+            <div class="squircle" style="width:28px;height:28px;font-size:12px;background:color-mix(in srgb,${w.color} 15%,transparent);color:${w.color}"><i class="fa-solid ${w.icon}"></i></div>
+            <div><b>${w.name}</b><div style="color:var(--mj-text-muted);font-size:11px">${w.steps} steps</div></div>
+          </div></td>
+          <td><span class="pill">${w.trigger}</span></td>
+          <td><span class="pill ${w.status === 'Active' ? 'pill-success' : ''}">${w.status}</span></td>
+          <td><div style="display:flex;align-items:center;gap:8px"><span class="spark-barcode">${w.bars.map((b, i) => `<span class="spark-bar ${b}" style="height:${8 + ((i * 3) % 10)}px"></span>`).join('')}</span><span class="mono">${w.health}%</span></div></td>
+          <td class="mono">${w.p50}</td>
+          <td onclick="event.stopPropagation()"><button type="button" class="btn btn-sm" onclick="switchSurface('runs')">Runs</button> <button type="button" class="btn btn-primary btn-sm" onclick="openInStudio('${w.name}')">Open Studio</button></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  function openInStudio(name) {
+    document.getElementById('studioWorkflowTitle').textContent = name;
+    switchSurface('studio');
+  }
+
+  // Surface 2: Create
+  let previewSteps = [
+    { name: 'Fetch Incoming Invoices', type: 'Action', icon: 'fa-bolt', color: '#3b82f6' },
+    { name: 'Validate Line Items', type: 'ForEach', icon: 'fa-repeat', color: '#06b6d4' },
+    { name: 'Risk Score Decision', type: 'Decision', icon: 'fa-scale-balanced', color: '#0891b2' },
+    { name: 'VP Finance Approval', type: 'Human', icon: 'fa-user-check', color: '#7b1fa2' },
+    { name: 'Post to ERP (Saga)', type: 'Action', icon: 'fa-bolt', color: '#3b82f6' }
+  ];
+
+  function selectDoor(door) {
+    document.querySelectorAll('.door-tile').forEach(el => el.classList.toggle('selected', el.dataset.door === door));
+    document.getElementById('doorDescribePane').style.display = door === 'describe' ? 'block' : 'none';
+    document.getElementById('doorPastRunPane').style.display = door === 'past-run' ? 'flex' : 'none';
+    document.getElementById('doorBlankPane').style.display = door === 'blank' ? 'block' : 'none';
+    if (door === 'blank') {
+      previewSteps = [{ name: 'On Demand Start', type: 'Action', icon: 'fa-play', color: '#0076b6' }];
+      document.getElementById('previewReasoning').innerHTML = '<b>Blank Canvas:</b> Ready to author from scratch inside Studio.';
+    } else if (door === 'past-run') {
+      selectPastRun('run-schema');
+      return;
+    }
+    renderPreviewGraph();
+  }
+
+  function applyRecipe(key) {
+    const map = {
+      invoice: ['Invoice Triage & Approval', 'Fetch incoming invoices, validate line items in parallel ForEach, score risk with AI Decision, require VP Finance Person approval, and post to ERP with Saga rollback.'],
+      schema: ['Schema Documentation Sweep', 'Query undocumented columns, draft descriptions in a ForEach prompt loop, and pause for Person steward review.'],
+      content: ['Content Pipeline', 'Run web searches, draft post, polish in a While loop up to 3 iterations until brandOK is true, then fork approved vs escalated.'],
+      triage: ['Support AI Triage', 'Classify incoming tickets with AI Decision, auto-respond to low severity, and escalate urgent cases to a Person step.']
+    };
+    const [name, prompt] = map[key];
+    document.getElementById('cwNameInput').value = name;
+    document.getElementById('cwPrompt').value = prompt;
+    compilePreview();
+  }
+
+  function selectPastRun(runId, el) {
+    if (el) {
+      document.querySelectorAll('.past-run-item').forEach(n => n.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+    if (runId === 'run-schema') {
+      document.getElementById('cwNameInput').value = 'Schema Documentation Sweep (Promoted)';
+      previewSteps = [
+        { name: 'Get Undocumented Fields', type: 'Action', icon: 'fa-bolt', color: '#3b82f6' },
+        { name: 'Draft Descriptions', type: 'ForEach', icon: 'fa-repeat', color: '#06b6d4' },
+        { name: 'Steward Approval', type: 'Human', icon: 'fa-user-check', color: '#7b1fa2' }
+      ];
+      document.getElementById('previewReasoning').innerHTML = '<b>Past Run Projection:</b> Projected 3 executed child tasks and 2 dependencies from settled run <code>run-schema</code> into a reusable Draft workflow.';
+    } else {
+      document.getElementById('cwNameInput').value = 'Content Pipeline (Promoted)';
+      previewSteps = [
+        { name: 'Broad Web Search', type: 'Action', icon: 'fa-bolt', color: '#3b82f6' },
+        { name: 'Draft Article', type: 'Prompt', icon: 'fa-comment-dots', color: '#8b5cf6' },
+        { name: 'Brand Polish Loop', type: 'While', icon: 'fa-rotate', color: '#f97316' },
+        { name: 'Close Out Approved', type: 'Action', icon: 'fa-bolt', color: '#10b981' }
+      ];
+      document.getElementById('previewReasoning').innerHTML = '<b>Past Run Projection:</b> Projected 4 executed steps from settled run <code>run-content</code>.';
+    }
+    renderPreviewGraph();
+  }
+
+  function compilePreview() {
+    document.getElementById('previewReasoning').innerHTML = `<b>AI Draft Preview:</b> Compiled <b>${document.getElementById('cwNameInput').value}</b> from your prompt. Review steps below — nothing is saved until you click <b>Approve &amp; Enter Studio</b>.`;
+    renderPreviewGraph();
+  }
+
+  function refinePreview() {
+    const input = document.getElementById('cwRefine');
+    const txt = (input.value || '').trim();
+    if (!txt) return;
+    previewSteps.push({ name: txt.slice(0, 28), type: 'Human', icon: 'fa-user-check', color: '#7b1fa2' });
+    input.value = '';
+    document.getElementById('previewReasoning').innerHTML = `<b>AI Refinement Applied:</b> Added step based on <em>"${txt}"</em> (preview only — still unsaved).`;
+    renderPreviewGraph();
+  }
+
+  function renderPreviewGraph() {
+    document.getElementById('previewStepCount').textContent = String(previewSteps.length);
+    document.getElementById('previewGraphRow').innerHTML = previewSteps.map((s, i) => `
+      ${i > 0 ? '<div class="path-arrow"><div class="path-line"></div></div>' : ''}
+      <div class="step-node" style="width:200px">
+        <div class="step-head">
+          <div class="step-sq" style="background:color-mix(in srgb,${s.color} 15%,transparent);color:${s.color}"><i class="fa-solid ${s.icon}"></i></div>
+          <div><div class="step-title">${s.name}</div><div class="step-sub">${s.type} step</div></div>
+        </div>
+      </div>`).join('');
+  }
+
+  function approveAndEnterStudio() {
+    openInStudio(document.getElementById('cwNameInput').value || 'New Workflow');
+  }
+
+  // Surface 3: Studio Dual-Lens
+  function setStudioLens(lens) {
+    state.studioLens = lens;
+    document.querySelectorAll('[data-lens]').forEach(b => b.classList.toggle('active', b.dataset.lens === lens));
+    const isTrig = lens === 'triggers';
+    document.getElementById('studioMainBody').style.display = isTrig ? 'none' : 'flex';
+    document.getElementById('studioTriggersTab').style.display = isTrig ? 'flex' : 'none';
+    const pb = document.getElementById('studioPlaybookPane');
+    const cv = document.getElementById('studioCanvasPane');
+    pb.style.display = (lens === 'split' || lens === 'playbook') ? 'flex' : 'none';
+    pb.classList.toggle('full', lens === 'playbook');
+    cv.style.display = (lens === 'canvas' || lens === 'split') ? 'block' : 'none';
+  }
+
+  function toggleStudioDirection() {
+    state.studioDir = state.studioDir === 'LR' ? 'TB' : 'LR';
+    document.getElementById('studioDirBtn').innerHTML = state.studioDir === 'LR'
+      ? '<i class="fa-solid fa-arrows-left-right"></i> LR'
+      : '<i class="fa-solid fa-arrows-up-down"></i> TB';
+    renderStudio();
+  }
+
+  function selectStudioStep(id) {
+    state.studioSelected = id;
+    renderStudio();
+  }
+
+  function renderStudio() {
+    document.getElementById('studioPlaybookList').innerHTML = STUDIO_STEPS.map(s => `
+      <div class="sop-card ${state.studioSelected === s.id ? 'selected' : ''}" onclick="selectStudioStep('${s.id}')">
+        <div class="sop-num">${s.num}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <i class="fa-solid ${s.icon}" style="color:${s.color};font-size:12px"></i>
+            <strong style="font-size:12px">${s.name}</strong>
+          </div>
+          <div style="font-size:11px;color:var(--mj-text-muted);margin-top:2px">${s.sub}</div>
+          <div style="margin-top:5px"><span class="var-pill">${s.mapping}</span></div>
+        </div>
+      </div>`).join('');
+
+    const row = document.getElementById('studioCanvasRow');
+    row.className = 'spatial-row' + (state.studioDir === 'TB' ? ' spatial-col' : '');
+    row.innerHTML = STUDIO_STEPS.map((s, idx) => {
+      const card = `<div class="step-node ${state.studioSelected === s.id ? 'selected' : ''}" onclick="selectStudioStep('${s.id}')">
+        <div class="step-head">
+          <div class="step-sq" style="background:color-mix(in srgb,${s.color} 15%,transparent);color:${s.color}"><i class="fa-solid ${s.icon}"></i></div>
+          <div><div class="step-title">${s.name}</div><div class="step-sub">${s.sub}</div></div>
+        </div>
+        <button type="button" class="step-port-plus" title="Quick-add step" onclick="event.stopPropagation()"><i class="fa-solid fa-plus"></i></button>
+      </div>`;
+      const wrapped = s.type === 'ForEach'
+        ? `<div class="loop-enclosure"><div class="loop-enclosure-head"><span><i class="fa-solid fa-repeat"></i> ForEach Enclosure · Parallel ×4</span><span>max 50</span></div>${card}<div class="loop-enclosure-foot">collection: ${s.mapping}</div></div>`
+        : card;
+      return `${idx > 0 ? '<div class="path-arrow"><div class="path-line"></div></div>' : ''}${wrapped}`;
+    }).join('');
+
+    const sel = STUDIO_STEPS.find(s => s.id === state.studioSelected) || STUDIO_STEPS[0];
+    document.getElementById('studioInspectorPane').innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--mj-border-default)">
+        <div class="step-sq" style="background:color-mix(in srgb,${sel.color} 15%,transparent);color:${sel.color}"><i class="fa-solid ${sel.icon}"></i></div>
+        <div><div style="font-weight:700;font-size:13px">${sel.name}</div><div style="font-size:11px;color:var(--mj-text-muted)">${sel.type} Step Inspector</div></div>
+      </div>
+      <div>
+        <span class="field-label">Step Description</span>
+        <textarea class="text-area" rows="2">${sel.desc}</textarea>
+      </div>
+      <div>
+        <span class="field-label">Data Mapping (click upstream pill to insert)</span>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
+          <span class="var-pill">{{ trigger.schema }}</span>
+          <span class="var-pill">{{ s1.output.rows }}</span>
+          <span class="var-pill">{{ s2.output.drafts }}</span>
+        </div>
+        <input class="text-input mono" value="${sel.mapping}" />
+      </div>
+      <div>
+        <span class="field-label">Saga Rollback / Undo Action</span>
+        <input class="text-input" value="${sel.saga}" placeholder="Optional compensation action..." />
+      </div>`;
+  }
+
+  // Surfaces 4 & 5: Runs + X-Ray Debugger
+  function toggleRunRail() {
+    document.getElementById('runRail').classList.toggle('collapsed');
+  }
+
+  function filterRuns(status, btn) {
+    state.runFilter = status;
+    btn.parentElement.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderRunRail();
+  }
+
+  function renderRunRail() {
+    const items = RUNS_DATA.filter(r => state.runFilter === 'all' || r.status === state.runFilter);
+    document.getElementById('runRailList').innerHTML = items.map(r => `
+      <button type="button" class="run-card ${state.selectedRun === r.id ? 'selected' : ''}" onclick="state.selectedRun='${r.id}';renderRunRail()">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+          <strong style="font-size:12px;text-align:left">${r.name}</strong>
+          <span class="pill ${r.status === 'Complete' ? 'pill-success' : r.status === 'In Progress' ? 'pill-info' : 'pill-warning'}">${r.status}</span>
+        </div>
+        <div style="font-size:11px;color:var(--mj-text-muted);display:flex;justify-content:space-between">
+          <span>${r.trigger}</span><span class="mono">${r.dur}</span>
+        </div>
+      </button>`).join('');
+  }
+
+  function toggleXRay() {
+    state.xray = !state.xray;
+    const btn = document.getElementById('xrayToggleBtn');
+    btn.classList.toggle('btn-primary', state.xray);
+    btn.innerHTML = `<i class="fa-solid fa-bolt"></i> X-Ray: ${state.xray ? 'ON' : 'OFF'} (X)`;
+    renderDebugger();
+  }
+
+  function toggleBlastRadius() {
+    state.blastRadius = !state.blastRadius;
+    renderDebugger();
+  }
+
+  function forceDecision(val) {
+    state.forcedEdge = val;
+    document.getElementById('copilotCopy').innerHTML = `Operator forced path to <b>${val === 'true' ? 'Forced Yes' : 'Forced No'}</b>. Downstream path updated with amber override indicator.`;
+    renderDebugger();
+  }
+
+  function approveHumanStep() {
+    state.humanApproved = true;
+    document.getElementById('inlineApprovalCard').style.display = 'none';
+    const d4 = DEBUG_STEPS.find(s => s.id === 'd4');
+    if (d4) { d4.status = 'Complete'; d4.output = { approved: true, reviewer: 'You (Verified)' }; }
+    renderDebugger();
+  }
+
+  function cycleBreakpoint(id) {
+    const step = DEBUG_STEPS.find(s => s.id === id);
+    if (!step) return;
+    step.bp = step.bp === 'none' ? 'single' : step.bp === 'single' ? 'remembered' : 'none';
+    const count = DEBUG_STEPS.filter(s => s.bp !== 'none').length;
+    document.getElementById('bpCountPill').innerHTML = `<i class="fa-solid fa-circle"></i> ${count} breakpoint${count === 1 ? '' : 's'}`;
+    renderDebugger();
+  }
+
+  function vcrAction(label) {
+    document.getElementById('vcrStatePill').innerHTML = `<i class="fa-solid fa-play"></i> ${label}`;
+  }
+
+  function toggleWaterfall() {
+    state.waterfallOpen = !state.waterfallOpen;
+    document.getElementById('waterfallDrawer').style.display = state.waterfallOpen ? 'flex' : 'none';
+  }
+
+  function onScrub(val) {
+    const sec = ((Number(val) / 100) * 5.0).toFixed(1);
+    document.getElementById('replayTimeLabel').textContent = `00:0${sec} / 00:05.0`;
+    document.getElementById('replaySlider').value = val;
+  }
+
+  function toggleReplay() {
+    state.replayPlaying = !state.replayPlaying;
+    document.getElementById('replayPlayBtn').innerHTML = state.replayPlaying ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>';
+    if (state.replayPlaying) {
+      let v = Number(document.getElementById('replaySlider').value);
+      if (v >= 100) v = 0;
+      state.replayTimer = setInterval(() => {
+        v = Math.min(100, v + 4);
+        onScrub(v);
+        if (v >= 100) toggleReplay();
+      }, 150);
+    } else if (state.replayTimer) {
+      clearInterval(state.replayTimer);
+      state.replayTimer = null;
+    }
+  }
+
+  function renderDebugger() {
+    document.getElementById('debugCanvasRow').innerHTML = DEBUG_STEPS.map((s, i) => {
+      const cls = [
+        'step-node',
+        state.selectedDebugStep === s.id ? 'selected' : '',
+        s.status === 'Skipped' ? 'skipped' : '',
+        s.status === 'In Progress' ? 'running' : '',
+        s.status === 'Paused' ? 'paused-here' : '',
+        state.blastRadius && (s.id === 'd4' || s.id === 'd5') ? 'blast' : ''
+      ].join(' ');
+      let arrow = '';
+      if (i > 0) {
+        const isSkippedEdge = s.status === 'Skipped';
+        const isForced = state.forcedEdge && s.id === 'd4';
+        const lineCls = isForced ? 'forced' : isSkippedEdge ? 'skipped' : 'taken';
+        const chip = isForced
+          ? `<span class="path-chip forced"><i class="fa-solid fa-hand"></i> Forced ${state.forcedEdge === 'true' ? 'Yes' : 'No'}</span>`
+          : isSkippedEdge
+            ? `<span class="path-chip skipped">✕ Skipped</span>`
+            : `<span class="path-chip">✓ Taken</span>`;
+        arrow = `<div class="path-arrow"><div class="path-line ${lineCls}"></div>${chip}</div>`;
+      }
+      const xrayHtml = state.xray ? `<div class="step-xray">
+        ${s.confidence != null ? `<div><div class="xray-kv"><span class="xray-k">Confidence</span><span class="xray-v">${s.confidence}% (min ${s.threshold}%)</span></div><div class="conf-track"><div class="conf-fill" style="width:${s.confidence}%"></div><div class="conf-thresh" style="left:${s.threshold}%"></div></div></div>` : ''}
+        ${s.taint ? `<span class="pill pill-warning" style="width:fit-content"><i class="fa-solid fa-shield-halved"></i> External Data Flag</span>` : ''}
+        ${s.clearsTaint ? `<span class="pill pill-success" style="width:fit-content"><i class="fa-solid fa-shield-check"></i> ${state.humanApproved ? 'Person Verified' : 'Clears Safety Flag'}</span>` : ''}
+        ${s.saga ? `<span class="pill pill-warning" style="width:fit-content"><i class="fa-solid fa-rotate-left"></i> Undo: ${s.saga}</span>` : ''}
+        ${Object.entries(s.output).slice(0, 2).map(([k, v]) => `<div class="xray-kv"><span class="xray-k">${k}</span><span class="xray-v changed">${String(v)}</span></div>`).join('')}
+        ${s.status === 'Paused' ? `<button type="button" class="btn btn-primary btn-sm" onclick="event.stopPropagation();vcrAction('Run This Step (${s.name})')"><i class="fa-solid fa-play"></i> Run This Step</button>` : ''}
+      </div>` : '';
+
+      return `${arrow}<div class="${cls}" onclick="state.selectedDebugStep='${s.id}';renderDebugger()">
+        <button type="button" class="step-bp-gutter ${s.bp}" title="Click to cycle breakpoint: Off -> Single-Run -> Remembered" onclick="event.stopPropagation();cycleBreakpoint('${s.id}')"></button>
+        <div class="step-head">
+          <div class="step-sq" style="background:color-mix(in srgb,${s.color} 15%,transparent);color:${s.color}"><i class="fa-solid ${s.icon}"></i></div>
+          <div style="flex:1;min-width:0">
+            <div class="step-title">${s.name}</div>
+            <div class="step-sub">${s.progressMsg || (s.status + ' · ' + s.dur)}</div>
+          </div>
+        </div>
+        ${s.progress ? `<div class="step-progress"><div class="step-progress-bar" style="width:${s.progress}%"></div></div>` : ''}
+        ${xrayHtml}
+      </div>`;
+    }).join('');
+
+    const sel = DEBUG_STEPS.find(s => s.id === state.selectedDebugStep) || DEBUG_STEPS[0];
+    document.getElementById('debugInspectorPane').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--mj-border-default)">
+        <div><strong style="font-size:13px">${sel.name}</strong><div style="font-size:11px;color:var(--mj-text-muted)">${sel.type} · ${sel.status} · ${sel.dur}</div></div>
+        <button type="button" class="btn btn-sm" onclick="navigator.clipboard && navigator.clipboard.writeText(JSON.stringify({input:sel.input,output:sel.output},null,2))"><i class="fa-solid fa-copy"></i> Copy JSON</button>
+      </div>
+      <div>
+        <span class="field-label">Before ⇄ After Payload Diff</span>
+        <div class="diff-grid">
+          <div class="diff-col"><div style="font-weight:700;margin-bottom:4px;color:var(--mj-text-muted)">BEFORE (Input)</div>${Object.entries(sel.input).map(([k, v]) => `<div class="diff-line">${k}: ${JSON.stringify(v)}</div>`).join('')}</div>
+          <div class="diff-col"><div style="font-weight:700;margin-bottom:4px;color:var(--mj-brand-primary)">AFTER (Output)</div>${Object.entries(sel.output).map(([k, v]) => `<div class="diff-line added">+ ${k}: ${JSON.stringify(v)}</div>`).join('')}</div>
+        </div>
+      </div>`;
+
+    document.getElementById('waterfallRows').innerHTML = DEBUG_STEPS.map(s => `
+      <div class="wf-gantt-row ${state.selectedDebugStep === s.id ? 'selected' : ''}" onclick="state.selectedDebugStep='${s.id}';renderDebugger()">
+        <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</span>
+        <div class="wf-gantt-track"><div class="wf-gantt-bar" style="left:${s.startPct}%;width:${s.widthPct}%;background:${s.status === 'Skipped' ? 'var(--mj-text-disabled)' : s.color}"></div></div>
+        <span class="mono" style="text-align:right;color:var(--mj-text-muted)">${s.dur}</span>
+      </div>`).join('');
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key.toLowerCase() === 'x') toggleXRay();
+  });
+
+  renderCatalog();
+  renderPreviewGraph();
+  renderStudio();
+  renderRunRail();
+  renderDebugger();
+</script>
+</body>
+</html>
