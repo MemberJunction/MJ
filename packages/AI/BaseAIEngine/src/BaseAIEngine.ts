@@ -1206,7 +1206,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
             const preferredId = this._preferredPrimaryByGroup.get(groupKey);
             let winner = preferredId
-                ? bucket.find(a => UUIDsEqual(a.ID, preferredId))
+                ? IndexByUUID(bucket).Get(preferredId)
                 : undefined;
 
             if (!winner) {

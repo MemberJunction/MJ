@@ -17,6 +17,8 @@ export const CHIEF_OF_STAFF_LIVE_ENTITIES: readonly string[] = [
     'MJ: AI Agent Permissions',
     'MJ: User Settings',
     'MJ: Agent Channels',
+    'MJ: Agent Channel Participants',
+    'MJ: Conversation Details',
 ];
 
 /**

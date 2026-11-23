@@ -859,6 +859,8 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 ],
             });
             expect(res1.Success).toBe(true);
+            expect(fixture1.capturedChannels[0]?.ApplicationScope).toBe('Application');
+            expect(fixture1.capturedChannels[0]?.ApplicationID).toBe('C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E70');
             expect(fixture1.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(25);
             expect(fixture1.capturedChannels[0]?.MaxHourlyWakes).toBe(12);
 

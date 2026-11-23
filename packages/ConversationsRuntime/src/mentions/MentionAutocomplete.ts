@@ -3,7 +3,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAISkillEntity, MJQueryEntityExtended, QueryEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseEntity, BaseEntityEvent, UserInfo, Metadata, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, MJEvent, MJEventType, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { IntersectAcceptedSkills } from './SkillNarrowing';
 import {
   MentionGroupKey,
@@ -815,6 +815,7 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
   ): RankedMentionItem[] {
     const allowedAgentIDs = scope?.AllowedAgentIDs ?? null;
     const inThreadIDs = scope?.InThreadAgentIDs ?? null;
+    const inThreadAgentSet = inThreadIDs ? new UUIDSet(inThreadIDs) : null;
     const defaultChatAgentID = scope?.DefaultChatAgentID ?? null;
     const currentUserId = this.resolveCurrentUserId();
 
@@ -851,7 +852,7 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
         continue;
       }
 
-      const isInCurrentThread = Boolean(inThreadIDs?.some(id => UUIDsEqual(id, agent.ID)));
+      const isInCurrentThread = Boolean(inThreadAgentSet?.Has(agent.ID));
       const isDefaultChatAgent = Boolean(defaultChatAgentID && UUIDsEqual(defaultChatAgentID, agent.ID));
       const { uses, score: frecencyScore } = this.getFrecencyForId(agent.ID, nowMs);
 

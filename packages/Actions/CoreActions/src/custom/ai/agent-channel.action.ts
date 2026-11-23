@@ -24,6 +24,21 @@ import { AgentWakeTriggerService } from '@memberjunction/ai-agents';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
+const MY_AGENTS_APPLICATION_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E70';
+
+function resolveMyAgentsApplicationId(md: IMetadataProvider): string | null {
+    const apps = (md as { Applications?: ReadonlyArray<{ ID: string; Name?: string }> }).Applications;
+    if (!Array.isArray(apps)) {
+        return MY_AGENTS_APPLICATION_ID;
+    }
+    const found =
+        apps.find((a) => UUIDsEqual(a.ID, MY_AGENTS_APPLICATION_ID)) ??
+        apps.find((a) => {
+            const name = a.Name?.trim().toLowerCase();
+            return name === 'my agents' || name === 'chief of staff';
+        });
+    return found?.ID ?? null;
+}
 
 function readStringParam(params: RunActionParams, name: string): string | undefined {
     const found = params.Params.find((p) => p.Name.trim().toLowerCase() === name.toLowerCase());
@@ -413,11 +428,18 @@ export class OpenAgentChannelAction extends BaseAction {
                 ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.AGENT_CHANNEL) ??
                 BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL;
 
+            const myAgentsAppId = resolveMyAgentsApplicationId(md);
             const channel = await md.GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', systemUser);
             channel.NewRecord();
             channel.Name = topic.slice(0, 255);
             channel.UserID = contextUser.ID;
             channel.TypeID = agentChannelTypeId;
+            if (myAgentsAppId) {
+                channel.ApplicationScope = 'Application';
+                channel.ApplicationID = myAgentsAppId;
+            } else {
+                channel.ApplicationScope = 'Global';
+            }
             channel.Topic = topic;
             channel.ChannelStatus = 'Open';
             channel.ReplyBy = replyByDate;
@@ -669,7 +691,40 @@ export class ReplyInAgentChannelAction extends BaseAction {
                 };
             }
 
-            let wakeOutcome = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            if (resolveChannel) {
+                channel.ChannelStatus = 'Resolved';
+                channel.ResolvedAt = new Date();
+                const resolvedSaved = await channel.Save();
+                if (!resolvedSaved) {
+                    return {
+                        Success: false,
+                        ResultCode: 'SAVE_FAILED',
+                        Message:
+                            channel.LatestResult?.CompleteMessage ||
+                            'Failed to mark Agent Channel as Resolved.',
+                        Params: params.Params,
+                    };
+                }
+
+                const resolvedPayload = {
+                    ChannelID: channel.ID,
+                    ConversationDetailID: detail.ID,
+                    ChannelStatus: 'Resolved' as const,
+                    PausedByGuard: false,
+                    PauseReason: null,
+                    WakeResults: [] as Awaited<
+                        ReturnType<AgentWakeTriggerService['TriggerWakeOnAgentChannelMessage']>
+                    >['results'],
+                };
+                return {
+                    Success: true,
+                    ResultCode: 'SUCCESS',
+                    Message: JSON.stringify(resolvedPayload),
+                    Params: setOutputParam(params, 'ConversationDetailID', detail.ID),
+                };
+            }
+
+            const wakeOutcome = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
                 channelID: channel.ID,
                 conversationDetailID: detail.ID,
                 senderUserID: contextUser.ID,
@@ -678,17 +733,6 @@ export class ReplyInAgentChannelAction extends BaseAction {
                 contextUser,
                 metadataProvider: md,
             });
-
-            if (resolveChannel) {
-                await channel.Load(channel.ID);
-                channel.ChannelStatus = 'Resolved';
-                channel.ResolvedAt = new Date();
-                await channel.Save();
-                wakeOutcome = {
-                    ...wakeOutcome,
-                    channelStatus: 'Resolved',
-                };
-            }
 
             const payload = {
                 ChannelID: channel.ID,

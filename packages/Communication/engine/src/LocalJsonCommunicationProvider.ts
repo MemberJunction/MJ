@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     ArchiveMessageParams,
     ArchiveMessageResult,
@@ -663,7 +663,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.ContextData as MailboxContextData | undefined
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const found = state.Messages.find((m) => m.ID === params.MessageID);
+            const found = state.Messages.find((m) => UUIDsEqual(m.ID, params.MessageID));
             if (!found) {
                 return {
                     Success: false,
@@ -752,7 +752,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.ContextData as MailboxContextData | undefined
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const original = state.Messages.find((m) => m.ID === params.MessageID);
+            const original = state.Messages.find((m) => UUIDsEqual(m.ID, params.MessageID));
             if (!original) {
                 return {
                     Success: false,
@@ -805,7 +805,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.Message?.From
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const original = state.Messages.find((m) => m.ID === params.MessageID);
+            const original = state.Messages.find((m) => UUIDsEqual(m.ID, params.MessageID));
             if (!original) {
                 return {
                     Success: false,
@@ -911,7 +911,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.ContextData as MailboxContextData | undefined
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const idx = state.Messages.findIndex((m) => m.ID === params.MessageID);
+            const idx = state.Messages.findIndex((m) => UUIDsEqual(m.ID, params.MessageID));
             if (idx < 0) {
                 return { Success: false, ErrorMessage: `Message '${params.MessageID}' not found.` };
             }
@@ -936,9 +936,9 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.ContextData as MailboxContextData | undefined
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const ids = new Set(params.MessageIDs);
+            const ids = new UUIDSet(params.MessageIDs);
             for (const msg of state.Messages) {
-                if (ids.has(msg.ID)) {
+                if (ids.Has(msg.ID)) {
                     msg.IsRead = params.IsRead;
                 }
             }
@@ -962,7 +962,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.ContextData as MailboxContextData | undefined
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const msg = state.Messages.find((m) => m.ID === params.MessageID);
+            const msg = state.Messages.find((m) => UUIDsEqual(m.ID, params.MessageID));
             if (!msg) {
                 return { Success: false, ErrorMessage: `Message '${params.MessageID}' not found.` };
             }
@@ -1112,7 +1112,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.ContextData as MailboxContextData | undefined
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const existing = state.Events.find((e) => e.ID === params.EventID);
+            const existing = state.Events.find((e) => UUIDsEqual(e.ID, params.EventID));
             if (!existing) {
                 return {
                     Success: false,
@@ -1148,7 +1148,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 };
             }
 
-            const idx = state.Events.findIndex((e) => e.ID === params.EventID);
+            const idx = state.Events.findIndex((e) => UUIDsEqual(e.ID, params.EventID));
             state.Events[idx] = updated;
             this.SaveMailbox(state, credentials);
 
@@ -1176,7 +1176,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.ContextData as MailboxContextData | undefined
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const existing = state.Events.find((e) => e.ID === params.EventID);
+            const existing = state.Events.find((e) => UUIDsEqual(e.ID, params.EventID));
             if (!existing) {
                 return {
                     Success: false,
@@ -1219,7 +1219,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
                 params.ContextData as MailboxContextData | undefined
             );
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const existing = state.Events.find((e) => e.ID === params.EventID);
+            const existing = state.Events.find((e) => UUIDsEqual(e.ID, params.EventID));
             if (!existing) {
                 return {
                     Success: false,
@@ -1535,7 +1535,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
         try {
             const mailbox = params.Target.Identifier.trim().toLowerCase();
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const idx = state.Events.findIndex((e) => e.ID === params.ExternalEventID);
+            const idx = state.Events.findIndex((e) => UUIDsEqual(e.ID, params.ExternalEventID));
             if (idx < 0) {
                 return {
                     Success: false,
@@ -1584,7 +1584,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
         try {
             const mailbox = params.Target.Identifier.trim().toLowerCase();
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const existing = state.Events.find((e) => e.ID === params.ExternalEventID);
+            const existing = state.Events.find((e) => UUIDsEqual(e.ID, params.ExternalEventID));
             if (existing) {
                 existing.IsCancelled = true;
                 existing.LastModified = new Date().toISOString();
@@ -1610,7 +1610,7 @@ export class LocalJsonCommunicationProvider extends BaseCommunicationProvider {
         try {
             const mailbox = params.Target.Identifier.trim().toLowerCase();
             const state = this.LoadOrSeedMailbox(mailbox, credentials);
-            const existing = state.Events.find((e) => e.ID === params.ExternalEventID);
+            const existing = state.Events.find((e) => UUIDsEqual(e.ID, params.ExternalEventID));
             if (!existing) {
                 return {
                     Success: false,

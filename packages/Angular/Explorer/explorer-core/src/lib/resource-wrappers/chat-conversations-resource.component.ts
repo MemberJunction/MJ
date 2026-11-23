@@ -85,7 +85,7 @@ import { debounceTime, filter } from 'rxjs/operators';
               [currentUser]="currentUser"
               [conversationId]="selectedConversationId"
               [conversation]="selectedConversation"
-              [DefaultAgentId]="defaultChatAgentId"
+              [DefaultAgentId]="DefaultChatAgentId"
               [AccessDeniedMessage]="ConversationAccessDeniedMessage"
               [isNewConversation]="isNewUnsavedConversation"
               [pendingMessage]="pendingMessageToSend"
@@ -512,11 +512,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   /** Per-user preferred default chat agent ID from `UserInfoEngine` (`chat.defaultAgentId`), or null for stock Sage default. */
   public DefaultChatAgentId: string | null = null;
-
-  /** Lowercase accessor for template binding `[DefaultAgentId]="defaultChatAgentId"`. */
-  public get defaultChatAgentId(): string | null {
-    return this.DefaultChatAgentId;
-  }
 
   private engine = ConversationEngine.Instance;
 

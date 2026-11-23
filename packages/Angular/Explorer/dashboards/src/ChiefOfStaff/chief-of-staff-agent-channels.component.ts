@@ -5,7 +5,7 @@ import {
     MJAgentChannelParticipantEntity,
     MJConversationDetailEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
     ChiefOfStaffPage,
@@ -99,11 +99,16 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
                 return false;
             }
             const participants = this.ParticipantsByChannel.get(c.ID) ?? [];
-            if (
-                this.AgentFilterID &&
-                !participants.some((p) => p.AgentID && UUIDsEqual(p.AgentID, this.AgentFilterID))
-            ) {
-                return false;
+            if (this.AgentFilterID) {
+                const participantAgentIds = new UUIDSet();
+                for (const p of participants) {
+                    if (p.AgentID) {
+                        participantAgentIds.Add(p.AgentID);
+                    }
+                }
+                if (!participantAgentIds.Has(this.AgentFilterID)) {
+                    return false;
+                }
             }
             if (!search) {
                 return true;

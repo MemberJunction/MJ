@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
@@ -196,18 +196,18 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         }
 
         const allAgents = AIEngine.Instance.Agents ?? [];
+        const agentsById = IndexByUUID(allAgents);
         const orderedFromLeaf: string[] = [];
-        const visited = new Set<string>();
+        const visited = new UUIDSet();
         let currentId: string | null | undefined = agentId;
 
         while (currentId) {
-            const norm = currentId.trim().toLowerCase();
-            if (visited.has(norm)) {
+            if (visited.Has(currentId)) {
                 break;
             }
-            visited.add(norm);
+            visited.Add(currentId);
             orderedFromLeaf.push(currentId);
-            const current = allAgents.find((a) => UUIDsEqual(a.ID, currentId));
+            const current = agentsById.Get(currentId);
             currentId = current?.BaseAgentID ?? null;
         }
 
