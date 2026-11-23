@@ -52,6 +52,8 @@ export interface InstalledAppMap {
     [appName: string]: {
         Version: string;
         Repository: string;
+        /** In-repo folder the app was installed from; null/undefined when none is recorded */
+        Subpath?: string | null;
         /**
          * What the installed version depends on, from its recorded manifest. `{}` means it has no
          * dependencies; undefined means they are not known locally.
