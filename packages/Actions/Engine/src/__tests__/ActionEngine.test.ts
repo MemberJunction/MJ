@@ -217,6 +217,9 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
         ActionAudienceReaders: actual.ActionAudienceReaders,
         ActionAudienceAddsReader: actual.ActionAudienceAddsReader,
         AUDIENCE_UNSUPPORTED_RESULT_CODE: actual.AUDIENCE_UNSUPPORTED_RESULT_CODE,
+        EnforceServerBoundHiddenScopeParams: actual.EnforceServerBoundHiddenScopeParams,
+        RequiresReceiptOnlyChatReturn: actual.RequiresReceiptOnlyChatReturn,
+        ShapeActionReturnForChat: actual.ShapeActionReturnForChat,
     };
 });
 
@@ -534,6 +537,22 @@ describe('ActionEngineServer', () => {
 
             expect(result.Success).toBe(true);
             expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
+        });
+
+        it('enforces SupportsAudience when IsStructuralAudience=true even without enumerated Readers', async () => {
+            const unsupported = new TestAction();
+            mockClassFactory.CreateInstance.mockReturnValue(unsupported);
+            const refused = await run(paramsFor(undefined, { IsStructuralAudience: true }));
+            expect(refused.Success).toBe(false);
+            expect(refused.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+
+            const supported = new AudienceAwareAction();
+            mockClassFactory.CreateInstance.mockReturnValue(supported);
+            vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({} as never);
+            vi.spyOn(engine as never, 'EndActionLog' as never).mockResolvedValue(undefined as never);
+            const allowed = await run(paramsFor(undefined, { IsStructuralAudience: true }));
+            expect(allowed.Success).toBe(true);
+            expect(supported.ranWith).toHaveLength(1);
         });
     });
 

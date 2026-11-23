@@ -6578,6 +6578,20 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     }
 
     /**
+    * * Field Name: DefaultAgentConfigurationID
+    * * Display Name: Default Agent Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake.
+    */
+    get DefaultAgentConfigurationID(): string | null {
+        return this.Get('DefaultAgentConfigurationID');
+    }
+    set DefaultAgentConfigurationID(value: string | null) {
+        this.Set('DefaultAgentConfigurationID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -6593,6 +6607,15 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     */
     get Skill(): string | null {
         return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: DefaultAgentConfiguration
+    * * Display Name: Default Agent Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DefaultAgentConfiguration(): string | null {
+        return this.Get('DefaultAgentConfiguration');
     }
 }
 
@@ -12530,7 +12553,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: CoordinationMode
     * * Display Name: Coordination Mode
     * * SQL Data Type: nvarchar(20)
-    * * Default Value: Observer
+    * * Default Value: Autonomous
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -12589,7 +12612,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: PhoneChannelMode
     * * Display Name: Phone Channel Mode
     * * SQL Data Type: nvarchar(20)
-    * * Default Value: InboundOnly
+    * * Default Value: Disabled
     * * Value List Type: List
     * * Possible Values 
     *   * Disabled
@@ -12627,7 +12650,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: CalendarChannelMode
     * * Display Name: Calendar Channel Mode
     * * SQL Data Type: nvarchar(30)
-    * * Default Value: ReadOnly
+    * * Default Value: ProposeWithApproval
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -14334,6 +14357,26 @@ if this limit is exceeded.
     }
     set MaxSubAgentConsultRounds(value: number | null) {
         this.Set('MaxSubAgentConsultRounds', value);
+    }
+
+    /**
+    * * Field Name: Isolation
+    * * Display Name: Isolation
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: InProcess
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Container
+    *   * InProcess
+    *   * Process
+    *   * Worker
+    * * Description: Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation).
+    */
+    get Isolation(): 'Container' | 'InProcess' | 'Process' | 'Worker' {
+        return this.Get('Isolation');
+    }
+    set Isolation(value: 'Container' | 'InProcess' | 'Process' | 'Worker') {
+        this.Set('Isolation', value);
     }
 
     /**
@@ -33169,6 +33212,20 @@ export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
     set TypeID(value: string) {
         this.Set('TypeID', value);
     }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
 }
 
 
@@ -40487,6 +40544,20 @@ export class MJCommentEntity extends BaseEntity<MJCommentEntityType> {
     }
     set TypeID(value: string) {
         this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
     }
 
     /**
@@ -53906,6 +53977,20 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -54011,6 +54096,60 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get Type(): string | null {
         return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent ID Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Parent ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Parent ID Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -73009,6 +73148,20 @@ export class MJFieldSuggestionEntity extends BaseEntity<MJFieldSuggestionEntityT
     }
     set TypeID(value: string) {
         this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
     }
 
     /**
@@ -117529,6 +117682,20 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     }
 
     /**
+    * * Field Name: AgentConfigurationID
+    * * Display Name: Agent Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional AI Configuration (model tier such as Fast, Standard, or High Power) used when executing this routine's Agent target. Seeded from the originating rhythm template's DefaultAgentConfigurationID on creation and changeable by the user or agent.
+    */
+    get AgentConfigurationID(): string | null {
+        return this.Get('AgentConfigurationID');
+    }
+    set AgentConfigurationID(value: string | null) {
+        this.Set('AgentConfigurationID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -117562,6 +117729,15 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: AgentConfiguration
+    * * Display Name: Agent Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AgentConfiguration(): string | null {
+        return this.Get('AgentConfiguration');
     }
 }
 

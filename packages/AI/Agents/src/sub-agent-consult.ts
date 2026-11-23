@@ -8,7 +8,7 @@
  */
 
 import { AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
-import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, IMetadataProvider, LimitsConfigResolver, RunView, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
@@ -16,7 +16,12 @@ import { IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
  * Default maximum consultation rounds per `(parent run, sub-agent entity ID)` pair
  * when `MJAIAgentEntity.MaxSubAgentConsultRounds` is `null` or `undefined`.
  */
-export const DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS = 3;
+export const DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS = CODE_FALLBACK_LIMITS.ResourceGuards.MaxSubAgentConsultRounds;
+
+/** Resolves the effective default max sub-agent consult rounds from `LimitsConfigResolver.Instance`. */
+export function GetMaxSubAgentConsultRounds(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxSubAgentConsultRounds;
+}
 
 /**
  * Metadata persisted in `MJAIAgentRunStepEntity.OutputData.consult` and tracked

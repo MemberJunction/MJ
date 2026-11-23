@@ -335,6 +335,8 @@ class HandoffValidationHarness {
             }
             throw new Error(`HandoffValidationHarness: unexpected GetEntityObject('${entityName}')`);
         },
+        RunView: async () => ({ Success: true, Results: [] }),
+        RunViews: async () => [],
     };
 }
 

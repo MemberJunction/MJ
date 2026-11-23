@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RunActionParams } from '@memberjunction/actions-base';
-import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { AuthorizationInfo, IMetadataProvider, LimitsConfigResolver, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRhythmTemplateEntity,
     MJAIAgentSuggestionEntity,
@@ -46,7 +46,7 @@ const alice = {
     IsActive: true,
     Type: 'User',
     UserRoles: [],
-} as unknown as UserInfo;
+} as Partial<UserInfo> as UserInfo;
 
 const bob = {
     ID: 'user-bob',
@@ -57,7 +57,7 @@ const bob = {
     IsActive: true,
     Type: 'User',
     UserRoles: [],
-} as unknown as UserInfo;
+} as Partial<UserInfo> as UserInfo;
 
 const systemUser = {
     ID: 'user-system',
@@ -66,20 +66,24 @@ const systemUser = {
     IsActive: true,
     Type: 'Owner',
     UserRoles: [],
-} as unknown as UserInfo;
+} as Partial<UserInfo> as UserInfo;
 
 const cosAgent = {
     ID: 'agent-cos',
     Name: 'Chief of Staff',
     AcceptsSkills: 'All',
     SkillActivationMode: 'Auto',
-} as unknown as MJAIAgentEntityExtended;
+} as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+interface ActionRunnerHarness {
+    InternalRunAction: (p: RunActionParams) => Promise<{ Success: boolean; ResultCode?: string; Message?: string }>;
+}
 
 function callAction(
-    action: { InternalRunAction: (p: RunActionParams) => Promise<{ Success: boolean; ResultCode?: string; Message?: string }> },
+    action: ActionRunnerHarness,
     params: RunActionParams
 ) {
-    return (action as unknown as { InternalRunAction: (p: RunActionParams) => Promise<{ Success: boolean; ResultCode?: string; Message?: string }> }).InternalRunAction(params);
+    return action.InternalRunAction(params);
 }
 
 describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Suggestions & Agent Channels', () => {
@@ -104,7 +108,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             ID: 'tpl-active-1',
             AgentID: cosAgent.ID,
             Status: 'Active',
-        } as unknown as MJAIAgentRhythmTemplateEntity;
+        } as Partial<MJAIAgentRhythmTemplateEntity> as MJAIAgentRhythmTemplateEntity;
         const approvedRequest = {
             ID: 'req-approved-1',
             AgentID: cosAgent.ID,
@@ -125,20 +129,36 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 }
                 return { Success: true, Results: [] };
             }
+            if (p.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'pol-alice-cos',
+                            AgentID: cosAgent.ID,
+                            UserID: alice.ID,
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                };
+            }
             return { Success: true, Results: [] };
         });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: runViewSpy,
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const routineStub = {
             ID: 'routine-approved-1',
             Save: vi.fn().mockResolvedValue(true),
             NextRunAt: null,
-        } as unknown as MJUserRoutineEntity;
+        } as Partial<MJUserRoutineEntity> as MJUserRoutineEntity;
         const md = {
             GetEntityObject: vi.fn().mockResolvedValue(routineStub),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         // 1. No approval at all -> APPROVAL_REQUIRED
         const unconfirmed = await callAction(new ScheduleNextAgentWakeAction() as never, {
@@ -235,14 +255,14 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
     it('SendInterAgentRequestAction enforces Coordinator APPROVAL_REQUIRED during autonomous agent runs', async () => {
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [{ ID: bob.ID, IsActive: true }] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
         vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
             status: 'found',
             policy: {
                 Status: 'Active',
                 CoordinationMode: 'Coordinator',
                 AllowInterAgentCoordination: true,
-            } as unknown as MJAIAgentUserPolicyEntity,
+            } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
         });
 
         const res = await callAction(new SendInterAgentRequestAction() as never, {
@@ -290,7 +310,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new AssembleMyBriefingAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -337,7 +357,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         } as never);
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new AssembleMyBriefingAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -388,7 +408,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new AssembleMyBriefingAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -437,21 +457,21 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             OfferAt: 'Onboarding',
             Status: 'Active',
             Skill: null,
-        } as unknown as MJAIAgentRhythmTemplateEntity;
+        } as Partial<MJAIAgentRhythmTemplateEntity> as MJAIAgentRhythmTemplateEntity;
 
         const declinedTemplate = {
             ...template,
             ID: 'tpl-2',
             Name: 'Declined Rhythm',
             WorkstreamKey: 'declined-key',
-        } as unknown as MJAIAgentRhythmTemplateEntity;
+        } as Partial<MJAIAgentRhythmTemplateEntity> as MJAIAgentRhythmTemplateEntity;
 
         const declinedSuggestion = {
             ID: 'sug-1',
             TargetKey: 'declined-key',
             Status: 'Declined',
             Save: vi.fn().mockResolvedValue(true),
-        } as unknown as MJAIAgentSuggestionEntity;
+        } as Partial<MJAIAgentSuggestionEntity> as MJAIAgentSuggestionEntity;
 
         const approvedReq = {
             ID: 'req-rhythm-approved-1',
@@ -474,9 +494,25 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                     }
                     return { Success: true, Results: [] };
                 }
+                if (p.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-alice-cos',
+                                AgentID: cosAgent.ID,
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
                 return { Success: true, Results: [] };
             }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const listRes = await callAction(new ListAvailableRhythmsAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -509,10 +545,10 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             NewRecord: vi.fn(),
             Save: vi.fn().mockResolvedValue(true),
             WakeConfigurationObject: null,
-        } as unknown as MJUserRoutineEntity;
+        } as Partial<MJUserRoutineEntity> as MJUserRoutineEntity;
         const md = {
             GetEntityObject: vi.fn().mockResolvedValue(routineStub),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         // With a real server-verified Approved ConfirmedApprovalRequestID, agent call succeeds!
         const enabledRes = await callAction(new EnableAgentRhythmAction() as never, {
@@ -559,7 +595,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                     },
                 ],
             }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new ManageAgentSuggestionsAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -584,7 +620,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 Status: 'Active',
                 CoordinationMode: 'Observer',
                 AllowInterAgentCoordination: true,
-            } as unknown as MJAIAgentUserPolicyEntity,
+            } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
         });
 
         const obsRes = await callAction(new OpenAgentChannelAction() as never, {
@@ -608,7 +644,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 Status: 'Active',
                 CoordinationMode: 'Autonomous',
                 AllowInterAgentCoordination: true,
-            } as unknown as MJAIAgentUserPolicyEntity,
+            } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
         });
 
         const savedEntities: string[] = [];
@@ -622,11 +658,11 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 }),
                 LatestResult: null,
             })),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [bob] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const wakeSpy = vi
             .spyOn(AgentWakeTriggerService.Instance, 'TriggerWakeOnAgentChannelMessage')
@@ -661,21 +697,194 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         expect(wakeSpy).toHaveBeenCalledTimes(1);
     });
 
+    it('CR-CHANNEL-CEILING-BYPASS: OpenAgentChannel enforces deployment and user-policy ceilings, allows tightening, and permits authorized ceiling overrides', async () => {
+        const makeChannelMd = () => {
+            const capturedChannels: Array<Partial<MJAgentChannelEntity>> = [];
+            const adminAuth: Partial<AuthorizationInfo> = {
+                ID: 'auth-manage-agents',
+                Name: 'AI: Manage Agents',
+                ParentID: null,
+                UserCanExecute: (u: UserInfo) => u.UserRoles.some((r) => r.RoleID === 'role-manage-agents'),
+            };
+            const md: Partial<IMetadataProvider> = {
+                Authorizations: [adminAuth as AuthorizationInfo],
+                GetEntityObject: vi.fn(async (name: string) => {
+                    if (name === 'MJ: Agent Channels') {
+                        const chan: Partial<MJAgentChannelEntity> = {
+                            ID: 'chan-ceiling-test',
+                            NewRecord: vi.fn(),
+                            Save: vi.fn(async () => {
+                                capturedChannels.push(chan);
+                                return true;
+                            }),
+                        };
+                        return chan as never;
+                    }
+                    return {
+                        ID: `${name}-1`,
+                        NewRecord: vi.fn(),
+                        Save: vi.fn(async () => true),
+                    } as never;
+                }),
+            };
+            return { md: md as IMetadataProvider, capturedChannels };
+        };
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [bob] }),
+        } as Partial<RunView> as RunView);
+        vi.spyOn(AgentWakeTriggerService.Instance, 'TriggerWakeOnAgentChannelMessage').mockResolvedValue({
+            channelID: 'chan-ceiling-test',
+            channelStatus: 'Open',
+            pausedByGuard: false,
+            pauseReason: null,
+            results: [],
+        });
+
+        try {
+            // 1) Ordinary coordination-enabled user cannot exceed deployment (MjConfig) ceiling
+            LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+                AgentChannelConsecutiveTurns: 25,
+                AgentChannelWakesPerHour: 12,
+            });
+            vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+                status: 'found',
+                policy: {
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+            });
+            const fixture1 = makeChannelMd();
+            const res1 = await callAction(new OpenAgentChannelAction() as never, {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: alice,
+                Context: { AgentID: cosAgent.ID },
+                Provider: fixture1.md,
+                Filters: [],
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Ceiling clamp test 1' },
+                    { Name: 'TargetUserIDs', Type: 'Input', Value: bob.ID },
+                    { Name: 'InitialMessage', Type: 'Input', Value: 'Attempt widening above deployment' },
+                    { Name: 'MaxConsecutiveAgentTurns', Type: 'Input', Value: 9999 },
+                    { Name: 'MaxHourlyWakes', Type: 'Input', Value: 5000 },
+                ],
+            });
+            expect(res1.Success).toBe(true);
+            expect(fixture1.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(25);
+            expect(fixture1.capturedChannels[0]?.MaxHourlyWakes).toBe(12);
+
+            // 2) Ordinary user cannot exceed tighter UserAgentPolicy ceiling
+            vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+                status: 'found',
+                policy: {
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                    InstructionsOverride: '<!-- mj-limits: {"AgentChannelConsecutiveTurns": 7, "AgentChannelWakesPerHour": 4} -->',
+                } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+            });
+            const fixture2 = makeChannelMd();
+            const res2 = await callAction(new OpenAgentChannelAction() as never, {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: alice,
+                Context: { AgentID: cosAgent.ID },
+                Provider: fixture2.md,
+                Filters: [],
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Ceiling clamp test 2' },
+                    { Name: 'TargetUserIDs', Type: 'Input', Value: bob.ID },
+                    { Name: 'InitialMessage', Type: 'Input', Value: 'Attempt widening above user policy' },
+                    { Name: 'MaxConsecutiveAgentTurns', Type: 'Input', Value: 20 },
+                    { Name: 'MaxHourlyWakes', Type: 'Input', Value: 10 },
+                ],
+            });
+            expect(res2.Success).toBe(true);
+            expect(fixture2.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(7);
+            expect(fixture2.capturedChannels[0]?.MaxHourlyWakes).toBe(4);
+
+            // 3) Tightening below defaults/policy remains effective for ordinary user
+            vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+                status: 'found',
+                policy: {
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                    InstructionsOverride: '<!-- mj-limits: {"AgentChannelConsecutiveTurns": 15, "AgentChannelWakesPerHour": 10} -->',
+                } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+            });
+            const fixture3 = makeChannelMd();
+            const res3 = await callAction(new OpenAgentChannelAction() as never, {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: alice,
+                Context: { AgentID: cosAgent.ID },
+                Provider: fixture3.md,
+                Filters: [],
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Tightening test' },
+                    { Name: 'TargetUserIDs', Type: 'Input', Value: bob.ID },
+                    { Name: 'InitialMessage', Type: 'Input', Value: 'Tighten below defaults' },
+                    { Name: 'MaxConsecutiveAgentTurns', Type: 'Input', Value: 3 },
+                    { Name: 'MaxHourlyWakes', Type: 'Input', Value: 2 },
+                ],
+            });
+            expect(res3.Success).toBe(true);
+            expect(fixture3.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(3);
+            expect(fixture3.capturedChannels[0]?.MaxHourlyWakes).toBe(2);
+
+            // 4) Explicitly authorized caller ('AI: Manage Agents') can override ceilings following policy
+            const authorizedUser: UserInfo = {
+                ...alice,
+                ID: 'user-agent-admin',
+                UserRoles: [{ RoleID: 'role-manage-agents', Role: 'AI Manager' } as UserInfo['UserRoles'][number]],
+            } as UserInfo;
+            vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+                status: 'found',
+                policy: {
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                    InstructionsOverride: '<!-- mj-limits: {"AgentChannelConsecutiveTurns": 7, "AgentChannelWakesPerHour": 4} -->',
+                } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+            });
+            const fixture4 = makeChannelMd();
+            const res4 = await callAction(new OpenAgentChannelAction() as never, {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: authorizedUser,
+                Context: { AgentID: cosAgent.ID },
+                Provider: fixture4.md,
+                Filters: [],
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Authorized override test' },
+                    { Name: 'TargetUserIDs', Type: 'Input', Value: bob.ID },
+                    { Name: 'InitialMessage', Type: 'Input', Value: 'Authorized raise' },
+                    { Name: 'MaxConsecutiveAgentTurns', Type: 'Input', Value: 150 },
+                    { Name: 'MaxHourlyWakes', Type: 'Input', Value: 80 },
+                ],
+            });
+            expect(res4.Success).toBe(true);
+            expect(fixture4.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(150);
+            expect(fixture4.capturedChannels[0]?.MaxHourlyWakes).toBe(80);
+        } finally {
+            LimitsConfigResolver.Instance.ClearMjConfigLimits();
+        }
+    });
+
     it('ReplyInAgentChannel blocks agents from posting when channel is Paused For Human', async () => {
         const pausedChannel = {
             ID: 'chan-paused',
             Topic: 'Paused thread',
             ChannelStatus: 'Paused For Human',
             Load: vi.fn().mockResolvedValue(true),
-        } as unknown as MJAgentChannelEntity;
+        } as Partial<MJAgentChannelEntity> as MJAgentChannelEntity;
 
         const md = {
             GetEntityObject: vi.fn().mockResolvedValue(pausedChannel),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [{ ID: 'part-1', UserID: alice.ID }] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new ReplyInAgentChannelAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -696,7 +905,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
     it('GetAgentChannel blocks non-participants and Core read/cancel actions work cleanly', async () => {
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const deniedChannel = await callAction(new GetAgentChannelAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -743,5 +952,278 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             Params: [{ Name: 'Query', Type: 'Input', Value: 'bob' }],
         });
         expect(colleagueRes.Success).toBe(true);
+    });
+
+    it('EnableAgentRhythmAction seeds AgentConfigurationID from template default and supports ModelTier override', async () => {
+        const fastCfgID = '3A1C5A15-8DAA-44E5-A098-F20085E6C93F';
+        const highPowerCfgID = 'B6B9D780-52B2-431B-93AB-AC83FEF78553';
+
+        interface RhythmTemplateStub {
+            ID: string;
+            AgentID: string;
+            SkillID: string | null;
+            Name: string;
+            WorkstreamKey: string;
+            Description: string;
+            DefaultCronExpression: string;
+            DefaultWakeGate: string | null;
+            WakeReason: string;
+            OfferAt: MJAIAgentRhythmTemplateEntity['OfferAt'];
+            Status: MJAIAgentRhythmTemplateEntity['Status'];
+            DefaultAgentConfigurationID: string | null;
+            DefaultAgentConfiguration: string | null;
+            Skill: string | null;
+        }
+        const template: RhythmTemplateStub = {
+            ID: 'tpl-tier-1',
+            AgentID: cosAgent.ID,
+            SkillID: null,
+            Name: 'Daily Calendar Guard & Conflict Check',
+            WorkstreamKey: 'calendar-daily-review',
+            Description: 'Daily conflict check',
+            DefaultCronExpression: '15 7 * * 1-5',
+            DefaultWakeGate: null,
+            WakeReason: 'Check calendar',
+            OfferAt: 'Onboarding',
+            Status: 'Active',
+            DefaultAgentConfigurationID: fastCfgID,
+            DefaultAgentConfiguration: 'Fast',
+            Skill: null,
+        };
+
+        const savedRoutines: Array<{ AgentConfigurationID: string | null }> = [];
+        const routineStub = {
+            ID: 'routine-tier-1',
+            UserID: alice.ID,
+            TargetID: cosAgent.ID,
+            RoutineType: 'AgentWake',
+            AgentConfigurationID: null as string | null,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => {
+                savedRoutines.push({
+                    AgentConfigurationID: routineStub.AgentConfigurationID,
+                });
+                return true;
+            }),
+            WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
+        };
+
+        let routineExists = false;
+        class TierStubRunView extends RunView {
+            public override RunView = vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) => {
+                if (p.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                    return { Success: true, Results: [template] };
+                }
+                if (p.EntityName === 'MJ: User Routines') {
+                    return { Success: true, Results: routineExists ? [routineStub] : [] };
+                }
+                if (p.EntityName === 'MJ: AI Configurations') {
+                    if (p.ExtraFilter?.includes("Name='High Power'")) {
+                        return {
+                            Success: true,
+                            Results: [{ ID: highPowerCfgID, Name: 'High Power', Status: 'Active' }],
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: [{ ID: fastCfgID, Name: 'Fast', Status: 'Active' }],
+                    };
+                }
+                if (p.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-alice-cos',
+                                AgentID: cosAgent.ID,
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }) as RunView['RunView'];
+        }
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(new TierStubRunView());
+
+        const md = {
+            GetEntityObject: vi.fn().mockResolvedValue(routineStub),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        // First call: creation seeds AgentConfigurationID from template.DefaultAgentConfigurationID
+        const seededRes = await callAction(new EnableAgentRhythmAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Provider: md,
+            Filters: [],
+            Params: [{ Name: 'WorkstreamKey', Type: 'Input', Value: 'calendar-daily-review' }],
+        });
+        expect(seededRes.Success).toBe(true);
+        expect(routineStub.AgentConfigurationID).toBe(fastCfgID);
+        expect(JSON.parse(seededRes.Message!).AgentConfigurationID).toBe(fastCfgID);
+
+        // Second call: user overrides existing routine to High tier ('High Power')
+        routineExists = true;
+        routineStub.WakeConfigurationObject = { workstreamKey: 'calendar-daily-review' };
+        const overrideRes = await callAction(new EnableAgentRhythmAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'WorkstreamKey', Type: 'Input', Value: 'calendar-daily-review' },
+                { Name: 'ModelTier', Type: 'Input', Value: 'High' },
+            ],
+        });
+        expect(overrideRes.Success).toBe(true);
+        expect(routineStub.AgentConfigurationID).toBe(highPowerCfgID);
+        expect(JSON.parse(overrideRes.Message!).AgentConfigurationID).toBe(highPowerCfgID);
+        expect(savedRoutines).toHaveLength(2);
+    });
+
+    it('EnableAgentRhythmAction and ListAvailableRhythmsAction fall back to catalog configuration when template DefaultAgentConfigurationID is null in DB', async () => {
+        const highPowerCfgID = 'B6B9D780-52B2-431B-93AB-AC83FEF78553';
+        const unseededTemplate = {
+            ID: 'tpl-unseeded-growth',
+            AgentID: cosAgent.ID,
+            SkillID: null,
+            Name: 'Growth Coaching & Career Development Review',
+            WorkstreamKey: 'growth-coaching',
+            Description: 'Coaching review',
+            DefaultCronExpression: '0 10 15 * *',
+            DefaultWakeGate: null,
+            WakeReason: 'Run growth coaching review',
+            OfferAt: 'Both',
+            Status: 'Active',
+            DefaultAgentConfigurationID: null,
+            DefaultAgentConfiguration: null,
+            Skill: null,
+        };
+
+        const routineStub = {
+            ID: 'routine-growth-1',
+            UserID: alice.ID,
+            TargetID: cosAgent.ID,
+            RoutineType: 'AgentWake',
+            AgentConfigurationID: null as string | null,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+            WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
+        };
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (p: { EntityName: string }) => {
+                if (p.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                    return { Success: true, Results: [unseededTemplate] };
+                }
+                if (p.EntityName === 'MJ: AI Configurations') {
+                    return { Success: true, Results: [{ ID: highPowerCfgID, Name: 'High Power', Status: 'Active' }] };
+                }
+                if (p.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-alice-cos',
+                                AgentID: cosAgent.ID,
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as Partial<RunView> as RunView);
+
+        const listRes = await callAction(new ListAvailableRhythmsAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Filters: [],
+            Params: [],
+        });
+        expect(listRes.Success).toBe(true);
+        const listed = JSON.parse(listRes.Message!);
+        expect(listed.Rhythms[0].DefaultAgentConfigurationID).toBe(highPowerCfgID);
+        expect(listed.Rhythms[0].DefaultAgentConfiguration).toBe('High Power');
+        expect(listed.Rhythms[0].DefaultModelTier).toBe('High');
+
+        const md = {
+            GetEntityObject: vi.fn().mockResolvedValue(routineStub),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const enabledRes = await callAction(new EnableAgentRhythmAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Provider: md,
+            Filters: [],
+            Params: [{ Name: 'WorkstreamKey', Type: 'Input', Value: 'growth-coaching' }],
+        });
+        expect(enabledRes.Success).toBe(true);
+        expect(routineStub.AgentConfigurationID).toBe(highPowerCfgID);
+        expect(JSON.parse(enabledRes.Message!).AgentConfigurationID).toBe(highPowerCfgID);
+    });
+
+    it('AssembleMyBriefingAction includes Team section for managers with direct reports and omits Team for individual contributors', async () => {
+        vi.spyOn(ActionEngineServer.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(AIEngine.Instance, 'GetBriefingActionsForAgent').mockReturnValue([]);
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) => {
+                if (p.EntityName === 'MJ: Users' && p.ExtraFilter?.includes(alice.ID)) {
+                    return {
+                        Success: true,
+                        Results: [{ ID: alice.ID, EmployeeID: 'emp-alice', Email: alice.Email, IsActive: true }],
+                    };
+                }
+                if (p.EntityName === 'MJ: Employees' && p.ExtraFilter?.includes("SupervisorID='emp-alice'")) {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'emp-bob',
+                                FirstName: 'Bob',
+                                LastName: 'Manager',
+                                Email: 'bob@example.com',
+                                Title: 'Engineer',
+                                SupervisorID: 'emp-alice',
+                                Active: true,
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as Partial<RunView> as RunView);
+
+        const managerBriefingRes = await callAction(new AssembleMyBriefingAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Filters: [],
+            Params: [{ Name: 'HorizonDays', Type: 'Input', Value: 7 }],
+        });
+        expect(managerBriefingRes.Success).toBe(true);
+        const managerPayload = JSON.parse(managerBriefingRes.Message!) as {
+            Team?: { DirectReportCount: number; DirectReports: Array<{ Email: string }> };
+        };
+        expect(managerPayload.Team).toBeDefined();
+        expect(managerPayload.Team?.DirectReportCount).toBe(1);
+        expect(managerPayload.Team?.DirectReports[0]?.Email).toBe('bob@example.com');
+
+        const icBriefingRes = await callAction(new AssembleMyBriefingAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: bob,
+            Filters: [],
+            Params: [{ Name: 'HorizonDays', Type: 'Input', Value: 7 }],
+        });
+        expect(icBriefingRes.Success).toBe(true);
+        const icPayload = JSON.parse(icBriefingRes.Message!) as { Team?: { DirectReportCount: number } };
+        expect('Team' in icPayload).toBe(false);
     });
 });

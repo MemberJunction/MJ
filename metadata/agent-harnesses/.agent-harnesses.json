@@ -161,7 +161,7 @@
       "Description": "Google Antigravity Cloud / Gemini Agent Interactions API (`AntigravityCloudAdapter`), supporting asynchronous background agent leasing (`background: true`), `x-goog-api-key` or Bearer authentication, repository/branch workspace context, remote MCP tool declarations, thinking/token telemetry, and `adaptive-wake` session continuation across AgentWake cycles.",
       "DriverClass": "AntigravityCloudAdapter",
       "AIVendorID": "@lookup:MJ: AI Vendors.Name=Google",
-      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen (High)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
       "DefaultModel": "gemini-4-hydrogen-high",
       "CapabilitySettings": {
         "SessionResume": true,
@@ -182,8 +182,8 @@
       "ID": "77421E47-605A-41CB-A55C-F4FC5FE4509A"
     },
     "sync": {
-      "lastModified": "2026-11-18T00:24:52.392Z",
-      "checksum": "2adc244761c270ba4cd937b660553d4caf1f3b28a2ab610388453460249f6bbb"
+      "lastModified": "2026-11-22T16:47:41.759Z",
+      "checksum": "e4a0cbae3edc7d8f16e6e185d19e74cb14aeb91fa0f6922eb2bd984dc21a664b"
     }
   },
   {
@@ -192,7 +192,7 @@
       "Description": "Google Antigravity CLI (`agy -p --output-format stream-json`), executed inside a local or Docker sandbox. Resumes conversations natively via `--conversation <id>`, maps MJ postures onto `--mode plan|accept-edits` + `--sandbox` or `--dangerously-skip-permissions`, and accepts `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `ANTIGRAVITY_API_KEY` via MJ: AI Agent Credentials.",
       "DriverClass": "AntigravityCliAdapter",
       "AIVendorID": "@lookup:MJ: AI Vendors.Name=Google",
-      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen (High)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
       "DefaultModel": "gemini-4-hydrogen-high",
       "CapabilitySettings": {
         "SessionResume": true,
@@ -213,8 +213,8 @@
       "ID": "83B96013-4591-4FDC-B755-E4B6A656C35F"
     },
     "sync": {
-      "lastModified": "2026-11-18T00:24:52.399Z",
-      "checksum": "f1d4e7c70697f3ad2c7ac42acbfc3f7d6dbf7a0dfb94240a5fdfa48240201775"
+      "lastModified": "2026-11-22T16:47:41.786Z",
+      "checksum": "b479c39ea67eb7de4c442b256730d0fec5efe7553ff6b7b9abae41aba29db273"
     }
   },
   {

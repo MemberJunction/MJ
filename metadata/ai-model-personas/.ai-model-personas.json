@@ -1006,5 +1006,125 @@
       "lastModified": "2026-09-13T20:06:44.511Z",
       "checksum": "c8e62b6c7c2059242d3b802310d7d93bcfa4a2881d55da48c65486ca1ca3fbd2"
     }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6255828B-DE69-4C34-B85A-0942E0008504"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "784A599F-4858-49C4-9AE8-5D368A5F9960"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "0D129873-6E75-405C-A691-99D61AC7724C"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A8B4C5A0-1A1C-4E7B-B964-7766106CB544"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6926CF70-0B99-48AE-AF44-3557C835F08F"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "46B1E961-89ED-42A9-82AF-2B83E5F22CFB"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "Sequence": 7,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "49D59E94-635A-4EE4-98C5-EBFF5F5EE928"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "Sequence": 8,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6604BD33-15FB-4501-8531-A975F8CC8CEE"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "Sequence": 9,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E88BF9DD-95B4-47B3-8CFE-2C1E81B7F785"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "Sequence": 10,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "2EC00163-4012-4A88-83CA-49644AE131F9"
+    }
   }
 ]
