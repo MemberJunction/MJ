@@ -1019,7 +1019,7 @@
 .rail-empty-note {
   padding: 4px 8px;
   font-size: 12px;
-  color: var(--mj-text-disabled);
+  color: var(--mj-text-secondary);
 }
 
 .rail-item,
@@ -1050,7 +1050,7 @@
 .rail-item.active,
 .rail-tree-row.active {
   background: color-mix(in srgb, var(--mj-brand-primary) 11%, var(--mj-bg-surface));
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
   font-weight: 600;
 }
 
@@ -1510,7 +1510,7 @@
 .cat-chip.active {
   background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
   border-color: color-mix(in srgb, var(--mj-brand-primary) 55%, var(--mj-border-default));
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
 }
 
 .unified-count-pill {
@@ -1769,7 +1769,7 @@
   font-size: 11px;
   font-weight: 600;
   background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
 }
 
 .shared-kind-pill[data-kind='artifact'] {
@@ -1803,8 +1803,8 @@
 }
 
 .shared-level-pill[data-level='Edit'] {
-  background: color-mix(in srgb, var(--mj-status-success) 12%, transparent);
-  color: var(--mj-status-success);
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
   border-color: color-mix(in srgb, var(--mj-status-success) 25%, transparent);
 }
 

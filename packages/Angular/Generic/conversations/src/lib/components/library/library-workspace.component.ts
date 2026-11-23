@@ -386,7 +386,11 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       this.applyRouteParamsInternal(this.pendingExternalParams);
       this.pendingExternalParams = null;
     }
-    void this.ReloadWorkspaceData();
+    queueMicrotask(() => {
+      if (!this.isDestroyed) {
+        void this.ReloadWorkspaceData();
+      }
+    });
   }
 
   public ngOnDestroy(): void {

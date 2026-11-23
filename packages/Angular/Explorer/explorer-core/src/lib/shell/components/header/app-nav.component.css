@@ -63,10 +63,10 @@
    across nav pills, pinned app buttons, launcher cards, and omnibar rows. */
 .nav-list .nav-item.active {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
 }
 .nav-list .nav-item.active i {
-  color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-active);
 }
 .nav-list .nav-item i {
   font-size: var(--mj-text-base);
@@ -76,7 +76,7 @@
   padding-right: var(--mj-space-3);
 }
 .nav-list .nav-item .badge {
-  background: var(--mj-status-error);
+  background: var(--mj-status-error-text);
   color: var(--mj-text-inverse);
   border-radius: var(--mj-radius-full);
   padding: var(--mj-space-0-5) var(--mj-space-1-5);

@@ -624,6 +624,10 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
         '../../../../../../Generic/conversations/src/lib/components/library/library-workspace.component.html',
         '../../../../../../Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.css',
         '../../../../../../Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.html',
+        '../../../../../../Generic/conversations/src/lib/components/conversation/conversation-list.component.ts',
+        '../../shell/components/record-open/records-hub-pill.component.css',
+        '../../shell/components/header/app-nav.component.css',
+        '../../shell/shell.component.css',
         '../artifact-resource.component.ts',
       ];
       const rawColorPattern = /#[0-9a-fA-F]{3,8}\b|\brgba?\s*\(|\bhsla?\s*\(/g;
@@ -633,6 +637,43 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
         const matches = content.match(rawColorPattern) ?? [];
         expect(matches, `Expected zero hardcoded color literals in ${rel}`).toEqual([]);
       }
+    });
+
+    it('uses WCAG 2.1 AA high-contrast semantic tokens on shell pills, badges, kbd, and library active/empty controls', () => {
+      const pillCss = readFileSync(
+        resolve(__dirname, '../../shell/components/record-open/records-hub-pill.component.css'),
+        'utf8',
+      );
+      expect(pillCss).toContain('color: var(--mj-brand-primary-active);');
+
+      const navCss = readFileSync(
+        resolve(__dirname, '../../shell/components/header/app-nav.component.css'),
+        'utf8',
+      );
+      expect(navCss).toContain('color: var(--mj-brand-primary-active);');
+      expect(navCss).toContain('background: var(--mj-status-error-text);');
+
+      const shellCss = readFileSync(
+        resolve(__dirname, '../../shell/shell.component.css'),
+        'utf8',
+      );
+      expect(shellCss).toMatch(/\.search-btn\s+\.search-btn-kbd[\s\S]*?color:\s*var\(--mj-text-secondary\);/);
+      expect(shellCss).toMatch(/\.notification-badge[\s\S]*?background:\s*var\(--mj-status-error-text\);/);
+
+      const libraryCss = readFileSync(
+        resolve(__dirname, '../../../../../../Generic/conversations/src/lib/components/library/library-workspace.component.css'),
+        'utf8',
+      );
+      expect(libraryCss).toMatch(/\.rail-empty-note[\s\S]*?color:\s*var\(--mj-text-secondary\);/);
+      expect(libraryCss).toMatch(/\.rail-item\.active[\s\S]*?color:\s*var\(--mj-brand-primary-active\);/);
+      expect(libraryCss).toMatch(/\.cat-chip\.active[\s\S]*?color:\s*var\(--mj-brand-primary-active\);/);
+      expect(libraryCss).toMatch(/\.shared-level-pill\[data-level='Edit'\][\s\S]*?color:\s*var\(--mj-status-success-text\);/);
+
+      const convListTs = readFileSync(
+        resolve(__dirname, '../../../../../../Generic/conversations/src/lib/components/conversation/conversation-list.component.ts'),
+        'utf8',
+      );
+      expect(convListTs).toMatch(/\.folder-empty-hint[\s\S]*?75%/);
     });
   });
 });

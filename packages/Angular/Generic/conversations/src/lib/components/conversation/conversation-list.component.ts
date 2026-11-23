@@ -1316,7 +1316,7 @@ interface ListContextMenu {
       padding: 6px 16px;
       font-size: 11px;
       font-style: italic;
-      color: color-mix(in srgb, var(--conv-list-ink) 45%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 75%, transparent);
     }
     .ungrouped-section.drag-over {
       background: color-mix(in srgb, var(--conv-list-accent) 12%, transparent);
