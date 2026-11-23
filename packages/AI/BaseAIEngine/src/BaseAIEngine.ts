@@ -1256,6 +1256,22 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * Builds the root-to-leaf inheritance chain for an already-provided `MJAIAgentEntityExtended`
+     * instance, keeping `agent` itself as the leaf so caller-supplied in-memory field overrides
+     * (such as tests cloning a cached agent with different `AcceptsSkills` / `SkillActivationMode`)
+     * are never shadowed by the cached copy in `_agents`.
+     */
+    private resolveInheritanceNodesForAgent(agent: MJAIAgentEntityExtended): MJAIAgentEntityExtended[] {
+        if (!agent.BaseAgentID) {
+            return [agent];
+        }
+        const ancestors = this.GetAgentInheritanceChain(agent.BaseAgentID).filter(
+            (a) => !UUIDsEqual(a.ID, agent.ID)
+        );
+        return [...ancestors, agent];
+    }
+
+    /**
      * Resolves effective scalar properties and deep-merged `TypeConfiguration` /
      * `AgentTypePromptParams` across the agent's `BaseAgentID` prototype inheritance chain
      * (`[rootAgent, ..., leafAgent]`).
@@ -1264,8 +1280,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         agentOrId: string | MJAIAgentEntityExtended
     ): EffectiveAgentProperties {
         const leaf = typeof agentOrId === 'string' ? this.GetAgentByID(agentOrId) : agentOrId;
-        const chain = leaf?.ID ? this.GetAgentInheritanceChain(leaf.ID) : [];
-        const nodes: MJAIAgentEntityExtended[] = chain.length > 0 ? chain : leaf ? [leaf] : [];
+        const nodes: MJAIAgentEntityExtended[] = leaf ? this.resolveInheritanceNodesForAgent(leaf) : [];
         const root = nodes[0];
 
         const nearestNonNull = <T>(picker: (a: MJAIAgentEntityExtended) => T | null | undefined): T | null => {
@@ -2079,8 +2094,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * chain (`All` -> `Limited` -> `None`) without reading unrelated scalar columns.
      */
     private resolveEffectiveAcceptsSkills(agent: MJAIAgentEntityExtended): MJAIAgentEntity['AcceptsSkills'] {
-        const chain = agent.ID ? this.GetAgentInheritanceChain(agent.ID) : [];
-        const nodes = chain.length > 0 ? chain : [agent];
+        const nodes = this.resolveInheritanceNodesForAgent(agent);
         const acceptsRank: Record<MJAIAgentEntity['AcceptsSkills'], number> = {
             None: 0,
             Limited: 1,
@@ -2101,8 +2115,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * chain (`Auto` -> `RequestedOnly`).
      */
     private resolveEffectiveSkillActivationMode(agent: MJAIAgentEntityExtended): MJAIAgentEntity['SkillActivationMode'] {
-        const chain = agent.ID ? this.GetAgentInheritanceChain(agent.ID) : [];
-        const nodes = chain.length > 0 ? chain : [agent];
+        const nodes = this.resolveInheritanceNodesForAgent(agent);
         const skillModeRank: Record<MJAIAgentEntity['SkillActivationMode'], number> = {
             RequestedOnly: 0,
             Auto: 1,
@@ -2135,8 +2148,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         } else {
             // 'Limited' — walk BaseAgentID inheritance chain root -> leaf;
             // active grants accumulate down the chain and descendant non-Active rows veto.
-            const chain = this.GetAgentInheritanceChain(agent.ID);
-            const chainIds = chain.length > 0 ? chain.map(a => a.ID) : [agent.ID];
+            const nodes = this.resolveInheritanceNodesForAgent(agent);
+            const chainIds = nodes.map(a => a.ID);
             const chainIdSet = new UUIDSet(chainIds);
             const grantsByAgentId = new Map<string, MJAIAgentSkillEntity[]>();
             for (const gs of this._agentSkills) {

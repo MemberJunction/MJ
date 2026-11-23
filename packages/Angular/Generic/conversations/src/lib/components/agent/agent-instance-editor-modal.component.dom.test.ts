@@ -2,13 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ProviderBase } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type {
   MJAIAgentEntity,
-  MJAIAgentPersonaEntity,
   MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride,
   MJAIAgentUserPolicyEntity,
-  MJAIPersonaEntity,
 } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
@@ -201,114 +200,134 @@ class StubAlertComponent {
 
 import { AgentInstanceEditorModalComponent } from './agent-instance-editor-modal.component';
 
+interface StubAgentPersonaRecord {
+  AgentID: string;
+  PersonaID: string;
+  IsDefault: boolean;
+  IsAllowed: boolean;
+  Sequence: number;
+  StyleOverrideObject: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null;
+  NewRecord: () => boolean;
+  Save: () => Promise<boolean>;
+  LatestResult: { CompleteMessage: string };
+}
+
+interface StubAgentPolicyRecord {
+  AgentID: string;
+  UserID: string;
+  DisplayNameOverride: string | null;
+  PreferredPersonaID: string | null;
+  CoordinationMode: MJAIAgentUserPolicyEntity['CoordinationMode'];
+  OnboardingStatus: MJAIAgentUserPolicyEntity['OnboardingStatus'];
+  NewRecord: () => boolean;
+  InnerLoad: () => Promise<boolean>;
+  Save: () => Promise<boolean>;
+  LatestResult: { CompleteMessage: string };
+}
+
 function buildStubProvider(user: UserInfo): IMetadataProvider {
-  const provider = {
-    CurrentUser: user,
-    GetEntityObject: vi.fn(async (entityName: string) => {
-      if (entityName === 'MJ: AI Agents') {
-        const record: StubAgent & {
-          NewRecord: () => void;
-          InnerLoad: () => Promise<boolean>;
-          Save: () => Promise<boolean>;
-          LatestResult: { CompleteMessage: string };
-        } = {
-          ID: PEPPER_ID,
-          Name: '',
-          Description: null,
-          BaseAgentID: null,
-          OwnerUserID: null,
-          TypeID: AGENT_TYPE_ID,
-          InstantiationMode: 'None',
-          IsPrimaryInstance: false,
-          IconClass: null,
-          LogoURL: null,
-          AdditionalInstructions: null,
-          TypeConfiguration: null,
-          Status: 'Active',
-          LatestResult: { CompleteMessage: '' },
-          NewRecord: () => {
-            record.ID = PEPPER_ID;
-          },
-          InnerLoad: async () => true,
-          Save: async () => {
-            const snapshot: StubAgent = {
-              ID: record.ID,
-              Name: record.Name,
-              Description: record.Description,
-              BaseAgentID: record.BaseAgentID,
-              OwnerUserID: record.OwnerUserID,
-              TypeID: record.TypeID,
-              InstantiationMode: record.InstantiationMode,
-              IsPrimaryInstance: record.IsPrimaryInstance,
-              IconClass: record.IconClass,
-              LogoURL: record.LogoURL,
-              AdditionalInstructions: record.AdditionalInstructions,
-              TypeConfiguration: record.TypeConfiguration,
-              Status: record.Status,
-            };
-            mockState.savedAgents.push(snapshot);
-            mockState.byId.set(snapshot.ID.toLowerCase(), snapshot);
-            return true;
-          },
-        };
-        return record;
-      }
-
-      if (entityName === 'MJ: AI Agent Personas') {
-        const personaRow: Partial<MJAIAgentPersonaEntity> & {
-          NewRecord: () => void;
-          Save: () => Promise<boolean>;
-          LatestResult: { CompleteMessage: string };
-        } = {
-          AgentID: '',
-          PersonaID: '',
-          IsDefault: true,
-          IsAllowed: true,
-          Sequence: 10,
-          StyleOverrideObject: null,
-          LatestResult: { CompleteMessage: '' },
-          NewRecord: () => undefined,
-          Save: async () => {
-            mockState.savedPersonas.push({
-              AgentID: personaRow.AgentID ?? '',
-              PersonaID: personaRow.PersonaID ?? '',
-              StyleOverrideObject: personaRow.StyleOverrideObject ?? null,
-            });
-            return true;
-          },
-        };
-        return personaRow;
-      }
-
-      const policyRow: Partial<MJAIAgentUserPolicyEntity> & {
-        NewRecord: () => void;
+  const getEntityObject = vi.fn(async (entityName: string) => {
+    if (entityName === 'MJ: AI Agents') {
+      const record: StubAgent & {
+        NewRecord: () => boolean;
         InnerLoad: () => Promise<boolean>;
         Save: () => Promise<boolean>;
         LatestResult: { CompleteMessage: string };
       } = {
-        AgentID: '',
-        UserID: '',
-        DisplayNameOverride: null,
-        PreferredPersonaID: null,
-        CoordinationMode: 'Coordinator',
-        OnboardingStatus: 'Completed',
+        ID: PEPPER_ID,
+        Name: '',
+        Description: null,
+        BaseAgentID: null,
+        OwnerUserID: null,
+        TypeID: AGENT_TYPE_ID,
+        InstantiationMode: 'None',
+        IsPrimaryInstance: false,
+        IconClass: null,
+        LogoURL: null,
+        AdditionalInstructions: null,
+        TypeConfiguration: null,
+        Status: 'Active',
         LatestResult: { CompleteMessage: '' },
-        NewRecord: () => undefined,
+        NewRecord: () => {
+          record.ID = PEPPER_ID;
+          return true;
+        },
         InnerLoad: async () => true,
         Save: async () => {
-          mockState.savedPolicies.push({
-            AgentID: policyRow.AgentID ?? '',
-            UserID: policyRow.UserID ?? '',
-            DisplayNameOverride: policyRow.DisplayNameOverride ?? null,
-            CoordinationMode: policyRow.CoordinationMode ?? 'Coordinator',
+          const snapshot: StubAgent = {
+            ID: record.ID,
+            Name: record.Name,
+            Description: record.Description,
+            BaseAgentID: record.BaseAgentID,
+            OwnerUserID: record.OwnerUserID,
+            TypeID: record.TypeID,
+            InstantiationMode: record.InstantiationMode,
+            IsPrimaryInstance: record.IsPrimaryInstance,
+            IconClass: record.IconClass,
+            LogoURL: record.LogoURL,
+            AdditionalInstructions: record.AdditionalInstructions,
+            TypeConfiguration: record.TypeConfiguration,
+            Status: record.Status,
+          };
+          mockState.savedAgents.push(snapshot);
+          mockState.byId.set(snapshot.ID.toLowerCase(), snapshot);
+          return true;
+        },
+      };
+      return record;
+    }
+
+    if (entityName === 'MJ: AI Agent Personas') {
+      const personaRow: StubAgentPersonaRecord = {
+        AgentID: '',
+        PersonaID: '',
+        IsDefault: true,
+        IsAllowed: true,
+        Sequence: 10,
+        StyleOverrideObject: null,
+        LatestResult: { CompleteMessage: '' },
+        NewRecord: () => true,
+        Save: async () => {
+          mockState.savedPersonas.push({
+            AgentID: personaRow.AgentID,
+            PersonaID: personaRow.PersonaID,
+            StyleOverrideObject: personaRow.StyleOverrideObject,
           });
           return true;
         },
       };
-      return policyRow;
-    }),
-  };
-  return provider as IMetadataProvider;
+      return personaRow;
+    }
+
+    const policyRow: StubAgentPolicyRecord = {
+      AgentID: '',
+      UserID: '',
+      DisplayNameOverride: null,
+      PreferredPersonaID: null,
+      CoordinationMode: 'Coordinator',
+      OnboardingStatus: 'Completed',
+      LatestResult: { CompleteMessage: '' },
+      NewRecord: () => true,
+      InnerLoad: async () => true,
+      Save: async () => {
+        mockState.savedPolicies.push({
+          AgentID: policyRow.AgentID,
+          UserID: policyRow.UserID,
+          DisplayNameOverride: policyRow.DisplayNameOverride,
+          CoordinationMode: policyRow.CoordinationMode,
+        });
+        return true;
+      },
+    };
+    return policyRow;
+  });
+
+  const provider: IMetadataProvider = Object.create(ProviderBase.prototype);
+  Object.defineProperties(provider, {
+    CurrentUser: { value: user, writable: true, configurable: true },
+    GetEntityObject: { value: getEntityObject, writable: true, configurable: true },
+  });
+  return provider;
 }
 
 describe('AgentInstanceEditorModalComponent (DOM)', () => {

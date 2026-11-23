@@ -244,7 +244,7 @@ describe('AIEngineBase Prototype Inheritance (BaseAgentID)', () => {
             ID: 'aa-3',
             AgentID: L2_PEPPER,
             ActionID: 'act-email',
-            Status: 'Disabled',
+            Status: 'Revoked',
         });
         const relQb = defineFields<MJAIAgentRelationshipEntity>(MJAIAgentRelationshipEntity.prototype, {
             ID: 'rel-1',
@@ -328,6 +328,39 @@ describe('AIEngineBase Prototype Inheritance (BaseAgentID)', () => {
         expect(resolvedPersona?.Persona.Name).toBe('Sage');
         expect(resolvedPersona?.Tone).toBe('Direct, a touch sarcastic and funny');
         expect(resolvedPersona?.SpeakingStyle).toBe('Punchy and witty');
+    });
+
+    it('honors caller-supplied in-memory overrides on passed-in agent objects instead of cached _agents copy', () => {
+        const cachedSage = makeAgent({
+            ID: L0_COS,
+            Name: 'Sage',
+            AcceptsSkills: 'None',
+            SkillActivationMode: 'RequestedOnly',
+        });
+        const autoSkill = defineFields<MJAISkillEntity>(MJAISkillEntity.prototype, {
+            ID: 'skill-auto',
+            Name: 'Auto Skill',
+            Status: 'Active',
+            ActivationMode: 'Auto',
+        });
+        const engine = seedEngine({
+            _agents: [cachedSage],
+            _skills: [autoSkill],
+        });
+
+        // Baseline cached agent rejects skills
+        expect(engine.GetSkillsForAgent(cachedSage)).toEqual([]);
+        expect(engine.GetAutoActivatableSkillsForAgent(cachedSage)).toEqual([]);
+
+        // Caller passes an in-memory clone sharing the same ID with overridden skill gating
+        const overriddenSage = makeAgent({
+            ID: L0_COS,
+            Name: 'Sage',
+            AcceptsSkills: 'All',
+            SkillActivationMode: 'Auto',
+        });
+        expect(engine.GetSkillsForAgent(overriddenSage).map(s => s.ID)).toEqual(['skill-auto']);
+        expect(engine.GetAutoActivatableSkillsForAgent(overriddenSage).map(s => s.ID)).toEqual(['skill-auto']);
     });
 
     it('enforces 2x2 RBAC matrix and Ancestor CanRun Invariant', () => {
