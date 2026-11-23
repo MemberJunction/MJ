@@ -113,7 +113,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     },
     MJAIAgentEntityExtended: class {
         ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null; BaseAgentID: string | null = null;
-        OwnerUserID = ''; InstantiationMode = 'None'; Actions: unknown[] = []; Notes: unknown[] = [];
+        OwnerUserID = ''; InstantiationMode = 'None'; Actions: Array<{ ID: string }> = []; Notes: Array<{ ID: string }> = [];
     },
     MAX_AGENT_INHERITANCE_DEPTH: 5,
     DeepMergeAgentConfigObjects: (base: Record<string, unknown>, over: Record<string, unknown>) => ({ ...base, ...over }),

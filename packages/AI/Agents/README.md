@@ -765,15 +765,6 @@ For backward compatibility, this package re-exports the following from `@memberj
 
 New code should import these directly from `@memberjunction/ai-reranker`.
 
-## Agent Instances, Unified Persona & Primary Routing
-
-- **Prototype Runtime Resolution**: `BaseAgent`, `AgentRunner`, `CreateAgentInstance`, and Realtime co-agent sessions resolve effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, skills, presets, run limits, and user-policy ceilings across `AIAgent.BaseAgentID` chains.
-- **Unified Text + Realtime Voice Persona**: `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) injects `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` into text prompts alongside the **Audience-Aware Tone Guardrail**.
-- **Sibling Memory Isolation & Org-Note Inheritance**: `AgentContextInjector` inherits agent-wide org notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes strictly isolated per derived instance.
-- **Primary Instance Wake Routing**: `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` routes inter-agent requests, utility mailbox wakes, and workstreams to the user's primary active derived instance (`IsPrimaryInstance = 1`).
-
-Full architecture: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
-
 ## Dependencies
 
 - `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
@@ -812,12 +803,17 @@ Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
 
 ## Agent Instances, Unified Persona & Primary Routing
 
-- **Prototype Runtime Resolution**: `BaseAgent`, `AgentRunner`, `CreateAgentInstance`, and Realtime co-agent sessions resolve effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, skills, presets, run limits, and user-policy ceilings across `AIAgent.BaseAgentID` chains.
-- **Unified Text + Realtime Voice Persona**: `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) injects `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` into text prompts alongside the **Audience-Aware Tone Guardrail**.
-- **Sibling Memory Isolation & Org-Note Inheritance**: `AgentContextInjector` inherits agent-wide org notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes strictly isolated per derived instance.
-- **Primary Instance Wake Routing**: `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` routes inter-agent requests, utility mailbox wakes, and workstreams to the user's primary active derived instance (`IsPrimaryInstance = 1`).
+Derived agents (`BaseAgentID != null`) execute directly through `BaseAgent` and `AgentRunner` with full live prototype inheritance, unified text + voice persona injection, isolated per-instance memory, and primary-instance wake routing.
 
-Full architecture: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+| Component / Function | Responsibility |
+| --- | --- |
+| `BaseAgent` / `AgentRunner` / `CreateAgentInstance` | Resolves effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, relationships, skills, presets, run limits, and user-policy ceilings across `BaseAgentID` chains. |
+| `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) | Unifies text and Realtime voice persona by injecting `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` alongside the **Audience-Aware Tone Guardrail** (personal wit in 1:1 owner chat; professional on external emails, invites, and peer channels). |
+| `AgentContextInjector.filterNotesByScoping` | Inherits org/agent-wide notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes (`UserID != null`) strictly isolated per sibling instance (*Pepper* vs *Cato*). |
+| `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` | Routes inbound utility mailbox wakes, colleague inter-agent requests, Agent Channels, and workstreams to the recipient's active `IsPrimaryInstance = true` derived instance (with oldest-active and base-template fallback). |
+| `RealtimeClientSessionService` | Inherits persona and stacked standing instructions when opening live voice/realtime sessions on derived instances. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
 
 ## Dependencies
 

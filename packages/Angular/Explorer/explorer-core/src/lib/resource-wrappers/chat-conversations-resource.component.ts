@@ -50,6 +50,7 @@ import { firstValueFrom, Subject, takeUntil } from 'rxjs';
                 [CurrentUser]="currentUser"
                 [ActiveAgentId]="selectedConversation?.DefaultAgentID ?? null"
                 (StartChatWithAgent)="OnStartChatWithAgent($event)"
+                (StartNewChatWithAgent)="OnStartNewChatWithAgent($event)"
                 (StartOnboardingWithTemplate)="OnStartOnboardingWithTemplate($event)">
               </mj-my-agents-section>
               <mj-conversation-list
@@ -1285,9 +1286,39 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Starts a fresh conversation pinned to a personal agent instance clicked in the My Agents rail.
+   * Opens the user's most recent active conversation already pinned to this personal agent
+   * instance, or creates a new conversation pinned to it when none exists yet.
    */
   async OnStartChatWithAgent(agent: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const existing = this.engine.Conversations
+      .filter(
+        (c) =>
+          !c.IsArchived &&
+          c.DefaultAgentID != null &&
+          UUIDsEqual(c.DefaultAgentID, agent.ID)
+      )
+      .sort((a, b) => {
+        const tA = new Date(a.__mj_UpdatedAt ?? a.__mj_CreatedAt ?? 0).getTime();
+        const tB = new Date(b.__mj_UpdatedAt ?? b.__mj_CreatedAt ?? 0).getTime();
+        return tB - tA;
+      })[0];
+
+    if (existing) {
+      await this.OnConversationSelected(existing.ID);
+      return;
+    }
+
+    await this.OnStartNewChatWithAgent(agent);
+  }
+
+  /**
+   * Explicitly creates a brand-new conversation pinned to a personal agent instance
+   * (triggered by the hover '+' action in My Agents or when no existing thread exists).
+   */
+  async OnStartNewChatWithAgent(agent: MJAIAgentEntityExtended): Promise<void> {
     if (!this.CurrentUser || !this.EnvironmentId) {
       return;
     }

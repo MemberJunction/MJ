@@ -17,6 +17,7 @@ import { BeforeFolderEditEventArgs, AfterFolderEditEventArgs } from '../../event
           [ShowMyAgents]="ShowMyAgents"
           [ActiveAgentId]="ActiveAgentId"
           (StartChatWithAgent)="StartChatWithAgent.emit($event)"
+          (StartNewChatWithAgent)="StartNewChatWithAgent.emit($event)"
           (StartOnboardingWithTemplate)="StartOnboardingWithTemplate.emit($event)"
           (AgentInstanceChanged)="AgentInstanceChanged.emit($event)">
         </mj-my-agents-section>
@@ -314,8 +315,10 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
    */
   @Output() afterFolderEdit = this.AfterFolderEdit;
 
-  /** User clicked one of their personal agent instances in My Agents to start a chat with it. */
+  /** User clicked one of their personal agent instances in My Agents to open/focus its thread. */
   @Output() StartChatWithAgent = new EventEmitter<MJAIAgentEntityExtended>();
+  /** User explicitly clicked the hover '+' icon on an instance to spin up a fresh chat thread. */
+  @Output() StartNewChatWithAgent = new EventEmitter<MJAIAgentEntityExtended>();
   /** User chose "Chat to Onboard" for an instantiable template agent. */
   @Output() StartOnboardingWithTemplate = new EventEmitter<MJAIAgentEntityExtended>();
   /** Emitted after a personal agent instance is created, tailored, or archived from the sidebar modal. */

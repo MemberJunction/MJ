@@ -111,7 +111,7 @@ describe('MyAgentsSectionComponent (DOM)', () => {
     expect(text).toContain('Set up My Chief of Staff');
   });
 
-  it('renders derived instances (Pepper primary + Cato secondary), hides setup CTA, and emits StartChatWithAgent on click', async () => {
+  it('renders derived instances sorted Primary/Required first (Pepper, Cato, FDA Clinical Scout), hides setup CTA, and emits chat/new-chat events', async () => {
     const cosTemplate: StubAgent = {
       ID: COS_ID,
       Name: 'Chief of Staff',
@@ -160,9 +160,21 @@ describe('MyAgentsSectionComponent (DOM)', () => {
       LogoURL: null,
       Status: 'Active',
     };
+    const scout: StubAgent = {
+      ID: '11111111-0000-4000-8000-000000000005',
+      Name: 'FDA Clinical Scout',
+      Description: 'Biotech phase II/III tracker',
+      BaseAgentID: RESEARCH_ID,
+      OwnerUserID: ALICE_ID,
+      InstantiationMode: 'None',
+      IsPrimaryInstance: true,
+      IconClass: 'fa-solid fa-microscope',
+      LogoURL: null,
+      Status: 'Active',
+    };
     mockAiEngineState.instantiable = [cosTemplate, researchTemplate];
-    mockAiEngineState.derived = [cato, pepper];
-    [cosTemplate, researchTemplate, pepper, cato].forEach((a) =>
+    mockAiEngineState.derived = [scout, cato, pepper];
+    [cosTemplate, researchTemplate, pepper, cato, scout].forEach((a) =>
       mockAiEngineState.byId.set(a.ID.toLowerCase(), a)
     );
 
@@ -177,18 +189,29 @@ describe('MyAgentsSectionComponent (DOM)', () => {
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Pepper');
     expect(text).toContain('Cato');
+    expect(text).toContain('FDA Clinical Scout');
     expect(text).not.toContain('Set up My Chief of Staff');
 
-    // Primary instance (Pepper) renders first and shows primary star
+    // Primary Required-root instance (Pepper) renders #1 with star, sibling Cato #2, Optional Scout #3
     const items = fixture.nativeElement.querySelectorAll('.mas-item') as NodeListOf<HTMLElement>;
-    expect(items.length).toBe(2);
+    expect(items.length).toBe(3);
     expect(items[0].textContent).toContain('Pepper');
     expect(items[0].querySelector('.mas-primary-star')).not.toBeNull();
     expect(items[1].textContent).toContain('Cato');
+    expect(items[2].textContent).toContain('FDA Clinical Scout');
 
     const started: MJAIAgentEntityExtended[] = [];
+    const startedNew: MJAIAgentEntityExtended[] = [];
     fixture.componentInstance.StartChatWithAgent.subscribe((a) => started.push(a));
+    fixture.componentInstance.StartNewChatWithAgent.subscribe((a) => startedNew.push(a));
+
     items[0].click();
+    expect(started.map((a) => a.Name)).toEqual(['Pepper']);
+
+    const newChatBtn = items[1].querySelector('.mas-new-chat-btn') as HTMLButtonElement | null;
+    expect(newChatBtn).not.toBeNull();
+    newChatBtn!.click();
+    expect(startedNew.map((a) => a.Name)).toEqual(['Cato']);
     expect(started.map((a) => a.Name)).toEqual(['Pepper']);
   });
 });

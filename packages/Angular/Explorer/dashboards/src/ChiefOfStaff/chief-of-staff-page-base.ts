@@ -137,14 +137,57 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         return this.AvailableAgents.some((a) => a.IsDerivedInstance === true);
     }
 
-    /** Full entity of the currently selected agent when it is a user-owned derived instance. */
-    public get SelectedDerivedAgentEntity(): MJAIAgentEntityExtended | null {
+    private failedAgentAvatarIds = new Set<string>();
+
+    /** Full entity of the currently selected agent (derived instance or catalog agent). */
+    public get SelectedAgentEntity(): MJAIAgentEntityExtended | null {
         if (!this.SelectedAgentID) {
             return null;
         }
         const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
-        const found = engine.GetAgentByID(this.SelectedAgentID);
+        return engine.GetAgentByID(this.SelectedAgentID) ?? null;
+    }
+
+    /** Full entity of the currently selected agent when it is a user-owned derived instance. */
+    public get SelectedDerivedAgentEntity(): MJAIAgentEntityExtended | null {
+        const found = this.SelectedAgentEntity;
         return found?.BaseAgentID ? found : null;
+    }
+
+    /** Normalized FontAwesome icon class for the currently selected agent (e.g., Pepper's chili pepper, Cato's chess knight). */
+    public get SelectedAgentIconClass(): string {
+        const agent = this.SelectedAgentEntity;
+        const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
+        const base = agent?.BaseAgentID ? engine.GetAgentByID(agent.BaseAgentID) : undefined;
+        const raw = agent?.IconClass?.trim() || base?.IconClass?.trim() || '';
+        if (!raw) {
+            return 'fa-solid fa-user-tie';
+        }
+        if (/\bfa-(solid|regular|brands|light|thin|duotone)\b|\bfa[srbltd]\b/.test(raw)) {
+            return raw;
+        }
+        return `fa-solid ${raw}`;
+    }
+
+    /** Custom avatar image URL (LogoURL -> Persona PreviewImageURL) for the selected agent, if configured and valid. */
+    public get SelectedAgentAvatarUrl(): string | null {
+        const agent = this.SelectedAgentEntity;
+        if (!agent || this.failedAgentAvatarIds.has(agent.ID.toLowerCase())) {
+            return null;
+        }
+        const direct = agent.LogoURL?.trim();
+        if (direct) {
+            return direct;
+        }
+        const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
+        return engine.ResolveAgentPersona(agent.ID)?.Persona?.PreviewImageURL?.trim() || null;
+    }
+
+    public OnSelectedAgentAvatarError(): void {
+        if (this.SelectedAgentID) {
+            this.failedAgentAvatarIds.add(this.SelectedAgentID.toLowerCase());
+            this.cdr.markForCheck();
+        }
     }
 
     public OpenCreateInstanceModal(): void {

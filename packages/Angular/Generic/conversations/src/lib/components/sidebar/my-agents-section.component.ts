@@ -57,8 +57,10 @@ export class MyAgentsSectionComponent
   @Input() ShowMyAgents = true;
   @Input() ActiveAgentId: string | null = null;
 
-  /** User clicked a personal agent row to start a fresh chat pinned to it. */
+  /** User clicked a personal agent row to open/focus its thread (or start one if none exists). */
   @Output() StartChatWithAgent = new EventEmitter<MJAIAgentEntityExtended>();
+  /** User explicitly clicked the hover '+' action to start a brand-new thread with this agent. */
+  @Output() StartNewChatWithAgent = new EventEmitter<MJAIAgentEntityExtended>();
   /** User chose "Chat to Onboard" for a template agent (e.g., Chief of Staff). */
   @Output() StartOnboardingWithTemplate = new EventEmitter<MJAIAgentEntityExtended>();
   /** Emitted after an instance is created, updated, or archived from the modal. */
@@ -145,6 +147,11 @@ export class MyAgentsSectionComponent
     this.StartChatWithAgent.emit(item.Agent);
   }
 
+  public OnNewChatClick(item: MyAgentDisplayItem, event: Event): void {
+    event.stopPropagation();
+    this.StartNewChatWithAgent.emit(item.Agent);
+  }
+
   public OnAvatarError(agentId: string): void {
     this.failedAvatars.add(agentId.toLowerCase());
     this.rebuildDisplayList();
@@ -210,9 +217,23 @@ export class MyAgentsSectionComponent
       }
     }
 
+    // Sort order:
+    //   0) Primary instance of a Required-template root (e.g., primary Chief of Staff like Pepper)
+    //   1) Secondary sibling instances sharing a Required-template root (e.g., Cato)
+    //   2) Other derived instances (primary first, then alphabetical — e.g., FDA Clinical Scout)
+    const sortRank = (agent: MJAIAgentEntityExtended): number => {
+      const root = engine.GetRootAgent(agent.ID);
+      const isRequiredRoot = root?.InstantiationMode === 'Required';
+      if (isRequiredRoot && agent.IsPrimaryInstance) return 0;
+      if (isRequiredRoot) return 1;
+      if (agent.IsPrimaryInstance) return 2;
+      return 3;
+    };
+
     const sorted = [...derived].sort((a, b) => {
-      if (Boolean(a.IsPrimaryInstance) !== Boolean(b.IsPrimaryInstance)) {
-        return a.IsPrimaryInstance ? -1 : 1;
+      const rankDiff = sortRank(a) - sortRank(b);
+      if (rankDiff !== 0) {
+        return rankDiff;
       }
       return (a.Name ?? '').localeCompare(b.Name ?? '');
     });

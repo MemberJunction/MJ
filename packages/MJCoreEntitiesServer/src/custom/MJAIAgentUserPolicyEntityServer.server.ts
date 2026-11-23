@@ -9,6 +9,7 @@ import {
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { MJAIAgentEntity, MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
+import { IsMetadataProvider } from './MJAIAgentEntityServer.server';
 import {
     AgentPolicyBaselineSnapshot,
     AgentUserPolicyEngine,
@@ -134,13 +135,10 @@ export class MJAIAgentUserPolicyEntityServer extends MJAIAgentUserPolicyEntity {
         if (cached) {
             return cached;
         }
-        if (!targetAgentId || !activeAgentId || !ownerUserId || !this.ProviderToUse) {
+        if (!targetAgentId || !activeAgentId || !ownerUserId || !IsMetadataProvider(this.ProviderToUse)) {
             return null;
         }
-        const md = this.ProviderToUse as unknown as IMetadataProvider;
-        if (typeof md.GetEntityObject !== 'function') {
-            return null;
-        }
+        const md = this.ProviderToUse;
 
         const leaf = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', this.ContextCurrentUser);
         if (!(await leaf.Load(targetAgentId))) {
@@ -274,11 +272,12 @@ export class MJAIAgentUserPolicyEntityServer extends MJAIAgentUserPolicyEntity {
                       .map((a) => a.ID)
                 : []);
         if (chainToCheck.length > 0 && effectiveUserId && this.ContextCurrentUser) {
+            const provider = IsMetadataProvider(this.ProviderToUse) ? this.ProviderToUse : undefined;
             const ancestorEffective = await engine.GetEffectivePolicyForAgentChain(
                 chainToCheck,
                 effectiveUserId,
                 this.ContextCurrentUser,
-                { provider: this.ProviderToUse as unknown as IMetadataProvider }
+                provider ? { provider } : undefined
             );
             if (ancestorEffective) {
                 const ancestorSnapshot = engine.SnapshotPolicy(ancestorEffective);

@@ -25,6 +25,26 @@ mj-page-body {
     white-space: nowrap;
 }
 
+.cos-agent-picker__avatar {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--mj-radius-full, 999px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    font-size: 12px;
+    overflow: hidden;
+}
+
+.cos-agent-picker__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 .cos-agent-picker mj-dropdown {
     flex: 1;
     min-width: 170px;

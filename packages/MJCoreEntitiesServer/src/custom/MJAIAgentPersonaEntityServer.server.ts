@@ -1,7 +1,6 @@
 import {
     BaseEntity,
     EntityDeleteOptions,
-    IMetadataProvider,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -9,7 +8,7 @@ import {
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntity, MJAIAgentPersonaEntity } from '@memberjunction/core-entities';
-import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
+import { IsAgentAdminOrOwnerUser, IsMetadataProvider } from './MJAIAgentEntityServer.server';
 
 /**
  * Pure ownership check for `MJ: AI Agent Personas` mutations by non-Owner (`UI` role) users.
@@ -96,8 +95,13 @@ export class MJAIAgentPersonaEntityServer extends MJAIAgentPersonaEntity {
     }
 
     private async loadAgent(agentId: string): Promise<MJAIAgentEntity | null> {
-        const md = this.ProviderToUse as unknown as IMetadataProvider;
-        const agent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', this.ContextCurrentUser);
+        if (!IsMetadataProvider(this.ProviderToUse)) {
+            return null;
+        }
+        const agent = await this.ProviderToUse.GetEntityObject<MJAIAgentEntity>(
+            'MJ: AI Agents',
+            this.ContextCurrentUser
+        );
         if (await agent.Load(agentId)) {
             return agent;
         }

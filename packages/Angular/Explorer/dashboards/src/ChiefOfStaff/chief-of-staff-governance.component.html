@@ -9,7 +9,14 @@
             @if (AvailableAgents.length > 0) {
                 <div class="cos-agent-picker">
                     <span class="cos-agent-picker__label">
-                        <i class="fa-solid fa-robot"></i> Agent
+                        <span class="cos-agent-picker__avatar" aria-hidden="true">
+                            @if (SelectedAgentAvatarUrl) {
+                                <img [src]="SelectedAgentAvatarUrl" [alt]="SelectedAgentDisplayName" (error)="OnSelectedAgentAvatarError()" />
+                            } @else {
+                                <i [class]="SelectedAgentIconClass"></i>
+                            }
+                        </span>
+                        Agent
                     </span>
                     <mj-dropdown
                         [Data]="AvailableAgents"

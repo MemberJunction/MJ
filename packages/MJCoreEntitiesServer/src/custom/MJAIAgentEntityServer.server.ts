@@ -2,6 +2,7 @@ import {
     BaseEntity,
     EntityDeleteOptions,
     EntitySaveOptions,
+    IEntityDataProvider,
     IMetadataProvider,
     RunView,
     UserInfo,
@@ -33,6 +34,16 @@ const ISOLATION_RANK: Record<MJAIAgentEntity['Isolation'], number> = {
     Process: 2,
     Container: 3,
 };
+
+/**
+ * Type guard narrowing an `IEntityDataProvider` to `IMetadataProvider` when the provider
+ * implements metadata/entity-instantiation methods (e.g., `SQLServerDataProvider`, `PostgreSQLDataProvider`).
+ */
+export function IsMetadataProvider(
+    provider: IEntityDataProvider | null | undefined
+): provider is IEntityDataProvider & IMetadataProvider {
+    return Boolean(provider && 'GetEntityObject' in provider && 'Entities' in provider);
+}
 
 /**
  * Returns true when `user` is an Owner-type user or holds an administrative / Agent Administrator role.
@@ -616,7 +627,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         rootBaseId: string,
         currentAgentId: string
     ): Promise<void> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse as unknown as IMetadataProvider);
+        const rv = new RunView(this.RunViewProviderToUse);
         const safeOwner = EscapeSQLString(ownerUserId);
         const res = await rv.RunView<MJAIAgentEntity>(
             {
@@ -643,7 +654,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
     }
 
     private async loadAllAgentsForGuard(): Promise<MJAIAgentEntity[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse as unknown as IMetadataProvider);
+        const rv = new RunView(this.RunViewProviderToUse);
         const res = await rv.RunView<MJAIAgentEntity>(
             {
                 EntityName: 'MJ: AI Agents',
@@ -655,7 +666,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
     }
 
     private async loadAllAgentPermissionsForGuard(): Promise<MJAIAgentPermissionEntity[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse as unknown as IMetadataProvider);
+        const rv = new RunView(this.RunViewProviderToUse);
         const res = await rv.RunView<MJAIAgentPermissionEntity>(
             {
                 EntityName: 'MJ: AI Agent Permissions',
@@ -670,8 +681,13 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         if (!this.TypeID) {
             return null;
         }
-        const md = this.ProviderToUse as unknown as IMetadataProvider;
-        const type = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types', this.ContextCurrentUser);
+        if (!IsMetadataProvider(this.ProviderToUse)) {
+            return null;
+        }
+        const type = await this.ProviderToUse.GetEntityObject<MJAIAgentTypeEntity>(
+            'MJ: AI Agent Types',
+            this.ContextCurrentUser
+        );
         if (!(await type.Load(this.TypeID))) {
             return null;
         }

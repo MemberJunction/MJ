@@ -1,12 +1,23 @@
 :host {
   display: block;
   flex-shrink: 0;
+  /* Match conversation-list.component.ts --mj-chat-list-* palette so My Agents blends
+     natively into the dark-navy Conversations rail and respects white-label overrides. */
+  --mas-bg: var(--mj-chat-list-bg, var(--mj-brand-secondary));
+  --mas-ink: var(--mj-chat-list-ink, var(--mj-brand-on-secondary));
+  --mas-active-bg: var(--mj-chat-list-active-bg, var(--mj-brand-primary));
+  --mas-active-ink: var(--mj-chat-list-active-ink, var(--mj-brand-on-secondary));
+  --mas-accent: var(--mj-chat-list-accent, var(--mj-brand-primary));
+  --mas-accent-ink: var(--mj-chat-list-accent-ink, var(--mj-text-inverse));
+  --mas-accent-hover: var(--mj-chat-list-accent-hover, var(--mj-brand-primary-hover));
+  --mas-hover-bg: var(--mj-chat-list-hover-bg, color-mix(in srgb, var(--mas-ink) 10%, transparent));
 }
 
 .mas-section {
-  border-bottom: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface);
-  padding: 6px 8px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mas-ink) 12%, transparent);
+  background: var(--mas-bg);
+  color: var(--mas-ink);
+  padding: 8px 8px 10px;
 }
 
 .mas-header-row {
@@ -24,45 +35,46 @@
   border: none;
   background: transparent;
   border-radius: var(--mj-radius-md, 6px);
-  color: var(--mj-text-primary);
+  color: var(--mas-ink);
   cursor: pointer;
   text-align: left;
+  transition: background 120ms ease;
 }
 
 .mas-header-toggle:hover {
-  background: var(--mj-bg-surface-hover);
+  background: var(--mas-hover-bg);
 }
 
 .mas-chevron {
   font-size: 9px;
-  color: var(--mj-text-muted);
+  color: color-mix(in srgb, var(--mas-ink) 58%, transparent);
   width: 10px;
   text-align: center;
 }
 
 .mas-mark {
   font-size: 12px;
-  color: var(--mj-brand-primary);
+  color: color-mix(in srgb, var(--mas-accent) 72%, var(--mas-ink));
 }
 
 .mas-title {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--mj-text-secondary);
+  color: color-mix(in srgb, var(--mas-ink) 78%, transparent);
 }
 
 .mas-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 17px;
+  min-width: 18px;
   height: 17px;
   padding: 0 5px;
   border-radius: var(--mj-radius-full, 999px);
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mas-ink) 15%, transparent);
+  color: var(--mas-ink);
   font-size: 10px;
   font-weight: 700;
 }
@@ -77,21 +89,22 @@
   border: none;
   background: transparent;
   border-radius: var(--mj-radius-md, 6px);
-  color: var(--mj-text-muted);
+  color: color-mix(in srgb, var(--mas-ink) 70%, transparent);
   font-size: 11px;
   cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .mas-add-btn:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
-  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mas-accent) 28%, transparent);
+  color: var(--mas-ink);
 }
 
 .mas-body {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .mas-cta-card {
@@ -99,19 +112,19 @@
   align-items: center;
   gap: 9px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 9px 10px;
   border-radius: var(--mj-radius-md, 8px);
-  border: 1px dashed color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
-  background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-card));
-  color: var(--mj-text-primary);
+  border: 1px dashed color-mix(in srgb, var(--mas-ink) 32%, transparent);
+  background: color-mix(in srgb, var(--mas-accent) 20%, transparent);
+  color: var(--mas-ink);
   text-align: left;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
 }
 
 .mas-cta-card:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 13%, var(--mj-bg-surface-card));
-  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mas-accent) 32%, transparent);
+  border-color: color-mix(in srgb, var(--mas-ink) 55%, transparent);
 }
 
 .mas-cta-icon {
@@ -122,8 +135,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
+  background: var(--mas-accent);
+  color: var(--mas-accent-ink);
   font-size: 12px;
 }
 
@@ -138,24 +151,24 @@
 .mas-cta-title {
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--mj-text-primary);
+  color: var(--mas-ink);
 }
 
 .mas-cta-sub {
   font-size: 11px;
-  color: var(--mj-text-muted);
+  color: color-mix(in srgb, var(--mas-ink) 70%, transparent);
 }
 
 .mas-cta-arrow {
   font-size: 11px;
-  color: var(--mj-brand-primary);
+  color: color-mix(in srgb, var(--mas-ink) 78%, transparent);
 }
 
 .mas-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 196px;
+  max-height: 204px;
   overflow-y: auto;
 }
 
@@ -165,16 +178,22 @@
   gap: 9px;
   padding: 6px 8px;
   border-radius: var(--mj-radius-md, 8px);
+  color: var(--mas-ink);
   cursor: pointer;
   transition: background 120ms ease;
 }
 
 .mas-item:hover {
-  background: var(--mj-bg-surface-hover);
+  background: var(--mas-hover-bg);
 }
 
 .mas-item--active {
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  background: var(--mas-active-bg);
+  color: var(--mas-active-ink);
+}
+
+.mas-item--active:hover {
+  background: var(--mas-accent-hover);
 }
 
 .mas-avatar {
@@ -185,10 +204,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface-card));
-  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mas-ink) 14%, transparent);
+  color: var(--mas-ink);
   font-size: 12px;
   overflow: hidden;
+}
+
+.mas-item--active .mas-avatar {
+  background: color-mix(in srgb, var(--mas-active-ink) 20%, transparent);
+  color: var(--mas-active-ink);
 }
 
 .mas-avatar img {
@@ -215,10 +239,14 @@
 .mas-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--mj-text-primary);
+  color: var(--mas-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mas-item--active .mas-name {
+  color: var(--mas-active-ink);
 }
 
 .mas-primary-star {
@@ -229,35 +257,67 @@
 
 .mas-base-badge {
   font-size: 10.5px;
-  color: var(--mj-text-muted);
+  color: color-mix(in srgb, var(--mas-ink) 62%, transparent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.mas-item--active .mas-base-badge {
+  color: color-mix(in srgb, var(--mas-active-ink) 80%, transparent);
+}
+
+.mas-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.mas-new-chat-btn,
 .mas-tailor-btn {
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
   background: transparent;
   border-radius: var(--mj-radius-md, 6px);
-  color: var(--mj-text-muted);
+  color: color-mix(in srgb, var(--mas-ink) 70%, transparent);
   font-size: 11px;
   cursor: pointer;
-  opacity: 0.65;
+  opacity: 0;
   transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
 }
 
+.mas-tailor-btn {
+  opacity: 0.55;
+}
+
+.mas-item:hover .mas-new-chat-btn,
 .mas-item:hover .mas-tailor-btn,
+.mas-item--active .mas-new-chat-btn,
+.mas-item--active .mas-tailor-btn,
+.mas-new-chat-btn:focus-visible,
 .mas-tailor-btn:focus-visible {
   opacity: 1;
 }
 
+.mas-new-chat-btn:hover,
 .mas-tailor-btn:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
-  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mas-ink) 18%, transparent);
+  color: var(--mas-ink);
+}
+
+.mas-item--active .mas-new-chat-btn,
+.mas-item--active .mas-tailor-btn {
+  color: color-mix(in srgb, var(--mas-active-ink) 85%, transparent);
+}
+
+.mas-item--active .mas-new-chat-btn:hover,
+.mas-item--active .mas-tailor-btn:hover {
+  background: color-mix(in srgb, var(--mas-active-ink) 20%, transparent);
+  color: var(--mas-active-ink);
 }

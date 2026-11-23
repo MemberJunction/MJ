@@ -80,14 +80,24 @@
                     <span class="mas-base-badge">{{ item.BaseAgentName }}</span>
                   }
                 </span>
-                <button
-                  type="button"
-                  class="mas-tailor-btn"
-                  [title]="'Tailor ' + item.Agent.Name"
-                  [attr.aria-label]="'Tailor ' + item.Agent.Name"
-                  (click)="OpenEditModal(item.Agent, $event)">
-                  <i class="fa-solid fa-sliders"></i>
-                </button>
+                <span class="mas-row-actions">
+                  <button
+                    type="button"
+                    class="mas-new-chat-btn"
+                    [title]="'New chat with ' + item.Agent.Name"
+                    [attr.aria-label]="'New chat with ' + item.Agent.Name"
+                    (click)="OnNewChatClick(item, $event)">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="mas-tailor-btn"
+                    [title]="'Tailor ' + item.Agent.Name"
+                    [attr.aria-label]="'Tailor ' + item.Agent.Name"
+                    (click)="OpenEditModal(item.Agent, $event)">
+                    <i class="fa-solid fa-sliders"></i>
+                  </button>
+                </span>
               </div>
             }
           </div>

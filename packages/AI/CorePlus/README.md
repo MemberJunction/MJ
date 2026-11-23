@@ -318,11 +318,17 @@ Provider mappings:
 
 ## Agent Instances, Instantiation Config & Policy Ceiling Inheritance
 
-- **`agent-instantiation.ts`**: Exports `AgentInstantiationMode`, `MAX_AGENT_INHERITANCE_DEPTH` (5), `IAgentInstantiationConfig`, `IAgentPersonalityPreset`, `ParseAgentInstantiationConfig`, and `DeepMergeAgentConfigObjects` for `AIAgent.BaseAgentID` prototype chains and `TypeConfiguration.instantiation` hints.
-- **`AgentUserPolicyEngine`**: `GetEffectivePolicyForAgentChain` / `GetCachedEffectivePolicyForAgentChain` / `IntersectPolicies` intersect policies from `[root … leaf]` using strictest-wins ceiling semantics without mutating entity instances.
-- **`ResolveAgentRunLimits`**: Accepts `AncestorAgents` and `AncestorUserPolicies` to clamp child agent run limits by prototype ancestor ceilings.
+`@memberjunction/ai-core-plus` defines the shared instantiation schema helpers, strictest-wins chain policy intersection, and ancestor-clamped run-limit resolution used across server engines and Angular UI studios.
 
-Full architecture: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+| Export | Module | Purpose |
+| --- | --- | --- |
+| `AgentInstantiationMode`, `MAX_AGENT_INHERITANCE_DEPTH` (5) | `agent-instantiation.ts` | Strongly-typed instantiation mode derived from `MJAIAgentEntity['InstantiationMode']` and the maximum prototype chain depth constant. |
+| `IAgentInstantiationConfig`, `IAgentPersonalityPreset`, `ParseAgentInstantiationConfig` | `agent-instantiation.ts` | Typed parser for `TypeConfiguration.instantiation` onboarding hints (suggested names, default icons, personality presets, `maxInstancesPerUser`). |
+| `DeepMergeAgentConfigObjects`, `ParseAgentConfigJsonObject` | `agent-instantiation.ts` | Deterministic root → leaf JSON object merge for `TypeConfiguration` and `AgentTypePromptParams` across `BaseAgentID` chains. |
+| `AgentUserPolicyEngine.GetEffectivePolicyForAgentChain` / `IntersectPolicies` | `AgentUserPolicyEngine.ts` | Intersects active user policies across `[root … leaf]` using strictest-wins ceiling semantics without mutating underlying entities. |
+| `ResolveAgentRunLimits` (`AncestorAgents`, `AncestorUserPolicies`) | `limits-diagnostics.ts` | Clamps derived agent cost, token, time, and iteration ceilings against every ancestor agent and ancestor policy in the chain. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
 
 ## Dependencies
 
