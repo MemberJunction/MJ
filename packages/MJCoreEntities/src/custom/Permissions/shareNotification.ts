@@ -38,7 +38,7 @@ export interface ShareNotificationInput {
     /** Explicit permission level granted (e.g., `'View'`, `'Edit'`, `'Owner'`). */
     PermissionLevel?: string;
     /** Extra JSON payload for the notification (e.g., PermissionID, DomainName). */
-    ExtraConfiguration?: Record<string, unknown>;
+    ExtraConfiguration?: Record<string, string | number | boolean | null | undefined>;
     /**
      * Optional override for the notification title. When omitted, the dispatcher
      * auto-generates `"<grantor> shared <resource> with you"`. Used by

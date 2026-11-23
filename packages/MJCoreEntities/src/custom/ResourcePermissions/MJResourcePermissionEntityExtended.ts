@@ -49,9 +49,9 @@ function buildResourceShareExtraConfiguration(
     resourceRecordId: string,
     permissionId: string,
     permissionLevel: MJResourcePermissionEntity['PermissionLevel']
-): Record<string, unknown> {
+): Record<string, string | number | boolean | null | undefined> {
     const normalized = resourceTypeName?.trim().toLowerCase() ?? '';
-    const base: Record<string, unknown> = {
+    const base: Record<string, string | number | boolean | null | undefined> = {
         ResourcePermissionID: permissionId,
         ResourceRecordID: resourceRecordId,
         ...(permissionLevel ? { PermissionLevel: permissionLevel } : {}),

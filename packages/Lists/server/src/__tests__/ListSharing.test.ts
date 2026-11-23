@@ -25,22 +25,45 @@ const TEST_AUDIT_LOG_TYPE_IDS: Record<string, string> = {
   'List Invitation Revoked':  '22222222-2222-2222-2222-222222222225',
 };
 
+type MockFieldValue = string | number | boolean | Date | null | undefined;
+
+interface MockShareNotificationArg {
+  Provider?: object;
+  ContextUser?: object;
+  GrantorUserID?: string;
+  GranteeUserID?: string;
+  ResourceTypeLabel?: string;
+  ResourceTypeName?: string;
+  ResourceName?: string | null;
+  ResourceRecordID?: string;
+  PermissionLevel?: string;
+  ActionsSummary?: string;
+  ExtraConfiguration?: Record<string, MockFieldValue>;
+}
+
+interface MockRunViewParams {
+  EntityName?: string;
+  ExtraFilter?: string;
+  Fields?: string[];
+  ResultType?: string;
+}
+
 vi.mock('@memberjunction/core', () => {
   class CompositeKey {
-    KeyValuePairs: Array<{ FieldName: string; Value: unknown }> = [];
+    KeyValuePairs: Array<{ FieldName: string; Value: MockFieldValue }> = [];
     ToConcatenatedString() {
       return this.KeyValuePairs.map((kv) => `${kv.FieldName}|${kv.Value}`).join('||');
     }
   }
   class RunView {
-    constructor(_p?: unknown) {}
+    constructor(_p?: object) {}
     static FromMetadataProvider() {
       return new RunView();
     }
     static async GetEntityNameFromRunViewParams() {
       return 'Contacts';
     }
-    RunView(params: unknown) {
+    RunView(params: MockRunViewParams) {
       return mockRunViewImpl(params);
     }
   }
@@ -81,7 +104,7 @@ vi.mock('@memberjunction/core-entities', () => ({
   MJResourcePermissionEntity: class {},
   MJUserEntity: class {},
   ConsumeEntityShareNotificationDispatched: (entity: object) => mockConsumeEntityShareNotificationDispatched(entity),
-  CreateShareNotification: (input: unknown) => mockCreateShareNotification(input),
+  CreateShareNotification: (input: MockShareNotificationArg) => mockCreateShareNotification(input),
   // ListSharing resolves resource-type / audit-log-type IDs by name through
   // these singleton engines. The mocks return test stand-in IDs so
   // assertions compare against deterministic values without pulling in the
@@ -107,8 +130,21 @@ import { ListSharing } from '../ListSharing';
 const CTX_USER = { ID: 'user-grantor', Name: 'Grantor', Email: 'grantor@x', UserRoles: [] };
 const LIST_ENTITY = { ID: 'list-entity-id', Name: 'MJ: Lists' };
 
-function makeMockPermission(overrides: Record<string, unknown> = {}) {
-  const state: Record<string, unknown> = {
+interface MockPermissionState {
+  ID: string;
+  ResourceTypeID: string;
+  ResourceRecordID: string;
+  Type: string;
+  UserID: string | null;
+  RoleID: string | null;
+  PermissionLevel: string | null;
+  Status: string;
+  SharedByUserID: string | null;
+  __mj_CreatedAt: Date;
+}
+
+function makeMockPermission(overrides: Partial<MockPermissionState> = {}) {
+  const state: MockPermissionState = {
     ID: 'perm-new',
     ResourceTypeID: '',
     ResourceRecordID: '',
@@ -128,28 +164,39 @@ function makeMockPermission(overrides: Record<string, unknown> = {}) {
     LatestResult: { CompleteMessage: '' },
     get ID() { return state.ID; },
     get ResourceTypeID() { return state.ResourceTypeID; },
-    set ResourceTypeID(v: unknown) { state.ResourceTypeID = v; },
+    set ResourceTypeID(v: string) { state.ResourceTypeID = v; },
     get ResourceRecordID() { return state.ResourceRecordID; },
-    set ResourceRecordID(v: unknown) { state.ResourceRecordID = v; },
+    set ResourceRecordID(v: string) { state.ResourceRecordID = v; },
     get Type() { return state.Type; },
-    set Type(v: unknown) { state.Type = v; },
+    set Type(v: string) { state.Type = v; },
     get UserID() { return state.UserID; },
-    set UserID(v: unknown) { state.UserID = v; },
+    set UserID(v: string | null) { state.UserID = v; },
     get RoleID() { return state.RoleID; },
-    set RoleID(v: unknown) { state.RoleID = v; },
+    set RoleID(v: string | null) { state.RoleID = v; },
     get PermissionLevel() { return state.PermissionLevel; },
-    set PermissionLevel(v: unknown) { state.PermissionLevel = v; },
+    set PermissionLevel(v: string | null) { state.PermissionLevel = v; },
     get Status() { return state.Status; },
-    set Status(v: unknown) { state.Status = v; },
+    set Status(v: string) { state.Status = v; },
     get SharedByUserID() { return state.SharedByUserID; },
-    set SharedByUserID(v: unknown) { state.SharedByUserID = v; },
+    set SharedByUserID(v: string | null) { state.SharedByUserID = v; },
     get __mj_CreatedAt() { return state.__mj_CreatedAt; },
     _state: state,
   };
 }
 
-function makeMockInvitation(overrides: Record<string, unknown> = {}) {
-  const state: Record<string, unknown> = {
+interface MockInvitationState {
+  ID: string;
+  ListID: string;
+  Email: string;
+  Role: string;
+  Token: string;
+  ExpiresAt: Date;
+  CreatedByUserID: string;
+  Status: string;
+}
+
+function makeMockInvitation(overrides: Partial<MockInvitationState> = {}) {
+  const state: MockInvitationState = {
     ID: 'inv-new',
     ListID: '',
     Email: '',
@@ -167,19 +214,19 @@ function makeMockInvitation(overrides: Record<string, unknown> = {}) {
     LatestResult: { CompleteMessage: '' },
     get ID() { return state.ID; },
     get ListID() { return state.ListID; },
-    set ListID(v: unknown) { state.ListID = v; },
+    set ListID(v: string) { state.ListID = v; },
     get Email() { return state.Email; },
-    set Email(v: unknown) { state.Email = v; },
+    set Email(v: string) { state.Email = v; },
     get Role() { return state.Role; },
-    set Role(v: unknown) { state.Role = v; },
+    set Role(v: string) { state.Role = v; },
     get Token() { return state.Token; },
-    set Token(v: unknown) { state.Token = v; },
+    set Token(v: string) { state.Token = v; },
     get ExpiresAt() { return state.ExpiresAt; },
-    set ExpiresAt(v: unknown) { state.ExpiresAt = v; },
+    set ExpiresAt(v: Date) { state.ExpiresAt = v; },
     get CreatedByUserID() { return state.CreatedByUserID; },
-    set CreatedByUserID(v: unknown) { state.CreatedByUserID = v; },
+    set CreatedByUserID(v: string) { state.CreatedByUserID = v; },
     get Status() { return state.Status; },
-    set Status(v: unknown) { state.Status = v; },
+    set Status(v: string) { state.Status = v; },
     _state: state,
   };
 }

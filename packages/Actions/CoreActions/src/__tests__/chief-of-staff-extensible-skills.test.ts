@@ -46,7 +46,7 @@ const alice = {
     IsActive: true,
     Type: 'User',
     UserRoles: [],
-} as unknown as UserInfo;
+} as Partial<UserInfo> as UserInfo;
 
 const bob = {
     ID: 'user-bob',
@@ -57,7 +57,7 @@ const bob = {
     IsActive: true,
     Type: 'User',
     UserRoles: [],
-} as unknown as UserInfo;
+} as Partial<UserInfo> as UserInfo;
 
 const systemUser = {
     ID: 'user-system',
@@ -66,20 +66,24 @@ const systemUser = {
     IsActive: true,
     Type: 'Owner',
     UserRoles: [],
-} as unknown as UserInfo;
+} as Partial<UserInfo> as UserInfo;
 
 const cosAgent = {
     ID: 'agent-cos',
     Name: 'Chief of Staff',
     AcceptsSkills: 'All',
     SkillActivationMode: 'Auto',
-} as unknown as MJAIAgentEntityExtended;
+} as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+interface ActionRunnerHarness {
+    InternalRunAction: (p: RunActionParams) => Promise<{ Success: boolean; ResultCode?: string; Message?: string }>;
+}
 
 function callAction(
-    action: { InternalRunAction: (p: RunActionParams) => Promise<{ Success: boolean; ResultCode?: string; Message?: string }> },
+    action: ActionRunnerHarness,
     params: RunActionParams
 ) {
-    return (action as unknown as { InternalRunAction: (p: RunActionParams) => Promise<{ Success: boolean; ResultCode?: string; Message?: string }> }).InternalRunAction(params);
+    return action.InternalRunAction(params);
 }
 
 describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Suggestions & Agent Channels', () => {
@@ -104,7 +108,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             ID: 'tpl-active-1',
             AgentID: cosAgent.ID,
             Status: 'Active',
-        } as unknown as MJAIAgentRhythmTemplateEntity;
+        } as Partial<MJAIAgentRhythmTemplateEntity> as MJAIAgentRhythmTemplateEntity;
         const approvedRequest = {
             ID: 'req-approved-1',
             AgentID: cosAgent.ID,
@@ -151,10 +155,10 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             ID: 'routine-approved-1',
             Save: vi.fn().mockResolvedValue(true),
             NextRunAt: null,
-        } as unknown as MJUserRoutineEntity;
+        } as Partial<MJUserRoutineEntity> as MJUserRoutineEntity;
         const md = {
             GetEntityObject: vi.fn().mockResolvedValue(routineStub),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         // 1. No approval at all -> APPROVAL_REQUIRED
         const unconfirmed = await callAction(new ScheduleNextAgentWakeAction() as never, {
@@ -258,7 +262,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 Status: 'Active',
                 CoordinationMode: 'Coordinator',
                 AllowInterAgentCoordination: true,
-            } as unknown as MJAIAgentUserPolicyEntity,
+            } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
         });
 
         const res = await callAction(new SendInterAgentRequestAction() as never, {
@@ -453,21 +457,21 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             OfferAt: 'Onboarding',
             Status: 'Active',
             Skill: null,
-        } as unknown as MJAIAgentRhythmTemplateEntity;
+        } as Partial<MJAIAgentRhythmTemplateEntity> as MJAIAgentRhythmTemplateEntity;
 
         const declinedTemplate = {
             ...template,
             ID: 'tpl-2',
             Name: 'Declined Rhythm',
             WorkstreamKey: 'declined-key',
-        } as unknown as MJAIAgentRhythmTemplateEntity;
+        } as Partial<MJAIAgentRhythmTemplateEntity> as MJAIAgentRhythmTemplateEntity;
 
         const declinedSuggestion = {
             ID: 'sug-1',
             TargetKey: 'declined-key',
             Status: 'Declined',
             Save: vi.fn().mockResolvedValue(true),
-        } as unknown as MJAIAgentSuggestionEntity;
+        } as Partial<MJAIAgentSuggestionEntity> as MJAIAgentSuggestionEntity;
 
         const approvedReq = {
             ID: 'req-rhythm-approved-1',
@@ -541,10 +545,10 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             NewRecord: vi.fn(),
             Save: vi.fn().mockResolvedValue(true),
             WakeConfigurationObject: null,
-        } as unknown as MJUserRoutineEntity;
+        } as Partial<MJUserRoutineEntity> as MJUserRoutineEntity;
         const md = {
             GetEntityObject: vi.fn().mockResolvedValue(routineStub),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         // With a real server-verified Approved ConfirmedApprovalRequestID, agent call succeeds!
         const enabledRes = await callAction(new EnableAgentRhythmAction() as never, {
@@ -616,7 +620,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 Status: 'Active',
                 CoordinationMode: 'Observer',
                 AllowInterAgentCoordination: true,
-            } as unknown as MJAIAgentUserPolicyEntity,
+            } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
         });
 
         const obsRes = await callAction(new OpenAgentChannelAction() as never, {
@@ -640,7 +644,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 Status: 'Active',
                 CoordinationMode: 'Autonomous',
                 AllowInterAgentCoordination: true,
-            } as unknown as MJAIAgentUserPolicyEntity,
+            } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
         });
 
         const savedEntities: string[] = [];
@@ -654,7 +658,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 }),
                 LatestResult: null,
             })),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [bob] }),
@@ -872,11 +876,11 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             Topic: 'Paused thread',
             ChannelStatus: 'Paused For Human',
             Load: vi.fn().mockResolvedValue(true),
-        } as unknown as MJAgentChannelEntity;
+        } as Partial<MJAgentChannelEntity> as MJAgentChannelEntity;
 
         const md = {
             GetEntityObject: vi.fn().mockResolvedValue(pausedChannel),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [{ ID: 'part-1', UserID: alice.ID }] }),
@@ -1219,7 +1223,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             Params: [{ Name: 'HorizonDays', Type: 'Input', Value: 7 }],
         });
         expect(icBriefingRes.Success).toBe(true);
-        const icPayload = JSON.parse(icBriefingRes.Message!) as Record<string, unknown>;
+        const icPayload = JSON.parse(icBriefingRes.Message!) as { Team?: { DirectReportCount: number } };
         expect('Team' in icPayload).toBe(false);
     });
 });

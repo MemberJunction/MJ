@@ -33,14 +33,36 @@ export interface TeamBriefingSection {
     Summary: string;
 }
 
+/** Typed summary entry inside a Chief of Staff core briefing array. */
+export type ChiefOfStaffBriefingRecord = Record<string, string | number | boolean | null | undefined>;
+
+/** Core operational state bundled inside a Chief of Staff briefing envelope. */
+export interface ChiefOfStaffCoreBriefingState {
+    PendingApprovals: ChiefOfStaffBriefingRecord[];
+    ActiveRoutines: ChiefOfStaffBriefingRecord[];
+    AgentChannels: ChiefOfStaffBriefingRecord[];
+    OpenSuggestions?: ChiefOfStaffBriefingRecord[];
+}
+
+/** Structured contribution returned by an individual skill briefing action. */
+export interface ChiefOfStaffSkillBriefingEntry {
+    SkillName: string;
+    ActionID: string;
+    ActionName: string | null;
+    Success: boolean;
+    ResultCode: string;
+    Data: string | number | boolean | object | null | undefined;
+    Error: string | null;
+}
+
 /** Envelope returned by Chief of Staff briefing assembly (`Team` omitted when user has 0 direct reports). */
 export interface ChiefOfStaffBriefingEnvelope {
     GeneratedAtISO: string;
     HorizonDays: number;
     Agent: { AgentID: string; Name: string };
     User: { UserID: string; Name: string; Email: string };
-    Core: Record<string, unknown>;
-    SkillBriefings: Array<Record<string, unknown>>;
+    Core: ChiefOfStaffCoreBriefingState;
+    SkillBriefings: ChiefOfStaffSkillBriefingEntry[];
     Team?: TeamBriefingSection;
 }
 
@@ -231,8 +253,8 @@ export function AssembleChiefOfStaffBriefingEnvelope(params: {
     HorizonDays: number;
     Agent: { AgentID: string; Name: string };
     User: { UserID: string; Name: string; Email: string };
-    Core: Record<string, unknown>;
-    SkillBriefings: Array<Record<string, unknown>>;
+    Core: ChiefOfStaffCoreBriefingState;
+    SkillBriefings: ChiefOfStaffSkillBriefingEntry[];
     Team?: TeamBriefingSection | null;
 }): ChiefOfStaffBriefingEnvelope {
     const envelope: ChiefOfStaffBriefingEnvelope = {
@@ -288,13 +310,13 @@ export function FormatChiefOfStaffBriefingMarkdown(envelope: ChiefOfStaffBriefin
     return sections.join('\n');
 }
 
-function formatSkillBriefingLines(skillBriefings: Array<Record<string, unknown>>): string[] {
+function formatSkillBriefingLines(skillBriefings: ChiefOfStaffSkillBriefingEntry[]): string[] {
     if (skillBriefings.length === 0) {
         return ['- Core briefing state assembled cleanly.'];
     }
     return skillBriefings.map((b) => {
-        const name = typeof b['SkillName'] === 'string' ? b['SkillName'] : 'Skill';
-        const ok = b['Success'] === true;
-        return `- **${name}**: ${ok ? 'Ready' : `Unavailable (${String(b['ResultCode'] ?? 'ERROR')})`}`;
+        const name = b.SkillName || 'Skill';
+        const ok = b.Success === true;
+        return `- **${name}**: ${ok ? 'Ready' : `Unavailable (${b.ResultCode || 'ERROR'})`}`;
     });
 }

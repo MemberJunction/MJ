@@ -13,8 +13,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 vi.mock('@memberjunction/ng-shared', () => ({
   BaseResourceComponent: class {
-    public Data: Record<string, unknown> | null = null;
-    protected navigationService: Record<string, unknown> = {};
+    public Data: Record<string, string | number | boolean | null | undefined> | null = null;
+    protected navigationService: Record<string, (...args: never[]) => void> = {};
     public ngOnInit(): void {}
     public ngOnDestroy(): void {}
     public GetQueryParams(): Record<string, string> {
@@ -84,7 +84,7 @@ interface TestLibraryResourceHarness {
   };
   appManager: {
     Applications: {
-      subscribe: (observer: { next?: (v: unknown[]) => void; complete?: () => void }) => { unsubscribe: () => void };
+      subscribe: (observer: { next?: (v: Array<{ ID: string; Name: string }>) => void; complete?: () => void }) => { unsubscribe: () => void };
     };
   };
 }
@@ -437,6 +437,7 @@ describe('Epic 4a Slice 4 — Library Sharing Views, Owner-Only Controls & Deep 
 
       const fakeChatApp = {
         ID: 'app-chat',
+        Name: 'Chat',
         GetNavItems: vi.fn(async () => [
           { Label: 'Conversations', DriverClass: 'ChatConversationsResource', Status: 'Active' },
         ]),

@@ -4,6 +4,7 @@ import {
     CompositeKey,
     EntityDeleteOptions,
     EntitySaveOptions,
+    IEntityDataProvider,
     IMetadataProvider,
     LogError,
     RunView,
@@ -64,6 +65,11 @@ import {
  *    boundary; the client checks only shape the UI. Refusals return `false` and record a `BaseEntityResult`, as
  *    `MJListEntityServer.Delete` does.
  */
+/** Converts a `BaseEntity.ProviderToUse` handle to `IMetadataProvider` when available. */
+function toMetadataProvider(provider: IEntityDataProvider | null | undefined): IMetadataProvider | undefined {
+    return provider ? (provider as Partial<IMetadataProvider> as IMetadataProvider) : undefined;
+}
+
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntityServer extends MJConversationEntity {
     public override async Load(
@@ -82,7 +88,7 @@ export class MJConversationEntityServer extends MJConversationEntity {
         if (!loaded) {
             return false;
         }
-        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
+        const provider = toMetadataProvider(this.ProviderToUse);
         if (provider?.ProviderType !== 'Database') {
             return true;
         }
@@ -165,7 +171,7 @@ export class MJConversationEntityServer extends MJConversationEntity {
         if (!this.IsSaved) {
             return null;
         }
-        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
+        const provider = toMetadataProvider(this.ProviderToUse);
         if (provider?.ProviderType !== 'Database') {
             return null;
         }
@@ -199,7 +205,7 @@ export class MJConversationEntityServer extends MJConversationEntity {
         let refusal: string | null;
         try {
             const decision = await UserMayDeleteConversation(
-                this.ProviderToUse as unknown as IMetadataProvider,
+                toMetadataProvider(this.ProviderToUse)!,
                 this.ContextCurrentUser,
                 { ID: this.ID, UserID: this.UserID }
             );
@@ -268,7 +274,7 @@ export class MJConversationEntityServer extends MJConversationEntity {
             return null;
         }
 
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const provider = toMetadataProvider(this.ProviderToUse)!;
         const entityInfo =
             (typeof provider?.EntityByID === 'function'
                 ? provider.EntityByID(this.LinkedEntityID)
@@ -507,7 +513,7 @@ function checkParentOwnerOnlyChange(entity: MJConversationEntity): ValidationErr
  * the target parent conversation exists AND belongs to `ContextCurrentUser` (`parent.UserID`).
  */
 async function checkParentTargetOwnership(entity: MJConversationEntityServer): Promise<string | null> {
-    const provider = entity.ProviderToUse as unknown as IMetadataProvider | undefined;
+    const provider = toMetadataProvider(entity.ProviderToUse);
     if (provider?.ProviderType !== 'Database') {
         return null;
     }
@@ -558,7 +564,7 @@ async function checkConversationWriteAuthorization(entity: MJConversationEntityS
     if (!entity.IsSaved) {
         return null;
     }
-    const provider = entity.ProviderToUse as unknown as IMetadataProvider | undefined;
+    const provider = toMetadataProvider(entity.ProviderToUse);
     if (provider?.ProviderType !== 'Database') {
         return null;
     }

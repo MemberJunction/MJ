@@ -89,11 +89,13 @@ function makeUser(id: string, name: string): UserInfo {
     return user;
 }
 
+type StubFieldValue = string | number | boolean | Date | null | undefined;
+
 interface SimpleFieldStub {
     Name: string;
     Dirty: boolean;
-    OldValue: unknown;
-    Value: unknown;
+    OldValue: StubFieldValue;
+    Value: StubFieldValue;
     EntityFieldInfo: {
         TSType: EntityFieldTSType;
         DisplayNameOrName: string;
@@ -106,7 +108,7 @@ function createPermissionStub(
     actor: UserInfo,
     data: Partial<StoredPermissionRow> & { ID: string; ResourceTypeID: string; ResourceRecordID: string },
     saved: boolean,
-    dirtyFields: Array<{ name: keyof StoredPermissionRow; oldValue: unknown; value: unknown }> = []
+    dirtyFields: Array<{ name: keyof StoredPermissionRow; oldValue: StubFieldValue; value: StubFieldValue }> = []
 ): MJResourcePermissionEntityServer {
     const entity = Object.create(MJResourcePermissionEntityServer.prototype) as MJResourcePermissionEntityServer;
     const state: StoredPermissionRow = {
@@ -134,7 +136,7 @@ function createPermissionStub(
             get Value() {
                 return override ? override.value : state[key];
             },
-            set Value(v: unknown) {
+            set Value(v: StubFieldValue) {
                 if (override) {
                     override.value = v;
                 }
@@ -205,7 +207,7 @@ function createConversationServerEntity(
     row: StoredConversationRow | null,
     opts: {
         saved?: boolean;
-        dirtyFields?: Array<{ name: keyof StoredConversationRow; oldValue: unknown; value: unknown }>;
+        dirtyFields?: Array<{ name: keyof StoredConversationRow; oldValue: StubFieldValue; value: StubFieldValue }>;
     } = {}
 ): MJConversationEntityServer {
     const entity = Object.create(MJConversationEntityServer.prototype) as MJConversationEntityServer;
@@ -239,7 +241,7 @@ function createConversationServerEntity(
             get Value() {
                 return override ? override.value : state[key];
             },
-            set Value(v: unknown) {
+            set Value(v: StubFieldValue) {
                 if (override) {
                     override.value = v;
                 }
@@ -498,11 +500,11 @@ describe('Epic 4a Slice 1 (AC-2): Conversation Sharing & ParentID Authorization 
             GetEntityObject: async <T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> => {
                 if (entityName === 'MJ: Conversations') {
                     const obj = createConversationServerEntity(provider, contextUser ?? alice, null, { saved: false });
-                    return obj as unknown as T;
+                    return obj as Partial<T> as T;
                 }
                 if (entityName === 'MJ: Users') {
                     const u = { ID: CHARLIE_ID, Name: 'Charlie', Email: 'charlie@example.com', Load: vi.fn().mockResolvedValue(true) };
-                    return u as unknown as T;
+                    return u as Partial<T> as T;
                 }
                 throw new Error(`Unexpected GetEntityObject entity: ${entityName}`);
             },
@@ -544,7 +546,7 @@ describe('Epic 4a Slice 1 (AC-2): Conversation Sharing & ParentID Authorization 
                 }
                 return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
             }) as IRunViewProvider['RunView'],
-        } as unknown as IMetadataProvider & IRunViewProvider;
+        } as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider & IRunViewProvider;
 
         for (const u of [systemUser, alice, bob, charlie]) {
             Object.defineProperty(u, 'OwningProvider', { value: provider, configurable: true });

@@ -98,13 +98,15 @@ interface RecordedNotification {
     ResourceConfiguration: string | null;
 }
 
+type NotificationEmailContextData = Record<string, string | number | boolean | null | undefined | object>;
+
 interface RecordedEmailDispatch {
     ProviderName: string;
     Channel: string;
     To: string;
     From: string;
     Subject: string;
-    ContextData: Record<string, unknown>;
+    ContextData: NotificationEmailContextData;
     RenderedHTML: string;
     PlainBody: string;
 }
@@ -339,7 +341,7 @@ describe('Epic 4a Slice 3 (AC-4): Unified CreateShareNotification & Email Delive
                 To: typeof msg.To === 'string' ? msg.To : '',
                 From: typeof msg.From === 'string' ? msg.From : '',
                 Subject: processed.ProcessedSubject,
-                ContextData: (msg.ContextData ?? {}) as Record<string, unknown>,
+                ContextData: (msg.ContextData ?? {}) as NotificationEmailContextData,
                 RenderedHTML: processed.ProcessedHTMLBody,
                 PlainBody: processed.ProcessedBody,
             });

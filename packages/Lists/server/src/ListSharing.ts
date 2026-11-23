@@ -486,7 +486,7 @@ export class ListSharing {
     };
   }
 
-  private snapshotTarget(p: MJResourcePermissionEntity): Record<string, unknown> {
+  private snapshotTarget(p: MJResourcePermissionEntity): Record<string, string | null> {
     return {
       TargetKind: p.Type === 'User' ? 'user' : 'role',
       TargetID: p.Type === 'User' ? p.UserID : p.RoleID,

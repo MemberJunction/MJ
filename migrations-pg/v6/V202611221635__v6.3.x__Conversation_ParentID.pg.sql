@@ -335,6 +335,9 @@ BEGIN
         SELECT 1 FROM "__mj"."EntityField"
         WHERE "ID" = '80f90792-76b7-486a-9163-7c5bed53861e'
            OR ("EntityID" = '1615C276-3021-4A0B-B2E8-0121273577E8' AND "Name" = 'ParentID')
+    ) AND EXISTS (
+        SELECT 1 FROM "__mj"."Entity"
+        WHERE "ID" = '1615C276-3021-4A0B-B2E8-0121273577E8'
     ) THEN
         INSERT INTO "__mj"."EntityField" (
             "ID", "EntityID", "Sequence", "Name", "DisplayName", "Description",
@@ -902,48 +905,56 @@ GRANT SELECT ON "__mj"."vwFieldSuggestions" TO "cdp_Integration";
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      MJ: Agent Channels (IS-A child)
 ------------------------------------------------------------
-CREATE OR REPLACE VIEW "__mj"."vwAgentChannels"
-AS
-SELECT
-    a.*,
-    __mj_isa_p1."UserID",
-    __mj_isa_p1."ExternalID",
-    __mj_isa_p1."Name",
-    __mj_isa_p1."Description",
-    __mj_isa_p1."IsArchived",
-    __mj_isa_p1."LinkedEntityID",
-    __mj_isa_p1."LinkedRecordID",
-    __mj_isa_p1."DataContextID",
-    __mj_isa_p1."Status",
-    __mj_isa_p1."EnvironmentID",
-    __mj_isa_p1."ProjectID",
-    __mj_isa_p1."IsPinned",
-    __mj_isa_p1."TestRunID",
-    __mj_isa_p1."ApplicationScope",
-    __mj_isa_p1."ApplicationID",
-    __mj_isa_p1."DefaultAgentID",
-    __mj_isa_p1."AdditionalData",
-    __mj_isa_p1."RecordingFileID",
-    __mj_isa_p1."EgressID",
-    __mj_isa_p1."VisitorKey",
-    __mj_isa_p1."LastConversationID",
-    __mj_isa_p1."AnchorType",
-    __mj_isa_p1."AnchorKey",
-    __mj_isa_p1."AnchorMetadata",
-    __mj_isa_p1."IsResolved",
-    __mj_isa_p1."ResolvedByUserID",
-    __mj_isa_p1."ResolvedAt",
-    __mj_isa_p1."TypeID",
-    __mj_isa_p1."ParentID"
-FROM
-    "__mj"."AgentChannel" AS a
-INNER JOIN
-    "__mj"."Conversation" AS __mj_isa_p1
-  ON
-    "a"."ID" = __mj_isa_p1."ID";
-GRANT SELECT ON "__mj"."vwAgentChannels" TO "cdp_UI";
-GRANT SELECT ON "__mj"."vwAgentChannels" TO "cdp_Developer";
-GRANT SELECT ON "__mj"."vwAgentChannels" TO "cdp_Integration";
+DO $$
+BEGIN
+    IF to_regclass('__mj."AgentChannel"') IS NOT NULL THEN
+        EXECUTE $vw_ac$
+            CREATE OR REPLACE VIEW "__mj"."vwAgentChannels"
+            AS
+            SELECT
+                a.*,
+                __mj_isa_p1."UserID",
+                __mj_isa_p1."ExternalID",
+                __mj_isa_p1."Name",
+                __mj_isa_p1."Description",
+                __mj_isa_p1."IsArchived",
+                __mj_isa_p1."LinkedEntityID",
+                __mj_isa_p1."LinkedRecordID",
+                __mj_isa_p1."DataContextID",
+                __mj_isa_p1."Status",
+                __mj_isa_p1."EnvironmentID",
+                __mj_isa_p1."ProjectID",
+                __mj_isa_p1."IsPinned",
+                __mj_isa_p1."TestRunID",
+                __mj_isa_p1."ApplicationScope",
+                __mj_isa_p1."ApplicationID",
+                __mj_isa_p1."DefaultAgentID",
+                __mj_isa_p1."AdditionalData",
+                __mj_isa_p1."RecordingFileID",
+                __mj_isa_p1."EgressID",
+                __mj_isa_p1."VisitorKey",
+                __mj_isa_p1."LastConversationID",
+                __mj_isa_p1."AnchorType",
+                __mj_isa_p1."AnchorKey",
+                __mj_isa_p1."AnchorMetadata",
+                __mj_isa_p1."IsResolved",
+                __mj_isa_p1."ResolvedByUserID",
+                __mj_isa_p1."ResolvedAt",
+                __mj_isa_p1."TypeID",
+                __mj_isa_p1."ParentID"
+            FROM
+                "__mj"."AgentChannel" AS a
+            INNER JOIN
+                "__mj"."Conversation" AS __mj_isa_p1
+              ON
+                "a"."ID" = __mj_isa_p1."ID"
+        $vw_ac$;
+        GRANT SELECT ON "__mj"."vwAgentChannels" TO "cdp_UI";
+        GRANT SELECT ON "__mj"."vwAgentChannels" TO "cdp_Developer";
+        GRANT SELECT ON "__mj"."vwAgentChannels" TO "cdp_Integration";
+    END IF;
+END
+$$;
 
 ------------------------------------------------------------
 ----- CREATE FUNCTION FOR Conversation
@@ -1286,12 +1297,14 @@ BEGIN
         UPDATE "__mj"."AIAgentSession" SET "ConversationID" = NULL WHERE "ID" = v_rec."ID";
     END LOOP;
 
-    -- Cascade: Delete MJ: Agent Channels records via ID
-    FOR v_rec IN
-        SELECT "ID" FROM "__mj"."AgentChannel" WHERE "ID" = p_id
-    LOOP
-        PERFORM "__mj"."spDeleteAgentChannel"(v_rec."ID");
-    END LOOP;
+    -- Cascade: Delete MJ: Agent Channels records via ID (only when AgentChannel table exists in PG)
+    IF to_regclass('__mj."AgentChannel"') IS NOT NULL THEN
+        FOR v_rec IN
+            EXECUTE 'SELECT "ID" FROM "__mj"."AgentChannel" WHERE "ID" = $1' USING p_id
+        LOOP
+            EXECUTE 'SELECT "__mj"."spDeleteAgentChannel"($1)' USING v_rec."ID";
+        END LOOP;
+    END IF;
 
     -- Cascade: Delete MJ: Comments records via ID
     FOR v_rec IN

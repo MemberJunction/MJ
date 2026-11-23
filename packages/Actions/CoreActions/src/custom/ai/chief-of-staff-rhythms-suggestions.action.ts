@@ -23,6 +23,12 @@ import {
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
 
+interface ActionRunContext {
+    AgentID?: string;
+}
+
+type ActionOutputValue = string | number | boolean | object | null | undefined;
+
 function readStringParam(params: RunActionParams, name: string): string | undefined {
     const found = params.Params.find((p) => p.Name.trim().toLowerCase() === name.toLowerCase());
     if (found?.Value == null) {
@@ -50,16 +56,16 @@ function readBooleanParam(params: RunActionParams, name: string, fallback: boole
     return fallback;
 }
 
-function extractContextAgentId(context: unknown): string | undefined {
+function extractContextAgentId(context: ActionRunContext | null | undefined): string | undefined {
     if (!context || typeof context !== 'object') {
         return undefined;
     }
-    const val = (context as { AgentID?: unknown }).AgentID;
+    const val = context.AgentID;
     return typeof val === 'string' && val.trim().length > 0 ? val.trim() : undefined;
 }
 
 function resolveTargetAgent(params: RunActionParams): MJAIAgentEntityExtended | null {
-    const explicitId = readStringParam(params, 'AgentID') ?? extractContextAgentId(params.Context);
+    const explicitId = readStringParam(params, 'AgentID') ?? extractContextAgentId(params.Context as ActionRunContext | null | undefined);
     if (explicitId) {
         return AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, explicitId)) ?? null;
     }
@@ -70,7 +76,7 @@ function resolveTargetAgent(params: RunActionParams): MJAIAgentEntityExtended | 
     );
 }
 
-function setOutputParam(params: RunActionParams, name: string, value: unknown): ActionParam[] {
+function setOutputParam(params: RunActionParams, name: string, value: ActionOutputValue): ActionParam[] {
     const existing = params.Params.find(
         (p) => p.Name.trim().toLowerCase() === name.toLowerCase() && p.Type === 'Output'
     );

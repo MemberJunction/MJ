@@ -361,7 +361,9 @@ export async function UserCanReadConversation(
     return false;
 }
 
-function toConversationSecurityRow(row: unknown): ConversationSecurityRow | null {
+export type ConversationReadRow = BaseEntity | ConversationSecurityRow;
+
+function toConversationSecurityRow(row: ConversationReadRow | null | undefined): ConversationSecurityRow | null {
     if (!row || typeof row !== 'object') {
         return null;
     }
@@ -383,10 +385,10 @@ function toConversationSecurityRow(row: unknown): ConversationSecurityRow | null
             ExternalID: typed.ExternalID,
         };
     }
-    return row as ConversationSecurityRow;
+    return row;
 }
 
-function hasRequiredSecurityFields(row: unknown): boolean {
+function hasRequiredSecurityFields(row: ConversationReadRow | null | undefined): boolean {
     if (!row || typeof row !== 'object') {
         return false;
     }
@@ -396,19 +398,18 @@ function hasRequiredSecurityFields(row: unknown): boolean {
     return REQUIRED_SECURITY_FIELDS.every((field) => Object.prototype.hasOwnProperty.call(row, field));
 }
 
-function stripSyntheticFields(row: unknown, originalFields: string[] | undefined): unknown {
+function stripSyntheticFields(row: ConversationReadRow, originalFields: string[] | undefined): ConversationReadRow {
     if (!originalFields || !row || typeof row !== 'object' || row instanceof BaseEntity) {
         return row;
     }
     const allowed = new Set(originalFields.map((f) => f.trim().toLowerCase()));
-    const copy: Partial<ConversationSecurityRow> = {};
-    const source = row as ConversationSecurityRow;
-    const keys = Object.keys(source) as Array<keyof ConversationSecurityRow>;
+    const copy: ConversationSecurityRow = {};
+    const keys = Object.keys(row) as Array<keyof ConversationSecurityRow>;
     for (const key of keys) {
         if (allowed.has(String(key).toLowerCase())) {
-            const val = source[key];
+            const val = row[key];
             if (val !== undefined) {
-                (copy as object & Record<keyof ConversationSecurityRow, unknown>)[key] = val;
+                Object.assign(copy, { [key]: val });
             }
         }
     }
@@ -547,7 +548,7 @@ async function filterReadableConversations(
     provider: IMetadataProvider,
     contextUser: UserInfo
 ): Promise<RunViewResult> {
-    const rawRows: unknown[] = Array.isArray(results.Results) ? results.Results : [];
+    const rawRows: ConversationReadRow[] = Array.isArray(results.Results) ? (results.Results as ConversationReadRow[]) : [];
     const missingIds: string[] = [];
     for (const row of rawRows) {
         if (!hasRequiredSecurityFields(row)) {
@@ -578,7 +579,7 @@ async function filterReadableConversations(
         }
     }
 
-    const readablePairs: Array<{ row: unknown; candidate: ConversationSecurityRow }> = [];
+    const readablePairs: Array<{ row: ConversationReadRow; candidate: ConversationSecurityRow }> = [];
     const readableIds = new Set<string>();
     for (const row of rawRows) {
         const parsed = toConversationSecurityRow(row);
@@ -602,7 +603,7 @@ async function filterReadableConversations(
     );
 
     let anyRedacted = false;
-    const keptRows: unknown[] = [];
+    const keptRows: ConversationReadRow[] = [];
     for (const { row, candidate } of readablePairs) {
         const { Row: redactedRow, Redacted } = redactUnreadableParentFields(row, candidate, readableAncestors);
         if (Redacted) {
@@ -627,7 +628,7 @@ async function filterReadableConversations(
 }
 
 function collectReferencedAncestorIds(
-    readablePairs: ReadonlyArray<{ row: unknown; candidate: ConversationSecurityRow }>,
+    readablePairs: ReadonlyArray<{ row: ConversationReadRow; candidate: ConversationSecurityRow }>,
     alreadyReadableIds: ReadonlySet<string>
 ): string[] {
     const ids: string[] = [];
@@ -690,10 +691,10 @@ async function resolveReadableAncestorIds(
 }
 
 function redactUnreadableParentFields(
-    row: unknown,
+    row: ConversationReadRow,
     candidate: ConversationSecurityRow,
     readableAncestors: ReadonlySet<string>
-): { Row: unknown; Redacted: boolean } {
+): { Row: ConversationReadRow; Redacted: boolean } {
     const raw = toConversationSecurityRow(row);
     const parentId = candidate.ParentID;
     const rootParentId = candidate.RootParentID ?? raw?.RootParentID ?? null;

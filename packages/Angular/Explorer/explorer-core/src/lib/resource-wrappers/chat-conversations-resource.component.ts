@@ -1,5 +1,5 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
@@ -298,14 +298,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.ChatArea = value;
   }
 
-  public CurrentUser: any = null;
+  public CurrentUser: UserInfo | null = null;
 
   /** @deprecated Use {@link CurrentUser}. */
-  public get currentUser(): any {
+  public get currentUser(): UserInfo | null {
     return this.CurrentUser;
   }
   /** @deprecated Use {@link CurrentUser}. */
-  public set currentUser(value: any) {
+  public set currentUser(value: UserInfo | null) {
     this.CurrentUser = value;
   }
   private skipUrlUpdate = true; // Skip URL updates during initialization
@@ -621,15 +621,20 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   private async initializeEngines(): Promise<void> {
     try {
+      const currentUser = this.CurrentUser;
       // Initialize AIEngine, conversations, and mention service in parallel
       await Promise.all([
         AIEngineBase.Instance.Config(false),
-        this.engine.LoadConversations(this.EnvironmentId, this.CurrentUser, false),
-        this.mentionAutocompleteService.initialize(this.CurrentUser)
+        ...(currentUser ? [
+          this.engine.LoadConversations(this.EnvironmentId, currentUser, false),
+          this.mentionAutocompleteService.initialize(currentUser)
+        ] : [])
       ]);
 
       // Restore active tasks AFTER conversations are cached (uses in-memory lookup)
-      await this.activeTasksService.restoreFromDatabase(this.CurrentUser);
+      if (currentUser) {
+        await this.activeTasksService.restoreFromDatabase(currentUser);
+      }
 
       // Mark as ready - child components can now render
       this.IsReady = true;
@@ -883,10 +888,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private async loadUnlistedConversation(conversationId: string, forceVerify = false): Promise<void> {
     let loaded: MJConversationEntity | null = null;
     try {
-      if (forceVerify && typeof this.engine.VerifyConversationAccess === 'function') {
-        loaded = await this.engine.VerifyConversationAccess(conversationId, this.CurrentUser);
-      } else if (typeof this.engine.EnsureConversationLoaded === 'function') {
-        loaded = await this.engine.EnsureConversationLoaded(conversationId, this.CurrentUser);
+      const currentUser = this.CurrentUser;
+      if (currentUser && forceVerify && typeof this.engine.VerifyConversationAccess === 'function') {
+        loaded = await this.engine.VerifyConversationAccess(conversationId, currentUser);
+      } else if (currentUser && typeof this.engine.EnsureConversationLoaded === 'function') {
+        loaded = await this.engine.EnsureConversationLoaded(conversationId, currentUser);
       }
     } catch {
       loaded = null;
