@@ -403,6 +403,50 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     }
   });
 
+  test('selected stays visible on hover, tall rows cap their radius, and phone menu sheets take the page gutter', async ({
+    page,
+  }, testInfo) => {
+    const isPhone = testInfo.project.name === 'phone-chromium';
+    await page.goto('/');
+    await page.waitForSelector('mj-surface.mj-surface');
+    const bg = (el: Element) => getComputedStyle(el).backgroundColor;
+
+    // Hovering a selected row deepens its fill; it never becomes the plain hover fill
+    const selectedRow = page.locator('[role="listbox"] mj-row.is-selected').first();
+    const plainRow = page.locator('[role="listbox"] mj-row:not(.is-selected)').first();
+    const selectedRest = await selectedRow.evaluate(bg);
+    await page.evaluate(() => {
+      document.querySelectorAll('[role="listbox"] mj-row').forEach((r) => {
+        (r as HTMLElement).style.transition = 'none';
+        r.classList.add('is-hover');
+      });
+    });
+    const selectedHover = await selectedRow.evaluate(bg);
+    const plainHover = await plainRow.evaluate(bg);
+    expect(selectedHover).not.toBe(plainHover);
+    expect(selectedHover).not.toBe(selectedRest);
+    await page.evaluate(() =>
+      document.querySelectorAll('[role="listbox"] mj-row').forEach((r) => r.classList.remove('is-hover'))
+    );
+
+    // Under a pill-radius look, a row's radius is capped at half its single-line height
+    await page.getByRole('button', { name: 'Look: LXP' }).click();
+    const { radius, minHeight } = await selectedRow.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { radius: parseFloat(cs.borderTopLeftRadius), minHeight: parseFloat(cs.minHeight) };
+    });
+    expect(radius).toBeGreaterThan(0);
+    expect(radius).toBeLessThanOrEqual(minHeight / 2);
+
+    if (isPhone) {
+      await page.locator('#open-popover').click();
+      const menu = page.locator('.cdk-overlay-container [role="menu"]');
+      await expect(menu).toBeVisible();
+      await expect(menu).toHaveCSS('padding-top', '16px');
+      await expect(menu).toHaveCSS('padding-left', '16px');
+    }
+  });
+
   test('removing an attribute restores the default instead of throwing', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', (msg) => {

@@ -62,6 +62,7 @@
     --mj-surface-bg: initial;
     --mj-surface-bg-hover: initial;
     --mj-surface-bg-selected: initial;
+    --mj-surface-bg-selected-hover: initial;
     --mj-surface-border: initial;
     --mj-surface-border-selected: initial;
     --mj-surface-radius: initial;
@@ -120,6 +121,20 @@
   .mj-surface.is-selected:not(.mj-surface-sunken) {
     background: var(--mj-surface-bg-selected, var(--_mj-surface-level-bg-selected, var(--mj-surface-base-bg-selected)));
     border-color: var(--mj-surface-border-selected, var(--_mj-surface-level-border-selected, var(--mj-brand-primary)));
+  }
+
+  /* Hovering a selected surface deepens its selected fill. It must never fall back to the plain
+     hover fill, which would make a selected item look unselected under the pointer. */
+  .mj-surface.is-selected.mj-surface-interactive:not(.mj-surface-sunken):hover,
+  .mj-surface.is-selected:not(.mj-surface-sunken).is-hover {
+    background: var(
+      --mj-surface-bg-selected-hover,
+      color-mix(
+        in srgb,
+        var(--mj-brand-primary) 6%,
+        var(--mj-surface-bg-selected, var(--_mj-surface-level-bg-selected, var(--mj-surface-base-bg-selected)))
+      )
+    );
   }
 
   .mj-surface:focus-visible {
@@ -184,7 +199,15 @@
         var(--_mj-row-explicit-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3)))
       );
     gap: var(--mj-row-gap, var(--mj-space-3));
-    border-radius: var(--_mj-visual-role-radius, var(--mj-row-radius, var(--mj-radius-control)));
+    /* A pill is only a pill at half the height. Capping there keeps single-line rows pill-shaped
+       under a pill radius while a tall, wrapped row gets bounded corners instead of half-circles. */
+    border-radius: min(
+      var(--_mj-visual-role-radius, var(--mj-row-radius, var(--mj-radius-control))),
+      var(
+        --mj-row-radius-max,
+        calc(var(--_mj-row-explicit-min-height, var(--mj-row-min-height, var(--mj-control-height-md))) / 2)
+      )
+    );
     border: 1px solid var(--_mj-visual-role-border, var(--_mj-tone-border, var(--mj-row-border, transparent)));
     transition: background-color var(--mj-transition-fast), border-color var(--mj-transition-fast);
   }
@@ -202,6 +225,19 @@
   .mj-row.is-selected {
     background: var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected));
     border-color: var(--_mj-tone-border, var(--mj-row-border-selected, var(--mj-brand-primary)));
+  }
+
+  /* Same rule as surfaces: hover deepens the selected fill, it never replaces it. */
+  .mj-row.is-selected.mj-row-interactive:not(.mj-row-disabled):hover,
+  .mj-row.is-selected:not(.mj-row-disabled).is-hover {
+    background: var(
+      --mj-row-bg-selected-hover,
+      color-mix(
+        in srgb,
+        var(--mj-brand-primary) 6%,
+        var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected))
+      )
+    );
   }
 
   /* Disabled uses the semantic text token only. Stacking opacity on top made the text unreadable. */
@@ -381,6 +417,12 @@
     box-shadow: var(--mj-layer-shadow, var(--mj-surface-overlay-shadow));
     padding-bottom: calc(var(--mj-layer-padding, var(--_mj-layer-default-padding, var(--mj-space-6))) + env(safe-area-inset-bottom, 0px));
     animation: mj-sheet-in-bottom 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* A menu or popover keeps tight padding when anchored. As a sheet it takes the page gutter, so
+     its content lines up with the page behind it and clears a large top corner radius. */
+  .mj-layer-pane-phone-sheet > .mj-layer-panel:is(.mj-layer-kind-menu, .mj-layer-kind-popover) {
+    --_mj-layer-default-padding: var(--mj-space-4);
   }
 
   /* Sideways, a full-width sheet would be a banner, so it caps at 640px (Material's sheet maximum) and centers. */
