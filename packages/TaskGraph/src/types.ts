@@ -11,6 +11,7 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import type { FastConvergenceJudgeEvaluator } from '@memberjunction/ai-agents';
 import type { MJLimitsOverride } from '@memberjunction/core';
+import type { TaskGraphIsolationRunnerMap } from './isolation';
 
 /**
  * Mints a fresh metadata/data provider.
@@ -600,6 +601,12 @@ export type TaskGraphDispatcherConfig = {
 
     /** Optional production budget and runaway governance configuration evaluated on node settlement. */
     Governance?: TaskGraphGovernanceConfig;
+
+    /**
+     * Optional per-level isolation execution runners (`InProcess`, `Worker`, `Process`, `Container`)
+     * used by {@link TaskGraphDispatcher} when executing graph tasks.
+     */
+    IsolationRunners?: TaskGraphIsolationRunnerMap;
 };
 
 /** Optional production budget and runaway governance configuration for {@link TaskGraphDispatcher}. */

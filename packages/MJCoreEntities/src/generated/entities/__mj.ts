@@ -14380,6 +14380,26 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: Isolation
+    * * Display Name: Isolation
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: InProcess
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Container
+    *   * InProcess
+    *   * Process
+    *   * Worker
+    * * Description: Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation).
+    */
+    get Isolation(): 'Container' | 'InProcess' | 'Process' | 'Worker' {
+        return this.Get('Isolation');
+    }
+    set Isolation(value: 'Container' | 'InProcess' | 'Process' | 'Worker') {
+        this.Set('Isolation', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)

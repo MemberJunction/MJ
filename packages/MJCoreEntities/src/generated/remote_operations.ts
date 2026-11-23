@@ -2037,6 +2037,8 @@ export interface WorkflowDraftOutput {
         durable?: boolean;
         /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
         failureSemantics?: 'block' | 'edges';
+        /** Per-graph execution isolation level ('Worker' default for newly drafted workflows). */
+        isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
     };
     /** Why drafting failed, or why the model's output was rejected. */
     errorMessage?: string;
@@ -2049,6 +2051,8 @@ export interface WorkflowSaveInput {
         name: string;
         description?: string;
         status: 'Active' | 'Paused' | 'Draft';
+        /** Optional workflow-level execution isolation override (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
+        isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
         graph: {
             workflowName: string;
             reasoning?: string;
@@ -2077,6 +2081,8 @@ export interface WorkflowSaveInput {
             durable?: boolean;
             /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
             failureSemantics?: 'block' | 'edges';
+            /** Per-graph execution isolation level override. */
+            isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
         };
         triggers: Array<
             | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }

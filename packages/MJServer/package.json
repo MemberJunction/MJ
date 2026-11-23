@@ -192,6 +192,7 @@
   },
   "devDependencies": {
     "@memberjunction/conversations-runtime": "6.3.0-edge.1",
+    "@memberjunction/work-queue-aws": "6.3.0-edge.1",
     "@types/express": "^5.0.6",
     "pkgroll": "2.23.0",
     "rimraf": "6.1.2",

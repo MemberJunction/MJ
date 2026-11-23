@@ -10727,6 +10727,10 @@ export class MJAIAgent_ {
     @Field(() => Int, {nullable: true, description: "Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3)."}) 
     MaxSubAgentConsultRounds?: number;
         
+    @Field({nullable: true, description: "Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation)."}) 
+    @MaxLength(20)
+    Isolation?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11041,6 +11045,9 @@ export class CreateMJAIAgentInput {
     @Field(() => Int, { nullable: true })
     MaxSubAgentConsultRounds: number | null;
 
+    @Field({ nullable: true })
+    Isolation?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -11290,6 +11297,9 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     MaxSubAgentConsultRounds?: number | null;
+
+    @Field({ nullable: true })
+    Isolation?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

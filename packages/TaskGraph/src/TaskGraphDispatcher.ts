@@ -61,7 +61,7 @@ import {
     type BudgetCostEvent,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
-import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LimitsConfigResolver, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, IsTaskGraphIsolationLevel, LimitsConfigResolver, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, type TaskGraphIsolationLevel, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, IsValidUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
@@ -97,6 +97,7 @@ import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import { WaitingStepRunner } from './WaitingStepRunner';
 import { IsProviderHumanTask, WAITING_STEP_MARKER, WaitingStepKindOf } from './waiting-steps';
+import { TaskGraphCallerNotificationService, TerminalOutcomeFromTaskStatus } from './queue-dispatch';
 import {
     IsSettlementExpired,
     IsSubmittingRunReady,
@@ -367,6 +368,8 @@ type GraphContext = {
     Security: NodeSecurity;
     /** The graph's steps record their taint (`TaskGraphParentMetadata.recordsTaint`); true when its parent cannot be read. */
     RecordsTaint: boolean;
+    /** Effective isolation level resolved from the parent graph metadata or `LimitsConfigResolver` defaults. */
+    Isolation: TaskGraphIsolationLevel;
 };
 
 /**
@@ -1796,6 +1799,21 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
 
         if (rollup.outcome === 'settled') {
+            if (graph.parentMetadata?.dispatchMode === 'Queue' || graph.parentMetadata?.callerNotification) {
+                const outcome = TerminalOutcomeFromTaskStatus(rollup.status);
+                if (outcome) {
+                    const failedNode = graph.nodes.find((n) => n.status === 'Failed');
+                    const firstError = (failedNode ? graph.entityById.get(failedNode.id)?.ErrorMessage : undefined) ?? parent.ErrorMessage ?? undefined;
+                    await TaskGraphCallerNotificationService.Instance.RecordTerminalNotification({
+                        ParentTaskID: parentID,
+                        WorkflowName: parent.Name,
+                        TerminalOutcome: outcome,
+                        ErrorMessage: firstError,
+                        Provider: provider,
+                        ContextUser: this.contextUser,
+                    });
+                }
+            }
             // ANNOUNCE ONCE PER PROCESS, RETRY THE REST (R2-12). Layout and the frame are
             // idempotent facts about a finished graph; the cost, lifecycle and delivery writes
             // below are the ones re-entry exists to retry. Without this split, a graph that keeps
@@ -2207,6 +2225,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // be read still leaves the node constrained by its own row.
         let parentEnvelopeColumn: string | null = null;
         let recordsTaint = true;
+        let isolation = LimitsConfigResolver.Resolve().Limits.Isolation.DefaultIsolation;
 
         if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
             parentRead = true;
@@ -2221,6 +2240,9 @@ export class TaskGraphDispatcher implements IShutdownable {
             submittedByUserID = meta.submittedByUserID ?? parent?.UserID ?? task.UserID;
             parentEnvelopeColumn = parent?.SecurityEnvelope ?? null;
             recordsTaint = meta.recordsTaint === true;
+            if (IsTaskGraphIsolationLevel(meta.isolation)) {
+                isolation = meta.isolation;
+            }
         } else if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
             try {
                 const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
@@ -2236,6 +2258,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
                     parentEnvelopeColumn = parent.SecurityEnvelope;
                     recordsTaint = meta.recordsTaint === true;
+                    if (IsTaskGraphIsolationLevel(meta.isolation)) {
+                        isolation = meta.isolation;
+                    }
                 }
             } catch (e) {
                 // An unreadable parent must not stop the work; depth zero is the safe reading, and the
@@ -2262,6 +2287,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             ExecutionUser: tenant ? CloneUserWithTenantContext(submitter, tenant, provider) : submitter,
             Security: security,
             RecordsTaint: recordsTaint,
+            Isolation: isolation,
         };
     }
 
@@ -4313,17 +4339,66 @@ export class TaskGraphDispatcher implements IShutdownable {
         // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
         const context = await this.graphContext(provider, task, prehydrated);
         const nodeEnvelope = this.nodeEnvelope(task, context, prehydrated);
-        const outcome = await this.runTaskBodyOfKind(
-            task,
-            provider,
-            rawPayload,
-            dependencyOutputs,
-            context,
-            nodeEnvelope,
-            onProgress,
-            prehydrated?.parentTask ?? null,
-        );
+        const isolationRunner = this.config?.IsolationRunners?.[context.Isolation];
+        const outcome = isolationRunner
+            ? await this.runWithIsolationRunner(isolationRunner, context.Isolation, task, provider, rawPayload, dependencyOutputs, context, nodeEnvelope, onProgress, prehydrated?.parentTask ?? null)
+            : await this.runTaskBodyOfKind(
+                task,
+                provider,
+                rawPayload,
+                dependencyOutputs,
+                context,
+                nodeEnvelope,
+                onProgress,
+                prehydrated?.parentTask ?? null,
+            );
         return { ...outcome, IsOutputTainted: this.inputTaintOf(nodeEnvelope) || outcome.IsOutputTainted === true };
+    }
+
+    /** Executes one task body through the configured isolation runner for its resolved isolation level. */
+    private async runWithIsolationRunner(
+        runner: NonNullable<NonNullable<TaskGraphDispatcherConfig['IsolationRunners']>[TaskGraphIsolationLevel]>,
+        level: TaskGraphIsolationLevel,
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        rawPayload: Record<string, unknown>,
+        dependencyOutputs: Map<string, unknown>,
+        context: GraphContext,
+        nodeEnvelope: { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string },
+        onProgress?: TaskRunProgressCallback,
+        parentTask?: MJTaskEntity | null,
+    ): Promise<TaskBodyOutcome> {
+        const isoConfig = LimitsConfigResolver.Resolve().Limits.Isolation;
+        const stepResult = await runner.Execute<TaskBodyOutcome>({
+            Level: level,
+            TaskID: task.ID,
+            TaskName: task.Name,
+            GraphID: task.ParentID ?? task.ID,
+            Workload: { Kind: 'InProcessCallback' },
+            Limits: isoConfig,
+            ExecuteInProcess: () =>
+                this.runTaskBodyOfKind(
+                    task,
+                    provider,
+                    rawPayload,
+                    dependencyOutputs,
+                    context,
+                    nodeEnvelope,
+                    onProgress,
+                    parentTask,
+                ),
+        });
+        if (stepResult.BodyOutcome) {
+            return stepResult.BodyOutcome;
+        }
+        return {
+            Success: stepResult.Success,
+            AgentRunID: null,
+            Output: stepResult.Output,
+            PayloadAtStart: rawPayload,
+            ErrorMessage: stepResult.ErrorMessage,
+            ResultCode: stepResult.ErrorCode,
+        };
     }
 
     /** {@link runTaskBody} for one step kind, with the node's context and envelope already resolved. */
