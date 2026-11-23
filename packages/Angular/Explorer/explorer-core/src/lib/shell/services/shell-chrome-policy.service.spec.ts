@@ -362,6 +362,75 @@ describe('ShellChromePolicyService', () => {
             service.EvaluateVisibility({ user: restrictedUser, userInfoEngine: weakeningBundle.engine }),
         ).toEqual(RESTRICTED_SHELL_CHROME_VISIBILITY);
 
+        // User setting roleRules cannot escalate visibility flags to true or clear isRestrictedParticipant
+        const roleRuleEscalationBundle = createMockUserInfoEngine({
+            loaded: true,
+            loadedForUserId: '11111111-1111-1111-1111-111111111111',
+            activeApps: [makeFakeUserApp('APP-1')],
+            settings: {
+                [SHELL_CHROME_POLICY_CONFIG_SETTING_KEY]: JSON.stringify({
+                    roleRules: [
+                        {
+                            roleName: 'External Participant',
+                            isRestrictedParticipant: false,
+                            visibility: {
+                                showGlobalSearch: true,
+                                showFloatingChat: true,
+                                showAppSwitcher: true,
+                                showNotifications: true,
+                                showAdminMenuItems: true,
+                            },
+                        },
+                    ],
+                }),
+            },
+        });
+        const afterRoleRuleEscalation = service.EvaluateVisibility({
+            user: restrictedUser,
+            userInfoEngine: roleRuleEscalationBundle.engine,
+        });
+        expect(afterRoleRuleEscalation).toEqual(RESTRICTED_SHELL_CHROME_VISIBILITY);
+        expect(afterRoleRuleEscalation.isRestrictedParticipant).toBe(true);
+
+        // User setting roleRules CAN narrow (false) flags without re-enabling true flags
+        const diCustomService = new ShellChromePolicyService({
+            roleRules: [
+                {
+                    roleName: 'Scoped Reviewer',
+                    isRestrictedParticipant: true,
+                    visibility: {
+                        showNotifications: true,
+                    },
+                },
+            ],
+        });
+        const scopedReviewer = makeUser([{ RoleID: '77777777-7777-7777-7777-777777777777', Role: 'Scoped Reviewer' }]);
+        const mixedSettingRuleBundle = createMockUserInfoEngine({
+            loaded: true,
+            loadedForUserId: '11111111-1111-1111-1111-111111111111',
+            activeApps: [makeFakeUserApp('APP-1')],
+            settings: {
+                [SHELL_CHROME_POLICY_CONFIG_SETTING_KEY]: JSON.stringify({
+                    roleRules: [
+                        {
+                            roleName: 'Scoped Reviewer',
+                            isRestrictedParticipant: false,
+                            visibility: {
+                                showGlobalSearch: true,
+                                showNotifications: false,
+                            },
+                        },
+                    ],
+                }),
+            },
+        });
+        const mixedVis = diCustomService.EvaluateVisibility({
+            user: scopedReviewer,
+            userInfoEngine: mixedSettingRuleBundle.engine,
+        });
+        expect(mixedVis).toEqual(RESTRICTED_SHELL_CHROME_VISIBILITY);
+        diCustomService.ngOnDestroy();
+
         // Verify zero localStorage or sessionStorage calls occurred
         expect(storageTracker.localGet).not.toHaveBeenCalled();
         expect(storageTracker.localSet).not.toHaveBeenCalled();

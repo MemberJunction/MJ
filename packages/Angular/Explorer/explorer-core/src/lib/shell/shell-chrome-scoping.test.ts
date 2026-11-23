@@ -90,14 +90,20 @@ describe('ShellComponent — Restricted Participant Chrome Policy Integration', 
         expect(shell.IsRestrictedParticipant).toBe(false);
         expect(shell.ChromeFlags.chatOverlay).toBe(true);
 
-        shell.OnGlobalKeydown(makeKeyboardEvent('/'));
+        const slashEvent = makeKeyboardEvent('/');
+        const kEvent = makeKeyboardEvent('k');
+        shell.OnGlobalKeydown(slashEvent);
         expect(paletteOpen).toHaveBeenCalledTimes(1);
+        expect(slashEvent.preventDefault).toHaveBeenCalledTimes(1);
+        expect(slashEvent.stopPropagation).toHaveBeenCalledTimes(1);
 
-        shell.OnGlobalKeydown(makeKeyboardEvent('k'));
+        shell.OnGlobalKeydown(kEvent);
         expect(searchFocus).toHaveBeenCalledTimes(1);
+        expect(kEvent.preventDefault).toHaveBeenCalledTimes(1);
+        expect(kEvent.stopPropagation).toHaveBeenCalledTimes(1);
     });
 
-    it('unmounts search, floating chat, app switcher, notifications, admin items, and hotkeys for restricted participants', () => {
+    it('unmounts search, floating chat, app switcher, notifications, admin items, and hotkeys without swallowing Ctrl/Cmd+K for restricted participants', () => {
         vi.spyOn(InstanceConfigEngine.Instance, 'Get').mockReturnValue(undefined);
         vi.spyOn(InstanceConfigEngine.Instance, 'GetBoolean').mockImplementation((_k, def) => def ?? true);
         vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
@@ -118,13 +124,19 @@ describe('ShellComponent — Restricted Participant Chrome Policy Integration', 
         expect(shell.ChromeFlags.appSwitcher).toBe(false);
         expect(shell.ChromeFlags.notifications).toBe(false);
 
-        shell.OnGlobalKeydown(makeKeyboardEvent('/'));
-        shell.OnGlobalKeydown(makeKeyboardEvent('k'));
+        const slashEvent = makeKeyboardEvent('/');
+        const kEvent = makeKeyboardEvent('k');
+        shell.OnGlobalKeydown(slashEvent);
+        shell.OnGlobalKeydown(kEvent);
         shell.ToggleSearch();
         shell.OpenOmnibar('query');
         expect(paletteOpen).not.toHaveBeenCalled();
         expect(omnibarOpen).not.toHaveBeenCalled();
         expect(searchFocus).not.toHaveBeenCalled();
+        expect(slashEvent.preventDefault).not.toHaveBeenCalled();
+        expect(slashEvent.stopPropagation).not.toHaveBeenCalled();
+        expect(kEvent.preventDefault).not.toHaveBeenCalled();
+        expect(kEvent.stopPropagation).not.toHaveBeenCalled();
     });
 
     it('gates user menu item visibility cleanly via IsUserMenuItemVisible', () => {
@@ -159,6 +171,65 @@ describe('ShellComponent — Restricted Participant Chrome Policy Integration', 
 
         expect(restrictedShell.IsUserMenuItemVisible(profileItem)).toBe(true);
         expect(restrictedShell.IsUserMenuItemVisible(adminItem)).toBe(false);
+    });
+
+    it('collapses leading, trailing, and consecutive dividers via GetVisibleUserMenuElements when admin groups are hidden', () => {
+        const makeItem = (id: string, group: string, adminOnly: boolean): UserMenuItem => ({
+            id,
+            label: id,
+            icon: 'fa-solid fa-circle',
+            group,
+            order: 10,
+            developerOnly: false,
+            adminOnly,
+            visible: true,
+            enabled: true,
+        });
+
+        const elements = [
+            { type: 'divider' as const, group: 'leading' },
+            makeItem('admin-top', 'admin-top', true),
+            { type: 'divider' as const, group: 'primary' },
+            makeItem('profile', 'primary', false),
+            { type: 'divider' as const, group: 'admin-mid' },
+            makeItem('diagnostic-bundle', 'admin-mid', true),
+            { type: 'divider' as const, group: 'danger' },
+            makeItem('logout', 'danger', false),
+            { type: 'divider' as const, group: 'trailing-admin' },
+            makeItem('admin-tail', 'trailing-admin', true),
+            { type: 'divider' as const, group: 'trailing' },
+        ];
+
+        const { shell: restrictedShell } = createShellHarness(RESTRICTED_SHELL_CHROME_VISIBILITY);
+        restrictedShell.UserMenuElements = elements;
+        const restrictedVisible = restrictedShell.GetVisibleUserMenuElements();
+        expect(restrictedVisible.map((el) => (isUserMenuDivider(el) ? `divider:${el.group}` : el.id))).toEqual([
+            'profile',
+            'divider:admin-mid',
+            'logout',
+        ]);
+
+        const { shell: unrestrictedShell } = createShellHarness(UNRESTRICTED_SHELL_CHROME_VISIBILITY);
+        unrestrictedShell.UserMenuElements = elements;
+        const unrestrictedVisible = unrestrictedShell.GetVisibleUserMenuElements();
+        expect(unrestrictedVisible.map((el) => (isUserMenuDivider(el) ? `divider:${el.group}` : el.id))).toEqual([
+            'admin-top',
+            'divider:primary',
+            'profile',
+            'divider:admin-mid',
+            'diagnostic-bundle',
+            'divider:danger',
+            'logout',
+            'divider:trailing-admin',
+            'admin-tail',
+        ]);
+
+        restrictedShell.UserMenuElements = [
+            { type: 'divider' as const, group: 'only' },
+            makeItem('admin-only', 'only', true),
+            { type: 'divider' as const, group: 'end' },
+        ];
+        expect(restrictedShell.GetVisibleUserMenuElements()).toEqual([]);
     });
 });
 
@@ -228,6 +299,6 @@ describe('ShellComponent Template — Angular 21 @if/@for Scoping Hygiene', () =
         expect(html).toContain('@if (ShowSearchBar)');
         expect(html).toContain('@if (ShowNotifications)');
         expect(html).toContain('@if (ShowCommandPalette)');
-        expect(html).toContain('@if (IsUserMenuItemVisible(item))');
+        expect(html).toContain('@for (element of GetVisibleUserMenuElements(); track element)');
     });
 });

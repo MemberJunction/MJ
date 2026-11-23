@@ -625,6 +625,29 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return this.ShowAdminMenuItems || (!item.adminOnly && !item.developerOnly);
   }
   /**
+   * Returns visible user-menu elements with leading, trailing, and consecutive
+   * `UserMenuDivider` entries stripped so hidden item groups never leave orphan dividers.
+   */
+  public GetVisibleUserMenuElements(): UserMenuElement[] {
+      const elements = this.UserMenuElements ?? [];
+      const result: UserMenuElement[] = [];
+      for (const element of elements) {
+          if (isUserMenuDivider(element)) {
+              if (result.length > 0 && !isUserMenuDivider(result[result.length - 1])) {
+                  result.push(element);
+              }
+              continue;
+          }
+          if (this.IsUserMenuItemVisible(element)) {
+              result.push(element);
+          }
+      }
+      if (result.length > 0 && isUserMenuDivider(result[result.length - 1])) {
+          result.pop();
+      }
+      return result;
+  }
+  /**
    * Two-layer gate for the unified Ctrl+K command palette (omnibar):
    * the 'Shell.Omnibar.Enabled' Instance Config row is the master AVAILABILITY
    * switch (default TRUE; false = legacy trio for everyone), and each user
@@ -3991,6 +4014,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
 
       if (event.key === 'k') {
+          if (event.defaultPrevented || !this.ShowSearchBar) {
+              return;
+          }
           const target = event.target as HTMLElement;
           const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
           if (inEditable && !this.UseOmnibar) {

@@ -18,14 +18,14 @@ Sub-Epic S8a ships generic, domain-neutral Explorer shell chrome scoping and zer
 - **Fail-Closed Precedence & Zero Web Storage**:
   - Authoritative role/session/application boundaries are evaluated purely in memory from `UserInfoEngine.Instance`, `Provider.CurrentUser.UserRoles`, `InstanceConfigEngine.Instance`, and `MJAuthBase.GetSessionScope()`.
   - Read-only evaluation (`EvaluateVisibility` / `GetVisibility`) never triggers `SetSettingDebounced`.
-  - User-writable `UserInfoEngine` preferences and setting overrides can narrow chrome (`false`) but can **never** escalate or re-enable controls restricted by role, session lock, or confirmed zero accessible apps.
+  - User-writable `UserInfoEngine` preferences and setting overrides (`mj.shell.chromePolicy.config.v1` / `mj.shell.chromePolicy.preferences.v1`) can narrow chrome (`false`) or enforce `isRestrictedParticipant: true`, but `sanitizeSettingRoleRule` strips all `true` visibility flags, disallows `isRestrictedParticipant: false`, and drops rules without narrowing effect so user settings can **never** escalate or re-enable controls restricted by role, session lock, or confirmed zero accessible apps.
   - Zero `window.localStorage` or `window.sessionStorage` calls exist anywhere in the policy service.
 
 ### 2. Explorer Shell & User Menu Integration
 - **`ShellComponent` (`shell.component.ts` / `shell.component.html`)**:
   - Applies `ApplyShellChromeVisibilityToFlags(...)` inside `chromeFlags` so `ChromeFlags.chatOverlay`, `ShowSearchBar`, `ShowAppSwitcher`, and `ShowNotifications` automatically reflect the resolved `ShellChromeVisibility` alongside `BaseShellChromePolicy` and `InstanceConfigEngine`.
-  - Adds `ShowAdminMenuItems`, `IsRestrictedParticipant`, `ShowCommandPalette`, and `IsUserMenuItemVisible(item)` using Angular 21 `@if`/`@for` control flow so hidden controls (desktop/mobile search, legacy search popup, command palette, omnibar palette, app switcher + nav-bar app buttons, notification bell, and admin user-menu items) are cleanly unmounted from the DOM rather than CSS-hidden.
-  - Guards document-level `Ctrl/Cmd+K` and `Ctrl/Cmd+/` hotkeys so hidden search/palette surfaces have no keyboard back door.
+  - Adds `ShowAdminMenuItems`, `IsRestrictedParticipant`, `ShowCommandPalette`, `IsUserMenuItemVisible(item)`, and `GetVisibleUserMenuElements()` using Angular 21 `@if`/`@for` control flow so hidden controls (desktop/mobile search, legacy search popup, command palette, omnibar palette, app switcher + nav-bar app buttons, notification bell, and admin user-menu items) are cleanly unmounted from the DOM rather than CSS-hidden, and leading, trailing, or consecutive user-menu dividers are collapsed cleanly.
+  - Guards document-level `Ctrl/Cmd+K` (`!event.defaultPrevented && ShowSearchBar`) and `Ctrl/Cmd+/` (`!event.defaultPrevented && ShowCommandPalette`) hotkeys prior to calling `event.preventDefault()` so hidden search/palette surfaces neither trigger nor swallow host/browser shortcuts.
 - **`BaseUserMenu` (`base-user-menu.ts` / `user-menu.types.ts`)**:
   - Marks administrative and workspace-management items (`pin-to-home`, `sharing-center`, `reset-layout`, `diagnostic-bundle`, `about`) with `adminOnly: true`, filtering them in both `GetMenuElements()` and `HandleItemClick()` when `showAdminMenuItems === false`, while preserving `My Profile`, theme selection, and `Sign Out`.
 

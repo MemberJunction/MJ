@@ -234,6 +234,36 @@ function cloneRoleRule(rule: ShellChromePolicyRoleRule): ShellChromePolicyRoleRu
     };
 }
 
+/**
+ * Strips any widening overrides from a `UserInfoEngine`-sourced `roleRule`:
+ * retains only `false` narrowing visibility flags, disallows `isRestrictedParticipant: false`,
+ * and drops rules that have no remaining narrowing effect.
+ */
+function sanitizeSettingRoleRule(rule: ShellChromePolicyRoleRule): ShellChromePolicyRoleRule | null {
+    const narrowedVisibility: Partial<Omit<ShellChromeVisibility, 'isRestrictedParticipant'>> = {};
+    let hasNarrowingFlag = false;
+    if (rule.visibility) {
+        for (const key of VISIBILITY_FLAG_KEYS) {
+            if (rule.visibility[key] === false) {
+                narrowedVisibility[key] = false;
+                hasNarrowingFlag = true;
+            }
+        }
+    }
+
+    const forcesRestricted = rule.isRestrictedParticipant === true;
+    if (!hasNarrowingFlag && !forcesRestricted) {
+        return null;
+    }
+
+    return {
+        roleName: rule.roleName,
+        roleId: rule.roleId,
+        ...(forcesRestricted ? { isRestrictedParticipant: true } : {}),
+        ...(hasNarrowingFlag ? { visibility: narrowedVisibility } : {}),
+    };
+}
+
 function isPlainJsonObject(value: JsonValue | undefined): value is JsonObject {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -579,7 +609,7 @@ export class ShellChromePolicyService implements OnDestroy {
     /**
      * Merges a `UserInfoEngine` setting-based policy config while preventing a user-writable
      * setting from stripping authoritative restricted roles, adding unrestricted bypass roles,
-     * or disabling `restrictOnZeroAccessibleApps`.
+     * disabling `restrictOnZeroAccessibleApps`, or escalating `roleRules` visibility/status.
      */
     private mergeNonWeakeningSettingConfig(
         authoritative: ShellChromePolicyConfig,
@@ -597,12 +627,16 @@ export class ShellChromePolicyService implements OnDestroy {
             }
         }
 
+        const sanitizedSettingRules = (settingConfig.roleRules ?? [])
+            .map(sanitizeSettingRoleRule)
+            .filter((rule): rule is ShellChromePolicyRoleRule => rule !== null);
+
         return {
             restrictedRoleNames: [...mergedRestrictedRoles],
             unrestrictedRoleNames: [...authoritative.unrestrictedRoleNames],
             roleRules: [
                 ...authoritative.roleRules.map(cloneRoleRule),
-                ...(settingConfig.roleRules ?? []).map(cloneRoleRule),
+                ...sanitizedSettingRules,
             ],
             restrictedDefaults: nextDefaults,
             restrictOnZeroAccessibleApps: authoritative.restrictOnZeroAccessibleApps,

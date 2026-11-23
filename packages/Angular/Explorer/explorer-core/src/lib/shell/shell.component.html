@@ -220,7 +220,7 @@
               <div class="user-menu-divider"></div>
             }
             <!-- Dynamic Menu Items -->
-            @for (element of userMenuElements; track element) {
+            @for (element of GetVisibleUserMenuElements(); track element) {
               <!-- Divider -->
               @if (isMenuDivider(element)) {
                 <div class="user-menu-divider"></div>
@@ -228,33 +228,31 @@
               <!-- Menu Item -->
               @if (!isMenuDivider(element)) {
                 @if (asMenuItem(element); as item) {
-                  @if (IsUserMenuItemVisible(item)) {
-                    @if (item.id === 'toggle-theme') {
-                      <div class="user-menu-item theme-toggle-item"
-                        [title]="item.tooltip || ''"
-                        (click)="onUserMenuItemClick(item.id)">
-                        <i [class]="item.icon"></i>
-                        <span class="menu-label">{{ item.label }}</span>
-                        <div class="theme-toggle-track" [class.dark]="IsDarkMode">
-                          <div class="theme-toggle-thumb">
-                            <i [class]="IsDarkMode ? 'fa-solid fa-moon' : 'fa-solid fa-sun'" class="theme-toggle-icon"></i>
-                          </div>
+                  @if (item.id === 'toggle-theme') {
+                    <div class="user-menu-item theme-toggle-item"
+                      [title]="item.tooltip || ''"
+                      (click)="onUserMenuItemClick(item.id)">
+                      <i [class]="item.icon"></i>
+                      <span class="menu-label">{{ item.label }}</span>
+                      <div class="theme-toggle-track" [class.dark]="IsDarkMode">
+                        <div class="theme-toggle-thumb">
+                          <i [class]="IsDarkMode ? 'fa-solid fa-moon' : 'fa-solid fa-sun'" class="theme-toggle-icon"></i>
                         </div>
                       </div>
-                    } @else {
-                      <div class="user-menu-item"
-                        [class.disabled]="!item.enabled"
-                        [class.danger]="item.cssClass === 'danger'"
-                        [style.color]="item.color || null"
-                        [title]="item.tooltip || ''"
-                        (click)="item.enabled && onUserMenuItemClick(item.id)">
-                        <i [class]="item.icon"></i>
-                        <span class="menu-label">{{ item.label }}</span>
-                        @if (item.shortcut) {
-                          <span class="menu-shortcut">{{ item.shortcut }}</span>
-                        }
-                      </div>
-                    }
+                    </div>
+                  } @else {
+                    <div class="user-menu-item"
+                      [class.disabled]="!item.enabled"
+                      [class.danger]="item.cssClass === 'danger'"
+                      [style.color]="item.color || null"
+                      [title]="item.tooltip || ''"
+                      (click)="item.enabled && onUserMenuItemClick(item.id)">
+                      <i [class]="item.icon"></i>
+                      <span class="menu-label">{{ item.label }}</span>
+                      @if (item.shortcut) {
+                        <span class="menu-shortcut">{{ item.shortcut }}</span>
+                      }
+                    </div>
                   }
                 }
               }
