@@ -134,10 +134,10 @@ describe('SideQuestionPanelComponent (DOM)', () => {
             SideQuestions: controllerStub as SideQuestionController,
             Mentions: {
                 ToPlainText: (raw: string) => raw,
-            },
+            } as Partial<ConversationsRuntime['Mentions']> as ConversationsRuntime['Mentions'],
             DefaultAgent: {
-                Resolve: vi.fn(async () => null),
-            },
+                Resolve: vi.fn(async () => Promise.reject(new Error('not configured'))),
+            } as Partial<ConversationsRuntime['DefaultAgent']> as ConversationsRuntime['DefaultAgent'],
         } as Partial<ConversationsRuntime> as ConversationsRuntime);
 
         TestBed.configureTestingModule({
@@ -189,7 +189,7 @@ describe('SideQuestionPanelComponent (DOM)', () => {
             { ID: 'a1', Role: 'Agent', Message: 'First answer.', Agent: 'Sage' },
             { ID: 'u2', Role: 'User', Message: 'Second question?' },
             { ID: 'a2', Role: 'Agent', Message: 'Second answer.', Agent: 'Sage' },
-        ] as MJConversationDetailEntity[];
+        ] as Partial<MJConversationDetailEntity>[] as MJConversationDetailEntity[];
 
         const { fixture } = setupPanel(makeState({ Messages: messages, TurnCount: 2 }));
         const root = fixture.nativeElement as HTMLElement;
@@ -219,7 +219,7 @@ describe('SideQuestionPanelComponent (DOM)', () => {
         const messages = [
             { ID: 'u1', Role: 'User', Message: 'Question?' },
             { ID: 'a1', Role: 'Agent', Message: 'Answer.', Agent: 'Sage' },
-        ] as MJConversationDetailEntity[];
+        ] as Partial<MJConversationDetailEntity>[] as MJConversationDetailEntity[];
 
         const { fixture, controllerStub } = setupPanel(makeState({ Messages: messages, TurnCount: 1 }));
         const root = fixture.nativeElement as HTMLElement;
