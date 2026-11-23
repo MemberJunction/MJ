@@ -705,12 +705,12 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       fixture.detectChanges();
       expect(el.querySelector('.aie-avatar-studio')).not.toBeNull();
 
-      // 2. Generate Avatar via Generate Image action (ActionParam[] ResultData shape)
+      // 2. Generate Avatar via Generate Image action (index-keyed object ResultData shape from ActionResolver.RunAction)
       mockState.runActionQueue.push({
         Success: true,
         Message: 'Generated',
-        Result: [
-          {
+        Result: {
+          0: {
             Name: 'Images',
             Type: 'Output',
             Value: [
@@ -721,7 +721,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
               },
             ],
           },
-        ],
+        },
         LogEntry: null,
         Params: [],
         RunParams: null,

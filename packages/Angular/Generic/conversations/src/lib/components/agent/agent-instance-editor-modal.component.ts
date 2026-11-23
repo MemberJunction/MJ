@@ -65,6 +65,7 @@ interface ActionResultPayloadWithParams {
 type ActionResultPayload =
   | ActionOutputParamLike[]
   | ActionResultPayloadWithParams
+  | Record<string, ActionOutputParamLike>
   | null
   | undefined;
 
@@ -1122,9 +1123,11 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     }
     const outputParams: ActionOutputParamLike[] = Array.isArray(payload)
       ? payload
-      : Array.isArray(payload.Params)
-        ? payload.Params
-        : [];
+      : Array.isArray((payload as ActionResultPayloadWithParams).Params)
+        ? ((payload as ActionResultPayloadWithParams).Params ?? [])
+        : Object.values(payload).filter(
+            (v): v is ActionOutputParamLike => Boolean(v && typeof v === 'object' && 'Name' in v)
+          );
     const imagesParam = outputParams.find(
       (p) => typeof p?.Name === 'string' && p.Name.trim().toLowerCase() === 'images'
     );
