@@ -50,6 +50,7 @@
   "shipped/SQL/list-conversation-detail-feedback.sql": {"$patch":{"keep":[2283,793],"text":"_2 %}\n    AND cd.__mj_UpdatedAt >= {{StartDate_2 | sqlString"}},
   "shipped/SQL/predictive-studio-lock-model.sql": {"$patch":{"keep":[797,3],"text":"ModelID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"$patch":{"keep":[817,3],"text":"PipelineID_2 | sqlString"}},
+  "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"$patch":{"keep":[952,3],"text":"BindingID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"$patch":{"keep":[695,3],"text":"PipelineID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": null,
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": null,

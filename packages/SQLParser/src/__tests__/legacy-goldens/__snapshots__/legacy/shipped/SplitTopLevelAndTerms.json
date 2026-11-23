@@ -50,6 +50,7 @@
   "shipped/SQL/list-conversation-detail-feedback.sql": [{"$slice":[0,2291]},{"$slice":[2294,2385]},{"$slice":[2388,2479]},{"$slice":[2482,2559]},{"$slice":[2562,2637]},{"$slice":[2640,2724]},{"$slice":[2727,3134]}],
   "shipped/SQL/predictive-studio-lock-model.sql": [{"$slice":[0,821]}],
   "shipped/SQL/predictive-studio-lock-pipeline.sql": [{"$slice":[0,844]}],
+  "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": [{"$slice":[0,978]}],
   "shipped/SQL/predictive-studio-next-model-version.sql": [{"$slice":[0,722]}],
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": [{"$slice":[0,589]}],
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": [{"$slice":[0,709]}," r.Purpose IN ('publish', 'rollback', 'adopt')\n  "," (m.ID IS NULL OR m.Status NOT IN ('Published', 'Archived'))\n  ",{"$slice":[830,1049]}],

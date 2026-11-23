@@ -50,6 +50,7 @@
   "shipped/SQL/list-conversation-detail-feedback.sql": false,
   "shipped/SQL/predictive-studio-lock-model.sql": false,
   "shipped/SQL/predictive-studio-lock-pipeline.sql": false,
+  "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": false,
   "shipped/SQL/predictive-studio-next-model-version.sql": false,
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": false,
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": false,

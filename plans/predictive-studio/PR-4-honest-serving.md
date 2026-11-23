@@ -13833,6 +13833,11 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   deleted ledger rows the D4-279 guard refuses → it authorises its own deletes; IT51 19/19 locally) and on PB18 (a
   timing gate: every primitive ~2x, including template rendering and DeepDiffer, which PR 4 does not touch; next's own
   run 45202760168 failed it at 1.49x). Commit `3eec4869b9`; merged next's two release-notes commits.
+- **CI at `ad1a163664`:** Build and Integration green; unit shard 3 red on SQLParser's reviewed `shipped`-corpus
+  goldens (the shard never ran at `da708d2139`, whose build failed): the new
+  `predictive-studio-lock-scoring-binding-for-batch.sql` (D4-289) and the IT186-renamed
+  `predictive-studio-schema-fingerprint.sql` were not in them. Snapshots regenerated (29 files; the diff names only
+  those two queries) → SQLParser 2175/2175.
 
 ## 12. Refresh log (append-only)
 

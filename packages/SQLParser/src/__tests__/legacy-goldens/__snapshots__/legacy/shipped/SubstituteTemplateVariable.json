@@ -50,6 +50,7 @@
   "shipped/SQL/list-conversation-detail-feedback.sql": {"$patch":{"keep":[2316,791],"text":"'golden'"}},
   "shipped/SQL/predictive-studio-lock-model.sql": {"$patch":{"keep":[795,1],"text":"'golden'"}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"$patch":{"keep":[815,1],"text":"'golden'"}},
+  "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"$patch":{"keep":[950,1],"text":"'golden'"}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"$patch":{"keep":[693,1],"text":"'golden'"}},
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": null,
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": null,

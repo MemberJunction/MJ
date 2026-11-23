@@ -50,6 +50,7 @@
   "shipped/SQL/list-conversation-detail-feedback.sql": {"orderByClause":"cd.__mj_UpdatedAt DESC","sqlWithoutOrder":{"$slice":[0,3101]}},
   "shipped/SQL/predictive-studio-lock-model.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,821]}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,844]}},
+  "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,978]}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,722]}},
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,589]}},
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,1049]}},
