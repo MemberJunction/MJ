@@ -6,6 +6,7 @@ import { AppSwitcherComponent } from './components/header/app-switcher.component
 import { AppNavComponent } from './components/header/app-nav.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { AppAccessDialogComponent } from './components/dialogs/app-access-dialog.component';
+import { ShellNoAccessComponent } from './components/no-access/shell-no-access.component';
 import { CommandPaletteComponent } from '../command-palette/command-palette.component';
 import { OmnibarPaletteComponent } from '../omnibar/omnibar-palette.component';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
@@ -28,6 +29,7 @@ import { SharePanelDirective } from '@memberjunction/ng-realtime-media';
     AppNavComponent,
     TabContainerComponent,
     AppAccessDialogComponent,
+    ShellNoAccessComponent,
     CommandPaletteComponent,
     OmnibarPaletteComponent
   ],
@@ -51,7 +53,8 @@ import { SharePanelDirective } from '@memberjunction/ng-realtime-media';
     CommandPaletteService
   ],
   exports: [
-    ShellComponent
+    ShellComponent,
+    ShellNoAccessComponent
   ]
 })
 export class ShellModule { }
