@@ -26,6 +26,7 @@ import {
     RunView,
     ServerOperationScopeManager,
     UserInfo,
+    ValidateDecisionReadResult,
     type EntityTransactionScope,
     type MJLimitsOverride,
     type TaskGraphIsolationLevel,
@@ -57,6 +58,7 @@ import {
     type TaskSecurityEnvelope,
     type ForEachOperation,
     type WhileOperation,
+    type WorkflowBudgetCapsConfig,
     type WorkflowLimitsMetadataInput,
     ConfigOf,
     IsDefaultHumanTaskProvider,
@@ -151,6 +153,8 @@ export type TaskGraphSubmitContext = {
     UserPolicyLimitsOverride?: MJLimitsOverride;
     /** Optional Tier-5 limits override persisted onto the parent graph for runtime budget/runaway governance. */
     LimitsOverride?: MJLimitsOverride;
+    /** Optional whole-workflow USD cost & wall-clock duration budget enforced across all nodes and agent runs. */
+    WorkflowBudget?: WorkflowBudgetCapsConfig;
     /** Enables (or explicitly disables when `false`) runtime budget/runaway governance evaluation on the dispatcher for this graph. */
     EnableGovernance?: boolean;
     /** Optional per-graph isolation level override (defaults from `spec.isolation` then `LimitsConfigResolver`). */
@@ -258,6 +262,8 @@ export type TaskGraphParentMetadata = {
     userPolicyLimitsOverride?: MJLimitsOverride;
     /** Optional Tier-5 limits override enforced by `TaskGraphGovernanceCoordinator` on the dispatcher. */
     limitsOverride?: MJLimitsOverride;
+    /** Optional whole-workflow USD cost & wall-clock duration cap persisted on the parent graph. */
+    workflowBudget?: WorkflowBudgetCapsConfig;
     /** Explicit governance opt-in/opt-out flag persisted onto the parent graph (`false` disables governance). */
     governanceEnabled?: boolean;
     /** Execution isolation mode for tasks in this graph (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
@@ -393,6 +399,7 @@ export function BuildTaskGraphParentInputPayload(args: {
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
     limitsOverride?: MJLimitsOverride;
+    workflowBudget?: WorkflowBudgetCapsConfig;
     governanceEnabled?: boolean;
     isolation?: TaskGraphIsolationLevel;
     dispatchMode?: TaskGraphDispatchMode;
@@ -424,9 +431,10 @@ export function BuildTaskGraphParentInputPayload(args: {
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
         ...(args.limitsOverride ? { limitsOverride: args.limitsOverride } : {}),
+        ...(args.workflowBudget ? { workflowBudget: args.workflowBudget } : {}),
         ...(args.governanceEnabled !== undefined
             ? { governanceEnabled: args.governanceEnabled }
-            : (args.limitsOverride ? { governanceEnabled: true } : {})),
+            : ((args.limitsOverride || args.workflowBudget) ? { governanceEnabled: true } : {})),
         ...(args.isolation ? { isolation: args.isolation } : {}),
         ...(args.dispatchMode ? { dispatchMode: args.dispatchMode } : {}),
         ...(args.queuedTopic ? { queuedTopic: args.queuedTopic } : {}),
@@ -1447,16 +1455,21 @@ export class TaskGraphService {
                 Fields: ['ID'],
                 ResultType: 'simple',
                 BypassCache: true,
+                IgnoreMaxRows: true,
             },
             context.ContextUser,
         );
-        if (!subGraphs.Success) {
-            LogError(`[TaskGraphService] Could not look for sub-graphs while cancelling: ${subGraphs.ErrorMessage}`);
+        const validatedSubGraphs = ValidateDecisionReadResult(subGraphs, {
+            EntityName: 'MJ: Tasks',
+            OperationName: 'TaskGraphService.cancelNestedGraphs',
+        });
+        if ('Error' in validatedSubGraphs) {
+            LogError(`[TaskGraphService] Could not look for sub-graphs while cancelling: ${validatedSubGraphs.ErrorMessage}`);
             return [];
         }
 
         const failures: string[] = [];
-        for (const row of subGraphs.Results ?? []) {
+        for (const row of validatedSubGraphs.Results) {
             // Through the depth-carrying overload, so the cap actually engages.
             const result = await this.cancelWithDepth(row.ID, context, depth + 1, visited);
             if (!result.Success) failures.push(...result.UncancelledTaskNames);
@@ -1486,15 +1499,20 @@ export class TaskGraphService {
                     ExtraFilter: `Status='Requested' AND OriginatingTaskID IN (${idList})`,
                     ResultType: 'entity_object',
                     BypassCache: true,
+                    IgnoreMaxRows: true,
                 },
                 context.ContextUser,
             );
-            if (!open.Success) {
-                LogError(`[TaskGraphService] Could not read open requests to cancel: ${open.ErrorMessage}`);
+            const validatedOpen = ValidateDecisionReadResult(open, {
+                EntityName: 'MJ: AI Agent Requests',
+                OperationName: 'TaskGraphService.cancelOpenRequests',
+            });
+            if ('Error' in validatedOpen) {
+                LogError(`[TaskGraphService] Could not read open requests to cancel: ${validatedOpen.ErrorMessage}`);
                 return;
             }
 
-            for (const request of open.Results ?? []) {
+            for (const request of validatedOpen.Results) {
                 request.Status = 'Canceled';
                 request.Comments = 'The workflow that asked this was cancelled.';
                 if (!(await request.Save())) {
@@ -2125,16 +2143,20 @@ export class TaskGraphService {
 
         const quoted = names.map((n) => `'${EscapeSQLString(n)}'`).join(',');
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: AI Prompts', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
+            { EntityName: 'MJ: AI Prompts', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple', IgnoreMaxRows: true },
             context.ContextUser,
         );
-        if (!result.Success) {
-            const reason = result.ErrorMessage || 'RunView on "MJ: AI Prompts" failed';
+        const validated = ValidateDecisionReadResult(result, {
+            EntityName: 'MJ: AI Prompts',
+            OperationName: 'TaskGraphService.resolvePrompts',
+        });
+        if ('Error' in validated) {
+            const reason = validated.ErrorMessage || 'RunView on "MJ: AI Prompts" failed';
             LogError(`[TaskGraph] Failed to resolve "MJ: AI Prompts" by name: ${reason}`);
             return { Success: false, ErrorMessage: reason };
         }
 
-        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
+        const found = new Map(validated.Results.map((r) => [r.Name, r.ID]));
         const missing = names.filter((n) => !found.has(n));
         if (missing.length > 0) {
             return {
@@ -2173,13 +2195,18 @@ export class TaskGraphService {
                 ExtraFilter: `ID IN (${ids.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
                 Fields: ['ID'],
                 ResultType: 'simple',
+                IgnoreMaxRows: true,
             },
             context.ContextUser,
         );
-        if (!result.Success) {
-            return { Success: false, ErrorMessage: `Task graph "${spec.workflowName}" was not started: its compensation actions could not be checked (${result.ErrorMessage}).` };
+        const validated = ValidateDecisionReadResult(result, {
+            EntityName: 'MJ: Actions',
+            OperationName: 'TaskGraphService.validateCompensationActionIDs',
+        });
+        if ('Error' in validated) {
+            return { Success: false, ErrorMessage: `Task graph "${spec.workflowName}" was not started: its compensation actions could not be checked (${validated.ErrorMessage}).` };
         }
-        const found = new UUIDSet((result.Results ?? []).map((row) => row.ID));
+        const found = new UUIDSet(validated.Results.map((row) => row.ID));
         const missing = ids.filter((id) => !found.Has(id));
         if (missing.length > 0) {
             return {
@@ -2348,6 +2375,19 @@ export class TaskGraphService {
         // credentials, and carrying it verbatim threw `Converting circular structure to JSON`
         // on any context with a socket in it — killing the run at submit time — while a context
         // that happened to serialize would have written its credentials to this row.
+        const requestedBudget = context.WorkflowBudget ?? spec.workflowBudget;
+        const effectiveWorkflowBudget: WorkflowBudgetCapsConfig | undefined =
+            requestedBudget && (requestedBudget.MaxCostUsd !== undefined || requestedBudget.MaxWallClockMs !== undefined)
+                ? {
+                    ...(requestedBudget.MaxCostUsd !== undefined ? { MaxCostUsd: requestedBudget.MaxCostUsd } : {}),
+                    ...(requestedBudget.MaxWallClockMs !== undefined ? { MaxWallClockMs: requestedBudget.MaxWallClockMs } : {}),
+                    StartedAtMs:
+                        typeof requestedBudget.StartedAtMs === 'number' && Number.isFinite(requestedBudget.StartedAtMs)
+                            ? requestedBudget.StartedAtMs
+                            : Date.now(),
+                }
+                : undefined;
+
         parent.InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
@@ -2365,6 +2405,7 @@ export class TaskGraphService {
                 : null,
             startPaused: context.Debug?.paused === true,
             limitsOverride: context.LimitsOverride ?? spec.limitsOverride,
+            workflowBudget: effectiveWorkflowBudget,
             governanceEnabled: context.EnableGovernance,
             isolation:
                 context.Isolation ??
@@ -2691,6 +2732,19 @@ export class TaskGraphService {
         };
         parent.Configuration = JSON.stringify({ queuedSubmission: queuedSnapshot });
 
+        const requestedBudget = context.WorkflowBudget ?? spec.workflowBudget;
+        const effectiveWorkflowBudget: WorkflowBudgetCapsConfig | undefined =
+            requestedBudget && (requestedBudget.MaxCostUsd !== undefined || requestedBudget.MaxWallClockMs !== undefined)
+                ? {
+                    ...(requestedBudget.MaxCostUsd !== undefined ? { MaxCostUsd: requestedBudget.MaxCostUsd } : {}),
+                    ...(requestedBudget.MaxWallClockMs !== undefined ? { MaxWallClockMs: requestedBudget.MaxWallClockMs } : {}),
+                    StartedAtMs:
+                        typeof requestedBudget.StartedAtMs === 'number' && Number.isFinite(requestedBudget.StartedAtMs)
+                            ? requestedBudget.StartedAtMs
+                            : Date.now(),
+                }
+                : undefined;
+
         parent.InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
@@ -2708,6 +2762,7 @@ export class TaskGraphService {
                 : null,
             startPaused: context.Debug?.paused === true,
             limitsOverride: context.LimitsOverride ?? spec.limitsOverride,
+            workflowBudget: effectiveWorkflowBudget,
             governanceEnabled: context.EnableGovernance,
             isolation,
             dispatchMode: 'Queue',

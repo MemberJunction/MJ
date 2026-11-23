@@ -19,6 +19,7 @@ import {
     RunView,
     RunViewParams,
     UserInfo,
+    ValidateDecisionReadResult,
     type MJLimitsBudgetsConfig,
 } from '@memberjunction/core';
 import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
@@ -817,9 +818,15 @@ export class BudgetEnforcementGuard {
             } else {
                 for (let i = 0; i < queryKinds.length; i++) {
                     const res = results[i];
-                    if (!res || !res.Success) {
-                        const errDetail = res?.ErrorMessage ?? `query batch item ${i} unsuccessful`;
-                        ledgerError = `RunViews failed for ${queryKinds[i]}: ${errDetail}`;
+                    const validated = ValidateDecisionReadResult(res, {
+                        EntityName: AGENT_RUN_ENTITY,
+                        OperationName: `BudgetEnforcementGuard.${queryKinds[i]}`,
+                    });
+                    if ('Error' in validated) {
+                        const errDetail = validated.ErrorMessage ?? `query batch item ${i} unsuccessful`;
+                        ledgerError = validated.Truncated
+                            ? `Decision read truncated for ${queryKinds[i]}: ${errDetail}`
+                            : `RunViews failed for ${queryKinds[i]}: ${errDetail}`;
                         LogError(`BudgetEnforcementGuard: ${ledgerError}`);
                         break;
                     }

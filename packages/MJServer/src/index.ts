@@ -100,6 +100,8 @@ import { ClientToolRequestManager, AgentRunWatchdog, InstallDefaultResumeContinu
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { RegisterAudienceActionHostBindings } from './services/HostGrantedWorkflowSubmitter.js';
+import { InitializeConversationDetailWritePermissionProviders } from './services/ConversationDetailWritePermissionWiring.js';
 import { RegisterSemanticGraphExpansionService } from './services/RegisterSemanticGraphExpansion.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -264,6 +266,8 @@ export * from './resolvers/QueryResolver.js';
 export * from './services/TaskGraphProviderFactory.js';
 export * from './services/TaskGraphAgentRunner.js';
 export * from './services/StartTaskGraphDispatcher.js';
+export * from './services/HostGrantedWorkflowSubmitter.js';
+export * from './services/ConversationDetailWritePermissionWiring.js';
 export * from './services/TaskGraphPromptRunner.js';
 export * from './services/TaskGraphContinuationDeliverer.js';
 export * from './services/isolation/index.js';
@@ -1098,6 +1102,8 @@ const setupComplete$ = new ReplaySubject(1);
   // ExecuteAdhocQuery's table check and timeout limit.
   ActionEngineServer.Instance.SetReadOnlyProviderFactory(() => CreateReadOnlyProvider(dataSources));
   ActionEngineServer.Instance.SetAdhocSQLAuthorizer(CreateAdhocSQLAuthorizer(configInfo.databaseSettings.requestTimeout));
+  RegisterAudienceActionHostBindings();
+  InitializeConversationDetailWritePermissionProviders();
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);

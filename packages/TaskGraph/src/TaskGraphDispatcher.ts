@@ -47,6 +47,7 @@ import {
     SumAgentRunTreeCost,
     WalkAgentRunTree,
     type AgentRunTreeNode,
+    type WorkflowBudgetBreachDiagnostic,
 
     FinalizeAgentRunStep,
     InitAgentRunStep,
@@ -61,7 +62,7 @@ import {
     type BudgetCostEvent,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
-import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, IsTaskGraphIsolationLevel, LimitsConfigResolver, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, type TaskGraphIsolationLevel, UserInfo } from '@memberjunction/core';
+import { AssertRunViewNotTruncated, DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, IsTaskGraphIsolationLevel, LimitsConfigResolver, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, type TaskGraphIsolationLevel, UserInfo, ValidateDecisionReadResult } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, IsValidUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
@@ -338,6 +339,8 @@ type TaskBodyOutcome = {
     TokensUsed?: number;
     /** Optional timestamped USD spend deltas incurred across loop iterations. */
     CostEvents?: BudgetCostEvent[];
+    /** Structured workflow budget breach diagnostic when execution stopped due to a whole-workflow limit. */
+    LimitExceeded?: WorkflowBudgetBreachDiagnostic;
 };
 
 interface GlobalUserCacheLookup {
@@ -2807,6 +2810,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Fields: ['ParentID'],
                 ResultType: 'simple',
                 BypassCache: true,
+                IgnoreMaxRows: true,
             },
             {
                 EntityName: 'MJ: Tasks',
@@ -2814,6 +2818,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Fields: ['ID'],
                 ResultType: 'simple',
                 BypassCache: true,
+                IgnoreMaxRows: true,
             },
             {
                 EntityName: 'MJ: Tasks',
@@ -2823,8 +2828,34 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Fields: ['ID', 'InputPayload'],
                 ResultType: 'simple',
                 BypassCache: true,
+                IgnoreMaxRows: true,
             },
         ], this.contextUser);
+
+        const validatedPending = ValidateDecisionReadResult(withPendingWork, {
+            EntityName: 'MJ: Tasks',
+            OperationName: 'TaskGraphDispatcher.findActiveGraphIDs.withPendingWork',
+        });
+        const validatedUnsettled = ValidateDecisionReadResult(unsettledParents, {
+            EntityName: 'MJ: Tasks',
+            OperationName: 'TaskGraphDispatcher.findActiveGraphIDs.unsettledParents',
+        });
+        const validatedTerminal = ValidateDecisionReadResult(terminalRecent, {
+            EntityName: 'MJ: Tasks',
+            OperationName: 'TaskGraphDispatcher.findActiveGraphIDs.terminalRecent',
+        });
+        if ('Error' in validatedPending) {
+            if (validatedPending.Truncated) throw validatedPending.Error;
+            LogError(`[TaskGraphDispatcher] ${validatedPending.ErrorMessage}`);
+        }
+        if ('Error' in validatedUnsettled) {
+            if (validatedUnsettled.Truncated) throw validatedUnsettled.Error;
+            LogError(`[TaskGraphDispatcher] ${validatedUnsettled.ErrorMessage}`);
+        }
+        if ('Error' in validatedTerminal) {
+            if (validatedTerminal.Truncated) throw validatedTerminal.Error;
+            LogError(`[TaskGraphDispatcher] ${validatedTerminal.ErrorMessage}`);
+        }
 
         const ids = new Set<string>();
         // Graphs this instance is mid-retry on, whatever the window says (R2-12). A failing pass
@@ -2836,10 +2867,10 @@ export class TaskGraphDispatcher implements IShutdownable {
         // whose metadata the dispatcher would trust. The other two arms prove most of them; the rest (a step retried in a
         // run that settled before the sweep window) are checked with one read, whatever their status or age.
         const workflowParents = new Set([
-            ...((unsettledParents?.Results ?? []) as Array<{ ID: string }>).map((r) => r.ID?.toUpperCase()),
-            ...((terminalRecent?.Results ?? []) as Array<{ ID: string }>).map((r) => r.ID?.toUpperCase()),
+            ...(('Results' in validatedUnsettled ? validatedUnsettled.Results : []) as Array<{ ID: string }>).map((r) => r.ID?.toUpperCase()),
+            ...(('Results' in validatedTerminal ? validatedTerminal.Results : []) as Array<{ ID: string }>).map((r) => r.ID?.toUpperCase()),
         ]);
-        const pendingParents = ((withPendingWork?.Results ?? []) as Array<{ ParentID: string }>).map((r) => r.ParentID).filter(Boolean);
+        const pendingParents = (('Results' in validatedPending ? validatedPending.Results : []) as Array<{ ParentID: string }>).map((r) => r.ParentID).filter(Boolean);
         const unproven = [...new Set(pendingParents.map((id) => id.toUpperCase()))].filter((id) => !workflowParents.has(id) && IsValidUUID(id));
         if (unproven.length > 0) {
             const proven = await rv.RunView<{ ID: string }>(
@@ -2849,17 +2880,23 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Fields: ['ID'],
                     ResultType: 'simple',
                     BypassCache: true,
+                    IgnoreMaxRows: true,
                 },
                 this.contextUser,
             );
-            for (const r of (proven.Success ? proven.Results : []) ?? []) workflowParents.add(r.ID.toUpperCase());
+            const validatedProven = ValidateDecisionReadResult(proven, {
+                EntityName: 'MJ: Tasks',
+                OperationName: 'TaskGraphDispatcher.findActiveGraphIDs.provenParents',
+            });
+            if ('Error' in validatedProven && validatedProven.Truncated) throw validatedProven.Error;
+            for (const r of 'Results' in validatedProven ? validatedProven.Results : []) workflowParents.add(r.ID.toUpperCase());
         }
         for (const parentID of pendingParents) {
             if (workflowParents.has(parentID.toUpperCase())) ids.add(parentID);
         }
         // Childless tasks match the second query too; propagateAndRollup skips anything with no
         // nodes, so they cost one empty load and nothing else.
-        for (const r of (unsettledParents?.Results ?? []) as Array<{ ID: string }>) {
+        for (const r of ('Results' in validatedUnsettled ? validatedUnsettled.Results : []) as Array<{ ID: string }>) {
             if (r.ID) ids.add(r.ID);
         }
         // The marker is JSON, so the filter is in TypeScript rather than in SQL — see
@@ -3385,10 +3422,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                 OrderBy: '__mj_CreatedAt ASC, ID ASC',
                 ResultType: 'entity_object',
                 BypassCache: true,
+                IgnoreMaxRows: true,
             },
             this.contextUser,
         );
-        return (result.Success ? result.Results : null) ?? [];
+        const validated = ValidateDecisionReadResult(result, {
+            EntityName: 'MJ: AI Agent Requests',
+            OperationName: 'TaskGraphDispatcher.findOpenRequests',
+        });
+        if ('Error' in validated) {
+            if (validated.Truncated) throw validated.Error;
+            return [];
+        }
+        return validated.Results;
     }
 
     /**
@@ -3418,11 +3464,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                     ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
                     ResultType: 'entity_object',
                     BypassCache: true,
+                    IgnoreMaxRows: true,
                 },
                 this.contextUser,
             );
-            if (!waiting.Success) return 0;
-            tasksToInspect = waiting.Results ?? [];
+            const validatedWaiting = ValidateDecisionReadResult(waiting, {
+                EntityName: 'MJ: Tasks',
+                OperationName: 'TaskGraphDispatcher.settleAnsweredHumanTasks',
+            });
+            if ('Error' in validatedWaiting) {
+                if (validatedWaiting.Truncated) throw validatedWaiting.Error;
+                return 0;
+            }
+            tasksToInspect = validatedWaiting.Results;
         }
 
         let settledCount = 0;
@@ -3523,11 +3577,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                         `AND ClaimedBy='${HUMAN_TASK_NOTIFIED_MARKER}'`,
                     ResultType: 'entity_object',
                     BypassCache: true,
+                    IgnoreMaxRows: true,
                 },
                 this.contextUser,
             );
-            if (!waiting.Success) return;
-            tasksToInspect = waiting.Results ?? [];
+            const validatedWaiting = ValidateDecisionReadResult(waiting, {
+                EntityName: 'MJ: Tasks',
+                OperationName: 'TaskGraphDispatcher.reconcileWaitingHumanTasks',
+            });
+            if ('Error' in validatedWaiting) {
+                if (validatedWaiting.Truncated) throw validatedWaiting.Error;
+                return;
+            }
+            tasksToInspect = validatedWaiting.Results;
         }
 
         for (const task of tasksToInspect) {
@@ -3598,10 +3660,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                 OrderBy: 'RespondedAt DESC',
                 ResultType: 'entity_object',
                 BypassCache: true,
+                IgnoreMaxRows: true,
             },
             this.contextUser,
         );
-        return (result.Success ? result.Results?.[0] : null) ?? null;
+        const validated = ValidateDecisionReadResult(result, {
+            EntityName: 'MJ: AI Agent Requests',
+            OperationName: 'TaskGraphDispatcher.answeredRequestFor',
+        });
+        if ('Error' in validated) {
+            if (validated.Truncated) throw validated.Error;
+            return null;
+        }
+        return validated.Results[0] ?? null;
     }
 
     /**
@@ -3627,10 +3698,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Fields: ['ID'],
                     ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
                     ResultType: 'simple',
+                    IgnoreMaxRows: true,
                 },
                 this.contextUser,
             );
-            ids = (humanTasks.Results ?? []).map((r) => `'${r.ID}'`);
+            const validatedHumanTasks = ValidateDecisionReadResult(humanTasks, {
+                EntityName: 'MJ: Tasks',
+                OperationName: 'TaskGraphDispatcher.expireOverdueRequests.humanTasks',
+            });
+            if ('Error' in validatedHumanTasks) {
+                if (validatedHumanTasks.Truncated) throw validatedHumanTasks.Error;
+                return;
+            }
+            ids = validatedHumanTasks.Results.map((r) => `'${r.ID}'`);
         }
         if (ids.length === 0) return;
 
@@ -3643,12 +3723,20 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `AND OriginatingTaskID IN (${ids.join(',')})`,
                 ResultType: 'entity_object',
                 BypassCache: true,
+                IgnoreMaxRows: true,
             },
             this.contextUser,
         );
-        if (!overdue.Success) return;
+        const validatedOverdue = ValidateDecisionReadResult(overdue, {
+            EntityName: 'MJ: AI Agent Requests',
+            OperationName: 'TaskGraphDispatcher.expireOverdueRequests.overdue',
+        });
+        if ('Error' in validatedOverdue) {
+            if (validatedOverdue.Truncated) throw validatedOverdue.Error;
+            return;
+        }
 
-        for (const request of overdue.Results ?? []) {
+        for (const request of validatedOverdue.Results) {
             request.Status = 'Expired';
             if (!(await request.Save())) {
                 LogError(`[TaskGraphDispatcher] Could not expire request ${request.ID}.`);
@@ -3697,20 +3785,26 @@ export class TaskGraphDispatcher implements IShutdownable {
         // BypassCache throughout: task status is written by the claim protocol's direct SQL, which
         // fires no cache invalidation. See findActiveGraphIDs.
         const childrenResult = await rv.RunView<MJTaskEntity>(
-            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object', BypassCache: true },
+            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true },
             this.contextUser,
         );
-        const children = (childrenResult.Success ? childrenResult.Results : []) ?? [];
+        const children = AssertRunViewNotTruncated(childrenResult, {
+            EntityName: 'MJ: Tasks',
+            OperationName: 'TaskGraphDispatcher.loadGraphState.children',
+        });
         if (children.length === 0) {
             return this.emptyGraphState(parentTaskID, preloadedParent ?? null);
         }
 
         const idList = children.map((c) => `'${c.ID}'`).join(',');
         const depsResult = await rv.RunView<MJTaskDependencyEntity>(
-            { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${idList})`, ResultType: 'entity_object', BypassCache: true },
+            { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${idList})`, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true },
             this.contextUser,
         );
-        const deps = (depsResult.Success ? depsResult.Results : []) ?? [];
+        const deps = AssertRunViewNotTruncated(depsResult, {
+            EntityName: 'MJ: Task Dependencies',
+            OperationName: 'TaskGraphDispatcher.loadGraphState.dependencies',
+        });
 
         const entityById = new Map(children.map((c) => [c.ID, c]));
 
@@ -4338,6 +4432,24 @@ export class TaskGraphDispatcher implements IShutdownable {
         // the in-run walker resolves them and as branch conditions already see them (R3-3). Without
         // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
         const context = await this.graphContext(provider, task, prehydrated);
+        const preDispatchBudget = this.governance
+            ? await this.governance.CheckWorkflowBudgetBeforeDispatch({
+                Provider: provider,
+                ContextUser: context.ExecutionUser,
+                GraphID: task.ParentID ?? task.ID,
+                Parent: prehydrated?.parentTask ?? null,
+                Task: task,
+            })
+            : { Exceeded: false as const };
+        if (preDispatchBudget.Exceeded && preDispatchBudget.Diagnostic) {
+            return {
+                Success: false,
+                ResultCode: preDispatchBudget.Diagnostic.Code,
+                ErrorMessage: preDispatchBudget.Diagnostic.Reason,
+                PayloadAtStart: rawPayload,
+                LimitExceeded: preDispatchBudget.Diagnostic,
+            };
+        }
         const nodeEnvelope = this.nodeEnvelope(task, context, prehydrated);
         const isolationRunner = this.config?.IsolationRunners?.[context.Isolation];
         const outcome = isolationRunner
@@ -4814,7 +4926,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         ownerUserID: string | null | undefined,
         attemptAccounting: Awaited<ReturnType<TaskGraphDispatcher['buildAttemptAccounting']>>,
     ): Promise<'scheduled' | 'not-retryable' | 'lost-ownership'> {
-        if (result.ResultCode === TAINTED_EGRESS_BLOCKED) return 'not-retryable';
+        if (result.LimitExceeded || result.ResultCode === TAINTED_EGRESS_BLOCKED) return 'not-retryable';
         const maxAttempts = await this.allowedRetries(provider, task);
         const attemptsSoFar = task.AttemptCount ?? 0;
         if (attemptsSoFar >= maxAttempts) return 'not-retryable';
@@ -6254,7 +6366,9 @@ export class TaskGraphDispatcher implements IShutdownable {
     ): Promise<TaskBodyOutcome> {
         const context = resolvedContext ?? await this.graphContext(provider, task);
         const presetName = (task.ConfigurationObject as TaskStepConfiguration | null)?.agent?.presetName?.trim() || undefined;
-        return this.agentRunner.RunAgentForTask({
+        const graphID = task.ParentID ?? task.ID;
+        const workflowBudget = this.governance?.GetWorkflowBudgetContext(graphID, null);
+        const result = await this.agentRunner.RunAgentForTask({
             TaskID: task.ID,
             AgentID: task.AgentID!,
             InputPayload: effectiveInput,
@@ -6263,11 +6377,16 @@ export class TaskGraphDispatcher implements IShutdownable {
             SubmittingAgentRunID: context.SubmittingAgentRunID,
             ...(context.ParentAgentHierarchy ? { ParentAgentHierarchy: context.ParentAgentHierarchy } : {}),
             ...(presetName ? { ConfigurationPresetName: presetName } : {}),
+            ...(workflowBudget ? { WorkflowBudget: workflowBudget } : {}),
             Provider: provider,
             ContextUser: context.ExecutionUser,
             OnProgress: onProgress,
             ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
         });
+        if (result.LimitExceeded && this.governance) {
+            this.governance.RecordLimitExceededBreach(graphID, null, result.LimitExceeded);
+        }
+        return result;
     }
 
     /**
