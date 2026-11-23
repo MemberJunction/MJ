@@ -18,7 +18,7 @@ import { StoredPrediction } from '@memberjunction/predictive-studio-core';
 import type { PSRunDetailRow } from './engine/predictive-studio.engine';
 
 /** The `MJ: Latest Feature Values` fields the surfaces read. */
-export type LatestPredictionRow = Pick<MJvwLatestFeatureValuesEntity, 'ID' | 'RecordID' | 'ValueText' | 'ValueNumeric' | 'ValueJSON' | 'Confidence' | 'EffectiveAsOf' | 'ComputedAt'>;
+export type LatestPredictionRow = Pick<MJvwLatestFeatureValuesEntity, 'ID' | 'RecordID' | 'ValueText' | 'ValueNumeric' | 'ValueJSON' | 'Confidence' | 'ComputedAt'>;
 
 /** The binding fields the latest-values read names. */
 export type LatestPredictionBinding = Pick<MJMLModelScoringBindingEntity, 'TargetEntityID' | 'FeatureName'>;
@@ -26,7 +26,7 @@ export type LatestPredictionBinding = Pick<MJMLModelScoringBindingEntity, 'Targe
 /** Reads and maps a binding's latest values. */
 export class LatestPredictionRows {
   /** The fields of {@link LatestPredictionRow}, as the read names them. */
-  public static readonly Fields = ['ID', 'RecordID', 'ValueText', 'ValueNumeric', 'ValueJSON', 'Confidence', 'EffectiveAsOf', 'ComputedAt'] as const satisfies readonly (keyof LatestPredictionRow)[];
+  public static readonly Fields = ['ID', 'RecordID', 'ValueText', 'ValueNumeric', 'ValueJSON', 'Confidence', 'ComputedAt'] as const satisfies readonly (keyof LatestPredictionRow)[];
 
   /** The filter of a binding's latest scored values: its feature on its target entity, `Model` rows only. */
   public static Filter(binding: LatestPredictionBinding): string {
@@ -43,13 +43,13 @@ export class LatestPredictionRows {
 
   /**
    * A stored row as the run-detail row the surfaces parse (`AtRiskRules.ParseAtRiskRows` reads `ResultPayload`'s
-   * `score`, `class` and `drivers`), dated when the value was computed (the grid's "Scored At"); a row with no compute
-   * time is dated by its as-of date (a calendar date, not a time of scoring). Null when the row stores no score.
+   * `score`, `class` and `drivers`), dated when the value was computed (the grid's "Scored At"; `ComputedAt` is NOT
+   * NULL, and the as-of date is a calendar date, not a time of scoring). Null when the row stores no score.
    */
   public static ToRunDetail(row: LatestPredictionRow): PSRunDetailRow | null {
     const score = LatestPredictionRows.Score(row);
     if (score === null) return null;
-    const scoredAt = LatestPredictionRows.date(row.ComputedAt) || LatestPredictionRows.date(row.EffectiveAsOf);
+    const scoredAt = LatestPredictionRows.date(row.ComputedAt);
     const payload = { score, class: row.ValueText, drivers: LatestPredictionRows.drivers(row.ValueJSON) };
     return { ID: row.ID, RecordID: row.RecordID, ResultPayload: JSON.stringify(payload), Status: 'Succeeded', CompletedAt: scoredAt, __mj_CreatedAt: scoredAt || new Date(0) };
   }

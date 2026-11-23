@@ -248,7 +248,7 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
   const Latest = (recordId: string, score: number): LatestPredictionRow => ({
     ID: `LV-${recordId}`, RecordID: recordId, ValueText: score >= 0.5 ? 'true' : 'false', ValueNumeric: score, Confidence: Math.max(score, 1 - score),
     ValueJSON: JSON.stringify({ Probabilities: { false: 1 - score, true: score }, Drivers: [{ sourceColumn: 'DaysSinceLogin', contribution: 0.4, effect: 'raises-adverse' }] }),
-    EffectiveAsOf: new Date('2026-11-03T00:00:00Z'), ComputedAt: new Date('2026-11-03T01:00:00Z'),
+    ComputedAt: new Date('2026-11-03T01:00:00Z'),
   });
 
   /** The provider of the last {@link RenderLatest}. */

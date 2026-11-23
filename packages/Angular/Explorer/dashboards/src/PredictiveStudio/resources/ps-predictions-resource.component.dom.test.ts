@@ -241,7 +241,7 @@ interface RenderResourceOptions {
 const latestValue = (recordId: string, score: number): LatestPredictionRow => ({
   ID: `LV-${recordId}`, RecordID: recordId, ValueText: 'false', ValueNumeric: score, Confidence: score,
   ValueJSON: JSON.stringify({ Probabilities: { true: 1 - score, false: score }, Drivers: [] }),
-  EffectiveAsOf: new Date('2026-10-01T00:00:00Z'), ComputedAt: new Date('2026-10-01T00:00:00Z'),
+  ComputedAt: new Date('2026-10-01T00:00:00Z'),
 });
 
 /**

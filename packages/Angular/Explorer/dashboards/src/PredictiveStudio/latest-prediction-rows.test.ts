@@ -6,12 +6,11 @@
 import { describe, it, expect } from 'vitest';
 import { LatestPredictionRows, type LatestPredictionRow } from './latest-prediction-rows';
 
-const AS_OF = new Date('2026-11-01T00:00:00Z');
 /** When the value was computed: the scoring run's time, later than the as-of calendar date it applies to. */
 const COMPUTED = new Date('2026-11-01T16:04:21Z');
 
 function row(over: Partial<LatestPredictionRow>): LatestPredictionRow {
-  return { ID: 'V1', RecordID: 'R1', ValueText: null, ValueNumeric: null, ValueJSON: null, Confidence: null, EffectiveAsOf: AS_OF, ComputedAt: COMPUTED, ...over };
+  return { ID: 'V1', RecordID: 'R1', ValueText: null, ValueNumeric: null, ValueJSON: null, Confidence: null, ComputedAt: COMPUTED, ...over };
 }
 
 describe('LatestPredictionRows', () => {
@@ -36,10 +35,5 @@ describe('LatestPredictionRows', () => {
     expect(detail?.ResultPayload).toBe(JSON.stringify({ score: 0.7, class: 'Lapsed', drivers: [{ feature: 'Tenure', value: -0.4 }] }));
     expect([detail?.RecordID, detail?.CompletedAt]).toEqual(['R1', COMPUTED]);
     expect(LatestPredictionRows.ToRunDetail(row({}))).toBeNull();
-  });
-
-  it('ToRunDetail falls back to the as-of date when a value has no compute time', () => {
-    const detail = LatestPredictionRows.ToRunDetail(row({ ValueNumeric: 12, ComputedAt: null }));
-    expect(detail?.CompletedAt).toEqual(AS_OF);
   });
 });

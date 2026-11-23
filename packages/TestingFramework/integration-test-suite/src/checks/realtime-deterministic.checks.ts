@@ -98,7 +98,7 @@ import { BaseRealtimeBridge } from '@memberjunction/ai-bridge-base';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '@memberjunction/ai-bridge-server';
 import { HandoffOfferRegistry, LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, RoomAuthorizationService, OFFER_UNAVAILABLE } from '@memberjunction/livekit-room-server';
 import { InteractionLifecycleService } from '@memberjunction/telephony-adapters';
-import { DetectSingleFeatureDominance, GateContexts, LifecycleGate, type GateContext, type PublishRequest } from '@memberjunction/predictive-studio';
+import { DetectSingleFeatureDominance, GateContexts, LifecycleGate, PublishRecordWriteAuthorisations, type GateContext, type PublishRequest } from '@memberjunction/predictive-studio';
 import {
     EvaluationProtocol,
     GateRules,
@@ -270,7 +270,8 @@ class Rd9Fixture {
     }
 
     /**
-     * Deletes, each Delete() checked (D4-62's order): the model's publish records, its output bindings (Evaluate creates
+     * Deletes, each Delete() checked (D4-62's order): the model's publish records (under the ledger guard's one-shot
+     * delete authorisation), its output bindings (Evaluate creates
      * four; `FK_MLOutputBinding_Model` blocks the model's delete while they stand), the model after clearing the run's
      * ResultingModelID, the run, the pipeline.
      */
@@ -281,6 +282,9 @@ class Rd9Fixture {
             );
             Assert(records.Success, `rd9 publish record read for cleanup failed: ${records.ErrorMessage}`);
             for (const record of records.Results) {
+                // The ledger is append-only (D4-279): this server-transport fixture authorises the delete of each record
+                // its own gate calls wrote, one-shot, in process — an API caller cannot.
+                PublishRecordWriteAuthorisations.Instance.AuthoriseDelete(record);
                 Assert(await record.Delete(), `rd9 publish record ${record.ID} delete failed: ${record.LatestResult?.CompleteMessage}`);
             }
             const bindings = await new RunView().RunView<MJMLOutputBindingEntity>(
