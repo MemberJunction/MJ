@@ -18,7 +18,7 @@
     </button>
 
     <!-- Nav Bar Apps: Left of App Switcher -->
-    @if (leftOfSwitcherApps.length > 0 && !appSwitchingLocked) {
+    @if (leftOfSwitcherApps.length > 0 && !appSwitchingLocked && ShowAppSwitcher) {
       <div class="nav-bar-apps left-of-switcher">
         @for (app of leftOfSwitcherApps; track app) {
           <button
@@ -168,7 +168,7 @@
         </button>
       }
       <!-- Nav Bar Apps: Left of User Menu -->
-      @if (leftOfUserMenuApps.length > 0) {
+      @if (leftOfUserMenuApps.length > 0 && !appSwitchingLocked && ShowAppSwitcher) {
         <div class="nav-bar-apps left-of-user-menu">
           @for (app of leftOfUserMenuApps; track app) {
             <button
@@ -228,31 +228,33 @@
               <!-- Menu Item -->
               @if (!isMenuDivider(element)) {
                 @if (asMenuItem(element); as item) {
-                  @if (item.id === 'toggle-theme') {
-                    <div class="user-menu-item theme-toggle-item"
-                      [title]="item.tooltip || ''"
-                      (click)="onUserMenuItemClick(item.id)">
-                      <i [class]="item.icon"></i>
-                      <span class="menu-label">{{ item.label }}</span>
-                      <div class="theme-toggle-track" [class.dark]="IsDarkMode">
-                        <div class="theme-toggle-thumb">
-                          <i [class]="IsDarkMode ? 'fa-solid fa-moon' : 'fa-solid fa-sun'" class="theme-toggle-icon"></i>
+                  @if (IsUserMenuItemVisible(item)) {
+                    @if (item.id === 'toggle-theme') {
+                      <div class="user-menu-item theme-toggle-item"
+                        [title]="item.tooltip || ''"
+                        (click)="onUserMenuItemClick(item.id)">
+                        <i [class]="item.icon"></i>
+                        <span class="menu-label">{{ item.label }}</span>
+                        <div class="theme-toggle-track" [class.dark]="IsDarkMode">
+                          <div class="theme-toggle-thumb">
+                            <i [class]="IsDarkMode ? 'fa-solid fa-moon' : 'fa-solid fa-sun'" class="theme-toggle-icon"></i>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  } @else {
-                    <div class="user-menu-item"
-                      [class.disabled]="!item.enabled"
-                      [class.danger]="item.cssClass === 'danger'"
-                      [style.color]="item.color || null"
-                      [title]="item.tooltip || ''"
-                      (click)="item.enabled && onUserMenuItemClick(item.id)">
-                      <i [class]="item.icon"></i>
-                      <span class="menu-label">{{ item.label }}</span>
-                      @if (item.shortcut) {
-                        <span class="menu-shortcut">{{ item.shortcut }}</span>
-                      }
-                    </div>
+                    } @else {
+                      <div class="user-menu-item"
+                        [class.disabled]="!item.enabled"
+                        [class.danger]="item.cssClass === 'danger'"
+                        [style.color]="item.color || null"
+                        [title]="item.tooltip || ''"
+                        (click)="item.enabled && onUserMenuItemClick(item.id)">
+                        <i [class]="item.icon"></i>
+                        <span class="menu-label">{{ item.label }}</span>
+                        @if (item.shortcut) {
+                          <span class="menu-shortcut">{{ item.shortcut }}</span>
+                        }
+                      </div>
+                    }
                   }
                 }
               }
@@ -264,32 +266,34 @@
   </header>
 
   <!-- Search Popup -->
-  @if (isSearchOpen) {
-    <div class="search-popup-overlay" (click)="closeSearch()"></div>
-  }
-  <div class="search-popup" [class.open]="isSearchOpen" [attr.inert]="isSearchOpen ? null : ''">
-    <div class="search-popup-content" (click)="$event.stopPropagation()">
-      <mj-dropdown
-        [Data]="searchableEntities"
-        TextField="Name"
-        ValueField="ID"
-        AriaLabel="Search in"
-        class="search-entity-dropdown"
-        [(ngModel)]="selectedEntity">
-      </mj-dropdown>
-      <input
-        type="text"
-        #searchInput
-        placeholder="Search..."
-        aria-label="Search"
-        class="mj-input search-input"
-        (keydown.enter)="onSearch($event)"
-        />
-      <button class="search-submit-btn" (click)="onSearch($event)" title="Search">
-        <i class="fa-solid fa-search"></i>
-      </button>
+  @if (ShowSearchBar) {
+    @if (isSearchOpen) {
+      <div class="search-popup-overlay" (click)="closeSearch()"></div>
+    }
+    <div class="search-popup" [class.open]="isSearchOpen" [attr.inert]="isSearchOpen ? null : ''">
+      <div class="search-popup-content" (click)="$event.stopPropagation()">
+        <mj-dropdown
+          [Data]="searchableEntities"
+          TextField="Name"
+          ValueField="ID"
+          AriaLabel="Search in"
+          class="search-entity-dropdown"
+          [(ngModel)]="selectedEntity">
+        </mj-dropdown>
+        <input
+          type="text"
+          #searchInput
+          placeholder="Search..."
+          aria-label="Search"
+          class="mj-input search-input"
+          (keydown.enter)="onSearch($event)"
+          />
+        <button class="search-submit-btn" (click)="onSearch($event)" title="Search">
+          <i class="fa-solid fa-search"></i>
+        </button>
+      </div>
     </div>
-  </div>
+  }
 
   <!-- Mobile Navigation Drawer -->
   @if (mobileNavOpen) {
@@ -324,10 +328,12 @@
       </div>
     }
     <div class="mobile-nav-footer">
-      <button class="mobile-nav-action" title="Search" (click)="toggleSearch(); closeMobileNav()">
-        <i class="fa-solid fa-search"></i>
-        <span>Search</span>
-      </button>
+      @if (ShowSearchBar) {
+        <button class="mobile-nav-action" title="Search" (click)="toggleSearch(); closeMobileNav()">
+          <i class="fa-solid fa-search"></i>
+          <span>Search</span>
+        </button>
+      }
       @if (ShowNotifications) {
         <button class="mobile-nav-action" title="Notifications" (click)="showNotifications(); closeMobileNav()">
           <i class="fa-solid fa-bell"></i>
@@ -398,10 +404,12 @@
 </mj-app-access-dialog>
 
 <!-- Command Palette -->
-<mj-command-palette
-  [ShowSearch]="ShowSearchBar"
-  (AppSelected)="onAppSwitch($event)"
-  (KnowledgeSearchRequested)="OnCommandPaletteSearch($event)"></mj-command-palette>
+@if (ShowCommandPalette) {
+  <mj-command-palette
+    [ShowSearch]="ShowSearchBar"
+    (AppSelected)="onAppSwitch($event)"
+    (KnowledgeSearchRequested)="OnCommandPaletteSearch($event)"></mj-command-palette>
+}
 
 <!-- Unified command palette (Shell.Omnibar.Enabled). Rendered only while the search bar is:
      when Instance Config or the host's chrome policy hides search, the palette must not

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewCon
 import { AngularAdapterService } from '@memberjunction/ng-react';
 import { ActivatedRoute, Router, NavigationEnd, NavigationError, NavigationCancel } from '@angular/router';
 import { Subscription, combineLatest, Subject } from 'rxjs';
-import { filter, takeUntil } from 'rxjs/operators';
+import { filter, skip, takeUntil } from 'rxjs/operators';
 import {
   ApplicationManager,
   WorkspaceStateManager,
@@ -42,6 +42,12 @@ import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AppSwitcherStyle } from './components/header/app-switcher.component';
 import { ApplyShellChromePolicy, BaseShellChromePolicy, ShellChromeFlags } from './shell-chrome-policy';
+import {
+  ApplyShellChromeVisibilityToFlags,
+  ShellChromePolicyService,
+  ShellChromeVisibility,
+  UNRESTRICTED_SHELL_CHROME_VISIBILITY
+} from './services/shell-chrome-policy.service';
 import { SetReadinessBeacon } from './readiness-beacon';
 import { FindDashboardTabForUrl, OpenDashboardForUrl, ParseAppDashboardUrl } from './dashboard-tab-for-url';
 import { ApplyDeepLinkToRestoredWorkspace } from './deep-link-workspace';
@@ -457,11 +463,33 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // depend on when a template happens to be evaluated.
           recordOpenStyle: this.resolvedRecordOpenStyle,
       };
-      const flags = ApplyShellChromePolicy(baseline, this.chromePolicy);
-      if (engine.Loaded) {
+      const hostScoped = ApplyShellChromePolicy(baseline, this.chromePolicy);
+      const flags = ApplyShellChromeVisibilityToFlags(hostScoped, this.getPolicyVisibility());
+      if (engine.Loaded && (!this.shellChromePolicyService || UserInfoEngine.Instance.Loaded || Boolean(UserInfoEngine.Instance.LoadedForUserId))) {
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /**
+   * Resolves current shell chrome visibility from `ShellChromePolicyService`, falling back
+   * safely to unrestricted visibility when constructed outside Angular DI in unit test harnesses.
+   */
+  private getPolicyVisibility(): ShellChromeVisibility {
+      if (!this.shellChromePolicyService) {
+          return UNRESTRICTED_SHELL_CHROME_VISIBILITY;
+      }
+      let providerForPolicy: ShellComponent['ProviderToUse'] | null = null;
+      try {
+          providerForPolicy = this.ProviderToUse ?? null;
+      } catch {
+          providerForPolicy = null;
+      }
+      const restrictedAppId = this.authBase?.GetSessionScope?.()?.restrictedToApplicationId ?? null;
+      return this.shellChromePolicyService.GetVisibility({
+          provider: providerForPolicy,
+          sessionRestrictedToApplicationId: restrictedAppId,
+      });
   }
 
   /**
@@ -478,6 +506,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /** The policy's answer may have changed: forget the cached flags and repaint. */
   private onChromePolicyChanged(): void {
       this._chromeFlags = null;
+      if (this.userMenu) {
+          this.userMenu.UpdateContext({
+              showAdminMenuItems: this.ShowAdminMenuItems
+          });
+          this.refreshMenuElements();
+      }
       this.cdr.markForCheck();
   }
 
@@ -568,6 +602,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
   get ShowSearchPreview(): boolean {
       return this.chromeFlags.searchPreview;
+  }
+  /** Visibility gate for administrative and workspace-management user menu items. */
+  public get ShowAdminMenuItems(): boolean {
+      return this.getPolicyVisibility().showAdminMenuItems;
+  }
+  /** True when the authenticated session resolves to a restricted participant profile. */
+  public get IsRestrictedParticipant(): boolean {
+      return this.getPolicyVisibility().isRestrictedParticipant;
+  }
+  /** Command palette is only mounted when either global search or app switching is enabled. */
+  public get ShowCommandPalette(): boolean {
+      return this.ShowSearchBar || this.ShowAppSwitcher;
+  }
+  /** Template visibility predicate for user menu items under `@if`/`@for` control flow. */
+  public IsUserMenuItemVisible(item: UserMenuItem): boolean {
+      return this.ShowAdminMenuItems || (!item.adminOnly && !item.developerOnly);
   }
   /**
    * Two-layer gate for the unified Ctrl+K command palette (omnibar):
@@ -759,6 +809,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /** Warms the React runtime (CDN scripts) after login; see InitializeShell(). Field-injected so the constructor signature is unchanged. */
   private reactAdapter = inject(AngularAdapterService);
   private diagnosticsService = inject(MJDiagnosticsService, { optional: true });
+  private readonly shellChromePolicyService = inject(ShellChromePolicyService, { optional: true });
   public DiagnosticDialogOpen = false;
 
   constructor(
@@ -969,6 +1020,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.subscriptions.push(
       this.chromePolicy.Changed.subscribe(() => this.onChromePolicyChanged())
     );
+
+    // Sync participant shell chrome policy once startup/UserInfoEngine completes and on updates
+    if (this.shellChromePolicyService) {
+      this.shellChromePolicyService.Refresh({
+        provider: this.ProviderToUse,
+        sessionRestrictedToApplicationId: this.authBase.GetSessionScope()?.restrictedToApplicationId ?? null,
+      });
+      this.subscriptions.push(
+        this.shellChromePolicyService.Visibility$
+          .pipe(skip(1), takeUntil(this.destroy$))
+          .subscribe(() => this.onChromePolicyChanged())
+      );
+    }
 
     // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
     this.subscriptions.push(
@@ -3224,7 +3288,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
       appliedTheme: this.themeService.AppliedTheme,
-      feedbackEnabled
+      feedbackEnabled,
+      showAdminMenuItems: this.ShowAdminMenuItems
     };
 
     // Initialize menu
@@ -3277,6 +3342,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   async OnUserMenuItemClick(itemId: string): Promise<void> {
     if (!this.userMenu) return;
+
+    if (!this.ShowAdminMenuItems) {
+      const targetItem = this.userMenu.GetMenuItems().find(i => i.id === itemId);
+      if (targetItem && (targetItem.adminOnly || targetItem.developerOnly)) {
+        return;
+      }
+    }
 
     const result = await this.userMenu.HandleItemClick(itemId);
 
@@ -3877,7 +3949,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
 
       if (event.key === '/') {
-          if (event.defaultPrevented) {
+          if (event.defaultPrevented || this.shouldBlockCommandPaletteHotkey()) {
               return;
           }
           event.preventDefault();
@@ -3900,6 +3972,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           event.stopPropagation();
           this.OnHeaderSearchClick();
       }
+  }
+
+  private shouldBlockCommandPaletteHotkey(): boolean {
+      if (!this._chromeFlags && !this.shellChromePolicyService) {
+          return false;
+      }
+      return !this.ShowCommandPalette;
   }
 
   /** Header search affordance / Ctrl+K: route to whichever search surface applies.
