@@ -348,18 +348,31 @@
     </div>
   </div>
 
-  <!-- Tab Container - with dynamic tab bar visibility. A call's Share menu offers it as "Main content" under
-       "This panel", except to a call inside it. -->
-  <mj-tab-container
-    id="mj-main-content"
-    role="main"
-    tabindex="-1"
-    mjSharePanel="Main content"
-    mjSharePanelIcon="fa-solid fa-table-cells-large"
-    [class.hide-tab-bar]="!tabBarVisible"
-    (firstResourceLoadComplete)="onFirstResourceLoadComplete()"
-    (layoutInitError)="handleLayoutError()">
-  </mj-tab-container>
+  <!-- Main Content: Branded No-Access View when zero applications are granted, otherwise Golden Layout Tab Container -->
+  @if (HasZeroApplicationGrants) {
+    <main id="mj-main-content" class="shell-no-access-main" tabindex="-1">
+      <mj-shell-no-access
+        [Provider]="Provider"
+        [UserName]="userName"
+        [UserEmail]="UserEmail"
+        [IsRefreshing]="IsRefreshingAccess"
+        [RefreshErrorMessage]="NoAccessRefreshError"
+        (RefreshAccess)="OnRefreshNoAccessGrants()"
+        (SignOut)="OnLogout()">
+      </mj-shell-no-access>
+    </main>
+  } @else {
+    <mj-tab-container
+      id="mj-main-content"
+      role="main"
+      tabindex="-1"
+      mjSharePanel="Main content"
+      mjSharePanelIcon="fa-solid fa-table-cells-large"
+      [class.hide-tab-bar]="!tabBarVisible"
+      (firstResourceLoadComplete)="onFirstResourceLoadComplete()"
+      (layoutInitError)="handleLayoutError()">
+    </mj-tab-container>
+  }
 </div>
 
 <!-- Loading State -->
