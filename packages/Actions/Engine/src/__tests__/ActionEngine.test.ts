@@ -535,6 +535,22 @@ describe('ActionEngineServer', () => {
             expect(result.Success).toBe(true);
             expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
         });
+
+        it('enforces SupportsAudience when IsStructuralAudience=true even without enumerated Readers', async () => {
+            const unsupported = new TestAction();
+            mockClassFactory.CreateInstance.mockReturnValue(unsupported);
+            const refused = await run(paramsFor(undefined, { IsStructuralAudience: true }));
+            expect(refused.Success).toBe(false);
+            expect(refused.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+
+            const supported = new AudienceAwareAction();
+            mockClassFactory.CreateInstance.mockReturnValue(supported);
+            vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({} as never);
+            vi.spyOn(engine as never, 'EndActionLog' as never).mockResolvedValue(undefined as never);
+            const allowed = await run(paramsFor(undefined, { IsStructuralAudience: true }));
+            expect(allowed.Success).toBe(true);
+            expect(supported.ranWith).toHaveLength(1);
+        });
     });
 
     describe('ValidateInputs', () => {

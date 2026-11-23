@@ -54,7 +54,7 @@ import {
     SearchAudience,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
-import { SearchFusion, LabeledResultList, ApplySemanticFloor } from './SearchFusion';
+import { SearchFusion, LabeledResultList, ApplySemanticFloor, StampOriginatingScope } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
 import { ProjectSearchResultForReader } from './ResultFieldProjection';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
@@ -582,6 +582,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 sourceCounts = this.countSources(labeledLists);
                 const defaultFusionWeights = params.FusionWeightsOverride;
                 fusedResults = this._fusion.Fuse(labeledLists, providerTopK, defaultFusionWeights);
+                if (resolvedScopes.length === 1) {
+                    const explicitScope = resolvedScopes[0].Scope;
+                    fusedResults = fusedResults.map(r => StampOriginatingScope(r, explicitScope.ID, explicitScope.Name));
+                }
             } else {
                 // Run each scope independently, then cross-scope RRF
                 const perScopeRunResults = await Promise.all(resolvedScopes.map(bundle =>
@@ -1902,17 +1906,18 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     ),
                     minScore,
                 );
-                // Stamp provider metadata onto each result
-                for (const r of providerResults) {
+                // Stamp provider metadata and originating scope attribution onto each result
+                const attributedResults = providerResults.map(r => {
                     r.ProviderId = entry.ID;
                     r.ProviderLabel = entry.DisplayName;
                     r.ProviderIcon = entry.Icon;
-                }
+                    return StampOriginatingScope(r, scope.ID, scope.Name);
+                });
                 if (onProviderResolved) {
                     try {
                         onProviderResolved({
                             sourceType: entry.Provider.SourceType,
-                            results: providerResults,
+                            results: attributedResults,
                             durationMs: Date.now() - providerStart,
                             scopeID: scope.ID,
                         });
@@ -1921,7 +1926,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         LogError(`SearchEngine: onProviderResolved callback threw for "${entry.Provider.SourceType}" in scope "${scope.Name}": ${cbMsg}`);
                     }
                 }
-                return { Source: entry.Provider.SourceType, Results: providerResults };
+                return { Source: entry.Provider.SourceType, Results: attributedResults };
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 LogError(`SearchEngine: Provider "${entry.Provider.SourceType}" failed in scope "${scope.Name}": ${msg}`);

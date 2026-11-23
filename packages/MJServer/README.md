@@ -550,6 +550,26 @@ Providers are registered via `@RegisterClass(BaseAuthProvider, 'type-key')` and 
 
 Configure providers in `mj.config.cjs` under `authProviders` or via environment variables (see Configuration section).
 
+#### Invite-Only External Authentication (`userHandling.inviteOnly`)
+
+By default, MJServer enables `autoCreateNewUsers: true` and assigns `'UI'` via `newUserRoles` so newly authenticated users can access MJExplorer immediately. For closed / invite-only external deployments, set `userHandling.inviteOnly: true` in `mj.config.cjs`:
+
+```javascript
+userHandling: {
+  inviteOnly: true,
+  // Optional: allow enterprise Entra ID / MSAL tenants whose tokens omit OIDC `email_verified`
+  // verifiedEmailOptionalProviders: ['azure'],
+}
+```
+
+When `userHandling.inviteOnly` is `true`, MJServer enforces three fail-closed invariants regardless of inherited `DEFAULT_SERVER_CONFIG` defaults:
+
+1. **Uninvited sign-ins are refused**: `autoCreateNewUsers` is forced to `false`. External IdP users who do not already have an active, pre-provisioned `MJ: Users` record are rejected with a 401 `InviteOnlyAuthenticationError`.
+2. **Unverified email claims are refused**: `requireVerifiedEmail` is forced to `true`. External JWTs must carry `email_verified: true` (or `xms_edov: true` when `email_verified` is omitted). Tokens with `email_verified: false`, `xms_edov: false`, or a missing verification claim are refused fail-closed. For enterprise IdPs (such as Microsoft Entra ID tenants) whose tokens omit `email_verified`, list the provider name (`'azure'`) or issuer URL in `verifiedEmailOptionalProviders` — even then, an explicit `email_verified: false` claim is always refused.
+3. **No auto-granted UI roles**: `newUserRoles` is forced empty so `'UI'` or any default UI role is never auto-granted to newly authenticated external users; an invited user receives only the roles explicitly assigned on their pre-provisioned `MJ: Users` record.
+
+Non-invite-only deployments (`inviteOnly: false`, the default) retain existing behavior unchanged. Standalone `requireVerifiedEmail: true` can also be enabled independently of `inviteOnly`.
+
 ### API Key Authentication
 
 The server supports two types of API key authentication:

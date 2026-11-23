@@ -436,6 +436,18 @@ export class RunActionParams<TContext = any> {
    public Audience?: ActionRunAudience;
 
    /**
+    * True when the calling agent run or durable task-graph step is executing under structural
+    * common-reach audience mode (`Mode: 'ScopeCommonReach'`), where no enumerated `Readers` are
+    * carried on {@link Audience} but audience restrictions remain unconditionally active.
+    *
+    * Set per dispatch by `BaseAgent` and `TaskGraphActionRunner`; never by the model. Actions
+    * that withhold pre-filter aggregates (such as `SourceCounts` and streaming `provider`
+    * progress events in `ScopedSearchAction`) must treat `params.Audience !== undefined ||
+    * params.IsStructuralAudience === true` as running under an audience.
+    */
+   public IsStructuralAudience?: boolean;
+
+   /**
     * The agent run's scope — its tenant (`PrimaryScopeRecordID`) and secondary dimensions — set by BaseAgent on
     * every dispatch inside an agent run, from the run's validated scope (`ExecuteAgentParams.PrimaryScope*` /
     * `SecondaryScopes`, as written to the `MJ: AI Agent Runs` row). Fields are `null` when the run is unscoped;

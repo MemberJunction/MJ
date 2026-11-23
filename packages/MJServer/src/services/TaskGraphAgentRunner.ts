@@ -424,12 +424,19 @@ export async function TaskGraphEnvelopeRunParams(
     actingUser: UserInfo,
 ): Promise<Partial<ExecuteAgentParams>> {
     const scope = env.RunScope;
-    const readers = env.Audience?.ReaderUserIDs ?? [];
+    let audienceParam: ExecuteAgentParams['Audience'] | undefined;
+    if (env.Audience) {
+        if ('Mode' in env.Audience && env.Audience.Mode === 'ScopeCommonReach') {
+            audienceParam = { Mode: 'ScopeCommonReach' };
+        } else if ('ReaderUserIDs' in env.Audience && env.Audience.ReaderUserIDs.length > 0) {
+            audienceParam = { Mode: 'Intersection', UserIDs: [...env.Audience.ReaderUserIDs] };
+        }
+    }
     const removals = env.IsRunTainted ? await taintedActionRemovals(actingUser) : [];
     return {
         SecurityEnvelope: env,
         ...(env.BoundActionParams ? { boundActionParams: structuredClone(env.BoundActionParams) } : {}),
-        ...(readers.length > 0 ? { Audience: { Mode: 'Intersection', UserIDs: [...readers] } } : {}),
+        ...(audienceParam ? { Audience: audienceParam } : {}),
         ...(scope?.PrimaryScopeEntityName ? { PrimaryScopeEntityName: scope.PrimaryScopeEntityName } : {}),
         ...(scope?.PrimaryScopeRecordID ? { PrimaryScopeRecordID: scope.PrimaryScopeRecordID } : {}),
         ...(scope?.SecondaryScopes ? { SecondaryScopes: structuredClone(scope.SecondaryScopes) } : {}),

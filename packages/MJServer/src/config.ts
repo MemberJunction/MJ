@@ -7,6 +7,7 @@ import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 import { ArtifactGuestSharingEnabledDefault } from './magicLinkConfigUnits.js';
 import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
+import { NormalizeInviteOnlyUserHandling } from './auth/inviteOnlyPolicy.js';
 import { DEFAULT_ROUTE_RATE_LIMITS, type RouteRateLimitName } from './routeRateLimitConfigUnits.js';
 import {
   AgentRunWatchdogDefaultsFromEnv,
@@ -62,6 +63,27 @@ const userHandlingInfoSchema = z.object({
       preset: z.string().optional().default('template'),
     })
     .optional(),
+  /**
+   * When true, enables **invite-only external authentication mode**:
+   * - Refuses uninvited sign-ins with an explicit authentication error (`autoCreateNewUsers` forced off).
+   * - Refuses unverified external email claims (`requireVerifiedEmail` forced on; fails closed unless
+   *   the provider is explicitly exempted in `verifiedEmailOptionalProviders` and never negated).
+   * - Never auto-grants `'UI'` or any `newUserRoles` (`newUserRoles` forced empty).
+   *
+   * Defaults to `false` to preserve existing open/domain-gated deployments.
+   */
+  inviteOnly: z.boolean().optional().default(false),
+  /**
+   * When true (or automatically implied by `inviteOnly: true`), external JWT sign-ins must carry
+   * a verified email assertion (`email_verified === true` or Entra ID `xms_edov === true`).
+   */
+  requireVerifiedEmail: z.boolean().optional().default(false),
+  /**
+   * Provider names (`'azure'`) or issuer URLs whose tokens may omit standard OIDC `email_verified`
+   * claims under `inviteOnly`/`requireVerifiedEmail` (e.g. Microsoft Entra ID tenants). An explicit
+   * `email_verified: false` or `xms_edov: false` claim is ALWAYS refused regardless of this list.
+   */
+  verifiedEmailOptionalProviders: z.array(z.string()).optional().default([]),
 });
 
 const databaseSettingsInfoSchema = z.object({
@@ -1448,7 +1470,10 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     // is, rather than as an address nobody can receive mail at.
     contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
-    UserApplications: []
+    UserApplications: [],
+    inviteOnly: false,
+    requireVerifiedEmail: false,
+    verifiedEmailOptionalProviders: [],
   },
 
   // Database settings (with environment variable for cache refresh)
@@ -1666,6 +1691,10 @@ export function LoadConfig() {
       '[SECURITY] Local dev auth (MJ_DEV_AUTH_ENABLED) is strictly forbidden when NODE_ENV=production. Refusing to start.'
     );
   }
+
+  // Enforce invite-only security invariants at config load so inherited defaults
+  // (autoCreateNewUsers: true, newUserRoles: ['UI']) can never silently bypass invite-only mode.
+  configParsing.data.userHandling = NormalizeInviteOnlyUserHandling(configParsing.data.userHandling);
 
   // Register optional Tier 2 (`MjConfig`) execution limits with the process-wide resolver.
   // When `limits` is omitted in mj.config.cjs, passing `null` clears any prior override so
