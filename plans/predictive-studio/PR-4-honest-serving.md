@@ -10988,9 +10988,10 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   caller to a non-person. `Actor` gains no kind. Residual: an action run with no agent context under a real user (a
   scheduled job running the action as its owner) is recorded as that user — `RunActionParams` carries no transport
   signal (OF4-27's class). The gate harness calls MJAPI with an API key, so its fixture protocols publish a kept
-  baseline (`autoPublishKeepBaseline: true`, OF4-30's route) — every unit-fixture protocol except a monitored
-  pipeline's, which keeps the product default so the challenger outcomes its gates measure are the product's, and
-  every protocol-bound pipeline the gate harness creates (its next protocol version, authored by the suite user).
+  baseline (`autoPublishKeepBaseline: true`, OF4-30's route) — every unit-fixture protocol and every protocol-bound
+  pipeline the gate harness creates (its next protocol version, authored by the suite user). A monitored pipeline moves
+  to the next protocol version with the product default once its incumbent is published
+  (`UnitFixtures.UseProductPromotion`), so every challenger its gates measure is judged by the product's rules.
 - **D4-281 · A chat request is not a person's explicit publish** (review R5 item 2). §5.1's "explicit publish request
   from an interactive user" is one the person makes themselves, through the model detail (`PSSignOffPanelComponent` →
   `PredictiveStudio.PromoteModel` as their session). In chat the LLM decides whether to call Promote, and nothing the

@@ -169,6 +169,7 @@ export class MonitoringFixture {
       throw new Error(`monitoring fixture: training ${o.Scenario} failed (${trained.RefusalCode || 'no refusal code'}): ${why}`);
     }
     await RunFixtures.PublishModel(h, trained.ModelID, `monitoring ${o.Scenario}`);
+    await UnitFixtures.UseProductPromotion(h, pipeline.ID); // the challengers are judged by the product's rules
     const scored = o.ScorePeriods || [];
     const arriving = o.Challenger === true;
     if (scored.length === 0) return { ModelID: trained.ModelID, PipelineID: pipeline.ID, BindingID: null, Dataset: dataset, Calendar: o.Calendar, Arriving: arriving };

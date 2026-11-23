@@ -20,6 +20,7 @@ export const PsGateW6S84Checks: NamedCheck[] = [
       const trained = await h.Train(pipeline);
       if (!trained.ModelID) throw new Error(`G6.5: training failed (${trained.RefusalCode || 'no refusal code'}): ${trained.ErrorMessage || 'no model'}`);
       await RunFixtures.PublishModel(h, trained.ModelID, 'G6.5');
+      await UnitFixtures.UseProductPromotion(h, pipeline.ID); // the challengers are judged by the product's rules
       const dataset = await h.EnsureLoaded({ Kind: 'world', ID: 'W6-drift', Seed: 42 });
       const periods = await MonitoringFixture.RunPeriods(h, { ModelID: trained.ModelID, PipelineID: pipeline.ID, BindingID: null, Dataset: dataset, Calendar: MONTHS_2024, Arriving: false }, Array.from({ length: 24 }, (_, i) => i));
       const flagged = periods.filter((p) => p.TriggersFired.includes('outcome-degradation'));

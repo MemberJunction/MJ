@@ -8,7 +8,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
   EvaluationProtocol, EvaluationProtocolRules, PredictionUnit, UtcDay,
   type ColumnEncodingKind, type DecisionDateRule, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
@@ -45,17 +45,19 @@ export interface MonitoredPromotion {
   readonly Margin?: number;
   readonly DummyBaselineOnly?: boolean;
   /**
-   * The protocol's `autoPublishKeepBaseline`; default false (the product default). The gate harness calls MJAPI with an
-   * API key, a non-interactive credential the lifecycle gate records as a `system` initiator (D4-280), so only a
-   * protocol that sets this lets the harness publish a model whose stored decision keeps the simple baseline (D-031).
+   * The protocol's `autoPublishKeepBaseline`; true for every fixture protocol ({@link FIXTURE_PROMOTION}). The gate
+   * harness calls MJAPI with an API key, a non-interactive credential the lifecycle gate records as a `system` initiator
+   * (D4-280), so only a protocol that sets this lets the harness publish a model whose stored decision keeps the simple
+   * baseline (D-031).
    */
   readonly AutoPublishKeepBaseline?: boolean;
 }
 
 /**
- * The promotion settings of a fixture pipeline that is not monitored: a kept simple baseline is published automatically,
- * so a fixture the gate publishes reaches `Published` whatever its stored decision (the route OF4-30 gives the agent
- * gates). A monitored pipeline keeps the product default, so the challenger outcomes its gates measure are the product's.
+ * The promotion settings every fixture protocol starts with: a kept simple baseline is published automatically, so a
+ * fixture the gate publishes reaches `Published` whatever its stored decision (the route OF4-30 gives the agent gates).
+ * A monitored pipeline moves to the product default once its incumbent is published
+ * ({@link UnitFixtures.UseProductPromotion}), so the challenger outcomes its gates measure are the product's.
  */
 const FIXTURE_PROMOTION: MonitoredPromotion = { AutoPublishKeepBaseline: true };
 
@@ -114,7 +116,7 @@ interface ProvisionOptions {
   readonly FeatureSteps?: FeatureStepGraph;
   /** The protocol's retrain triggers; default none. */
   readonly Triggers?: readonly RetrainTrigger[];
-  /** The protocol's promotion settings beyond the defaults (D4-238); default {@link FIXTURE_PROMOTION}. */
+  /** The protocol's promotion settings beyond the defaults (D4-238), over {@link FIXTURE_PROMOTION}. */
   readonly Promotion?: MonitoredPromotion;
 }
 
@@ -312,7 +314,7 @@ export class UnitFixtures {
   private static async provision(h: TruthHarness, o: ProvisionOptions): Promise<ProvisionedUnitPipeline> {
     const { Draft: draft, Features: features, Algorithm: algorithm, Protocol: protocol, Guard: guard, FeatureSteps: featureSteps } = o;
     const triggers = o.Triggers || null;
-    const promotion = o.Promotion || FIXTURE_PROMOTION;
+    const promotion: MonitoredPromotion = { ...FIXTURE_PROMOTION, ...(o.Promotion || {}) };
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -445,13 +447,35 @@ export class UnitFixtures {
   }
 
   /**
+   * Points a pipeline at the next version of its Evaluation Protocol with the product's promotion default
+   * (`autoPublishKeepBaseline: false`), recorded for teardown: a monitored fixture calls it once its incumbent is
+   * published, so every challenger after it is judged and published by the product's rules, not the fixture's. Throws
+   * when a read or a save fails, or the pipeline is bound to no protocol.
+   */
+  public static async UseProductPromotion(h: TruthHarness, pipelineId: string): Promise<void> {
+    const factory = UnitFixtures.EntityFactory(h);
+    const pipeline = await factory.getEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', h.User);
+    if (!(await pipeline.Load(pipelineId))) throw new Error(`ML Training Pipeline ${pipelineId} not found`);
+    if (!pipeline.EvaluationProtocolID) throw new Error(`ML Training Pipeline ${pipelineId} has no Evaluation Protocol`);
+    const latest = await factory.getEntityObject<MJMLEvaluationProtocolEntity>('MJ: ML Evaluation Protocols', h.User);
+    if (!(await latest.Load(pipeline.EvaluationProtocolID))) throw new Error(`Evaluation Protocol ${pipeline.EvaluationProtocolID} not found`);
+    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(latest);
+    if (parsed.Ok === false) throw new Error(`Evaluation Protocol ${latest.ID} does not parse: ${parsed.Errors.join('; ')}`);
+    const promotion = { ...parsed.Value.promotion, autoPublishKeepBaseline: false };
+    const next = await EvaluationProtocolVersioning.CreateNextEvaluationProtocolVersion(latest, { promotion }, { kind: 'human', userId: h.User.ID }, factory, h.User);
+    h.Created.RecordEvaluationProtocol(next.ID);
+    pipeline.EvaluationProtocolID = next.ID;
+    if (!(await pipeline.Save())) throw new Error(`Pointing pipeline ${pipelineId} at Evaluation Protocol v${next.Version} failed: ${pipeline.LatestResult?.CompleteMessage}`);
+  }
+
+  /**
    * A monitored world renewal pipeline (M6.6, G6.5): the world's renewal unit censored at `trainThrough`, the given
    * features, the year-cutoff protocol with `triggers`.
    */
   public static ProvisionMonitoredWorldPipeline(h: TruthHarness, world: string, features: readonly string[], trainThrough: string, triggers: readonly RetrainTrigger[]): Promise<ProvisionedUnitPipeline> {
     const base = UnitFixtures.WorldRenewalUnitDraft(h, world, false);
     const draft: UnitDraft = { ...base, Name: `${base.Name} — monitored through ${trainThrough}`, Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: trainThrough } } };
-    return UnitFixtures.provision(h, { Draft: draft, Features: features, Algorithm: 'Logistic Regression', Protocol: { Kind: 'year-cutoff' }, FeatureSteps: UnitFixtures.worldRenewalSteps(h, world, { Features: features }), Triggers: triggers, Promotion: {} });
+    return UnitFixtures.provision(h, { Draft: draft, Features: features, Algorithm: 'Logistic Regression', Protocol: { Kind: 'year-cutoff' }, FeatureSteps: UnitFixtures.worldRenewalSteps(h, world, { Features: features }), Triggers: triggers });
   }
 
   /** The C3 task (W9-multiclass s42): the three attendance outcomes in the artifact's order, `NoShow` the adverse class. */
