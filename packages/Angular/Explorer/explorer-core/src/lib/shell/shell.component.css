@@ -50,8 +50,18 @@
 
 /* The main landmark is also the skip-link target; focusing it programmatically must
    not paint a ring on a region the user did not tab to. */
-mj-tab-container:focus {
+mj-tab-container:focus,
+.shell-no-access-main:focus {
   outline: none;
+}
+
+.shell-no-access-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--mj-bg-page);
 }
 
 .shell-container {
