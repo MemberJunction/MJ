@@ -53561,7 +53561,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     	}
     }
 
-/**
+    /**
     * A record cannot be its own parent, and specifying a parent branch requires a parent record to be set.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -54178,6 +54178,15 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: ParentBranch
+    * * Display Name: Parent Branch Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ParentBranch(): string | null {
+        return this.Get('ParentBranch');
+    }
+
+    /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
@@ -54220,15 +54229,6 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
-    }
-
-    /**
-    * * Field Name: ParentBranch
-    * * Display Name: Parent Branch Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ParentBranch(): string | null {
-        return this.Get('ParentBranch');
     }
 }
 

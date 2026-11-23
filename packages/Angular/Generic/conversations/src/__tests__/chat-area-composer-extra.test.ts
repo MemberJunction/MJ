@@ -94,9 +94,10 @@ describe('chat area — host rules reach every composer', () => {
     });
 
     it("every composer's '@' list is scoped, and the pin picker is narrowed", () => {
-        // The new-conversation composer, the empty state, and the conversation's composer.
-        expect(indexesOfCount(chatArea, '[AllowedAgentIDs]="AllowedAgentIDs"')).toBe(4); // + the pin picker
-        expect(indexesOfCount(chatArea, '[MentionPeople]="MentionPeople"')).toBe(3);
+        // The new-conversation composer, the empty state, the conversation's composer,
+        // the side-question panel, and the pin picker.
+        expect(indexesOfCount(chatArea, '[AllowedAgentIDs]="AllowedAgentIDs"')).toBe(5);
+        expect(indexesOfCount(chatArea, '[MentionPeople]="MentionPeople"')).toBe(4);
         expect(messageInput).toContain('[AllowedAgentIDs]="AllowedAgentIDs"');
         expect(messageInput).toContain('[MentionPeople]="MentionPeople"');
     });

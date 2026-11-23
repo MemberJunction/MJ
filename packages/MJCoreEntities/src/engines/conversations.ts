@@ -2188,10 +2188,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ? ''
             : ` AND LinkedEntityID IS NULL`;
         // Child side-question threads live inside their parent conversation's side-question UI
-        // and must not clutter the top-level Chat sidebar list.
+        // and must not clutter the top-level Chat sidebar list, while generic ParentID child
+        // conversations (Epic 4a) remain governed by the shared-folder ParentID clause above.
+        const sideQuestionTypeId =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SIDE_QUESTION) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
         const sideQuestionClause = options?.includeSideQuestions
             ? ''
-            : ` AND ParentID IS NULL`;
+            : ` AND (TypeID IS NULL OR TypeID<>'${EscapeSQLString(sideQuestionTypeId)}')`;
         return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}${sideQuestionClause}`;
     }
 
@@ -5794,7 +5798,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 const scope = data['ApplicationScope'] as string | undefined;
                 const anchorType = data['AnchorType'] as string | null | undefined;
                 const linkedEntityId = data['LinkedEntityID'] as string | null | undefined;
-                const parentId = data['ParentID'] as string | null | undefined;
+                const typeId = data['TypeID'] as string | null | undefined;
+                const parentBranchId = data['ParentBranchID'] as string | null | undefined;
+                const sideQuestionTypeId =
+                    this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SIDE_QUESTION) ??
+                    BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
+                const isSideQuestion =
+                    (typeId != null && (UUIDsEqual(typeId, sideQuestionTypeId) || UUIDsEqual(typeId, BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION))) ||
+                    parentBranchId != null;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
                 const inLoadedEnvironment =
@@ -5804,7 +5815,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                     scope !== 'Application' &&
                     anchorType == null &&
                     linkedEntityId == null &&
-                    parentId == null &&
+                    !isSideQuestion &&
                     !isArchived &&
                     inLoadedEnvironment
                 ) {

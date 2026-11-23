@@ -134,7 +134,7 @@ describe('Side Questions — Core Entities & Access', () => {
         expect(missing.Loaded).toBe(false);
     });
 
-    it('excludes ParentID != null from default visible conversation filter and allows opt-in', () => {
+    it('excludes SIDE_QUESTION TypeID from default visible conversation filter and allows opt-in', () => {
         const buildFilter = Reflect.get(
             ConversationEngine.Instance,
             'buildVisibleConversationsFilter'
@@ -145,7 +145,7 @@ describe('Side Questions — Core Entities & Access', () => {
             options?: { includeSideQuestions?: boolean }
         ) => string;
         const defaultFilter = Reflect.apply(buildFilter, ConversationEngine.Instance, ['env-1', 'u1', []]);
-        expect(defaultFilter).toContain('ParentID IS NULL');
+        expect(defaultFilter).toContain(`TypeID<>'${BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION}'`);
 
         const optInFilter = Reflect.apply(buildFilter, ConversationEngine.Instance, [
             'env-1',
@@ -153,10 +153,10 @@ describe('Side Questions — Core Entities & Access', () => {
             [],
             { includeSideQuestions: true },
         ]);
-        expect(optInFilter).not.toContain('ParentID IS NULL');
+        expect(optInFilter).not.toContain(BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION);
     });
 
-    it('does not prepend child side conversations into sidebar cache', () => {
+    it('does not prepend SIDE_QUESTION child conversations into sidebar cache', () => {
         const setLastEnv = Reflect.set(ConversationEngine.Instance, '_lastEnvironmentId', 'env-1');
         expect(setLastEnv).toBe(true);
         const listSubject = Reflect.get(ConversationEngine.Instance, '_conversations$') as {
@@ -168,25 +168,24 @@ describe('Side Questions — Core Entities & Access', () => {
         const handleEvent = Reflect.get(
             ConversationEngine.Instance,
             'handleConversationEntityEvent'
-        ) as (event: {
-            type: string;
-            baseEntity: { GetAll: () => Record<string, string | boolean | null> };
-        }) => Promise<void>;
+        ) as (
+            event: { baseEntity: object },
+            action: string,
+            data: Record<string, string | boolean | null>
+        ) => boolean;
 
-        void Reflect.apply(handleEvent, ConversationEngine.Instance, [
+        Reflect.apply(handleEvent, ConversationEngine.Instance, [
+            { baseEntity: { ID: 'side-conv-1' } },
+            'save',
             {
-                type: 'save',
-                baseEntity: {
-                    GetAll: () => ({
-                        ID: 'side-conv-1',
-                        ApplicationScope: 'Global',
-                        AnchorType: null,
-                        LinkedEntityID: null,
-                        ParentID: 'parent-conv-1',
-                        EnvironmentID: 'env-1',
-                        IsArchived: false,
-                    }),
-                },
+                ID: 'side-conv-1',
+                ApplicationScope: 'Global',
+                AnchorType: null,
+                LinkedEntityID: null,
+                ParentID: 'parent-conv-1',
+                TypeID: BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION,
+                EnvironmentID: 'env-1',
+                IsArchived: false,
             },
         ]);
         expect(listSubject.value).toHaveLength(0);
