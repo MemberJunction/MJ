@@ -39,7 +39,7 @@ interface LoopAgentResponse {
     /** Task completion status. true = terminate loop, false = continue */
     taskComplete?: boolean;
 {%- endif %}
-    /** Plain text message (<100 words). Required for 'Chat' type, omit for others */
+    /** User-facing reply text. Include when completing a conversational reply (taskComplete: true) or pausing for 'Chat'; omit on intermediate turns */
     message?: string;
 {% if __agentTypePromptParams.includeResponseTypeDefinition.responseForms != false %}
     /** Optional response form to collect structured user input */
@@ -523,7 +523,7 @@ Static values need no syntax: `"Welcome!"`
 **Next step types:**
 - `"Actions"`: Execute one or more actions
 - `"Sub-Agent"`: Invoke a sub-agent
-- {% if _NATIVE_CONTROL_FLOW == 'implicit' %}`ask_user` tool: ask the user (pauses the run){% else %}`"Chat"`: Send message to user{% endif %}
+- {% if _NATIVE_CONTROL_FLOW == 'implicit' %}`ask_user` tool: ask the user (pauses the run){% else %}`"Chat"`: Pause mid-task to ask the user a blocking question (for normal completed replies, set `taskComplete: true` with `message` and omit `nextStep`){% endif %}
 - `"Retry"`: Continue processing (set `messageIndex` to expand a compacted message first)
 {% if __agentTypePromptParams.includeForEachDocs != false %}- `"ForEach"`: Iterate over a collection, executing action/sub-agent per item{% endif %}
 {% if __agentTypePromptParams.includeWhileDocs != false %}- `"While"`: Loop while condition is true, executing action/sub-agent per iteration{% endif %}

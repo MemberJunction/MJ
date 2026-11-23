@@ -176,6 +176,24 @@ describe('parseObjectOutput — key cleaning and ValidationBehavior (#4827)', ()
     expect(res).toEqual({ name: 'John' });
   });
 
+  it("preserves colon-bearing format keys like '16:9' and '9:16' under 'Warn' while cleaning 'name:string?' (#4827)", async () => {
+    const res = await priv(runner).parseObjectOutput(
+      '{"Source":{"16:9":{"Files":{"index.html":"<html></html>"}},"9:16":{"Files":{}}},"name:string?":"Hero"}',
+      { OutputType: 'object', OutputExample: '{"Source":{}}', ValidationBehavior: 'Warn' },
+      false,
+      false,
+      [],
+      {}
+    );
+    expect(res).toEqual({
+      Source: {
+        '16:9': { Files: { 'index.html': '<html></html>' } },
+        '9:16': { Files: {} },
+      },
+      name: 'Hero',
+    });
+  });
+
   it("still cleans under 'None' when cleanValidationSyntax is set explicitly", async () => {
     const res = await priv(runner).parseObjectOutput('{"name?":"John"}', { OutputType: 'object', OutputExample: example, ValidationBehavior: 'None' }, false, true, [], {});
     expect(res).toEqual({ name: 'John' });

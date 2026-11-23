@@ -47,6 +47,10 @@ export class MJResourcePermissionEntityServer extends MJResourcePermissionEntity
     private _conversationOwnerAuthorized = false;
 
     public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
+        const provider = this.ProviderToUse;
+        if (!isMetadataProvider(provider) || provider.ProviderType !== 'Database') {
+            return super.CheckPermissions(type, throwError);
+        }
         if (this.involvesConversationResourceType()) {
             if (this._conversationOwnerAuthorized) {
                 return true;
