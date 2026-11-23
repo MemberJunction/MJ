@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type WorkflowSaveInput, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type ExecuteAgentResult, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -316,6 +316,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * MessageInputComponent and triggers conversationCreated as usual.
    */
   @Input() SuppressNewConversationEmptyState = false;
+
+  /**
+   * When set by the host wrapper (for example after deep-link permission verification fails
+   * or a share is revoked), displays a clean access-denied state without rendering messages.
+   */
+  @Input() AccessDeniedMessage: string | null = null;
 
   /** @deprecated Use {@link SuppressNewConversationEmptyState}. */
   @Input() set suppressNewConversationEmptyState(value: ConversationChatAreaComponent['SuppressNewConversationEmptyState']) {
@@ -7556,7 +7562,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   ShareConversation(): void {
-    if (!this.Conversation) return;
+    if (!this.Conversation || !this.CanShareConversation) return;
     this.ShareContext = {
       ResourceID: this.Conversation.ID,
       ResourceName: this.Conversation.Name ?? 'Conversation',
@@ -7565,6 +7571,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       CurrentUserID: this.CurrentUser?.ID ?? null
     };
     this.ShowShareModal = true;
+  }
+
+  /** True when the open conversation is a child `ParentID` side thread. */
+  public get IsSideThread(): boolean {
+    return Boolean(this.Conversation?.ParentID);
+  }
+
+  /**
+   * True when a `ParentID` side thread has been explicitly shared rather than remaining
+   * private to the owner (side threads never inherit parent/folder access implicitly).
+   */
+  public get IsSideThreadExplicitlyShared(): boolean {
+    if (!this.Conversation?.ParentID) {
+      return false;
+    }
+    if (this.SharedByBadge !== null) {
+      return true;
+    }
+    return this.engine?.IsConversationExplicitlyShared?.(this.Conversation.ID) ?? false;
   }
 
   /** @deprecated Use {@link ShareConversation}. */
@@ -8423,11 +8448,35 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         spec.workflowName?.trim() ||
         this.SelectedTaskGraphPanel?.workflowTitle?.trim() ||
         'Saved Workflow';
-      const workflowSpec: WorkflowSpec = {
+      type SaveableTask = WorkflowSaveInput['spec']['graph']['tasks'][number];
+      const saveableTasks: SaveableTask[] = [];
+      for (const task of spec.tasks) {
+        if (task.kind === 'Enqueue') {
+          MJNotificationService.Instance.CreateSimpleNotification(
+            'Workflows containing Enqueue steps cannot yet be saved from this panel.',
+            'warning',
+            5000,
+          );
+          return;
+        }
+        const kind: SaveableTask['kind'] = task.kind;
+        saveableTasks.push({
+          tempId: task.tempId,
+          name: task.name,
+          description: task.description,
+          kind,
+          configuration: task.configuration as SaveableTask['configuration'],
+          dependsOn: task.dependsOn,
+          policy: task.policy,
+          layout: task.layout,
+          inputPayload: task.inputPayload,
+        });
+      }
+      const workflowSpec: WorkflowSaveInput['spec'] = {
         name,
         description: `Saved from Conversation ${this.Conversation?.Name || this.ConversationId || ''}`.trim(),
         status: 'Draft',
-        graph: { ...spec, workflowName: name },
+        graph: { ...spec, workflowName: name, tasks: saveableTasks },
         triggers: [],
       };
       const op = new WorkflowSaveOperation();

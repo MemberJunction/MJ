@@ -15,6 +15,7 @@ import { CompositeKey, IRunViewProvider, LogError, RunView, RunViewParams, UserI
 import {
   ArtifactMetadataEngine,
   ArtifactPermissionEngine,
+  CONVERSATIONS_RESOURCE_TYPE_ID,
   FileStorageEngineBase,
   MJArtifactEntity,
   MJArtifactPermissionEntity,
@@ -23,7 +24,9 @@ import {
   MJCollectionArtifactEntity,
   MJCollectionEntity,
   MJCollectionPermissionEntity,
+  MJConversationEntity,
   MJEnvironmentEntityExtended,
+  MJResourcePermissionEntity,
   ParseArtifactVersionConfiguration,
   ResolveArtifactTypeThumbnailPolicy,
   UserInfoEngine,
@@ -63,6 +66,8 @@ import {
   LibraryListStyle,
   LibraryNavigatorSection,
   LibraryOwnershipFilter,
+  LibrarySharedEntry,
+  LibrarySharedPermissionLevel,
   LibrarySurfaceMode,
   LibraryUnifiedLayout,
   LibraryUnifiedScope,
@@ -91,8 +96,42 @@ interface CollectionArtifactLinkRow {
 
 type ArtifactPermissionSummaryRow = Pick<
   MJArtifactPermissionEntity,
-  'ID' | 'ArtifactID' | 'UserID' | 'CanRead' | 'CanEdit' | 'CanShare' | 'CanDelete'
+  | 'ID'
+  | 'ArtifactID'
+  | 'UserID'
+  | 'User'
+  | 'SharedByUserID'
+  | 'SharedByUser'
+  | 'CanRead'
+  | 'CanEdit'
+  | 'CanShare'
+  | 'CanDelete'
+  | '__mj_CreatedAt'
 >;
+
+interface ConversationShareSummaryRow {
+  ID: string;
+  ResourceRecordID: string;
+  Type: MJResourcePermissionEntity['Type'];
+  RoleID: string | null;
+  UserID: string | null;
+  PermissionLevel: MJResourcePermissionEntity['PermissionLevel'];
+  SharedByUserID: string | null;
+  SharedByUser: string | null;
+  User: string | null;
+  Role: string | null;
+  __mj_CreatedAt: Date | string;
+}
+
+interface SharedConversationRow {
+  ID: string;
+  Name: string | null;
+  Description: string | null;
+  UserID: string | null;
+  User: string | null;
+  ParentID: string | null;
+  __mj_UpdatedAt: Date | string;
+}
 
 interface EnvironmentScopedArtifactIdRow {
   ID: string;
@@ -143,10 +182,14 @@ const ARTIFACT_PERMISSION_SUMMARY_FIELDS: string[] = [
   'ID',
   'ArtifactID',
   'UserID',
+  'User',
+  'SharedByUserID',
+  'SharedByUser',
   'CanRead',
   'CanEdit',
   'CanShare',
   'CanDelete',
+  '__mj_CreatedAt',
 ];
 
 export interface LibraryExternalRouteParams {
@@ -218,6 +261,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public LoadedArtifactCount = 0;
   public TotalArtifactCount = 0;
   public AllItems: LibraryItemSummary[] = [];
+  public SharedWithMeEntries: LibrarySharedEntry[] = [];
+  public SharedByMeEntries: LibrarySharedEntry[] = [];
   public CollectionTree: LibraryCollectionNode[] = [];
   public FlatCollections: LibraryCollectionNode[] = [];
   public ConnectedDrives: LibraryDriveSummary[] = [];
@@ -398,6 +443,12 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         badge: this.SharedWithMeCount || null,
       },
       {
+        key: 'shared-by-me',
+        label: 'Shared by Me',
+        icon: 'fa-solid fa-paper-plane',
+        badge: this.SharedByMeCount || null,
+      },
+      {
         key: 'drives',
         label: 'Connected Drives',
         icon: 'fa-solid fa-cloud',
@@ -414,7 +465,28 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   public get SharedWithMeCount(): number {
-    return this.AllItems.filter((i) => i.IsSharedWithMe).length;
+    const entries = this.SharedWithMeEntries ?? [];
+    return entries.length > 0
+      ? entries.length
+      : (this.AllItems ?? []).filter((i) => i.IsSharedWithMe).length;
+  }
+
+  public get SharedByMeCount(): number {
+    return (this.SharedByMeEntries ?? []).length;
+  }
+
+  public get FilteredSharedWithMeEntries(): LibrarySharedEntry[] {
+    return this.filterSharedEntries(this.SharedWithMeEntries ?? []);
+  }
+
+  public get FilteredSharedByMeEntries(): LibrarySharedEntry[] {
+    return this.filterSharedEntries(this.SharedByMeEntries ?? []);
+  }
+
+  public get ActiveSharedEntries(): LibrarySharedEntry[] {
+    return this.UnifiedScope === 'shared-by-me'
+      ? this.FilteredSharedByMeEntries
+      : this.FilteredSharedWithMeEntries;
   }
 
   public get StarredCount(): number {
@@ -475,10 +547,12 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
     if (this.SurfaceMode === 'navigator') {
       if (this.NavigatorSection === 'shared') return 'shared';
+      if (this.NavigatorSection === 'shared-by-me') return 'shared-by-me';
       if (this.NavigatorSection === 'starred') return 'starred';
       return 'home';
     }
     if (this.HubTab === 'shared') return 'shared';
+    if (this.HubTab === 'shared-by-me') return 'shared-by-me';
     return 'home';
   }
 
@@ -494,6 +568,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       segments.push({ Label: 'All Items', Scope: 'all' });
     } else if (scope === 'shared') {
       segments.push({ Label: 'Shared with Me', Scope: 'shared' });
+    } else if (scope === 'shared-by-me') {
+      segments.push({ Label: 'Shared by Me', Scope: 'shared-by-me' });
     } else if (scope === 'starred') {
       segments.push({ Label: 'Starred', Scope: 'starred' });
     } else if (scope === 'collection') {
@@ -519,6 +595,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       return this.SelectedDrive?.AccountName || 'Connected Drives';
     }
     if (scope === 'shared') return 'Shared with Me';
+    if (scope === 'shared-by-me') return 'Shared by Me';
     if (scope === 'starred') return 'Starred Items';
     if (scope === 'all') return 'All Items';
     return 'Library Home';
@@ -533,7 +610,10 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       return `${this.SelectedDrive.ProviderName} · Dynamic remote browsing`;
     }
     if (scope === 'shared') {
-      return 'Documents, spreadsheets, slides, and collections shared with you';
+      return 'Conversations, side threads, and artifacts shared with you';
+    }
+    if (scope === 'shared-by-me') {
+      return 'Conversations and artifacts you have shared with teammates';
     }
     if (scope === 'starred') {
       return 'Pinned items for instant access';
@@ -666,7 +746,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   public SwitchHubTab(tabKey: string): void {
-    const valid: LibraryHubTab[] = ['overview', 'collections', 'all', 'shared', 'drives'];
+    const valid: LibraryHubTab[] = ['overview', 'collections', 'all', 'shared', 'shared-by-me', 'drives'];
     const tab = (valid.includes(tabKey as LibraryHubTab) ? tabKey : 'overview') as LibraryHubTab;
     this.HubTab = tab;
     this.IsFullCanvasOpen = false;
@@ -678,7 +758,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.cdr.detectChanges();
   }
 
-  public SelectNavigatorView(section: 'all' | 'collections' | 'shared' | 'starred'): void {
+  public SelectNavigatorView(section: 'all' | 'collections' | 'shared' | 'shared-by-me' | 'starred'): void {
     this.SurfaceMode = 'navigator';
     this.NavigatorSection = section;
     this.SelectedCollectionId = null;
@@ -734,6 +814,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       if (scope === 'shared') {
         this.HubTab = 'shared';
         this.NavigatorSection = 'shared';
+      } else if (scope === 'shared-by-me') {
+        this.HubTab = 'shared-by-me';
+        this.NavigatorSection = 'shared-by-me';
       } else if (scope === 'starred') {
         this.HubTab = 'all';
         this.NavigatorSection = 'starred';
@@ -747,6 +830,111 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
     this.emitWorkspaceState();
     this.cdr.detectChanges();
+  }
+
+  /** Opens a shared conversation (or `ParentID` side thread) or shared artifact from the Library sharing view. */
+  public OpenSharedEntry(entry: LibrarySharedEntry, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (entry.ItemKind === 'conversation') {
+      this.HostNavigate.emit({
+        Kind: 'conversation',
+        ConversationId: entry.ResourceId,
+      });
+      return;
+    }
+    this.OpenArtifactStudio(entry.ResourceId);
+  }
+
+  /**
+   * Revokes a permission record granted by the current user (`Shared by Me` view) and immediately
+   * removes the revoked entry from the view. Conversation shares enforce owner-only revocation.
+   */
+  public async RevokeSharedEntry(entry: LibrarySharedEntry, event?: Event): Promise<boolean> {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (!entry.CanRevoke || !entry.PermissionRecordId || entry.IsRevoking) {
+      return false;
+    }
+
+    const user = this.EffectiveUser;
+    const md = this.ProviderToUse;
+    entry.IsRevoking = true;
+    this.notifyViewCheck();
+
+    try {
+      const entityName =
+        entry.ItemKind === 'conversation' ? 'MJ: Resource Permissions' : 'MJ: Artifact Permissions';
+      const perm = await md.GetEntityObject<MJResourcePermissionEntity | MJArtifactPermissionEntity>(
+        entityName,
+        user,
+      );
+      const loaded = await perm.Load(entry.PermissionRecordId);
+      if (!loaded) {
+        this.SharedByMeEntries = this.SharedByMeEntries.filter((e) => e.Id !== entry.Id);
+        this.notifications.CreateSimpleNotification(
+          'Share record was already removed or cannot be accessed.',
+          'info',
+          3500,
+        );
+        return false;
+      }
+
+      const deleted = await perm.Delete();
+      if (!deleted) {
+        const msg =
+          perm.LatestResult?.CompleteMessage ||
+          perm.LatestResult?.Message ||
+          `Failed to revoke access for "${entry.Title}".`;
+        this.notifications.CreateSimpleNotification(msg, 'error', 4000);
+        return false;
+      }
+
+      this.SharedByMeEntries = this.SharedByMeEntries.filter((e) => e.Id !== entry.Id);
+      this.notifications.CreateSimpleNotification(
+        `Revoked ${entry.RecipientName}'s access to "${entry.Title}".`,
+        'success',
+        3000,
+      );
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to revoke share permission.';
+      this.notifications.CreateSimpleNotification(msg, 'error', 4000);
+      return false;
+    } finally {
+      entry.IsRevoking = false;
+      this.emitWorkspaceState();
+      this.notifyViewCheck();
+    }
+  }
+
+  /** Formats a share grant date concisely for `Shared with Me` and `Shared by Me` rows/cards. */
+  public FormatShareDate(value: Date | string | null | undefined): string {
+    if (!value) return 'Unknown date';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown date';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  private filterSharedEntries(entries: LibrarySharedEntry[]): LibrarySharedEntry[] {
+    const q = this.SearchQuery.trim().toLowerCase();
+    return entries.filter((entry) => {
+      if (this.CategoryFilter !== 'all' && entry.ItemKind === 'conversation') {
+        return false;
+      }
+      if (!q) return true;
+      const itemLabel = entry.ItemKind === 'conversation' ? 'conversation' : 'artifact';
+      return (
+        entry.Title.toLowerCase().includes(q) ||
+        entry.Description.toLowerCase().includes(q) ||
+        entry.SharerName.toLowerCase().includes(q) ||
+        entry.RecipientName.toLowerCase().includes(q) ||
+        entry.PermissionLevel.toLowerCase().includes(q) ||
+        itemLabel.includes(q)
+      );
+    });
   }
 
   public SetUnifiedLayout(layout: LibraryUnifiedLayout): void {
@@ -1552,6 +1740,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           checkedDirectSharedNormIds: initial.checkedDirectSharedNormIds,
         });
       }
+
+      await this.loadSharingEntries(rv, user, generation);
     } catch (err) {
       if (!this.isReloadStale(generation)) {
         this.LoadError = err instanceof Error ? err.message : 'Failed to load Library items.';
@@ -1743,6 +1933,370 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   private isReloadStale(generation: number): boolean {
     return Boolean(this.isDestroyed) || generation !== this.reloadGeneration;
+  }
+
+  private toShareDate(primary: Date | string | null | undefined, fallback?: Date | string | null): Date {
+    const raw = primary ?? fallback;
+    if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+      return raw;
+    }
+    if (typeof raw === 'string' && raw.length > 0) {
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    return new Date(0);
+  }
+
+  private toShareLevel(raw: MJResourcePermissionEntity['PermissionLevel'] | boolean | null | undefined): LibrarySharedPermissionLevel {
+    if (raw === true || raw === 'Edit' || raw === 'Owner') {
+      return 'Edit';
+    }
+    return 'View';
+  }
+
+  /**
+   * Builds baseline `Shared with Me` artifact entries from hydrated Library items and
+   * `MJ: Artifact Permissions` rows, preserving any conversation entries already loaded.
+   */
+  private syncArtifactSharedWithMeEntries(artifactPerms: ReadonlyArray<ArtifactPermissionSummaryRow>): void {
+    const permByArtId = new Map<string, ArtifactPermissionSummaryRow>();
+    for (const ap of artifactPerms) {
+      if (ap.CanRead) {
+        permByArtId.set(NormalizeUUID(ap.ArtifactID), ap);
+      }
+    }
+    const currentUser = this.EffectiveUser;
+    const recipientName = currentUser?.Name || 'You';
+    const artifactEntries: LibrarySharedEntry[] = this.AllItems
+      .filter((item) => item.IsSharedWithMe)
+      .map((item) => {
+        const perm = permByArtId.get(NormalizeUUID(item.Id));
+        return {
+          Id: perm ? `art-in:${perm.ID}` : `art-in-col:${item.Id}`,
+          ItemKind: 'artifact',
+          ResourceId: item.Id,
+          Title: item.Name,
+          Description: item.Description || item.TypeName,
+          Icon: item.Icon,
+          SharerName: perm?.SharedByUser || item.OwnerName || 'Shared user',
+          RecipientName: recipientName,
+          ShareDate: this.toShareDate(perm?.__mj_CreatedAt, item.UpdatedAt),
+          PermissionLevel: perm ? this.toShareLevel(perm.CanEdit) : this.toShareLevel(item.CanEdit),
+          IsSideThread: false,
+          ParentConversationId: null,
+          PermissionRecordId: perm?.ID ?? null,
+          CanRevoke: false,
+        };
+      });
+
+    const existingConversations = (this.SharedWithMeEntries ?? []).filter(
+      (e) => e.ItemKind === 'conversation',
+    );
+    this.SharedWithMeEntries = [...artifactEntries, ...existingConversations].sort(
+      (a, b) => b.ShareDate.getTime() - a.ShareDate.getTime(),
+    );
+    this.SharedByMeEntries ??= [];
+  }
+
+  /**
+   * Loads both `Shared with Me` conversations (including explicitly shared `ParentID` side threads)
+   * and `Shared by Me` permissions across conversations and artifacts.
+   */
+  private async loadSharingEntries(rv: RunView, user: UserInfo, generation: number): Promise<void> {
+    const safeUserId = EscapeSQLString(user.ID);
+    const safeEnvId = EscapeSQLString(this.EffectiveEnvironmentId);
+    const safeConvTypeId = EscapeSQLString(CONVERSATIONS_RESOURCE_TYPE_ID);
+    this.SharedWithMeEntries ??= [];
+    this.SharedByMeEntries ??= [];
+    const baseArtifactSharedWithMe = this.SharedWithMeEntries.filter((e) => e.ItemKind === 'artifact');
+
+    try {
+      const results = await rv.RunViews(
+        [
+          {
+            EntityName: 'MJ: Resource Permissions',
+            ExtraFilter: `ResourceTypeID='${safeConvTypeId}' AND Status='Approved' AND UserID='${safeUserId}'`,
+            Fields: [
+              'ID',
+              'ResourceRecordID',
+              'Type',
+              'RoleID',
+              'UserID',
+              'PermissionLevel',
+              'SharedByUserID',
+              'SharedByUser',
+              'User',
+              'Role',
+              '__mj_CreatedAt',
+            ],
+            OrderBy: '__mj_CreatedAt DESC',
+            IgnoreMaxRows: true,
+            ResultType: 'simple',
+          },
+          {
+            EntityName: 'MJ: Resource Permissions',
+            ExtraFilter: `ResourceTypeID='${safeConvTypeId}' AND Status='Approved' AND SharedByUserID='${safeUserId}'`,
+            Fields: [
+              'ID',
+              'ResourceRecordID',
+              'Type',
+              'RoleID',
+              'UserID',
+              'PermissionLevel',
+              'SharedByUserID',
+              'SharedByUser',
+              'User',
+              'Role',
+              '__mj_CreatedAt',
+            ],
+            OrderBy: '__mj_CreatedAt DESC',
+            IgnoreMaxRows: true,
+            ResultType: 'simple',
+          },
+          {
+            EntityName: 'MJ: Artifact Permissions',
+            ExtraFilter: `SharedByUserID='${safeUserId}' AND CanRead=1`,
+            Fields: ARTIFACT_PERMISSION_SUMMARY_FIELDS,
+            OrderBy: '__mj_CreatedAt DESC',
+            IgnoreMaxRows: true,
+            ResultType: 'simple',
+          },
+          {
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: `UserID='${safeUserId}' AND (IsArchived IS NULL OR IsArchived=0)`,
+            Fields: ['ID', 'Name', 'Description', 'UserID', 'User', 'ParentID', '__mj_UpdatedAt'],
+            IgnoreMaxRows: true,
+            ResultType: 'simple',
+          },
+        ],
+        user,
+      );
+
+      if (this.isReloadStale(generation) || !Array.isArray(results)) {
+        return;
+      }
+
+      const convInPerms =
+        results[0]?.Success ? ((results[0].Results ?? []) as ConversationShareSummaryRow[]) : [];
+      const convOutByGrantorPerms =
+        results[1]?.Success ? ((results[1].Results ?? []) as ConversationShareSummaryRow[]) : [];
+      const artOutPerms =
+        results[2]?.Success ? ((results[2].Results ?? []) as ArtifactPermissionSummaryRow[]) : [];
+      const ownedConversations =
+        results[3]?.Success ? ((results[3].Results ?? []) as SharedConversationRow[]) : [];
+
+      const ownedConvByNormId = new Map<string, SharedConversationRow>();
+      for (const conv of ownedConversations) {
+        ownedConvByNormId.set(NormalizeUUID(conv.ID), conv);
+      }
+
+      // Also check permissions on owned conversations (covers grants where SharedByUserID was omitted)
+      let convOutAllPerms = [...convOutByGrantorPerms];
+      if (ownedConversations.length > 0) {
+        const ownedConvIdFilter = this.sqlUuidInList(ownedConversations.map((c) => c.ID));
+        const extraPermRes = await rv.RunView<ConversationShareSummaryRow>(
+          {
+            EntityName: 'MJ: Resource Permissions',
+            ExtraFilter: `ResourceTypeID='${safeConvTypeId}' AND Status='Approved' AND ResourceRecordID IN (${ownedConvIdFilter})`,
+            Fields: [
+              'ID',
+              'ResourceRecordID',
+              'Type',
+              'RoleID',
+              'UserID',
+              'PermissionLevel',
+              'SharedByUserID',
+              'SharedByUser',
+              'User',
+              'Role',
+              '__mj_CreatedAt',
+            ],
+            OrderBy: '__mj_CreatedAt DESC',
+            IgnoreMaxRows: true,
+            ResultType: 'simple',
+          },
+          user,
+        );
+        if (extraPermRes?.Success && Array.isArray(extraPermRes.Results)) {
+          const seenPermIds = new Set(convOutAllPerms.map((p) => NormalizeUUID(p.ID)));
+          for (const row of extraPermRes.Results) {
+            const key = NormalizeUUID(row.ID);
+            if (!seenPermIds.has(key)) {
+              seenPermIds.add(key);
+              convOutAllPerms.push(row);
+            }
+          }
+        }
+      }
+
+      if (this.isReloadStale(generation)) {
+        return;
+      }
+
+      const neededConvIds = this.uniqueIds([
+        ...convInPerms.map((p) => p.ResourceRecordID),
+        ...convOutAllPerms.map((p) => p.ResourceRecordID),
+      ]).filter((id) => !ownedConvByNormId.has(NormalizeUUID(id)));
+
+      const allItemByNormId = new Map<string, LibraryItemSummary>();
+      for (const item of this.AllItems) {
+        allItemByNormId.set(NormalizeUUID(item.Id), item);
+      }
+      const missingArtifactIds = this.uniqueIds(artOutPerms.map((p) => p.ArtifactID)).filter(
+        (id) => !allItemByNormId.has(NormalizeUUID(id)),
+      );
+
+      const hydrateQueries: RunViewParams[] = [];
+      const convQueryIndices: number[] = [];
+      const artQueryIndices: number[] = [];
+      for (const chunk of this.chunkIds(neededConvIds)) {
+        convQueryIndices.push(hydrateQueries.length);
+        hydrateQueries.push({
+          EntityName: 'MJ: Conversations',
+          ExtraFilter: `EnvironmentID='${safeEnvId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
+          Fields: ['ID', 'Name', 'Description', 'UserID', 'User', 'ParentID', '__mj_UpdatedAt'],
+          IgnoreMaxRows: true,
+          ResultType: 'simple',
+        });
+      }
+      for (const chunk of this.chunkIds(missingArtifactIds)) {
+        artQueryIndices.push(hydrateQueries.length);
+        hydrateQueries.push({
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `EnvironmentID='${safeEnvId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
+          Fields: ['ID', 'Name', 'Description', 'TypeID', 'Type', 'UserID', 'User', '__mj_UpdatedAt'],
+          IgnoreMaxRows: true,
+          ResultType: 'simple',
+        });
+      }
+
+      const hydrateResults =
+        hydrateQueries.length > 0 ? await rv.RunViews(hydrateQueries, user) : [];
+      if (this.isReloadStale(generation)) {
+        return;
+      }
+
+      const convByNormId = new Map<string, SharedConversationRow>(ownedConvByNormId);
+      for (const idx of convQueryIndices) {
+        const res = hydrateResults[idx];
+        if (res?.Success && Array.isArray(res.Results)) {
+          for (const conv of res.Results as SharedConversationRow[]) {
+            convByNormId.set(NormalizeUUID(conv.ID), conv);
+          }
+        }
+      }
+
+      const fetchedArtByNormId = new Map<
+        string,
+        Pick<MJArtifactEntity, 'ID' | 'Name' | 'Description' | 'Type' | 'UserID' | '__mj_UpdatedAt'>
+      >();
+      for (const idx of artQueryIndices) {
+        const res = hydrateResults[idx];
+        if (res?.Success && Array.isArray(res.Results)) {
+          for (const art of res.Results as Array<
+            Pick<MJArtifactEntity, 'ID' | 'Name' | 'Description' | 'Type' | 'UserID' | '__mj_UpdatedAt'>
+          >) {
+            fetchedArtByNormId.set(NormalizeUUID(art.ID), art);
+          }
+        }
+      }
+
+      const sharedWithMeConversations: LibrarySharedEntry[] = [];
+      for (const perm of convInPerms) {
+        const conv = convByNormId.get(NormalizeUUID(perm.ResourceRecordID));
+        if (!conv) continue;
+        if (conv.UserID && UUIDsEqual(conv.UserID, user.ID)) continue;
+        const isSideThread = Boolean(conv.ParentID);
+        sharedWithMeConversations.push({
+          Id: `conv-in:${perm.ID}`,
+          ItemKind: 'conversation',
+          ResourceId: conv.ID,
+          Title: conv.Name || 'Shared Conversation',
+          Description: conv.Description || (isSideThread ? 'Shared side thread' : 'Shared conversation'),
+          Icon: isSideThread ? 'fa-solid fa-code-branch' : 'fa-solid fa-comments',
+          SharerName: perm.SharedByUser || conv.User || 'Owner',
+          RecipientName: user.Name || 'You',
+          ShareDate: this.toShareDate(perm.__mj_CreatedAt, conv.__mj_UpdatedAt),
+          PermissionLevel: this.toShareLevel(perm.PermissionLevel),
+          IsSideThread: isSideThread,
+          ParentConversationId: conv.ParentID ?? null,
+          PermissionRecordId: perm.ID,
+          CanRevoke: false,
+        });
+      }
+
+      const sharedByMeEntries: LibrarySharedEntry[] = [];
+      for (const perm of convOutAllPerms) {
+        if (perm.UserID && UUIDsEqual(perm.UserID, user.ID)) continue;
+        const conv = convByNormId.get(NormalizeUUID(perm.ResourceRecordID));
+        if (!conv) continue;
+        const isOwner = Boolean(conv.UserID && UUIDsEqual(conv.UserID, user.ID));
+        if (!isOwner) continue;
+        const isSideThread = Boolean(conv.ParentID);
+        sharedByMeEntries.push({
+          Id: `conv-out:${perm.ID}`,
+          ItemKind: 'conversation',
+          ResourceId: conv.ID,
+          Title: conv.Name || 'Shared Conversation',
+          Description: conv.Description || (isSideThread ? 'Shared side thread' : 'Conversation share'),
+          Icon: isSideThread ? 'fa-solid fa-code-branch' : 'fa-solid fa-comments',
+          SharerName: user.Name || 'You',
+          RecipientName: perm.User || perm.Role || 'Recipient',
+          ShareDate: this.toShareDate(perm.__mj_CreatedAt, conv.__mj_UpdatedAt),
+          PermissionLevel: this.toShareLevel(perm.PermissionLevel),
+          IsSideThread: isSideThread,
+          ParentConversationId: conv.ParentID ?? null,
+          PermissionRecordId: perm.ID,
+          CanRevoke: true,
+        });
+      }
+
+      for (const ap of artOutPerms) {
+        if (ap.UserID && UUIDsEqual(ap.UserID, user.ID)) continue;
+        const normArt = NormalizeUUID(ap.ArtifactID);
+        const itemSummary = allItemByNormId.get(normArt);
+        const rawArt = fetchedArtByNormId.get(normArt);
+        if (!itemSummary && !rawArt) continue;
+        const canRevoke =
+          Boolean(itemSummary?.IsOwnedByCurrentUser) ||
+          Boolean(rawArt?.UserID && UUIDsEqual(rawArt.UserID, user.ID)) ||
+          Boolean(ap.SharedByUserID && UUIDsEqual(ap.SharedByUserID, user.ID));
+        sharedByMeEntries.push({
+          Id: `art-out:${ap.ID}`,
+          ItemKind: 'artifact',
+          ResourceId: ap.ArtifactID,
+          Title: itemSummary?.Name || rawArt?.Name || 'Shared Artifact',
+          Description:
+            itemSummary?.Description ||
+            rawArt?.Description ||
+            itemSummary?.TypeName ||
+            rawArt?.Type ||
+            'Artifact share',
+          Icon: itemSummary?.Icon || 'fa-solid fa-file-lines',
+          SharerName: user.Name || 'You',
+          RecipientName: ap.User || 'Recipient',
+          ShareDate: this.toShareDate(ap.__mj_CreatedAt, itemSummary?.UpdatedAt ?? rawArt?.__mj_UpdatedAt),
+          PermissionLevel: this.toShareLevel(ap.CanEdit),
+          IsSideThread: false,
+          ParentConversationId: null,
+          PermissionRecordId: ap.ID,
+          CanRevoke: canRevoke,
+        });
+      }
+
+      this.SharedWithMeEntries = [...baseArtifactSharedWithMe, ...sharedWithMeConversations].sort(
+        (a, b) => b.ShareDate.getTime() - a.ShareDate.getTime(),
+      );
+      this.SharedByMeEntries = sharedByMeEntries.sort(
+        (a, b) => b.ShareDate.getTime() - a.ShareDate.getTime(),
+      );
+      this.emitWorkspaceState();
+      this.notifyViewCheck();
+    } catch {
+      // Optional sharing feed query failure keeps baseline artifact entries without blocking Library
+    }
   }
 
   private notifyViewCheck(): void {
@@ -2783,7 +3337,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       });
     }
 
-    this.AllItems = items;
+      this.AllItems = items;
+    this.syncArtifactSharedWithMeEntries(data.artifactPerms);
 
     // Build Collection tree
     const nodesByNormId = new Map<string, LibraryCollectionNode>();
@@ -2919,7 +3474,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       this.SurfaceMode = fallbackMode;
     }
 
-    if (params.tab && ['overview', 'collections', 'all', 'shared', 'drives'].includes(params.tab)) {
+    if (params.tab && ['overview', 'collections', 'all', 'shared', 'shared-by-me', 'drives'].includes(params.tab)) {
       this.HubTab = params.tab as LibraryHubTab;
     } else {
       this.HubTab = fallbackHubTab;
@@ -2927,7 +3482,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
     if (
       params.section &&
-      ['all', 'collections', 'shared', 'starred', 'collection', 'drive'].includes(params.section)
+      ['all', 'collections', 'shared', 'shared-by-me', 'starred', 'collection', 'drive'].includes(params.section)
     ) {
       this.NavigatorSection = params.section as LibraryNavigatorSection;
     } else if (params.mode !== 'hub') {
