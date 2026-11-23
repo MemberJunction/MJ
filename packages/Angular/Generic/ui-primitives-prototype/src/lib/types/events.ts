@@ -14,8 +14,13 @@ const SAFE_AXIS_SLUG_RE = /^[a-z0-9-]+$/;
 /**
  * Validates open-axis names (`Tone`, `VisualRole`, `Level`) so malformed values fall back
  * cleanly to the default token slug instead of producing invalid `var()` identifiers (CSS IACVT).
+ * A missing value also falls back: removing an attribute from a Custom Element sets its input to
+ * `undefined`, and that has to mean "use the default", not crash.
  */
-export function SanitizeAxisSlug(value: string, fallback: string): string {
+export function SanitizeAxisSlug(value: string | null | undefined, fallback: string): string {
+  if (value == null) {
+    return fallback;
+  }
   const trimmed = value.trim();
   return SAFE_AXIS_SLUG_RE.test(trimmed) ? trimmed : fallback;
 }

@@ -143,7 +143,7 @@ export class MJRowComponent implements OnDestroy {
   protected readonly safeTone = computed(() => SanitizeAxisSlug(this.Tone(), 'neutral'));
   protected readonly safeRole = computed(() => SanitizeAxisSlug(this.VisualRole(), 'row'));
   protected readonly safeItemRole = computed<MJRowItemRole>(() => {
-    const candidate = this.ItemRole().trim() as MJRowItemRole;
+    const candidate = (this.ItemRole() ?? '').trim() as MJRowItemRole;
     return VALID_ITEM_ROLES.has(candidate) ? candidate : 'button';
   });
   protected readonly isHighlighted = computed(
@@ -294,36 +294,60 @@ export class MJRowComponent implements OnDestroy {
       event.preventDefault();
       return;
     }
-    if (
-      this.safeItemRole() === 'option' &&
-      ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)
-    ) {
-      const listbox = this.hostEl.nativeElement.closest<HTMLElement>('[role="listbox"]');
-      if (!listbox) {
-        return;
-      }
-      const options = Array.from(
-        listbox.querySelectorAll<HTMLElement>('[role="option"]:not([aria-disabled="true"])')
+    const role = this.safeItemRole();
+    if (role === 'option') {
+      // Single-select listbox: selection follows focus. A multi-select listbox will need to skip this click.
+      this.moveRovingFocus(event, '[role="listbox"]', '[role="option"]:not([aria-disabled="true"])')?.click();
+    } else if (role === 'menuitem' || role === 'menuitemradio') {
+      // Menus move focus only; Enter or Space activates.
+      this.moveRovingFocus(
+        event,
+        '[role="menu"], [role="menubar"]',
+        '[role="menuitem"]:not([aria-disabled="true"]), [role="menuitemradio"]:not([aria-disabled="true"])'
       );
-      if (options.length === 0) {
-        return;
-      }
-      event.preventDefault();
-      const currentIndex = options.indexOf(this.hostEl.nativeElement);
-      let nextIndex = 0;
-      if (event.key === 'ArrowDown') {
-        nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % options.length;
-      } else if (event.key === 'ArrowUp') {
-        nextIndex = currentIndex <= 0 ? options.length - 1 : currentIndex - 1;
-      } else if (event.key === 'End') {
-        nextIndex = options.length - 1;
-      }
-      const target = options[nextIndex];
-      if (target) {
-        target.focus();
-        target.click();
-      }
     }
+  }
+
+  /**
+   * Moves focus to the next, previous, first or last item in the row's composite container
+   * (listbox, menu, menubar) and returns the item it focused. A row that takes itself out of the
+   * Tab order with a roving tabindex has to answer the arrow keys itself, inside a layer or not.
+   * Menubars and `aria-orientation="horizontal"` containers use Left and Right instead of Up and Down.
+   */
+  private moveRovingFocus(
+    event: KeyboardEvent,
+    containerSelector: string,
+    itemSelector: string
+  ): HTMLElement | null {
+    const container = this.hostEl.nativeElement.closest<HTMLElement>(containerSelector);
+    if (!container) {
+      return null;
+    }
+    const horizontal =
+      container.getAttribute('role') === 'menubar' ||
+      container.getAttribute('aria-orientation') === 'horizontal';
+    const nextKey = horizontal ? 'ArrowRight' : 'ArrowDown';
+    const previousKey = horizontal ? 'ArrowLeft' : 'ArrowUp';
+    if (![nextKey, previousKey, 'Home', 'End'].includes(event.key)) {
+      return null;
+    }
+    const items = Array.from(container.querySelectorAll<HTMLElement>(itemSelector));
+    if (items.length === 0) {
+      return null;
+    }
+    event.preventDefault();
+    const currentIndex = items.indexOf(this.hostEl.nativeElement);
+    let nextIndex = 0;
+    if (event.key === nextKey) {
+      nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
+    } else if (event.key === previousKey) {
+      nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+    } else if (event.key === 'End') {
+      nextIndex = items.length - 1;
+    }
+    const target = items[nextIndex] ?? null;
+    target?.focus();
+    return target;
   }
 
   protected onKeyUp(event: KeyboardEvent): void {

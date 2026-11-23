@@ -38,6 +38,11 @@ function optionalModalBoolean(value: BooleanInputValue): boolean | undefined {
   return booleanAttribute(value);
 }
 
+/** `Closeable` defaults to true, so removing its attribute restores true rather than reading as false. */
+function closeableBoolean(value: BooleanInputValue): boolean {
+  return value === null || value === undefined ? true : booleanAttribute(value);
+}
+
 @Directive({
   selector: '[mjLayerHeader]',
   standalone: true,
@@ -116,7 +121,7 @@ export class MJLayerComponent implements OnDestroy {
   public readonly Modal = input<boolean | undefined, BooleanInputValue>(undefined, {
     transform: optionalModalBoolean,
   });
-  public readonly Closeable = input(true, { transform: booleanAttribute });
+  public readonly Closeable = input<boolean, BooleanInputValue>(true, { transform: closeableBoolean });
   public readonly Size = input<string>('md');
   public readonly Open = input(false, { transform: booleanAttribute });
   /**

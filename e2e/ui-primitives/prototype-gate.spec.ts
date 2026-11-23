@@ -383,6 +383,46 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     }
   });
 
+  test('removing an attribute restores the default instead of throwing', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.goto('/');
+    await page.waitForSelector('mj-surface.mj-surface');
+
+    // Every axis and option attribute on the page, removed at once; each input must fall back to its default
+    const removed = await page.evaluate(async () => {
+      const attrs = ['level', 'tone', 'visual-role', 'elevation', 'padding', 'radius', 'density', 'item-role', 'kind', 'placement', 'size'];
+      let count = 0;
+      for (const attr of attrs) {
+        for (const el of Array.from(document.querySelectorAll(`[${attr}]`))) {
+          el.removeAttribute(attr);
+          count++;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return count;
+    });
+    expect(removed).toBeGreaterThan(10);
+    expect(errors).toEqual([]);
+    await expect(page.locator('mj-surface').first()).toHaveClass(/mj-surface-base/);
+
+    // Closeable defaults to true, so removing closeable="false" makes the layer closeable again
+    await page.evaluate(() => {
+      const dialog = document.getElementById('proto-dialog');
+      dialog?.setAttribute('closeable', 'false');
+      dialog?.removeAttribute('closeable');
+      dialog?.setAttribute('open', 'true');
+    });
+    const dialog = page.locator('.cdk-overlay-container [role="dialog"][aria-modal="true"]');
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+
   test('focus-visible ring works across all 3 looks and phone targets meet 44px', async ({
     page,
   }, testInfo) => {

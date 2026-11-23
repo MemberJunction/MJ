@@ -168,3 +168,75 @@ describe('MJRowComponent', () => {
     await ExpectNoAxeViolations(fixture);
   });
 });
+
+@Component({
+  standalone: true,
+  imports: [MJRowComponent, MJRowContentDirective],
+  template: `
+    <div role="menu" aria-label="Actions" class="plain-menu">
+      <mj-row class="m-1" [Interactive]="true" [ItemRole]="'menuitem'"><span mjRowContent>Rename</span></mj-row>
+      <mj-row class="m-2" [Interactive]="true" [ItemRole]="'menuitem'"><span mjRowContent>Duplicate</span></mj-row>
+      <mj-row class="m-3" [Interactive]="true" [ItemRole]="'menuitem'"><span mjRowContent>Delete</span></mj-row>
+    </div>
+    <div role="menubar" aria-label="Main" class="plain-menubar">
+      <mj-row class="b-1" [Interactive]="true" [ItemRole]="'menuitem'"><span mjRowContent>File</span></mj-row>
+      <mj-row class="b-2" [Interactive]="true" [ItemRole]="'menuitem'"><span mjRowContent>Edit</span></mj-row>
+    </div>
+  `,
+})
+class MenuRowHostComponent {}
+
+describe('MJRowComponent menu items outside a layer', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [MenuRowHostComponent],
+    }).compileComponents();
+  });
+
+  function press(el: HTMLElement, key: string): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    el.dispatchEvent(event);
+    return event;
+  }
+
+  it('answers the arrow keys in a plain [role="menu"], since its roving tabindex takes items out of the Tab order', async () => {
+    const fixture = TestBed.createComponent(MenuRowHostComponent);
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+    const [m1, m2, m3] = ['m-1', 'm-2', 'm-3'].map(
+      (c) => fixture.nativeElement.querySelector(`mj-row.${c}`) as HTMLElement
+    );
+
+    expect(m1.getAttribute('tabindex')).toBe('0');
+    expect(m2.getAttribute('tabindex')).toBe('-1');
+
+    m1.focus();
+    expect(press(m1, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(m2);
+    press(m2, 'End');
+    expect(document.activeElement).toBe(m3);
+    press(m3, 'ArrowDown');
+    expect(document.activeElement).toBe(m1);
+    press(m1, 'ArrowUp');
+    expect(document.activeElement).toBe(m3);
+    press(m3, 'Home');
+    expect(document.activeElement).toBe(m1);
+  });
+
+  it('uses Left and Right in a menubar and leaves Up and Down alone', () => {
+    const fixture = TestBed.createComponent(MenuRowHostComponent);
+    fixture.detectChanges();
+    const [b1, b2] = ['b-1', 'b-2'].map(
+      (c) => fixture.nativeElement.querySelector(`mj-row.${c}`) as HTMLElement
+    );
+
+    b1.focus();
+    expect(press(b1, 'ArrowDown').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+    press(b1, 'ArrowRight');
+    expect(document.activeElement).toBe(b2);
+    press(b2, 'ArrowLeft');
+    expect(document.activeElement).toBe(b1);
+  });
+});

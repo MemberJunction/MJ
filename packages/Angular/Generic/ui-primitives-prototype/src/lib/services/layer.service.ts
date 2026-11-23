@@ -360,7 +360,8 @@ export class MJLayerService {
   }
 
   private handleMenuKeydown(event: KeyboardEvent, container: HTMLElement): void {
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    // mj-row menu items move focus themselves; this covers menus built from other markup.
+    if (event.defaultPrevented || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       return;
     }
     const items = Array.from(

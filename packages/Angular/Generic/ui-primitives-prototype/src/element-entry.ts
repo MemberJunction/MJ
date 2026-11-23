@@ -112,6 +112,7 @@ function defineElement<T>(appRef: ApplicationRef, tag: string, component: Type<T
       namespace?: string | null
     ): void {
       if (name in kebabToProp) {
+        // A removed attribute sets the input to undefined; every primitive input reads that as its default.
         Reflect.set(this, kebabToProp[name], newValue === null ? undefined : newValue);
         return;
       }
