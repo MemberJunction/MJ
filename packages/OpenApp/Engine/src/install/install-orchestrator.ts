@@ -1621,10 +1621,10 @@ interface InternalResult {
  * Resolves the FULL transitive dependency graph for a manifest, returning any
  * uninstalled dependencies that need to be installed first, in leaf-first order.
  *
- * Unlike a single-level resolve, this fetches every reachable dependency's
- * manifest from its repository so the complete graph is known up front — which
- * is what makes genuine cross-repo cycle detection (A -> B -> A) possible before
- * any install work begins.
+ * Unlike a single-level resolve, this reads what every reachable dependency itself
+ * depends on (an installed app's recorded manifest, otherwise the manifest in its
+ * repository) so the complete graph is known up front — which is what makes genuine
+ * cross-repo cycle detection (A -> B -> A) possible before any install work begins.
  */
 async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
   if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
@@ -1645,7 +1645,7 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     if (app.Status !== 'Active' && app.Status !== 'Disabled') {
       continue;
     }
-    installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL };
+    installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL, Dependencies: ReadInstalledDependencies(app, context) };
   }
 
   // Zod infers object variant fields as optional; DependencyValue requires them.
@@ -1672,6 +1672,27 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange, Subpath: d.Subpath, Version: d.ResolvedVersion }));
 
   return { Success: true, DepsToInstall: depsToInstall };
+}
+
+/**
+ * What an installed app depends on, read from its persisted `ManifestJSON` (the documented source
+ * of truth, saved in the same write as `Version`). Returns undefined, after a warning, when that
+ * manifest cannot be parsed: the graph then reads the installed version's manifest from the app's
+ * repository.
+ */
+function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorContext): Record<string, DependencyValue> | undefined {
+  let dependencies: MJAppManifest['dependencies'];
+  try {
+    dependencies = (JSON.parse(app.ManifestJSON) as MJAppManifest).dependencies;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnWarn?.(
+      'Dependencies',
+      `Could not parse the recorded manifest of installed app '${app.Name}' (${message}). If this operation needs its dependencies, they are read from ${app.RepositoryURL} at version ${app.Version}.`,
+    );
+    return undefined;
+  }
+  return (dependencies ?? {}) as Record<string, DependencyValue>;
 }
 
 /**
