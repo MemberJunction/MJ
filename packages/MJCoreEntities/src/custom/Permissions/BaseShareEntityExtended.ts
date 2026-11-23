@@ -170,6 +170,20 @@ export async function dispatchShareNotificationAfterSave(
 }
 
 /**
+ * Derive a normalized permission level string (`'Owner'`, `'Edit'`, or `'View'`)
+ * from boolean permission flags on Artifact, Collection, or Dashboard grants.
+ */
+export function DeriveSharePermissionLevel(flags: {
+    canEdit?: boolean | null;
+    canDelete?: boolean | null;
+    canShare?: boolean | null;
+}): 'View' | 'Edit' | 'Owner' {
+    if (flags.canDelete || flags.canShare) return 'Owner';
+    if (flags.canEdit) return 'Edit';
+    return 'View';
+}
+
+/**
  * Turn `{ view: this.CanRead, edit: this.CanEdit, … }` into `"view, edit"`.
  * Truthy verbs are emitted in declaration order. Replaces the hand-rolled
  * `actionsSummary()` method each sharing entity used to carry.

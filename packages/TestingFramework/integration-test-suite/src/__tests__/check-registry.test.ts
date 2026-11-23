@@ -43,6 +43,8 @@ import { OpenAppLocalSourceChecks } from '../checks/open-app-local-source.checks
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
 import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
+import { ChiefOfStaffWorldChecks } from '../checks/chief-of-staff-world.checks';
+import { ChiefOfStaffLiveChecks } from '../checks/chief-of-staff-live.checks';
 import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
@@ -128,6 +130,7 @@ import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
 import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
 import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
 import { DocsSlidesSheetsLibraryChecks, DocsSlidesSheetsLibraryClientChecks } from '../checks/docs-slides-sheets-library.checks';
+import { DocsSemanticGraphChecks } from '../checks/docs-semantic-graph.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
@@ -214,7 +217,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
-        ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
+        ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
+        ['chief-of-staff-world', ChiefOfStaffWorldChecks, 3], // COSW1-COSW3 idempotent persistent Chief of Staff world seed: Jordan & Elena personas, active Coordinator policies, routines, suggestions, notes, Agent Channel (IT183)
+        ['chief-of-staff-live', ChiefOfStaffLiveChecks, 4], // COSL1-COSL4 live-model heuristic verification of shipped Chief of Staff via AgentRunner: typed actions, DraftOnly refusal, Agent Channel reply, zero raw SQL/CRUD (IT184)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
@@ -304,10 +309,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
-        ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
+        ['graph-runtime', GraphRuntimeChecks, 9], // GR1-GR9 MJ Canon traversal, per-caller query visibility, edge & concept approval gates on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures, FindPath + Find Graph Path, Propose Canon Domains dry run, and live concept gate lifecycle (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
         ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 14], // DSLC1-DSLC14 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, B4 default-off guest share refusal, and R1/R2 count_only + stored queries (IT171)
+        ['docs-semantic-graph', DocsSemanticGraphChecks, 6], // DSG1-DSG6 MJ Docs in the semantic graph: seeded source and graph, artifact indexing, [[links]], artifact-ACL agreement, shared concepts and redaction, evidence retraction (IT185)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
@@ -405,7 +411,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'calendar-event-links': 2,
-        'chief-of-staff': 8,
+        'chief-of-staff': 14,
+        'chief-of-staff-live': 4,
+        'chief-of-staff-world': 3,
         'ciphertext-cache': 7,
         'class-resolution': 5,
         'client-cache': 26,
@@ -423,6 +431,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'diagnostics': 4,
         'docs-slides-sheets-library': 10,
         'docs-slides-sheets-library-client': 14,
+        'docs-semantic-graph': 6,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -447,7 +456,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-5': 3,
         'fp-live-jobtitle': 1,
         'gemini-decisions': 8,
-        'graph-runtime': 6,
+        'graph-runtime': 9,
         'integration-schema-pipeline': 4,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
@@ -639,7 +648,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(252);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(255);
     });
 });
 
@@ -763,6 +772,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-delete-client.CD1',
         'conversation-delete-client.CD2',
         'conversation-delete-client.CD3',
+        'docs-semantic-graph.DSG2',
+        'docs-semantic-graph.DSG3',
+        'docs-semantic-graph.DSG4',
+        'docs-semantic-graph.DSG5',
+        'docs-semantic-graph.DSG6',
         'docs-slides-sheets-library.DSL3',
         'docs-slides-sheets-library.DSL8',
         'encrypted-read-client.ER1',
@@ -859,6 +873,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fp-gate-c2-5.G3',
         'graph-runtime.GR5',
         'graph-runtime.GR6',
+        'graph-runtime.GR9',
         'jsontype-live-sync-client.JL1',
         'jsontype-live-sync-client.JL2',
         'jsontype-live-sync-client.JL3',
@@ -1221,6 +1236,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-skills-live.SL5',
         'agent-wire-callback.WC1',
         'agent-wire-callback.WC2',
+        'chief-of-staff-live.COSL1',
+        'chief-of-staff-live.COSL2',
+        'chief-of-staff-live.COSL3',
+        'chief-of-staff-live.COSL4',
         'fp-live-jobtitle.L1',
         'native-tool-calling-live.NTC1',
         'native-tool-calling-live.NTC2',

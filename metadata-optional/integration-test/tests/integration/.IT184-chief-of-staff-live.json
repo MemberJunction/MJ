@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT184 - Chief of Staff Live Agent Execution",
+    "Description": "Live-model heuristic verification of the shipped Chief of Staff agent via AgentRunner.RunAgent: verifies terminal run/step lineage (verifyAgentRun), typed core action invocation (Assemble My Briefing, Get My Agent Context, List Available Rhythms, Manage Agent Suggestions, Agent Channel actions), DraftOnly email policy enforcement, and zero raw SQL or generic CRUD tool calls across the entire run tree (COSL1-COSL4).",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All COSL1-COSL4 live agent checks pass with terminal AgentRun/Step trees, expected typed CoS action execution logs, DraftOnly outbound email refusal, and zero raw SQL/CRUD invocations."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "chief-of-staff-live"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F7A9C320-84E1-4D92-B652-9C8E4F3A2B02"
+  }
+}

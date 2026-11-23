@@ -28,9 +28,18 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
         }
     },
 }));
-vi.mock('@memberjunction/ai-agents', () => ({ AgentRunner: class {} }));
-vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
+vi.mock('@memberjunction/ai-agents', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-agents')>()),
+    AgentRunner: class {},
+}));
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),
+    AIPromptRunner: class {},
+}));
+vi.mock('@memberjunction/actions', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions')>()),
+    ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } },
+}));
 
 import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
 import type { ScheduledJobExecutionContext } from '../BaseScheduledJob';
@@ -55,6 +64,7 @@ function makeOneShot(overrides: Record<string, unknown> = {}) {
     const routine: Record<string, unknown> = {
         ID: 'R-1', Name: 'Chief of Staff — Wake (reminder-call-amith)', UserID: 'OWNER',
         RoutineType: 'AgentWake', ScheduleMode: 'OneShot', CronExpression: null,
+        TargetType: 'Agent', TargetID: 'AGENT-1',
         Status: 'Active', NextRunAt: TOMORROW, LastRunAt: null, LastRunStatus: null, LastResultHash: null,
         WakeConfiguration: '{"workstreamKey":"reminder-call-amith","wakeGate":{"skipIfUnchanged":true}}',
         WakeConfigurationObject: null,
@@ -89,6 +99,25 @@ describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
             Users: [ownerUser],
             FindUser: async ({ ID }) => (ID === 'OWNER' ? ownerUser : undefined),
         };
+        runViewProbeMock.mockReset().mockImplementation(async (rvParams: { EntityName?: string }) => {
+            if (rvParams?.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'POL-OWNER',
+                            AgentID: 'AGENT-1',
+                            UserID: 'OWNER',
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                };
+            }
+            return { Success: true, Results: [] };
+        });
         driver = new UserRoutineDispatcherDriver() as Driver;
         driver.logError = vi.fn();
         driver.log = vi.fn();

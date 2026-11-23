@@ -1966,7 +1966,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(harness.run.TotalCompletionTokensUsed).toBe(DECISION_RUN.TokensCompletionRollup);
     });
 
-    it('stops the run at MaxCostPerRun when the decision calls alone exceed it', async () => {
+    it('pauses non-destructively at MaxCostPerRun when the decision calls alone exceed it', async () => {
         harness.agent = makeAgentRow({ MaxCostPerRun: 0.001, AgentTypePromptParams: DECISIONS_ON });
         answerDecisions();
         const { agent } = makeAgent([
@@ -1977,7 +1977,9 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         const result = await agent.Execute(makeParams());
 
         expect(result.success).toBe(false);
-        expect(harness.run.ErrorMessage).toContain('Maximum cost limit of $0.001 exceeded');
+        expect(result.paused).toBe(true);
+        expect(harness.run.Status).toBe('Paused');
+        expect(harness.run.Message).toContain('0.001');
         expect(harness.runActionCalls).toHaveLength(0);
     });
 
@@ -2369,7 +2371,7 @@ describe("BaseAgent.Execute — a memory rerank's cost", () => {
         expect(harness.run.TotalPromptTokensUsed).toBe(RERANK_RUN.TokensPromptRollup);
     });
 
-    it('stops the run at MaxCostPerRun when the rerank alone exceeds it', async () => {
+    it('pauses non-destructively at MaxCostPerRun when the rerank alone exceeds it', async () => {
         harness.agent = makeAgentRow({ InjectNotes: true, MaxCostPerRun: 0.001 });
         rerankNotesWithCost();
         const { agent } = makeAgent([
@@ -2380,7 +2382,9 @@ describe("BaseAgent.Execute — a memory rerank's cost", () => {
         const result = await agent.Execute(makeParams());
 
         expect(result.success).toBe(false);
-        expect(harness.run.ErrorMessage).toContain('Maximum cost limit of $0.001 exceeded');
+        expect(result.paused).toBe(true);
+        expect(harness.run.Status).toBe('Paused');
+        expect(harness.run.Message).toContain('0.001');
         expect(harness.runActionCalls).toHaveLength(0);
     });
 

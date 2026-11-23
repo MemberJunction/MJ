@@ -63,7 +63,7 @@ import {
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { RefusalExtensions } from './refusalExtensions.js';
-import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { AssertAPIKeyScopeForRequest } from '../auth/APIKeyRequestScope.js';
 import sql from 'mssql';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
@@ -95,9 +95,10 @@ import { Subscription } from 'rxjs';
  * `mj: diagnostic sender registrations` is refused a change to its guarded fields by a rule that decides on
  * `Dirty`, so the baseline must be the stored row.
  *
- * `mj: graph edges` gates approval on the stored `Status`, on `Dirty` identity and content columns, and on the
- * stored review stamp in `Attributes` (`MJGraphEdgeEntityServer`), so it must hold even if a host stops
- * tracking the entity's changes.
+ * `mj: graph edges` and `mj: graph concepts` gate approval/deprecation on the stored `Status` and on `Dirty`
+ * governed columns (and `Attributes` review stamp on edges) in `MJGraphEdgeEntityServer` /
+ * `MJGraphConceptEntityServer`, so the baseline must always come from the stored row even if a host stops
+ * tracking changes.
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
@@ -109,6 +110,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: projects',
   'mj: diagnostic sender registrations',
   'mj: graph edges',
+  'mj: graph concepts',
   'mj: artifacts',
   'mj: artifact versions',
   'mj: artifact permissions',
@@ -1345,68 +1347,14 @@ export class ResolverBase {
     if (!userPayload.apiKeyHash) {
       return;
     }
-
-    // Get system user for authorization call
-    // NOTE: We use system user here because Authorize() needs to run internal
-    // database queries (loading scope rules, logging decisions). The system user
-    // ensures these queries work regardless of what permissions the API key's
-    // user has. The API key's associated user (in userPayload.userRecord) is
-    // used later when the actual operation executes - their permissions are
-    // the ultimate ceiling that scopes can only narrow, never expand.
-    const systemUser = UserCache.Instance.GetSystemUser();
-    if (!systemUser) {
-      throw new Error('System user not found');
-    }
-
-    const apiKeyEngine = GetAPIKeyEngine();
-
-    // Check for full_access scope first (god power - bypasses all other checks).
-    // Use skipLogging to avoid polluting the usage log with expected denials —
-    // this is a fast-path optimization, not the real authorization decision.
-    const fullAccessResult = await apiKeyEngine.Authorize(
+    // One implementation for every transport: the REST routes run the same check.
+    await AssertAPIKeyScopeForRequest(
       userPayload.apiKeyHash,
-      'MJAPI',
-      'full_access',
-      '*',
-      systemUser,
-      { endpoint: '/graphql', method: 'POST' },
-      { skipLogging: true }
-    );
-
-    if (fullAccessResult.Allowed) {
-      // full_access granted - skip specific scope check
-      return;
-    }
-
-    // Check specific scope. The acting context stamped on the session user (set
-    // server-side in context.ts, never client-supplied) rides along so filtered
-    // rules with {{Acting*}} tokens can validate their required values — without
-    // it, a filtered rule fails closed even for a session carrying valid context.
-    const sessionUser = this.GetUserFromPayload(userPayload);
-    const result = await apiKeyEngine.Authorize(
-      userPayload.apiKeyHash,
-      'MJAPI',
       scopePath,
       resource,
-      systemUser,
-      {
-        endpoint: '/graphql',
-        method: 'POST'
-      },
-      {
-        actingContext: sessionUser?.APIKeyActingContext
-      }
+      this.GetUserFromPayload(userPayload),
+      { endpoint: '/graphql', method: 'POST' }
     );
-
-    if (!result.Allowed) {
-      // Provide specific, actionable error message
-      throw new AuthorizationError(
-        `Access denied. This API key requires the '${scopePath}' scope ` +
-        `for resource '${resource}' to perform this operation. ` +
-        `Please update the API key's scopes or use an API key with appropriate permissions. ` +
-        `Denial reason: ${result.Reason}`
-      );
-    }
   }
 
   /**

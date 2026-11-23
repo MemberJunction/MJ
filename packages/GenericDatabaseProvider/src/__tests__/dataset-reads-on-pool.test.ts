@@ -107,4 +107,21 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
         expect(provider.sqlOptions.every(o => o?.ignoreAmbientTransaction === true)).toBe(true);
         expect(provider.batchOptions.every(o => o?.ignoreAmbientTransaction === true)).toBe(true);
     });
+
+    it('PeerMetadataNoticeMustWait stays false during an unrelated ambient transaction while MetadataMemberRefreshMustWait stays true', () => {
+        const inspect = provider as unknown as {
+            CurrentTransactionDepth: number;
+            MetadataMemberRefreshMustWait: boolean;
+            PeerMetadataNoticeMustWait: boolean;
+            _metadataReadsJoinTransaction: boolean;
+        };
+        vi.spyOn(provider, 'CurrentTransactionDepth', 'get').mockReturnValue(1);
+        expect(inspect.MetadataMemberRefreshMustWait).toBe(true);
+        expect(inspect.PeerMetadataNoticeMustWait).toBe(false);
+
+        // When MetadataReadsJoinTransaction is active, peer notices must wait too.
+        inspect._metadataReadsJoinTransaction = true;
+        expect(inspect.PeerMetadataNoticeMustWait).toBe(true);
+        inspect._metadataReadsJoinTransaction = false;
+    });
 });

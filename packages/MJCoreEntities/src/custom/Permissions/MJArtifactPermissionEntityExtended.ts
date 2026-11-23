@@ -9,6 +9,7 @@ import {
     AssertCallerMaySaveShare,
     BuildActionsSummary,
     CheckShareManagePermission,
+    DeriveSharePermissionLevel,
     DispatchShareNotificationAfterSave,
     FailShareSave,
     GetStoredShareFieldString,
@@ -53,7 +54,12 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
         if (saved) {
             await DispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, async (provider, grantorId) => {
                 // The Artifact view doesn't denormalize Name onto the permission row — look it up.
-                const artifactName = await this.fetchArtifactName();
+                const artifactName = (await this.fetchArtifactName()) ?? this.Artifact ?? null;
+                const permissionLevel = DeriveSharePermissionLevel({
+                    canEdit: this.CanEdit,
+                    canDelete: this.CanDelete,
+                    canShare: this.CanShare,
+                });
                 return {
                     Provider: provider,
                     ContextUser: this.ContextCurrentUser,
@@ -63,8 +69,15 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
                     ResourceTypeName: 'Artifacts',
                     ResourceName: artifactName,
                     ResourceRecordID: this.ArtifactID,
+                    PermissionLevel: permissionLevel,
                     ActionsSummary: this.actionsSummary(),
-                    ExtraConfiguration: { PermissionID: this.ID },
+                    ExtraConfiguration: {
+                        type: 'artifact',
+                        artifactId: this.ArtifactID,
+                        ResourceRecordID: this.ArtifactID,
+                        PermissionID: this.ID,
+                        PermissionLevel: permissionLevel,
+                    },
                 };
             });
             await ArtifactPermissionEngine.Instance.NotifyPermissionsChanged({

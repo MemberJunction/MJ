@@ -2,6 +2,7 @@ import { ApplicationInfo, CompositeKey, EntitySaveOptions, IMetadataProvider, Lo
 import { RecordCloneEngine } from "@memberjunction/record-cloning";
 import { RegisterClass } from "@memberjunction/global";
 import { ResolveConfiguredPrincipal } from "./principals.js";
+import { ResolveEffectiveNewUserRoles } from "./inviteOnlyPolicy.js";
 import { configInfo } from "../config.js";
 import { CreateIsolatedProvider } from "../isolatedProvider.js";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityType, MJApplicationEntityEntityType, UserInfoEngine } from "@memberjunction/core-entities";
@@ -59,9 +60,10 @@ export class NewUserBase {
                     throw new Error(`Failed to create new user ${firstName} ${lastName} ${email}: ${user.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
 
-                if(configInfo.userHandling && configInfo.userHandling.newUserRoles){
+                const rolesToAssign = ResolveEffectiveNewUserRoles(configInfo?.userHandling);
+                if (rolesToAssign.length > 0) {
                     LogStatus(`User ${user.Email} created, assigning roles`);
-                    for (const role of configInfo.userHandling.newUserRoles) {
+                    for (const role of rolesToAssign) {
                         const userRole = provider.Roles.find(r => r.Name === role);
                         if (!userRole) {
                             LogError(`Role ${role} not found in the database, cannot assign to new user ${user.Name}`);

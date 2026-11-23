@@ -13,6 +13,14 @@
     "./aws": {
       "types": "./dist/aws/index.d.ts",
       "default": "./dist/aws/index.js"
+    },
+    "./azure": {
+      "types": "./dist/azure/index.d.ts",
+      "default": "./dist/azure/index.js"
+    },
+    "./gcp": {
+      "types": "./dist/gcp/index.d.ts",
+      "default": "./dist/gcp/index.js"
     }
   },
   "files": [
@@ -28,14 +36,17 @@
   "license": "BUSL-1.1",
   "dependencies": {
     "@aws-sdk/credential-providers": "^3.984.0",
+    "@azure/identity": "^4.13.0",
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/core-entities": "6.3.0-edge.1",
     "@memberjunction/credentials": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
     "@memberjunction/sql-dialect": "6.3.0-edge.1",
     "@memberjunction/work-queue-aws": "6.3.0-edge.1",
+    "@memberjunction/work-queue-azure": "6.3.0-edge.1",
     "@memberjunction/work-queue-base": "6.3.0-edge.1",
-    "@memberjunction/work-queue-core": "6.3.0-edge.1"
+    "@memberjunction/work-queue-core": "6.3.0-edge.1",
+    "@memberjunction/work-queue-gcp": "6.3.0-edge.1"
   },
   "devDependencies": {
     "@memberjunction/generic-database-provider": "6.3.0-edge.1",

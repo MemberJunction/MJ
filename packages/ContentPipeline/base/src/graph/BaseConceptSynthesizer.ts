@@ -13,6 +13,7 @@ import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { ConceptSeedCluster } from './ConceptSeedClustering.js';
 import type {
     GraphAuthorityTier,
+    GraphAuthorityTierDescriptor,
     GraphConceptType,
     ResolvedGraphOverlayConfig,
 } from './GraphOverlay.types.js';
@@ -22,7 +23,8 @@ export interface ConceptChunkCitation {
     readonly ChunkID: string;
     readonly ContentItemID: string;
     readonly HeadingPath?: string | null;
-    readonly AuthorityTier: GraphAuthorityTier;
+    /** Tier name of the cited chunk, or `null` when unranked. */
+    readonly AuthorityTier: GraphAuthorityTier | null;
     readonly Excerpt?: string | null;
 }
 
@@ -42,19 +44,28 @@ export interface SynthesizedGraphConcept {
     readonly Specification: string;
     readonly Synonyms: readonly string[];
     readonly ParentConceptName?: string | null;
-    readonly AuthorityTier: GraphAuthorityTier;
+    /** Tier name of the concept's highest-authority source, or `null` when unranked. */
+    readonly AuthorityTier: GraphAuthorityTier | null;
     /** Optional foreign key to `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier.ID`). */
     readonly AuthorityTierID?: string | null;
     readonly Confidence: number;
     readonly Citations: readonly ConceptChunkCitation[];
 }
 
-/** Synthesized edge ready to be persisted into `MJ: Graph Edges`. */
+/**
+ * Synthesized edge ready to be persisted into `MJ: Graph Edges`.
+ *
+ * Direction follows the edge type's `MJ: Graph Edge Type Endpoints` rows. In particular `Describes`,
+ * `Defines`, `Measures` and `Implements` run artifact -> concept: the entity, view, query, action or
+ * skill is the source and the `MJ: Graph Concepts` record the target. A store validates an edge
+ * against those rows before writing it and drops one that breaks them.
+ */
 export interface SynthesizedGraphEdge {
     readonly EdgeTypeName:
         | 'SourcedFrom'
         | 'Mentions'
-        | 'Broader Than'
+        | 'BroaderThan'
+        | 'NarrowerThan'
         | 'Describes'
         | 'Defines'
         | 'Measures'
@@ -62,12 +73,12 @@ export interface SynthesizedGraphEdge {
         | 'Governs'
         | 'Contradicts'
         | 'RelatedTo'
-        | 'Related To'
         | (string & {});
     readonly SourceEntityName: string;
     /** Record ID (or concept name placeholder when referencing the newly synthesized concept). */
     readonly SourceRecordID: string;
     readonly TargetEntityName: string;
+    /** Record ID (or concept name placeholder when referencing the newly synthesized concept). */
     readonly TargetRecordID: string;
     readonly Weight: number;
     readonly Confidence: number;
@@ -82,6 +93,8 @@ export interface SynthesizeConceptRequest {
     readonly GraphID: string;
     readonly OverlayConfig: ResolvedGraphOverlayConfig;
     readonly SeedCluster: ConceptSeedCluster;
+    /** Active `MJ: Graph Authority Tiers` rows, for ranking chunks. Empty means every chunk ranks equally. */
+    readonly AuthorityTiers?: readonly GraphAuthorityTierDescriptor[];
     readonly ContextUser: UserInfo;
     readonly Provider: IMetadataProvider;
     readonly Signal: AbortSignal;
