@@ -13826,6 +13826,13 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   85 s, Containment 79/79 on rerun. Root build 354/354 after merging next (112 commits; migration retimed to
   `V202611222146`, flyway rows renamed on the claude and review DBs; next's three migrations applied); `check:guards`,
   `check:changeset` pass. Commits `be06f67fea`, `8547fbc725`, merge `f435e36222`.
+- **After approval (CI at `da708d2139`):** Build red on dashboards `test:types` (`latest-prediction-rows.test.ts` typed
+  `null` into the NOT NULL `ComputedAt`; the dead as-of fallback and the unread `EffectiveAsOf` field removed) and on
+  `vector-sensitive-fields` (68 refused names: PR 4's `ViewAuthorizationID`, `ViewAuthorization`, `SnapshotHash`;
+  bracket 68) → dashboards 3169/3169, `test:types` 0. Integration red on IT51 RD9 (its server-transport teardown
+  deleted ledger rows the D4-279 guard refuses → it authorises its own deletes; IT51 19/19 locally) and on PB18 (a
+  timing gate: every primitive ~2x, including template rendering and DeepDiffer, which PR 4 does not touch; next's own
+  run 45202760168 failed it at 1.49x). Commit `3eec4869b9`; merged next's two release-notes commits.
 
 ## 12. Refresh log (append-only)
 
