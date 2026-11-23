@@ -61,5 +61,16 @@
     "fields": {
       "ParentID": "@lookup:MJ: Entities.Name=MJ: Comments"
     }
+  },
+  {
+    "_comments": [
+      "MJ: Agent Channels IS-A MJ: Conversations (shared-PK extension for AGENT_CHANNEL conversations)."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Agent Channels"
+    },
+    "fields": {
+      "ParentID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    }
   }
 ]

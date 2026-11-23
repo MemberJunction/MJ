@@ -262,6 +262,8 @@ class ChatHandlingHarness {
             }
             throw new Error(`ChatHandlingHarness: unexpected GetEntityObject('${entityName}')`);
         },
+        RunView: async () => ({ Success: true, Results: [] }),
+        RunViews: async () => [],
     };
 }
 

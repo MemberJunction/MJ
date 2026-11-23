@@ -42,14 +42,30 @@ export class AIDecisionTaskRunner implements TaskDecisionRunner {
             decisionParams.Questions = mapping.Questions;
 
             const result = await new AIDecisionRunner().ExecuteDecision(decisionParams);
+            const costUsd = typeof result.promptRun?.TotalCost === 'number' && Number.isFinite(result.promptRun.TotalCost) && result.promptRun.TotalCost > 0
+                ? result.promptRun.TotalCost
+                : (typeof result.cost === 'number' && Number.isFinite(result.cost) ? Math.max(0, result.cost) : undefined);
+            const tokensUsed = typeof result.promptRun?.TokensUsedRollup === 'number' && Number.isFinite(result.promptRun.TokensUsedRollup) && result.promptRun.TokensUsedRollup > 0
+                ? result.promptRun.TokensUsedRollup
+                : (typeof result.promptRun?.TokensUsed === 'number' && Number.isFinite(result.promptRun.TokensUsed) && result.promptRun.TokensUsed > 0
+                    ? result.promptRun.TokensUsed
+                    : (typeof result.tokensUsed === 'number' && Number.isFinite(result.tokensUsed) ? Math.max(0, result.tokensUsed) : undefined));
             if (!result.success) {
                 return {
                     Success: false,
                     ErrorMessage: result.errorMessage || 'The decision call failed.',
                     PromptRunID: result.promptRun?.ID,
+                    ...(costUsd !== undefined ? { CostUsd: costUsd } : {}),
+                    ...(tokensUsed !== undefined ? { TokensUsed: tokensUsed } : {}),
                 };
             }
-            return { Success: true, Answers: SummarizeDecisionAnswers(result.Answers), PromptRunID: result.promptRun?.ID };
+            return {
+                Success: true,
+                Answers: SummarizeDecisionAnswers(result.Answers),
+                PromptRunID: result.promptRun?.ID,
+                ...(costUsd !== undefined ? { CostUsd: costUsd } : {}),
+                ...(tokensUsed !== undefined ? { TokensUsed: tokensUsed } : {}),
+            };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`[AIDecisionTaskRunner] Task ${params.TaskID} failed: ${message}`);

@@ -41,6 +41,7 @@ import {
   emitOverlayCss,
   emitScopedCustomCss,
   MJ_DEFAULT_SEEDS,
+  SanitizeThemeSeeds,
   ThemeSeeds,
 } from '@memberjunction/theme-engine';
 import {
@@ -132,15 +133,25 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   }
 
   public readonly FontOptions: { label: string; value: string }[] = [
-    { label: 'Inter (default)', value: MJ_DEFAULT_SEEDS.fontFamily! },
+    { label: 'Montserrat (default)', value: MJ_DEFAULT_SEEDS.fontFamily! },
     { label: 'Georgia (serif)', value: "'Georgia', 'Times New Roman', serif" },
     { label: 'Trebuchet', value: "'Trebuchet MS', Verdana, sans-serif" },
     { label: 'System UI', value: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" },
   ];
 
+  public readonly HeadingFontOptions: { label: string; value: string }[] = [
+    { label: 'Match body font', value: '' },
+    ...this.FontOptions,
+  ];
+
   /** @deprecated Use {@link FontOptions}. */
   public get fontOptions(): { label: string; value: string }[] {
     return this.FontOptions;
+  }
+
+  public OnHeadingFontChanged(value: string): void {
+    this.Seeds.fontFamilyDisplay = value || undefined;
+    this.OnSeedsChanged();
   }
 
   /** Height %s + labels for the demo bar chart. */
@@ -782,7 +793,18 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     const el = this.previewCanvas?.nativeElement;
     if (!el) return;
     // Advanced token overrides win, layered last — mirrors emitOverlayCss's merge order.
-    const vars = { ...this.Derived.overlayVars, ...this.Derived.tokens[this.PreviewMode], ...this.TokenOverrides };
+    // Explicitly stamp --mj-font-family-display on the canvas even when Derive() omits it
+    // ("Match body font"), so the preview does not inherit a live org theme's heading font from <html>.
+    const resolvedDisplayFont =
+      this.Derived.overlayVars['--mj-font-family-display'] ??
+      this.TokenOverrides['--mj-font-family'] ??
+      this.Derived.seeds.fontFamilyDisplay;
+    const vars: Record<string, string> = {
+      ...this.Derived.overlayVars,
+      '--mj-font-family-display': resolvedDisplayFont,
+      ...this.Derived.tokens[this.PreviewMode],
+      ...this.TokenOverrides,
+    };
     for (const k of this.appliedVarKeys) {
       if (!(k in vars)) el.style.removeProperty(k);
     }
@@ -822,7 +844,11 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
 
   /** Token names in the derived contract (completion, insert picker, validation). */
   public get OverridableTokens(): string[] {
-    const names = new Set([...Object.keys(this.Derived.overlayVars), ...Object.keys(this.Derived.tokens.light)]);
+    const names = new Set([
+      ...Object.keys(this.Derived.overlayVars),
+      ...Object.keys(this.Derived.tokens.light),
+      '--mj-font-family-display',
+    ]);
     return Array.from(names).sort();
   }
 
@@ -880,13 +906,17 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     const names = new Set([
       ...Object.keys(this.Derived.overlayVars),
       ...Object.keys(this.Derived.tokens.light),
+      '--mj-font-family-display',
       ...Object.keys(this.TokenOverrides),
     ]);
     const groups: TokenGroup[] = TOKEN_CATEGORIES.map((c) => ({ key: c.Key, label: c.Label, rows: [], modified: 0 }));
     const other: TokenGroup = { key: 'other', label: 'Other', rows: [], modified: 0 };
     for (const name of Array.from(names).sort()) {
       if (q && !name.toLowerCase().includes(q)) continue;
-      const derivedVal = this.Derived.tokens[this.PreviewMode][name] ?? this.Derived.overlayVars[name] ?? '';
+      const derivedVal =
+        this.Derived.tokens[this.PreviewMode][name] ??
+        this.Derived.overlayVars[name] ??
+        (name === '--mj-font-family-display' ? this.Derived.seeds.fontFamilyDisplay : '');
       const overridden = name in this.TokenOverrides;
       const value = overridden ? this.TokenOverrides[name] : derivedVal;
       const hex = /^#[0-9a-fA-F]{6}$/.test(value.trim());
@@ -1529,7 +1559,8 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     this.CurrentThemeId = entity.ID;
     this.CurrentName = entity.Name;
     try {
-      this.Seeds = { ...MJ_DEFAULT_SEEDS, ...(JSON.parse(entity.Seeds) as ThemeSeeds) };
+      const parsed = JSON.parse(entity.Seeds) as ThemeSeeds;
+      this.Seeds = { ...MJ_DEFAULT_SEEDS, ...(SanitizeThemeSeeds(parsed) ?? parsed) };
     } catch {
       this.Seeds = { ...MJ_DEFAULT_SEEDS };
     }
@@ -1831,7 +1862,8 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       }
       let seeds: ThemeSeeds;
       try {
-        seeds = { ...MJ_DEFAULT_SEEDS, ...(JSON.parse(entity.Seeds) as ThemeSeeds) };
+        const parsed = JSON.parse(entity.Seeds) as ThemeSeeds;
+        seeds = { ...MJ_DEFAULT_SEEDS, ...(SanitizeThemeSeeds(parsed) ?? parsed) };
       } catch {
         seeds = { ...MJ_DEFAULT_SEEDS };
       }

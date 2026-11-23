@@ -24,7 +24,7 @@ import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type AppPackageGroups, type PackageManagerOptions, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { RestoreFileSnapshot, SnapshotFiles } from './file-snapshot.js';
 import { CheckWorkspacePackages } from './workspace-packages.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
@@ -1042,7 +1042,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           PackageManager: context.PackageManager,
         }),
       );
-      const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose);
+      // The record still holds the previous version's manifest here (it is rewritten in Step 9),
+      // also on a resumed attempt, so its pins can be told apart from the host's own deps.
+      const replaced = await ResolveReplacedPackages(existingApp, context);
+      const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose, replaced);
       if (!pkgResult.Success) {
         const restore = pkgResult.PackageJsonUpdated ? RestoreFileSnapshot(packageFiles) : null;
         if (restore !== null && restore.Failed.length === 0) {
@@ -1505,26 +1508,12 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
 
       // Collect other installed apps' manifests so we don't remove shared prebundle excludes
-      const otherApps = (await ListInstalledApps(context.ContextUser))
-        .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
-      // Skip a corrupt OTHER-app manifest — it must not break THIS app's removal (B24).
-      const otherManifests = otherApps.flatMap(a => {
-        try {
-          return [JSON.parse(a.ManifestJSON) as MJAppManifest];
-        } catch {
-          Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
-          return [];
-        }
-      });
+      const otherManifests = await ListOtherAppManifests(options.AppName, context);
 
       // Same shared-survival rule for npm deps: any package another installed app still
       // declares (server/client/shared) must survive this app's removal, or the survivor's
       // next boot fails on a missing dependency.
-      const retainPackages = [...new Set(otherManifests.flatMap(m => [
-        ...(m.packages?.server ?? []),
-        ...(m.packages?.client ?? []),
-        ...(m.packages?.shared ?? []),
-      ].map(p => p.name)))];
+      const retainPackages = ListDeclaredPackageNames(otherManifests);
 
       await Promise.all([
         Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
@@ -1610,6 +1599,29 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     Callbacks?.OnError?.('Remove', message);
     return BuildFailureResult('Remove', options.AppName, '', phase, startTime, message);
   }
+}
+
+/**
+ * The parsed manifests of every installed app other than `appName` (status `Removed` excluded).
+ * A corrupt OTHER-app manifest is skipped with a warning: it must not break an operation on THIS
+ * app (B24).
+ */
+async function ListOtherAppManifests(appName: string, context: OrchestratorContext): Promise<MJAppManifest[]> {
+  const otherApps = (await ListInstalledApps(context.ContextUser)).filter((a) => a.Name !== appName && a.Status !== 'Removed');
+  return otherApps.flatMap((a) => {
+    try {
+      return [JSON.parse(a.ManifestJSON) as MJAppManifest];
+    } catch {
+      context.Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
+      return [];
+    }
+  });
+}
+
+/** Every npm package name the manifests declare, across server, client and shared, deduplicated. */
+function ListDeclaredPackageNames(manifests: MJAppManifest[]): string[] {
+  const names = manifests.flatMap((m) => [...(m.packages?.server ?? []), ...(m.packages?.client ?? []), ...(m.packages?.shared ?? [])].map((p) => p.name));
+  return [...new Set(names)];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2431,11 +2443,49 @@ export function DescribeRestoredUpgrade(info: RestoredUpgradeInfo): string {
   );
 }
 
+/** What an upgrade's package step needs to remove the replaced version's stale pins (#6789). */
+type ReplacedPackages = Required<Pick<PackageManagerOptions, 'PreviousPackages' | 'RetainPackages'>>;
+
+/** A manifest's package groups, empty when it declares none (`packages` is optional). */
+function ToPackageGroups(packages: MJAppManifest['packages']): AppPackageGroups {
+  return { Server: packages?.server ?? [], Client: packages?.client ?? [], Shared: packages?.shared ?? [] };
+}
+
+/**
+ * The installed version's packages, read from the persisted `ManifestJSON` (the documented source
+ * of truth), plus every package another installed app declares, which must keep its pin. Returns
+ * undefined, after a warning, when that manifest cannot be parsed: the upgrade then only adds, as
+ * it did before, and never fails over an unreadable historical record. Also undefined when the
+ * installed version declared no packages: there is nothing to remove.
+ */
+async function ResolveReplacedPackages(existingApp: InstalledAppInfo, context: OrchestratorContext): Promise<ReplacedPackages | undefined> {
+  let previous: MJAppManifest;
+  try {
+    previous = JSON.parse(existingApp.ManifestJSON) as MJAppManifest;
+  } catch {
+    context.Callbacks?.OnWarn?.(
+      'Packages',
+      `Could not parse the previously-installed manifest for '${existingApp.Name}', so package pins the new version no longer ` +
+        `lists were not removed. Check the server and client package.json files for old ${existingApp.Name} packages.`,
+    );
+    return undefined;
+  }
+  const previousGroups = ToPackageGroups(previous.packages);
+  if (previousGroups.Server.length + previousGroups.Client.length + previousGroups.Shared.length === 0) return undefined;
+  return {
+    PreviousPackages: previousGroups,
+    RetainPackages: ListDeclaredPackageNames(await ListOtherAppManifests(existingApp.Name, context)),
+  };
+}
+
 /**
  * Adds app npm packages to the appropriate workspace package.json files and runs npm install.
  *
  * @param packageVersion - The version string to write (may differ from manifest.version when an explicit version is requested)
  * @param versionStrategy - Override for version strategy (e.g., 'exact' when explicit version is requested)
+ * @param replaced - Upgrade only: the replaced version's packages, whose pins the new manifest no longer places are removed.
+ *   With it, the step runs even when the new manifest declares no packages, so a version that drops them all
+ *   still loses its old pins (#6789).
  */
 async function HandlePackageInstallation(
   manifest: MJAppManifest,
@@ -2443,33 +2493,40 @@ async function HandlePackageInstallation(
   packageVersion?: string,
   versionStrategy?: VersionStrategy,
   verbose?: boolean,
+  replaced?: ReplacedPackages,
 ): Promise<InternalResult> {
-  if (!manifest.packages) {
+  if (!manifest.packages && !replaced) {
     return { Success: true };
   }
 
+  const wanted = ToPackageGroups(manifest.packages);
   context.Callbacks?.OnProgress?.('Packages', 'Adding packages...');
   const addResult = AddAppPackages({
     RepoRoot: context.RepoRoot,
-    ServerPackages: manifest.packages.server ?? [],
-    ClientPackages: manifest.packages.client ?? [],
-    SharedPackages: manifest.packages.shared ?? [],
+    ServerPackages: wanted.Server,
+    ClientPackages: wanted.Client,
+    SharedPackages: wanted.Shared,
     Version: packageVersion ?? manifest.version,
     ServerPackagePath: context.ServerPackagePath,
     ClientPackagePath: context.ClientPackagePath,
     PackageManager: context.PackageManager,
     VersionStrategy: versionStrategy ?? context.VersionStrategy,
     AdditionalTargets: context.AdditionalTargets,
+    PreviousPackages: replaced?.PreviousPackages,
+    RetainPackages: replaced?.RetainPackages,
   });
 
   if (!addResult.Success) {
     return { Success: false, ErrorMessage: addResult.ErrorMessage };
   }
+  if (addResult.Removed.length > 0) {
+    context.Callbacks?.OnProgress?.('Packages', `Removed pins the new version no longer places in that workspace: ${addResult.Removed.join(', ')}`);
+  }
 
   // If the manifest declares a package prefix, bump ALL matching dependencies
   // across the workspace (not just the manifest-declared ones). This handles
   // consumer-added packages like bcsaas-settings, bcsaas-credentials, etc.
-  const prefix = manifest.packages.prefix;
+  const prefix = manifest.packages?.prefix;
   if (prefix) {
     const bareVersion = packageVersion ?? manifest.version;
     const updatedCount = BumpPrefixedDependencies(context.RepoRoot, prefix, bareVersion);
@@ -2479,7 +2536,7 @@ async function HandlePackageInstallation(
   }
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
-  const installResult = await RunPackageInstallAsync(context.RepoRoot, verbose, manifest.packages.registry, context.PackageManager);
+  const installResult = await RunPackageInstallAsync(context.RepoRoot, verbose, manifest.packages?.registry, context.PackageManager);
   if (installResult.DevWorkspaceParent) {
     context.Callbacks?.OnProgress?.(
       'Packages',

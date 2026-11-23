@@ -451,16 +451,19 @@ export class PipelineProcessor implements IRecordProcessor {
         }
         const committer = this.storage.Committer(context.Provider, context.ContextUser);
         const defaults = this.childDefaults(working);
+        const chunkIdsBySequence = new Map<number, string>();
         let committed = 0;
         let failed = 0;
         let firstError: string | undefined;
         for (const child of working.Children) {
+            this.resolveParentChunkLink(child, chunkIdsBySequence);
             const outcome = await this.persistOneChild(child, working, defaults, committer);
             if (outcome.Status === 'Failed') {
                 failed++;
                 firstError ??= outcome.ErrorMessage;
             } else if (!this.config.IsTest) {
                 committed++;
+                this.recordCommittedChunkSequence(child, chunkIdsBySequence);
             }
             await this.progress?.RecordChildOutcome?.(record, child.Identity.Key, outcome, this.entityIDFor(child.Entity, context));
             if (outcome.Status !== 'Failed' && child.Children.length > 0) {
@@ -478,6 +481,37 @@ export class PipelineProcessor implements IRecordProcessor {
             await this.sweepOrphans(working, context);
         }
         return { Committed: committed, Failed: failed, FirstError: firstError };
+    }
+
+    /** Link a hierarchical child chunk (`Pipeline.parentSequence`) to its already-saved parent chunk ID. */
+    private resolveParentChunkLink(child: WorkingRecord, chunkIdsBySequence: ReadonlyMap<number, string>): void {
+        if (child.Entity !== 'Content Item Chunk') {
+            return;
+        }
+        const parentSequence = child.GetExtension<number>('Pipeline', 'parentSequence');
+        if (typeof parentSequence !== 'number') {
+            return;
+        }
+        const parentChunkID = chunkIdsBySequence.get(parentSequence);
+        if (!parentChunkID) {
+            return;
+        }
+        const existingColumns = child.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {};
+        child.SetExtension('Pipeline', 'columns', { ...existingColumns, ParentChunkID: parentChunkID });
+        child.SetExtension('Pipeline', 'parentChunkID', parentChunkID);
+    }
+
+    /** Remember a committed chunk's `RecordID` under its `Sequence` so downstream sub-chapters can reference it. */
+    private recordCommittedChunkSequence(child: WorkingRecord, chunkIdsBySequence: Map<number, string>): void {
+        if (child.Entity !== 'Content Item Chunk' || !child.Identity.RecordID) {
+            return;
+        }
+        const seq =
+            child.GetExtension<number>('Pipeline', 'sequence') ??
+            (child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Sequence as number | undefined);
+        if (typeof seq === 'number') {
+            chunkIdsBySequence.set(seq, child.Identity.RecordID);
+        }
     }
 
     /**

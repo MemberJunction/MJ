@@ -90,7 +90,18 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
 }));
 
 vi.mock('@memberjunction/global', () => ({
-    MJGlobal: { Instance: { ClassFactory: { CreateInstance: mockCreateInstance } } },
+    MJGlobal: {
+        Instance: {
+            ClassFactory: { CreateInstance: mockCreateInstance },
+            GetEventListener: () => ({ subscribe: () => ({ unsubscribe: () => { /* no-op */ } }) }),
+        },
+    },
+    MJEventType: { ComponentEvent: 'ComponentEvent' },
+    EscapeSQLString: (v: string) => v.replace(/'/g, "''").replace(/\0/g, ''),
+    UserScopedCacheKey: (userID: string | null | undefined, ...parts: string[]) => {
+        if (!userID || userID.trim() === '') return null;
+        return [...parts, `u:${userID.trim().toLowerCase()}`].join(':');
+    },
     UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) =>
         !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase(),
     NormalizeUUID: (id: string) => id.trim().toLowerCase(),
@@ -143,6 +154,7 @@ describe('VectorSearchProvider — indexes keyed by Entity Document (#4911)', ()
     let search: VectorSearchProvider;
 
     beforeEach(() => {
+        VectorSearchProvider.ClearCaches();
         search = new VectorSearchProvider();
         search.Provider = metadataProvider;
         getActiveDocsCalls.count = 0;

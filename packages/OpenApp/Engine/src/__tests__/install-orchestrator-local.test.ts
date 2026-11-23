@@ -50,7 +50,7 @@ vi.mock('../install/schema-manager.js', async (importOriginal) => ({
 }));
 vi.mock('../install/migration-runner.js', () => ({ RunAppMigrations: vi.fn() }));
 vi.mock('../install/package-manager.js', () => ({
-    AddAppPackages: vi.fn(() => ({ Success: true })),
+    AddAppPackages: vi.fn(() => ({ Success: true, Added: [], Removed: [] })),
     RemoveAppPackages: vi.fn(() => ({ Success: true })),
     RunPackageInstallAsync: vi.fn(async () => ({ Success: true })),
     BumpPrefixedDependencies: vi.fn(() => 0),

@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { AuditLogTypeEngine, MJAuditLogEntity } from '@memberjunction/core-entities';
 
 /** What one List audit row records. */
@@ -10,6 +10,12 @@ export interface ListAuditLogEntry {
   Details: Record<string, unknown>;
 }
 
+/** Minimal metadata surface needed to write a List audit row. */
+export interface ListAuditMetadataLike {
+  GetEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>;
+  EntityByName(entityName: string): EntityInfo | undefined;
+}
+
 /**
  * Writes one audit row against a list. Best effort: a failure is logged and never fails the
  * operation that called it. The type is looked up by name through `AuditLogTypeEngine`, so call
@@ -17,7 +23,7 @@ export interface ListAuditLogEntry {
  */
 export async function EmitListAuditLog(
   entry: ListAuditLogEntry,
-  md: Metadata,
+  md: ListAuditMetadataLike,
   contextUser: UserInfo,
   provider?: IMetadataProvider,
 ): Promise<void> {

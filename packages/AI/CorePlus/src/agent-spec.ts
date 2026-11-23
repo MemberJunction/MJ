@@ -168,6 +168,11 @@ export interface AgentSpec {
     MaxSubAgentConsultRounds?: number;
 
     /**
+     * Execution isolation level for workflows and graphs backed by this agent. Derived from `MJAIAgentEntity['Isolation']` (`'Container' | 'InProcess' | 'Process' | 'Worker'`).
+     */
+    Isolation?: MJAIAgentEntity['Isolation'];
+
+    /**
     * Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.
     */
     DefaultArtifactTypeID?: string;

@@ -68,7 +68,7 @@ const CLOSE_BAD_GATEWAY = 1014; // the upstream did not open, failed, stopped an
 type RelayLeg = 'browser' | 'upstream';
 const RELAY_LEGS: readonly RelayLeg[] = ['browser', 'upstream'];
 
-/** The longest delay `setTimeout` takes (about 24.8 days); a longer one would fire at once. */
+// ProtocolLimit: Node.js/V8 setTimeout 32-bit signed integer ceiling (2^31 - 1 ms); a longer delay fires immediately
 const MAX_TIMER_MS = 2_147_483_647;
 
 /** Distinct drop labels counted per connection; later new labels count as `other`. */

@@ -34,7 +34,7 @@ export interface ActionToolSet {
     byToolName: Map<string, ActionToolBinding>;
 }
 
-/** Providers cap tool names at 64 characters. */
+// ProtocolLimit: OpenAI / Anthropic / Gemini chat-completions function tool name maximum length is 64 characters
 const MAX_TOOL_NAME_LENGTH = 64;
 
 /**

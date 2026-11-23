@@ -22,13 +22,54 @@
  *
  * @module @memberjunction/task-graph
  */
-import { UUIDsEqual } from '@memberjunction/global';
+import { IsPlainObject, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import type {
+    BudgetBreachDetail,
+    BudgetDimension,
+    BudgetScope,
+    CumulativeBudgetLedger,
+    FastConvergenceJudgeResult,
+    ProgressEvaluationResult,
+    RunawayJsonObject,
+    RunawayJsonValue,
+    RunawayPauseReason,
+} from '@memberjunction/ai-core-plus';
 
 /** What a step allowance permits: one task, the current frontier, or one named task. */
 export type StepTarget = 'one' | 'wave' | string;
 
 /** A user's answer for an edge whose condition they have overridden. */
 export type EdgeOverrideVerdict = 'true' | 'false';
+
+/** Pause reason identifying a governance-initiated pause (`'governance'` or `'governance:<detail>'`). */
+export type GovernancePausedReason = 'governance' | `governance:${string}`;
+
+/** Returns true when `reason` identifies a governance pause rather than an ordinary debugger pause. */
+export function IsGovernancePausedReason(reason: RunawayJsonValue | undefined): reason is GovernancePausedReason {
+    return reason === 'governance' || (typeof reason === 'string' && reason.startsWith('governance:'));
+}
+
+/**
+ * Durable governance pause envelope serialized into `$.debug.pendingCheckpointContext`
+ * whenever `$.debug.paused` is written while the submitting `MJ: AI Agent Runs` checkpoint
+ * has not yet persisted (`checkpointPersisted === false`).
+ */
+export interface PendingGovernanceCheckpointContext {
+    reason: RunawayPauseReason;
+    reasonDetail: string;
+    scope: BudgetScope | null;
+    dimension: BudgetDimension | null;
+    triggerValue: number | null;
+    thresholdValue: number | null;
+    pausedAtIso: string;
+    pausedAtIteration: number;
+    submittingAgentRunId: string | null;
+    completedTaskIds: string[];
+    cumulativeLedger?: CumulativeBudgetLedger;
+    budgetBreach?: BudgetBreachDetail;
+    progressEvaluation?: ProgressEvaluationResult;
+    fastJudgeResult?: FastConvergenceJudgeResult;
+}
 
 /**
  * The durable debug state of one graph.
@@ -41,8 +82,13 @@ export type TaskGraphDebugState = {
     paused?: boolean;
     /** Who paused it — informational, for the console and the frame. */
     pausedBy?: string | null;
-    /** Whether a person paused it or a breakpoint did. */
-    pausedReason?: 'user' | 'breakpoint';
+    /** Whether a person paused it, a breakpoint did, or budget/runaway governance did. */
+    pausedReason?: 'user' | 'breakpoint' | GovernancePausedReason;
+    /**
+     * Dedicated durable governance-approval-required marker set when governance pauses the graph
+     * and cleared ONLY by `TaskGraphGovernanceCoordinator.ClearDebugPauseFields` inside `ApproveAndResumePausedGraph`.
+     */
+    governancePauseActive?: boolean;
     /** The task whose breakpoint fired, when `pausedReason` is `'breakpoint'`. */
     pausedAtTaskID?: string | null;
     /** Task IDs the dispatcher pauses the graph on, before claiming them. */
@@ -65,6 +111,17 @@ export type TaskGraphDebugState = {
      * survives restarts and is honored by every instance.
      */
     edgeOverrides?: Record<string, EdgeOverrideVerdict>;
+    /**
+     * For governance pauses (`pausedReason === 'governance'`), records whether the submitting
+     * `MJ: AI Agent Runs` checkpoint has been durably persisted. When `false`, any replacement
+     * dispatcher must reconstruct `PendingPauseContext`, keep claims blocked, suppress `GraphPaused`,
+     * and flush the checkpoint before announcing `GraphPaused`.
+     */
+    checkpointPersisted?: boolean;
+    /**
+     * Durable serialized governance pause envelope written when `checkpointPersisted === false`.
+     */
+    pendingCheckpointContext?: PendingGovernanceCheckpointContext | null;
 };
 
 /** What the claim gate decided for one graph on one pass. */
@@ -86,9 +143,104 @@ export type ClaimGateDecision =
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const VALID_RUNAWAY_PAUSE_REASONS: ReadonlySet<RunawayPauseReason> = new Set<RunawayPauseReason>([
+    'BudgetExceeded',
+    'ProgressStalled',
+    'LedgerUnavailable',
+    'ManualPause',
+    'FastJudgeStalled',
+]);
+
+const VALID_BUDGET_SCOPES: ReadonlySet<BudgetScope> = new Set<BudgetScope>([
+    'PerRun',
+    'PerRoutine',
+    'PerUserPerDay',
+]);
+
+const VALID_BUDGET_DIMENSIONS: ReadonlySet<BudgetDimension> = new Set<BudgetDimension>([
+    'CostUsd',
+    'WallClockMs',
+    'Tokens',
+]);
+
 /** True for values JSON round-trips or hand edits commonly produce for a boolean. */
-function readBool(value: unknown): boolean {
+function readBool(value: RunawayJsonValue | undefined): boolean {
     return value === true || value === 'true';
+}
+
+function readOptionalTriStateBool(value: RunawayJsonValue | undefined): boolean | undefined {
+    if (value === true || value === 'true' || value === 1) return true;
+    if (value === false || value === 'false' || value === 0) return false;
+    return undefined;
+}
+
+function readFiniteNumber(value: RunawayJsonValue | undefined): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function parsePendingCheckpointContext(
+    raw: RunawayJsonValue | undefined,
+): PendingGovernanceCheckpointContext | null {
+    const obj = typeof raw === 'string'
+        ? SafeJSONParse<RunawayJsonObject>(raw)
+        : (IsPlainObject(raw) ? raw : null);
+    if (!obj) return null;
+
+    const reasonRaw = obj['reason'];
+    if (typeof reasonRaw !== 'string' || !VALID_RUNAWAY_PAUSE_REASONS.has(reasonRaw as RunawayPauseReason)) {
+        return null;
+    }
+    const reason = reasonRaw as RunawayPauseReason;
+    const reasonDetail = typeof obj['reasonDetail'] === 'string' ? obj['reasonDetail'] : '';
+    const scopeRaw = obj['scope'];
+    const scope = typeof scopeRaw === 'string' && VALID_BUDGET_SCOPES.has(scopeRaw as BudgetScope)
+        ? (scopeRaw as BudgetScope)
+        : null;
+    const dimRaw = obj['dimension'];
+    const dimension = typeof dimRaw === 'string' && VALID_BUDGET_DIMENSIONS.has(dimRaw as BudgetDimension)
+        ? (dimRaw as BudgetDimension)
+        : null;
+    const pausedAtIso = typeof obj['pausedAtIso'] === 'string' ? obj['pausedAtIso'] : new Date().toISOString();
+    const iterRaw = obj['pausedAtIteration'];
+    const pausedAtIteration = typeof iterRaw === 'number' && Number.isFinite(iterRaw) ? Math.max(0, Math.trunc(iterRaw)) : 1;
+    const subRunRaw = obj['submittingAgentRunId'];
+    const submittingAgentRunId = typeof subRunRaw === 'string' && subRunRaw.trim().length > 0 ? subRunRaw.trim() : null;
+    const completedRaw = obj['completedTaskIds'];
+    const completedTaskIds = Array.isArray(completedRaw)
+        ? completedRaw.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+        : [];
+
+    const parsed: PendingGovernanceCheckpointContext = {
+        reason,
+        reasonDetail,
+        scope,
+        dimension,
+        triggerValue: readFiniteNumber(obj['triggerValue']),
+        thresholdValue: readFiniteNumber(obj['thresholdValue']),
+        pausedAtIso,
+        pausedAtIteration,
+        submittingAgentRunId,
+        completedTaskIds,
+    };
+
+    const ledgerRaw = obj['cumulativeLedger'];
+    if (IsPlainObject(ledgerRaw) && typeof ledgerRaw['RunCostUsd'] === 'number') {
+        parsed.cumulativeLedger = ledgerRaw as Partial<CumulativeBudgetLedger> as CumulativeBudgetLedger;
+    }
+    const breachRaw = obj['budgetBreach'];
+    if (IsPlainObject(breachRaw) && typeof breachRaw['Scope'] === 'string' && typeof breachRaw['Reason'] === 'string') {
+        parsed.budgetBreach = breachRaw as Partial<BudgetBreachDetail> as BudgetBreachDetail;
+    }
+    const progressRaw = obj['progressEvaluation'];
+    if (IsPlainObject(progressRaw) && typeof progressRaw['Classification'] === 'string' && typeof progressRaw['Reason'] === 'string') {
+        parsed.progressEvaluation = progressRaw as Partial<ProgressEvaluationResult> as ProgressEvaluationResult;
+    }
+    const judgeRaw = obj['fastJudgeResult'];
+    if (IsPlainObject(judgeRaw) && typeof judgeRaw['Converging'] === 'boolean' && typeof judgeRaw['Reason'] === 'string') {
+        parsed.fastJudgeResult = judgeRaw as Partial<FastConvergenceJudgeResult> as FastConvergenceJudgeResult;
+    }
+
+    return parsed;
 }
 
 /**
@@ -101,36 +253,67 @@ function readBool(value: unknown): boolean {
 export function ParseTaskGraphDebugState(raw: string | null | undefined): TaskGraphDebugState {
     if (!raw) return {};
     try {
-        const parsed = JSON.parse(raw) as { debug?: unknown };
+        const parsed = JSON.parse(raw) as { debug?: RunawayJsonValue };
         const debug = parsed && typeof parsed === 'object' ? parsed.debug : undefined;
-        if (!debug || typeof debug !== 'object') return {};
-        const d = debug as Record<string, unknown>;
+        if (!IsPlainObject(debug)) return {};
+        const d = debug;
         const state: TaskGraphDebugState = {};
-        if (readBool(d.paused)) state.paused = true;
-        if (typeof d.pausedBy === 'string') state.pausedBy = d.pausedBy;
-        if (d.pausedReason === 'user' || d.pausedReason === 'breakpoint') state.pausedReason = d.pausedReason;
-        if (typeof d.pausedAtTaskID === 'string') state.pausedAtTaskID = d.pausedAtTaskID;
-        if (typeof d.skipBreakpointTaskID === 'string') state.skipBreakpointTaskID = d.skipBreakpointTaskID;
-        if (Array.isArray(d.breakpoints)) {
-            const ids = d.breakpoints.filter((b): b is string => typeof b === 'string' && UUID_SHAPE.test(b));
+        if (readBool(d['paused'])) state.paused = true;
+        if (typeof d['pausedBy'] === 'string') state.pausedBy = d['pausedBy'];
+        const pr = d['pausedReason'];
+        if (pr === 'user' || pr === 'breakpoint' || IsGovernancePausedReason(pr)) {
+            state.pausedReason = pr;
+        }
+        if (readBool(d['governancePauseActive'])) {
+            state.governancePauseActive = true;
+        }
+        if (typeof d['pausedAtTaskID'] === 'string') state.pausedAtTaskID = d['pausedAtTaskID'];
+        if (typeof d['skipBreakpointTaskID'] === 'string') state.skipBreakpointTaskID = d['skipBreakpointTaskID'];
+        if (Array.isArray(d['breakpoints'])) {
+            const ids = d['breakpoints'].filter((b): b is string => typeof b === 'string' && UUID_SHAPE.test(b));
             if (ids.length > 0) state.breakpoints = ids;
         }
-        if (d.step === 'one' || d.step === 'wave' || (typeof d.step === 'string' && UUID_SHAPE.test(d.step))) {
-            state.step = d.step;
+        const step = d['step'];
+        if (step === 'one' || step === 'wave' || (typeof step === 'string' && UUID_SHAPE.test(step))) {
+            state.step = step;
         }
-        if (d.edgeOverrides && typeof d.edgeOverrides === 'object') {
+        const edgeOverrides = d['edgeOverrides'];
+        if (IsPlainObject(edgeOverrides)) {
             const overrides: Record<string, EdgeOverrideVerdict> = {};
-            for (const [edgeID, verdict] of Object.entries(d.edgeOverrides as Record<string, unknown>)) {
+            for (const [edgeID, verdict] of Object.entries(edgeOverrides)) {
                 if (UUID_SHAPE.test(edgeID) && (verdict === 'true' || verdict === 'false')) {
                     overrides[edgeID] = verdict;
                 }
             }
             if (Object.keys(overrides).length > 0) state.edgeOverrides = overrides;
         }
+        const cpPersisted = readOptionalTriStateBool(d['checkpointPersisted']);
+        if (cpPersisted !== undefined) {
+            state.checkpointPersisted = cpPersisted;
+        }
+        const pendingCtx = parsePendingCheckpointContext(d['pendingCheckpointContext']);
+        if (pendingCtx) {
+            state.pendingCheckpointContext = pendingCtx;
+        }
         return state;
     } catch {
         return {};
     }
+}
+
+/**
+ * Returns true when `$.debug` carries any active durable governance pause marker
+ * (`governancePauseActive === true`, a governance `pausedReason`, `checkpointPersisted === false`,
+ * or a non-null `pendingCheckpointContext`), even if an ordinary debugger operation altered `paused`.
+ */
+export function IsGovernanceDebugPause(debug: TaskGraphDebugState): boolean {
+    if (debug.governancePauseActive === true) {
+        return true;
+    }
+    if (debug.pendingCheckpointContext != null || debug.checkpointPersisted === false) {
+        return true;
+    }
+    return IsGovernancePausedReason(debug.pausedReason);
 }
 
 /**

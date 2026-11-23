@@ -1,5 +1,5 @@
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { MJConversationEntity, MJProjectEntity, MJResourcePermissionEntity } from '../generated/entity_subclasses';
 import { IsConversationHiddenByFieldSecurity, UserCanReadLinkedRecord } from './AnchoredConversationSecurity';
 import { ResourcePermissionEngine } from './ResourcePermissions/ResourcePermissionEngine';
@@ -9,6 +9,13 @@ export const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04
 
 /** Resource type ID for conversation folders (`MJ: Projects`) in the resource permission system. */
 const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
+/**
+ * ConversationType ID for `AGENT_CHANNEL` (`MJ: Agent Channels` IS-A `MJ: Conversations`).
+ * Local copy of `BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL` to avoid pulling `ConversationEngine`
+ * into every entity subclass.
+ */
+const AGENT_CHANNEL_CONVERSATION_TYPE_ID = '09E7A069-DB29-4329-BB29-4DF8CB998D94';
 
 /**
  * Returns whether a conversation inherits access from its folder (`ProjectID`).
@@ -130,6 +137,27 @@ export async function UserMayWriteConversation(
     if (isOwner) {
         return { Allowed: true, Reason: null, IsOwner: true, Loaded: true };
     }
+
+    // For AGENT_CHANNEL conversations (MJ: Agent Channels IS-A MJ: Conversations), any enrolled
+    // human/agent participant in MJ: Agent Channel Participants may post into the channel.
+    if (conversation.TypeID && UUIDsEqual(conversation.TypeID, AGENT_CHANNEL_CONVERSATION_TYPE_ID)) {
+        const rv = RunView.FromMetadataProvider(provider);
+        const partRes = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Agent Channel Participants',
+                ExtraFilter: `AgentChannelID='${EscapeSQLString(conversationId)}' AND UserID='${EscapeSQLString(user.ID)}'`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            user
+        );
+        if (partRes.Success && (partRes.Results?.length ?? 0) > 0) {
+            return { Allowed: true, Reason: null, IsOwner: false, Loaded: true };
+        }
+        return { Allowed: false, Reason: 'You do not have access to this conversation.', IsOwner: false, Loaded: true };
+    }
+
     const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(provider, ResourcePermissionEngine) as ResourcePermissionEngine;
     await engine.Config(false, user);
     const grant = engine
@@ -235,4 +263,45 @@ export async function UserMayDeleteConversation(
         return { Allowed: true, Reason: null };
     }
     return { Allowed: false, Reason: `${CONVERSATION_DELETE_REFUSED_REASON}.` };
+}
+
+/**
+ * Whether a user owns a conversation: its `UserID`, an Owner-level grant on it, or (when
+ * {@link IsInheritingFolderAccess} is true) an Owner-level grant on its parent folder
+ * (`MJ: Projects`). Mirrors the share gate (`ConversationEngine.CanShareConversation`).
+ * Server-side only: a non-database provider, or a conversation that cannot be loaded, reports
+ * false, since nothing could be verified; callers that must fail open on the client decide
+ * that themselves.
+ */
+export async function UserOwnsConversation(
+    provider: IMetadataProvider,
+    user: UserInfo | null | undefined,
+    conversationId: string
+): Promise<boolean> {
+    if (provider?.ProviderType !== 'Database' || !user) {
+        return false;
+    }
+    const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+    if (!(await conversation.Load(conversationId))) {
+        return false;
+    }
+    if (conversation.UserID && UUIDsEqual(conversation.UserID, user.ID)) {
+        return true;
+    }
+    const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(provider, ResourcePermissionEngine) as ResourcePermissionEngine;
+    await engine.Config(false, user);
+    if (engine.GetUserResourcePermissionLevel(CONVERSATIONS_RESOURCE_TYPE_ID, conversationId, user) === 'Owner') {
+        return true;
+    }
+    if (conversation.ProjectID && IsInheritingFolderAccess(conversation)) {
+        const folderPerm = engine.GetUserResourcePermissionLevel(
+            PROJECTS_RESOURCE_TYPE_ID,
+            conversation.ProjectID,
+            user
+        );
+        if (folderPerm === 'Owner') {
+            return true;
+        }
+    }
+    return false;
 }

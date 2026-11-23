@@ -1,0 +1,99 @@
+<section class="no-access-stage" aria-labelledby="mj-no-access-heading">
+  <div class="no-access-card">
+    <div class="no-access-brand">
+      @if (ShowLogoImage && ResolvedBranding.LogoUrl) {
+        <img
+          class="no-access-logo-img"
+          [src]="ResolvedBranding.LogoUrl"
+          [alt]="ResolvedBranding.BrandTitle"
+          (error)="OnLogoImageError()" />
+      } @else {
+        <div class="no-access-logo-badge" aria-hidden="true">
+          <i [class]="ResolvedBranding.LogoIconClass"></i>
+        </div>
+      }
+      <span class="no-access-brand-title">{{ ResolvedBranding.BrandTitle }}</span>
+    </div>
+
+    <div class="no-access-emblem" aria-hidden="true">
+      <i class="fa-solid fa-lock"></i>
+    </div>
+
+    <h1 id="mj-no-access-heading" class="no-access-heading">
+      {{ ResolvedBranding.Heading }}
+    </h1>
+
+    <p class="no-access-message">
+      {{ ResolvedBranding.Message }}
+    </p>
+
+    @if (ResolvedBranding.HelpText) {
+      <p class="no-access-help">
+        {{ ResolvedBranding.HelpText }}
+      </p>
+    }
+
+    @if (HasIdentitySummary) {
+      <div class="no-access-identity" aria-label="Signed-in account">
+        <i class="fa-solid fa-user-check no-access-identity-icon" aria-hidden="true"></i>
+        <div class="no-access-identity-details">
+          @if (UserName) {
+            <span class="no-access-identity-name">{{ UserName }}</span>
+          }
+          @if (UserEmail) {
+            <span class="no-access-identity-email">{{ UserEmail }}</span>
+          }
+        </div>
+      </div>
+    }
+
+    @if (RefreshErrorMessage) {
+      <div class="no-access-feedback" role="status" aria-live="polite">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <span>{{ RefreshErrorMessage }}</span>
+      </div>
+    }
+
+    <div class="no-access-actions">
+      <button
+        type="button"
+        mjButton
+        variant="primary"
+        [disabled]="IsRefreshing"
+        (click)="OnRefreshAccess()">
+        @if (IsRefreshing) {
+          <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+        } @else {
+          <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+        }
+        <span>{{ ResolvedBranding.RefreshLabel }}</span>
+      </button>
+
+      <button
+        type="button"
+        mjButton
+        variant="outline"
+        [disabled]="IsRefreshing"
+        (click)="OnSignOut()">
+        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+        <span>{{ ResolvedBranding.SignOutLabel }}</span>
+      </button>
+    </div>
+
+    @if (HasSupportContact && SupportHref) {
+      <div class="no-access-support">
+        <a
+          class="no-access-support-link"
+          [href]="SupportHref"
+          [attr.target]="SupportOpensNewTab ? '_blank' : null"
+          [attr.rel]="SupportOpensNewTab ? 'noopener noreferrer' : null">
+          <i class="fa-solid fa-life-ring" aria-hidden="true"></i>
+          <span>{{ ResolvedBranding.SupportLabel }}</span>
+          @if (ResolvedBranding.SupportEmail && !ResolvedBranding.SupportUrl) {
+            <span class="no-access-support-address">({{ ResolvedBranding.SupportEmail }})</span>
+          }
+        </a>
+      </div>
+    }
+  </div>
+</section>

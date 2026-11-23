@@ -40,7 +40,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
-        LogError: (...args: unknown[]) => mockLogError(...args),
+        LogError: (...args: Parameters<typeof actual.LogError>) => mockLogError(...args),
         LogStatus: vi.fn(),
         RunView: class {
             static FromMetadataProvider = () => ({ RunView: mockRunView });
@@ -150,7 +150,7 @@ function makeParams(
                 UserID: submittingRunOverrides.UserID ?? null,
             };
         }),
-    } as unknown as IMetadataProvider;
+    } as Partial<IMetadataProvider> as IMetadataProvider;
 
     return {
         TaskID: 'task-1',
@@ -159,7 +159,7 @@ function makeParams(
         DependencyOutputs: new Map(),
         SubmittingAgentRunID: 'submitting-run-1',
         Provider: provider,
-        ContextUser: { ID: 'user-1' } as unknown as UserInfo,
+        ContextUser: { ID: 'user-1' } as Partial<UserInfo> as UserInfo,
         ...overrides,
     };
 }
@@ -386,7 +386,7 @@ describe('TaskGraphAgentRunner', () => {
                 }
                 return { Load: vi.fn().mockResolvedValue(false) };
             }),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         const runner = new TaskGraphAgentRunner();
         const outcome = await runner.RunAgentForTask({
@@ -424,7 +424,7 @@ describe('TaskGraphAgentRunner', () => {
                 }
                 return { Load: vi.fn().mockResolvedValue(false) };
             }),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         const runner = new TaskGraphAgentRunner();
         const outcome = await runner.RunAgentForTask({
@@ -452,7 +452,7 @@ describe('TaskGraphAgentRunner', () => {
                 }
                 return { Load: vi.fn().mockResolvedValue(false) };
             }),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         const runner = new TaskGraphAgentRunner();
         const outcome = await runner.RunAgentForTask({
@@ -497,7 +497,7 @@ describe('TaskGraphAgentRunner', () => {
                 }
                 return { Load: vi.fn().mockResolvedValue(false) };
             }),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         const runner = new TaskGraphAgentRunner();
         const outcome = await runner.RunAgentForTask({
@@ -541,7 +541,7 @@ describe('TaskGraphAgentRunner', () => {
                 }
                 return { Load: vi.fn().mockResolvedValue(false) };
             }),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         const runner = new TaskGraphAgentRunner();
         const outcome = await runner.RunAgentForTask({
@@ -609,11 +609,11 @@ describe('TaskGraphAgentRunner security envelope (S1, S2, S7)', () => {
     });
 
     it('runs as the per-task clone the dispatcher handed it, not the shared cached user', async () => {
-        const shared = { ID: 'user-1' } as unknown as UserInfo;
+        const shared = { ID: 'user-1' } as Partial<UserInfo> as UserInfo;
         const cached = UserCache.Instance.Users as UserInfo[];
         cached.push(shared);
         try {
-            const clone = { ID: 'user-1', TenantContext: { TenantID: 'org-A', Source: 'header' } } as unknown as UserInfo;
+            const clone = { ID: 'user-1', TenantContext: { TenantID: 'org-A', Source: 'header' } } as Partial<UserInfo> as UserInfo;
             const params = makeParams(
                 { ContextUser: clone, SecurityEnvelope: { Version: 1, IsRunTainted: false, CallerTenantContext: { TenantID: 'org-A', Source: 'header' } } },
                 'parent-cfg-1',
@@ -636,5 +636,41 @@ describe('TaskGraphAgentRunner security envelope (S1, S2, S7)', () => {
 
     it('lists no change when no action is gated', () => {
         expect(TaintedActionRemovals([{ ID: SAFE_ACTION, Config_Object: null }])).toEqual([]);
+    });
+
+    it('CR-PRODUCTION-WORKFLOW-USAGE: propagates CostUsd and TokensUsed from agentRun on success and paid failure', async () => {
+        runAgent.mockResolvedValueOnce({
+            success: true,
+            payload: { done: true },
+            agentRun: {
+                ID: 'step-run-paid-ok',
+                Message: 'Done',
+                TotalCostRollup: 0.42,
+                TotalCost: 0.18,
+                TotalTokensUsedRollup: 4200,
+                TotalTokensUsed: 1800,
+            },
+        });
+        const runner = new TaskGraphAgentRunner();
+        const successOutcome = await runner.RunAgentForTask(makeParams());
+        expect(successOutcome.Success).toBe(true);
+        expect(successOutcome.AgentRunID).toBe('step-run-paid-ok');
+        expect(successOutcome.CostUsd).toBeCloseTo(0.42, 6);
+        expect(successOutcome.TokensUsed).toBe(4200);
+
+        runAgent.mockResolvedValueOnce({
+            success: false,
+            agentRun: {
+                ID: 'step-run-paid-fail',
+                ErrorMessage: 'Tool timeout after 2 turns',
+                TotalCost: 0.19,
+                TotalTokensUsed: 1950,
+            },
+        });
+        const failureOutcome = await runner.RunAgentForTask(makeParams());
+        expect(failureOutcome.Success).toBe(false);
+        expect(failureOutcome.AgentRunID).toBe('step-run-paid-fail');
+        expect(failureOutcome.CostUsd).toBeCloseTo(0.19, 6);
+        expect(failureOutcome.TokensUsed).toBe(1950);
     });
 });

@@ -10,6 +10,7 @@ import {
   PickWorstOnPrimary,
   THEME_RECIPES,
   TOKEN_CATEGORIES,
+  TOKEN_PREVIEW_TARGETS,
 } from '../ThemeStudio/theme-studio.constants';
 
 function check(overrides: Partial<ContrastCheck>): ContrastCheck {
@@ -157,5 +158,22 @@ describe('buildCssWarnings', () => {
     const warning = BuildCssWarnings(`.a { c: ${many}; }`, known)[0];
     expect(warning).toContain('Unknown tokens:');
     expect(warning).toContain('(+2 more)');
+  });
+});
+
+describe('TOKEN_PREVIEW_TARGETS display font binding', () => {
+  it('maps --mj-font-family-display to the preview title selectors and binds them in preview CSS', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const expectedSelectors = ['.mx-ph-title', '.mx-dlg-t', '.rhead .ti', '.chart .ct'];
+    expect(TOKEN_PREVIEW_TARGETS['--mj-font-family-display']).toEqual(expectedSelectors);
+
+    const css = readFileSync(join(__dirname, '../ThemeStudio/theme-studio-dashboard.component.css'), 'utf8');
+    for (const sel of expectedSelectors) {
+      const escaped = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rule = css.match(new RegExp(`${escaped}\\s*\\{[^}]*\\}`));
+      expect(rule, `expected CSS rule for ${sel}`).not.toBeNull();
+      expect(rule![0]).toContain('font-family: var(--mj-font-family-display, var(--mj-font-family))');
+    }
   });
 });
