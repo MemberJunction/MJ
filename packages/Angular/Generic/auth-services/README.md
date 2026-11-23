@@ -253,7 +253,7 @@ try {
 ## Build
 
 ```bash
-cd packages/Angular/Explorer/auth-services && npm run build
+cd packages/Angular/Generic/auth-services && pnpm run build
 ```
 
 ## License
