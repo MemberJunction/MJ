@@ -76,6 +76,8 @@ export type TaskAudienceEnvelope =
       }
     | {
           readonly Mode: 'ScopeCommonReach';
+          /** Disallowed on `'ScopeCommonReach'`: structural mode never enumerates reader IDs. */
+          readonly ReaderUserIDs?: never;
       };
 
 /** A run's security constraints, persisted on a task graph's rows and enforced on every node. */
