@@ -60,6 +60,8 @@ import type {
 } from '@memberjunction/actions-base';
 import {
     AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    HostGrantedWorkflowSubmitterRegistry,
+    NamedPersonAgentRequestRegistry,
     SERVER_BOUND_SCOPE_MISSING_RESULT_CODE,
     SERVER_BOUND_SCOPE_SPOOFING_RESULT_CODE,
 } from '@memberjunction/actions-base';
@@ -227,11 +229,12 @@ describe('ActionEngineServer server-bound hidden scope & receipt shaping', () =>
         expect(injectedOrg).toEqual({ Name: 'OrganizationID', Type: 'Input', Value: 'org-real', Bound: true });
         expect(injectedRegion).toEqual({ Name: 'Region', Type: 'Input', Value: 'us-east', Bound: true });
 
-        // Chat-facing result is receipt-only: sensitive output, hidden Both param, raw Message, and AIDirectives are stripped
+        // Chat-facing result is receipt-only: sensitive output, hidden Input/Bound & Both params, raw Message, and AIDirectives are stripped
         expect(result.Message).toBe('Request processed cleanly.');
         expect(result.AIDirectives).toBeUndefined();
         expect(result.Params?.some((p) => p.Name === 'SensitivePayload')).toBe(false);
-        expect(result.Params?.some((p) => p.Name === 'OrganizationID' && p.Type === 'Both')).toBe(false);
+        expect(result.Params?.some((p) => p.Name === 'OrganizationID')).toBe(false);
+        expect(result.Params?.some((p) => p.Name === 'Region')).toBe(false);
         expect(result.Params?.find((p) => p.Name === 'ReceiptID')?.Value).toBe('rcpt-1001');
         expect(result.ChatReceipt).toMatchObject({
             ReceiptOnly: true,
@@ -242,7 +245,7 @@ describe('ActionEngineServer server-bound hidden scope & receipt shaping', () =>
             Summary: 'Request processed cleanly.',
             ReceiptType: 'HostGrantedSubmission',
             ReferenceID: 'rcpt-1001',
-            RedactedOutputParamNames: ['SensitivePayload', 'OrganizationID'],
+            RedactedOutputParamNames: ['OrganizationID', 'Region', 'SensitivePayload'],
             RetainedOutputParamNames: ['ReceiptID'],
         });
     });
@@ -312,5 +315,73 @@ describe('ActionEngineServer server-bound hidden scope & receipt shaping', () =>
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe(AUDIENCE_UNSUPPORTED_RESULT_CODE);
         expect(result.Message).toMatch(/ScopeCommonReach/);
+    });
+
+    it('enforces AllowsHostGrantedWorkflowSubmission and AllowsNamedPersonAgentRequests in ActionEngineServer helpers', async () => {
+        HostGrantedWorkflowSubmitterRegistry.Instance.Clear();
+        NamedPersonAgentRequestRegistry.Instance.Clear();
+        const wfSpy = vi.fn().mockResolvedValue({
+            Success: true,
+            WorkflowKey: 'wf-1',
+            Status: 'Submitted',
+            ReceiptMessage: 'ok',
+        });
+        const reqSpy = vi.fn().mockResolvedValue({
+            Success: true,
+            TargetUserID: 'u-2',
+            ReceiptMessage: 'ok',
+        });
+        HostGrantedWorkflowSubmitterRegistry.Instance.Register({ SubmitHostGrantedWorkflow: wfSpy });
+        NamedPersonAgentRequestRegistry.Instance.Register({ CreateNamedPersonRequest: reqSpy });
+
+        const action = new ScopedReceiptAction();
+        mockClassFactory.CreateInstance.mockReturnValue(action);
+        const params = buildParams();
+
+        const deniedWf = await ActionEngineServer.Instance.SubmitHostGrantedWorkflowForAction(params, {
+            WorkflowKey: 'wf-1',
+            Inputs: {},
+            ServerBoundScope: { OrganizationID: 'org-real' },
+            ContextUser: caller,
+        });
+        expect(deniedWf.Success).toBe(false);
+        expect(deniedWf.Status).toBe('Rejected');
+        expect(wfSpy).not.toHaveBeenCalled();
+
+        const deniedReq = await ActionEngineServer.Instance.CreateNamedPersonRequestForAction(params, {
+            TargetUserID: 'u-2',
+            TargetAgentID: 'agent-1',
+            Subject: 'Hello',
+            Message: 'World',
+            ContextUser: caller,
+        });
+        expect(deniedReq.Success).toBe(false);
+        expect(reqSpy).not.toHaveBeenCalled();
+
+        const allowedParams = buildParams({
+            AudienceContract: {
+                SupportsAudience: true,
+                AllowsHostGrantedWorkflowSubmission: true,
+                AllowsNamedPersonAgentRequests: true,
+            },
+        });
+        const allowedWf = await ActionEngineServer.Instance.SubmitHostGrantedWorkflowForAction(allowedParams, {
+            WorkflowKey: 'wf-1',
+            Inputs: {},
+            ServerBoundScope: { OrganizationID: 'org-real' },
+            ContextUser: caller,
+        });
+        expect(allowedWf.Success).toBe(true);
+        expect(wfSpy).toHaveBeenCalledOnce();
+
+        const allowedReq = await ActionEngineServer.Instance.CreateNamedPersonRequestForAction(allowedParams, {
+            TargetUserID: 'u-2',
+            TargetAgentID: 'agent-1',
+            Subject: 'Hello',
+            Message: 'World',
+            ContextUser: caller,
+        });
+        expect(allowedReq.Success).toBe(true);
+        expect(reqSpy).toHaveBeenCalledOnce();
     });
 });

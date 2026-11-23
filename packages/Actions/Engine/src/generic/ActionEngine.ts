@@ -19,9 +19,15 @@ import {
     DidFieldChangeToValue,
     ActionAudienceReaders,
     AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    CreateContractGovernedNamedPersonRequest,
     EnforceServerBoundHiddenScopeParams,
     RequiresReceiptOnlyChatReturn,
     ShapeActionReturnForChat,
+    SubmitContractGovernedWorkflow,
+    type HostGrantedWorkflowSubmissionPayload,
+    type HostGrantedWorkflowSubmissionResult,
+    type NamedPersonAgentRequestPayload,
+    type NamedPersonAgentRequestReceipt,
     type ReceiptOnlyReturnShapingPolicy,
     type ServerBoundHiddenScopeParamDeclaration,
     type SupportsAudienceContract
@@ -887,6 +893,38 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    ): ServerBoundHiddenScopeParamDeclaration[] {
       const contract = this.resolveAudienceContract(params, actionInstance);
       return [...(contract?.HiddenScopeParams ?? [])];
+   }
+
+   /**
+    * Submits a host-granted workflow for `params`, failing closed unless the action's resolved
+    * {@link SupportsAudienceContract.AllowsHostGrantedWorkflowSubmission} is explicitly `true`.
+    */
+   public async SubmitHostGrantedWorkflowForAction(
+      params: RunActionParams,
+      payload: HostGrantedWorkflowSubmissionPayload
+   ): Promise<HostGrantedWorkflowSubmissionResult> {
+      const actionInstance =
+         params.Action && params.Action.Type !== 'Runtime'
+            ? this.GetOrCreateActionInstance(params)
+            : null;
+      const contract = this.resolveAudienceContract(params, actionInstance);
+      return SubmitContractGovernedWorkflow(contract, payload, params.Action?.Name);
+   }
+
+   /**
+    * Dispatches a named-person agent request for `params`, failing closed unless the action's resolved
+    * {@link SupportsAudienceContract.AllowsNamedPersonAgentRequests} is explicitly `true`.
+    */
+   public async CreateNamedPersonRequestForAction(
+      params: RunActionParams,
+      payload: NamedPersonAgentRequestPayload
+   ): Promise<NamedPersonAgentRequestReceipt> {
+      const actionInstance =
+         params.Action && params.Action.Type !== 'Runtime'
+            ? this.GetOrCreateActionInstance(params)
+            : null;
+      const contract = this.resolveAudienceContract(params, actionInstance);
+      return CreateContractGovernedNamedPersonRequest(contract, payload, params.Action?.Name);
    }
 
    /**

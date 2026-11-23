@@ -41,8 +41,12 @@ import {
     InitializeConversationDetailWritePermissionProviders,
     ResolveConversationDetailWriteContext,
 } from '../services/ConversationDetailWritePermissionWiring.js';
+import { TaskGraphAgentRunner } from '../services/TaskGraphAgentRunner.js';
 import { ActionResolver } from '../resolvers/ActionResolver.js';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { AgentRunner } from '@memberjunction/ai-agents';
+import type { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { RunView } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import type { AppContext } from '../types.js';
 
@@ -134,6 +138,8 @@ describe('MJServer Host-Granted Workflow Submission & ActionResolver Receipt Sha
             TaskIDMap: new Map(),
         });
         vi.spyOn(ActionEngineBase.Instance, 'Loaded', 'get').mockReturnValue(false);
+        vi.spyOn(ActionEngineBase.Instance, 'Config').mockResolvedValue();
+        vi.spyOn(ActionEngineBase.Instance, 'GetActionByName').mockReturnValue(undefined);
 
         const caller = makeUser('user-1');
         const reader = makeUser('user-2');
@@ -244,6 +250,86 @@ describe('MJServer Host-Granted Workflow Submission & ActionResolver Receipt Sha
         expect(parsedData.ChatReceipt?.ReferenceID).toBe('task-501');
         expect(parsedData.Params).toEqual([{ Name: 'WorkflowTaskID', Type: 'Output', Value: 'task-501' }]);
     });
+
+    it('loads ActionEngineBase when unloaded, binds top-level task.actionName without BoundActionIDs, and fails closed when ServerBoundScope has no resolvable action target', async () => {
+        type LegacyActionNode = {
+            tempId: string;
+            name: string;
+            description: string;
+            dependsOn: string[];
+            actionName: string;
+        };
+        const legacyTask: LegacyActionNode = {
+            tempId: 'step-top',
+            name: 'Top Level Step',
+            description: 'Uses top-level actionName',
+            dependsOn: [],
+            actionName: 'Send Digest Action',
+        };
+        HostGrantedWorkflowCatalog.Instance.Register({
+            WorkflowKey: 'top-level-action-wf',
+            BuildSpec: () =>
+                ({
+                    workflowName: 'Top-Level Action Workflow',
+                    tasks: [legacyTask],
+                    durable: true,
+                }) as Partial<import('@memberjunction/ai-core-plus').TaskGraphSpec> as import('@memberjunction/ai-core-plus').TaskGraphSpec,
+        });
+
+        const submitSpy = vi.spyOn(TaskGraphService.prototype, 'Submit').mockResolvedValue({
+            Success: true,
+            ParentTaskID: 'parent-top-1',
+            TaskIDMap: new Map(),
+        });
+        vi.spyOn(ActionEngineBase.Instance, 'Loaded', 'get').mockReturnValue(false);
+        const configSpy = vi.spyOn(ActionEngineBase.Instance, 'Config').mockResolvedValue();
+        vi.spyOn(ActionEngineBase.Instance, 'GetActionByName').mockImplementation((name: string) =>
+            name === 'Send Digest Action' ? ({ ID: 'act-top-level-id' } as MJActionEntityExtended) : undefined
+        );
+
+        const caller = makeUser('user-1');
+        const provider = { ProviderType: 'Database' } as IMetadataProvider;
+        const submitter = new MJServerHostGrantedWorkflowSubmitter();
+        const boundRes = await submitter.SubmitHostGrantedWorkflow({
+            WorkflowKey: 'top-level-action-wf',
+            Inputs: {},
+            ServerBoundScope: { OrganizationID: 'org-real' },
+            ContextUser: caller,
+            Provider: provider,
+        });
+
+        expect(boundRes.Success).toBe(true);
+        expect(configSpy).toHaveBeenCalledWith(false, caller, provider);
+        expect(submitSpy.mock.calls[0]?.[1]?.SecurityEnvelope?.BoundActionParams).toEqual({
+            'act-top-level-id': { OrganizationID: 'org-real' },
+        });
+
+        // Fail closed when ServerBoundScope is non-empty and no action IDs resolve
+        vi.spyOn(ActionEngineBase.Instance, 'GetActionByName').mockReturnValue(undefined);
+        const rejectedRes = await submitter.SubmitHostGrantedWorkflow({
+            WorkflowKey: 'top-level-action-wf',
+            Inputs: {},
+            ServerBoundScope: { OrganizationID: 'org-real' },
+            ContextUser: caller,
+            Provider: provider,
+        });
+        expect(rejectedRes.Success).toBe(false);
+        expect(rejectedRes.Status).toBe('Rejected');
+        expect(rejectedRes.ErrorMessage).toContain('ServerBoundScope');
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+
+        // Fail closed when AudienceContract has AllowsHostGrantedWorkflowSubmission: false
+        const disallowedRes = await submitter.SubmitHostGrantedWorkflow({
+            WorkflowKey: 'top-level-action-wf',
+            Inputs: {},
+            ServerBoundScope: { OrganizationID: 'org-real' },
+            AudienceContract: { SupportsAudience: true, AllowsHostGrantedWorkflowSubmission: false },
+            ContextUser: caller,
+            Provider: provider,
+        });
+        expect(disallowedRes.Success).toBe(false);
+        expect(disallowedRes.Status).toBe('Rejected');
+    });
 });
 
 describe('MJServer Pluggable Conversation-Detail Write Permission Wiring (MJ-4)', () => {
@@ -319,9 +405,94 @@ describe('MJServer Pluggable Conversation-Detail Write Permission Wiring (MJ-4)'
         expect(defaultUserMayWriteSpy).toHaveBeenCalledOnce();
     });
 
-    it('ResolveConversationDetailWriteContext returns null for non-database provider', async () => {
-        const provider = { ProviderType: 'GraphQL' } as IMetadataProvider;
-        const res = await ResolveConversationDetailWriteContext(provider, makeUser('user-1'), 'conv-1');
+    it('ResolveConversationDetailWriteContext returns null for non-database provider and AuthorizeConversationDetailWrite fails closed on DB lookup error', async () => {
+        const gqlProvider = { ProviderType: 'GraphQL' } as IMetadataProvider;
+        const res = await ResolveConversationDetailWriteContext(gqlProvider, makeUser('user-1'), 'conv-1');
         expect(res).toBeNull();
+
+        ConversationDetailWritePermissionRegistry.Instance.Register('community', new CustomRulePermissionProvider());
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn().mockRejectedValue(new Error('DB connection lost')),
+        } as Pick<RunView, 'RunView'> as RunView);
+
+        const dbProvider = { ProviderType: 'Database' } as IMetadataProvider;
+        const detail = { ConversationID: 'conv-err', Role: 'User' } as MJConversationDetailEntity;
+        const failClosed = await AuthorizeConversationDetailWrite({
+            Provider: dbProvider,
+            ContextUser: makeUser('user-1'),
+            Operation: 'create',
+            ConversationDetail: detail,
+        });
+        expect(failClosed.Allowed).toBe(false);
+        expect(failClosed.Reason).toBe('Unable to verify conversation write permissions.');
+    });
+});
+
+describe('TaskGraphAgentRunner whole-workflow cumulative budget seeding (CR-5)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('seeds child treeBudget with WorkflowMaxCostUsd and prior CumulativeCostUsd so multi-node breaches report whole-workflow Limit and PriorCost + ChildCost', async () => {
+        const fakeAgent = { ID: 'agent-1', Name: 'Step Agent' } as MJAIAgentEntityExtended;
+        const fakeProvider = {
+            ProviderType: 'Database',
+            GetEntityObject: vi.fn().mockResolvedValue({
+                Load: vi.fn().mockResolvedValue(true),
+                ID: fakeAgent.ID,
+                Name: fakeAgent.Name,
+            }),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementation(async (runParams) => {
+            const budget = runParams.treeBudget!;
+            // Prior spend ($0.18) + child spend ($0.10) = $0.28 >= $0.25 workflow cap
+            const childSpend = 0.10;
+            const totalCumulative = (budget.cumulativeCostUsd ?? 0) + childSpend;
+            return {
+                success: false,
+                payload: null,
+                agentRun: { ID: 'run-2', TotalCost: childSpend, ErrorMessage: 'Workflow USD cost budget exceeded' } as MJAIAgentRunEntityExtended,
+                limitExceeded: {
+                    Code: 'WORKFLOW_COST_LIMIT_EXCEEDED',
+                    Dimension: 'CostUsd',
+                    Limit: budget.workflowMaxCostUsd ?? 0,
+                    CumulativeCostUsd: totalCumulative,
+                    ElapsedWallClockMs: 500,
+                    WorkflowStartedAtMs: budget.workflowStartedAtMs ?? Date.now(),
+                    BreachedAtMs: Date.now(),
+                    CurrentValue: totalCumulative,
+                    SourceScope: 'Workflow',
+                    Reason: `Workflow USD cost budget exceeded ($${totalCumulative.toFixed(4)}/$${(budget.workflowMaxCostUsd ?? 0).toFixed(4)})`,
+                },
+            };
+        });
+
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask({
+            TaskID: 'task-node-2',
+            AgentID: 'agent-1',
+            InputPayload: {},
+            DependencyOutputs: new Map(),
+            Provider: fakeProvider,
+            ContextUser: makeUser('user-1'),
+            WorkflowBudget: {
+                ParentTaskID: 'parent-wf-1',
+                WorkflowMaxCostUsd: 0.25,
+                WorkflowMaxDurationMs: 60_000,
+                WorkflowStartedAtMs: Date.now() - 1_000,
+                CumulativeCostUsd: 0.18,
+                RemainingCostUsd: 0.07,
+                RemainingWallClockMs: 59_000,
+            },
+        });
+
+        expect(runAgentSpy).toHaveBeenCalledOnce();
+        const passedParams = runAgentSpy.mock.calls[0]?.[0];
+        expect(passedParams?.workflowMaxCostUsd).toBe(0.25);
+        expect(passedParams?.treeBudget?.workflowMaxCostUsd).toBe(0.25);
+        expect(passedParams?.treeBudget?.cumulativeCostUsd).toBeCloseTo(0.18, 6);
+        expect(result.LimitExceeded?.Limit).toBe(0.25);
+        expect(result.LimitExceeded?.CumulativeCostUsd).toBeCloseTo(0.28, 6);
     });
 });

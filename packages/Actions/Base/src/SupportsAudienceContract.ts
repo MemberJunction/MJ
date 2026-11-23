@@ -1,4 +1,4 @@
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, TenantContext, UserInfo } from '@memberjunction/core';
 import type { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { ActionAudienceReaders, type ActionRunAudience } from './ActionAudience';
@@ -185,6 +185,8 @@ export interface HostGrantedWorkflowSubmissionPayload {
         MaxWallClockMs?: number;
         StartedAtMs?: number;
     };
+    /** Optional action contract governing whether host-granted workflow submission is allowed. */
+    AudienceContract?: SupportsAudienceContract;
     ContextUser: UserInfo;
     Provider?: IMetadataProvider;
 }
@@ -241,9 +243,21 @@ export class HostGrantedWorkflowSubmitterRegistry extends BaseSingleton<HostGran
 
     /**
      * Submits a host-granted workflow through the registered submitter, failing closed
-     * with `Status: 'Unavailable'` when no submitter is registered.
+     * when `AudienceContract` disallows workflow submission or when no submitter is registered.
      */
     public async Submit(payload: HostGrantedWorkflowSubmissionPayload): Promise<HostGrantedWorkflowSubmissionResult> {
+        if (payload.AudienceContract !== undefined) {
+            const gate = AssertAllowsHostGrantedWorkflowSubmission(payload.AudienceContract);
+            if ('ErrorMessage' in gate) {
+                return {
+                    Success: false,
+                    WorkflowKey: payload.WorkflowKey,
+                    Status: 'Rejected',
+                    ReceiptMessage: `Workflow '${payload.WorkflowKey}' submission was rejected.`,
+                    ErrorMessage: gate.ErrorMessage,
+                };
+            }
+        }
         if (!this._submitter) {
             return {
                 Success: false,
@@ -280,6 +294,10 @@ export interface NamedPersonAgentRequestPayload {
     Audience?: ActionAudienceDescriptor;
     ServerBoundScope?: ServerBoundScopeBindings;
     Metadata?: ContractJSONObject;
+    /** Optional action contract governing whether named-person agent requests are allowed. */
+    AudienceContract?: SupportsAudienceContract;
+    /** Optional explicit tenant context of the target recipient for cross-tenant verification. */
+    TargetUserTenantContext?: TenantContext;
     ContextUser: UserInfo;
     Provider?: IMetadataProvider;
 }
@@ -335,9 +353,20 @@ export class NamedPersonAgentRequestRegistry extends BaseSingleton<NamedPersonAg
 
     /**
      * Dispatches a named-person agent request through the registered handler, failing closed
-     * when no handler is registered.
+     * when `AudienceContract` disallows named-person requests or when no handler is registered.
      */
     public async CreateRequest(payload: NamedPersonAgentRequestPayload): Promise<NamedPersonAgentRequestReceipt> {
+        if (payload.AudienceContract !== undefined) {
+            const gate = AssertAllowsNamedPersonAgentRequests(payload.AudienceContract);
+            if ('ErrorMessage' in gate) {
+                return {
+                    Success: false,
+                    TargetUserID: payload.TargetUserID,
+                    ReceiptMessage: `Request for user '${payload.TargetUserID}' was rejected.`,
+                    ErrorMessage: gate.ErrorMessage,
+                };
+            }
+        }
         if (!this._handler) {
             return {
                 Success: false,
@@ -395,7 +424,112 @@ export function IsSupportsAudienceContract(
             return false;
         }
     }
+    if ('SupportedModes' in candidate && candidate.SupportedModes !== undefined) {
+        if (
+            !Array.isArray(candidate.SupportedModes) ||
+            !candidate.SupportedModes.every(
+                (mode) => mode === 'Caller' || mode === 'Intersection' || mode === 'ScopeCommonReach'
+            )
+        ) {
+            return false;
+        }
+    }
+    if (
+        'AllowsHostGrantedWorkflowSubmission' in candidate &&
+        candidate.AllowsHostGrantedWorkflowSubmission !== undefined &&
+        typeof candidate.AllowsHostGrantedWorkflowSubmission !== 'boolean'
+    ) {
+        return false;
+    }
+    if (
+        'AllowsNamedPersonAgentRequests' in candidate &&
+        candidate.AllowsNamedPersonAgentRequests !== undefined &&
+        typeof candidate.AllowsNamedPersonAgentRequests !== 'boolean'
+    ) {
+        return false;
+    }
     return true;
+}
+
+/**
+ * Verifies that a {@link SupportsAudienceContract} explicitly permits host-granted workflow submission.
+ */
+export function AssertAllowsHostGrantedWorkflowSubmission(
+    contract: SupportsAudienceContract | undefined,
+    actionName?: string
+): { Allowed: true } | { Allowed: false; ErrorMessage: string } {
+    if (contract?.AllowsHostGrantedWorkflowSubmission === true) {
+        return { Allowed: true };
+    }
+    const label = actionName ? `Action '${actionName}'` : 'This action';
+    return {
+        Allowed: false,
+        ErrorMessage: `${label} is not authorized to submit host-granted workflows (AllowsHostGrantedWorkflowSubmission must be true).`,
+    };
+}
+
+/**
+ * Verifies that a {@link SupportsAudienceContract} explicitly permits dispatching named-person agent requests.
+ */
+export function AssertAllowsNamedPersonAgentRequests(
+    contract: SupportsAudienceContract | undefined,
+    actionName?: string
+): { Allowed: true } | { Allowed: false; ErrorMessage: string } {
+    if (contract?.AllowsNamedPersonAgentRequests === true) {
+        return { Allowed: true };
+    }
+    const label = actionName ? `Action '${actionName}'` : 'This action';
+    return {
+        Allowed: false,
+        ErrorMessage: `${label} is not authorized to dispatch named-person agent requests (AllowsNamedPersonAgentRequests must be true).`,
+    };
+}
+
+/**
+ * Submits a host-granted workflow only after verifying {@link SupportsAudienceContract.AllowsHostGrantedWorkflowSubmission}.
+ */
+export async function SubmitContractGovernedWorkflow(
+    contract: SupportsAudienceContract | undefined,
+    payload: HostGrantedWorkflowSubmissionPayload,
+    actionName?: string
+): Promise<HostGrantedWorkflowSubmissionResult> {
+    const gate = AssertAllowsHostGrantedWorkflowSubmission(contract, actionName);
+    if ('ErrorMessage' in gate) {
+        return {
+            Success: false,
+            WorkflowKey: payload.WorkflowKey,
+            Status: 'Rejected',
+            ReceiptMessage: `Workflow '${payload.WorkflowKey}' submission was rejected.`,
+            ErrorMessage: gate.ErrorMessage,
+        };
+    }
+    return HostGrantedWorkflowSubmitterRegistry.Instance.Submit({
+        ...payload,
+        AudienceContract: contract,
+    });
+}
+
+/**
+ * Dispatches a named-person agent request only after verifying {@link SupportsAudienceContract.AllowsNamedPersonAgentRequests}.
+ */
+export async function CreateContractGovernedNamedPersonRequest(
+    contract: SupportsAudienceContract | undefined,
+    payload: NamedPersonAgentRequestPayload,
+    actionName?: string
+): Promise<NamedPersonAgentRequestReceipt> {
+    const gate = AssertAllowsNamedPersonAgentRequests(contract, actionName);
+    if ('ErrorMessage' in gate) {
+        return {
+            Success: false,
+            TargetUserID: payload.TargetUserID,
+            ReceiptMessage: `Request for user '${payload.TargetUserID}' was rejected.`,
+            ErrorMessage: gate.ErrorMessage,
+        };
+    }
+    return NamedPersonAgentRequestRegistry.Instance.CreateRequest({
+        ...payload,
+        AudienceContract: contract,
+    });
 }
 
 /**
@@ -704,13 +838,27 @@ export function ShapeActionReturnForChat(
 
     const retainedParams: ActionParam[] = [];
     const redactedOutputParamNames: string[] = [];
+    const redactedSeenLower = new Set<string>();
     const retainedOutputParamNames: string[] = [];
     let referenceId: string | undefined;
     const referenceParamLower = policy.ReferenceIDParamName?.trim().toLowerCase();
 
+    const recordRedacted = (name: string, lowerName: string): void => {
+        if (!redactedSeenLower.has(lowerName)) {
+            redactedSeenLower.add(lowerName);
+            redactedOutputParamNames.push(name);
+        }
+    };
+
     for (const param of result.Params ?? []) {
         const normalizedType = param.Type.trim().toLowerCase();
         const lowerName = param.Name.trim().toLowerCase();
+
+        // Always strip hidden scope and server-bound parameters regardless of Type ('Input' | 'Output' | 'Both').
+        if (strippedSet.has(lowerName) || param.Bound === true) {
+            recordRedacted(param.Name, lowerName);
+            continue;
+        }
 
         if (referenceParamLower && lowerName === referenceParamLower && typeof param.Value === 'string' && param.Value.trim().length > 0) {
             referenceId = param.Value.trim();
@@ -721,12 +869,12 @@ export function ShapeActionReturnForChat(
             continue;
         }
 
-        const isAllowed = allowedSet.has(lowerName) && !strippedSet.has(lowerName);
+        const isAllowed = allowedSet.has(lowerName);
         if (isAllowed) {
             retainedParams.push(param);
             retainedOutputParamNames.push(param.Name);
         } else {
-            redactedOutputParamNames.push(param.Name);
+            recordRedacted(param.Name, lowerName);
         }
     }
 

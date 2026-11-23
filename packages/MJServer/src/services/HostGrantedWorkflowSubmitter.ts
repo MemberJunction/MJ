@@ -1,5 +1,6 @@
 import {
     ActionEngineBase,
+    AssertAllowsHostGrantedWorkflowSubmission,
     HostGrantedWorkflowSubmitterRegistry,
     type HostGrantedWorkflowSubmissionPayload,
     type HostGrantedWorkflowSubmissionResult,
@@ -8,8 +9,10 @@ import {
 } from '@memberjunction/actions-base';
 import {
     BuildTaskSecurityEnvelope,
+    ConfigOf,
     type BoundActionParams,
     type TaskGraphSpec,
+    type TaskGraphSpecNode,
     type TaskRunScope,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
@@ -84,6 +87,19 @@ export class MJServerHostGrantedWorkflowSubmitter implements HostGrantedWorkflow
             };
         }
 
+        if (payload.AudienceContract !== undefined) {
+            const contractGate = AssertAllowsHostGrantedWorkflowSubmission(payload.AudienceContract);
+            if ('ErrorMessage' in contractGate) {
+                return {
+                    Success: false,
+                    WorkflowKey: workflowKey,
+                    Status: 'Rejected',
+                    ReceiptMessage: `Workflow '${workflowKey}' submission was rejected.`,
+                    ErrorMessage: contractGate.ErrorMessage,
+                };
+            }
+        }
+
         const definition = HostGrantedWorkflowCatalog.Instance.GetWorkflow(workflowKey);
         if (!definition) {
             return {
@@ -103,7 +119,7 @@ export class MJServerHostGrantedWorkflowSubmitter implements HostGrantedWorkflow
                 definition.DefaultEnvironmentID?.trim() ||
                 MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
-            const envelope = this.buildSecurityEnvelope(payload, spec, definition);
+            const envelope = await this.buildSecurityEnvelope(payload, spec, definition, provider);
             const result = await new TaskGraphService().Submit(spec, {
                 EnvironmentID: environmentID,
                 ConversationDetailID: payload.ConversationDetailID ?? null,
@@ -144,15 +160,18 @@ export class MJServerHostGrantedWorkflowSubmitter implements HostGrantedWorkflow
         }
     }
 
-    private buildSecurityEnvelope(
+    private async buildSecurityEnvelope(
         payload: HostGrantedWorkflowSubmissionPayload,
         spec: TaskGraphSpec,
-        definition: HostGrantedWorkflowDefinition
-    ): TaskSecurityEnvelope | undefined {
-        const boundActionParams = this.buildBoundActionParams(
+        definition: HostGrantedWorkflowDefinition,
+        provider: IMetadataProvider
+    ): Promise<TaskSecurityEnvelope | undefined> {
+        const boundActionParams = await this.buildBoundActionParams(
             payload.ServerBoundScope,
             spec,
-            definition.BoundActionIDs
+            definition.BoundActionIDs,
+            payload.ContextUser,
+            provider
         );
         const runScope: TaskRunScope | undefined = payload.RunScope
             ? {
@@ -181,11 +200,13 @@ export class MJServerHostGrantedWorkflowSubmitter implements HostGrantedWorkflow
         });
     }
 
-    private buildBoundActionParams(
+    private async buildBoundActionParams(
         serverBoundScope: ServerBoundScopeBindings,
         spec: TaskGraphSpec,
-        explicitActionIds: ReadonlyArray<string> | undefined
-    ): BoundActionParams | undefined {
+        explicitActionIds: ReadonlyArray<string> | undefined,
+        contextUser: HostGrantedWorkflowSubmissionPayload['ContextUser'],
+        provider: IMetadataProvider
+    ): Promise<BoundActionParams | undefined> {
         const scopeEntries = Object.entries(serverBoundScope).filter(
             (entry): entry is [string, NonNullable<ServerBoundScopeBindings[string]>] =>
                 entry[1] !== undefined
@@ -194,18 +215,16 @@ export class MJServerHostGrantedWorkflowSubmitter implements HostGrantedWorkflow
             return undefined;
         }
 
-        const targetActionIds = new Set<string>(explicitActionIds ?? []);
-        for (const task of spec.tasks ?? []) {
-            if (task.kind !== 'Action' || !ActionEngineBase.Instance.Loaded || !task.configuration) {
-                continue;
-            }
-            const actionName =
-                'actionName' in task.configuration && typeof task.configuration.actionName === 'string'
-                    ? task.configuration.actionName
-                    : undefined;
-            if (!actionName) {
-                continue;
-            }
+        const targetActionIds = new Set<string>(
+            (explicitActionIds ?? []).map((id) => id.trim()).filter((id) => id.length > 0)
+        );
+        const taskActionNames = this.extractActionNamesFromTasks(spec.tasks ?? []);
+
+        if (taskActionNames.length > 0 && !ActionEngineBase.Instance.Loaded) {
+            await ActionEngineBase.Instance.Config(false, contextUser, provider);
+        }
+
+        for (const actionName of taskActionNames) {
             const action = ActionEngineBase.Instance.GetActionByName(actionName);
             if (action?.ID) {
                 targetActionIds.add(action.ID);
@@ -213,7 +232,9 @@ export class MJServerHostGrantedWorkflowSubmitter implements HostGrantedWorkflow
         }
 
         if (targetActionIds.size === 0) {
-            return undefined;
+            throw new Error(
+                'Non-empty ServerBoundScope could not be bound to any action target in workflow spec; refusing submission to prevent dropping server-bound scope.'
+            );
         }
 
         const boundParams: BoundActionParams = {};
@@ -223,6 +244,33 @@ export class MJServerHostGrantedWorkflowSubmitter implements HostGrantedWorkflow
             boundParams[actionId] = { ...scopeRecord };
         }
         return boundParams;
+    }
+
+    private extractActionNamesFromTasks(tasks: ReadonlyArray<TaskGraphSpecNode>): string[] {
+        type TaskNodeWithTopLevelActionName = TaskGraphSpecNode & { actionName?: string };
+        const names: string[] = [];
+        for (const task of tasks) {
+            const actionCfg = ConfigOf(task, 'Action');
+            const enqueueCfg = ConfigOf(task, 'Enqueue');
+            const configActionName =
+                actionCfg?.actionName ??
+                enqueueCfg?.actionName ??
+                (task.configuration &&
+                typeof task.configuration === 'object' &&
+                'actionName' in task.configuration &&
+                typeof task.configuration.actionName === 'string'
+                    ? task.configuration.actionName
+                    : undefined);
+            const topLevelActionName =
+                typeof (task as TaskNodeWithTopLevelActionName).actionName === 'string'
+                    ? (task as TaskNodeWithTopLevelActionName).actionName
+                    : undefined;
+            const resolvedName = (configActionName ?? topLevelActionName)?.trim();
+            if (resolvedName) {
+                names.push(resolvedName);
+            }
+        }
+        return names;
     }
 }
 

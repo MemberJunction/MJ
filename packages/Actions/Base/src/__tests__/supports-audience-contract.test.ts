@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import type { ActionResultSimple, RunActionParams } from '../ActionEngine-Base';
 import {
+    AssertAllowsHostGrantedWorkflowSubmission,
+    AssertAllowsNamedPersonAgentRequests,
+    CreateContractGovernedNamedPersonRequest,
     EnforceServerBoundHiddenScopeParams,
     HasServerBoundHiddenScopeParams,
     HostGrantedWorkflowSubmitterRegistry,
@@ -15,6 +18,7 @@ import {
     SERVER_BOUND_SCOPE_MISSING_RESULT_CODE,
     SERVER_BOUND_SCOPE_SPOOFING_RESULT_CODE,
     ShapeActionReturnForChat,
+    SubmitContractGovernedWorkflow,
     type HostGrantedWorkflowSubmissionPayload,
     type HostGrantedWorkflowSubmitter,
     type NamedPersonAgentRequestHandler,
@@ -56,6 +60,24 @@ describe('SupportsAudienceContract (packages/Actions/Base)', () => {
                 IsSupportsAudienceContract({
                     SupportsAudience: true,
                     HiddenScopeParams: [{ ParamName: '', Source: 'ContextUser.ID' }],
+                })
+            ).toBe(false);
+            expect(
+                IsSupportsAudienceContract({
+                    SupportsAudience: true,
+                    AllowsHostGrantedWorkflowSubmission: 'true',
+                })
+            ).toBe(false);
+            expect(
+                IsSupportsAudienceContract({
+                    SupportsAudience: true,
+                    AllowsNamedPersonAgentRequests: 1,
+                })
+            ).toBe(false);
+            expect(
+                IsSupportsAudienceContract({
+                    SupportsAudience: true,
+                    SupportedModes: ['InvalidMode'],
                 })
             ).toBe(false);
         });
@@ -241,6 +263,34 @@ describe('SupportsAudienceContract (packages/Actions/Base)', () => {
             expect(shaped.Result.ChatReceipt).toEqual(shaped.Receipt);
         });
 
+        it('strips injected hidden Input/Bound scope params from shapedResult.Params', () => {
+            const policy: ReceiptOnlyReturnShapingPolicy = {
+                Enabled: true,
+                AllowedReceiptParamNames: ['WorkflowTaskID'],
+                ReferenceIDParamName: 'WorkflowTaskID',
+            };
+            const raw: ActionResultSimple = {
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Public topic' },
+                    { Name: 'OrganizationID', Type: 'Input', Value: 'org-secret', Bound: true },
+                    { Name: 'InternalTenantTag', Type: 'Input', Value: 'tenant-secret' },
+                    { Name: 'ArbitraryBound', Type: 'Input', Value: 'bound-secret', Bound: true },
+                    { Name: 'WorkflowTaskID', Type: 'Output', Value: 'task-99' },
+                ],
+            };
+
+            const shaped = ShapeActionReturnForChat('Test Action', 'act-9', raw, policy, ['OrganizationID', 'InternalTenantTag']);
+            expect(shaped.Result.Params?.map((p) => p.Name)).toEqual(['Topic', 'WorkflowTaskID']);
+            expect(shaped.Result.Params?.some((p) => p.Bound === true)).toBe(false);
+            expect(shaped.Receipt.RedactedOutputParamNames).toEqual([
+                'OrganizationID',
+                'InternalTenantTag',
+                'ArbitraryBound',
+            ]);
+        });
+
         it('honours ApplyOnlyWhenAudienceScoped flag', () => {
             const contract: SupportsAudienceContract = {
                 SupportsAudience: true,
@@ -305,6 +355,65 @@ describe('SupportsAudienceContract (packages/Actions/Base)', () => {
             const registeredReq = await NamedPersonAgentRequestRegistry.Instance.CreateRequest(reqPayload);
             expect(registeredReq.Success).toBe(true);
             expect(registeredReq.AgentRequestID).toBe('req-77');
+        });
+
+        it('fails closed when contract capability flags are false or omitted', async () => {
+            const caller = makeUser('user-1');
+            const submitSpy = vi.fn().mockResolvedValue({
+                Success: true,
+                WorkflowKey: 'notify-owner',
+                Status: 'Submitted',
+                ReceiptMessage: 'ok',
+            });
+            HostGrantedWorkflowSubmitterRegistry.Instance.Register({ SubmitHostGrantedWorkflow: submitSpy });
+
+            const reqSpy = vi.fn().mockResolvedValue({
+                Success: true,
+                TargetUserID: 'user-2',
+                ReceiptMessage: 'ok',
+            });
+            NamedPersonAgentRequestRegistry.Instance.Register({ CreateNamedPersonRequest: reqSpy });
+
+            const deniedContract: SupportsAudienceContract = {
+                SupportsAudience: true,
+                AllowsHostGrantedWorkflowSubmission: false,
+                AllowsNamedPersonAgentRequests: false,
+            };
+
+            expect(AssertAllowsHostGrantedWorkflowSubmission(deniedContract).Allowed).toBe(false);
+            expect(AssertAllowsNamedPersonAgentRequests(deniedContract).Allowed).toBe(false);
+
+            const wfDenied = await SubmitContractGovernedWorkflow(deniedContract, {
+                WorkflowKey: 'notify-owner',
+                Inputs: {},
+                ServerBoundScope: { OrganizationID: 'org-1' },
+                ContextUser: caller,
+            });
+            expect(wfDenied.Success).toBe(false);
+            expect(wfDenied.Status).toBe('Rejected');
+            expect(submitSpy).not.toHaveBeenCalled();
+
+            const reqDenied = await CreateContractGovernedNamedPersonRequest(deniedContract, {
+                TargetUserID: 'user-2',
+                TargetAgentID: 'agent-1',
+                Subject: 'Hi',
+                Message: 'Body',
+                ContextUser: caller,
+            });
+            expect(reqDenied.Success).toBe(false);
+            expect(reqSpy).not.toHaveBeenCalled();
+
+            // Registry itself also enforces contract capability flags when AudienceContract is provided
+            const regWfDenied = await HostGrantedWorkflowSubmitterRegistry.Instance.Submit({
+                WorkflowKey: 'notify-owner',
+                Inputs: {},
+                ServerBoundScope: { OrganizationID: 'org-1' },
+                AudienceContract: { SupportsAudience: true },
+                ContextUser: caller,
+            });
+            expect(regWfDenied.Success).toBe(false);
+            expect(regWfDenied.Status).toBe('Rejected');
+            expect(submitSpy).not.toHaveBeenCalled();
         });
     });
 });

@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { IMetadataProvider, RunViewResult, UserInfo } from '@memberjunction/core';
+import type { EntityInfo, IMetadataProvider, RunViewResult, UserInfo } from '@memberjunction/core';
 import { RunView, WellKnownUserSource } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     ConversationDetailWritePermissionProvider,
     ConversationDetailWritePermissionRegistry,
+    ConversationSummaryLookupError,
     ResolveConversationSummaryForWritePermission,
     type ConversationDetailWritePermissionContext,
     type ConversationDetailWritePermissionVerdict,
@@ -401,6 +404,38 @@ describe('Pluggable ConversationDetailWritePermissionProvider (MJ-4)', () => {
         expect(resolved).toEqual(summary);
         expect(runViewFn).toHaveBeenCalledOnce();
     });
+
+    it('fails closed with Decision Deny when ResolveConversationSummaryForWritePermission throws or fails on DB lookup', async () => {
+        vi.spyOn(MJGlobal.Instance.ClassFactory, 'GetAllRegistrations').mockReturnValue([]);
+        ConversationDetailWritePermissionRegistry.Instance.Register('host-allow', new MockAllowProvider(false));
+
+        const failingRunView: Pick<RunView, 'RunView'> = {
+            RunView: vi.fn().mockRejectedValue(new Error('SQL connection timeout')),
+        };
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(failingRunView as RunView);
+
+        const provider = { ProviderType: 'Database' } as IMetadataProvider;
+        await expect(
+            ResolveConversationSummaryForWritePermission(provider, makeUser('u1'), 'conv-err')
+        ).rejects.toBeInstanceOf(ConversationSummaryLookupError);
+
+        const { instance, results } = createServerDetailInstance({ conversationId: 'conv-err' });
+        const verdict = await instance.EvaluatePluggableWritePermission('create');
+        expect(verdict).toEqual({
+            Decision: 'Deny',
+            Reason: 'Unable to verify conversation write permissions.',
+        });
+        expect(await instance.Save()).toBe(false);
+        expect(results[0]?.Message).toBe('Unable to verify conversation write permissions.');
+
+        // RunView returning Success=false also fails closed
+        const unsuccessfulRunView: Pick<RunView, 'RunView'> = {
+            RunView: vi.fn().mockResolvedValue({ Success: false, Results: [], ErrorMessage: 'Deadlock' }),
+        };
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(unsuccessfulRunView as RunView);
+        const verdictUnsuccessful = await instance.EvaluatePluggableWritePermission('update');
+        expect(verdictUnsuccessful.Decision).toBe('Deny');
+    });
 });
 
 describe('AudienceNamedPersonAgentRequestService (MJ-3)', () => {
@@ -409,8 +444,26 @@ describe('AudienceNamedPersonAgentRequestService (MJ-3)', () => {
         vi.restoreAllMocks();
     });
 
-    it('creates an MJAIAgentRequestEntity for an active target user and returns a sanitized receipt', async () => {
+    function makeRequestProvider(
+        savedRequest: Record<string, unknown>,
+        canCreate: boolean = true
+    ): IMetadataProvider {
+        const entityInfo = {
+            Name: 'MJ: AI Agent Requests',
+            CheckPermissions: vi.fn().mockReturnValue(canCreate),
+        } as Partial<EntityInfo> as EntityInfo;
+        return {
+            ProviderType: 'Database',
+            EntityByName: vi.fn().mockReturnValue(entityInfo),
+            GetEntityObject: vi.fn().mockResolvedValue(savedRequest),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+    }
+
+    it('creates an MJAIAgentRequestEntity for an active target user and returns a sanitized receipt without leaking ServerBoundScope into Comments', async () => {
         vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(makeUser('sys-1', 'Owner'));
+        vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
+
         const savedRequest = {
             ID: 'req-99',
             AgentID: '',
@@ -433,18 +486,20 @@ describe('AudienceNamedPersonAgentRequestService (MJ-3)', () => {
         const fakeRunView: Pick<RunView, 'RunView'> = { RunView: runViewMock };
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(fakeRunView as RunView);
 
-        const provider = {
-            ProviderType: 'Database',
-            GetEntityObject: vi.fn().mockResolvedValue(savedRequest),
-        } as Partial<IMetadataProvider> as IMetadataProvider;
+        const provider = makeRequestProvider(savedRequest, true);
+        const sender = makeUser('user-sender');
+        sender.TenantContext = { TenantID: 'tenant-1', Source: 'custom' };
 
         RegisterDefaultNamedPersonAgentRequestHandler();
         const receipt = await NamedPersonAgentRequestRegistry.Instance.CreateRequest({
             TargetUserID: 'user-target',
             TargetUserDisplayName: 'Alice',
+            TargetAgentID: 'agent-cos',
+            TargetUserTenantContext: { TenantID: 'tenant-1', Source: 'custom' },
             Subject: 'Approve deployment',
             Message: 'Sensitive internal deployment details.',
-            ContextUser: makeUser('user-sender'),
+            ServerBoundScope: { OrganizationID: 'org-secret-99', SecretDivision: 'M&A' },
+            ContextUser: sender,
             Provider: provider,
         });
 
@@ -456,7 +511,17 @@ describe('AudienceNamedPersonAgentRequestService (MJ-3)', () => {
             ReceiptMessage: 'Agent request queued for recipient Alice.',
         });
         expect(receipt.ReceiptMessage).not.toContain('Sensitive internal');
+        expect(canRunSpy).toHaveBeenCalledWith('agent-cos', sender);
         expect(savedRequest.RequestForUserID).toBe('user-target');
+        expect(savedRequest.Comments).not.toContain('org-secret-99');
+        expect(savedRequest.Comments).not.toContain('M&A');
+        expect(savedRequest.Comments).not.toContain('SecretDivision');
+        const parsedComments = JSON.parse(savedRequest.Comments) as {
+            HasServerBoundScope?: boolean;
+            ServerBoundScopeKeyCount?: number;
+        };
+        expect(parsedComments.HasServerBoundScope).toBe(true);
+        expect(parsedComments.ServerBoundScopeKeyCount).toBe(2);
         expect(savedRequest.Save).toHaveBeenCalledOnce();
     });
 
@@ -466,10 +531,11 @@ describe('AudienceNamedPersonAgentRequestService (MJ-3)', () => {
         const fakeRunView: Pick<RunView, 'RunView'> = { RunView: runViewMock };
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(fakeRunView as RunView);
 
-        const provider = { ProviderType: 'Database' } as IMetadataProvider;
+        const provider = makeRequestProvider({}, true);
         const service = new AudienceNamedPersonAgentRequestService();
         const receipt = await service.CreateNamedPersonRequest({
             TargetUserID: 'user-inactive',
+            TargetAgentID: 'agent-cos',
             Subject: 'Check in',
             Message: 'Details',
             ContextUser: makeUser('user-sender'),
@@ -477,6 +543,85 @@ describe('AudienceNamedPersonAgentRequestService (MJ-3)', () => {
         });
 
         expect(receipt.Success).toBe(false);
-        expect(receipt.ErrorMessage).toContain('not found or is inactive');
+        expect(receipt.ErrorMessage).toContain('not found');
+    });
+
+    it('fails closed when caller lacks Create permission on MJ: AI Agent Requests without escalating to systemUser', async () => {
+        const getSystemSpy = vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser');
+        const runViewSpy = vi.spyOn(RunView, 'FromMetadataProvider');
+        const provider = makeRequestProvider({}, false);
+
+        const service = new AudienceNamedPersonAgentRequestService();
+        const receipt = await service.CreateNamedPersonRequest({
+            TargetUserID: 'user-target',
+            TargetAgentID: 'agent-cos',
+            Subject: 'Approval',
+            Message: 'Please approve',
+            ContextUser: makeUser('unprivileged-user'),
+            Provider: provider,
+        });
+
+        expect(receipt.Success).toBe(false);
+        expect(receipt.ErrorMessage).toContain('lacks Create permission');
+        expect(getSystemSpy).not.toHaveBeenCalled();
+        expect(runViewSpy).not.toHaveBeenCalled();
+    });
+
+    it('fails closed on cross-tenant target mismatch', async () => {
+        const provider = makeRequestProvider({}, true);
+        const sender = makeUser('user-sender');
+        sender.TenantContext = { TenantID: 'tenant-alpha', Source: 'header' };
+        const cachedTarget = makeUser('user-beta');
+        cachedTarget.TenantContext = { TenantID: 'tenant-beta', Source: 'header' };
+        vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([cachedTarget]);
+
+        const service = new AudienceNamedPersonAgentRequestService();
+        const receipt = await service.CreateNamedPersonRequest({
+            TargetUserID: 'user-beta',
+            TargetAgentID: 'agent-cos',
+            Subject: 'Cross-tenant probe',
+            Message: 'Details',
+            ContextUser: sender,
+            Provider: provider,
+        });
+
+        expect(receipt.Success).toBe(false);
+        expect(receipt.ErrorMessage).toContain('Cross-tenant mismatch');
+    });
+
+    it('fails closed when TargetAgentID is omitted or when CanUserRunAgent returns false', async () => {
+        vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(false);
+        const provider = makeRequestProvider({}, true);
+        const service = new AudienceNamedPersonAgentRequestService();
+
+        const missingAgentReceipt = await service.CreateNamedPersonRequest({
+            TargetUserID: 'user-target',
+            Subject: 'Missing agent',
+            Message: 'Body',
+            ContextUser: makeUser('user-sender'),
+            Provider: provider,
+        });
+        expect(missingAgentReceipt.Success).toBe(false);
+        expect(missingAgentReceipt.ErrorMessage).toContain('TargetAgentID');
+
+        const runViewMock = vi
+            .fn()
+            .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'user-target', IsActive: true }] })
+            .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'type-approval' }] })
+            .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'agent-restricted', Status: 'Active' }] });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewMock } as Pick<RunView, 'RunView'> as RunView);
+
+        const unauthorizedAgentReceipt = await service.CreateNamedPersonRequest({
+            TargetUserID: 'user-target',
+            TargetAgentID: 'agent-restricted',
+            Subject: 'Restricted agent',
+            Message: 'Body',
+            ContextUser: makeUser('user-sender'),
+            Provider: provider,
+        });
+        expect(unauthorizedAgentReceipt.Success).toBe(false);
+        expect(unauthorizedAgentReceipt.ErrorMessage).toContain('CanUserRunAgent');
+        expect(canRunSpy).toHaveBeenCalledOnce();
     });
 });

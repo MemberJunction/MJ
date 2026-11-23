@@ -231,8 +231,25 @@ export class ConversationDetailWritePermissionRegistry extends BaseSingleton<Con
 }
 
 /**
+ * Error thrown when loading conversation metadata for write-permission evaluation fails
+ * due to a database/RunView failure, distinguishing lookup errors from genuinely absent conversations.
+ */
+export class ConversationSummaryLookupError extends Error {
+    public readonly ConversationID: string;
+
+    constructor(conversationId: string, detail: string) {
+        super(`Failed to load conversation metadata for ${conversationId}: ${detail}`);
+        this.name = 'ConversationSummaryLookupError';
+        this.ConversationID = conversationId;
+    }
+}
+
+/**
  * Resolves {@link ConversationSummaryForWritePermission} from an already-preloaded summary when available,
  * or performs a single narrow `ResultType: 'simple'` lookup as the system user.
+ *
+ * Throws {@link ConversationSummaryLookupError} if the underlying database lookup fails or throws, so callers
+ * fail closed rather than treating DB errors as unsaved conversations.
  */
 export async function ResolveConversationSummaryForWritePermission(
     provider: IMetadataProvider,
@@ -270,15 +287,23 @@ export async function ResolveConversationSummaryForWritePermission(
             },
             systemUser
         );
-        if (result.Success && Array.isArray(result.Results) && result.Results.length > 0) {
+        if (!result.Success) {
+            const detail = result.ErrorMessage || 'RunView returned Success=false';
+            LogError(`ResolveConversationSummaryForWritePermission failed for conversation ${conversationId}: ${detail}`);
+            throw new ConversationSummaryLookupError(conversationId, detail);
+        }
+        if (Array.isArray(result.Results) && result.Results.length > 0) {
             return result.Results[0];
         }
         return null;
     } catch (error) {
+        if (error instanceof ConversationSummaryLookupError) {
+            throw error;
+        }
         const msg = error instanceof Error ? error.message : String(error);
         LogError(
             `ResolveConversationSummaryForWritePermission failed for conversation ${conversationId}: ${msg}`
         );
-        return null;
+        throw new ConversationSummaryLookupError(conversationId, msg);
     }
 }

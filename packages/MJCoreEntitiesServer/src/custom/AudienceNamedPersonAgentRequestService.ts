@@ -1,4 +1,5 @@
 import {
+    EntityPermissionType,
     IMetadataProvider,
     LogError,
     Metadata,
@@ -13,11 +14,14 @@ import {
     MJUserEntity,
 } from '@memberjunction/core-entities';
 import {
+    AssertAllowsNamedPersonAgentRequests,
     NamedPersonAgentRequestRegistry,
     type NamedPersonAgentRequestHandler,
     type NamedPersonAgentRequestPayload,
     type NamedPersonAgentRequestReceipt,
 } from '@memberjunction/actions-base';
+import { AIEngine } from '@memberjunction/aiengine';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 
 const DEFAULT_REQUEST_TYPE_NAME = 'Approval';
@@ -31,89 +35,131 @@ export class AudienceNamedPersonAgentRequestService implements NamedPersonAgentR
     public async CreateNamedPersonRequest(
         payload: NamedPersonAgentRequestPayload
     ): Promise<NamedPersonAgentRequestReceipt> {
-        const targetUserId = payload.TargetUserID?.trim();
+        const targetUserId = payload.TargetUserID?.trim() ?? '';
         if (!targetUserId || !payload.ContextUser?.ID || !payload.Subject?.trim() || !payload.Message?.trim()) {
-            return {
-                Success: false,
-                TargetUserID: targetUserId ?? '',
-                ReceiptMessage: 'Named-person agent request requires TargetUserID, Subject, Message, and ContextUser.',
-                ErrorMessage: 'Invalid NamedPersonAgentRequestPayload.',
-            };
+            return this.fail(
+                targetUserId,
+                'Named-person agent request requires TargetUserID, Subject, Message, and ContextUser.',
+                'Invalid NamedPersonAgentRequestPayload.'
+            );
+        }
+
+        if (payload.ContextUser.IsActive === false) {
+            return this.fail(
+                targetUserId,
+                'Caller account is inactive and cannot create agent requests.',
+                'Inactive ContextUser.'
+            );
+        }
+
+        if (payload.AudienceContract !== undefined) {
+            const contractGate = AssertAllowsNamedPersonAgentRequests(payload.AudienceContract);
+            if ('ErrorMessage' in contractGate) {
+                return this.fail(
+                    targetUserId,
+                    'This action is not permitted to dispatch named-person agent requests.',
+                    contractGate.ErrorMessage
+                );
+            }
+        }
+
+        const requestedAgentId = payload.TargetAgentID?.trim() ?? '';
+        if (!requestedAgentId) {
+            return this.fail(
+                targetUserId,
+                'TargetAgentID is required for named-person agent requests.',
+                'Missing explicit TargetAgentID.'
+            );
         }
 
         const provider = payload.Provider ?? Metadata.Provider;
         if (!provider) {
-            return {
-                Success: false,
-                TargetUserID: targetUserId,
-                ReceiptMessage: 'No metadata provider is available to persist the agent request.',
-                ErrorMessage: 'Missing metadata provider.',
-            };
+            return this.fail(
+                targetUserId,
+                'No metadata provider is available to persist the agent request.',
+                'Missing metadata provider.'
+            );
         }
 
         try {
-            const systemUser =
-                (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? payload.ContextUser;
+            const callerAuthorized = this.verifyCallerCreatePermission(provider, payload.ContextUser);
+            if ('Reason' in callerAuthorized) {
+                return this.fail(
+                    targetUserId,
+                    'You do not have permission to create agent requests.',
+                    callerAuthorized.Reason
+                );
+            }
+
+            const tenantCheck = this.verifyTenantParity(payload, targetUserId);
+            if ('Reason' in tenantCheck) {
+                return this.fail(
+                    targetUserId,
+                    'Cross-tenant named-person agent requests are not permitted.',
+                    tenantCheck.Reason
+                );
+            }
+
             const rv = RunView.FromMetadataProvider(provider);
 
-            const targetUserActive = await this.verifyTargetUserActive(rv, systemUser, targetUserId);
+            const targetUserActive = await this.verifyTargetUserActive(rv, payload.ContextUser, targetUserId);
             if (!targetUserActive) {
-                return {
-                    Success: false,
-                    TargetUserID: targetUserId,
-                    ReceiptMessage: 'Target recipient is not an active user.',
-                    ErrorMessage: `TargetUserID '${targetUserId}' was not found or is inactive.`,
-                };
+                return this.fail(
+                    targetUserId,
+                    'Target recipient is not an active user.',
+                    `TargetUserID '${targetUserId}' was not found, is inactive, or is outside caller scope.`
+                );
             }
 
             const requestTypeId = await this.resolveRequestTypeId(
                 rv,
-                systemUser,
+                payload.ContextUser,
                 payload.RequestTypeName ?? DEFAULT_REQUEST_TYPE_NAME
             );
             if (!requestTypeId) {
-                return {
-                    Success: false,
-                    TargetUserID: targetUserId,
-                    ReceiptMessage: 'Required agent request type metadata is unavailable.',
-                    ErrorMessage: `Agent request type '${payload.RequestTypeName ?? DEFAULT_REQUEST_TYPE_NAME}' was not found.`,
-                };
+                return this.fail(
+                    targetUserId,
+                    'Required agent request type metadata is unavailable.',
+                    `Agent request type '${payload.RequestTypeName ?? DEFAULT_REQUEST_TYPE_NAME}' was not found.`
+                );
             }
 
-            const agentId = await this.resolveTargetAgentId(rv, systemUser, payload.TargetAgentID);
-            if (!agentId) {
-                return {
-                    Success: false,
-                    TargetUserID: targetUserId,
-                    ReceiptMessage: 'Target agent could not be resolved.',
-                    ErrorMessage: 'No active agent matched TargetAgentID or default agent.',
-                };
+            const agentResolution = await this.resolveAuthorizedTargetAgentId(
+                rv,
+                provider,
+                payload.ContextUser,
+                requestedAgentId
+            );
+            if ('PublicReason' in agentResolution) {
+                return this.fail(
+                    targetUserId,
+                    agentResolution.PublicReason,
+                    agentResolution.InternalReason
+                );
             }
 
-            const saveUser = this.resolveSaveUser(payload.ContextUser, systemUser, targetUserId);
+            const saveUser = await this.resolveSaveUser(provider, payload.ContextUser, targetUserId);
+            if (!saveUser) {
+                return this.fail(
+                    targetUserId,
+                    'Unable to authorize persistence for the designated recipient.',
+                    'System user is unavailable for cross-user request persistence.'
+                );
+            }
+
             const requestEntity = await provider.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 saveUser
             );
             requestEntity.NewRecord();
-            requestEntity.AgentID = agentId;
+            requestEntity.AgentID = agentResolution.AgentID;
             requestEntity.RequestTypeID = requestTypeId;
             requestEntity.RequestedAt = new Date();
             requestEntity.RequestForUserID = targetUserId;
             requestEntity.Status = 'Requested';
             requestEntity.Priority = this.clampPriority(payload.Priority);
             requestEntity.Request = `${payload.Subject.trim()}\n\n${payload.Message.trim()}`;
-            requestEntity.Comments = JSON.stringify({
-                NamedPersonRequest: true,
-                SenderUserID: payload.ContextUser.ID,
-                DeliveryMode: payload.DeliveryMode ?? 'DirectUserRequest',
-                ...(payload.OriginatingConversationDetailID
-                    ? { OriginatingConversationDetailID: payload.OriginatingConversationDetailID }
-                    : {}),
-                ...(payload.Audience ? { AudienceMode: payload.Audience.Mode } : {}),
-                ...(payload.ServerBoundScope ? { ServerBoundScope: payload.ServerBoundScope } : {}),
-                ...(payload.Metadata ? { Metadata: payload.Metadata } : {}),
-            });
+            requestEntity.Comments = JSON.stringify(this.buildNonSensitiveRequestComments(payload));
             if (payload.OriginatingAgentRunID) {
                 requestEntity.OriginatingAgentRunID = payload.OriginatingAgentRunID;
             }
@@ -124,12 +170,11 @@ export class AudienceNamedPersonAgentRequestService implements NamedPersonAgentR
             const saved = await requestEntity.Save();
             if (!saved) {
                 const detail = requestEntity.LatestResult?.CompleteMessage ?? 'Failed to save MJ: AI Agent Requests.';
-                return {
-                    Success: false,
-                    TargetUserID: targetUserId,
-                    ReceiptMessage: 'Failed to create agent request for the designated recipient.',
-                    ErrorMessage: detail,
-                };
+                return this.fail(
+                    targetUserId,
+                    'Failed to create agent request for the designated recipient.',
+                    detail
+                );
             }
 
             return {
@@ -142,18 +187,156 @@ export class AudienceNamedPersonAgentRequestService implements NamedPersonAgentR
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`AudienceNamedPersonAgentRequestService.CreateNamedPersonRequest failed: ${msg}`);
+            return this.fail(
+                targetUserId,
+                'Unable to queue named-person agent request.',
+                msg
+            );
+        }
+    }
+
+    private fail(
+        targetUserId: string,
+        receiptMessage: string,
+        errorMessage: string
+    ): NamedPersonAgentRequestReceipt {
+        return {
+            Success: false,
+            TargetUserID: targetUserId,
+            ReceiptMessage: receiptMessage,
+            ErrorMessage: errorMessage,
+        };
+    }
+
+    private verifyCallerCreatePermission(
+        provider: IMetadataProvider,
+        contextUser: UserInfo
+    ): { Allowed: true } | { Allowed: false; Reason: string } {
+        const isOwnerOrSystem =
+            contextUser.Type?.trim().toLowerCase() === 'owner' ||
+            WellKnownUserSource.Instance.IsSystemUser(contextUser);
+
+        if (typeof provider.EntityByName !== 'function') {
+            if (isOwnerOrSystem) {
+                return { Allowed: true };
+            }
             return {
-                Success: false,
-                TargetUserID: targetUserId,
-                ReceiptMessage: 'Unable to queue named-person agent request.',
-                ErrorMessage: msg,
+                Allowed: false,
+                Reason: 'Caller Create permission on MJ: AI Agent Requests could not be verified.',
             };
         }
+
+        const requestEntityInfo = provider.EntityByName('MJ: AI Agent Requests');
+        if (!requestEntityInfo) {
+            return {
+                Allowed: false,
+                Reason: 'Entity metadata for MJ: AI Agent Requests was not found.',
+            };
+        }
+
+        if (!requestEntityInfo.CheckPermissions(contextUser, EntityPermissionType.Create, false)) {
+            return {
+                Allowed: false,
+                Reason: `User '${contextUser.ID}' lacks Create permission on MJ: AI Agent Requests.`,
+            };
+        }
+
+        return { Allowed: true };
+    }
+
+    private verifyTenantParity(
+        payload: NamedPersonAgentRequestPayload,
+        targetUserId: string
+    ): { Allowed: true } | { Allowed: false; Reason: string } {
+        const callerTenantId = payload.ContextUser.TenantContext?.TenantID?.trim();
+        if (payload.ContextUser.TenantContext && !callerTenantId) {
+            return {
+                Allowed: false,
+                Reason: 'Caller TenantContext is present without a valid TenantID.',
+            };
+        }
+
+        const explicitTargetTenantId = payload.TargetUserTenantContext?.TenantID?.trim();
+        if (payload.TargetUserTenantContext && !explicitTargetTenantId) {
+            return {
+                Allowed: false,
+                Reason: 'TargetUserTenantContext is present without a valid TenantID.',
+            };
+        }
+
+        let cachedTargetTenantId: string | undefined;
+        try {
+            const cachedUsers = UserCache.Instance?.Users;
+            if (Array.isArray(cachedUsers)) {
+                const cachedTarget = cachedUsers.find((u) => UUIDsEqual(u.ID, targetUserId));
+                cachedTargetTenantId = cachedTarget?.TenantContext?.TenantID?.trim() || undefined;
+            }
+        } catch {
+            // UserCache may be uninitialized in isolated unit tests.
+        }
+
+        const targetTenantId = explicitTargetTenantId ?? cachedTargetTenantId;
+        if (callerTenantId && targetTenantId && !this.tenantIdsEqual(callerTenantId, targetTenantId)) {
+            return {
+                Allowed: false,
+                Reason: `Cross-tenant mismatch: caller tenant '${callerTenantId}' does not match target user tenant '${targetTenantId}'.`,
+            };
+        }
+
+        if (!callerTenantId && targetTenantId) {
+            const isOwnerOrSystem =
+                payload.ContextUser.Type?.trim().toLowerCase() === 'owner' ||
+                WellKnownUserSource.Instance.IsSystemUser(payload.ContextUser);
+            if (!isOwnerOrSystem) {
+                return {
+                    Allowed: false,
+                    Reason: `Unscoped caller cannot target tenant-scoped user in tenant '${targetTenantId}'.`,
+                };
+            }
+        }
+
+        if (callerTenantId && payload.ServerBoundScope) {
+            for (const [key, value] of Object.entries(payload.ServerBoundScope)) {
+                if (key.trim().toLowerCase() === 'tenantid' && typeof value === 'string' && value.trim().length > 0) {
+                    if (!this.tenantIdsEqual(callerTenantId, value)) {
+                        return {
+                            Allowed: false,
+                            Reason: `Cross-tenant mismatch: ServerBoundScope TenantID '${value}' does not match caller tenant '${callerTenantId}'.`,
+                        };
+                    }
+                }
+            }
+        }
+
+        return { Allowed: true };
+    }
+
+    private tenantIdsEqual(a: string, b: string): boolean {
+        return a.trim().toLowerCase() === b.trim().toLowerCase();
+    }
+
+    private buildNonSensitiveRequestComments(payload: NamedPersonAgentRequestPayload): Record<string, unknown> {
+        const scopeKeys = payload.ServerBoundScope
+            ? Object.entries(payload.ServerBoundScope).filter((entry) => entry[1] !== undefined)
+            : [];
+        return {
+            NamedPersonRequest: true,
+            SenderUserID: payload.ContextUser.ID,
+            DeliveryMode: payload.DeliveryMode ?? 'DirectUserRequest',
+            ...(payload.OriginatingConversationDetailID
+                ? { OriginatingConversationDetailID: payload.OriginatingConversationDetailID }
+                : {}),
+            ...(payload.Audience ? { AudienceMode: payload.Audience.Mode } : {}),
+            ...(scopeKeys.length > 0
+                ? { HasServerBoundScope: true, ServerBoundScopeKeyCount: scopeKeys.length }
+                : {}),
+            ...(payload.Metadata ? { Metadata: payload.Metadata } : {}),
+        };
     }
 
     private async verifyTargetUserActive(
         rv: RunView,
-        systemUser: UserInfo,
+        contextUser: UserInfo,
         targetUserId: string
     ): Promise<boolean> {
         const res = await rv.RunView<Pick<MJUserEntity, 'ID' | 'IsActive'>>(
@@ -165,14 +348,14 @@ export class AudienceNamedPersonAgentRequestService implements NamedPersonAgentR
                 SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
-            systemUser
+            contextUser
         );
         return Boolean(res.Success && Array.isArray(res.Results) && res.Results.length > 0 && res.Results[0].IsActive);
     }
 
     private async resolveRequestTypeId(
         rv: RunView,
-        systemUser: UserInfo,
+        contextUser: UserInfo,
         typeName: string
     ): Promise<string | null> {
         const res = await rv.RunView<Pick<MJAIAgentRequestTypeEntity, 'ID'>>(
@@ -184,51 +367,86 @@ export class AudienceNamedPersonAgentRequestService implements NamedPersonAgentR
                 SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
-            systemUser
+            contextUser
         );
         return res.Success && res.Results.length > 0 ? res.Results[0].ID : null;
     }
 
-    private async resolveTargetAgentId(
+    private async resolveAuthorizedTargetAgentId(
         rv: RunView,
-        systemUser: UserInfo,
-        requestedAgentId: string | undefined
-    ): Promise<string | null> {
-        if (requestedAgentId && requestedAgentId.trim().length > 0) {
-            const res = await rv.RunView<Pick<MJAIAgentEntity, 'ID' | 'Status'>>(
-                {
-                    EntityName: 'MJ: AI Agents',
-                    ExtraFilter: `ID='${EscapeSQLString(requestedAgentId.trim())}' AND Status='Active'`,
-                    Fields: ['ID', 'Status'],
-                    MaxRows: 1,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple',
-                },
-                systemUser
-            );
-            return res.Success && res.Results.length > 0 ? res.Results[0].ID : null;
-        }
-        const fallbackRes = await rv.RunView<Pick<MJAIAgentEntity, 'ID'>>(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        requestedAgentId: string
+    ): Promise<{ AgentID: string } | { AgentID: null; PublicReason: string; InternalReason: string }> {
+        const res = await rv.RunView<Pick<MJAIAgentEntity, 'ID' | 'Status'>>(
             {
                 EntityName: 'MJ: AI Agents',
-                ExtraFilter: `Status='Active'`,
-                OrderBy: `__mj_CreatedAt ASC`,
-                Fields: ['ID'],
+                ExtraFilter: `ID='${EscapeSQLString(requestedAgentId)}' AND Status='Active'`,
+                Fields: ['ID', 'Status'],
                 MaxRows: 1,
                 SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
-            systemUser
+            contextUser
         );
-        return fallbackRes.Success && fallbackRes.Results.length > 0 ? fallbackRes.Results[0].ID : null;
+        const activeAgentId = res.Success && res.Results.length > 0 ? res.Results[0].ID : null;
+        if (!activeAgentId) {
+            return {
+                AgentID: null,
+                PublicReason: 'Target agent could not be resolved.',
+                InternalReason: `Active agent '${requestedAgentId}' was not found or is not accessible to caller.`,
+            };
+        }
+
+        if (!AIEngine.Instance.Loaded) {
+            try {
+                await AIEngine.Instance.Config(false, contextUser, provider);
+            } catch (err) {
+                LogError(
+                    `AudienceNamedPersonAgentRequestService: AIEngine.Config failed before permission check: ${
+                        err instanceof Error ? err.message : String(err)
+                    }`
+                );
+            }
+        }
+
+        const canRun = await AIEngine.Instance.CanUserRunAgent(activeAgentId, contextUser);
+        if (!canRun) {
+            return {
+                AgentID: null,
+                PublicReason: 'You do not have permission to invoke the target agent.',
+                InternalReason: `Caller '${contextUser.ID}' lacks CanUserRunAgent permission for agent '${activeAgentId}'.`,
+            };
+        }
+
+        return { AgentID: activeAgentId };
     }
 
-    private resolveSaveUser(contextUser: UserInfo, systemUser: UserInfo, targetUserId: string): UserInfo {
-        if (UUIDsEqual(contextUser.ID, targetUserId)) {
+    private async resolveSaveUser(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        targetUserId: string
+    ): Promise<UserInfo | null> {
+        if (
+            UUIDsEqual(contextUser.ID, targetUserId) ||
+            contextUser.Type?.trim().toLowerCase() === 'owner' ||
+            WellKnownUserSource.Instance.IsSystemUser(contextUser)
+        ) {
             return contextUser;
         }
-        if (contextUser.Type?.trim().toLowerCase() === 'owner') {
-            return contextUser;
+        const systemUser = await WellKnownUserSource.Instance.GetSystemUser(provider);
+        if (!systemUser) {
+            return null;
+        }
+        if (contextUser.TenantContext) {
+            // Clone systemUser with caller's TenantContext so the shared systemUser instance is never mutated.
+            const cloned = new UserInfo(provider, {
+                ...systemUser,
+                _UserRoles: undefined,
+                UserRoles: systemUser.UserRoles,
+            });
+            cloned.TenantContext = { ...contextUser.TenantContext };
+            return cloned;
         }
         return systemUser;
     }

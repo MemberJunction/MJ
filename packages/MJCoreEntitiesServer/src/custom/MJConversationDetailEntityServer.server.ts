@@ -119,12 +119,24 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
         if (!ConversationDetailWritePermissionRegistry.Instance.HasRegisteredProviders()) {
             return { Decision: 'Abstain' };
         }
-        const summary = await ResolveConversationSummaryForWritePermission(
-            provider,
-            user,
-            this.ConversationID,
-            this.preloadedConversationSummary
-        );
+        let summary: ConversationSummaryForWritePermission | null;
+        try {
+            summary = await ResolveConversationSummaryForWritePermission(
+                provider,
+                user,
+                this.ConversationID,
+                this.preloadedConversationSummary
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(
+                `MJConversationDetailEntityServer.EvaluatePluggableWritePermission failed closed on conversation ${this.ConversationID} for user ${user.ID}: ${msg}`
+            );
+            return {
+                Decision: 'Deny',
+                Reason: 'Unable to verify conversation write permissions.',
+            };
+        }
         return ConversationDetailWritePermissionRegistry.Instance.Evaluate({
             Provider: provider,
             ContextUser: user,

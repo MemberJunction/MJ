@@ -1,4 +1,4 @@
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { UserMayWriteConversation, type MJConversationDetailEntity } from '@memberjunction/core-entities';
 import {
     ConversationDetailWritePermissionRegistry,
@@ -56,12 +56,26 @@ export async function AuthorizeConversationDetailWrite(
     let preloaded: ConversationSummaryForWritePermission | null = params.Conversation ?? null;
 
     if (ConversationDetailWritePermissionRegistry.Instance.HasRegisteredProviders()) {
-        preloaded = await ResolveConversationSummaryForWritePermission(
-            params.Provider,
-            params.ContextUser,
-            conversationId,
-            preloaded
-        );
+        try {
+            preloaded = await ResolveConversationSummaryForWritePermission(
+                params.Provider,
+                params.ContextUser,
+                conversationId,
+                preloaded
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(
+                `AuthorizeConversationDetailWrite failed closed on conversation ${conversationId} for user ${params.ContextUser.ID}: ${msg}`
+            );
+            return {
+                Allowed: false,
+                IsOwner: false,
+                Reason: 'Unable to verify conversation write permissions.',
+                DecisionSource: 'CustomProvider',
+                Conversation: null,
+            };
+        }
         const verdict: ConversationDetailWritePermissionVerdict =
             await ConversationDetailWritePermissionRegistry.Instance.Evaluate({
                 Provider: params.Provider,
