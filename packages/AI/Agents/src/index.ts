@@ -53,6 +53,7 @@ export * from './AgentContextAssembler';
 export * from './AgentStepDispatcher';
 export * from './finish-if-state';
 export * from './MemoryWriteManager';
+export * from './skill-instructions-template';
 export * from './SkillMarkdownConverter';
 export * from './SkillImportExportService';
 export * from './operations/AISkillMarkdownOperations';
