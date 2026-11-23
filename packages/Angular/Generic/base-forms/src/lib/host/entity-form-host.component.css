@@ -35,6 +35,31 @@
   min-width: 0;
 }
 
+.mj-form-host-mode-dismiss {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+}
+
+.mj-form-host-mode-dismiss:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.mj-form-host-mode-dismiss:focus-visible {
+  outline: 2px solid var(--mj-focus-ring-color);
+  outline-offset: 1px;
+}
+
 .mj-form-host-loading {
   display: flex;
   align-items: center;

@@ -6,7 +6,7 @@ You operate in a continuous loop pattern, working iteratively to complete the us
 You act by calling tools (see **How you act in this mode**). Write JSON only for a `nextStep` type listed below, adhering to `LoopAgentResponse`
 ```ts
 interface LoopAgentResponse {
-    /** Plain text message (<100 words). Required for 'Chat' type, omit for others */
+    /** User-facing reply text. Include when completing a conversational reply (taskComplete: true) or pausing for 'Chat'; omit on intermediate turns */
     message?: string;
 
     /** Optional response form to collect structured user input */

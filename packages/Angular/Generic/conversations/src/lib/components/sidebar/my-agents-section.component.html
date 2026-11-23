@@ -1,0 +1,120 @@
+@if (IsVisible) {
+  <div class="mas-section">
+    <div class="mas-header-row">
+      <button
+        type="button"
+        class="mas-header-toggle"
+        [attr.aria-expanded]="IsExpanded"
+        (click)="ToggleExpanded()">
+        <i
+          class="fa-solid mas-chevron"
+          [class.fa-chevron-down]="IsExpanded"
+          [class.fa-chevron-right]="!IsExpanded"></i>
+        <i class="fa-solid fa-wand-magic-sparkles mas-mark"></i>
+        <span class="mas-title">My Agents</span>
+        @if (MyAgents.length > 0) {
+          <span class="mas-count">{{ MyAgents.length }}</span>
+        }
+      </button>
+      @if (HasInstantiableTemplates) {
+        <button
+          type="button"
+          class="mas-add-btn"
+          title="Create a personal agent instance"
+          aria-label="Create a personal agent instance"
+          (click)="OpenCreateModal($event)">
+          <i class="fa-solid fa-plus"></i>
+        </button>
+      }
+    </div>
+
+    @if (IsExpanded) {
+      <div class="mas-body">
+        <!-- Setup CTAs for un-onboarded Required templates (e.g., Chief of Staff) -->
+        @for (tpl of UnonboardedRequiredTemplates; track tpl.ID) {
+          <button
+            type="button"
+            class="mas-cta-card"
+            (click)="OpenCreateModal($event, tpl.ID)">
+            <span class="mas-cta-icon">
+              <i [class]="tpl.IconClass || 'fa-solid fa-user-tie'"></i>
+            </span>
+            <span class="mas-cta-text">
+              <span class="mas-cta-title">Set up My {{ tpl.Name }}</span>
+              <span class="mas-cta-sub">Name, voice &amp; personality in 30s</span>
+            </span>
+            <i class="fa-solid fa-arrow-right mas-cta-arrow"></i>
+          </button>
+        }
+
+        <!-- User's personal/shared derived agent instances -->
+        @if (MyAgents.length > 0) {
+          <div class="mas-list" role="list">
+            @for (item of MyAgents; track item.Agent.ID) {
+              <div
+                class="mas-item"
+                role="listitem"
+                [class.mas-item--active]="IsActiveAgent(item.Agent.ID)"
+                [title]="item.Agent.Description || item.Agent.Name"
+                (click)="OnAgentRowClick(item)">
+                <span class="mas-avatar">
+                  @if (item.AvatarUrl) {
+                    <img
+                      [src]="item.AvatarUrl"
+                      [alt]="item.Agent.Name"
+                      (error)="OnAvatarError(item.Agent.ID)" />
+                  } @else {
+                    <i [class]="item.IconClass"></i>
+                  }
+                </span>
+                <span class="mas-info">
+                  <span class="mas-name-row">
+                    <span class="mas-name">{{ item.Agent.Name }}</span>
+                    @if (item.ShowPrimaryStar) {
+                      <i
+                        class="fa-solid fa-star mas-primary-star"
+                        title="Primary instance"></i>
+                    }
+                  </span>
+                  @if (item.BaseAgentName) {
+                    <span class="mas-base-badge">{{ item.BaseAgentName }}</span>
+                  }
+                </span>
+                <span class="mas-row-actions">
+                  <button
+                    type="button"
+                    class="mas-new-chat-btn"
+                    [title]="'New chat with ' + item.Agent.Name"
+                    [attr.aria-label]="'New chat with ' + item.Agent.Name"
+                    (click)="OnNewChatClick(item, $event)">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="mas-tailor-btn"
+                    [title]="'Tailor ' + item.Agent.Name"
+                    [attr.aria-label]="'Tailor ' + item.Agent.Name"
+                    (click)="OpenEditModal(item.Agent, $event)">
+                    <i class="fa-solid fa-sliders"></i>
+                  </button>
+                </span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <mj-agent-instance-editor-modal
+      [Provider]="Provider"
+      [(Visible)]="EditorVisible"
+      [CurrentUser]="EffectiveUser"
+      [Mode]="EditorMode"
+      [EditingAgent]="EditingAgent"
+      [InitialBaseAgentId]="InitialBaseAgentId"
+      (Saved)="OnEditorSaved($event)"
+      (Archived)="OnEditorArchived()"
+      (ChatToOnboard)="OnEditorChatToOnboard($event)">
+    </mj-agent-instance-editor-modal>
+  </div>
+}
