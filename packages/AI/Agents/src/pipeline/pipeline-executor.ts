@@ -132,6 +132,7 @@ export class PipelineExecutor {
 
     /** Validate + run a pipeline. Returns a structured result; never throws on stage failure. */
     public async Execute(stages: PipelineStage[]): Promise<PipelineExecutionResult> {
+        this.registry.ResetTaint();
         const shapeError = this.validateShape(stages);
         if (shapeError) {
             return { success: false, finalOutput: null, steps: [], error: shapeError, contextBytesSaved: 0 };
@@ -194,6 +195,7 @@ export class PipelineExecutor {
             // Surface the hint only when the FINAL result is itself degenerate (empty, or all-null
             // elements); a deliberate empty result mid-pipeline that's later repopulated shouldn't nag.
             diagnostic: looksDegenerate(current) ? firstDiagnostic : undefined,
+            ...(this.registry.HighestTaint ? { Taint: this.registry.HighestTaint } : {}),
         };
     }
 

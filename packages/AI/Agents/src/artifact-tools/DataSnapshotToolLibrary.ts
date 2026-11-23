@@ -283,8 +283,8 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 description: 'Returns column names, types, and descriptions for a specific table.',
                 inputSchema: {
                     type: 'object',
-                    properties: { table: { type: 'string', description: 'Table name' } },
-                    required: ['table'],
+                    properties: { table: { type: 'string', description: 'Table name (optional when the snapshot has only one table)' } },
+                    required: [],
                 },
             },
             {
@@ -293,11 +293,11 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        table: { type: 'string' },
+                        table: { type: 'string', description: 'Table name (optional when the snapshot has only one table)' },
                         start: { type: 'number', description: 'Zero-based start index' },
                         count: { type: 'number', description: 'Number of rows to return' },
                     },
-                    required: ['table', 'start', 'count'],
+                    required: ['start', 'count'],
                 },
             },
             {
@@ -306,13 +306,13 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        table: { type: 'string' },
+                        table: { type: 'string', description: 'Table name (optional when the snapshot has only one table)' },
                         field: { type: 'string' },
                         operator: { type: 'string' },
                         value: {},
                         limit: { type: 'number', description: 'Max rows to return. Default: 200' },
                     },
-                    required: ['table', 'field', 'operator', 'value'],
+                    required: ['field', 'operator', 'value'],
                 },
             },
             {
@@ -329,12 +329,12 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        table: { type: 'string' },
+                        table: { type: 'string', description: 'Table name (optional when the snapshot has only one table)' },
                         field: { type: 'string' },
                         operation: { type: 'string' },
                         p: { type: 'number', description: 'Percentile 0-100. Required when operation is "percentile".' },
                     },
-                    required: ['table', 'field', 'operation'],
+                    required: ['field', 'operation'],
                 },
             },
             {
@@ -346,7 +346,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        table: { type: 'string' },
+                        table: { type: 'string', description: 'Table name (optional when the snapshot has only one table)' },
                         groupBy: { type: 'array', items: { type: 'string' }, description: 'One or more fields to group by.' },
                         aggregations: {
                             type: 'array',
@@ -381,7 +381,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                         },
                         limit: { type: 'number', description: 'Optional max number of groups to return.' },
                     },
-                    required: ['table', 'groupBy', 'aggregations'],
+                    required: ['groupBy', 'aggregations'],
                 },
             },
             {
@@ -394,13 +394,13 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        table: { type: 'string' },
+                        table: { type: 'string', description: 'Table name (optional when the snapshot has only one table)' },
                         expression: { type: 'string', description: 'e.g. "Price / DurationHours" or "(Revenue - Cost) / Revenue".' },
                         as: { type: 'string', description: 'Name for the computed column.' },
                         sort: { type: 'string', description: 'Optional "asc" or "desc" — sorts by the computed column.' },
                         limit: { type: 'number', description: 'Optional max rows to return (top/bottom N after sort).' },
                     },
-                    required: ['table', 'expression', 'as'],
+                    required: ['expression', 'as'],
                 },
             },
             {
@@ -411,7 +411,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        table: { type: 'string' },
+                        table: { type: 'string', description: 'Table name (optional when the snapshot has only one table)' },
                         conditions: {
                             type: 'array',
                             items: {
@@ -427,7 +427,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                         combine: { type: 'string', description: '"and" (default) or "or".' },
                         limit: { type: 'number', description: 'Max rows to return. Default: 200' },
                     },
-                    required: ['table', 'conditions'],
+                    required: ['conditions'],
                 },
             },
         ];
@@ -978,10 +978,23 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
     // -----------------------------------------------------------------------
 
     private findTable(payload: SnapshotPayload, tableName: string): SnapshotTable | undefined {
-        return payload.tables.find(t => t.name === tableName);
+        const exact = payload.tables.find(t => t.name === tableName);
+        if (exact) return exact;
+        if (typeof tableName === 'string' && tableName.trim().length > 0) {
+            const lower = tableName.trim().toLowerCase();
+            return payload.tables.find(t => t.name.toLowerCase() === lower);
+        }
+        // When a snapshot contains only a single table and `table` is omitted, default to that table.
+        if (payload.tables.length === 1 && (!tableName || String(tableName).trim().length === 0)) {
+            return payload.tables[0];
+        }
+        return undefined;
     }
 
-    private tableNotFoundError(tableName: string): ArtifactToolResult {
+    private tableNotFoundError(tableName: string | undefined): ArtifactToolResult {
+        if (!tableName || String(tableName).trim().length === 0) {
+            return this.errorResult('Parameter "table" is required when the snapshot contains multiple tables. Call get_tables to inspect available table names.');
+        }
         return this.errorResult(`Table "${tableName}" not found in snapshot.`);
     }
 

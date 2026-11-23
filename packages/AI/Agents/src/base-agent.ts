@@ -214,7 +214,20 @@ import {
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
-import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
+import { type ActiveRunTaint, ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
+import {
+    ActionResultSpilloverManager,
+    FormatArtifactSpilloverHint,
+    GetActionConfigObject,
+    IndexActiveAgentActions,
+    MergeToolTurnMetadata,
+    PickMostRestrictiveExpirationConfig,
+    ResolveActionExpirationConfig,
+    ResolveActionMaxExecutionsPerRun,
+    ResolveLoopExpirationMetadata,
+    type ActionCompactMode,
+    type ResolvedActionExpirationConfig,
+} from './ActionResultSpilloverManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
 import { PayloadFeedbackManager, PayloadFeedbackContext, PayloadFeedbackQuestion, PayloadFeedbackResponse } from './PayloadFeedbackManager';
@@ -299,7 +312,7 @@ import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 import { GetValueFromPath } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
-import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData } from './client-tool-results';
+import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData, ExtractUntrustedEnvelope, TruncatePreservingUntrustedEnvelope } from './client-tool-results';
 import {
     CanAgentOwnSubAgentConsults,
     FormatReloadedConsultsMessage,
@@ -1138,6 +1151,13 @@ export class BaseAgent {
     protected _taintedSources: AgentTaintedSource[] = [];
 
     /**
+     * Manages deferred action-output spillover closures so `_ARTIFACT_MANIFEST` and provider KV caches
+     * stay stable while action results remain inline.
+     * @private
+     */
+    private _actionSpilloverManager: ActionResultSpilloverManager = new ActionResultSpilloverManager();
+
+    /**
      * True when the current agent run has ingested at least one `'Untrusted'` or `'SemiTrusted'`
      * action or client-tool result.
      */
@@ -1744,15 +1764,9 @@ export class BaseAgent {
         }
 
         // 3. Action metadata catalog setting (Action.Config_Object?.outputTrustLevel)
-        const metadataLevel = entity?.Config_Object?.outputTrustLevel;
-        if (isLevel(metadataLevel)) {
-            return metadataLevel;
-        }
-        if (typeof entity?.Config_ === 'string' && entity.Config_.trim().length > 0) {
-            const parsed = CleanAndParseJSON<Record<string, unknown>>(entity.Config_, false);
-            if (parsed && isLevel(parsed.outputTrustLevel)) {
-                return parsed.outputTrustLevel;
-            }
+        const actionConfig = GetActionConfigObject(entity);
+        if (actionConfig && isLevel(actionConfig.outputTrustLevel)) {
+            return actionConfig.outputTrustLevel;
         }
 
         return 'Trusted';
@@ -1766,6 +1780,52 @@ export class BaseAgent {
         if (!this._taintedSources.some(s => s.stepNumber === stepNumber && s.sourceName === sourceName && s.trustLevel === trustLevel)) {
             this._taintedSources.push({ stepNumber, sourceName, trustLevel });
         }
+    }
+
+    /**
+     * Returns the highest-severity external taint source ingested so far in this run
+     * (`'Untrusted'` wins over `'SemiTrusted'`), or `undefined` when the run is untainted.
+     * @protected
+     */
+    protected GetHighestRunTaint(): ActiveRunTaint | undefined {
+        if (this._taintedSources.length === 0) {
+            return undefined;
+        }
+        const untrusted = this._taintedSources.find(s => s.trustLevel === 'Untrusted');
+        if (untrusted) {
+            return { TrustLevel: 'Untrusted', SourceName: untrusted.sourceName };
+        }
+        const first = this._taintedSources[0];
+        return { TrustLevel: first.trustLevel, SourceName: first.sourceName };
+    }
+
+    /**
+     * Whether artifact workspace/history tools are enabled for this agent run
+     * (`includeArtifactToolsDocs !== false` and workspace tools active on `_artifactToolManager`).
+     * Avoids re-parsing `AgentTypePromptParams` JSON once `gatherPromptTemplateData` has merged
+     * `this._agentTypePromptParams`.
+     * @private
+     */
+    private areArtifactToolsEnabled(params?: ExecuteAgentParams): boolean {
+        if (!this._artifactToolManager.IsWorkspaceEnabled()) {
+            return false;
+        }
+        const overrideParams = params?.data?.__agentTypePromptParams as Partial<LoopAgentTypePromptParams> | undefined;
+        if (overrideParams?.includeArtifactToolsDocs !== undefined) {
+            return overrideParams.includeArtifactToolsDocs !== false;
+        }
+        const mergedParams = this._agentTypePromptParams as Partial<LoopAgentTypePromptParams> | undefined;
+        if (mergedParams !== undefined) {
+            return mergedParams.includeArtifactToolsDocs !== false;
+        }
+        const rawAgentParams = params?.agent?.AgentTypePromptParams;
+        if (typeof rawAgentParams === 'string' && rawAgentParams.trim().length > 0) {
+            const parsed = CleanAndParseJSON<Partial<LoopAgentTypePromptParams>>(rawAgentParams, false);
+            if (parsed?.includeArtifactToolsDocs === false) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -2423,7 +2483,25 @@ export class BaseAgent {
      * Manages artifact tools for the current agent run.
      * Allows agents to explore input artifacts on demand.
      */
-    private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
+    private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager({
+        getRunTaint: () => this.GetHighestRunTaint(),
+    });
+
+    /**
+     * Protected accessor exposing the run's {@link ArtifactToolManager} to subclasses and tests.
+     * @protected
+     */
+    protected get ArtifactManager(): ArtifactToolManager {
+        return this._artifactToolManager;
+    }
+
+    /**
+     * Protected accessor exposing the run's {@link ActionResultSpilloverManager} to subclasses and tests.
+     * @protected
+     */
+    protected get ActionSpilloverManager(): ActionResultSpilloverManager {
+        return this._actionSpilloverManager;
+    }
     /**
      * Service for evaluating agent decisions inline via fast decision models.
      */
@@ -3409,6 +3487,7 @@ export class BaseAgent {
                 contextUser: params.contextUser,
                 provider: this.ProviderToUse,
                 getAgentRun: () => this._agentRun,
+                getRunTaint: () => this.GetHighestRunTaint(),
                 agentName: params.agent?.Name ?? undefined,
                 workspaceEnabled: true,
             });
@@ -3499,6 +3578,7 @@ export class BaseAgent {
             this._lastSubAgentArtifactDirective = undefined;
             this._lastSubAgentPayloadArtifactTypeID = undefined;
             this._taintedSources = [];
+            this._actionSpilloverManager.Clear();
             this.seedTaintFromSecurityEnvelope(params);
             this.seedTaintFromParentRun(params);
             this._messageLifecycleCallback = params.onMessageLifecycle;
@@ -4052,6 +4132,7 @@ export class BaseAgent {
         this._runScope = undefined;
         this._audienceReaders = undefined;
         this._audienceSource = undefined;
+        this._actionSpilloverManager.Clear();
     }
 
     /**
@@ -6687,6 +6768,17 @@ export class BaseAgent {
     }
 
     /**
+     * Indexes effective active `AIAgentAction` rows (including `BaseAgentID`-inherited rows) by
+     * `ActionID` for O(1) lookup inside action/loop loops.
+     */
+    private indexEffectiveAgentActions(agentId: string): ReturnType<typeof IndexActiveAgentActions> {
+        const effective = this.getEffectiveAgentActions(agentId);
+        return effective.length > 0
+            ? IndexActiveAgentActions(agentId, effective, true)
+            : IndexActiveAgentActions(agentId);
+    }
+
+    /**
      * Injects resolved Persona style (`Tone`, `SpeakingStyle`, `Persona.Description`, `StyleOverrideObject`),
      * stacked `AdditionalInstructions` along the `BaseAgentID` chain, and the Audience-Aware Tone
      * Guardrail as a system message so text chat personality unifies seamlessly with Realtime voice.
@@ -7829,9 +7921,14 @@ export class BaseAgent {
      * second one.
      */
     private static insertToolResultsAfterCallTurn(messages: ChatMessage[], callTurnIndex: number, results: AgentChatMessage): void {
-        const adjacent = messages[callTurnIndex + 1];
+        const adjacent = messages[callTurnIndex + 1] as AgentChatMessage | undefined;
         if (adjacent?.role === 'tool' && Array.isArray(adjacent.content) && Array.isArray(results.content)) {
-            messages[callTurnIndex + 1] = { ...adjacent, content: [...adjacent.content, ...results.content] };
+            const mergedMetadata = MergeToolTurnMetadata(adjacent.metadata, results.metadata);
+            messages[callTurnIndex + 1] = {
+                ...adjacent,
+                content: [...adjacent.content, ...results.content],
+                ...(mergedMetadata ? { metadata: mergedMetadata } : {}),
+            };
             return;
         }
         messages.splice(callTurnIndex + 1, 0, results);
@@ -7954,7 +8051,7 @@ export class BaseAgent {
         return {
             ApplyScratchpad: (changes) => this.applyScratchpadFromTool(changes),
             WriteMemory: (note, type, scopeHint) => this.writeMemoryFromTool({ note, type, scopeHint }, params),
-            RunArtifactTool: (artifactId, tool, input) => this.runArtifactToolFromTool({ artifactId, tool, input }),
+            RunArtifactTool: (artifactId, tool, input) => this.ExecuteNativeArtifactTool({ artifactId, tool, input }),
             RunConversationTool: (tool, input) => this.runConversationToolFromTool(tool, input),
             RunDecisions: (requests, payload) => this.runDecisionsFromTool(requests, payload, params)
         };
@@ -7976,11 +8073,19 @@ export class BaseAgent {
         return { Content: `${result.disposition}${result.reason ? `: ${result.reason}` : ''}`, IsError: failed };
     }
 
-    private async runArtifactToolFromTool(call: ArtifactToolCall): Promise<AgentToolResult> {
+    protected async ExecuteNativeArtifactTool(call: ArtifactToolCall): Promise<AgentToolResult> {
         const stored = await this._artifactToolManager.ExecuteSingleToolCall(call);
-        return stored.result.success
-            ? { Content: this.capStandaloneToolResultText(RenderToolResultData(stored.result.data)), IsError: false }
-            : { Content: stored.result.errorMessage ?? `Artifact tool '${call.tool}' failed.`, IsError: true };
+        if (stored.trustLevel === 'Untrusted' || stored.trustLevel === 'SemiTrusted') {
+            this.recordTaintedSource(this._promptTurnCount, stored.sourceName ?? `artifact:${stored.artifactId}`, stored.trustLevel);
+        }
+        if (!stored.result.success) {
+            return { Content: stored.result.errorMessage ?? `Artifact tool '${call.tool}' failed.`, IsError: true };
+        }
+        const rendered = this.capStandaloneToolResultText(RenderToolResultData(stored.result.data));
+        const content = (stored.trustLevel === 'Untrusted' || stored.trustLevel === 'SemiTrusted')
+            ? WrapUntrustedExternalData(rendered, stored.sourceName ?? `artifact:${stored.artifactId}`, stored.trustLevel)
+            : rendered;
+        return { Content: content, IsError: false };
     }
 
     private async runConversationToolFromTool(tool: string, input: ArtifactToolArgs): Promise<AgentToolResult> {
@@ -9739,9 +9844,6 @@ export class BaseAgent {
         // Falls back to database-configured actions only when the list was never computed for this run
         const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
-        // Also get the database-configured agent actions (including inherited BaseAgentID actions) for MaxExecutionsPerRun lookup
-        const dbAgentActions = this.getEffectiveAgentActions(params.agent.ID);
-
         const resolvedByAction = new Map<AgentAction, MJActionEntityExtended>();
         const missingActions = nextStep.actions?.filter(action => {
             if (!action || typeof action.name !== 'string' || action.name.trim().length === 0) {
@@ -9779,6 +9881,7 @@ export class BaseAgent {
         // Check MaxExecutionsPerRun limits for each action
         if (nextStep.actions) {
             const violatedActions: string[] = [];
+            const agentActionsByActionId = this.indexEffectiveAgentActions(params.agent.ID);
 
             for (const action of nextStep.actions) {
                 const normalizedActionName = typeof action?.name === 'string' ? action.name.trim().toLowerCase() : '';
@@ -9790,17 +9893,13 @@ export class BaseAgent {
 
                 if (!actionEntity) continue;
 
-                // Check for limit from database-configured agent action
-                const dbAgentAction = dbAgentActions.find(aa => UUIDsEqual(aa.ActionID, actionEntity.ID));
-                let maxExecutions: number | null = null;
-
-                if (dbAgentAction?.MaxExecutionsPerRun != null) {
-                    // Database-configured action with limit
-                    maxExecutions = dbAgentAction.MaxExecutionsPerRun;
-                } else if (this._dynamicActionLimits[actionEntity.ID] != null) {
-                    // Dynamically added action with limit from actionChanges
-                    maxExecutions = this._dynamicActionLimits[actionEntity.ID];
-                }
+                // Check for limit across per-agent AIAgentAction rows, dynamic actionChanges, and Action.Config
+                const maxExecutions = ResolveActionMaxExecutionsPerRun(
+                    actionEntity,
+                    params.agent.ID,
+                    this._dynamicActionLimits,
+                    agentActionsByActionId
+                );
 
                 if (maxExecutions != null) {
                     const executionCount = await this.getActionExecutionCount(agentRun.ID, actionEntity.ID);
@@ -11609,9 +11708,11 @@ export class BaseAgent {
         // Remove in reverse order to maintain indices
         removedIndices.sort((a, b) => b - a).forEach(index => {
             const target = params.conversationMessages[index] as AgentChatMessage;
+            const artifactIds = this.areArtifactToolsEnabled(params) ? this._actionSpilloverManager.Materialize(target) : [];
             if (target.role === 'tool') {
+                const artifactNote = FormatArtifactSpilloverHint(artifactIds, this._artifactToolManager.HasArtifacts(), 'semicolon');
                 // a tool turn cannot be removed without orphaning the call it answers; stub it.
-                params.conversationMessages[index] = this.stubToolTurn(target, '[result expired — stubbed to recover context]');
+                params.conversationMessages[index] = this.stubToolTurn(target, `[result expired — stubbed to recover context${artifactNote}]`);
                 this.emitMessageLifecycleEvent({
                     type: 'message-compacted',
                     turn: currentStepCount,
@@ -11639,6 +11740,80 @@ export class BaseAgent {
             tokensSaved,
             strategyName: `Removed ${removedIndices.length} old tool-results (${minAge}+ turns)`
         };
+    }
+
+    private formatToolRecoveryTurn(message: AgentChatMessage, maxChars: number, artifactHint: string): AgentChatMessage {
+        return CompactToolResultContent(message, (t) =>
+            TruncatePreservingUntrustedEnvelope(t, maxChars, (len) => `[compacted from ${len} chars${artifactHint ? `.${artifactHint}` : ''}]`)
+        );
+    }
+
+    private compactToolTurnForRecovery(
+        originalMessage: AgentChatMessage,
+        maxChars: number,
+        originalTokens: number,
+        params: ExecuteAgentParams
+    ): { compacted: AgentChatMessage; saved: number } | null {
+        const toolsEnabled = this.areArtifactToolsEnabled(params);
+        const existingIds = originalMessage.metadata?.artifactIds;
+        const hasExistingHint = toolsEnabled && Boolean(existingIds?.length) && this._artifactToolManager.HasArtifacts();
+        const hasOwnedPending = toolsEnabled && this._actionSpilloverManager.HasOwnedPending(originalMessage);
+        const previewHint = hasExistingHint
+            ? FormatArtifactSpilloverHint(existingIds, true)
+            : hasOwnedPending
+                ? FormatArtifactSpilloverHint(['A'], true)
+                : '';
+
+        const preview = this.formatToolRecoveryTurn(originalMessage, maxChars, previewHint);
+        const previewSaved = originalTokens - this.estimateTokens(preview.content);
+        if (previewSaved <= 0) {
+            return null;
+        }
+        if (!hasOwnedPending) {
+            return { compacted: preview, saved: previewSaved };
+        }
+
+        const artifactIds = this._actionSpilloverManager.Materialize(originalMessage);
+        const realHint = FormatArtifactSpilloverHint(artifactIds, this._artifactToolManager.HasArtifacts());
+        if (realHint === previewHint) {
+            return { compacted: preview, saved: previewSaved };
+        }
+        const compacted = this.formatToolRecoveryTurn(originalMessage, maxChars, realHint);
+        const saved = originalTokens - this.estimateTokens(compacted.content);
+        return saved > 0 ? { compacted, saved } : null;
+    }
+
+    private wouldUserMessageCompactSaveTokens(
+        originalMessage: AgentChatMessage,
+        originalTokens: number,
+        originalContent: string,
+        maxChars: number,
+        params: ExecuteAgentParams
+    ): boolean {
+        // Media blocks already shrink when replaced with stubs, even when text is short.
+        if (originalTokens > this.estimateTokens(originalContent)) {
+            return true;
+        }
+        const envelope = ExtractUntrustedEnvelope(originalContent);
+        const body = envelope ? envelope.UnwrappedText : originalContent;
+        if (body.length <= maxChars) {
+            return false;
+        }
+        const toolsEnabled = this.areArtifactToolsEnabled(params);
+        const hasOwnedPending = toolsEnabled && this._actionSpilloverManager.HasOwnedPending(originalMessage);
+        const existingIds = originalMessage.metadata?.artifactIds;
+        const expectedHint = toolsEnabled && existingIds?.length && this._artifactToolManager.HasArtifacts()
+            ? FormatArtifactSpilloverHint(existingIds, true)
+            : hasOwnedPending
+                ? FormatArtifactSpilloverHint(['A'], true)
+                : '';
+        const truncated = `${body.substring(0, maxChars)}...`;
+        const renderedBody = envelope
+            ? WrapUntrustedExternalData(truncated, envelope.Source, envelope.TrustLevel)
+            : truncated;
+        const expandable = !(originalMessage.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
+        const preview = `${renderedBody}\n\n[Compacted: showing first ${maxChars} of ${body.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}${expectedHint}]`;
+        return originalTokens - this.estimateTokens(preview) > 0;
     }
 
     /**
@@ -11684,17 +11859,19 @@ export class BaseAgent {
             const originalContent = ReplaceMediaBlocksWithStubs(originalMessage.content);
 
             if (originalMessage.role === 'tool') {
-                // compact each tool_result block's text; the block structure is what the provider needs.
-                const compacted = CompactToolResultContent(originalMessage, (t) => (t.length > 500 ? `${t.slice(0, 500)}… [compacted from ${t.length} chars]` : t));
-                const saved = originalTokens - this.estimateTokens(compacted.content);
-                if (saved > 0) {
+                const toolOutcome = this.compactToolTurnForRecovery(originalMessage, 500, originalTokens, params);
+                if (toolOutcome) {
                     params.conversationMessages[candidate.index] = {
-                        ...compacted,
-                        metadata: { ...originalMessage.metadata, wasCompacted: true, originalLength: originalContent.length, tokensSaved: saved }
+                        ...toolOutcome.compacted,
+                        metadata: { ...originalMessage.metadata, wasCompacted: true, originalLength: originalContent.length, tokensSaved: toolOutcome.saved }
                     };
-                    tokensSaved += saved;
+                    tokensSaved += toolOutcome.saved;
                     compactedCount++;
                 }
+                continue;
+            }
+
+            if (!this.wouldUserMessageCompactSaveTokens(originalMessage, originalTokens, originalContent, 500, params)) {
                 continue;
             }
 
@@ -11776,6 +11953,28 @@ export class BaseAgent {
             const originalTokens = candidate.tokens;
             const originalMessage = candidate.message as AgentChatMessage;
             const originalContent = ReplaceMediaBlocksWithStubs(originalMessage.content);
+
+            if (originalMessage.role === 'tool') {
+                const toolOutcome = this.compactToolTurnForRecovery(originalMessage, 200, originalTokens, params);
+                if (toolOutcome) {
+                    params.conversationMessages[candidate.index] = {
+                        ...toolOutcome.compacted,
+                        metadata: {
+                            ...originalMessage.metadata,
+                            wasCompacted: true,
+                            originalLength: originalContent.length,
+                            tokensSaved: toolOutcome.saved
+                        }
+                    };
+                    tokensSaved += toolOutcome.saved;
+                    compactedCount++;
+                }
+                continue;
+            }
+
+            if (!this.wouldUserMessageCompactSaveTokens(originalMessage, originalTokens, originalContent, 200, params)) {
+                continue;
+            }
 
             // Aggressive compaction - keep only first 200 chars
             const compactedContent = await this.compactMessage(
@@ -12206,6 +12405,13 @@ The context is now within limits. Please retry your request with the recovered c
                 });
 
                 const stored = await this._artifactToolManager.ExecuteSingleToolCall(call);
+                if (stored.trustLevel === 'Untrusted' || stored.trustLevel === 'SemiTrusted') {
+                    this.recordTaintedSource(
+                        toolStep?.StepNumber ?? this._promptTurnCount,
+                        stored.sourceName ?? `artifact:${stored.artifactId}`,
+                        stored.trustLevel,
+                    );
+                }
 
                 // Typed cross-turn contract — see CarryForwardToolStepOutput (read back by
                 // BuildPriorTurnToolResultsMessage on the next run; StepName is display-only).
@@ -12216,6 +12422,8 @@ The context is now within limits. Please retry your request with the recovered c
                     input: stored.input,
                     result: stored.result,
                     durationMs: stored.durationMs,
+                    ...(stored.trustLevel ? { trustLevel: stored.trustLevel } : {}),
+                    ...(stored.sourceName ? { sourceName: stored.sourceName } : {}),
                 };
                 await this.finalizeStepEntity(
                     toolStep,
@@ -13203,6 +13411,8 @@ The context is now within limits. Please retry your request with the recovered c
             if (!parsed.toolFamily || !BaseAgent.CarryForwardToolFamilies.includes(parsed.toolFamily)) continue;
             if (typeof parsed.tool !== 'string' || parsed.tool.length === 0) continue;
             if (parsed.result?.success !== true) continue;
+            // Never carry untrusted or semi-trusted artifact reads across into a new run without taint tracking.
+            if (parsed.trustLevel === 'Untrusted' || parsed.trustLevel === 'SemiTrusted') continue;
 
             const section = FormatToolResultSection(
                 { tool: parsed.tool, input: parsed.input },
@@ -13403,8 +13613,11 @@ The context is now within limits. Please retry your request with the recovered c
         const body = toolResults.map((r, i) => {
             const parts: ToolResultSectionParts = { tool: r.tool, input: r.input, ordinal: i + 1, signaturePrefix: r.artifactId };
             if (r.result.success) {
-                const data = this.capStandaloneToolResultText(RenderToolResultData(r.result.data));
-                return FormatToolResultSection(parts, data);
+                const rawData = this.capStandaloneToolResultText(RenderToolResultData(r.result.data));
+                const section = FormatToolResultSection(parts, rawData);
+                return (r.trustLevel === 'Untrusted' || r.trustLevel === 'SemiTrusted')
+                    ? WrapUntrustedExternalData(section, r.sourceName ?? `artifact:${r.artifactId}`, r.trustLevel)
+                    : section;
             }
             return FormatToolErrorSection(parts, r.result.errorMessage);
         }).join('\n\n');
@@ -13697,9 +13910,22 @@ The context is now within limits. Please retry your request with the recovered c
         // there is no model in that loop to act on the breaker's guidance.
         this.getEffectiveActionsForValidation(params.agent.ID).forEach((actionEntity) =>
             register(
-                new ActionInvocable(actionEntity.Name, (p) =>
-                    this.ExecuteSingleAction(params, { name: actionEntity.Name, params: p }, actionEntity, params.contextUser, { skipCircuitBreaker: true }),
-                ),
+                new ActionInvocable(actionEntity.Name, async (p) => {
+                    const actionResult = await this.ExecuteSingleAction(
+                        params,
+                        { name: actionEntity.Name, params: p },
+                        actionEntity,
+                        params.contextUser,
+                        { skipCircuitBreaker: true },
+                    );
+                    const trustLevel = this.resolveActionTrustLevel(actionEntity.Name, actionEntity, params);
+                    if (trustLevel === 'Untrusted' || trustLevel === 'SemiTrusted') {
+                        const sourceName = `action:${actionEntity.Name}`;
+                        this.recordTaintedSource(this._promptTurnCount, sourceName, trustLevel);
+                        registry.RecordTaint(sourceName, trustLevel);
+                    }
+                    return actionResult;
+                }),
             ),
         );
 
@@ -13713,6 +13939,11 @@ The context is now within limits. Please retry your request with the recovered c
                         tool,
                         input: p as ArtifactToolArgs,
                     });
+                    if (stored.trustLevel === 'Untrusted' || stored.trustLevel === 'SemiTrusted') {
+                        const sourceName = stored.sourceName ?? `artifact:${stored.artifactId}`;
+                        this.recordTaintedSource(this._promptTurnCount, sourceName, stored.trustLevel);
+                        registry.RecordTaint(sourceName, stored.trustLevel);
+                    }
                     return stored.result;
                 }),
             ),
@@ -13794,6 +14025,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected injectPipelineResultMessage(params: ExecuteAgentParams, result: PipelineExecutionResult): void {
+        const pipelineTaint = result.Taint;
         const diagnostic = result.success && result.diagnostic
             ? `\n⚠ Empty result — ${result.diagnostic}`
             : '';
@@ -13801,8 +14033,12 @@ The context is now within limits. Please retry your request with the recovered c
         // select`). Without it, multiple pipeline results across turns are indistinguishable once
         // compacted — mirrors how artifact-tool results name their tool/artifact.
         const label = summarizePipelineStages(result.steps);
+        const renderedFinalOutput = result.success ? formatFinalOutput(result.finalOutput) : '';
+        const formattedFinalOutput = result.success && pipelineTaint
+            ? WrapUntrustedExternalData(renderedFinalOutput, pipelineTaint.SourceName, pipelineTaint.TrustLevel)
+            : `\`\`\`\n${renderedFinalOutput}\n\`\`\``;
         const content = result.success
-            ? `Pipeline result [${label}] (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n\`\`\`\n${formatFinalOutput(result.finalOutput)}\n\`\`\`${diagnostic}`
+            ? `Pipeline result [${label}] (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n${formattedFinalOutput}${diagnostic}`
             : `Pipeline failed [${label}].\n${result.error}`;
 
         const message: AgentChatMessage = {
@@ -16325,7 +16561,11 @@ The context is now within limits. Please retry your request with the recovered c
 
         // The parent's history minus its runtime-state messages (see the doc comment): every mode
         // slices THIS, so no fragment reaches the sub-agent and none spends a MaxMessages slot.
-        const history = params.conversationMessages.filter(m => (m as AgentChatMessage).metadata?.volatileState !== true);
+        // Shallow-clone each copied message and its metadata so sub-agent turn expiration/compaction
+        // never mutates parent message metadata by shared reference.
+        const history = params.conversationMessages
+            .filter(m => (m as AgentChatMessage).metadata?.volatileState !== true)
+            .map(m => this.cloneMessageForSubAgent(m));
 
         // Apply message mode
         switch (messageMode) {
@@ -16394,6 +16634,27 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return messages;
+    }
+
+    /**
+     * Clones a conversation message and its metadata object (and handle arrays) before passing it
+     * across a sub-agent boundary so sub-agent lifecycle mutations never leak back to the parent.
+     */
+    private cloneMessageForSubAgent(msg: ChatMessage): ChatMessage {
+        const agentMsg = msg as AgentChatMessage;
+        if (!agentMsg.metadata) {
+            return { ...msg };
+        }
+        const meta = agentMsg.metadata;
+        const clonedMeta: AgentChatMessageMetadata = {
+            ...meta,
+            ...(meta.artifactIds ? { artifactIds: [...meta.artifactIds] } : {}),
+            ...(meta.pendingSpilloverIds ? { pendingSpilloverIds: [...meta.pendingSpilloverIds] } : {}),
+        };
+        return {
+            ...agentMsg,
+            metadata: clonedMeta,
+        };
     }
 
     /**
@@ -17147,6 +17408,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._heldDecisions = undefined;
         this._awaitingWorkflowTaskID = null;
         this._taintedSources = [];
+        this._actionSpilloverManager.Clear();
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -21331,7 +21593,7 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Executes actions step and tracks it.
-     * 
+     *
      * @private
      */
     private async executeActionsStep(
@@ -21450,9 +21712,6 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            // Get the effective AIAgentAction metadata records for this agent (including BaseAgentID-inherited ones)
-            const agentActions = this.getEffectiveAgentActions(params.agent.ID);
-
             // Use _effectiveActions which includes runtime action changes applied in gatherPromptTemplateData
             // getEffectiveActionsForValidation falls back to the configured actions only when none were computed;
             // an empty computed list (a host's actionChanges removed every action) is authoritative
@@ -21570,6 +21829,10 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Build a clean summary of action results
             // Apply large binary content interception to prevent context overflow
+            const agentActionsByActionId = this.indexEffectiveAgentActions(params.agent.ID);
+            const toolsEnabled = this.areArtifactToolsEnabled(params);
+            const allPendingSpilloverIds: string[] = [];
+            const resolvedExpirationConfigs: ResolvedActionExpirationConfig[] = [];
             const actionSummaries: ActionResultSummary[] = actionResults.map(result => {
                 const actionResult = result.result;
                 const isActionSuccess = Boolean(result.success && (actionResult ? actionResult.Success : true));
@@ -21588,13 +21851,44 @@ The context is now within limits. Please retry your request with the recovered c
                 const fileOutputs = this.detectFileOutputs(outputParams);
                 this._fileOutputs.push(...fileOutputs);
 
+                const stepNum = result.stepEntity?.StepNumber ?? (stepCount + 1);
                 const trustLevel = this.resolveActionTrustLevel(result.action.name, result.actionEntity, params);
                 if (trustLevel === 'Untrusted' || trustLevel === 'SemiTrusted') {
                     this.recordTaintedSource(
-                        result.stepEntity?.StepNumber ?? (stepCount + 1),
+                        stepNum,
                         `action:${result.action.name}`,
                         trustLevel
                     );
+                }
+
+                // Resolve expiration/compaction settings uniformly across direct (AIAgentAction)
+                // and skill-bundled (AISkillAction / Action.Config) invocations, and defer
+                // artifact spillover until compaction, expiry/removal, or context recovery
+                // so `_ARTIFACT_MANIFEST` and provider KV cache stay stable while inline.
+                const expirationConfig = ResolveActionExpirationConfig(
+                    result.actionEntity,
+                    params.agent.ID,
+                    params,
+                    agentActionsByActionId
+                );
+                if (expirationConfig != null && expirationConfig.ExpirationMode !== 'None') {
+                    resolvedExpirationConfigs.push(expirationConfig);
+                }
+                const pendingSpilloverId = isActionSuccess && addConversationMessage && toolsEnabled
+                    ? this._actionSpilloverManager.QueueDeferred(
+                        {
+                            ActionName: result.action.name,
+                            OutputParams: sanitizedParams,
+                            Message: actionResult?.Message,
+                            StepNumber: stepNum,
+                            ExpirationConfig: expirationConfig,
+                            TrustLevel: trustLevel,
+                        },
+                        this._artifactToolManager
+                    )
+                    : undefined;
+                if (pendingSpilloverId) {
+                    allPendingSpilloverIds.push(pendingSpilloverId);
                 }
 
                 return {
@@ -21621,54 +21915,24 @@ The context is now within limits. Please retry your request with the recovered c
             // Add user message with the results — compact markdown instead of JSON
             const resultsMessage = this.buildActionResultsMessage(actionSummaries);
 
-            // Build metadata from AI Agent Actions configuration
-            // If multiple actions, use the most restrictive (shortest) expiration settings
-            let metadata: AgentChatMessageMetadata | undefined;
-            const agentActionConfigs = actionResults
-                .map(r => agentActions.find(aa => UUIDsEqual(aa.ActionID, r.actionEntity.ID)))
-                .filter(aa => aa != null);
-
-            if (agentActionConfigs.length > 0) {
-                // Find the most restrictive expiration settings
-                let minExpirationTurns: number | null = null;
-                let expirationMode: 'None' | 'Remove' | 'Compact' = 'None';
-                let compactMode: 'First N Chars' | 'AI Summary' | undefined;
-                let compactLength: number | undefined;
-                let compactPromptId: string | undefined;
-
-                for (const agentAction of agentActionConfigs) {
-                    // Track shortest expiration (most restrictive)
-                    if (agentAction.ResultExpirationTurns != null) {
-                        if (minExpirationTurns === null || agentAction.ResultExpirationTurns < minExpirationTurns) {
-                            minExpirationTurns = agentAction.ResultExpirationTurns;
-                            expirationMode = agentAction.ResultExpirationMode as 'None' | 'Remove' | 'Compact' || 'None';
-                            compactMode = agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined;
-                            compactLength = agentAction.CompactLength;
-                            compactPromptId = agentAction.CompactPromptID;
-                        }
+            // Build metadata from unified action expiration configuration (run override -> AIAgentAction -> Action.Config).
+            // If multiple actions ran in parallel, use the most restrictive active expiration settings
+            // (shortest turns -> Remove over Compact -> smaller CompactLength), ignoring 'None'.
+            const mostRestrictiveExpiration = PickMostRestrictiveExpirationConfig(resolvedExpirationConfigs);
+            const metadata: AgentChatMessageMetadata = {
+                turnAdded: this._promptTurnCount,
+                messageType: 'action-result',
+                ...(mostRestrictiveExpiration
+                    ? {
+                        expirationTurns: mostRestrictiveExpiration.ExpirationTurns,
+                        expirationMode: mostRestrictiveExpiration.ExpirationMode,
+                        compactMode: mostRestrictiveExpiration.CompactMode,
+                        compactLength: mostRestrictiveExpiration.CompactLength,
+                        compactPromptId: mostRestrictiveExpiration.CompactPromptID,
                     }
-                }
-
-                // Expiration settings only when the configuration has them; the tag itself is always stamped below.
-                if (minExpirationTurns !== null && expirationMode !== 'None') {
-                    metadata = {
-                        turnAdded: this._promptTurnCount,
-                        messageType: 'action-result',
-                        expirationTurns: minExpirationTurns,
-                        expirationMode: expirationMode,
-                        compactMode: compactMode,
-                        compactLength: compactLength,
-                        compactPromptId: compactPromptId
-                    };
-                }
-            }
-
-            // Every action result is tagged, with or without expiration settings, so IsToolResultMessage
-            // and IsVolatileResultMessage recognize it: context recovery and post-run compaction can then
-            // compact it, and `pruneAndCompactExpiredMessages` still leaves it alone (no expirationTurns).
-            if (!metadata) {
-                metadata = { turnAdded: this._promptTurnCount, messageType: 'action-result' };
-            }
+                    : {}),
+                ...(allPendingSpilloverIds.length > 0 ? { pendingSpilloverIds: allPendingSpilloverIds } : {}),
+            };
 
             if (addConversationMessage) {
                 // Add user message with results and optional metadata
@@ -23092,11 +23356,11 @@ The context is now within limits. Please retry your request with the recovered c
             return this.createFailedStep('ForEach configuration missing', previousDecision);
         }
 
-        const primaryActionName = forEach.action?.name ?? forEach.steps?.[0]?.name;
+        const loopActionNames = this.getLoopActionNames(forEach);
         const headerMessage = this.validateForEachHeader(forEach);
         if (headerMessage) {
             return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `ForEach configuration invalid: ${headerMessage}`,
-                                                     previousDecision, params, primaryActionName);
+                                                     previousDecision, params, loopActionNames);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
@@ -23104,14 +23368,14 @@ The context is now within limits. Please retry your request with the recovered c
 
         if (!collection) {
             return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `Collection path "${forEach.collectionPath}" not an array`,
-                                                     previousDecision, params, primaryActionName);
+                                                     previousDecision, params, loopActionNames);
         }
 
         const agentId = params.agent?.ID ?? this._agentRun?.AgentID ?? '';
         const bodyMessage = this.validateLoopBodyOperation('ForEach', forEach, agentId);
         if (bodyMessage) {
             return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `ForEach configuration invalid: ${bodyMessage}`,
-                                                     previousDecision, params, primaryActionName);
+                                                     previousDecision, params, loopActionNames);
         }
 
         const loopStepEntity = await this.createForEachLoopStep(forEach, collection, currentPayload, params);
@@ -23914,7 +24178,7 @@ The context is now within limits. Please retry your request with the recovered c
                                       loopResults);
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params, forEach.action?.name ?? forEach.steps?.[0]?.name);
+            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params, this.getLoopActionNames(forEach));
         }
 
         return {
@@ -23924,6 +24188,13 @@ The context is now within limits. Please retry your request with the recovered c
             newPayload: loopResults.finalPayload,
             previousPayload: previousDecision.previousPayload
         };
+    }
+
+    private getLoopActionNames(op: Pick<ForEachOperation, 'action' | 'steps'>): string[] {
+        if (op.action?.name) {
+            return [op.action.name];
+        }
+        return (op.steps ?? []).map(s => s.name).filter((n): n is string => typeof n === 'string' && n.length > 0);
     }
 
     /**
@@ -23937,15 +24208,46 @@ The context is now within limits. Please retry your request with the recovered c
         results: BaseAgentNextStep[],
         errors: LoopIterationError[],
         params: ExecuteAgentParams,
-        actionName?: string
-    ) {
+        actionNames?: string | readonly string[]
+    ): void {
         const label = loopType === 'ForEach' ? 'Collection' : 'Condition';
         const content = `## Loop Completed\n**Type:** ${loopType}\n**${label}:** ${collectionOrCondition}\n` +
                      `**Processed:** ${results.length}, **Errors:** ${errors.length}\n\n` +
                      this.formatLoopResultsAsMarkdown(results, errors);
 
-        // Resolve expiration metadata from the loop's action config (most-restrictive-wins)
-        const metadata = this.resolveLoopExpirationMetadata(params, actionName);
+        const names = typeof actionNames === 'string' ? [actionNames] : [...(actionNames ?? [])];
+        // Resolve expiration metadata across all loop-body actions (most-restrictive-wins)
+        const metadata = this.resolveLoopExpirationMetadata(params, names);
+
+        if (results.length > 0 && this.areArtifactToolsEnabled(params)) {
+            const envelope = ExtractUntrustedEnvelope(content);
+            const loopExpirationConfig: ResolvedActionExpirationConfig | undefined =
+                metadata.expirationTurns != null && metadata.expirationMode
+                    ? {
+                        ExpirationTurns: metadata.expirationTurns,
+                        ExpirationMode: metadata.expirationMode,
+                        CompactMode: metadata.compactMode,
+                        CompactLength: metadata.compactLength,
+                        CompactPromptID: metadata.compactPromptId,
+                    }
+                    : undefined;
+            const actionLabel = names.length > 0 ? `${loopType}: ${names.join(' → ')}` : `${loopType} Loop`;
+            const pendingSpilloverId = this._actionSpilloverManager.QueueDeferred(
+                {
+                    ActionName: actionLabel,
+                    OutputParams: [],
+                    Message: envelope ? envelope.UnwrappedText : content,
+                    StepNumber: this._promptTurnCount,
+                    ExpirationConfig: loopExpirationConfig,
+                    TrustLevel: envelope ? envelope.TrustLevel : 'Trusted',
+                    SourceName: envelope?.Source,
+                },
+                this._artifactToolManager
+            );
+            if (pendingSpilloverId) {
+                metadata.pendingSpilloverIds = [pendingSpilloverId];
+            }
+        }
 
         params.conversationMessages.push({
             role: 'user',
@@ -23968,10 +24270,10 @@ The context is now within limits. Please retry your request with the recovered c
         errorMessage: string,
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams,
-        actionName?: string
+        actionNames?: string | readonly string[]
     ): BaseAgentNextStep {
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage(loopType, collectionOrCondition, [], [{ index: 0, message: errorMessage }], params, actionName);
+            this.injectLoopResultsMessage(loopType, collectionOrCondition, [], [{ index: 0, message: errorMessage }], params, actionNames);
         }
         return this.createFailedStep(errorMessage, previousDecision);
     }
@@ -24013,57 +24315,23 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private resolveLoopExpirationMetadata(
         params: ExecuteAgentParams,
-        actionName?: string
+        actionNames?: string | readonly string[]
     ): AgentChatMessageMetadata {
-        const baseMetadata: AgentChatMessageMetadata = {
-            turnAdded: this._promptTurnCount,
-            messageType: 'loop-result'
-        };
-
-        // Check for global override first
-        if (params.messageExpirationOverride) {
-            const override = params.messageExpirationOverride;
-            if (override.expirationTurns != null && override.expirationMode !== 'None') {
-                return {
-                    ...baseMetadata,
-                    expirationTurns: override.expirationTurns,
-                    expirationMode: override.expirationMode || 'Remove',
-                    compactMode: override.compactMode,
-                    compactLength: override.compactLength,
-                    compactPromptId: override.compactPromptId
-                };
-            }
-        }
-
-        // Look up the loop's action config for expiration settings (including BaseAgentID-inherited ones)
-        if (actionName) {
-            const agentActions = this.getEffectiveAgentActions(params.agent.ID);
-            const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
-            const matchedAction =
-                effectiveActions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase())
-                ?? this.matchNamedBySanitizedToolName(actionName, effectiveActions).match;
-
-            if (matchedAction) {
-                const agentAction = agentActions.find(aa => UUIDsEqual(aa.ActionID, matchedAction.ID));
-                if (agentAction?.ResultExpirationTurns != null && agentAction.ResultExpirationMode !== 'None') {
-                    return {
-                        ...baseMetadata,
-                        expirationTurns: agentAction.ResultExpirationTurns,
-                        expirationMode: agentAction.ResultExpirationMode as 'Remove' | 'Compact',
-                        compactMode: agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined,
-                        compactLength: agentAction.CompactLength ?? undefined,
-                        compactPromptId: agentAction.CompactPromptID ?? undefined
-                    };
-                }
-            }
-        }
-
-        // Default: keep for 3 turns then remove (safe fallback so results don't vanish after 1 turn)
-        return {
-            ...baseMetadata,
-            expirationTurns: 3,
-            expirationMode: 'Remove'
-        };
+        const names = typeof actionNames === 'string' ? [actionNames] : [...(actionNames ?? [])];
+        const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
+        const allActions = ActionEngineBase.Instance?.Actions ?? [];
+        const matchedActions = names
+            .map(name =>
+                this.resolveActionEntityForAgent(name, effectiveActions, params)
+                ?? this.resolveActionEntityForAgent(name, allActions, params)
+            )
+            .filter((a): a is MJActionEntityExtended => a != null);
+        return ResolveLoopExpirationMetadata(
+            params,
+            this._promptTurnCount,
+            matchedActions,
+            this.indexEffectiveAgentActions(params.agent.ID)
+        );
     }
 
     /**
@@ -24141,12 +24409,12 @@ The context is now within limits. Please retry your request with the recovered c
             return this.createFailedStep('While configuration missing', previousDecision);
         }
 
-        const primaryActionName = whileOp.action?.name ?? whileOp.steps?.[0]?.name;
+        const loopActionNames = this.getLoopActionNames(whileOp);
         const agentId = params.agent?.ID ?? this._agentRun?.AgentID ?? '';
         const validationMessage = this.validateWhileOperation(whileOp, agentId);
         if (validationMessage) {
             return this.failLoopBeforeFirstIteration('While', whileOp.condition, `While configuration invalid: ${validationMessage}`,
-                                                     previousDecision, params, primaryActionName);
+                                                     previousDecision, params, loopActionNames);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
@@ -24425,7 +24693,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Inject before the early return below: a Loop agent re-prompts after a Failed step, and the
         // loop-results message (the condition error, under Errors) is the only way the model learns why.
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name ?? whileOp.steps?.[0]?.name);
+            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, this.getLoopActionNames(whileOp));
         }
 
         // A condition that never evaluated means the loop never ran: fail the step rather than
@@ -24772,6 +25040,9 @@ The context is now within limits. Please retry your request with the recovered c
             // _stepSaveQueue.Flush() and _agentRun.Save() inside a defensive try/catch so any
             // error in post-run maintenance is logged gracefully without turning a successful
             // agent run into a failure.
+            // Discard unmaterialized lazy spillovers before post-run compaction so finished runs do not
+            // register orphaned artifact handles for inline messages that survived the entire run.
+            this._actionSpilloverManager.Clear();
             if (this._executeParams) {
                 try {
                     await this.runPostRunCompaction(this._executeParams, this._agentRun);
@@ -25021,7 +25292,7 @@ The context is now within limits. Please retry your request with the recovered c
             index: number;
             message: AgentChatMessage;
             metadata: {
-                compactMode: 'First N Chars' | 'AI Summary';
+                compactMode: ActionCompactMode;
                 compactLength: number;
                 compactPromptId: string;
                 originalLength: number;
@@ -25071,7 +25342,9 @@ The context is now within limits. Please retry your request with the recovered c
 
                 if (msg.metadata.expirationMode === 'Remove' && msg.role === 'tool') {
                     // a tool turn cannot be removed (it answers an assistant call); stub its blocks.
-                    params.conversationMessages[i] = this.stubToolTurn(msg, `[result expired after ${turnsAlive} turns]`);
+                    const artifactIds = this.areArtifactToolsEnabled(params) ? this._actionSpilloverManager.Materialize(msg) : [];
+                    const artifactNote = FormatArtifactSpilloverHint(artifactIds, this._artifactToolManager.HasArtifacts(), 'semicolon');
+                    params.conversationMessages[i] = this.stubToolTurn(msg, `[result expired after ${turnsAlive} turns${artifactNote}]`);
                     this.emitMessageLifecycleEvent({
                         type: 'message-expired',
                         turn: currentTurn,
@@ -25080,6 +25353,9 @@ The context is now within limits. Please retry your request with the recovered c
                         reason: `Expired after ${turnsAlive} turns (limit: ${msg.metadata.expirationTurns}); tool turn stubbed, not removed`
                     });
                 } else if (msg.metadata.expirationMode === 'Remove') {
+                    if (this.areArtifactToolsEnabled(params)) {
+                        this._actionSpilloverManager.Materialize(msg);
+                    }
                     messagesToRemove.push(i);
 
                     this.emitMessageLifecycleEvent({
@@ -25092,12 +25368,13 @@ The context is now within limits. Please retry your request with the recovered c
                 } else if (msg.metadata.expirationMode === 'Compact') {
                     // Compacted once is compacted: compacting again would summarize the summary, and
                     // change the message again on every turn. Expansion clears the flag.
-                    if (msg.metadata.compactMode && !msg.metadata.wasCompacted) {
+                    const effectiveCompactMode: ActionCompactMode = msg.metadata.compactMode || 'First N Chars';
+                    if (!msg.metadata.wasCompacted) {
                         messagesToCompact.push({
                             index: i,
                             message: msg,
                             metadata: {
-                                compactMode: msg.metadata.compactMode,
+                                compactMode: effectiveCompactMode,
                                 compactLength: msg.metadata.compactLength || 500,
                                 compactPromptId: msg.metadata.compactPromptId || '',
                                 originalLength: typeof msg.content === 'string'
@@ -25555,9 +25832,16 @@ The context is now within limits. Please retry your request with the recovered c
                         || '';
 
                     if (msg.role === 'tool') {
+                        // Post-run compaction runs after finalizeAgentRun clears ephemeral spillovers (and
+                        // the next run resets ArtifactToolManager), so truncate while preserving any
+                        // <untrusted_external_data> boundary without advertising ephemeral artifact handles.
                         const compactedTurn = CompactToolResultContent(
                             msg,
-                            (t) => (t.length > compactLength ? `${t.slice(0, compactLength)}… [compacted from ${t.length} chars]` : t)
+                            (t) => TruncatePreservingUntrustedEnvelope(
+                                t,
+                                compactLength,
+                                (len) => `[compacted from ${len} chars]`
+                            )
                         );
                         const saved = Math.max(0, this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content));
                         messages[i] = {
@@ -25823,7 +26107,7 @@ The context is now within limits. Please retry your request with the recovered c
     protected async compactMessage(
         message: AgentChatMessage,
         metadata: {
-            compactMode: 'First N Chars' | 'AI Summary';
+            compactMode: ActionCompactMode;
             compactLength: number;
             compactPromptId: string;
             originalLength: number;
@@ -25831,19 +26115,32 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams
     ): Promise<string> {
         const originalContent = ReplaceMediaBlocksWithStubs(message.content);
+        const envelope = ExtractUntrustedEnvelope(originalContent);
 
         switch (metadata.compactMode) {
             case 'First N Chars': {
                 const length = metadata.compactLength;
+                const bodyToCompact = envelope ? envelope.UnwrappedText : originalContent;
 
-                if (originalContent.length <= length) {
+                if (bodyToCompact.length <= length) {
                     return originalContent; // Already short enough
                 }
 
-                const truncated = originalContent.substring(0, length);
+                const toolsEnabled = this.areArtifactToolsEnabled(params);
+                if (toolsEnabled) {
+                    this._actionSpilloverManager.Materialize(message);
+                }
+
+                const truncated = `${bodyToCompact.substring(0, length)}...`;
+                const renderedBody = envelope
+                    ? WrapUntrustedExternalData(truncated, envelope.Source, envelope.TrustLevel)
+                    : truncated;
                 // A native-only agent has no message expansion, so its tool results do not offer it.
                 const expandable = !(message.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
-                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}]`;
+                const artifactHint = toolsEnabled
+                    ? FormatArtifactSpilloverHint(message.metadata?.artifactIds, this._artifactToolManager.HasArtifacts())
+                    : '';
+                return `${renderedBody}\n\n[Compacted: showing first ${length} of ${bodyToCompact.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}${artifactHint}]`;
             }
 
             case 'AI Summary': {
@@ -25905,7 +26202,19 @@ The context is now within limits. Please retry your request with the recovered c
                         );
                     }
 
-                    return `[AI Summary of ${metadata.originalLength} chars. Agent can request full expansion if needed.]\n\n${result.result.summary}`;
+                    const toolsEnabled = this.areArtifactToolsEnabled(params);
+                    if (toolsEnabled) {
+                        this._actionSpilloverManager.Materialize(message);
+                    }
+                    const expandable = !(message.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
+                    const artifactHint = toolsEnabled
+                        ? FormatArtifactSpilloverHint(message.metadata?.artifactIds, this._artifactToolManager.HasArtifacts())
+                        : '';
+                    const rawSummary = ExtractUntrustedEnvelope(result.result.summary)?.UnwrappedText ?? result.result.summary;
+                    const renderedSummary = envelope
+                        ? WrapUntrustedExternalData(rawSummary, envelope.Source, envelope.TrustLevel)
+                        : rawSummary;
+                    return `[AI Summary of ${metadata.originalLength} chars.${expandable ? ' Agent can request full expansion if needed.' : ''}${artifactHint}]\n\n${renderedSummary}`;
 
                 } catch (error) {
                     console.error('Error during AI summary:', error);
