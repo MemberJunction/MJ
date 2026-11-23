@@ -90,6 +90,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp, UpgradeApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
+import type { InstalledAppInfo } from '../types/open-app-types.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
@@ -104,6 +105,7 @@ import {
     ListInstalledApps,
     CheckSchemaSharedByOtherApps,
     UpdateAppRecord,
+    ReplaceAppDependenciesAtomically,
 } from '../install/history-recorder.js';
 
 /** Records the name of each app as it reaches the "record installation" step. */
@@ -1732,5 +1734,116 @@ describe('InstallApp — public page slug owned by another app', () => {
         expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
         expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
         expect(vi.mocked(AddPublicPages)).not.toHaveBeenCalled();
+    });
+});
+
+describe('Requirements of an already-installed dependency (#6877)', () => {
+    const repoUrl = (name: string) => `https://github.com/test/${name}`;
+    const needs = (name: string, version: string) => ({ [name]: { version, repository: repoUrl(name) } });
+    const warnings: string[] = [];
+    const ctx = { ...context, Callbacks: { OnWarn: (_phase: string, message: string) => { warnings.push(message); } } } as OrchestratorContext;
+
+    /** An installed app row; `manifestText` is its persisted ManifestJSON. */
+    function installedRow(name: string, manifestText: string, version = '1.0.0'): InstalledAppInfo {
+        return { ID: `id-${name}`, Name: name, Version: version, RepositoryURL: repoUrl(name), Status: 'Active', ManifestJSON: manifestText } as InstalledAppInfo;
+    }
+
+    /** Manifests by `repoUrl` (default branch) or `repoUrl@version`. A missing key fails the fetch. */
+    function serveRefs(byRef: Record<string, string>): void {
+        vi.mocked(FetchManifestFromGitHub).mockImplementation(async (url, version) => {
+            const json = byRef[version ? `${url}@${version}` : url];
+            return json ? { Success: true, ManifestJSON: json } : { Success: false, ErrorMessage: `no manifest for ${url} at ${version ?? 'HEAD'}` };
+        });
+    }
+
+    const root = manifestJSON('app-root', { ...needs('app-tasks', '^1.0.0'), ...needs('app-common', '^1.0.0') });
+    /** app-tasks as it is on its default branch: it needs an app-common that is not released. */
+    const tasksOnDefaultBranch = manifestJSON('app-tasks', needs('app-common', '>=1.5.0 <2.0.0'));
+    const tasksAtInstalledVersion = manifestJSON('app-tasks', needs('app-common', '^1.0.0'));
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        warnings.length = 0;
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(ReplaceAppDependenciesAtomically).mockResolvedValue(true);
+        vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
+        vi.mocked(FindInstalledApp).mockResolvedValue(null);
+        vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
+            installSequence.push(manifest.name);
+            return `id-${manifest.name}`;
+        });
+    });
+
+    it('installs when the recorded manifest is satisfied, whatever the default branch asks for', async () => {
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            installedRow('app-tasks', tasksAtInstalledVersion),
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch });
+
+        const result = await InstallApp({ Source: repoUrl('app-root') }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(installSequence).toEqual(['app-root']);
+        // Only the app being installed is read from GitHub.
+        expect(vi.mocked(FetchManifestFromGitHub).mock.calls.map(([url]) => url)).toEqual([repoUrl('app-root')]);
+    });
+
+    it('upgrades when the recorded manifest is satisfied, whatever the default branch asks for', async () => {
+        const rootRow = installedRow('app-root', root, '0.9.0');
+        vi.mocked(FindInstalledApp).mockResolvedValue(rootRow);
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            rootRow,
+            installedRow('app-tasks', tasksAtInstalledVersion),
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch });
+
+        const result = await UpgradeApp({ AppName: 'app-root', Version: '1.0.0' }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(result.Success).toBe(true);
+        expect(vi.mocked(FetchManifestFromGitHub).mock.calls.map(([url]) => url)).toEqual([repoUrl('app-root')]);
+    });
+
+    it('warns and reads the manifest at the installed version when the recorded manifest is not valid JSON', async () => {
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            installedRow('app-tasks', '{not json'),
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({
+            [repoUrl('app-root')]: root,
+            [repoUrl('app-tasks')]: tasksOnDefaultBranch,
+            [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion,
+        });
+
+        const result = await InstallApp({ Source: repoUrl('app-root') }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(installSequence).toEqual(['app-root']);
+        expect(warnings.some((w) => w.includes("'app-tasks'") && w.includes('1.0.0'))).toBe(true);
+    });
+
+    it('does not follow a file: dependency recorded for an app installed from GitHub', async () => {
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            installedRow('app-tasks', manifestJSON('app-tasks', { 'app-local': { version: '^1.0.0', repository: 'file:apps/app-local' } })),
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [repoUrl('app-root')]: root });
+
+        const result = await InstallApp({ Source: repoUrl('app-root') }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(installSequence).toEqual(['app-root']);
+        expect(warnings.some((w) => w.includes('file:apps/app-local'))).toBe(true);
     });
 });
