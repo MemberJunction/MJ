@@ -1748,7 +1748,12 @@ export class FlowAgentType extends BaseAgentType {
     private compileAndValidateFlow<P>(
         params: ExecuteAgentParams<P>
     ): { Spec: TaskGraphSpec; Excluded: FlowCompileResult['Excluded'] } | { ErrorMessage: string } {
-        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
+        const compiled = CompileFlowAgentToTaskGraph(
+            params.agent.ID,
+            params.agent.Name,
+            params.agent.Description ?? undefined,
+            params.agent.Isolation,
+        );
         if (!compiled.Success || !compiled.Spec) {
             return { ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}` };
         }
@@ -2181,7 +2186,7 @@ export class FlowAgentType extends BaseAgentType {
         // Parse base configuration from AIAgentStep
         const baseConfig = JSON.parse(node.Configuration);
 
-        // Build universal ForEachOperation
+        // Parse universal ForEachOperation (including optional enqueue fan-out configuration)
         const forEach: ForEachOperation = {
             collectionPath: baseConfig.collectionPath,
             itemVariable: baseConfig.itemVariable || 'item',
@@ -2192,6 +2197,14 @@ export class FlowAgentType extends BaseAgentType {
             executionMode: baseConfig.executionMode,
             maxConcurrency: baseConfig.maxConcurrency
         };
+
+        if (baseConfig.enqueue && typeof baseConfig.enqueue === 'object') {
+            return this.stopFlow(
+                `Workflow '${params.agent.Name}' reached ForEach + Enqueue step '${node.Name}', which queues work asynchronously ` +
+                `and runs on the TaskGraph dispatcher. Run the workflow as a top-level run with executionMode 'dispatch'.`,
+                payload
+            );
+        }
 
         // Multi-step loop bodies (`steps[]`, e.g. from graduated TaskGraphSpec workflows) take precedence
         // over single-action `node.ActionID` (which only holds steps[0]'s ID on AIAgentStep).

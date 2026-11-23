@@ -18,10 +18,25 @@ import {
     MJAIAgentEntityExtended,
     TypedActionPolicyGuard,
 } from '@memberjunction/ai-core-plus';
+import {
+    AssembleChiefOfStaffBriefingEnvelope,
+    BuildTeamBriefingSection,
+    type ChiefOfStaffBriefingRecord,
+    type ChiefOfStaffCoreBriefingState,
+    type ChiefOfStaffSkillBriefingEntry,
+    type TeamBriefingSection,
+    type TeamDirectReportSummary,
+} from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
+
+interface ActionRunContext {
+    AgentID?: string;
+}
+
+type ActionOutputValue = string | number | boolean | object | null | undefined;
 
 function readStringParam(params: RunActionParams, name: string): string | undefined {
     const found = params.Params.find((p) => p.Name.trim().toLowerCase() === name.toLowerCase());
@@ -62,11 +77,11 @@ function readBooleanParam(params: RunActionParams, name: string, fallback: boole
     return fallback;
 }
 
-function extractContextAgentId(context: unknown): string | undefined {
+function extractContextAgentId(context: ActionRunContext | null | undefined): string | undefined {
     if (!context || typeof context !== 'object') {
         return undefined;
     }
-    const val = (context as { AgentID?: unknown }).AgentID;
+    const val = context.AgentID;
     if (typeof val === 'string' && val.trim().length > 0) {
         return val.trim();
     }
@@ -74,7 +89,7 @@ function extractContextAgentId(context: unknown): string | undefined {
 }
 
 function resolveTargetAgent(params: RunActionParams): MJAIAgentEntityExtended | null {
-    const explicitId = readStringParam(params, 'AgentID') ?? extractContextAgentId(params.Context);
+    const explicitId = readStringParam(params, 'AgentID') ?? extractContextAgentId(params.Context as ActionRunContext | null | undefined);
     if (explicitId) {
         return AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, explicitId)) ?? null;
     }
@@ -85,7 +100,7 @@ function resolveTargetAgent(params: RunActionParams): MJAIAgentEntityExtended | 
     );
 }
 
-function setOutputParam(params: RunActionParams, name: string, value: unknown): ActionParam[] {
+function setOutputParam(params: RunActionParams, name: string, value: ActionOutputValue): ActionParam[] {
     const existing = params.Params.find(
         (p) => p.Name.trim().toLowerCase() === name.toLowerCase() && p.Type === 'Output'
     );
@@ -329,8 +344,9 @@ export class AssembleMyBriefingAction extends BaseAction {
                 (entry) => !includeSkillSet || includeSkillSet.has(entry.skill.Name.trim().toLowerCase())
             );
 
-            const [coreState, skillBriefings] = await Promise.all([
+            const [coreState, teamSection, skillBriefings] = await Promise.all([
                 this.loadCoreBriefingState(agent.ID, contextUser, params.Context, md),
+                this.loadTeamBriefingSection(contextUser, params.Context, md),
                 Promise.all(
                     briefingEntries.map((entry) =>
                         this.runBriefingContributor(
@@ -346,14 +362,14 @@ export class AssembleMyBriefingAction extends BaseAction {
                 ),
             ]);
 
-            const payload = {
-                GeneratedAtISO: new Date().toISOString(),
+            const payload = AssembleChiefOfStaffBriefingEnvelope({
                 HorizonDays: horizonDays,
                 Agent: { AgentID: agent.ID, Name: agent.Name },
                 User: { UserID: contextUser.ID, Name: contextUser.Name, Email: contextUser.Email },
                 Core: coreState,
                 SkillBriefings: skillBriefings,
-            };
+                Team: teamSection,
+            });
 
             const outParams = setOutputParam(params, 'BriefingJSON', JSON.stringify(payload));
             return {
@@ -377,9 +393,9 @@ export class AssembleMyBriefingAction extends BaseAction {
     private async loadCoreBriefingState(
         agentId: string,
         contextUser: UserInfo,
-        actionContext: unknown,
+        actionContext: ActionRunContext | null | undefined,
         md: IMetadataProvider
-    ): Promise<Record<string, unknown>> {
+    ): Promise<ChiefOfStaffCoreBriefingState> {
         const rv = RunView.FromMetadataProvider(md);
         const safeUserId = EscapeSQLString(contextUser.ID);
         const safeAgentId = EscapeSQLString(agentId);
@@ -465,7 +481,7 @@ export class AssembleMyBriefingAction extends BaseAction {
                 : Promise.resolve({ Success: false, Results: [] as MJAIAgentSuggestionEntity[] }),
         ]);
 
-        let activeChannels: Array<Record<string, unknown>> = [];
+        let activeChannels: ChiefOfStaffBriefingRecord[] = [];
         if (channelsGuard.Allowed && participantRes.Success && participantRes.Results.length > 0) {
             const channelIds = participantRes.Results.map((p) => `'${EscapeSQLString(p.AgentChannelID)}'`).join(',');
             const chanRes = await rv.RunView<MJAgentChannelEntity>(
@@ -545,6 +561,50 @@ export class AssembleMyBriefingAction extends BaseAction {
         };
     }
 
+    private async loadTeamBriefingSection(
+        contextUser: UserInfo,
+        actionContext: ActionRunContext | null | undefined,
+        md: IMetadataProvider
+    ): Promise<TeamBriefingSection | null> {
+        const empGuard = await TypedActionPolicyGuard.CheckEntityAccess({
+            entityName: 'MJ: Employees',
+            operation: 'Read',
+            contextUser,
+            actionContext,
+            provider: md,
+        });
+        if (!empGuard.Allowed) {
+            return null;
+        }
+        const team = await BuildTeamBriefingSection({
+            ContextUser: contextUser,
+            MetadataProvider: md,
+        });
+        if (!team) {
+            return null;
+        }
+        const maskedReports: TeamDirectReportSummary[] = TypedActionPolicyGuard.MaskRows(
+            team.DirectReports.map((r) => ({
+                EmployeeID: r.EmployeeID,
+                UserID: r.UserID,
+                Name: r.Name,
+                Email: r.Email,
+                Title: r.Title,
+            })),
+            empGuard.DeniedFieldPatterns
+        ).map((masked) => ({
+            EmployeeID: masked.EmployeeID ?? '',
+            UserID: masked.UserID ?? null,
+            Name: masked.Name ?? '',
+            Email: masked.Email ?? '',
+            Title: masked.Title ?? null,
+        }));
+        return {
+            ...team,
+            DirectReports: maskedReports,
+        };
+    }
+
     private async runBriefingContributor(
         skillName: string,
         actionId: string,
@@ -553,7 +613,7 @@ export class AssembleMyBriefingAction extends BaseAction {
         contributorTimeoutMs: number,
         maxContributorChars: number,
         parentParams: RunActionParams
-    ): Promise<Record<string, unknown>> {
+    ): Promise<ChiefOfStaffSkillBriefingEntry> {
         const action = ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, actionId));
         if (!action) {
             return {
@@ -603,27 +663,28 @@ export class AssembleMyBriefingAction extends BaseAction {
             }
 
             const result = raced;
+            type ContributorJsonObject = Record<string, string | number | boolean | object | null | undefined>;
             const parsedData =
                 result.Message && (result.Message.trim().startsWith('{') || result.Message.trim().startsWith('['))
-                    ? SafeJSONParse<Record<string, unknown>>(result.Message)
+                    ? SafeJSONParse<ContributorJsonObject>(result.Message)
                     : null;
 
-            const outputParams: Record<string, unknown> = {};
+            const outputParams: ContributorJsonObject = {};
             for (const p of result.Params ?? []) {
                 if ((p.Type === 'Output' || p.Type === 'Both') && p.Value !== undefined && p.Value !== null) {
                     if (typeof p.Value === 'string') {
                         const trimmed = p.Value.trim();
                         if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-                            const parsed = SafeJSONParse<unknown>(trimmed);
+                            const parsed = SafeJSONParse<ActionOutputValue>(trimmed);
                             outputParams[p.Name] = parsed ?? p.Value;
                             continue;
                         }
                     }
-                    outputParams[p.Name] = p.Value;
+                    outputParams[p.Name] = p.Value as ActionOutputValue;
                 }
             }
             const hasOutputs = Object.keys(outputParams).length > 0;
-            const rawContributorData: unknown = parsedData
+            const rawContributorData: ActionOutputValue = parsedData
                 ? hasOutputs
                     ? { ...parsedData, Outputs: outputParams }
                     : parsedData
@@ -661,7 +722,7 @@ export class AssembleMyBriefingAction extends BaseAction {
         }
     }
 
-    private capContributorPayload(data: unknown, maxChars: number): unknown {
+    private capContributorPayload(data: ActionOutputValue, maxChars: number): ActionOutputValue {
         if (data === null || data === undefined) {
             return data;
         }

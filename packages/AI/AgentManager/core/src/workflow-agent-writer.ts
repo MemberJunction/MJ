@@ -77,6 +77,7 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
         }
 
         result.Spec.Description = spec.description ?? result.Spec.Description;
+        result.Spec.Isolation = spec.isolation ?? spec.graph.isolation ?? result.Spec.Isolation;
         // A Draft or Paused workflow persists as a Disabled agent, so nothing can invoke it before
         // its author has turned it on — the schedule side makes the same choice for the same reason.
         // 'Disabled' and not 'Inactive': the latter is not a value `AIAgent.Status` accepts, so this

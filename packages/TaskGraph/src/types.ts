@@ -8,9 +8,11 @@ import type {
     OwnerPauseNotificationPayload,
     TaskGraphDecisionAnswer,
     TaskSecurityEnvelope,
+    WorkflowBudgetBreachDiagnostic,
 } from '@memberjunction/ai-core-plus';
 import type { FastConvergenceJudgeEvaluator } from '@memberjunction/ai-agents';
 import type { MJLimitsOverride } from '@memberjunction/core';
+import type { TaskGraphIsolationRunnerMap } from './isolation';
 
 /**
  * Mints a fresh metadata/data provider.
@@ -413,6 +415,17 @@ export type TaskGraphObserver = {
     OnFrame(frame: TaskGraphFrame): void;
 };
 
+/** Whole-workflow USD cost & wall-clock budget state propagated into task-graph node runners. */
+export type TaskGraphWorkflowBudgetContext = {
+    ParentTaskID: string;
+    WorkflowMaxCostUsd?: number;
+    WorkflowMaxDurationMs?: number;
+    WorkflowStartedAtMs: number;
+    CumulativeCostUsd: number;
+    RemainingCostUsd?: number;
+    RemainingWallClockMs?: number;
+};
+
 /** Everything an executor needs to run a single task node. */
 export type TaskAgentRunParams = {
     /** The task row being executed. */
@@ -460,6 +473,8 @@ export type TaskAgentRunParams = {
      * input taint). The runner starts the agent run under it; see `TaskAgentRunner.EnforcesSecurityEnvelope`.
      */
     SecurityEnvelope?: TaskSecurityEnvelope;
+    /** Whole-workflow budget ceilings & start timestamp propagated from the orchestrating TaskGraph. */
+    WorkflowBudget?: TaskGraphWorkflowBudgetContext;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };
@@ -479,6 +494,8 @@ export type TaskAgentRunResult = {
     CostUsd?: number;
     /** Optional token count consumed by executing this agent node. */
     TokensUsed?: number;
+    /** Structured workflow budget breach diagnostic when execution stopped due to a whole-workflow limit. */
+    LimitExceeded?: WorkflowBudgetBreachDiagnostic;
 };
 
 /**
@@ -600,6 +617,12 @@ export type TaskGraphDispatcherConfig = {
 
     /** Optional production budget and runaway governance configuration evaluated on node settlement. */
     Governance?: TaskGraphGovernanceConfig;
+
+    /**
+     * Optional per-level isolation execution runners (`InProcess`, `Worker`, `Process`, `Container`)
+     * used by {@link TaskGraphDispatcher} when executing graph tasks.
+     */
+    IsolationRunners?: TaskGraphIsolationRunnerMap;
 };
 
 /** Optional production budget and runaway governance configuration for {@link TaskGraphDispatcher}. */

@@ -106,8 +106,8 @@ export class SearchAction extends BaseAction {
                     "SEARCH_FAILED"
                 );
             }
-            // `!== undefined`: any audience at all — even a malformed one the engine refused — withholds SourceCounts.
-            return this.buildSuccessResult(result, checked.query, params.Audience !== undefined);
+            // `!== undefined` or structural audience: any audience at all — even a malformed one the engine refused — withholds SourceCounts.
+            return this.buildSuccessResult(result, checked.query, params.Audience !== undefined || params.IsStructuralAudience === true);
         } catch (error) {
             LogError(`SearchAction error: ${error instanceof Error ? error.message : String(error)}`);
             return this.createErrorResult(
