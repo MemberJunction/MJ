@@ -134,7 +134,9 @@ vi.mock('@memberjunction/api-keys', () => ({
 import { MJGlobal } from '@memberjunction/global';
 import { DEFAULT_SERVER_CONFIG, LoadConfig, configInfo } from '../config.js';
 import {
+  EMAIL_VERIFICATION_AUTH_ERROR_PREFIX,
   EvaluateExternalEmailVerification,
+  INVITE_ONLY_AUTH_ERROR_PREFIX,
   IsInviteOnlyMode,
   IsVerifiedEmailRequired,
   NormalizeInviteOnlyUserHandling,
@@ -340,6 +342,80 @@ describe('MJ-5 Invite-Only External User Config (userHandling)', () => {
         }),
       ).toEqual({ Allowed: true });
     });
+
+    it('strictly normalizes boolean, numeric, and string variants of email_verified and xms_edov', () => {
+      const policy = { inviteOnly: true, requireVerifiedEmail: true, verifiedEmailOptionalProviders: ['azure'] };
+
+      for (const unverified of [0, '0', 'false', ' FALSE ', 'unverified', 'no', 2]) {
+        const resEntra = EvaluateExternalEmailVerification({
+          Payload: { iss: 'https://login.microsoftonline.com/tenant/v2.0', sub: '1', xms_edov: unverified },
+          UserHandling: policy,
+          ProviderName: 'azure',
+          Issuer: 'https://login.microsoftonline.com/tenant/v2.0',
+        });
+        expect(resEntra.Allowed, `xms_edov=${String(unverified)}`).toBe(false);
+        if (!resEntra.Allowed) {
+          expect(resEntra.Reason.startsWith(INVITE_ONLY_AUTH_ERROR_PREFIX)).toBe(true);
+        }
+
+        const resOidc = EvaluateExternalEmailVerification({
+          Payload: { iss: 'https://auth0.test/', sub: '1', email_verified: unverified, xms_edov: true },
+          UserHandling: policy,
+          ProviderName: 'auth0',
+          Issuer: 'https://auth0.test/',
+        });
+        expect(resOidc.Allowed, `email_verified=${String(unverified)}`).toBe(false);
+      }
+
+      for (const verified of [1, '1', 'true', ' TRUE ']) {
+        expect(
+          EvaluateExternalEmailVerification({
+            Payload: { iss: 'https://login.microsoftonline.com/tenant/v2.0', sub: '1', xms_edov: verified },
+            UserHandling: { ...policy, verifiedEmailOptionalProviders: [] },
+            ProviderName: 'azure',
+            Issuer: 'https://login.microsoftonline.com/tenant/v2.0',
+          }),
+          `xms_edov=${String(verified)}`,
+        ).toEqual({ Allowed: true });
+      }
+
+      // Rejects immediately when email_verified=true is paired with xms_edov=false
+      expect(
+        EvaluateExternalEmailVerification({
+          Payload: { iss: 'https://login.microsoftonline.com/tenant/v2.0', sub: '1', email_verified: true, xms_edov: 0 },
+          UserHandling: policy,
+          ProviderName: 'azure',
+        }).Allowed,
+      ).toBe(false);
+    });
+
+    it('uses non-invite-only refusal wording when requireVerifiedEmail=true and inviteOnly=false', () => {
+      const policy = { inviteOnly: false, requireVerifiedEmail: true, verifiedEmailOptionalProviders: [] };
+
+      const unverified = EvaluateExternalEmailVerification({
+        Payload: { iss: 'https://auth0.test/', sub: '1', email_verified: 'false' },
+        UserHandling: policy,
+        ProviderName: 'auth0',
+        Issuer: 'https://auth0.test/',
+      });
+      expect(unverified.Allowed).toBe(false);
+      if (!unverified.Allowed) {
+        expect(unverified.Reason.startsWith(EMAIL_VERIFICATION_AUTH_ERROR_PREFIX)).toBe(true);
+        expect(unverified.Reason).not.toContain('Invite-only');
+      }
+
+      const missing = EvaluateExternalEmailVerification({
+        Payload: { iss: 'https://auth0.test/', sub: '1' },
+        UserHandling: policy,
+        ProviderName: 'auth0',
+        Issuer: 'https://auth0.test/',
+      });
+      expect(missing.Allowed).toBe(false);
+      if (!missing.Allowed) {
+        expect(missing.Reason.startsWith(EMAIL_VERIFICATION_AUTH_ERROR_PREFIX)).toBe(true);
+        expect(missing.Reason).not.toContain('Invite-only');
+      }
+    });
   });
 
   describe('end-to-end GetUserPayload & CreateUnifiedAuthMiddleware invite-only enforcement', () => {
@@ -409,6 +485,20 @@ describe('MJ-5 Invite-Only External User Config (userHandling)', () => {
       await expect(GetUserPayload('Bearer tok-unverified-missing', 's1', dataSources)).rejects.toThrow(
         /missing a verified email claim/,
       );
+    });
+
+    it('surfaces standalone Sign-in refused wording via GetUserPayload when requireVerifiedEmail=true and inviteOnly=false', async () => {
+      Object.assign(configInfo.userHandling, { inviteOnly: false, requireVerifiedEmail: true });
+      setupJwt('tok-standalone-unverified', { xms_edov: '0' }, 'user@external.org');
+      let caught: unknown;
+      try {
+        await GetUserPayload('Bearer tok-standalone-unverified', 's1', dataSources);
+      } catch (err) {
+        caught = err;
+      }
+      expect(IsInviteOnlyAuthenticationError(caught)).toBe(true);
+      expect((caught as Error).message).toMatch(/^Sign-in refused:/);
+      expect((caught as Error).message).not.toContain('Invite-only');
     });
 
     it('admits an invited and verified external user with ZERO auto-granted UI roles', async () => {

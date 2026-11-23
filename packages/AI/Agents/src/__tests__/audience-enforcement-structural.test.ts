@@ -254,17 +254,47 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
             expect(result).toEqual({ Error: expect.stringMatching(/^Invalid Audience: /) });
             expect(refreshSpy).not.toHaveBeenCalled();
         });
+
+        it('fails closed when ScopeCommonReach is supplied without a constraining run scope', async () => {
+            const unscopedParams = makeParams(
+                { Mode: 'ScopeCommonReach' },
+                { PrimaryScopeEntityName: undefined, PrimaryScopeRecordID: undefined, SecondaryScopes: undefined, SearchScopeIDs: undefined }
+            );
+            const result = await internals.audienceReadersFor(unscopedParams);
+            expect(result).toEqual({ Error: expect.stringMatching(/requires a constraining run scope/) });
+            await expect(
+                agent.ExecuteSingleAction(unscopedParams, { name: 'Scoped Search', params: { Query: 'q' } }, makeActionEntity(), CALLER)
+            ).rejects.toThrow(/requires a constraining run scope/);
+            expect(actionHarness.dispatched).toHaveLength(0);
+        });
+
+        it('accepts ScopeCommonReach when SecondaryScopes or SearchScopeIDs constrains the run without PrimaryScopeRecordID', async () => {
+            const withSecondary = makeParams(
+                { Mode: 'ScopeCommonReach' },
+                { PrimaryScopeEntityName: undefined, PrimaryScopeRecordID: undefined, SecondaryScopes: { WorkspaceID: 'ws-1' } }
+            );
+            expect(await internals.audienceReadersFor(withSecondary)).toEqual({ Readers: [] });
+
+            const agentWithSearchScopes = new BaseAgent();
+            const withSearchScopes = makeParams(
+                { Mode: 'ScopeCommonReach' },
+                { PrimaryScopeEntityName: undefined, PrimaryScopeRecordID: undefined, SearchScopeIDs: ['scope-1'] }
+            );
+            expect(await getInternals(agentWithSearchScopes).audienceReadersFor(withSearchScopes)).toEqual({ Readers: [] });
+        });
     });
 
     describe('unconditional enforcement of all non-enumeration audience boundaries', () => {
         const STRUCTURAL_AUDIENCE: AgentRunAudience = { Mode: 'ScopeCommonReach', ScopeAsserted: true };
 
-        it('permits SupportsAudience actions and strictly refuses + locks out non-supporting and runtime actions', async () => {
+        it('permits SupportsAudience actions, propagates IsStructuralAudience, and strictly refuses + locks out non-supporting and runtime actions', async () => {
             const searchEntity = makeActionEntity();
             const searchAction: AgentAction = { name: 'Scoped Search', params: { Query: 'q' } };
             const allowedResult = await agent.ExecuteSingleAction(makeParams(STRUCTURAL_AUDIENCE), searchAction, searchEntity, CALLER);
             expect(allowedResult.Success).toBe(true);
             expect(actionHarness.dispatched).toHaveLength(1);
+            expect(actionHarness.dispatched[0].IsStructuralAudience).toBe(true);
+            expect(actionHarness.dispatched[0].Audience).toBeUndefined();
 
             const nonAudienceEntity = makeActionEntity({
                 ID: 'aaaaaaaa-0000-4000-8000-0000000000f2',
@@ -297,6 +327,36 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
             expect(runtimeRefused.Success).toBe(false);
             expect(runtimeRefused.ResultCode).toBe(AUDIENCE_UNSUPPORTED_RESULT_CODE);
             expect(actionHarness.dispatched).toHaveLength(1);
+        });
+
+        it('memoizes SupportsAudience per SubClass via GetRegistration without repeated BaseAction construction', async () => {
+            @RegisterClass(BaseAction, '__Test_MemoizedAudienceSearch')
+            class MemoizedAudienceAction extends BaseAction {
+                public static ConstructionCount = 0;
+                constructor() {
+                    super();
+                    MemoizedAudienceAction.ConstructionCount++;
+                }
+                public override get SupportsAudience(): boolean {
+                    return true;
+                }
+            }
+            void MemoizedAudienceAction;
+
+            const createSpy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
+            const memoEntity = makeActionEntity({ DriverClass: '__Test_MemoizedAudienceSearch' });
+            const unregisteredEntity = makeActionEntity({
+                ID: 'aaaaaaaa-0000-4000-8000-0000000000f9',
+                Name: 'Unregistered Action',
+                DriverClass: '__Test_DoesNotExist',
+            });
+
+            await agent.ExecuteSingleAction(makeParams(STRUCTURAL_AUDIENCE), { name: 'Scoped Search', params: { Query: 'q1' } }, memoEntity, CALLER);
+            await agent.ExecuteSingleAction(makeParams(STRUCTURAL_AUDIENCE), { name: 'Scoped Search', params: { Query: 'q2' } }, memoEntity, CALLER);
+            await agent.ExecuteSingleAction(makeParams(STRUCTURAL_AUDIENCE), { name: 'Unregistered Action', params: {} }, unregisteredEntity, CALLER);
+
+            expect(MemoizedAudienceAction.ConstructionCount).toBe(1);
+            expect(createSpy).toHaveBeenCalledTimes(1);
         });
 
         it('enforces AgentUserPolicyEngine Deny rules even for SupportsAudience actions under ScopeCommonReach', async () => {
@@ -406,6 +466,7 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
             );
             expect(actionHarness.dispatched).toHaveLength(1);
             expect(actionHarness.dispatched[0].Audience).toEqual({ Readers: [READER] });
+            expect(actionHarness.dispatched[0].IsStructuralAudience).toBeUndefined();
         });
 
         it('runs Caller mode with no audience restriction', async () => {
@@ -421,6 +482,7 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
             );
             expect(result.Success).toBe(true);
             expect(actionHarness.dispatched[0].Audience).toBeUndefined();
+            expect(actionHarness.dispatched[0].IsStructuralAudience).toBeUndefined();
         });
     });
 });
