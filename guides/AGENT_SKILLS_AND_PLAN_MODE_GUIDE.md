@@ -172,6 +172,7 @@ The marker is a Nunjucks comment, so it renders to nothing. Without it the text 
 
 | Variable | Value |
 |---|---|
+| system placeholders that need only the acting user | `_CURRENT_DATE`, `_CURRENT_TIME` and the other clock values, `_ENVIRONMENT`, `_USER_NAME`, `_USER_EMAIL`, `_USER_ID`. Placeholders that need a prompt or a prompt run (`_OUTPUT_EXAMPLE`, `_MODEL_ID`, …) are not available. Lowest priority: a `params.data` key of the same name wins, as in agent prompts |
 | every key of `params.data` | the caller's run data, as agent prompts get it |
 | `_CURRENT_PAYLOAD` | the payload at activation time |
 | `agentName`, `agentDescription` | the activating agent |
@@ -188,9 +189,9 @@ Brand color: {{ brandColor }}
 Behavior to know:
 
 - **Rendered once, at activation.** The result is appended to the conversation once, like any activation message, and is not re-rendered on later turns, so the prompt cache is unaffected. A Conversation-scoped skill (§1.6c) is re-rendered when it re-activates at the start of each run.
-- **A template error never fails the run.** The stored text is used instead and a `warning` is logged (category `AgentSkills`) naming the skill.
+- **A template error never fails the run.** The stored text is used instead. The template engine logs the render error, and a `warning` naming the skill is logged as well (category `AgentSkills`).
 - **Values are HTML-escaped**, as in agent prompts (`&` → `&amp;`). Use `| safe` for a value that must stay as written.
-- **Composition:** `{% template "Template Name" %}` embeds a stored MJ template. `{% include %}` does not resolve stored templates. `{% AIPrompt %}` works, but it makes an LLM call during activation.
+- **Composition:** `{% template "Template Name" %}` embeds a stored MJ template. `{% include %}` does not resolve stored templates. `{% AIPrompt %}` works, but it makes an LLM call during activation. The call runs as the user whose run activates the skill and uses the server's API key for the model. It is not an AI Prompt Run: it is not recorded on the agent run and does not count against the run's budget.
 - **Payload timing:** a skill pre-activated from `requestedSkillIDs` or the conversation (§1.6a, §1.6c) sees the run's starting payload; a skill the model activates sees the payload from that decision.
 - **Inspection:** `Get Skill Details` returns the template source unrendered, with `InstructionsAreTemplate: true`, since the action has no run data to render it with.
 - **SKILL.md:** the marker is ordinary body text, so it survives export and import (§1.7).

@@ -459,7 +459,7 @@ export const AiSkillsChecks: NamedCheck[] = [
     // ── Templated instructions (rendered at activation) ─────────────────────────────────────────
     {
         Id: 'ai-skills.AS22',
-        Name: 'A templated skill renders at activation with run data and a stored template embed; a plain skill stays verbatim',
+        Name: 'A templated skill renders at activation with run data, a system placeholder and a stored template embed; a plain skill stays verbatim',
         Fn: async (ctx: IntegrationCheckContext) => {
             const f = fx(ctx);
             const embedName = `IT Skill Embed ${Date.now().toString(36)} ${TAG}`;
@@ -472,7 +472,7 @@ export const AiSkillsChecks: NamedCheck[] = [
                 templated.Status = 'Active';
                 templated.Description = `Test skill ${TAG}`;
                 templated.CreatedByUserID = ctx.User.ID;
-                templated.Instructions = `${SKILL_INSTRUCTIONS_TEMPLATE_MARKER}\nBrand {{ brandColor }}.\n` +
+                templated.Instructions = `${SKILL_INSTRUCTIONS_TEMPLATE_MARKER}\nBrand {{ brandColor }}. Owner [{{ _USER_NAME }}].\n` +
                     `{% for e in entities %}[{{ e }}]{% endfor %}\n` +
                     `{% if _CURRENT_PAYLOAD.phase == "design" %}PHASE-DESIGN{% else %}PHASE-OTHER{% endif %}\n` +
                     `{% template "${embedName}" %}`;
@@ -496,6 +496,7 @@ export const AiSkillsChecks: NamedCheck[] = [
                 Assert(!!activation, 'activation appended a skill-activation message');
                 const text = String(activation!.content);
                 Assert(text.includes('Brand #0055ff.'), `params.data value rendered; got: ${text}`);
+                Assert(!text.includes('Owner [].') && !text.includes('_USER_NAME'), `the _USER_NAME system placeholder rendered from the acting user; got: ${text}`);
                 Assert(text.includes('[Accounts][Invoices]'), 'loop over params.data rendered');
                 Assert(text.includes('PHASE-DESIGN') && !text.includes('PHASE-OTHER'), 'payload conditional rendered');
                 Assert(text.includes('EMBEDDED-STYLE-RULES for IT Skill Probe'), `stored template embedded with the agent's data; got: ${text}`);

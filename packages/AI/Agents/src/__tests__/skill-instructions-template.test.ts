@@ -11,7 +11,9 @@
  *   2. unmarked instructions are used verbatim — including literal `{{query:"…"}}` — and never touch
  *      the template engine;
  *   3. a render error falls back to the stored text, logs a warning, and does not fail the activation;
- *   4. interpolated values are HTML-escaped, as in agent prompts.
+ *   4. interpolated values are HTML-escaped, as in agent prompts;
+ *   5. the system placeholders that need only the acting user (`_USER_NAME`, `_CURRENT_DATE`, …) are
+ *      available, at lower priority than params.data, as in agent prompts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -61,6 +63,8 @@ const QUERY_LITERAL = skill('bbbbbbbb-0000-4000-8000-000000000002', 'Data Analys
     'Compose with `{{query:"Sales/Monthly Revenue"}}` as the base CTE.');
 const BROKEN = skill('cccccccc-0000-4000-8000-000000000003', 'Broken',
     `${SKILL_INSTRUCTIONS_TEMPLATE_MARKER}\n{% if brandColor %}never closed`);
+const PLACEHOLDERS = skill('eeeeeeee-0000-4000-8000-000000000005', 'Placeholders',
+    `${SKILL_INSTRUCTIONS_TEMPLATE_MARKER}Owner: {{ _USER_NAME }}. Date: {{ _CURRENT_DATE }}. Email: {{ _USER_EMAIL }}.`);
 const ESCAPING = skill('dddddddd-0000-4000-8000-000000000004', 'Escaping',
     `${SKILL_INSTRUCTIONS_TEMPLATE_MARKER}Company: {{ company }}`);
 
@@ -82,11 +86,15 @@ function bare(): Internals {
     return i;
 }
 
-function paramsFor(requested: MJAISkillEntity[], payload: Record<string, string> = { phase: 'design' }): ExecuteAgentParams {
+function paramsFor(
+    requested: MJAISkillEntity[],
+    payload: Record<string, string> = { phase: 'design' },
+    extraData: Record<string, string> = {},
+): ExecuteAgentParams {
     return {
-        agent: AGENT, contextUser: {} as UserInfo, conversationMessages: [], payload,
+        agent: AGENT, contextUser: { Name: 'Pat Doe', Email: 'pat@example.com' } as UserInfo, conversationMessages: [], payload,
         requestedSkillIDs: requested.map(s => s.ID),
-        data: { brandColor: '#0055ff', entities: ['Accounts', 'Invoices'], company: 'Smith & <Sons>' },
+        data: { brandColor: '#0055ff', entities: ['Accounts', 'Invoices'], company: 'Smith & <Sons>', ...extraData },
     } as unknown as ExecuteAgentParams;
 }
 
@@ -155,6 +163,20 @@ describe('templated skill instructions (real BaseAgent + real renderer)', () => 
         const warnings = logs.errorEx.filter(l => l.message.includes("Skill 'Broken'"));
         expect(warnings).toHaveLength(1);
         expect(warnings[0].severity).toBe('warning');
+    });
+
+    it('provides the system placeholders that need only the acting user, under params.data', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 10, 23, 12));
+        try {
+            engine.skills = [PLACEHOLDERS];
+            const params = paramsFor([PLACEHOLDERS], undefined, { _USER_EMAIL: 'override@example.com' });
+            await bare().preActivateRequestedSkills(params);
+
+            expect(activationMessage(params)).toContain('Owner: Pat Doe. Date: 2026-11-23. Email: override@example.com.');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('HTML-escapes interpolated values, as agent prompts do', async () => {

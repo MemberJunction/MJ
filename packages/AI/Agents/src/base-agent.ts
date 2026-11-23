@@ -22204,7 +22204,8 @@ The context is now within limits. Please retry your request with the recovered c
      * {@link SKILL_INSTRUCTIONS_TEMPLATE_MARKER} are rendered as a Nunjucks template with
      * {@link buildSkillTemplateData}, using the same HTML autoescaping as agent prompts, so
      * `{% template "Name" %}` and the other registered template tags work. If rendering fails the
-     * stored text is used and a warning is logged: a template error never fails the run.
+     * stored text is used: the template engine logs the render error, and a warning naming the skill
+     * is logged here. A template error never fails the run.
      *
      * Override to source or render instructions differently (for example, a custom data shape).
      *
@@ -22225,7 +22226,7 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             await this.ensureTemplateEngineConfigured(params.contextUser);
             const result = await TemplateEngineServer.Instance.RenderTemplateSimple(
-                stored, this.buildSkillTemplateData(params, payload), { ContextUser: params.contextUser });
+                stored, await this.buildSkillTemplateData(params, payload), { ContextUser: params.contextUser });
             if (result.Success && result.Output != null) {
                 return result.Output.trimStart();
             }
@@ -22237,14 +22238,18 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The data a templated skill renders with: the run's `params.data`, the current payload as
+     * The data a templated skill renders with, in increasing priority: the system placeholders that
+     * need only the acting user (`_CURRENT_DATE`, `_USER_NAME` and the other clock, environment and user
+     * values, as agent prompts get them), the run's `params.data`, the current payload as
      * `_CURRENT_PAYLOAD` (the name agent prompts use), and the agent's name and description.
      * Override to add values.
      *
      * @protected
      */
-    protected buildSkillTemplateData(params: ExecuteAgentParams, payload: unknown): Record<string, unknown> {
+    protected async buildSkillTemplateData(params: ExecuteAgentParams, payload: unknown): Promise<Record<string, unknown>> {
+        const placeholders = await SystemPlaceholderManager.ResolveAvailablePlaceholders({ contextUser: params.contextUser });
         return {
+            ...placeholders,
             ...(params.data ?? {}),
             [BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER]: payload ?? {},
             agentName: params.agent.Name,
