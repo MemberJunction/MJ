@@ -230,6 +230,17 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(overlays).toHaveCount(1);
     await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
 
+    // Upright phone: the side sheet fills the screen, with no strip of page beside it
+    if (testInfo.project.name === 'phone-chromium') {
+      const sideSheet = overlays.first();
+      await sideSheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+      const sheetBox = await sideSheet.boundingBox();
+      expect(sheetBox).not.toBeNull();
+      expect(Math.round(sheetBox!.x)).toBe(0);
+      expect(Math.round(sheetBox!.width)).toBe(390);
+      expect(Math.round(sheetBox!.height)).toBe(844);
+    }
+
     await page.evaluate(() => document.getElementById('proto-dialog')?.setAttribute('open', 'true'));
     await expect(overlays).toHaveCount(2);
     await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
@@ -242,7 +253,9 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(overlays).toHaveCount(0);
     await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
 
-    // Menu popover: defaults to non-modal (no aria-modal), aria-expanded syncs, focus enters checked menuitemradio, ArrowDown + Enter selects LXP and returns focus
+    // Menu popover: aria-expanded syncs, focus enters checked menuitemradio, ArrowDown + Enter selects LXP and returns focus.
+    // Desktop: anchored and non-modal. Phone: a modal bottom sheet that keeps role="menu" (WAVE_0_SPEC.md 6.2.1).
+    const isPhone = testInfo.project.name === 'phone-chromium';
     const openPopoverBtn = page.locator('#open-popover');
     await expect(openPopoverBtn).toHaveAttribute('aria-expanded', 'false');
     await openPopoverBtn.click();
@@ -250,7 +263,21 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
 
     const menu = page.locator('.cdk-overlay-container [role="menu"]');
     await expect(menu).toBeVisible();
-    await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
+    const menuPane = page.locator('.cdk-overlay-pane', { has: page.locator('[role="menu"]') });
+    if (isPhone) {
+      await expect(menuPane).toHaveClass(/mj-layer-pane-phone-sheet/);
+      await expect(menuPane).toHaveAttribute('role', 'dialog');
+      await expect(menuPane).toHaveAttribute('aria-modal', 'true');
+      await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
+      await menu.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+      const menuBox = await menu.boundingBox();
+      expect(menuBox).not.toBeNull();
+      expect(Math.round(menuBox!.width)).toBe(390);
+      expect(Math.abs(menuBox!.y + menuBox!.height - 844)).toBeLessThanOrEqual(1);
+    } else {
+      await expect(menuPane).not.toHaveClass(/mj-layer-pane-phone-sheet/);
+      await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
+    }
 
     const mjItem = menu.locator('[role="menuitemradio"][data-popover-action="mj"]');
     const lxpItem = menu.locator('[role="menuitemradio"][data-popover-action="lxp"]');
@@ -270,6 +297,90 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(openPopoverBtn).toHaveAttribute('aria-expanded', 'false');
     await expect(openPopoverBtn).toBeFocused();
     await expect(page.locator('html')).toHaveAttribute('data-look', 'lxp');
+    await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
+  });
+
+  test('a layer set to PhonePresentation="anchored" stays anchored at phone width', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'phone-chromium', 'Phone presentation only differs at phone width');
+    await page.goto('/');
+    await page.waitForSelector('mj-surface.mj-surface');
+
+    // Stand-in for a combobox suggestion list: content tied to a field being typed into stays next to it.
+    await page.evaluate(() => {
+      const layer = document.createElement('mj-layer');
+      layer.id = 'proto-anchored';
+      layer.setAttribute('kind', 'popover');
+      layer.setAttribute('phone-presentation', 'anchored');
+      layer.setAttribute('anchor', '#open-popover');
+      layer.setAttribute('label', 'Suggestions');
+      layer.innerHTML = '<div mj-layer-body><button type="button">First suggestion</button></div>';
+      document.querySelector('main')?.appendChild(layer);
+    });
+    await page.waitForFunction(() => document.querySelector('#proto-anchored .mj-layer-staging') !== null);
+    await page.evaluate(() => document.getElementById('proto-anchored')?.setAttribute('open', 'true'));
+
+    const panel = page.locator('.cdk-overlay-container [role="dialog"][aria-label="Suggestions"]');
+    await expect(panel).toBeVisible();
+    const pane = page.locator('.cdk-overlay-pane', { has: page.locator('[aria-label="Suggestions"]') });
+    await expect(pane).not.toHaveClass(/mj-layer-pane-phone-sheet/);
+    await expect(panel).not.toHaveAttribute('aria-modal', 'true');
+    await expect(page.locator('.cdk-overlay-backdrop')).toHaveCount(0);
+    await expect(page.locator('html')).not.toHaveClass(/cdk-global-scrollblock/);
+
+    const box = await panel.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThan(390);
+    expect(box!.y + box!.height).toBeLessThan(843);
+
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+  });
+
+  test('a phone held sideways opens sheets capped at 640px and centered; a short desktop window stays desktop', async ({
+    page,
+  }, testInfo) => {
+    const isPhone = testInfo.project.name === 'phone-chromium';
+    await page.setViewportSize(isPhone ? { width: 844, height: 390 } : { width: 1280, height: 450 });
+    await page.goto('/');
+    await page.waitForSelector('mj-surface.mj-surface');
+
+    await page.locator('#open-popover').click();
+    const menu = page.locator('.cdk-overlay-container [role="menu"]');
+    await expect(menu).toBeVisible();
+    const pane = page.locator('.cdk-overlay-pane', { has: page.locator('[role="menu"]') });
+
+    if (isPhone) {
+      await expect(pane).toHaveClass(/mj-layer-pane-phone-sheet/);
+      await expect(pane).toHaveClass(/mj-layer-pane-phone-short/);
+      await menu.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+      const box = await menu.boundingBox();
+      expect(box).not.toBeNull();
+      expect(Math.round(box!.width)).toBe(640);
+      expect(Math.abs(box!.x - (844 - 640) / 2)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box!.y + box!.height - 390)).toBeLessThanOrEqual(1);
+    } else {
+      // A mouse pointer keeps a short desktop window out of phone mode.
+      await expect(pane).not.toHaveClass(/mj-layer-pane-phone-sheet/);
+    }
+
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+
+    // Sideways, a side sheet keeps its side panel: it fits beside the page
+    if (isPhone) {
+      await page.getByRole('button', { name: 'Open Sheet' }).click();
+      const sideSheet = page.locator('.cdk-overlay-container .mj-layer-kind-sheet');
+      await expect(sideSheet).toBeVisible();
+      await sideSheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+      const sheetBox = await sideSheet.boundingBox();
+      expect(sheetBox).not.toBeNull();
+      expect(Math.round(sheetBox!.width)).toBe(420);
+      expect(Math.round(sheetBox!.x + sheetBox!.width)).toBe(844);
+      await page.keyboard.press('Escape');
+      await expect(sideSheet).toBeHidden();
+    }
   });
 
   test('focus-visible ring works across all 3 looks and phone targets meet 44px', async ({

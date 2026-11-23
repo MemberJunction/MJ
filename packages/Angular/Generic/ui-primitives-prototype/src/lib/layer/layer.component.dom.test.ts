@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MJLayerService } from '../services/layer.service';
 import { MJBeforeEvent } from '../types/events';
 import {
@@ -11,6 +11,7 @@ import {
   MJLayerHeaderDirective,
   MJLayerTitleDirective,
 } from './layer.component';
+import { MJPhonePresentation, ResolvePhonePresentation } from './phone-presentation';
 
 @Component({
   standalone: true,
@@ -69,6 +70,19 @@ import {
         <button type="button">Popover Action</button>
       </div>
     </mj-layer>
+
+    <mj-layer
+      [Open]="menuOpen()"
+      [Kind]="'menu'"
+      [Anchor]="'#popover-trigger'"
+      [PhonePresentation]="menuPhonePresentation()"
+      (AfterClose)="menuOpen.set(false)"
+    >
+      <div mjLayerBody>
+        <button type="button" role="menuitem">Rename</button>
+        <button type="button" role="menuitem">Duplicate</button>
+      </div>
+    </mj-layer>
   `,
 })
 class LayerHostComponent {
@@ -76,6 +90,8 @@ class LayerHostComponent {
   public readonly layerOpen = signal(false);
   public readonly popoverOpen = signal(false);
   public readonly popoverAnchor = signal('#popover-trigger');
+  public readonly menuOpen = signal(false);
+  public readonly menuPhonePresentation = signal<MJPhonePresentation | undefined>(undefined);
   public cancelNextOpen = false;
   public cancelNextClose = false;
   public afterOpenCount = 0;
@@ -250,5 +266,170 @@ describe('MJLayerComponent', () => {
     fixture.detectChanges();
     expect(layerService.ActiveCount).toBe(0);
     expect(document.documentElement.classList.contains('cdk-global-scrollblock')).toBe(false);
+  });
+});
+
+/**
+ * jsdom has no matchMedia; stand one in so the layer service sees a phone held upright (narrow),
+ * a phone held sideways (short), or a desktop. A query matches when it names the viewport's feature.
+ */
+function mockViewport(viewport: 'narrow' | 'short' | 'desktop'): void {
+  const feature = { narrow: 'max-width: 640px', short: 'max-height: 480px', desktop: null }[viewport];
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string): MediaQueryList => {
+      const list = new EventTarget() as MediaQueryList;
+      Object.defineProperties(list, {
+        matches: { value: feature !== null && query.includes(feature) },
+        media: { value: query },
+      });
+      return list;
+    },
+  });
+}
+
+describe('ResolvePhonePresentation', () => {
+  it('defaults by Kind: choose-from and fill-in kinds open as a sheet, the rest stay as they are', () => {
+    expect(ResolvePhonePresentation('dialog', undefined)).toBe('sheet');
+    expect(ResolvePhonePresentation('sheet', undefined, 'bottom')).toBe('sheet');
+    expect(ResolvePhonePresentation('sheet', undefined, 'end')).toBe('full-screen');
+    expect(ResolvePhonePresentation('sheet', undefined, 'start')).toBe('full-screen');
+    expect(ResolvePhonePresentation('menu', undefined)).toBe('sheet');
+    expect(ResolvePhonePresentation('popover', undefined)).toBe('sheet');
+    expect(ResolvePhonePresentation('tooltip', undefined)).toBe('anchored');
+    expect(ResolvePhonePresentation('toast', undefined)).toBe('anchored');
+    expect(ResolvePhonePresentation('custom-kind', undefined)).toBe('anchored');
+  });
+
+  it('lets an explicit value win, and ignores values it does not know', () => {
+    expect(ResolvePhonePresentation('popover', 'anchored')).toBe('anchored');
+    expect(ResolvePhonePresentation('dialog', 'full-screen')).toBe('full-screen');
+    expect(ResolvePhonePresentation('tooltip', 'sheet')).toBe('sheet');
+    expect(ResolvePhonePresentation('menu', 'sideways')).toBe('sheet');
+  });
+});
+
+describe('MJLayerComponent phone presentation', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [LayerHostComponent],
+    }).compileComponents();
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'matchMedia');
+  });
+
+  function openMenu(phonePresentation: MJPhonePresentation | undefined) {
+    const fixture = TestBed.createComponent(LayerHostComponent);
+    fixture.componentInstance.menuPhonePresentation.set(phonePresentation);
+    fixture.componentInstance.menuOpen.set(true);
+    fixture.detectChanges();
+    fixture.detectChanges();
+    const panel = document.body.querySelector<HTMLElement>('.cdk-overlay-container [role="menu"]');
+    const pane = panel?.closest<HTMLElement>('.cdk-overlay-pane') ?? null;
+    return { fixture, panel, pane };
+  }
+
+  it('opens a menu on a phone as a modal bottom sheet that keeps role="menu" and gets a title', () => {
+    mockViewport('narrow');
+    const { fixture, panel, pane } = openMenu(undefined);
+    const layerService = TestBed.inject(MJLayerService);
+
+    expect(panel).toBeTruthy();
+    expect(pane?.classList.contains('mj-layer-pane-phone-sheet')).toBe(true);
+    expect(pane?.getAttribute('role')).toBe('dialog');
+    expect(pane?.getAttribute('aria-modal')).toBe('true');
+    expect(pane?.getAttribute('aria-label')).toBe('Open Popover');
+    expect(document.body.querySelector('.cdk-overlay-backdrop')).toBeTruthy();
+    // No consumer title, so the sheet shows the trigger's name where the menu's anchor used to be.
+    expect(panel?.querySelector('.mj-layer-sheet-title')?.textContent?.trim()).toBe('Open Popover');
+
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.menuOpen()).toBe(false);
+    expect(layerService.ActiveCount).toBe(0);
+  });
+
+  it('keeps a menu anchored on a phone when PhonePresentation is "anchored"', () => {
+    mockViewport('narrow');
+    const { panel, pane } = openMenu('anchored');
+
+    expect(panel).toBeTruthy();
+    expect(pane?.classList.contains('mj-layer-pane-phone-sheet')).toBe(false);
+    expect(pane?.getAttribute('role')).toBeNull();
+    expect(document.body.querySelector('.cdk-overlay-backdrop')).toBeNull();
+    expect(panel?.querySelector('.mj-layer-sheet-title')).toBeNull();
+  });
+
+  it('keeps a menu anchored off phones, and never marks the panel with a phone class', () => {
+    mockViewport('desktop');
+    const { panel, pane } = openMenu(undefined);
+
+    expect(pane?.classList.contains('mj-layer-pane-phone-sheet')).toBe(false);
+    expect(panel?.className).not.toContain('phone');
+    expect(document.body.querySelector('.cdk-overlay-backdrop')).toBeNull();
+  });
+
+  it('treats a phone held sideways as a phone and marks the sheet short, so it stops spanning the full width', () => {
+    mockViewport('short');
+    const { panel, pane } = openMenu(undefined);
+
+    expect(panel).toBeTruthy();
+    expect(pane?.classList.contains('mj-layer-pane-phone-sheet')).toBe(true);
+    expect(pane?.classList.contains('mj-layer-pane-phone-short')).toBe(true);
+    expect(pane?.getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('does not mark an upright phone sheet short', () => {
+    mockViewport('narrow');
+    const { pane } = openMenu(undefined);
+
+    expect(pane?.classList.contains('mj-layer-pane-phone-sheet')).toBe(true);
+    expect(pane?.classList.contains('mj-layer-pane-phone-short')).toBe(false);
+  });
+
+  it('fills an upright phone with a side sheet, so no strip of page shows beside it', () => {
+    mockViewport('narrow');
+    const fixture = TestBed.createComponent(LayerHostComponent);
+    fixture.componentInstance.parentModalOpen.set(true);
+    fixture.detectChanges();
+    fixture.detectChanges();
+
+    const pane = document.body.querySelector('.mj-layer-kind-sheet')?.closest('.cdk-overlay-pane');
+    expect(pane?.classList.contains('mj-layer-pane-phone-full-screen')).toBe(true);
+    expect(pane?.classList.contains('mj-layer-pane-phone-sheet')).toBe(false);
+  });
+
+  it('keeps a side sheet as a side panel on a phone held sideways, where it fits beside the page', () => {
+    mockViewport('short');
+    const fixture = TestBed.createComponent(LayerHostComponent);
+    fixture.componentInstance.parentModalOpen.set(true);
+    fixture.detectChanges();
+    fixture.detectChanges();
+
+    const pane = document.body.querySelector('.mj-layer-kind-sheet')?.closest('.cdk-overlay-pane');
+    expect(pane).toBeTruthy();
+    expect(pane?.className).not.toContain('mj-layer-pane-phone');
+  });
+
+  it('presents a dialog as a sheet on a phone with no generated title when the consumer gives one, and resolves full-screen when asked', () => {
+    mockViewport('narrow');
+    const fixture = TestBed.createComponent(LayerHostComponent);
+    fixture.componentInstance.layerOpen.set(true);
+    fixture.detectChanges();
+    fixture.detectChanges();
+
+    const dialog = document.body.querySelector<HTMLElement>(
+      '.cdk-overlay-container [role="dialog"][aria-modal="true"]'
+    );
+    expect(dialog?.closest('.cdk-overlay-pane')?.classList.contains('mj-layer-pane-phone-sheet')).toBe(true);
+    expect(dialog?.querySelector('.mj-layer-sheet-title')).toBeNull();
+    fixture.componentInstance.layerOpen.set(false);
+    fixture.detectChanges();
+
+    const fullScreen = TestBed.inject(MJLayerService).ResolvePhoneMode('dialog', 'full-screen');
+    expect(fullScreen).toBe('full-screen');
   });
 });

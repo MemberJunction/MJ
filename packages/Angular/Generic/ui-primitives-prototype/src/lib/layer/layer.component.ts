@@ -16,8 +16,9 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { MJLayerService } from '../services/layer.service';
+import { MJLayerPhoneMode, MJLayerService } from '../services/layer.service';
 import { MJAnnouncerService } from '../services/announcer.service';
+import { MJPhonePresentation } from './phone-presentation';
 import {
   DispatchMJElementEvent,
   MJAfterEvent,
@@ -74,7 +75,7 @@ export class MJLayerFooterDirective {}
 
 /**
  * Wave 0 overlay primitive rendered via CDK Overlay + DomPortal (MJLayerService).
- * Uses standard MJ PascalCase inputs (`[Open]`, `[Kind]`, `[AllowPhoneSheet]`);
+ * Uses standard MJ PascalCase inputs (`[Open]`, `[Kind]`, `[PhonePresentation]`);
  * the Angular Elements entry maps kebab-case HTML attributes onto these properties automatically.
  */
 @Component({
@@ -89,9 +90,12 @@ export class MJLayerFooterDirective {}
         tabindex="-1"
         [attr.role]="ariaRole()"
         [attr.aria-modal]="ariaModal()"
-        [attr.aria-label]="Label() || null"
+        [attr.aria-label]="ariaLabel()"
         [attr.aria-labelledby]="ariaLabelledBy()"
       >
+        @if (showGeneratedTitle()) {
+          <div class="mj-layer-sheet-title" aria-hidden="true">{{ sheetTitleText() }}</div>
+        }
         <ng-content />
       </div>
     </div>
@@ -115,7 +119,12 @@ export class MJLayerComponent implements OnDestroy {
   public readonly Closeable = input(true, { transform: booleanAttribute });
   public readonly Size = input<string>('md');
   public readonly Open = input(false, { transform: booleanAttribute });
-  public readonly AllowPhoneSheet = input(true, { transform: booleanAttribute });
+  /**
+   * How the layer presents on a phone (WAVE_0_SPEC.md Section 6.2.1). Unset, it defaults by
+   * `Kind`: dialog, menu and popover open as a bottom sheet, a side sheet fills an upright phone,
+   * and tooltip and toast are unchanged.
+   */
+  public readonly PhonePresentation = input<MJPhonePresentation | undefined>(undefined);
   public readonly Anchor = input<string | HTMLElement | null>(null);
   public readonly Label = input<string>('');
   public readonly AnnounceOnOpen = input<string>('');
@@ -128,6 +137,10 @@ export class MJLayerComponent implements OnDestroy {
   private readonly isOpenState = signal(false);
   private isCurrentlyOpen = false;
 
+  /** Set when the layer opens on a phone in a sheet or full-screen mode; `null` otherwise. */
+  private readonly activePhoneMode = signal<MJLayerPhoneMode | null>(null);
+  protected readonly sheetTitleText = signal('');
+
   protected readonly safeKind = computed(() => SanitizeAxisSlug(this.Kind(), 'dialog'));
   protected readonly safePlacement = computed(() => SanitizeAxisSlug(this.Placement(), 'center'));
   protected readonly safeSize = computed(() => SanitizeAxisSlug(this.Size(), 'md'));
@@ -137,22 +150,41 @@ export class MJLayerComponent implements OnDestroy {
     if (explicit !== undefined) {
       return explicit;
     }
+    // A layer presented as a sheet or full screen on a phone is modal, whatever its kind.
+    if (this.activePhoneMode() !== null) {
+      return true;
+    }
     const kind = this.safeKind();
     return kind !== 'popover' && kind !== 'menu' && kind !== 'tooltip' && kind !== 'toast';
   });
 
-  protected readonly panelClasses = computed(() => {
-    const classes = [
+  protected readonly panelClasses = computed(() =>
+    [
       'mj-layer-panel',
       'mj-surface-overlay',
       `mj-layer-kind-${this.safeKind()}`,
       `mj-layer-placement-${this.safePlacement()}`,
       `mj-layer-size-${this.safeSize()}`,
-    ];
-    if (this.AllowPhoneSheet()) {
-      classes.push('mj-layer-phone-sheet');
+    ].join(' ')
+  );
+
+  private readonly hasConsumerTitle = computed(
+    () => this.titleDirective() !== undefined || this.lightDomTitleId() !== null
+  );
+
+  /**
+   * At the bottom of the screen a sheet loses the visual link to its trigger, so a sheet without a
+   * consumer title shows one: its `Label`, otherwise the trigger's accessible name.
+   */
+  protected readonly showGeneratedTitle = computed(
+    () => this.activePhoneMode() !== null && !this.hasConsumerTitle() && this.sheetTitleText() !== ''
+  );
+
+  protected readonly ariaLabel = computed(() => {
+    if (this.Label()) {
+      return this.Label();
     }
-    return classes.join(' ');
+    return this.showGeneratedTitle() ? this.sheetTitleText() : null;
   });
 
   protected readonly ariaRole = computed(() => {
@@ -201,42 +233,60 @@ export class MJLayerComponent implements OnDestroy {
       const panelEl = this.layerPanel()?.nativeElement;
 
       if (shouldBeOpen && panelEl && !this.isCurrentlyOpen) {
-        untracked(() => {
-          const before: MJBeforeEvent<'open'> = { Cancel: false, Reason: 'open' };
-          this.BeforeOpen.emit(before);
-          DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-open', before);
-          if (before.Cancel) {
-            this.isCurrentlyOpen = false;
-            this.isOpenState.set(false);
-            return;
-          }
-
-          this.isCurrentlyOpen = true;
-          this.syncLightDomTitleId(panelEl);
-          this.layerService.Open({
-            Id: this.layerId,
-            PanelElement: panelEl,
-            Kind: this.safeKind(),
-            Placement: this.safePlacement(),
-            Modal: this.effectiveModal(),
-            Closeable: this.Closeable(),
-            AllowPhoneSheet: this.AllowPhoneSheet(),
-            Anchor: this.Anchor(),
-            OnRequestClose: (reason) => this.RequestClose(reason),
-          });
-          const announcement = this.AnnounceOnOpen();
-          if (announcement) {
-            void this.announcer.Announce(announcement, 'polite');
-          }
-          const after: MJAfterEvent<'open'> = { Reason: 'open' };
-          this.AfterOpen.emit(after);
-          DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-open', after);
-        });
+        untracked(() => this.openLayer(panelEl));
       } else if (!shouldBeOpen && this.isCurrentlyOpen) {
         this.isCurrentlyOpen = false;
         this.layerService.Close(this.layerId);
+        this.activePhoneMode.set(null);
       }
     });
+  }
+
+  /** Runs the cancelable open sequence: BeforeOpen, phone mode decision, overlay, AfterOpen. */
+  private openLayer(panelEl: HTMLElement): void {
+    const before: MJBeforeEvent<'open'> = { Cancel: false, Reason: 'open' };
+    this.BeforeOpen.emit(before);
+    DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-open', before);
+    if (before.Cancel) {
+      this.isCurrentlyOpen = false;
+      this.isOpenState.set(false);
+      return;
+    }
+
+    this.isCurrentlyOpen = true;
+    this.syncLightDomTitleId(panelEl);
+    this.activePhoneMode.set(
+      this.layerService.ResolvePhoneMode(this.safeKind(), this.PhonePresentation(), this.safePlacement())
+    );
+    this.sheetTitleText.set(this.Label() || this.layerService.AccessibleNameOf(this.Anchor()));
+
+    this.layerService.Open({
+      Id: this.layerId,
+      PanelElement: panelEl,
+      Kind: this.safeKind(),
+      Placement: this.safePlacement(),
+      Modal: this.effectiveModal(),
+      Closeable: this.Closeable(),
+      PhoneMode: this.activePhoneMode(),
+      Title: this.resolveLayerName(panelEl),
+      Anchor: this.Anchor(),
+      OnRequestClose: (reason) => this.RequestClose(reason),
+    });
+    const announcement = this.AnnounceOnOpen();
+    if (announcement) {
+      void this.announcer.Announce(announcement, 'polite');
+    }
+    const after: MJAfterEvent<'open'> = { Reason: 'open' };
+    this.AfterOpen.emit(after);
+    DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-open', after);
+  }
+
+  /** The layer's name: its `Label`, its consumer title's text, or the trigger's accessible name. */
+  private resolveLayerName(panelEl: HTMLElement): string {
+    const consumerTitle = panelEl
+      .querySelector<HTMLElement>('.mj-layer-title, [mj-layer-title], [mjlayertitle]')
+      ?.textContent?.trim();
+    return this.Label() || consumerTitle || this.layerService.AccessibleNameOf(this.Anchor());
   }
 
   /** Requests closing the layer, honoring cancelable BeforeClose guards. */
@@ -254,6 +304,7 @@ export class MJLayerComponent implements OnDestroy {
     this.isCurrentlyOpen = false;
     this.isOpenState.set(false);
     this.layerService.Close(this.layerId);
+    this.activePhoneMode.set(null);
 
     const after: MJAfterEvent<'escape' | 'backdrop' | 'programmatic'> = { Reason: reason };
     this.AfterClose.emit(after);

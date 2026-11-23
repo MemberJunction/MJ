@@ -4,3 +4,4 @@ export * from './lib/services/layer.service';
 export * from './lib/surface/surface.component';
 export * from './lib/row/row.component';
 export * from './lib/layer/layer.component';
+export * from './lib/layer/phone-presentation';

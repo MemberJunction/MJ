@@ -51,8 +51,8 @@ function toKebabCase(propName: string): string {
 
 /**
  * Registers an Angular component as a Custom Element while preserving MJ's PascalCase
- * Angular input contract (`[Density]`, `[AllowPhoneSheet]`) AND supporting standard
- * lowercase/kebab-case HTML attributes (`density`, `allow-phone-sheet`) via native
+ * Angular input contract (`[Density]`, `[PhonePresentation]`) AND supporting standard
+ * lowercase/kebab-case HTML attributes (`density`, `phone-presentation`) via native
  * `observedAttributes` + `attributeChangedCallback` derived from `reflectComponentType()`.
  */
 function defineElement<T>(appRef: ApplicationRef, tag: string, component: Type<T>): void {

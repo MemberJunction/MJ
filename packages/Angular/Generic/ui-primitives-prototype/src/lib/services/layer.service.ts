@@ -9,6 +9,16 @@ import {
 import { DomPortal } from '@angular/cdk/portal';
 import { ConfigurableFocusTrap, ConfigurableFocusTrapFactory } from '@angular/cdk/a11y';
 import { Subscription } from 'rxjs';
+import {
+  IsPhonePresentation,
+  MJ_NARROW_PHONE_QUERY,
+  MJ_PHONE_VIEWPORT_QUERY,
+  MJ_SHORT_PHONE_QUERY,
+  ResolvePhonePresentation,
+} from '../layer/phone-presentation';
+
+/** How a layer opens on a phone when it does not stay as it is on desktop. */
+export type MJLayerPhoneMode = 'sheet' | 'full-screen';
 
 export interface MJLayerOpenRequest {
   Id: string;
@@ -17,7 +27,10 @@ export interface MJLayerOpenRequest {
   Placement: string;
   Modal: boolean;
   Closeable: boolean;
-  AllowPhoneSheet: boolean;
+  /** `sheet` or `full-screen` when the layer opens in a phone mode, `null` to open as on desktop. */
+  PhoneMode: MJLayerPhoneMode | null;
+  /** Accessible name for the sheet container when a menu opens in a phone mode. */
+  Title: string;
   Anchor: string | HTMLElement | null;
   OnRequestClose: (reason: 'escape' | 'backdrop' | 'programmatic') => void;
 }
@@ -63,6 +76,7 @@ export class MJLayerService {
     const overlayRef = this.overlay.create(config);
     const portal = new DomPortal(request.PanelElement);
     overlayRef.attach(portal);
+    this.applyPhoneContainerSemantics(overlayRef.overlayElement, request);
 
     let focusTrap: ConfigurableFocusTrap | null = null;
     if (request.Modal) {
@@ -173,10 +187,86 @@ export class MJLayerService {
     return this.stack.length;
   }
 
+  /**
+   * Decides, at open time, whether a layer opens in a phone mode (WAVE_0_SPEC.md Section 6.2.1).
+   * Returns `null` (open as on desktop) off phones and for `anchored`. A `sheet` kind also returns
+   * `null` when it is already a bottom sheet, and, by default, for a side sheet on a phone held
+   * sideways, where its side panel fits beside the page.
+   */
+  public ResolvePhoneMode(
+    kind: string,
+    requested: string | null | undefined,
+    placement?: string
+  ): MJLayerPhoneMode | null {
+    if (!this.isPhoneViewport()) {
+      return null;
+    }
+    const presentation = ResolvePhonePresentation(kind, requested, placement);
+    if (presentation === 'anchored') {
+      return null;
+    }
+    if (kind === 'sheet' && this.keepsOwnSheetPlacement(presentation, requested, placement)) {
+      return null;
+    }
+    return presentation;
+  }
+
+  private keepsOwnSheetPlacement(
+    presentation: MJLayerPhoneMode,
+    requested: string | null | undefined,
+    placement?: string
+  ): boolean {
+    if (presentation === 'sheet' && placement === 'bottom') {
+      return true;
+    }
+    const isDefault = !IsPhonePresentation(requested);
+    return isDefault && !this.matchesMedia(MJ_NARROW_PHONE_QUERY);
+  }
+
+  /** The trigger's accessible name: its `aria-label`, otherwise its trimmed text. */
+  public AccessibleNameOf(anchor: string | HTMLElement | null): string {
+    const anchorEl = this.resolveAnchor(anchor);
+    if (!anchorEl) {
+      return '';
+    }
+    return (anchorEl.getAttribute('aria-label') ?? anchorEl.textContent ?? '').trim();
+  }
+
+  private isPhoneViewport(): boolean {
+    return this.matchesMedia(MJ_PHONE_VIEWPORT_QUERY);
+  }
+
+  private matchesMedia(query: string): boolean {
+    const view = this.doc.defaultView;
+    if (!view || typeof view.matchMedia !== 'function') {
+      return false;
+    }
+    return view.matchMedia(query).matches;
+  }
+
+  /**
+   * A menu's panel keeps `role="menu"`, so when it opens as a sheet the overlay pane becomes the
+   * modal dialog container around it. Other kinds already carry their dialog role on the panel.
+   */
+  private applyPhoneContainerSemantics(pane: HTMLElement, request: MJLayerOpenRequest): void {
+    if (!request.PhoneMode || request.Kind !== 'menu') {
+      return;
+    }
+    pane.setAttribute('role', 'dialog');
+    pane.setAttribute('aria-modal', 'true');
+    if (request.Title) {
+      pane.setAttribute('aria-label', request.Title);
+    }
+  }
+
   private buildOverlayConfig(
     request: MJLayerOpenRequest,
     anchorEl: HTMLElement | null
   ): OverlayConfig {
+    if (request.PhoneMode) {
+      return this.buildPhoneOverlayConfig(request, request.PhoneMode);
+    }
+
     let positionStrategy: PositionStrategy = this.overlay
       .position()
       .global()
@@ -206,19 +296,43 @@ export class MJLayerService {
       }
     }
 
-    const panelClasses: string[] = [];
-    if (request.Kind === 'dialog' && request.AllowPhoneSheet) {
-      panelClasses.push('mj-layer-pane-phone-sheet');
+    return new OverlayConfig({
+      hasBackdrop: request.Modal,
+      backdropClass: 'mj-layer-backdrop',
+      positionStrategy,
+      scrollStrategy: request.Modal
+        ? this.overlay.scrollStrategies.noop()
+        : this.overlay.scrollStrategies.reposition(),
+      disposeOnNavigation: true,
+    });
+  }
+
+  /**
+   * Bottom sheet pinned to the screen's bottom edge, or a pane that fills the screen. On a phone
+   * held sideways the pane is also marked `mj-layer-pane-phone-short`, where sheets stop spanning
+   * the full width.
+   */
+  private buildPhoneOverlayConfig(
+    request: MJLayerOpenRequest,
+    mode: MJLayerPhoneMode
+  ): OverlayConfig {
+    const isSheet = mode === 'sheet';
+    const positionStrategy = isSheet
+      ? this.overlay.position().global().centerHorizontally().bottom('0')
+      : this.overlay.position().global().left('0').top('0');
+    const panelClass = [isSheet ? 'mj-layer-pane-phone-sheet' : 'mj-layer-pane-phone-full-screen'];
+    if (this.matchesMedia(MJ_SHORT_PHONE_QUERY)) {
+      panelClass.push('mj-layer-pane-phone-short');
     }
 
     return new OverlayConfig({
       hasBackdrop: request.Modal,
       backdropClass: 'mj-layer-backdrop',
-      panelClass: panelClasses,
+      panelClass,
       positionStrategy,
-      scrollStrategy: request.Modal
-        ? this.overlay.scrollStrategies.noop()
-        : this.overlay.scrollStrategies.reposition(),
+      width: '100%',
+      height: isSheet ? undefined : '100%',
+      scrollStrategy: this.overlay.scrollStrategies.noop(),
       disposeOnNavigation: true,
     });
   }
