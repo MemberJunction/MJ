@@ -18,6 +18,8 @@ const { db, writes, saveOptions } = vi.hoisted(() => ({
         views: [] as RunViewParams[],
         /** Whether the context user holds `Queries: Approve`. */
         canApproveQueries: true,
+        /** The (user, provider) each `UserCanApproveQueries` call was given. */
+        approveChecks: [] as unknown[][],
     },
     writes: [] as Array<Record<string, unknown>>,
     saveOptions: [] as Array<EntitySaveOptions | undefined>,
@@ -123,7 +125,10 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 
     return {
         ...actual,
-        UserCanApproveQueries: () => db.canApproveQueries,
+        UserCanApproveQueries: (...args: unknown[]) => {
+            db.approveChecks.push(args);
+            return db.canApproveQueries;
+        },
         MJDashboardEntityExtended: StubDashboard,
         MJComponentEntityExtended: StubComponent,
         MJUserViewEntityExtended: StubUserView,
@@ -160,6 +165,7 @@ beforeEach(() => {
     db.queryParameters = [];
     db.views = [];
     db.canApproveQueries = true;
+    db.approveChecks = [];
     writes.length = 0;
     saveOptions.length = 0;
 });
@@ -296,8 +302,12 @@ describe('MJQueryEntityServer', () => {
         db.stored = { Status: 'Pending', ...PENDING };
         db.canApproveQueries = false;
         const query = create(MJQueryEntityServer);
+        // The authorizations come from the query's own provider, not the process-global one.
+        const provider = { RunView: vi.fn(), GetEntityObject: vi.fn(), Authorizations: [] };
+        Object.defineProperty(query, 'ProviderToUse', { value: provider });
         expect(await query.Save()).toBe(false);
         expect(writes).toHaveLength(0);
+        expect(db.approveChecks).toEqual([[{ ID: 'approver-1' }, provider]]);
         expect(query.RegisterResultHistoryEntry).toHaveBeenCalledWith(expect.objectContaining({
             Success: false,
             Message: expect.stringContaining("needs the 'Queries: Approve' authorization"),

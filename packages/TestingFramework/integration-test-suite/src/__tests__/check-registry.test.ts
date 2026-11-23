@@ -549,7 +549,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w9-s6-3': 1,
         'ps-truth-datasets': 68,
         'query-api-lifecycle': 12,
-        'query-approvals': 6,
+        'query-approvals': 7,
         'query-extraction': 15,
         'query-metadata-client': 3,
         'query-refresh': 16,

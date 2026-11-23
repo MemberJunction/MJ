@@ -7008,12 +7008,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     private logQueryRunRefusal(
         query: MJQueryEntityExtended,
         user: UserInfo,
-        result: { deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation },
+        result: { deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation; rowFilteredEntities?: string[] },
     ): void {
         const v = result.fieldSecurityViolation;
         const queryRoles = (query.QueryPermissions ?? []).map(p => p.Role).join(', ');
+        const rowFiltered = result.rowFilteredEntities ?? [];
         const reason = v
             ? `field-level security (${v.Kind}: ${v.Reference}${v.Entity ? ` on ${v.Entity.Name}` : ''})`
+            : rowFiltered.length > 0
+                ? `a draft (status '${query.Status}') reading entities row-filtered for the user (${rowFiltered.join(', ')}); approve the query or read them with RunView`
             : result.deniedEntities.length > 0
                 ? `unreadable entities (${result.deniedEntities.join(', ')})`
                 : `the query's own role list (MJ: Query Permissions: [${queryRoles}])`;

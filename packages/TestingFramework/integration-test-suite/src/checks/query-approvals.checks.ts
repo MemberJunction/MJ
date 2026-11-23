@@ -12,7 +12,7 @@
  * Fixtures: one category and two saved queries over a literal derived table (valid unchanged on
  * SQL Server and PostgreSQL), deleted in teardown. Self-cleaning, so the deterministic tier.
  */
-import { Metadata, RunQuery, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { EntityPermissionType, Metadata, RunQuery, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import type { EntitySaveOptions, RunQueryParams, RunQueryResult } from '@memberjunction/core';
 import { GetQueryApprovalStateAsync, QueryEngine, UserCanApproveQueries } from '@memberjunction/core-entities';
 import type { MJQueryEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
@@ -21,6 +21,7 @@ import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/t
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 import { CreateRenderCategory, DeleteRenderQueries, RefreshRenderQueries } from './runquery-rendering-fixture';
+import { ForPlatform, PlatformOf } from './query-extraction-fixture';
 import type { RenderFixtures } from './runquery-rendering-fixture';
 
 /** Three rows, 1 to 3, valid unchanged on both platforms. */
@@ -146,6 +147,24 @@ async function storedStatus(queryID: string, user: UserInfo): Promise<string | n
     }, user);
     Assert(result.Success && result.Results.length === 1, `query ${queryID} did not read back: ${result.ErrorMessage}`);
     return result.Results[0].Status;
+}
+
+/**
+ * Reloads a fixture query as the holder and keeps that copy for teardown: the UI role has no
+ * Delete on queries, so a copy the UI user saved could not delete itself.
+ */
+async function adoptAsHolder(ctx: IntegrationCheckContext, name: string, queryID: string): Promise<MJQueryEntity> {
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+    Assert(await query.Load(queryID), `the query ${queryID} did not load for the holder`);
+    fixtures!.Queries.set(name, query);
+    return query;
+}
+
+/** Runs a saved query as `user`, after refreshing the engine so it runs what is stored. */
+async function runAs(ctx: IntegrationCheckContext, queryID: string, user: UserInfo): Promise<RunQueryResult> {
+    await RefreshRenderQueries(ctx.User);
+    return new RunQuery().RunQuery({ QueryID: queryID }, user);
 }
 
 async function editChapterSQL(ctx: IntegrationCheckContext, sql: string): Promise<void> {
@@ -308,6 +327,38 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             fixtures!.Queries.set('IT120 UI Draft', asHolder);
             Assert(UUIDsEqual(asHolder.ApprovedByUserID, ctx.User.ID), `the approver must be the holder — got ${asHolder.ApprovedByUserID}`);
             AssertEqual(await storedStatus(draft.ID, ctx.User), 'Approved', 'the holder\'s approval must be stored');
+        }
+    },
+    {
+        Id: 'query-approvals.QA7',
+        Name: 'QA7: a draft that reads an entity row-filtered for the running user is refused at run; approved, it runs (#6746)',
+        Fn: async (ctx) => {
+            const ui = uiOnlyUser(ctx);
+            const platform = PlatformOf(ctx, 'query-approvals');
+            // The UI role reads MJ: AI Agent Runs only for the user's own runs (UI: Own AI Agent Runs).
+            const agentRuns = ctx.Provider.EntityByName('MJ: AI Agent Runs');
+            Assert(!!agentRuns, "the 'MJ: AI Agent Runs' entity is required and was not found");
+            Assert(agentRuns!.GetEffectiveRowFilterWhereClause(ui, EntityPermissionType.Read, '').length > 0,
+                'fixture invalid: the UI role must read MJ: AI Agent Runs under a row filter');
+
+            // The author's own draft over a row-filtered entity saves, but does not run for them.
+            const filtered = await createQuery('IT120 UI Draft Agent Runs', ForPlatform('SELECT r.[ID] FROM __mj.[vwAIAgentRuns] r WHERE 1 = 0', platform), ui);
+            await adoptAsHolder(ctx, 'IT120 UI Draft Agent Runs', filtered.ID);
+            const refused = await runAs(ctx, filtered.ID, ui);
+            AssertEqual(refused.Success, false, 'a draft reading a row-filtered entity must be refused for the UI user');
+
+            // A draft that reads no row-filtered entity still runs: drafts are not blocked as such.
+            const plain = await createQuery('IT120 UI Draft Rows', `SELECT N FROM ${ROWS}`, ui);
+            await adoptAsHolder(ctx, 'IT120 UI Draft Rows', plain.ID);
+            const ran = await runAs(ctx, plain.ID, ui);
+            Assert(ran.Success, `a draft over no row-filtered entity must run for the UI user: ${ran.ErrorMessage}`);
+
+            // Once a holder approves it, the same SQL runs with the approver's trust.
+            const approved = fixtures!.Queries.get('IT120 UI Draft Agent Runs')!;
+            approved.Status = 'Approved';
+            await saveOrThrow(approved, 'approving the agent-runs draft as a holder', FixtureQuerySaveOptions());
+            const afterApproval = await runAs(ctx, approved.ID, ui);
+            Assert(afterApproval.Success, `the approved query must run for the UI user: ${afterApproval.ErrorMessage}`);
         }
     }
 ];

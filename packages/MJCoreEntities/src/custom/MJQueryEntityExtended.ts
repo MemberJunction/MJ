@@ -1,4 +1,4 @@
-import { BaseEntity, UserInfo, QueryCacheConfig, IMetadataProvider, EntityInfo, FieldSecuritySQLGate, FieldSecurityViolation } from "@memberjunction/core";
+import { BaseEntity, UserInfo, QueryCacheConfig, IMetadataProvider, EntityInfo, EntityPermissionType, FieldSecuritySQLGate, FieldSecurityViolation, IsPostRunViewProtectedEntity } from "@memberjunction/core";
 import { IndexByUUID, RegisterClass, UUIDsEqual, SQLScreeningDialect } from "@memberjunction/global";
 import {
     MJQueryEntity,
@@ -30,6 +30,11 @@ export interface RenderedSQLCheckResult {
     deniedEntities: string[];
     /** The field-level security finding behind a refusal, for logging. */
     fieldSecurityViolation?: FieldSecurityViolation;
+    /**
+     * Entities a draft (not Approved) query reads that are row-filtered for the user, behind a
+     * refusal. For logging; never shown to the user.
+     */
+    rowFilteredEntities?: string[];
     /**
      * True when the query may run but a projection star can bring a column the user is denied:
      * the caller must drop the denied columns from the rows before returning them.
@@ -353,6 +358,12 @@ export class MJQueryEntityExtended extends MJQueryEntity {
      *    caller only as output columns (`options.ProjectionStarOffsets`) is not refused. The result
      *    then reports `needsColumnFiltering` when the user is denied a field on an entity the SQL
      *    reads: the caller must run the query and drop the denied columns from its rows.
+     * 5. A draft (any status but Approved) is refused when an entity it reads is row-filtered for
+     *    the user: a role row-level-security filter or an API-key row filter, or an entity whose
+     *    rows only RunView's server hooks confine. Raw SQL applies none of these, and a draft is SQL
+     *    nobody with `Queries: Approve` has vouched for, so it gets the rule ad-hoc SQL gets. An
+     *    Approved query runs with its approver's trust, as before. SQL that cannot be read is
+     *    refused for a draft when any entity in the catalog is row-filtered for the user.
      *
      * The result never names a denied field, so a refusal says only that the query cannot be run.
      * `QueryFields` metadata plays no part: it is documentation, not a security source.
@@ -383,6 +394,10 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         if (deniedEntities.length > 0) {
             return { canRun: false, deniedEntities };
         }
+        const rowFilteredEntities = this.draftRowFilteredEntities(user, read, catalog);
+        if (rowFilteredEntities.length > 0) {
+            return { canRun: false, deniedEntities: [], rowFilteredEntities };
+        }
         const readEntities = [...this.declaredEntities(catalog), ...(read ?? [])];
         const stars = options?.ProjectionStarOffsets;
         const violation = FieldSecuritySQLGate.FindViolation(renderedSQL, {
@@ -398,6 +413,29 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         }
         const needsColumnFiltering = !!stars && stars.size > 0 && FieldSecuritySQLGate.UserCarriesDenials(readEntities, user);
         return { canRun: true, deniedEntities: [], needsColumnFiltering };
+    }
+
+    /**
+     * For a draft (any status but Approved), the entities it reads that are row-filtered for the
+     * user ({@link UserCanRunRenderedSQL} step 5); empty for an Approved query. `read` is null when
+     * the SQL could not be read: the whole catalog is then checked, and the refusal names no entity.
+     */
+    private draftRowFilteredEntities(user: UserInfo, read: EntityInfo[] | null, catalog: readonly EntityInfo[]): string[] {
+        if (this.Status === 'Approved') return [];
+        if (read === null) {
+            return catalog.some(e => MJQueryEntityExtended.isRowFilteredFor(e, user)) ? ['(SQL that could not be read)'] : [];
+        }
+        return read.filter(e => MJQueryEntityExtended.isRowFilteredFor(e, user)).map(e => e.Name);
+    }
+
+    /**
+     * Whether raw SQL reading this entity's base view would see rows the user's read is narrowed
+     * from: a role or API-key row filter applies, or only RunView's server hooks confine its rows.
+     * The same rule ad-hoc SQL is held to.
+     */
+    private static isRowFilteredFor(entity: EntityInfo, user: UserInfo): boolean {
+        return IsPostRunViewProtectedEntity(entity.Name)
+            || entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0;
     }
 
     /** The catalog entities this query's `QueryEntities` rows name; stale rows are left out. */

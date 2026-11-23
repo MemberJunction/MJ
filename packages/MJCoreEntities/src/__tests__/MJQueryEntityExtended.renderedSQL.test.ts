@@ -80,9 +80,10 @@ const clerk = user('U0000000-0000-0000-0000-0000000000B3', CLERK);
  */
 const QueryCtor = MJQueryEntityExtended as unknown as new () => MJQueryEntityExtended;
 
-function query(id: string): MJQueryEntityExtended {
+function query(id: string, status: MJQueryEntityExtended['Status'] = 'Approved'): MJQueryEntityExtended {
     const q = new QueryCtor();
     Object.defineProperty(q, 'ID', { value: id });
+    Object.defineProperty(q, 'Status', { value: status });
     return q;
 }
 
@@ -170,6 +171,72 @@ describe('MJQueryEntityExtended.UserCanRunRenderedSQL', () => {
         const result = query('q-k').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver', { ProjectionStarOffsets: new Set([sql.indexOf('*')]) });
         expect(result).toEqual({ canRun: true, deniedEntities: [] });
         engineState.permissions = [];
+    });
+});
+
+/**
+ * A draft runs only on entities the user reads unscoped (#6746). Raw SQL applies no row-level
+ * security, and a draft is SQL nobody with `Queries: Approve` has vouched for, so it gets the rule
+ * ad-hoc SQL gets. An Approved query keeps running with its approver's trust.
+ */
+describe('MJQueryEntityExtended.UserCanRunRenderedSQL for a draft', () => {
+    /** People is row-filtered for STAFF only; HR reads it unscoped. */
+    function withPeopleFilteredForStaff<T>(fn: () => T): T {
+        const people = catalog[0];
+        const spy = vi.spyOn(people, 'GetEffectiveRowFilterWhereClause')
+            .mockImplementation((u: UserInfo) => (u.ID === staff.ID ? "(OwnerID = 'x')" : ''));
+        try {
+            return fn();
+        } finally {
+            spy.mockRestore();
+        }
+    }
+    const sql = 'SELECT ID, Name FROM __mj.vwPeople';
+
+    it('refuses a Pending query that reads an entity row-filtered for the user, naming it for the log only', () => {
+        const result = withPeopleFilteredForStaff(() => query('q-r1', 'Pending').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver'));
+        expect(result).toEqual({ canRun: false, deniedEntities: [], rowFilteredEntities: ['People'] });
+    });
+
+    it('treats every status but Approved as a draft', () => {
+        for (const status of ['Rejected', 'Expired'] as const) {
+            const result = withPeopleFilteredForStaff(() => query('q-r2', status).UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver'));
+            expect(result.canRun, status).toBe(false);
+        }
+    });
+
+    it('runs the same SQL when the query is Approved', () => {
+        const result = withPeopleFilteredForStaff(() => query('q-r3', 'Approved').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver'));
+        expect(result.canRun).toBe(true);
+    });
+
+    it('runs the draft for a user who reads the entity unscoped', () => {
+        const result = withPeopleFilteredForStaff(() => query('q-r4', 'Pending').UserCanRunRenderedSQL(hr, sql, catalog, 'sqlserver'));
+        expect(result.canRun).toBe(true);
+    });
+
+    it('lets a holder of the query role list run a draft whatever it reads (definer\'s rights)', () => {
+        engineState.permissions = [{ QueryID: 'q-r5', Role: `Role-${STAFF}` }];
+        try {
+            const result = withPeopleFilteredForStaff(() => query('q-r5', 'Pending').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver'));
+            expect(result.canRun).toBe(true);
+        } finally {
+            engineState.permissions = [];
+        }
+    });
+
+    it('refuses a draft whose SQL cannot be read when any entity is row-filtered for the user', () => {
+        // HR reads every entity, so only this rule can refuse it: unreadable SQL is otherwise allowed for HR.
+        const unreadable = "SELECT ID FROM vwPeople WHERE Name = 'unterminated";
+        const spy = vi.spyOn(catalog[1], 'GetEffectiveRowFilterWhereClause').mockReturnValue("(Region = 'x')");
+        try {
+            expect(query('q-r6', 'Pending').UserCanRunRenderedSQL(hr, unreadable, catalog, 'sqlserver'))
+                .toEqual({ canRun: false, deniedEntities: [], rowFilteredEntities: ['(SQL that could not be read)'] });
+            expect(query('q-r6', 'Approved').UserCanRunRenderedSQL(hr, unreadable, catalog, 'sqlserver').canRun).toBe(true);
+        } finally {
+            spy.mockRestore();
+        }
+        expect(query('q-r6', 'Pending').UserCanRunRenderedSQL(hr, unreadable, catalog, 'sqlserver').canRun).toBe(true);
     });
 });
 

@@ -248,13 +248,17 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     /**
      * The statuses the drawer dropdown offers. `Approved` is left out for a user who can't approve
-     * queries (the server would refuse the save), unless the query being edited is already Approved.
+     * queries (the server would refuse the save), unless the query was Approved when the drawer
+     * opened, so moving it to another status can be undone before saving.
      */
     public get DrawerStatuses(): Array<MJQueryEntityExtended['Status']> {
         const all = QueryBrowserResourceComponent.allDrawerStatuses;
-        if (this.CanApproveQueries || this.DrawerStatus === 'Approved') return all;
+        if (this.CanApproveQueries || this.drawerLoadedStatus === 'Approved') return all;
         return all.filter(s => s !== 'Approved');
     }
+
+    /** The status of the query the drawer opened on; null when it is creating one. */
+    private drawerLoadedStatus: MJQueryEntityExtended['Status'] | null = null;
 
     /** Whether the current user may approve queries (the `Queries: Approve` authorization). */
     public get CanApproveQueries(): boolean {
@@ -1623,6 +1627,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         // Default to the explicit category, or the most recently active category
         this.DrawerCategoryID = categoryID ?? this.activeCategoryID ?? '';
         this.DrawerStatus = 'Pending';
+        this.drawerLoadedStatus = null;
         this.DrawerReusable = false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
@@ -1646,6 +1651,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerDescription = query.Description ?? '';
         this.DrawerCategoryID = query.CategoryID ?? '';
         this.DrawerStatus = query.Status ?? 'Pending';
+        this.drawerLoadedStatus = query.Status ?? null;
         this.DrawerReusable = query.Reusable ?? false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
