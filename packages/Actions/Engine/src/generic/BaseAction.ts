@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, type SupportsAudienceContract } from "@memberjunction/actions-base";
  
 /**
  * Base class for all actions. All actions will derive from this class and be instantiated by the ClassFactory within the @memberjunctin/global package.
@@ -41,6 +41,15 @@ export abstract class BaseAction {
     */
    public get SupportsAudience(): boolean {
       return false;
+   }
+
+   /**
+    * Optional formalized SupportsAudience contract declaring supported audience modes,
+    * server-bound hidden scope parameters, receipt-only chat return shaping, and host-granted
+    * workflow / named-person request capabilities.
+    */
+   public get AudienceContract(): SupportsAudienceContract | undefined {
+      return undefined;
    }
 
    /**

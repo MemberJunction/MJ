@@ -3,6 +3,12 @@ import { EntityChangeContext } from './EntityChangeContext';
 import { MJActionCategoryEntity, MJActionEntity, MJActionEntity_IActionConfiguration, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
 import type { ActionRunAudience } from "./ActionAudience";
+import type {
+   ActionChatReceipt,
+   ReceiptOnlyReturnShapingPolicy,
+   ServerBoundScopeBindings,
+   SupportsAudienceContract,
+} from "./SupportsAudienceContract";
 
 
 export class ActionLibrary {
@@ -151,6 +157,11 @@ export class ActionResultSimple {
     * Optional structured error recovery guidance when `Success` is `false`.
     */
    public ErrorRecovery?: ActionErrorRecovery;
+
+   /**
+    * Optional sanitized confirmation receipt emitted when receipt-only chat return shaping applies.
+    */
+   public ChatReceipt?: ActionChatReceipt;
 }
 
 /**
@@ -216,6 +227,11 @@ export class ActionResult {
     * Propagated from ActionResultSimple.ErrorRecovery returned by the action implementation.
     */
    public ErrorRecovery?: ActionErrorRecovery;
+
+   /**
+    * Optional sanitized confirmation receipt propagated when receipt-only chat return shaping applies.
+    */
+   public ChatReceipt?: ActionChatReceipt;
 }
 
 /**
@@ -501,6 +517,23 @@ export class RunActionParams<TContext = any> {
     * direct invocations, which is what the execution log's NULL provenance columns mean.
     */
    public Provenance?: ActionInvocationProvenance;
+
+   /**
+    * Trusted server-bound hidden scope parameter values injected by the host/runtime.
+    * Untrusted client/LLM parameters matching these names are rejected or stripped before execution.
+    */
+   public ServerBoundScopeParams?: ServerBoundScopeBindings;
+
+   /**
+    * Optional per-dispatch SupportsAudience contract augmenting or declaring hidden scope params
+    * and receipt-only return shaping for this execution.
+    */
+   public AudienceContract?: SupportsAudienceContract;
+
+   /**
+    * Optional per-dispatch receipt-only chat return shaping override.
+    */
+   public ChatReturnShaping?: ReceiptOnlyReturnShapingPolicy;
 };
  
 
