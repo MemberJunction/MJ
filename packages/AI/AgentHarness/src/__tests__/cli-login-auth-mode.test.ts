@@ -128,21 +128,46 @@ describe('Local CLI Login / Subscription Auth Mode', () => {
             });
         });
 
-        it('detects ClaudeCodeCliAdapter login via ~/.claude/.credentials.json, ~/.claude.json, or ~/.claude', () => {
+        it('detects ClaudeCodeCliAdapter login via $CLAUDE_CONFIG_DIR/.credentials.json, ~/.claude/.credentials.json, or ~/.claude.json (ignoring bare ~/.claude)', () => {
             const home = makeTempDir();
-            expect(DetectLocalCliLoginSession('ClaudeCodeCliAdapter', { homeDir: home }).hasLocalLogin).toBe(false);
+            // Bare ~/.claude with only settings.json must NOT be treated as a login session
+            fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+            fs.writeFileSync(path.join(home, '.claude', 'settings.json'), '{}', 'utf8');
+            expect(
+                DetectLocalCliLoginSession('ClaudeCodeCliAdapter', { homeDir: home, env: {} }),
+            ).toEqual({
+                hasLocalLogin: false,
+                indicatorPath: null,
+            });
+
+            // $CLAUDE_CONFIG_DIR/.credentials.json takes precedence when set
+            const customClaudeDir = makeTempDir();
+            const customCreds = path.join(customClaudeDir, '.credentials.json');
+            fs.writeFileSync(customCreds, '{}', 'utf8');
+            expect(
+                DetectLocalCliLoginSession('ClaudeCodeCliAdapter', {
+                    homeDir: home,
+                    env: { CLAUDE_CONFIG_DIR: customClaudeDir },
+                }),
+            ).toEqual({
+                hasLocalLogin: true,
+                indicatorPath: customCreds,
+            });
 
             const claudeJson = path.join(home, '.claude.json');
             fs.writeFileSync(claudeJson, '{"oauthAccount":{}}', 'utf8');
-            expect(DetectLocalCliLoginSession('ClaudeCodeCliAdapter', { homeDir: home })).toEqual({
+            expect(
+                DetectLocalCliLoginSession('ClaudeCodeCliAdapter', { homeDir: home, env: {} }),
+            ).toEqual({
                 hasLocalLogin: true,
                 indicatorPath: claudeJson,
             });
 
             const credsFile = path.join(home, '.claude', '.credentials.json');
-            fs.mkdirSync(path.dirname(credsFile), { recursive: true });
             fs.writeFileSync(credsFile, '{}', 'utf8');
-            expect(DetectLocalCliLoginSession('ClaudeCodeCliAdapter', { homeDir: home })).toEqual({
+            expect(
+                DetectLocalCliLoginSession('ClaudeCodeCliAdapter', { homeDir: home, env: {} }),
+            ).toEqual({
                 hasLocalLogin: true,
                 indicatorPath: credsFile,
             });

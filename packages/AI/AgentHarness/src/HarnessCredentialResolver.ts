@@ -492,13 +492,17 @@ export function DetectLocalCliLoginSession(
             }
             candidates.push(path.join(resolvedHome, '.config', 'antigravity'));
             break;
-        case 'ClaudeCodeCliAdapter':
+        case 'ClaudeCodeCliAdapter': {
+            const claudeConfigDir = nonEmptyEnvValue(env.CLAUDE_CONFIG_DIR);
+            if (claudeConfigDir) {
+                candidates.push(path.join(claudeConfigDir, '.credentials.json'));
+            }
             candidates.push(
                 path.join(resolvedHome, '.claude', '.credentials.json'),
                 path.join(resolvedHome, '.claude.json'),
-                path.join(resolvedHome, '.claude'),
             );
             break;
+        }
         case 'CodexAdapter':
             candidates.push(path.join(resolvedHome, '.codex', 'auth.json'));
             break;
