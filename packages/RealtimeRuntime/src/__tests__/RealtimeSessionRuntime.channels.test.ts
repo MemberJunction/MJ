@@ -732,3 +732,46 @@ describe('RealtimeSessionRuntime — ChannelClassLoader (on-demand channel code)
     await runtime.EndRealtimeSession();
   });
 });
+
+describe('RealtimeSessionRuntime — ChannelFilter (viewport/host capability gating)', () => {
+  beforeEach(() => {
+    ScopedFakeClient.Notes = [];
+    ScopedFakeClient.ListenOnConnect = true;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('omits filtered-out channels from mint candidates, native tools, and mounted session channels', async () => {
+    stubRegistry([ECHO_ROW, FORM_ROW]);
+    const { runtime, provider } = build();
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Echo',
+    });
+
+    const [mint] = provider.mints();
+    const candidates = JSON.parse(String(mint.variables['channelCandidatesJson'])) as Array<{ Key: string }>;
+    expect(candidates.map((c) => c.Key)).toEqual(['Form']);
+    expect(mint.variables['clientToolsJson']).toBeNull();
+    expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual([]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Form',
+      ChannelFilterReason: 'Only available on desktop right now, not on mobile at the moment.',
+    });
+    expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual(['Echo']);
+    expect(ScopedFakeClient.Notes.some((n) => n.includes('Unavailable on this device') && n.includes('Form') && n.includes('Only available on desktop'))).toBe(true);
+    expect(runtime.GetSurfaceSnapshot()).toMatchObject({
+      UnavailableChannels: [{ ChannelKey: 'Form', Reason: 'Only available on desktop right now, not on mobile at the moment.' }],
+    });
+    const echo = runtime.ActiveChannels[0] as RegisteredEcho;
+    const refusal = await echo.ContextForTest!.DispatchContextAction!({
+      Target: { Channel: 'Form' },
+      Action: 'open',
+      Params: {},
+    });
+    expect(refusal.Success).toBe(false);
+    expect(refusal.ErrorMessage).toContain('Only available on desktop right now, not on mobile at the moment.');
+    await runtime.EndRealtimeSession();
+  });
+});

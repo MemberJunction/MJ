@@ -65,6 +65,20 @@ export interface RealtimeHostChannelDeclaration {
 export interface RealtimeSessionStartOptions {
     /** Channels the host brings to this session (see {@link RealtimeHostChannelDeclaration}). */
     HostChannels?: RealtimeHostChannelDeclaration[];
+    /**
+     * Optional host predicate that filters prepared channel plugins before candidate reporting and mint.
+     * Returning `false` leaves the channel out of `channelCandidatesJson` and `NativeTools` so neither
+     * the voice model nor the server mounts a surface the current viewport cannot display (e.g. side-panel
+     * tabs on mobile phones).
+     */
+    ChannelFilter?: (plugin: BaseRealtimeChannelClient) => boolean;
+    /**
+     * Optional explanation surfaced to the agent (in the `[channels]` catalog note, `GetSurfaceSnapshot`,
+     * and `ContextTool` errors) for active channels omitted by {@link ChannelFilter}, so the agent explains
+     * why a feature is unavailable on this device (e.g. desktop-only, not on mobile) instead of saying it
+     * lacks access.
+     */
+    ChannelFilterReason?: string;
     /** The fork (`MJ: Conversation Branches.ID`) the session starts on; omitted or null is Main. */
     ConversationBranchID?: string | null;
     /**

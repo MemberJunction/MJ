@@ -32,6 +32,7 @@ import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
 import { AgentOrbStateFor, RealtimeAgentOrbComponent, type RealtimeAgentOrbState } from './realtime-agent-orb.component';
+import { IsNarrowRealtimeViewport } from './capture/realtime-capture-channel';
 import { RealtimeCameraCheckCardComponent } from './capture/realtime-camera-check-card.component';
 import { SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY } from './realtime-surface-placement-prefs';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
@@ -1602,7 +1603,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * earned, and Details is what earns it (same shape as {@link AllowDevLinks}).
    */
   public get ShowDetailsControl(): boolean {
-    return !this.IsReviewing && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
+    return !this.IsReviewing && !IsNarrowRealtimeViewport() && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
   }
 
   /**
