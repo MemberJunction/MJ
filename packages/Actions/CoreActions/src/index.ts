@@ -150,6 +150,7 @@ export * from './custom/ai/communication-oauth-service';
 export * from './custom/ai/chief-of-staff-core-reads.action';
 export * from './custom/ai/chief-of-staff-rhythms-suggestions.action';
 export * from './custom/ai/agent-channel.action';
+export * from './custom/ai/manage-my-agent-instance.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';

@@ -150,6 +150,16 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Manage My Agent Instance",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "22176029-CA01-4FC2-80DC-2450AE7752A1"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Get Record",
             "Status": "Active"
           },

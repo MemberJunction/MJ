@@ -1,0 +1,328 @@
+@if (Visible) {
+  <mj-dialog
+    [Title]="DialogTitle"
+    [Visible]="true"
+    [Width]="680"
+    [MinWidth]="360"
+    (Close)="OnCancel()">
+    <div class="aie-body">
+      @if (IsLoading) {
+        <div class="aie-loading">
+          <mj-loading text="Loading agent studio..." size="medium"></mj-loading>
+        </div>
+      } @else {
+        <!-- Live Identity Preview Banner -->
+        <div class="aie-preview-card">
+          <div class="aie-preview-avatar">
+            @if (PreviewAvatarUrl) {
+              <img
+                [src]="PreviewAvatarUrl"
+                [alt]="InstanceName || 'Agent avatar'"
+                (error)="AvatarPreviewError = true" />
+            } @else {
+              <i [class]="IconClass || 'fa-solid fa-wand-magic-sparkles'"></i>
+            }
+          </div>
+          <div class="aie-preview-meta">
+            <div class="aie-preview-name-row">
+              <span class="aie-preview-name">{{ InstanceName.trim() || 'Your Personal Agent' }}</span>
+              @if (SelectedBaseAgent) {
+                <span class="aie-base-pill">{{ SelectedBaseAgent.Name }}</span>
+              }
+              @if (IsPrimaryInstance && ShowPrimaryToggle) {
+                <span class="aie-primary-pill">
+                  <i class="fa-solid fa-star"></i> Primary
+                </span>
+              }
+            </div>
+            <p class="aie-preview-tone">
+              @if (Tone.trim()) {
+                {{ Tone }}
+              } @else if (Description.trim()) {
+                {{ Description }}
+              } @else {
+                Inherits all tools, skills, and updates live from {{ SelectedBaseAgent?.Name || 'its base template' }}.
+              }
+            </p>
+          </div>
+          @if (Mode === 'create' && SelectedBaseAgent) {
+            <button
+              mjButton
+              variant="outline"
+              size="sm"
+              type="button"
+              (click)="OnChatToOnboardClicked()"
+              title="Set up conversationally in chat instead of using the form">
+              <i class="fa-solid fa-comments"></i> Chat to Onboard
+            </button>
+          }
+        </div>
+
+        @if (ErrorMessage) {
+          <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
+        }
+
+        <!-- Base Template Selector (Create mode) -->
+        @if (Mode === 'create' && InstantiableTemplates.length > 0) {
+          <div class="aie-section">
+            <label class="aie-label">Base Agent Template</label>
+            <div class="aie-template-grid">
+              @for (tpl of InstantiableTemplates; track tpl.ID) {
+                <button
+                  type="button"
+                  class="aie-template-card"
+                  [class.aie-template-card--selected]="tpl.ID === SelectedBaseAgentId"
+                  (click)="SelectTemplate(tpl)">
+                  <span class="aie-template-icon">
+                    <i [class]="tpl.IconClass || 'fa-solid fa-robot'"></i>
+                  </span>
+                  <span class="aie-template-text">
+                    <span class="aie-template-name">{{ tpl.Name }}</span>
+                    @if (tpl.Description) {
+                      <span class="aie-template-desc">{{ tpl.Description }}</span>
+                    }
+                  </span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Name & Suggestions -->
+        <div class="aie-section">
+          <label class="aie-label" for="aie-instance-name">
+            Name <span class="aie-required">*</span>
+          </label>
+          <input
+            id="aie-instance-name"
+            type="text"
+            class="aie-input"
+            [(ngModel)]="InstanceName"
+            placeholder="e.g., Pepper, Cato, FDA Clinical Scout"
+            autocomplete="off" />
+          @if (Mode === 'create' && SuggestedNames.length > 0) {
+            <div class="aie-chip-row">
+              <span class="aie-chip-hint">Ideas:</span>
+              @for (idea of SuggestedNames; track idea) {
+                <button
+                  type="button"
+                  class="aie-chip"
+                  [class.aie-chip--active]="InstanceName.trim().toLowerCase() === idea.toLowerCase()"
+                  (click)="ApplySuggestedName(idea)">
+                  {{ idea }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Short Description -->
+        <div class="aie-section">
+          <label class="aie-label" for="aie-instance-desc">Role / Focus</label>
+          <input
+            id="aie-instance-desc"
+            type="text"
+            class="aie-input"
+            [(ngModel)]="Description"
+            placeholder="Optional short description of what this instance focuses on" />
+        </div>
+
+        <!-- Visual Identity: Icon Grid + Avatar URL -->
+        <div class="aie-section">
+          <label class="aie-label">Icon &amp; Custom Avatar</label>
+          <div class="aie-icon-grid">
+            @for (opt of IconOptions; track opt.IconClass) {
+              <button
+                type="button"
+                class="aie-icon-tile"
+                [class.aie-icon-tile--selected]="IconClass === opt.IconClass"
+                [title]="opt.Label"
+                (click)="SelectIcon(opt.IconClass)">
+                <i [class]="opt.IconClass"></i>
+              </button>
+            }
+          </div>
+          <input
+            type="url"
+            class="aie-input aie-input--sub"
+            [(ngModel)]="LogoURL"
+            (ngModelChange)="OnLogoUrlChanged()"
+            placeholder="Optional custom avatar image URL (https://...)" />
+        </div>
+
+        <!-- Voice Persona -->
+        @if (ActivePersonas.length > 0) {
+          <div class="aie-section">
+            <div class="aie-label-row">
+              <label class="aie-label">Voice Persona</label>
+              @if (ActivePersonas.length > 6) {
+                <button
+                  type="button"
+                  class="aie-link-btn"
+                  (click)="ShowAllPersonas = !ShowAllPersonas">
+                  {{ ShowAllPersonas ? 'Show fewer' : 'Show all (' + ActivePersonas.length + ')' }}
+                </button>
+              }
+            </div>
+            <div class="aie-chip-row">
+              @for (persona of VisiblePersonas; track persona.ID) {
+                <button
+                  type="button"
+                  class="aie-chip"
+                  [class.aie-chip--active]="IsPersonaSelected(persona)"
+                  [title]="persona.Description || persona.Name"
+                  (click)="SelectPersona(persona)">
+                  <i class="fa-solid fa-microphone-lines"></i>
+                  {{ persona.Name }}
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Personality Style Presets + Tone & SpeakingStyle -->
+        <div class="aie-section">
+          <label class="aie-label">Personality &amp; Communication Style</label>
+          <div class="aie-chip-row aie-chip-row--presets">
+            @for (preset of PersonalityPresets; track preset.label) {
+              <button
+                type="button"
+                class="aie-chip"
+                [class.aie-chip--active]="IsPresetActive(preset)"
+                (click)="ApplyPersonalityPreset(preset)">
+                {{ preset.label }}
+              </button>
+            }
+          </div>
+          <div class="aie-two-col">
+            <div>
+              <label class="aie-sublabel" for="aie-tone">Tone</label>
+              <input
+                id="aie-tone"
+                type="text"
+                class="aie-input"
+                [(ngModel)]="Tone"
+                placeholder="e.g., Direct, playful, a touch sarcastic and funny" />
+            </div>
+            <div>
+              <label class="aie-sublabel" for="aie-style">Speaking / Writing Style</label>
+              <input
+                id="aie-style"
+                type="text"
+                class="aie-input"
+                [(ngModel)]="SpeakingStyle"
+                placeholder="e.g., Crisp bullet points, punchy one-liners" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Standing Instructions -->
+        <div class="aie-section">
+          <label class="aie-label" for="aie-instructions">Standing Instructions</label>
+          <textarea
+            id="aie-instructions"
+            class="aie-textarea"
+            rows="3"
+            [(ngModel)]="AdditionalInstructions"
+            placeholder="Custom ground rules, priorities, or domain focus stacked onto every run..."></textarea>
+        </div>
+
+        <!-- Optional Coordination Mode (for Chief of Staff instances) -->
+        @if (IsChiefOfStaffTemplate) {
+          <div class="aie-section">
+            <label class="aie-label">Coordination Autonomy</label>
+            <div class="aie-mode-row">
+              @for (opt of CoordinationModeOptions; track opt.Value) {
+                <button
+                  type="button"
+                  class="aie-mode-pill"
+                  [class.aie-mode-pill--active]="CoordinationMode === opt.Value"
+                  (click)="SetCoordinationMode(opt.Value)">
+                  <span class="aie-mode-pill-title">{{ opt.Label }}</span>
+                  <span class="aie-mode-pill-hint">{{ opt.Hint }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Primary Instance Toggle -->
+        @if (ShowPrimaryToggle) {
+          <div class="aie-section aie-primary-row">
+            <label class="aie-checkbox-label">
+              <input type="checkbox" [(ngModel)]="IsPrimaryInstance" />
+              <span>
+                <strong>Primary {{ SelectedBaseAgent?.Name || 'agent' }} instance</strong>
+                <span class="aie-checkbox-sub">
+                  Receives inbound wakes, colleague requests, and serves as your default switcher choice.
+                </span>
+              </span>
+            </label>
+          </div>
+        }
+
+        <!-- Archive confirmation inline callout -->
+        @if (Mode === 'edit' && ConfirmArchiveOpen) {
+          <div class="aie-archive-confirm">
+            <span>Archive <strong>{{ EditingAgent?.Name }}</strong>? Past conversations stay intact, and it will be hidden from your active agents.</span>
+            <div class="aie-archive-confirm-actions">
+              <button
+                mjButton
+                variant="danger"
+                size="sm"
+                type="button"
+                [disabled]="IsArchiving"
+                (click)="ConfirmArchive()">
+                {{ IsArchiving ? 'Archiving...' : 'Confirm Archive' }}
+              </button>
+              <button
+                mjButton
+                variant="outline"
+                size="sm"
+                type="button"
+                [disabled]="IsArchiving"
+                (click)="CancelArchive()">
+                Keep
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </div>
+
+    <mj-dialog-actions>
+      <div class="aie-actions-bar">
+        <div class="aie-actions-primary">
+          <button
+            mjButton
+            variant="primary"
+            type="button"
+            [disabled]="!CanSave"
+            (click)="OnSave()">
+            <i class="fa-solid fa-check"></i>
+            {{ IsSaving ? 'Saving...' : (Mode === 'edit' ? 'Save Changes' : 'Create Agent') }}
+          </button>
+          <button
+            mjButton
+            variant="outline"
+            type="button"
+            [disabled]="IsSaving || IsArchiving"
+            (click)="OnCancel()">
+            Cancel
+          </button>
+        </div>
+        @if (Mode === 'edit' && !ConfirmArchiveOpen) {
+          <button
+            mjButton
+            variant="flat"
+            size="sm"
+            type="button"
+            [disabled]="IsSaving || IsArchiving"
+            (click)="RequestArchive()">
+            <i class="fa-solid fa-box-archive"></i> Archive
+          </button>
+        }
+      </div>
+    </mj-dialog-actions>
+  </mj-dialog>
+}

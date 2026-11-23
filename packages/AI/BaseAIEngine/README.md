@@ -251,6 +251,14 @@ Use the availability set for the user-requested path (`/skill` mentions → `Exe
 
 Bundle membership is resolved by ID via `GetSkillActionIDs(skillID)` / `GetSkillSubAgentIDs(skillID)`; skill permission rows are cached on `SkillPermissions` and evaluated by `AISkillPermissionHelper` (open-by-default). Full architecture: [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md).
 
+## Multi-Level Prototype Inheritance & 2×2 RBAC
+
+- **Inheritance Resolution**: `GetAgentInheritanceChain(agentId)` (max depth 5, cycle-safe), `GetRootAgent`, `ResolveEffectiveAgentProperties` (nearest non-null scalar + deep-merged `TypeConfiguration` & `AgentTypePromptParams`), `GetEffectiveAgentPrompts`, `GetEffectiveAgentActions` (with descendant `Revoked`/`Pending` veto), `GetStackedAdditionalInstructions`, and live ancestor inheritance across `GetSubAgents`, `GetSkillsForAgent`, `GetAutoActivatableSkillsForAgent`, `GetAgentConfigurationPresets`, `GetClientToolsForAgent`, `GetAgentModalities`, and `ResolveAgentPersona`.
+- **2×2 RBAC & Ancestor `CanRun` Invariant**: `AIAgentPermissionHelper.ComputeEffectivePermissionsSync` keeps derived agents (`BaseAgentID != null`) with 0 ACL rows private to `OwnerUserID`, while requiring `CanRun` on every ancestor in the `BaseAgentID` chain (fail-closed).
+- **Discovery & User-Scoped Resolution**: `GetInstantiableAgents(user)`, `GetUserDerivedAgents(user)`, `ResolveAgentForUser(nameOrId, user)`, and `ResolvePrimaryUserAgentInstance(baseAgentId, userId)`; templates with `InstantiationMode === 'Required'` are excluded from `GetUserRunnableAgentDirectory`.
+
+Full architecture: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+
 ## Dependencies
 
 - `@memberjunction/core` -- BaseEngine, Metadata, RunView

@@ -19,6 +19,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     AgentDisplayName,
     BuildChiefOfStaffAgentContext,
@@ -106,7 +107,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
     /** The conversation entity when it could be loaded (title, pinned agent); the chat area loads messages by ID either way. */
     public BriefingConversation: MJConversationEntity | null = null;
 
-    /** Agents available in the toolbar agent picker (Chief of Staff, Software Factory, etc.). */
+    /** Agents available in the toolbar agent picker (user's Pepper/Cato instances, Chief of Staff, Software Factory, etc.). */
     public AvailableAgents: SelectableGovernanceAgent[] = [];
     /** Currently selected agent ID for Policy, Wake Routines, and Approvals. */
     public SelectedAgentID: string | null = null;
@@ -117,12 +118,78 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
     private agentQueryParamInitialized = false;
     private _loadGeneration = 0;
 
+    // ── Personal Agent Instance Editor Modal state ───────────────────────────────────────
+    public ShowInstanceEditor = false;
+    public InstanceEditorMode: 'create' | 'edit' = 'create';
+    public EditingInstanceAgent: MJAIAgentEntityExtended | null = null;
+    public InitialInstanceBaseAgentId: string | null = null;
+
     public get SelectedAgentDisplayName(): string {
         return AgentDisplayName(this.DraftPolicy, this.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME);
     }
 
     public get ChiefOfStaffDisplayName(): string {
         return this.SelectedAgentDisplayName;
+    }
+
+    /** True when the user already has at least one active derived instance under Chief of Staff. */
+    public get HasPersonalChiefOfStaffInstance(): boolean {
+        return this.AvailableAgents.some((a) => a.IsDerivedInstance === true);
+    }
+
+    /** Full entity of the currently selected agent when it is a user-owned derived instance. */
+    public get SelectedDerivedAgentEntity(): MJAIAgentEntityExtended | null {
+        if (!this.SelectedAgentID) {
+            return null;
+        }
+        const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
+        const found = engine.GetAgentByID(this.SelectedAgentID);
+        return found?.BaseAgentID ? found : null;
+    }
+
+    public OpenCreateInstanceModal(): void {
+        const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
+        const cosTemplate = engine.Agents.find(
+            (a) => !a.BaseAgentID && a.Name?.trim().toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase(),
+        );
+        this.InstanceEditorMode = 'create';
+        this.EditingInstanceAgent = null;
+        this.InitialInstanceBaseAgentId = cosTemplate?.ID ?? null;
+        this.ShowInstanceEditor = true;
+        this.cdr.markForCheck();
+    }
+
+    public OpenEditInstanceModal(): void {
+        const derived = this.SelectedDerivedAgentEntity;
+        if (!derived) {
+            this.OpenCreateInstanceModal();
+            return;
+        }
+        this.InstanceEditorMode = 'edit';
+        this.EditingInstanceAgent = derived;
+        this.InitialInstanceBaseAgentId = derived.BaseAgentID ?? null;
+        this.ShowInstanceEditor = true;
+        this.cdr.markForCheck();
+    }
+
+    public async OnInstanceSaved(savedAgent: MJAIAgentEntityExtended): Promise<void> {
+        this.SelectedAgentID = savedAgent.ID;
+        this.SelectedAgentName = savedAgent.Name ?? CHIEF_OF_STAFF_AGENT_NAME;
+        this.chiefOfStaffAgentId = savedAgent.ID;
+        this.syncSelectedAgentQueryParam();
+        await this.LoadChiefOfStaffData();
+        this.showBanner('success', `Saved personal agent "${savedAgent.Name}".`);
+    }
+
+    public async OnInstanceArchived(): Promise<void> {
+        this.SelectedAgentID = null;
+        this.chiefOfStaffAgentId = null;
+        await this.LoadChiefOfStaffData();
+        this.showBanner('success', 'Archived personal agent instance.');
+    }
+
+    public OnInstanceChatToOnboard(_template: MJAIAgentEntityExtended): void {
+        void this.navigationService.OpenNavItemByName('Chat');
     }
 
     /** Approval requests awaiting a decision, filtered by the search text. */
@@ -490,12 +557,14 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
 
     /**
      * Loads the selectable governance agents from `AIEngineBase` and resolves the currently active
-     * agent from `?agent=` query param, current selection, or `'Chief of Staff'`.
+     * agent from `?agent=` query param, current selection, the user's primary derived Chief of Staff
+     * instance (e.g., Pepper), or `'Chief of Staff'`.
      */
     private async resolveSelectedAgent(): Promise<SelectableGovernanceAgent | null> {
         const engine = <AIEngineBase>AIEngineBase.GetProviderInstance(this.ProviderToUse, AIEngineBase);
         await engine.EnsureLoaded(this.ProviderToUse.CurrentUser, this.ProviderToUse);
-        this.AvailableAgents = SelectableAgentsForGovernance(engine.Agents);
+        const currentUserId = this.ProviderToUse.CurrentUser?.ID ?? null;
+        this.AvailableAgents = SelectableAgentsForGovernance(engine.Agents, undefined, currentUserId);
 
         if (this.requestedAgentQueryParam) {
             const matchedFromQuery = ResolveSelectableAgent(this.AvailableAgents, this.requestedAgentQueryParam);
@@ -512,7 +581,11 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             }
         }
 
+        const primaryDerived =
+            this.AvailableAgents.find((a) => a.IsDerivedInstance && a.IsPrimaryInstance) ??
+            this.AvailableAgents.find((a) => a.IsDerivedInstance);
         return (
+            primaryDerived ??
             ResolveSelectableAgent(this.AvailableAgents, CHIEF_OF_STAFF_AGENT_NAME) ??
             this.AvailableAgents[0] ??
             null

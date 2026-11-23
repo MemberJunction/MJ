@@ -10,7 +10,7 @@ import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './com
 import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest, ExportArtifactLinkTarget } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
-import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { ComposeEmailCommand, MJAIAgentEntityExtended, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import type { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
@@ -45,6 +45,13 @@ import { firstValueFrom, Subject, takeUntil } from 'rxjs';
             [class.no-transition]="!sidebarTransitionsEnabled"
             [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
             @if (currentUser) {
+              <!-- My Agents — Grok-Bot-style personal agent instances rail -->
+              <mj-my-agents-section
+                [CurrentUser]="currentUser"
+                [ActiveAgentId]="selectedConversation?.DefaultAgentID ?? null"
+                (StartChatWithAgent)="OnStartChatWithAgent($event)"
+                (StartOnboardingWithTemplate)="OnStartOnboardingWithTemplate($event)">
+              </mj-my-agents-section>
               <mj-conversation-list
                 #conversationList
                 [environmentId]="environmentId"
@@ -1275,6 +1282,81 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /** @deprecated Use {@link OnNewConversationRequested}. */
   onNewConversationRequested(): void {
     return this.OnNewConversationRequested();
+  }
+
+  /**
+   * Starts a fresh conversation pinned to a personal agent instance clicked in the My Agents rail.
+   */
+  async OnStartChatWithAgent(agent: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const conversation = await this.engine.CreateConversation(
+      `Chat with ${agent.Name}`,
+      this.EnvironmentId,
+      this.CurrentUser,
+      undefined,
+      undefined,
+      { defaultAgentId: agent.ID }
+    );
+    if (!conversation) {
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Could not start a conversation with ${agent.Name}.`,
+        'error',
+        4000
+      );
+      return;
+    }
+    this.PendingMessageToSend = null;
+    this.PendingAttachmentsToSend = null;
+    this.SelectedConversationId = conversation.ID;
+    this.SelectedConversation = conversation;
+    this.IsNewUnsavedConversation = false;
+    this.bridge.SetActiveFromWorkspace(conversation.ID);
+    this.updateUrl();
+    this.NotifyDisplayNameChanged(conversation.Name || `Chat with ${agent.Name}`);
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Starts a guided conversational onboarding chat pinned to an instantiable template agent
+   * (e.g., Chief of Staff) so the agent walks the user through minting their personal instance.
+   */
+  async OnStartOnboardingWithTemplate(template: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const conversation = await this.engine.CreateConversation(
+      `Set up My ${template.Name}`,
+      this.EnvironmentId,
+      this.CurrentUser,
+      undefined,
+      undefined,
+      { defaultAgentId: template.ID }
+    );
+    if (!conversation) {
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Could not start onboarding with ${template.Name}.`,
+        'error',
+        4000
+      );
+      return;
+    }
+    this.PendingMessageToSend = `Hi! Help me personalize and set up my own ${template.Name}.`;
+    this.PendingAttachmentsToSend = null;
+    this.SelectedConversationId = conversation.ID;
+    this.SelectedConversation = conversation;
+    this.IsNewUnsavedConversation = false;
+    this.bridge.SetActiveFromWorkspace(conversation.ID);
+    this.updateUrl();
+    this.NotifyDisplayNameChanged(conversation.Name || `Set up My ${template.Name}`);
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
+    }
+    this.cdr.detectChanges();
   }
 
   /**

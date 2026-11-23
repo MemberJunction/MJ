@@ -21,7 +21,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { IMetadataProvider, LogError, LogStatus, Metadata, type MJLimitsOverride, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { IMetadataProvider, IRunViewProvider, LogError, LogStatus, Metadata, type MJLimitsOverride, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
@@ -460,8 +460,14 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         }
 
         const saveUser = this.resolveRoutineSaveUser(targetUserID, contextUser);
-        const policyEval = await CheckActivePolicyForAgentAndUser(
+        const resolvedTarget = await this.resolvePrimaryUserAgentForTarget(
             request.AgentID,
+            targetUserID,
+            saveUser,
+            metadataProvider
+        );
+        const policyEval = await CheckActivePolicyForAgentAndUser(
+            resolvedTarget.ID,
             targetUserID,
             saveUser,
             { provider: metadataProvider, preferCache: true }
@@ -489,8 +495,8 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
         return this.upsertImmediateWakeRoutine({
             targetUserID,
-            targetAgentID: request.AgentID,
-            targetAgentName: policy.Agent ?? null,
+            targetAgentID: resolvedTarget.ID,
+            targetAgentName: resolvedTarget.Name ?? policy.Agent ?? null,
             workstreamKey,
             wakeReason,
             resumeState,
@@ -599,9 +605,16 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             }
         }
 
-        // 4. Enforce user's Chief of Staff / Agent policy in senderUser's context
-        const policyEval = await CheckActivePolicyForAgentAndUser(
+        // 4. Resolve user's primary derived agent instance (e.g., Chief of Staff -> Alice's Pepper)
+        // and enforce user's Agent policy in senderUser's context
+        const resolvedMailboxTarget = await this.resolvePrimaryUserAgentForTarget(
             identity.AgentID,
+            senderUser.ID,
+            senderUser,
+            md
+        );
+        const policyEval = await CheckActivePolicyForAgentAndUser(
+            resolvedMailboxTarget.ID,
             senderUser.ID,
             senderUser,
             { provider: md, preferCache: true }
@@ -613,7 +626,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         if (policy.EmailChannelMode === 'Disabled') {
             return this.notTriggered(
                 'POLICY_DENIED',
-                `User ${senderUser.Email} has EmailChannelMode="Disabled" for agent ${identity.AgentID}.`
+                `User ${senderUser.Email} has EmailChannelMode="Disabled" for agent ${resolvedMailboxTarget.ID}.`
             );
         }
 
@@ -638,8 +651,8 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
         return this.upsertImmediateWakeRoutine({
             targetUserID: senderUser.ID,
-            targetAgentID: identity.AgentID,
-            targetAgentName: policy?.Agent ?? null,
+            targetAgentID: resolvedMailboxTarget.ID,
+            targetAgentName: resolvedMailboxTarget.Name ?? policy?.Agent ?? null,
             workstreamKey,
             wakeReason,
             resumeState,
@@ -708,19 +721,29 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             }
         }
 
-        const resolvedAgent = await this.resolveTargetAgentForWorkstream(
+        const resolvedBaseAgent = await this.resolveTargetAgentForWorkstream(
             input.targetAgentID,
             input.targetAgentName,
             saveUser,
             md
         );
-        if (!resolvedAgent) {
+        if (!resolvedBaseAgent) {
             const requestedLabel = input.targetAgentID?.trim() || input.targetAgentName?.trim() || '(none)';
             return this.notTriggered(
                 'AGENT_NOT_FOUND',
                 `Target agent "${requestedLabel}" could not be found or resolved.`
             );
         }
+
+        // If the wake targeted a prototype/template agent (e.g., Chief of Staff), deterministically
+        // route to targetUserID's IsPrimaryInstance derived agent (e.g., Alice's Pepper).
+        const resolvedAgent = await this.resolvePrimaryUserAgentForTarget(
+            resolvedBaseAgent.ID,
+            targetUserID,
+            saveUser,
+            md,
+            resolvedBaseAgent.Name
+        );
 
         const policyEval = await CheckActivePolicyForAgentAndUser(
             resolvedAgent.ID,
@@ -1179,6 +1202,89 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             contextUser
         );
         return Boolean(res.Success && Array.isArray(res.Results) && res.Results.length > 0);
+    }
+
+    /**
+     * Resolves a user's primary active derived instance (`IsPrimaryInstance = true`) descending
+     * from `targetAgentId` when `targetAgentId` is a prototype/template agent (e.g., `Chief of Staff`).
+     * Falls back cleanly to `targetAgentId` if the user has not instantiated a personal instance yet
+     * or if `targetAgentId` is already a concrete derived instance.
+     */
+    public async ResolvePrimaryUserAgentInstance(
+        targetAgentIdOrName: string,
+        userId: string,
+        contextUser?: UserInfo,
+        metadataProvider?: IMetadataProvider
+    ): Promise<{ ID: string; Name: string | null }> {
+        const effectiveUser = contextUser ? this.resolveRoutineSaveUser(userId, contextUser) : undefined;
+        const result = await this.resolvePrimaryUserAgentForTarget(
+            targetAgentIdOrName,
+            userId,
+            effectiveUser,
+            metadataProvider ?? Metadata.Provider
+        );
+        return result;
+    }
+
+    private async resolvePrimaryUserAgentForTarget(
+        targetAgentIdOrName: string,
+        userId: string,
+        contextUser: UserInfo | undefined,
+        md: IMetadataProvider,
+        fallbackName?: string | null
+    ): Promise<{ ID: string; Name: string | null }> {
+        const trimmed = (targetAgentIdOrName ?? '').trim();
+        if (!trimmed || !userId) {
+            return { ID: trimmed, Name: fallbackName ?? null };
+        }
+
+        // Fast path: check in-memory AIEngine cache
+        try {
+            if (typeof AIEngine.Instance?.ResolvePrimaryUserAgentInstance === 'function') {
+                const targetAgent =
+                    typeof AIEngine.Instance.GetAgentByID === 'function'
+                        ? AIEngine.Instance.GetAgentByID(trimmed)
+                        : undefined;
+                // Only redirect when targeting a root/template agent (not an explicit leaf instance)
+                if (!targetAgent || !targetAgent.BaseAgentID || targetAgent.InstantiationMode !== 'None') {
+                    const primary = AIEngine.Instance.ResolvePrimaryUserAgentInstance(trimmed, userId);
+                    if (primary) {
+                        return { ID: primary.ID, Name: primary.Name ?? fallbackName ?? null };
+                    }
+                }
+            }
+        } catch {
+            // Fall through to DB lookup when AIEngine is not configured in unit tests
+        }
+
+        // DB fallback for cold cache / isolated provider
+        try {
+            if (IsValidUUID(trimmed) && typeof (md as Partial<IRunViewProvider>).RunView === 'function') {
+                const rv = RunView.FromMetadataProvider(md);
+                const safeRoot = EscapeSQLString(trimmed);
+                const safeUser = EscapeSQLString(userId);
+                const res = await rv.RunView<{ ID: string; Name?: string | null; IsPrimaryInstance?: boolean }>(
+                    {
+                        EntityName: 'MJ: AI Agents',
+                        ExtraFilter: `OwnerUserID='${safeUser}' AND Status='Active' AND BaseAgentID IS NOT NULL AND (RootBaseAgentID='${safeRoot}' OR BaseAgentID='${safeRoot}')`,
+                        OrderBy: 'IsPrimaryInstance DESC, Name ASC',
+                        Fields: ['ID', 'Name', 'IsPrimaryInstance'],
+                        MaxRows: 1,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple',
+                    },
+                    contextUser
+                );
+                if (res.Success && Array.isArray(res.Results) && res.Results.length > 0) {
+                    const row = res.Results[0];
+                    return { ID: row.ID, Name: row.Name ?? fallbackName ?? null };
+                }
+            }
+        } catch {
+            // Graceful fallback to original targetAgentIdOrName
+        }
+
+        return { ID: trimmed, Name: fallbackName ?? null };
     }
 
     private async resolveTargetAgentForWorkstream(

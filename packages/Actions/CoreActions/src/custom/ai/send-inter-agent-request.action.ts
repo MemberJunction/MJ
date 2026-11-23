@@ -108,7 +108,7 @@ export class SendInterAgentRequestAction extends BaseAction {
                 };
             }
 
-            const targetResolution = this.resolveRecipientAgent(params, senderAgent);
+            const targetResolution = this.resolveRecipientAgent(params, senderAgent, targetUserId);
             if ('errorResult' in targetResolution) {
                 return targetResolution.errorResult;
             }
@@ -431,10 +431,23 @@ export class SendInterAgentRequestAction extends BaseAction {
 
     private resolveRecipientAgent(
         params: RunActionParams,
-        senderAgent: (typeof AIEngine.Instance.Agents)[number]
+        senderAgent: (typeof AIEngine.Instance.Agents)[number],
+        targetUserId: string
     ): { agent: (typeof AIEngine.Instance.Agents)[number] } | { errorResult: ActionResultSimple } {
         const targetAgentId = this.getStringParam(params, 'TargetAgentID');
         const targetAgentName = this.getStringParam(params, 'TargetAgentName');
+        const resolveForUser = (
+            candidate: (typeof AIEngine.Instance.Agents)[number]
+        ): (typeof AIEngine.Instance.Agents)[number] => {
+            if (
+                !candidate.BaseAgentID &&
+                targetUserId &&
+                typeof AIEngine.Instance.ResolvePrimaryUserAgentInstance === 'function'
+            ) {
+                return AIEngine.Instance.ResolvePrimaryUserAgentInstance(candidate.ID, targetUserId) ?? candidate;
+            }
+            return candidate;
+        };
         if (targetAgentName) {
             const found = AIEngine.Instance.Agents.find(
                 (a) => a.Name.trim().toLowerCase() === targetAgentName.trim().toLowerCase()
@@ -449,7 +462,7 @@ export class SendInterAgentRequestAction extends BaseAction {
                     },
                 };
             }
-            return { agent: found };
+            return { agent: resolveForUser(found) };
         }
         if (targetAgentId) {
             const found = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, targetAgentId));
@@ -463,12 +476,15 @@ export class SendInterAgentRequestAction extends BaseAction {
                     },
                 };
             }
-            return { agent: found };
+            return { agent: resolveForUser(found) };
         }
         const defaultCos = AIEngine.Instance.Agents.find(
-            (a) => a.Name.trim().toLowerCase() === 'chief of staff'
+            (a) => !a.BaseAgentID && a.Name.trim().toLowerCase() === 'chief of staff'
         );
-        return { agent: defaultCos ?? senderAgent };
+        const fallback = defaultCos ?? (senderAgent.BaseAgentID
+            ? AIEngine.Instance.GetRootAgent?.(senderAgent.ID) ?? senderAgent
+            : senderAgent);
+        return { agent: resolveForUser(fallback) };
     }
 
     private clampPriority(raw: number): number {

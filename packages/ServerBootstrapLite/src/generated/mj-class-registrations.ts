@@ -1232,7 +1232,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (94 classes)
+// @memberjunction/core-entities-server (95 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1241,6 +1241,7 @@ import {
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -1330,7 +1331,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (208 classes)
+// @memberjunction/core-actions (209 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1466,6 +1467,7 @@ import {
     LoopAction,
     MCPToolAction,
     ManageAgentSuggestionsAction,
+    ManageMyAgentInstanceAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
@@ -2551,6 +2553,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -2630,11 +2633,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJTagScopeEntityServer,
     MJTaskDependencyEntityServer,
     MJTaskEntityServer,
-    MJTemplateContentEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
@@ -2776,6 +2779,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     LoopAction,
     MCPToolAction,
     ManageAgentSuggestionsAction,
+    ManageMyAgentInstanceAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
@@ -2833,12 +2837,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
-    TextAnalyzerAction,
-    TriggerAgentWakeAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    TextAnalyzerAction,
+    TriggerAgentWakeAction,
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
@@ -2911,7 +2915,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1255;
+export const CLASS_REGISTRATIONS_COUNT = 1257;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -41,6 +41,7 @@ export * from './custom/MJScheduledJobEntityServer.server';
 export * from './custom/RecordProcessOnChangeReconciler';
 export * from './custom/MJCompanyIntegrationEntityServer.server';
 export * from './custom/MJAIAgentEntityServer.server';
+export * from './custom/MJAIAgentPersonaEntityServer.server';
 export * from './custom/MJAIAgentCoAgentEntityServer.server';
 export * from './custom/MJAIAgentRelationshipEntityServer.server';
 export * from './custom/MJAIBridgeProviderEntityServer.server';

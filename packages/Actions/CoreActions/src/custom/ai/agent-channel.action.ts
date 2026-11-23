@@ -369,12 +369,25 @@ export class OpenAgentChannelAction extends BaseAction {
                 };
             }
 
-            // Create participant records (initiator + all peers)
+            // Create participant records (initiator + all peers), routing each peer to their primary derived instance when present
+            const resolvePeerAgentId = (baseTarget: MJAIAgentEntityExtended, userId: string): string => {
+                const rootOrTarget =
+                    baseTarget.BaseAgentID && typeof AIEngine.Instance.GetRootAgent === 'function'
+                        ? AIEngine.Instance.GetRootAgent(baseTarget.ID) ?? baseTarget
+                        : baseTarget;
+                if (typeof AIEngine.Instance.ResolvePrimaryUserAgentInstance === 'function') {
+                    const resolved = AIEngine.Instance.ResolvePrimaryUserAgentInstance(rootOrTarget.ID, userId);
+                    if (resolved) {
+                        return resolved.ID;
+                    }
+                }
+                return baseTarget.ID;
+            };
             const participantSpecs: Array<{ userId: string; agentId: string; role: MJAgentChannelParticipantEntity['Role'] }> = [
                 { userId: contextUser.ID, agentId: senderAgent.ID, role: 'Initiator' },
                 ...activeTargets.map((u) => ({
                     userId: u.ID,
-                    agentId: targetAgent.ID,
+                    agentId: resolvePeerAgentId(targetAgent, u.ID),
                     role: 'Participant' as const,
                 })),
             ];

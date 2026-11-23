@@ -316,6 +316,14 @@ Provider mappings:
 - **Groq**: Experimental reasoning_effort parameter
 - **Gemini**: Reasoning mode intensity
 
+## Agent Instances, Instantiation Config & Policy Ceiling Inheritance
+
+- **`agent-instantiation.ts`**: Exports `AgentInstantiationMode`, `MAX_AGENT_INHERITANCE_DEPTH` (5), `IAgentInstantiationConfig`, `IAgentPersonalityPreset`, `ParseAgentInstantiationConfig`, and `DeepMergeAgentConfigObjects` for `AIAgent.BaseAgentID` prototype chains and `TypeConfiguration.instantiation` hints.
+- **`AgentUserPolicyEngine`**: `GetEffectivePolicyForAgentChain` / `GetCachedEffectivePolicyForAgentChain` / `IntersectPolicies` intersect policies from `[root … leaf]` using strictest-wins ceiling semantics without mutating entity instances.
+- **`ResolveAgentRunLimits`**: Accepts `AncestorAgents` and `AncestorUserPolicies` to clamp child agent run limits by prototype ancestor ceilings.
+
+Full architecture: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+
 ## Dependencies
 
 - `@memberjunction/ai` -- Core AI abstractions

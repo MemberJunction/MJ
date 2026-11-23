@@ -89,9 +89,16 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
 
       const allAgents = AIEngineBase.Instance.ReadableAgents; // none for a user with no read on MJ: AI Agents, not a throw (MJ#5240)
 
-      // Filter by status, hierarchy, and invocation mode first
+      // Filter by status, hierarchy, invocation mode, and instantiation mode first.
+      // Templates with InstantiationMode === 'Required' (e.g., Chief of Staff) are instantiated
+      // into personal derived agents rather than mentioned directly in chat.
       const candidateAgents = allAgents.filter(
-        a => !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent' && !a.IsRestricted
+        a =>
+          !a.ParentID &&
+          a.Status === 'Active' &&
+          a.InvocationMode !== 'Sub-Agent' &&
+          !a.IsRestricted &&
+          a.InstantiationMode !== 'Required'
       );
 
       // Filter by user's 'run' permission — respects open-by-default + explicit permissions

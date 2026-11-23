@@ -416,4 +416,39 @@ describe('Multi-agent picker helpers (Chief of Staff + Software Factory)', () =>
         expect(ctx['SelectedAgentName']).toBe('Software Factory');
         expect(ctx['AvailableAgentNames']).toEqual(['Chief of Staff', 'Software Factory']);
     });
+
+    it('surfaces personal derived Chief of Staff instances (Pepper primary, Cato secondary) first and suppresses unreferenced Required template', () => {
+        const USER_ID = '11111111-0000-4000-8000-000000000099';
+        const PEPPER_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E11';
+        const CATO_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E22';
+        const raw = [
+            { ID: FACTORY_ID, Name: 'Software Factory', ParentID: null, Status: 'Active', InstantiationMode: 'None' },
+            { ID: COS_ID, Name: 'Chief of Staff', ParentID: null, Status: 'Active', InstantiationMode: 'Required' },
+            {
+                ID: CATO_ID,
+                Name: 'Cato',
+                ParentID: null,
+                BaseAgentID: COS_ID,
+                OwnerUserID: USER_ID,
+                IsPrimaryInstance: false,
+                Status: 'Active',
+            },
+            {
+                ID: PEPPER_ID,
+                Name: 'Pepper',
+                ParentID: null,
+                BaseAgentID: COS_ID,
+                OwnerUserID: USER_ID,
+                IsPrimaryInstance: true,
+                Status: 'Active',
+            },
+        ];
+
+        const selectable = SelectableAgentsForGovernance(raw, undefined, USER_ID);
+        expect(selectable.map((a) => a.Name)).toEqual(['Pepper', 'Cato', 'Software Factory']);
+        expect(selectable[0].IsDerivedInstance).toBe(true);
+        expect(selectable[0].IsPrimaryInstance).toBe(true);
+        expect(selectable[1].IsDerivedInstance).toBe(true);
+        expect(selectable[1].IsPrimaryInstance).toBeUndefined();
+    });
 });

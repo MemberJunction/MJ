@@ -12,6 +12,8 @@ export const CHIEF_OF_STAFF_LIVE_ENTITIES: readonly string[] = [
     'MJ: User Routines',
     'MJ: User Routine Runs',
     'MJ: AI Agent User Policies',
+    'MJ: AI Agents',
+    'MJ: AI Agent Personas',
 ];
 
 /**

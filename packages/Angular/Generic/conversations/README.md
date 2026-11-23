@@ -631,6 +631,14 @@ Uses `@memberjunction/ng-ui-components` for dialogs, buttons, inputs, layout, in
 - `@angular/forms` ^21.x
 - `@angular/platform-browser` ^21.x
 
+## Personal Agent Instances ("My Agents")
+
+- **`MyAgentsSectionComponent` (`mj-my-agents-section`)**: Left-rail section inside `ConversationSidebarComponent` (`[ShowMyAgents]`, default `true`) listing the user's active derived agent instances (`BaseAgentID != null`) with custom avatars/icons, base-agent badges, primary stars, Tailor controls, and a setup CTA for un-onboarded `InstantiationMode === 'Required'` templates.
+- **`AgentInstanceEditorModalComponent` (`mj-agent-instance-editor-modal`)**: Dual-mode studio supporting both **"Chat to Onboard"** and direct interactive creation/tailoring (template cards, name suggestions, icon grid, custom `LogoURL`, voice persona selector, personality presets writing `AIAgentPersona.StyleOverride`, standing instructions, autonomy mode, and primary toggle).
+- **`ConversationAgentPickerComponent` & `MessageItemComponent`**: Excludes `InstantiationMode === 'Required'` templates from default pickers, groups `My Agents` above catalog agents, resolves `LogoURL` → Persona `PreviewImageURL` → `IconClass`, and live-refreshes when conversational onboarding re-pins `Conversation.DefaultAgentID`.
+
+Full guide: [Agent Permissions & Inheritance Guide](../../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+
 ## Build
 
 ```bash

@@ -44,6 +44,24 @@
                     </mj-dropdown>
                 </div>
             }
+            @if (SelectedDerivedAgentEntity) {
+                <button
+                    mjButton
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    (click)="OpenEditInstanceModal()">
+                    <i class="fa-solid fa-sliders"></i> Personalize
+                </button>
+            }
+            <button
+                mjButton
+                variant="outline"
+                size="sm"
+                type="button"
+                (click)="OpenCreateInstanceModal()">
+                <i class="fa-solid fa-plus"></i> New Instance
+            </button>
             <mj-refresh-button
                 [Loading]="IsLoading"
                 [ShowLabel]="true"
@@ -75,6 +93,20 @@
                 <mj-loading text="Loading Chief of Staff..."></mj-loading>
             </div>
         } @else {
+            @if (!HasPersonalChiefOfStaffInstance) {
+                <div class="cos-setup-callout">
+                    <div class="cos-setup-callout__text">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <div>
+                            <strong>Set up your personal Chief of Staff</strong>
+                            <p>Give your executive partner a name, voice, personality, and standing instructions — or create multiple specialized instances.</p>
+                        </div>
+                    </div>
+                    <button mjButton variant="primary" size="sm" type="button" (click)="OpenCreateInstanceModal()">
+                        <i class="fa-solid fa-plus"></i> Personalize Now
+                    </button>
+                </div>
+            }
             <div class="cos-kpi-grid">
                 <div class="cos-kpi-card" (click)="OpenPage('approvals-wakes')">
                     <div class="cos-kpi-card__header">
@@ -320,3 +352,15 @@
         (Close)="OnRequestDialogClose($event)">
     </mj-agent-request-dialog>
 }
+
+<mj-agent-instance-editor-modal
+    [Provider]="Provider"
+    [(Visible)]="ShowInstanceEditor"
+    [CurrentUser]="ProviderToUse.CurrentUser"
+    [Mode]="InstanceEditorMode"
+    [EditingAgent]="EditingInstanceAgent"
+    [InitialBaseAgentId]="InitialInstanceBaseAgentId"
+    (Saved)="OnInstanceSaved($event)"
+    (Archived)="OnInstanceArchived()"
+    (ChatToOnboard)="OnInstanceChatToOnboard($event)">
+</mj-agent-instance-editor-modal>

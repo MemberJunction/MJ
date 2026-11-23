@@ -765,6 +765,15 @@ For backward compatibility, this package re-exports the following from `@memberj
 
 New code should import these directly from `@memberjunction/ai-reranker`.
 
+## Agent Instances, Unified Persona & Primary Routing
+
+- **Prototype Runtime Resolution**: `BaseAgent`, `AgentRunner`, `CreateAgentInstance`, and Realtime co-agent sessions resolve effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, skills, presets, run limits, and user-policy ceilings across `AIAgent.BaseAgentID` chains.
+- **Unified Text + Realtime Voice Persona**: `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) injects `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` into text prompts alongside the **Audience-Aware Tone Guardrail**.
+- **Sibling Memory Isolation & Org-Note Inheritance**: `AgentContextInjector` inherits agent-wide org notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes strictly isolated per derived instance.
+- **Primary Instance Wake Routing**: `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` routes inter-agent requests, utility mailbox wakes, and workstreams to the user's primary active derived instance (`IsPrimaryInstance = 1`).
+
+Full architecture: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+
 ## Dependencies
 
 - `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
@@ -800,6 +809,15 @@ Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
 - **Agent Category** -- business-domain default (e.g., Marketing → Box, Finance → SharePoint)
 - **Agent** -- per-agent override
 - **Runtime** -- `ExecuteAgentParams.override.storageAccountId` for programmatic callers
+
+## Agent Instances, Unified Persona & Primary Routing
+
+- **Prototype Runtime Resolution**: `BaseAgent`, `AgentRunner`, `CreateAgentInstance`, and Realtime co-agent sessions resolve effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, skills, presets, run limits, and user-policy ceilings across `AIAgent.BaseAgentID` chains.
+- **Unified Text + Realtime Voice Persona**: `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) injects `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` into text prompts alongside the **Audience-Aware Tone Guardrail**.
+- **Sibling Memory Isolation & Org-Note Inheritance**: `AgentContextInjector` inherits agent-wide org notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes strictly isolated per derived instance.
+- **Primary Instance Wake Routing**: `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` routes inter-agent requests, utility mailbox wakes, and workstreams to the user's primary active derived instance (`IsPrimaryInstance = 1`).
+
+Full architecture: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
 
 ## Dependencies
 

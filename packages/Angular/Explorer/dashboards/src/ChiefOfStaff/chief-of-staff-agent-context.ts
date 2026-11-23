@@ -45,27 +45,86 @@ export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 export interface SelectableGovernanceAgent {
     ID: string;
     Name: string;
+    BaseAgentID?: string | null;
+    IsDerivedInstance?: boolean;
+    IsPrimaryInstance?: boolean;
+    IconClass?: string | null;
 }
 
 export interface GovernanceAgentCandidate {
     ID: string;
     Name: string | null;
     ParentID?: string | null;
+    BaseAgentID?: string | null;
+    OwnerUserID?: string | null;
+    InstantiationMode?: string | null;
+    IsPrimaryInstance?: boolean | null;
+    IconClass?: string | null;
     Status?: string | null;
 }
 
 /**
+ * Resolves the root ancestor agent ID for a candidate by walking `BaseAgentID` up to depth 5.
+ */
+function resolveRootBaseAgent(
+    candidate: GovernanceAgentCandidate,
+    byId: ReadonlyMap<string, GovernanceAgentCandidate>,
+): GovernanceAgentCandidate {
+    let cur = candidate;
+    const visited = new Set<string>([candidate.ID.trim().toLowerCase()]);
+    for (let depth = 0; depth < 5 && cur.BaseAgentID; depth++) {
+        const nextKey = cur.BaseAgentID.trim().toLowerCase();
+        if (visited.has(nextKey)) {
+            break;
+        }
+        visited.add(nextKey);
+        const parent = byId.get(nextKey);
+        if (!parent) {
+            break;
+        }
+        cur = parent;
+    }
+    return cur;
+}
+
+/**
  * Builds the sorted list of agents available in the Chief of Staff app's agent picker:
- * active top-level (`ParentID == null`) agents, plus any agent explicitly referenced in
- * `extraReferencedIds` (e.g., existing policies/routines/requests for the user), with
- * `'Chief of Staff'` ordered first and the rest alphabetical by name.
+ * - Active derived personal instances (e.g., *Pepper*, *Cato* under Chief of Staff), ordered
+ *   primary Chief of Staff instance first, then other Chief of Staff instances alphabetically.
+ * - Active top-level (`ParentID == null`) agents — omitting uninstantiated `InstantiationMode === 'Required'`
+ *   templates once the user has at least one active derived instance under that template (unless
+ *   explicitly referenced in `extraReferencedIds`).
+ * - Any agent explicitly referenced in `extraReferencedIds` (e.g., existing policies/routines/requests).
  */
 export function SelectableAgentsForGovernance(
     agents: readonly GovernanceAgentCandidate[],
     extraReferencedIds?: ReadonlySet<string>,
+    currentUserId?: string | null,
 ): SelectableGovernanceAgent[] {
+    const byId = new Map<string, GovernanceAgentCandidate>();
+    for (const a of agents) {
+        if (a.ID) {
+            byId.set(a.ID.trim().toLowerCase(), a);
+        }
+    }
+
+    // Track which Required templates already have an active derived instance visible to this user
+    const rootsWithActiveDerived = new Set<string>();
+    for (const a of agents) {
+        if (!a.ID || !a.BaseAgentID) {
+            continue;
+        }
+        const isActive = a.Status == null || a.Status === 'Active';
+        const ownerMatches =
+            !currentUserId || !a.OwnerUserID || UUIDsEqual(a.OwnerUserID, currentUserId);
+        if (isActive && ownerMatches) {
+            const root = resolveRootBaseAgent(a, byId);
+            rootsWithActiveDerived.add(root.ID.trim().toLowerCase());
+        }
+    }
+
     const seen = new Set<string>();
-    const out: SelectableGovernanceAgent[] = [];
+    const out: Array<SelectableGovernanceAgent & { _sortGroup: number }> = [];
     const extraRefSet = extraReferencedIds ? new UUIDSet(extraReferencedIds) : null;
 
     for (const a of agents) {
@@ -77,24 +136,64 @@ export function SelectableAgentsForGovernance(
         if (seen.has(key)) {
             continue;
         }
-        const isCos = name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
-        const isTopLevelActive =
-            a.ParentID == null && (a.Status == null || a.Status === 'Active');
-        const isReferenced = extraRefSet ? extraRefSet.Has(a.ID) : false;
 
-        if (isCos || isTopLevelActive || isReferenced) {
-            seen.add(key);
-            out.push({ ID: a.ID, Name: name });
+        const isActive = a.Status == null || a.Status === 'Active';
+        const isReferenced = extraRefSet ? extraRefSet.Has(a.ID) : false;
+        const isDerived = Boolean(a.BaseAgentID);
+        const root = resolveRootBaseAgent(a, byId);
+        const rootIsCos =
+            (root.Name?.trim().toLowerCase() ?? '') === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+        const isCosTemplate =
+            !isDerived && name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+
+        // Suppress a Required template once the user has derived instances under it (unless referenced)
+        const suppressRequiredTemplate =
+            !isDerived &&
+            a.InstantiationMode === 'Required' &&
+            rootsWithActiveDerived.has(key) &&
+            !isReferenced;
+        if (suppressRequiredTemplate) {
+            continue;
         }
+
+        const isTopLevelActive = a.ParentID == null && isActive;
+        const include = isCosTemplate || isTopLevelActive || isReferenced;
+        if (!include) {
+            continue;
+        }
+
+        let sortGroup: number;
+        if (isDerived && rootIsCos && a.IsPrimaryInstance) {
+            sortGroup = 0; // User's primary Chief of Staff instance (e.g., Pepper)
+        } else if (isDerived && rootIsCos) {
+            sortGroup = 1; // Other Chief of Staff instances (e.g., Cato)
+        } else if (isCosTemplate) {
+            sortGroup = 2; // Chief of Staff template (when user hasn't onboarded yet)
+        } else if (isDerived) {
+            sortGroup = 3; // Other personal derived instances (e.g., FDA Clinical Scout)
+        } else {
+            sortGroup = 4; // General top-level agents (e.g., Software Factory)
+        }
+
+        seen.add(key);
+        out.push({
+            ID: a.ID,
+            Name: name,
+            ...(isDerived ? { BaseAgentID: a.BaseAgentID, IsDerivedInstance: true } : {}),
+            ...(a.IsPrimaryInstance ? { IsPrimaryInstance: true } : {}),
+            ...(a.IconClass ? { IconClass: a.IconClass } : {}),
+            _sortGroup: sortGroup,
+        });
     }
 
-    return out.sort((a, b) => {
-        const aIsCos = a.Name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
-        const bIsCos = b.Name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
-        if (aIsCos && !bIsCos) return -1;
-        if (!aIsCos && bIsCos) return 1;
-        return a.Name.localeCompare(b.Name);
-    });
+    return out
+        .sort((a, b) => {
+            if (a._sortGroup !== b._sortGroup) {
+                return a._sortGroup - b._sortGroup;
+            }
+            return a.Name.localeCompare(b.Name);
+        })
+        .map(({ _sortGroup: _ignored, ...agent }) => agent);
 }
 
 /**

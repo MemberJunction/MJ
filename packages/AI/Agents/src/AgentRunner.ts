@@ -322,16 +322,23 @@ export class AgentRunner {
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, params.contextUser);
             
+            // Resolve effective TypeID and DriverClass along the BaseAgentID inheritance chain when derived
+            const effectiveProps = typeof AIEngine.Instance.ResolveEffectiveAgentProperties === 'function'
+                ? AIEngine.Instance.ResolveEffectiveAgentProperties(params.agent)
+                : null;
+            const effectiveTypeID = effectiveProps?.TypeID ?? params.agent.TypeID;
+
             // The agent must have a known type
-            const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID));
+            const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, effectiveTypeID));
             if (!agentType) {
-                throw new Error(`Agent type not found for ID: ${params.agent.TypeID}`);
+                throw new Error(`Agent type not found for ID: ${effectiveTypeID}`);
             }
             
-            // The agent's own DriverClass, or the plain BaseAgent when it declares none. Never the
-            // agent type's DriverClass (a BaseAgentType key), and an unregistered key throws (#4112).
+            // The agent's own (or inherited) DriverClass, or the plain BaseAgent when neither declares one.
+            // Never the agent type's DriverClass (a BaseAgentType key), and an unregistered key throws (#4112).
+            const effectiveDriverClass = effectiveProps?.DriverClass?.trim() || params.agent.DriverClass?.trim() || 'BaseAgent';
             LogStatusEx({
-                message: `AgentRunner: Using driver class: ${params.agent.DriverClass?.trim() || 'BaseAgent'}`,
+                message: `AgentRunner: Using driver class: ${effectiveDriverClass}`,
                 verboseOnly: true,
                 isVerboseEnabled: () => params.verbose === true || IsVerboseLoggingEnabled()
             });

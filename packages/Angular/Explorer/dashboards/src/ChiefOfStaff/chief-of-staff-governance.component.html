@@ -21,6 +21,24 @@
                     </mj-dropdown>
                 </div>
             }
+            @if (SelectedDerivedAgentEntity) {
+                <button
+                    mjButton
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    (click)="OpenEditInstanceModal()">
+                    <i class="fa-solid fa-sliders"></i> Personalize
+                </button>
+            }
+            <button
+                mjButton
+                variant="outline"
+                size="sm"
+                type="button"
+                (click)="OpenCreateInstanceModal()">
+                <i class="fa-solid fa-plus"></i> New Instance
+            </button>
             <mj-refresh-button
                 [Loading]="IsLoading"
                 [ShowLabel]="true"
@@ -353,3 +371,15 @@
         }
     </mj-page-body>
 </mj-page-layout>
+
+<mj-agent-instance-editor-modal
+    [Provider]="Provider"
+    [(Visible)]="ShowInstanceEditor"
+    [CurrentUser]="ProviderToUse.CurrentUser"
+    [Mode]="InstanceEditorMode"
+    [EditingAgent]="EditingInstanceAgent"
+    [InitialBaseAgentId]="InitialInstanceBaseAgentId"
+    (Saved)="OnInstanceSaved($event)"
+    (Archived)="OnInstanceArchived()"
+    (ChatToOnboard)="OnInstanceChatToOnboard($event)">
+</mj-agent-instance-editor-modal>

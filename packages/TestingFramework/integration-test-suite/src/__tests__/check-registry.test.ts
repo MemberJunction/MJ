@@ -380,6 +380,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-execution-primitives-live': 4,
         'agent-external-harness': 7,
         'agent-handoff': 6,
+        'agent-instances-and-inheritance': 5,
         'agent-loop-live': 7,
         'agent-loop-standin': 14,
         'agent-memory-guards': 5,
@@ -648,7 +649,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(255);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(256);
     });
 });
 
@@ -687,6 +688,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     // Checks skipped in the deterministic lane unless RUN_MUTATION_TESTS=1 arms the nightly mutation rig.
     const EXPECTED_MUTATION_GATED: string[] = [
         'actions-pipeline.AP2',
+        'agent-instances-and-inheritance.AII1',
+        'agent-instances-and-inheritance.AII2',
+        'agent-instances-and-inheritance.AII3',
+        'agent-instances-and-inheritance.AII4',
+        'agent-instances-and-inheritance.AII5',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
         'archive-paging.ARP1',

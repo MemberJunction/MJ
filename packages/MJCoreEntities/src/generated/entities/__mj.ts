@@ -12942,6 +12942,31 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
         Source: 'cache',
   });
 
+
+  /**
+   * Retrieves all descendant records in the BaseAgentID hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetBaseAgentIDDescendants<T extends BaseEntity = this>(maxDepth?: number): Promise<T[]> {
+    return this.GetDescendants<T>({ parentFieldName: 'BaseAgentID', maxDepth });
+  }
+
+  /**
+   * Retrieves all ancestor records in the BaseAgentID hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetBaseAgentIDAncestors<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetAncestors<T>('BaseAgentID');
+  }
+
+  /**
+   * Retrieves all direct child records in the BaseAgentID hierarchy of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetBaseAgentIDChildren<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetChildren<T>('BaseAgentID');
+  }
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -13216,8 +13241,8 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: LogoURL
     * * Display Name: Logo URL
-    * * SQL Data Type: nvarchar(255)
-    * * Description: URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: URL to an image file, presigned asset URL, or base64 data URI (e.g., data:image/png;base64,...) for the agent logo or custom instance avatar. Takes precedence over IconClass in UI display.
     */
     get LogoURL(): string | null {
         return this.Get('LogoURL');
@@ -14380,6 +14405,66 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: BaseAgentID
+    * * Display Name: Base Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Optional prototype/base agent ID for multi-level capability inheritance (instance-of), distinct from ParentID (structural sub-agent composition). Derived agents inherit prompts, actions, sub-agents, skills, configurations, modalities, and rhythm templates live from their BaseAgentID chain (up to MaxDepth 5).
+    */
+    get BaseAgentID(): string | null {
+        return this.Get('BaseAgentID');
+    }
+    set BaseAgentID(value: string | null) {
+        this.Set('BaseAgentID', value);
+    }
+
+    /**
+    * * Field Name: InstantiationMode
+    * * Display Name: Instantiation Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * Optional
+    *   * Required
+    * * Description: Controls whether users can create tailored derived instances from this agent via BaseAgentID: None (direct-use only; default for catalog agents, sub-agents, and personal leaf instances), Optional (directly runnable and instantiable as a template), or Required (template/onboarding factory only; excluded from direct ad-hoc delegation).
+    */
+    get InstantiationMode(): 'None' | 'Optional' | 'Required' {
+        return this.Get('InstantiationMode');
+    }
+    set InstantiationMode(value: 'None' | 'Optional' | 'Required') {
+        this.Set('InstantiationMode', value);
+    }
+
+    /**
+    * * Field Name: AdditionalInstructions
+    * * Display Name: Additional Instructions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional standing instructions appended to this agent's prompt context and stacked down the BaseAgentID inheritance chain from root template to personal leaf instance.
+    */
+    get AdditionalInstructions(): string | null {
+        return this.Get('AdditionalInstructions');
+    }
+    set AdditionalInstructions(value: string | null) {
+        this.Set('AdditionalInstructions', value);
+    }
+
+    /**
+    * * Field Name: IsPrimaryInstance
+    * * Display Name: Is Primary Instance
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, marks this derived agent as the owner's primary instance among multiple instances sharing the same RootBaseAgentID for deterministic routing (e.g., inbound mailbox wakes, inter-agent requests, default dashboard selection).
+    */
+    get IsPrimaryInstance(): boolean {
+        return this.Get('IsPrimaryInstance');
+    }
+    set IsPrimaryInstance(value: boolean) {
+        this.Set('IsPrimaryInstance', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -14488,6 +14573,15 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: BaseAgent
+    * * Display Name: Base Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get BaseAgent(): string | null {
+        return this.Get('BaseAgent');
+    }
+
+    /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
@@ -14530,6 +14624,51 @@ if this limit is exceeded.
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+
+    /**
+    * * Field Name: RootBaseAgentID
+    * * Display Name: Root Base Agent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootBaseAgentID(): string | null {
+        return this.Get('RootBaseAgentID');
+    }
+
+    /**
+    * * Field Name: BaseAgentIDDepth
+    * * Display Name: Base Agent ID Depth
+    * * SQL Data Type: int
+    */
+    get BaseAgentIDDepth(): number | null {
+        return this.Get('BaseAgentIDDepth');
+    }
+
+    /**
+    * * Field Name: BaseAgentIDPath
+    * * Display Name: Base Agent ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get BaseAgentIDPath(): string | null {
+        return this.Get('BaseAgentIDPath');
+    }
+
+    /**
+    * * Field Name: BaseAgentIDIsLeaf
+    * * Display Name: Base Agent ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get BaseAgentIDIsLeaf(): boolean | null {
+        return this.Get('BaseAgentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: BaseAgentIDChildCount
+    * * Display Name: Base Agent ID Child Count
+    * * SQL Data Type: int
+    */
+    get BaseAgentIDChildCount(): number | null {
+        return this.Get('BaseAgentIDChildCount');
     }
 }
 

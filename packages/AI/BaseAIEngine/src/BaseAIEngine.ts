@@ -48,8 +48,72 @@ import { BasePriceUnitType, NormalizedUsage } from "./PriceUnitTypes";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { AISkillPermissionHelper, EffectiveSkillPermissions } from "./AISkillPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
-import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended, type DecisionAnsweringModel, type DecisionCalibrationKey } from "@memberjunction/ai-core-plus";
+import {
+    MJAIPromptEntityExtended,
+    MJAIPromptCategoryEntityExtended,
+    MJAIModelEntityExtended,
+    MJAIAgentEntityExtended,
+    MAX_AGENT_INHERITANCE_DEPTH,
+    DeepMergeAgentConfigObjects,
+    ParseAgentConfigJsonObject,
+    type AgentConfigJsonObject,
+    type DecisionAnsweringModel,
+    type DecisionCalibrationKey
+} from "@memberjunction/ai-core-plus";
 import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
+
+/**
+ * One layer of standing instructions accumulated down an agent's `BaseAgentID` prototype chain
+ * (ordered `[rootAgent, ..., leafAgent]`).
+ */
+export interface StackedAdditionalInstruction {
+    AgentID: string;
+    AgentName: string;
+    IsRootOrTemplate: boolean;
+    Instructions: string;
+}
+
+/**
+ * Effective scalar and merged JSON properties for an agent after walking its `BaseAgentID`
+ * prototype inheritance chain (`[rootAgent, ..., leafAgent]`).
+ */
+export interface EffectiveAgentProperties {
+    TypeID: string | null;
+    DriverClass: string | null;
+    ModelSelectionMode: MJAIAgentEntity['ModelSelectionMode'];
+    Isolation: MJAIAgentEntity['Isolation'];
+    ContextWindowMaxTokens: number | null;
+    CompactionTriggerPercent: number | null;
+    CompactionTargetPercent: number | null;
+    ConversationSummaryPromptID: string | null;
+    EnableContextCompression: boolean;
+    ContextCompressionMessageThreshold: number | null;
+    ContextCompressionPromptID: string | null;
+    ContextCompressionMessageRetentionCount: number | null;
+    RerankerConfiguration: string | null;
+    ScopeConfig: string | null;
+    DefaultPromptEffortLevel: number | null;
+    ChatHandlingOption: MJAIAgentEntity['ChatHandlingOption'];
+    DefaultArtifactTypeID: string | null;
+    ArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'];
+    DeclareActionsAsNativeTools: boolean;
+    SupportsPlanMode: boolean;
+    RequirePlanMode: boolean;
+    AcceptsSkills: MJAIAgentEntity['AcceptsSkills'];
+    SkillActivationMode: MJAIAgentEntity['SkillActivationMode'];
+    SearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'];
+    AllowMemoryWrite: boolean;
+    InjectNotes: boolean;
+    MaxNotesToInject: number | null;
+    NoteInjectionStrategy: MJAIAgentEntity['NoteInjectionStrategy'];
+    InjectExamples: boolean;
+    MaxExamplesToInject: number | null;
+    ExampleInjectionStrategy: MJAIAgentEntity['ExampleInjectionStrategy'];
+    LogoURL: string | null;
+    IconClass: string | null;
+    TypeConfiguration: string | null;
+    AgentTypePromptParams: string | null;
+}
 
 /**
  * Represents the effective limits for a specific modality (e.g., Image, Audio).
@@ -285,6 +349,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentsByID: Map<string, MJAIAgentEntityExtended> | null = null;
     private _agentsByName: Map<string, MJAIAgentEntityExtended> | null = null;
     private _childAgentsByParentID: Map<string, MJAIAgentEntityExtended[]> | null = null;
+    private _agentInheritanceChainCache: Map<string, MJAIAgentEntityExtended[]> = new Map();
     private _agentsIndexedRef: MJAIAgentEntityExtended[] | null = null;
     private _agentsIndexedLen = -1;
 
@@ -669,6 +734,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         this._agentsByID = null;
         this._agentsByName = null;
         this._childAgentsByParentID = null;
+        this._agentInheritanceChainCache.clear();
         this._agentsIndexedRef = null;
         this._agentsIndexedLen = -1;
         this._agentRelationshipsByAgentID = null;
@@ -1093,41 +1159,364 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     ): MJAIAgentEntityExtended[] {
         this.ensureAgentsIndex();
         this.ensureAgentRelationshipsIndex();
-        const normAgentId = NormalizeUUID(agentID);
 
-        // Get child agents (ParentID relationship)
-        const rawChildAgents = this._childAgentsByParentID!.get(normAgentId) ?? [];
-        const childAgents = status ? rawChildAgents.filter(a => a.Status === status) : rawChildAgents;
+        const chain = this.GetAgentInheritanceChain(agentID);
+        const chainIds = chain.length > 0 ? chain.map(a => NormalizeUUID(a.ID)) : [NormalizeUUID(agentID)];
+        const relStatus = relationshipStatus ?? 'Active';
 
-        // Get related agents (AgentRelationships)
-        const relStatus = relationshipStatus ?? 'Active'; // Default to Active for relationships
-        const rawRelationships = this._agentRelationshipsByAgentID!.get(normAgentId) ?? [];
+        // Accumulate root -> leaf so derived instances inherit parent sub-agents live,
+        // while allowing a descendant AIAgentRelationship row with Status !== relStatus
+        // (e.g. 'Disabled') to veto an inherited sub-agent.
+        const subAgentsById = new Map<string, MJAIAgentEntityExtended>();
 
-        // Combine and deduplicate by ID
-        const uniqueAgentIDs = new Set<string>();
-        const allSubAgents: MJAIAgentEntityExtended[] = [];
-
-        for (const agent of childAgents) {
-            const normId = NormalizeUUID(agent.ID);
-            if (!uniqueAgentIDs.has(normId)) {
-                uniqueAgentIDs.add(normId);
-                allSubAgents.push(agent);
+        for (const normChainAgentId of chainIds) {
+            // 1. Structural child agents (ParentID relationship)
+            const rawChildAgents = this._childAgentsByParentID!.get(normChainAgentId) ?? [];
+            const childAgents = status ? rawChildAgents.filter(a => a.Status === status) : rawChildAgents;
+            for (const child of childAgents) {
+                const normChildId = NormalizeUUID(child.ID);
+                if (!subAgentsById.has(normChildId)) {
+                    subAgentsById.set(normChildId, child);
+                }
             }
-        }
 
-        for (const ar of rawRelationships) {
-            if (ar.Status !== relStatus || !ar.SubAgentID) continue;
-            const agent = this._agentsByID!.get(NormalizeUUID(ar.SubAgentID));
-            if (agent && (!status || agent.Status === status)) {
-                const normId = NormalizeUUID(agent.ID);
-                if (!uniqueAgentIDs.has(normId)) {
-                    uniqueAgentIDs.add(normId);
-                    allSubAgents.push(agent);
+            // 2. Explicit AIAgentRelationship rows (active adds; non-matching status vetoes)
+            const rawRelationships = this._agentRelationshipsByAgentID!.get(normChainAgentId) ?? [];
+            for (const ar of rawRelationships) {
+                if (!ar.SubAgentID) continue;
+                const normSubId = NormalizeUUID(ar.SubAgentID);
+                if (ar.Status !== relStatus) {
+                    subAgentsById.delete(normSubId);
+                    continue;
+                }
+                const subAgent = this._agentsByID!.get(normSubId);
+                if (subAgent && (!status || subAgent.Status === status)) {
+                    subAgentsById.set(normSubId, subAgent);
                 }
             }
         }
 
-        return allSubAgents;
+        return Array.from(subAgentsById.values());
+    }
+
+    /**
+     * Resolves the `BaseAgentID` prototype inheritance chain for `agentId`, ordered from
+     * outermost prototype root down to the agent itself: `[rootAgent, ..., leafAgent]`.
+     *
+     * Cycle-safe and bounded to `MAX_AGENT_INHERITANCE_DEPTH` (5 hops, up to 6 nodes).
+     * Memoized per loaded `_agents` snapshot.
+     */
+    public GetAgentInheritanceChain(agentId: string): MJAIAgentEntityExtended[] {
+        if (!agentId) {
+            return [];
+        }
+        this.ensureAgentsIndex();
+        const normId = NormalizeUUID(agentId);
+        const cached = this._agentInheritanceChainCache.get(normId);
+        if (cached) {
+            return cached.slice();
+        }
+
+        const leaf = this._agentsByID!.get(normId);
+        if (!leaf) {
+            return [];
+        }
+
+        const chainFromLeaf: MJAIAgentEntityExtended[] = [leaf];
+        const visited = new UUIDSet([leaf.ID]);
+        let currentBaseId = leaf.BaseAgentID;
+        let hops = 0;
+
+        while (currentBaseId && hops < MAX_AGENT_INHERITANCE_DEPTH) {
+            if (visited.Has(currentBaseId)) {
+                break;
+            }
+            visited.Add(currentBaseId);
+            const baseAgent = this._agentsByID!.get(NormalizeUUID(currentBaseId));
+            if (!baseAgent) {
+                break;
+            }
+            chainFromLeaf.push(baseAgent);
+            currentBaseId = baseAgent.BaseAgentID;
+            hops++;
+        }
+
+        const ordered = chainFromLeaf.reverse();
+        this._agentInheritanceChainCache.set(normId, ordered);
+        return ordered.slice();
+    }
+
+    /**
+     * Returns the top-level prototype root agent (`BaseAgentID == null`) for `agentId`,
+     * or the agent itself if it is already a root agent.
+     */
+    public GetRootAgent(agentId: string): MJAIAgentEntityExtended | undefined {
+        const chain = this.GetAgentInheritanceChain(agentId);
+        return chain.length > 0 ? chain[0] : undefined;
+    }
+
+    /**
+     * Resolves effective scalar properties and deep-merged `TypeConfiguration` /
+     * `AgentTypePromptParams` across the agent's `BaseAgentID` prototype inheritance chain
+     * (`[rootAgent, ..., leafAgent]`).
+     */
+    public ResolveEffectiveAgentProperties(
+        agentOrId: string | MJAIAgentEntityExtended
+    ): EffectiveAgentProperties {
+        const leaf = typeof agentOrId === 'string' ? this.GetAgentByID(agentOrId) : agentOrId;
+        const chain = leaf?.ID ? this.GetAgentInheritanceChain(leaf.ID) : [];
+        const nodes: MJAIAgentEntityExtended[] = chain.length > 0 ? chain : leaf ? [leaf] : [];
+        const root = nodes[0];
+
+        const nearestNonNull = <T>(picker: (a: MJAIAgentEntityExtended) => T | null | undefined): T | null => {
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const v = picker(nodes[i]);
+                if (v !== null && v !== undefined && (typeof v !== 'string' || v.trim().length > 0)) {
+                    return v;
+                }
+            }
+            return null;
+        };
+
+        // Strictest Isolation wins down the chain: Container (3) > Process (2) > Worker (1) > InProcess (0)
+        const isolationRank: Record<MJAIAgentEntity['Isolation'], number> = {
+            InProcess: 0,
+            Worker: 1,
+            Process: 2,
+            Container: 3,
+        };
+        let effectiveIsolation: MJAIAgentEntity['Isolation'] = 'InProcess';
+        for (const node of nodes) {
+            const iso = node.Isolation ?? 'InProcess';
+            if ((isolationRank[iso] ?? 0) > (isolationRank[effectiveIsolation] ?? 0)) {
+                effectiveIsolation = iso;
+            }
+        }
+
+        // AcceptsSkills narrows monotonically down the chain: All (2) -> Limited (1) -> None (0).
+        // When a derived node omits AcceptsSkills (undefined/null), it inherits from its ancestor.
+        const acceptsRank: Record<MJAIAgentEntity['AcceptsSkills'], number> = {
+            None: 0,
+            Limited: 1,
+            All: 2,
+        };
+        let effectiveAcceptsSkills: MJAIAgentEntity['AcceptsSkills'] = root?.AcceptsSkills ?? 'None';
+        for (let i = 1; i < nodes.length; i++) {
+            const nodeAccepts = nodes[i].AcceptsSkills;
+            if (nodeAccepts != null && (acceptsRank[nodeAccepts] ?? 0) < (acceptsRank[effectiveAcceptsSkills] ?? 0)) {
+                effectiveAcceptsSkills = nodeAccepts;
+            }
+        }
+
+        // SkillActivationMode narrows monotonically: Auto (1) -> RequestedOnly (0).
+        const skillModeRank: Record<MJAIAgentEntity['SkillActivationMode'], number> = {
+            RequestedOnly: 0,
+            Auto: 1,
+        };
+        let effectiveSkillActivationMode: MJAIAgentEntity['SkillActivationMode'] =
+            root?.SkillActivationMode ?? 'RequestedOnly';
+        for (let i = 1; i < nodes.length; i++) {
+            const nodeMode = nodes[i].SkillActivationMode;
+            if (nodeMode != null && (skillModeRank[nodeMode] ?? 0) < (skillModeRank[effectiveSkillActivationMode] ?? 0)) {
+                effectiveSkillActivationMode = nodeMode;
+            }
+        }
+
+        // ModelSelectionMode: if leaf owns active prompts use leaf's mode; otherwise inherit from
+        // the nearest prompt-owning ancestor (or root).
+        const activePromptAgentIds = new UUIDSet(
+            this._agentPrompts.filter(ap => ap.Status === 'Active').map(ap => ap.AgentID)
+        );
+        const leafHasOwnPrompts = leaf ? activePromptAgentIds.Has(leaf.ID) : false;
+        let effectiveModelSelectionMode: MJAIAgentEntity['ModelSelectionMode'] =
+            leaf?.ModelSelectionMode ?? 'Agent Type';
+        if (!leafHasOwnPrompts && nodes.length > 1) {
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const candidate = nodes[i];
+                if (activePromptAgentIds.Has(candidate.ID)) {
+                    effectiveModelSelectionMode = candidate.ModelSelectionMode ?? 'Agent Type';
+                    break;
+                }
+            }
+        }
+
+        // Deep-merge TypeConfiguration root -> leaf; strip `instantiation` from non-instantiable leaves
+        let mergedTypeConfig: AgentConfigJsonObject | null = null;
+        for (const node of nodes) {
+            const parsed = ParseAgentConfigJsonObject(node.TypeConfiguration);
+            if (parsed) {
+                mergedTypeConfig = mergedTypeConfig
+                    ? DeepMergeAgentConfigObjects(mergedTypeConfig, parsed)
+                    : { ...parsed };
+            }
+        }
+        if (mergedTypeConfig && leaf && leaf.BaseAgentID && (leaf.InstantiationMode ?? 'None') === 'None') {
+            delete mergedTypeConfig['instantiation'];
+        }
+
+        // Deep-merge AgentTypePromptParams root -> leaf
+        let mergedPromptParams: AgentConfigJsonObject | null = null;
+        for (const node of nodes) {
+            const parsed = ParseAgentConfigJsonObject(node.AgentTypePromptParams);
+            if (parsed) {
+                mergedPromptParams = mergedPromptParams
+                    ? DeepMergeAgentConfigObjects(mergedPromptParams, parsed)
+                    : { ...parsed };
+            }
+        }
+
+        // RequirePlanMode is monotonic OR down the chain; SupportsPlanMode is monotonic AND.
+        const effectiveRequirePlanMode = nodes.some(n => n.RequirePlanMode === true);
+        const effectiveSupportsPlanMode = nodes.length > 0 ? nodes.every(n => n.SupportsPlanMode !== false) : true;
+
+        // Capability flags that default to false/conservative on minimal derived rows inherit from
+        // the nearest ancestor that enabled them (while leaf overrides if set).
+        const effectiveSearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'] =
+            leaf?.SearchScopeAccess && leaf.SearchScopeAccess !== 'None'
+                ? leaf.SearchScopeAccess
+                : (nearestNonNull(a => (a.SearchScopeAccess && a.SearchScopeAccess !== 'None' ? a.SearchScopeAccess : null)) ??
+                    leaf?.SearchScopeAccess ??
+                    'None');
+        const effectiveArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'] =
+            leaf?.ArtifactCreationMode && leaf.ArtifactCreationMode !== 'Never'
+                ? leaf.ArtifactCreationMode
+                : (nearestNonNull(a => (a.ArtifactCreationMode && a.ArtifactCreationMode !== 'Never' ? a.ArtifactCreationMode : null)) ??
+                    leaf?.ArtifactCreationMode ??
+                    'Never');
+
+        return {
+            TypeID: nearestNonNull(a => a.TypeID),
+            DriverClass: nearestNonNull(a => a.DriverClass),
+            ModelSelectionMode: effectiveModelSelectionMode,
+            Isolation: effectiveIsolation,
+            ContextWindowMaxTokens: nearestNonNull(a => a.ContextWindowMaxTokens),
+            CompactionTriggerPercent: nearestNonNull(a => a.CompactionTriggerPercent),
+            CompactionTargetPercent: nearestNonNull(a => a.CompactionTargetPercent),
+            ConversationSummaryPromptID: nearestNonNull(a => a.ConversationSummaryPromptID),
+            EnableContextCompression: nodes.some(n => n.EnableContextCompression === true),
+            ContextCompressionMessageThreshold: nearestNonNull(a => a.ContextCompressionMessageThreshold),
+            ContextCompressionPromptID: nearestNonNull(a => a.ContextCompressionPromptID),
+            ContextCompressionMessageRetentionCount: nearestNonNull(a => a.ContextCompressionMessageRetentionCount),
+            RerankerConfiguration: nearestNonNull(a => a.RerankerConfiguration),
+            ScopeConfig: nearestNonNull(a => a.ScopeConfig),
+            DefaultPromptEffortLevel: nearestNonNull(a => a.DefaultPromptEffortLevel),
+            ChatHandlingOption: nearestNonNull(a => a.ChatHandlingOption),
+            DefaultArtifactTypeID: nearestNonNull(a => a.DefaultArtifactTypeID),
+            ArtifactCreationMode: effectiveArtifactCreationMode,
+            DeclareActionsAsNativeTools: nodes.some(n => n.DeclareActionsAsNativeTools === true),
+            SupportsPlanMode: effectiveSupportsPlanMode,
+            RequirePlanMode: effectiveRequirePlanMode,
+            AcceptsSkills: effectiveAcceptsSkills,
+            SkillActivationMode: effectiveSkillActivationMode,
+            SearchScopeAccess: effectiveSearchScopeAccess,
+            AllowMemoryWrite: nodes.some(n => n.AllowMemoryWrite === true),
+            InjectNotes: nodes.some(n => n.InjectNotes === true),
+            MaxNotesToInject: nearestNonNull(a => a.MaxNotesToInject),
+            NoteInjectionStrategy: nearestNonNull(a => a.NoteInjectionStrategy) ?? 'Relevant',
+            InjectExamples: nodes.some(n => n.InjectExamples === true),
+            MaxExamplesToInject: nearestNonNull(a => a.MaxExamplesToInject),
+            ExampleInjectionStrategy: nearestNonNull(a => a.ExampleInjectionStrategy) ?? 'Semantic',
+            LogoURL: nearestNonNull(a => a.LogoURL),
+            IconClass: nearestNonNull(a => a.IconClass),
+            TypeConfiguration: mergedTypeConfig && Object.keys(mergedTypeConfig).length > 0
+                ? JSON.stringify(mergedTypeConfig)
+                : null,
+            AgentTypePromptParams: mergedPromptParams && Object.keys(mergedPromptParams).length > 0
+                ? JSON.stringify(mergedPromptParams)
+                : null,
+        };
+    }
+
+    /**
+     * Resolves effective `AIAgentPrompt` rows for `agentId` along its `BaseAgentID` chain:
+     * if the agent defines its own matching prompts, those are returned; otherwise walks up
+     * `BaseAgentID` to the nearest ancestor with matching prompts.
+     */
+    public GetEffectiveAgentPrompts(
+        agentId: string,
+        status: MJAIAgentPromptEntity['Status'] = 'Active'
+    ): MJAIAgentPromptEntity[] {
+        const chain = this.GetAgentInheritanceChain(agentId);
+        const idsLeafToRoot = chain.length > 0
+            ? chain.map(a => a.ID).reverse()
+            : agentId ? [agentId] : [];
+        const chainIdSet = new UUIDSet(idsLeafToRoot);
+        const promptsByAgentId = new Map<string, MJAIAgentPromptEntity[]>();
+        for (const ap of this._agentPrompts) {
+            if (ap.Status === status && chainIdSet.Has(ap.AgentID)) {
+                const key = NormalizeUUID(ap.AgentID);
+                const list = promptsByAgentId.get(key) ?? [];
+                list.push(ap);
+                promptsByAgentId.set(key, list);
+            }
+        }
+
+        for (const id of idsLeafToRoot) {
+            const matches = promptsByAgentId.get(NormalizeUUID(id));
+            if (matches && matches.length > 0) {
+                return matches.sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Resolves effective `AIAgentAction` rows for `agentId` across its `BaseAgentID` chain
+     * (root -> leaf, keyed by `ActionID`). A descendant row with `Status !== 'Active'`
+     * (e.g. `'Disabled'` or `'Revoked'`) vetoes an inherited action.
+     */
+    public GetEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[] {
+        const chain = this.GetAgentInheritanceChain(agentId);
+        const idsRootToLeaf = chain.length > 0
+            ? chain.map(a => a.ID)
+            : agentId ? [agentId] : [];
+        const chainIdSet = new UUIDSet(idsRootToLeaf);
+        const actionsByAgentId = new Map<string, MJAIAgentActionEntity[]>();
+        for (const aa of this._agentActions) {
+            if (chainIdSet.Has(aa.AgentID)) {
+                const key = NormalizeUUID(aa.AgentID);
+                const list = actionsByAgentId.get(key) ?? [];
+                list.push(aa);
+                actionsByAgentId.set(key, list);
+            }
+        }
+
+        const effectiveByActionId = new Map<string, MJAIAgentActionEntity>();
+        for (const id of idsRootToLeaf) {
+            const rows = actionsByAgentId.get(NormalizeUUID(id)) ?? [];
+            for (const row of rows) {
+                if (!row.ActionID) continue;
+                const normActionId = NormalizeUUID(row.ActionID);
+                if (row.Status === 'Active') {
+                    effectiveByActionId.set(normActionId, row);
+                } else {
+                    // Explicit veto on descendant disables the inherited action
+                    effectiveByActionId.delete(normActionId);
+                }
+            }
+        }
+        return Array.from(effectiveByActionId.values());
+    }
+
+    /**
+     * Collects non-empty `AdditionalInstructions` stacked down the `BaseAgentID` chain from
+     * root template to leaf instance.
+     */
+    public GetStackedAdditionalInstructions(agentId: string): StackedAdditionalInstruction[] {
+        const chain = this.GetAgentInheritanceChain(agentId);
+        const stacked: StackedAdditionalInstruction[] = [];
+        for (const node of chain) {
+            const text = node.AdditionalInstructions?.trim();
+            if (text && text.length > 0) {
+                stacked.push({
+                    AgentID: node.ID,
+                    AgentName: node.Name ?? node.ID,
+                    IsRootOrTemplate: !node.BaseAgentID || node.InstantiationMode !== 'None',
+                    Instructions: text,
+                });
+            }
+        }
+        return stacked;
     }
 
     public get AgentTypes(): MJAIAgentTypeEntity[] {
@@ -1371,8 +1760,237 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * Synchronous check for whether `user` has `CanView` permission on `agent` under the
+     * 2x2 RBAC matrix.
+     */
+    public CanUserViewAgentSync(agent: MJAIAgentEntityExtended, user: UserInfo | undefined): boolean {
+        if (!agent || !user) {
+            return false;
+        }
+        return AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+            agent,
+            this._agents,
+            this._agentPermissions,
+            user
+        ).canView;
+    }
+
+    /**
+     * Synchronous check for whether `user` has `CanRun` permission on `agent` under the
+     * 2x2 RBAC matrix AND the Ancestor `CanRun` Invariant across `BaseAgentID`.
+     */
+    public CanUserRunAgentSync(agent: MJAIAgentEntityExtended, user: UserInfo | undefined): boolean {
+        if (!agent || !user) {
+            return false;
+        }
+        return AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+            agent,
+            this._agents,
+            this._agentPermissions,
+            user
+        ).canRun;
+    }
+
+    /**
+     * Returns active agents that can be instantiated as templates (`InstantiationMode` is
+     * `'Required'` or `'Optional'`) and that `user` is permitted to run.
+     */
+    public GetInstantiableAgents(user: UserInfo | undefined): MJAIAgentEntityExtended[] {
+        if (!user) {
+            return [];
+        }
+        const userRoleIds = new UUIDSet(user.UserRoles?.map(ur => ur.RoleID) ?? []);
+        return this._agents
+            .filter(a =>
+                a.Status === 'Active' &&
+                (a.InstantiationMode === 'Required' || a.InstantiationMode === 'Optional') &&
+                this.canUserRunAgentSync(a, this._agentPermissions, user, userRoleIds)
+            )
+            .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
+    }
+
+    /**
+     * Returns active derived agents (`BaseAgentID != null`) owned by or shared with `user`.
+     * Optionally filters to instances descending from `rootOrBaseAgentId` (matching either
+     * direct `BaseAgentID` or top-level `GetRootAgent(a.ID)`).
+     *
+     * Ordered: owned instances first, `IsPrimaryInstance` first, then alphabetically by `Name`.
+     */
+    public GetUserDerivedAgents(
+        user: UserInfo | undefined,
+        rootOrBaseAgentId?: string
+    ): MJAIAgentEntityExtended[] {
+        if (!user) {
+            return [];
+        }
+        const userRoleIds = new UUIDSet(user.UserRoles?.map(ur => ur.RoleID) ?? []);
+        const filtered = this._agents.filter(a => {
+            if (a.Status !== 'Active' || !a.BaseAgentID) {
+                return false;
+            }
+            const perms = AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+                a,
+                this._agents,
+                this._agentPermissions,
+                user,
+                userRoleIds
+            );
+            if (!perms.canView) {
+                return false;
+            }
+            if (rootOrBaseAgentId) {
+                const root = this.GetRootAgent(a.ID);
+                const matchesDirect = UUIDsEqual(a.BaseAgentID, rootOrBaseAgentId);
+                const matchesRoot = root ? UUIDsEqual(root.ID, rootOrBaseAgentId) : false;
+                if (!matchesDirect && !matchesRoot) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        return filtered.sort((a, b) => {
+            const aOwned = UUIDsEqual(a.OwnerUserID, user.ID) ? 1 : 0;
+            const bOwned = UUIDsEqual(b.OwnerUserID, user.ID) ? 1 : 0;
+            if (aOwned !== bOwned) return bOwned - aOwned;
+            const aPrimary = a.IsPrimaryInstance ? 1 : 0;
+            const bPrimary = b.IsPrimaryInstance ? 1 : 0;
+            if (aPrimary !== bPrimary) return bPrimary - aPrimary;
+            return (a.Name ?? '').localeCompare(b.Name ?? '');
+        });
+    }
+
+    /**
+     * User-scoped agent resolution by UUID or display name so multiple users naming their
+     * personal bots `"Pepper"`, `"Jarvis"`, or `"Sage"` never collide or shadow system agents.
+     *
+     * Resolution precedence:
+     * 1. Exact UUID match (visible to `user`, or any agent if `user` is omitted)
+     * 2. User's owned active derived agents (`BaseAgentID != null && OwnerUserID === user.ID`)
+     * 3. Shared active derived agents visible to `user`
+     * 4. Root catalog agents (`BaseAgentID == null`) visible to `user`
+     */
+    public ResolveAgentForUser(
+        nameOrId: string,
+        user: UserInfo | undefined
+    ): MJAIAgentEntityExtended | undefined {
+        const trimmed = nameOrId?.trim();
+        if (!trimmed) {
+            return undefined;
+        }
+        this.ensureAgentsIndex();
+
+        // 1. Exact UUID match
+        const byId = this._agentsByID!.get(NormalizeUUID(trimmed));
+        if (byId) {
+            if (!user || this.CanUserViewAgentSync(byId, user)) {
+                return byId;
+            }
+            return undefined;
+        }
+
+        const normName = trimmed.toLowerCase();
+        if (!user) {
+            return this._agentsByName!.get(normName);
+        }
+
+        const userRoleIds = new UUIDSet(user.UserRoles?.map(ur => ur.RoleID) ?? []);
+
+        // 2. Owned derived active agents
+        const ownedDerived = this._agents.find(
+            a =>
+                a.Status === 'Active' &&
+                a.BaseAgentID != null &&
+                UUIDsEqual(a.OwnerUserID, user.ID) &&
+                (a.Name ?? '').trim().toLowerCase() === normName
+        );
+        if (ownedDerived) {
+            return ownedDerived;
+        }
+
+        // 3. Shared derived active agents visible to user
+        const sharedDerived = this._agents.find(
+            a =>
+                a.Status === 'Active' &&
+                a.BaseAgentID != null &&
+                (a.Name ?? '').trim().toLowerCase() === normName &&
+                AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+                    a,
+                    this._agents,
+                    this._agentPermissions,
+                    user,
+                    userRoleIds
+                ).canView
+        );
+        if (sharedDerived) {
+            return sharedDerived;
+        }
+
+        // 4. Root catalog agents
+        const rootMatch = this._agents.find(
+            a =>
+                !a.BaseAgentID &&
+                (a.Name ?? '').trim().toLowerCase() === normName &&
+                AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+                    a,
+                    this._agents,
+                    this._agentPermissions,
+                    user,
+                    userRoleIds
+                ).canView
+        );
+        return rootMatch;
+    }
+
+    /**
+     * Deterministically resolves a user's primary active derived instance descending from
+     * `rootAgentIdOrName` (for example, resolving *"Alice's Chief of Staff"* to Alice's
+     * `IsPrimaryInstance = true` *Pepper* agent for inbound email wakes, inter-agent requests,
+     * and Agent Channels).
+     *
+     * Preference order among `userId`'s active owned instances under the root:
+     * 1. Instance with `IsPrimaryInstance === true`
+     * 2. Earliest-created active instance (fallback when no primary flag is set)
+     * 3. `undefined` when the user has not instantiated an instance under that root yet.
+     */
+    public ResolvePrimaryUserAgentInstance(
+        rootAgentIdOrName: string,
+        userId: string
+    ): MJAIAgentEntityExtended | undefined {
+        if (!rootAgentIdOrName || !userId) {
+            return undefined;
+        }
+        this.ensureAgentsIndex();
+        const rootAgent =
+            this._agentsByID!.get(NormalizeUUID(rootAgentIdOrName)) ??
+            this._agentsByName!.get(rootAgentIdOrName.trim().toLowerCase());
+        const targetRootId = rootAgent?.ID ?? rootAgentIdOrName;
+
+        const candidates = this._agents.filter(a => {
+            if (a.Status !== 'Active' || !a.BaseAgentID || !UUIDsEqual(a.OwnerUserID, userId)) {
+                return false;
+            }
+            const chainRoot = this.GetRootAgent(a.ID);
+            return (
+                UUIDsEqual(a.BaseAgentID, targetRootId) ||
+                (chainRoot != null && UUIDsEqual(chainRoot.ID, targetRootId))
+            );
+        });
+
+        if (candidates.length === 0) {
+            return undefined;
+        }
+        const explicitPrimary = candidates.find(a => a.IsPrimaryInstance === true);
+        if (explicitPrimary) {
+            return explicitPrimary;
+        }
+        return candidates.sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''))[0];
+    }
+
+    /**
      * Synchronous permission check using already-loaded `_agentPermissions` metadata.
-     * Mirrors `AIAgentPermissionHelper.GetEffectivePermissions` without async `Config()` overhead.
+     * Delegates to {@link AIAgentPermissionHelper.ComputeEffectivePermissionsSync} so
+     * 2x2 RBAC and Ancestor `CanRun` semantics stay 100% consistent everywhere.
      */
     private canUserRunAgentSync(
         agent: MJAIAgentEntityExtended,
@@ -1380,18 +1998,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         user: UserInfo,
         userRoleIds: UUIDSet
     ): boolean {
-        if (UUIDsEqual(agent.OwnerUserID, user.ID)) {
-            return true;
-        }
-        const agentPerms = allPermissions.filter(p => UUIDsEqual(p.AgentID, agent.ID));
-        if (agentPerms.length === 0) {
-            // Open by default when no permission rows are configured on the agent
-            return true;
-        }
-        const matching = agentPerms.filter(
-            p => UUIDsEqual(p.UserID, user.ID) || (p.RoleID != null && userRoleIds.Has(p.RoleID))
-        );
-        return matching.some(p => p.CanDelete === true || p.CanEdit === true || p.CanRun === true);
+        return AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+            agent,
+            this._agents,
+            allPermissions,
+            user,
+            userRoleIds
+        ).canRun;
     }
 
     private summarizeAgentDescription(rawDescription: string | null | undefined): string {
@@ -1461,23 +2074,91 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param user - Optional user; when present, filters to skills the user can Run.
      * @returns MJAISkillEntity[] - Active skills the agent may activate (empty if AcceptsSkills is 'None').
      */
+    /**
+     * Resolves the effective narrowed `AcceptsSkills` value down the agent's `BaseAgentID`
+     * chain (`All` -> `Limited` -> `None`) without reading unrelated scalar columns.
+     */
+    private resolveEffectiveAcceptsSkills(agent: MJAIAgentEntityExtended): MJAIAgentEntity['AcceptsSkills'] {
+        const chain = agent.ID ? this.GetAgentInheritanceChain(agent.ID) : [];
+        const nodes = chain.length > 0 ? chain : [agent];
+        const acceptsRank: Record<MJAIAgentEntity['AcceptsSkills'], number> = {
+            None: 0,
+            Limited: 1,
+            All: 2,
+        };
+        let effective: MJAIAgentEntity['AcceptsSkills'] = nodes[0]?.AcceptsSkills ?? 'None';
+        for (let i = 1; i < nodes.length; i++) {
+            const nodeAccepts = nodes[i].AcceptsSkills;
+            if (nodeAccepts != null && (acceptsRank[nodeAccepts] ?? 0) < (acceptsRank[effective] ?? 0)) {
+                effective = nodeAccepts;
+            }
+        }
+        return effective;
+    }
+
+    /**
+     * Resolves the effective narrowed `SkillActivationMode` value down the agent's `BaseAgentID`
+     * chain (`Auto` -> `RequestedOnly`).
+     */
+    private resolveEffectiveSkillActivationMode(agent: MJAIAgentEntityExtended): MJAIAgentEntity['SkillActivationMode'] {
+        const chain = agent.ID ? this.GetAgentInheritanceChain(agent.ID) : [];
+        const nodes = chain.length > 0 ? chain : [agent];
+        const skillModeRank: Record<MJAIAgentEntity['SkillActivationMode'], number> = {
+            RequestedOnly: 0,
+            Auto: 1,
+        };
+        let effective: MJAIAgentEntity['SkillActivationMode'] = nodes[0]?.SkillActivationMode ?? 'RequestedOnly';
+        for (let i = 1; i < nodes.length; i++) {
+            const nodeMode = nodes[i].SkillActivationMode;
+            if (nodeMode != null && (skillModeRank[nodeMode] ?? 0) < (skillModeRank[effective] ?? 0)) {
+                effective = nodeMode;
+            }
+        }
+        return effective;
+    }
+
     public GetSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] {
-        if (!agent || agent.AcceptsSkills === 'None') {
+        if (!agent) {
+            return [];
+        }
+
+        const effectiveAcceptsSkills = this.resolveEffectiveAcceptsSkills(agent);
+        if (effectiveAcceptsSkills === 'None') {
             return [];
         }
 
         const activeSkills = this._skills.filter(s => s.Status === 'Active');
 
         let agentSkills: MJAISkillEntity[];
-        if (agent.AcceptsSkills === 'All') {
+        if (effectiveAcceptsSkills === 'All') {
             agentSkills = activeSkills;
         } else {
-            // 'Limited' — only skills with an Active grant for this agent
-            const grantedSkillIDs = new Set(
-                this._agentSkills
-                    .filter(gs => UUIDsEqual(gs.AgentID, agent.ID) && gs.Status === 'Active')
-                    .map(gs => NormalizeUUID(gs.SkillID))
-            );
+            // 'Limited' — walk BaseAgentID inheritance chain root -> leaf;
+            // active grants accumulate down the chain and descendant non-Active rows veto.
+            const chain = this.GetAgentInheritanceChain(agent.ID);
+            const chainIds = chain.length > 0 ? chain.map(a => a.ID) : [agent.ID];
+            const chainIdSet = new UUIDSet(chainIds);
+            const grantsByAgentId = new Map<string, MJAIAgentSkillEntity[]>();
+            for (const gs of this._agentSkills) {
+                if (chainIdSet.Has(gs.AgentID)) {
+                    const key = NormalizeUUID(gs.AgentID);
+                    const list = grantsByAgentId.get(key) ?? [];
+                    list.push(gs);
+                    grantsByAgentId.set(key, list);
+                }
+            }
+            const grantedSkillIDs = new Set<string>();
+            for (const chainAgentId of chainIds) {
+                const grants = grantsByAgentId.get(NormalizeUUID(chainAgentId)) ?? [];
+                for (const grant of grants) {
+                    const normSkillId = NormalizeUUID(grant.SkillID);
+                    if (grant.Status === 'Active') {
+                        grantedSkillIDs.add(normSkillId);
+                    } else {
+                        grantedSkillIDs.delete(normSkillId);
+                    }
+                }
+            }
             agentSkills = activeSkills.filter(s => grantedSkillIDs.has(NormalizeUUID(s.ID)));
         }
 
@@ -1520,7 +2201,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      *          gate is 'RequestedOnly', or when no availability gate passes).
      */
     public GetAutoActivatableSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] {
-        if (!agent || agent.SkillActivationMode !== 'Auto') {
+        if (!agent) {
+            return [];
+        }
+        if (this.resolveEffectiveSkillActivationMode(agent) !== 'Auto') {
             return [];
         }
         return this.GetSkillsForAgent(agent, user).filter(s => s.ActivationMode === 'Auto');
@@ -1616,9 +2300,22 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
         this.ensureAgentConfigurationsIndex();
-        const raw = this._agentConfigurationsByAgentID!.get(NormalizeUUID(agentId)) ?? [];
-        const presets = activeOnly ? raw.filter(ac => ac.Status === 'Active') : raw.slice();
-        return presets.sort((a, b) => a.Priority - b.Priority);
+        const chain = this.GetAgentInheritanceChain(agentId);
+        const idsRootToLeaf = chain.length > 0 ? chain.map(a => NormalizeUUID(a.ID)) : [NormalizeUUID(agentId)];
+
+        const byPresetName = new Map<string, MJAIAgentConfigurationEntity>();
+        for (const id of idsRootToLeaf) {
+            const raw = this._agentConfigurationsByAgentID!.get(id) ?? [];
+            for (const preset of raw) {
+                const key = (preset.Name ?? preset.ID).trim().toLowerCase();
+                if (activeOnly && preset.Status !== 'Active') {
+                    byPresetName.delete(key);
+                } else {
+                    byPresetName.set(key, preset);
+                }
+            }
+        }
+        return Array.from(byPresetName.values()).sort((a, b) => a.Priority - b.Priority);
     }
 
     /**
@@ -1638,10 +2335,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns The configuration preset, or undefined if not found
      */
     public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
-        this.ensureAgentConfigurationsIndex();
-        const raw = this._agentConfigurationsByAgentID!.get(NormalizeUUID(agentId));
-        if (!raw) return undefined;
-        return raw.find(ac => ac.Name === presetName && ac.Status === 'Active');
+        const presets = this.GetAgentConfigurationPresets(agentId, true);
+        return presets.find(ac => ac.Name === presetName);
     }
 
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] {
@@ -1845,11 +2540,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             const byId = new Map<string, MJAIAgentEntityExtended>();
             const byName = new Map<string, MJAIAgentEntityExtended>();
             const byParentId = new Map<string, MJAIAgentEntityExtended[]>();
+            // Pass 1: Index all agents by ID & ParentID, and register ROOT catalog agents
+            // (BaseAgentID == null) into _agentsByName first so personal derived instances
+            // named "Pepper", "Jarvis", or "Sage" can never shadow system catalog agents.
             for (const a of this._agents) {
                 if (a.ID) {
                     byId.set(NormalizeUUID(a.ID), a);
                 }
-                if (a.Name) {
+                if (a.Name && !a.BaseAgentID) {
                     const normName = a.Name.trim().toLowerCase();
                     if (!byName.has(normName)) {
                         byName.set(normName, a);
@@ -1865,9 +2563,19 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                     list.push(a);
                 }
             }
+            // Pass 2: Register derived agents by name only if no root catalog agent claims that name.
+            for (const a of this._agents) {
+                if (a.Name && a.BaseAgentID) {
+                    const normName = a.Name.trim().toLowerCase();
+                    if (!byName.has(normName)) {
+                        byName.set(normName, a);
+                    }
+                }
+            }
             this._agentsByID = byId;
             this._agentsByName = byName;
             this._childAgentsByParentID = byParentId;
+            this._agentInheritanceChainCache.clear();
             this._agentsIndexedRef = this._agents;
             this._agentsIndexedLen = this._agents.length;
         }
@@ -2513,10 +3221,29 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Joins through the junction table to return full tool definition entities.
      */
     public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] {
-        const junctions = this._agentClientTools
-            .filter(j => UUIDsEqual(j.AgentID, agentId))
-            .sort((a, b) => a.Priority - b.Priority);
+        const chain = this.GetAgentInheritanceChain(agentId);
+        const idsRootToLeaf = chain.length > 0 ? chain.map(a => a.ID) : [agentId];
+        const chainIdSet = new UUIDSet(idsRootToLeaf);
+        const toolsByAgentId = new Map<string, MJAIAgentClientToolEntity[]>();
+        for (const j of this._agentClientTools) {
+            if (chainIdSet.Has(j.AgentID)) {
+                const key = NormalizeUUID(j.AgentID);
+                const list = toolsByAgentId.get(key) ?? [];
+                list.push(j);
+                toolsByAgentId.set(key, list);
+            }
+        }
 
+        const mergedByToolId = new Map<string, MJAIAgentClientToolEntity>();
+        for (const id of idsRootToLeaf) {
+            const rows = toolsByAgentId.get(NormalizeUUID(id)) ?? [];
+            for (const row of rows) {
+                if (!row.ClientToolDefinitionID) continue;
+                mergedByToolId.set(NormalizeUUID(row.ClientToolDefinitionID), row);
+            }
+        }
+
+        const junctions = Array.from(mergedByToolId.values()).sort((a, b) => a.Priority - b.Priority);
         const tools: MJAIClientToolDefinitionEntity[] = [];
         for (const junction of junctions) {
             const tool = this._clientToolDefinitions.find(t => UUIDsEqual(t.ID, junction.ClientToolDefinitionID));
@@ -2555,11 +3282,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return undefined;
         }
 
-        // 1. If agent selects model via its own prompt
-        if (agent.ModelSelectionMode === 'Agent') {
-            const agentPrompt = this._agentPrompts
-                .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
-                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+        const effectiveProps = this.ResolveEffectiveAgentProperties(agent);
+        const effectivePrompts = this.GetEffectiveAgentPrompts(agent.ID, 'Active');
+
+        // 1. If agent selects model via its own (or inherited) prompt
+        if (effectiveProps.ModelSelectionMode === 'Agent') {
+            const agentPrompt = effectivePrompts[0];
             if (agentPrompt) {
                 const promptModels = this.PromptModelsByPromptID.get(NormalizeUUID(agentPrompt.PromptID));
                 if (promptModels && promptModels.length > 0) {
@@ -2569,8 +3297,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
 
         // 2. Default: check agent type's system prompt
-        if (agent.TypeID) {
-            const agentType = this._agentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+        if (effectiveProps.TypeID) {
+            const agentType = this._agentTypes.find(at => UUIDsEqual(at.ID, effectiveProps.TypeID));
             if (agentType?.SystemPromptID) {
                 const promptModels = this.PromptModelsByPromptID.get(NormalizeUUID(agentType.SystemPromptID));
                 if (promptModels && promptModels.length > 0) {
@@ -2580,10 +3308,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
 
         // 3. Fallback: check agent prompt if not checked in step 1
-        if (agent.ModelSelectionMode !== 'Agent') {
-            const agentPrompt = this._agentPrompts
-                .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
-                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+        if (effectiveProps.ModelSelectionMode !== 'Agent') {
+            const agentPrompt = effectivePrompts[0];
             if (agentPrompt) {
                 const promptModels = this.PromptModelsByPromptID.get(NormalizeUUID(agentPrompt.PromptID));
                 if (promptModels && promptModels.length > 0) {
@@ -2597,13 +3323,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     /**
      * Gets all modalities supported by an agent for a given direction.
-     * Follows precedence chain: Agent → Model → System → Default.
+     * Follows precedence chain: Agent (walked BaseAgentID root -> leaf) → Model → System → Default.
      * If no explicit agent modality records exist, falls through to the agent's model's effective modalities.
      * Any explicit AIAgentModality records override: IsAllowed = 1 adds/retains, IsAllowed = 0 acts as a hard veto.
-     * @param agentId - The agent ID
-     * @param direction - 'Input' or 'Output'
-     * @param modelId - Optional model ID override
-     * @returns Array of modality entities the agent supports
      */
     public GetAgentModalities(agentId: string, direction: 'Input' | 'Output', modelId?: string): MJAIModalityEntity[] {
         this.ensureModalitiesIndex();
@@ -2617,22 +3339,34 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             resultMap.set(NormalizeUUID(m.ID), m);
         }
 
-        // Apply agent-level explicit overrides/vetoes
-        const agentRecords = this._agentModalities.filter(
-            am => UUIDsEqual(am.AgentID, agentId) && am.Direction === direction
-        );
+        // Apply agent-level explicit overrides/vetoes root -> leaf along BaseAgentID chain
+        const chain = this.GetAgentInheritanceChain(agentId);
+        const idsRootToLeaf = chain.length > 0 ? chain.map(a => a.ID) : [agentId];
+        const chainIdSet = new UUIDSet(idsRootToLeaf);
+        const modalitiesByAgentId = new Map<string, MJAIAgentModalityEntity[]>();
+        for (const am of this._agentModalities) {
+            if (am.Direction === direction && chainIdSet.Has(am.AgentID)) {
+                const key = NormalizeUUID(am.AgentID);
+                const list = modalitiesByAgentId.get(key) ?? [];
+                list.push(am);
+                modalitiesByAgentId.set(key, list);
+            }
+        }
 
-        for (const am of agentRecords) {
-            const normId = NormalizeUUID(am.ModalityID);
-            const isAllowed = am.IsAllowed !== false;
-            if (isAllowed) {
-                const modality = this._modalitiesByID!.get(normId);
-                if (modality) {
-                    resultMap.set(normId, modality);
+        for (const id of idsRootToLeaf) {
+            const agentRecords = modalitiesByAgentId.get(NormalizeUUID(id)) ?? [];
+            for (const am of agentRecords) {
+                const normId = NormalizeUUID(am.ModalityID);
+                const isAllowed = am.IsAllowed !== false;
+                if (isAllowed) {
+                    const modality = this._modalitiesByID!.get(normId);
+                    if (modality) {
+                        resultMap.set(normId, modality);
+                    }
+                } else {
+                    // Hard veto at agent layer
+                    resultMap.delete(normId);
                 }
-            } else {
-                // Hard veto at agent layer
-                resultMap.delete(normId);
             }
         }
 
@@ -2708,16 +3442,30 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         this.ensureModalitiesIndex();
         const targetModality = this._modalitiesByName!.get(modalityName.toLowerCase());
 
-        // Check if agent has an explicit record for this modality & direction
+        // Check agent-level explicit record walking leaf -> root along BaseAgentID chain
         if (targetModality) {
-            const agentRecord = this._agentModalities.find(
-                am => UUIDsEqual(am.AgentID, agentId) &&
-                      am.Direction === direction &&
-                      UUIDsEqual(am.ModalityID, targetModality.ID)
-            );
-            if (agentRecord) {
-                // Explicit record exists: IsAllowed is authoritative (IsAllowed = false is a hard veto)
-                return agentRecord.IsAllowed !== false;
+            const chain = this.GetAgentInheritanceChain(agentId);
+            const idsLeafToRoot = chain.length > 0 ? chain.map(a => a.ID).reverse() : [agentId];
+            const chainIdSet = new UUIDSet(idsLeafToRoot);
+            const recordByAgentId = new Map<string, MJAIAgentModalityEntity>();
+            for (const am of this._agentModalities) {
+                if (
+                    am.Direction === direction &&
+                    UUIDsEqual(am.ModalityID, targetModality.ID) &&
+                    chainIdSet.Has(am.AgentID)
+                ) {
+                    const key = NormalizeUUID(am.AgentID);
+                    if (!recordByAgentId.has(key)) {
+                        recordByAgentId.set(key, am);
+                    }
+                }
+            }
+            for (const id of idsLeafToRoot) {
+                const agentRecord = recordByAgentId.get(NormalizeUUID(id));
+                if (agentRecord) {
+                    // Nearest explicit record wins (IsAllowed = false is a hard veto)
+                    return agentRecord.IsAllowed !== false;
+                }
             }
         }
 
@@ -2800,10 +3548,31 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             };
         }
 
-        // Check agent-specific modality settings first (highest priority)
-        const agentModality = this._agentModalities.find(
-            am => UUIDsEqual(am.AgentID, agentId) && UUIDsEqual(am.ModalityID, modality.ID) && am.Direction === 'Input'
-        );
+        // Check agent-specific modality settings walking leaf -> root along BaseAgentID chain
+        const chain = this.GetAgentInheritanceChain(agentId);
+        const idsLeafToRoot = chain.length > 0 ? chain.map(a => a.ID).reverse() : [agentId];
+        const chainIdSet = new UUIDSet(idsLeafToRoot);
+        const modalityByAgentId = new Map<string, MJAIAgentModalityEntity>();
+        for (const am of this._agentModalities) {
+            if (
+                am.Direction === 'Input' &&
+                UUIDsEqual(am.ModalityID, modality.ID) &&
+                chainIdSet.Has(am.AgentID)
+            ) {
+                const key = NormalizeUUID(am.AgentID);
+                if (!modalityByAgentId.has(key)) {
+                    modalityByAgentId.set(key, am);
+                }
+            }
+        }
+        let agentModality: MJAIAgentModalityEntity | undefined;
+        for (const id of idsLeafToRoot) {
+            const found = modalityByAgentId.get(NormalizeUUID(id));
+            if (found) {
+                agentModality = found;
+                break;
+            }
+        }
 
         if (agentModality) {
             // Agent has explicit modality configuration
@@ -3133,19 +3902,60 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * Gets all personas configured for an agent, ordered by Sequence.
-     * Only returns personas where IsAllowed is true and the persona record is active.
+     * Gets all personas configured for an agent across its `BaseAgentID` inheritance chain
+     * (root -> leaf), ordered by `Sequence`. Descendant rows override ancestor rows for the
+     * same `PersonaID`, and descendant `IsAllowed === false` vetoes an inherited persona.
      *
      * @param agentId - The agent ID
      * @returns Array of resolved agent personas
      */
     public GetAgentPersonas(agentId: string): ResolvedAgentPersona[] {
-        const agentRecords = this._agentPersonas
-            .filter(ap => UUIDsEqual(ap.AgentID, agentId) && ap.IsAllowed)
-            .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+        const chain = this.GetAgentInheritanceChain(agentId);
+        const idsRootToLeaf = chain.length > 0 ? chain.map(a => a.ID) : [agentId];
+        const chainIdSet = new UUIDSet(idsRootToLeaf);
+        const personasByAgentId = new Map<string, MJAIAgentPersonaEntity[]>();
+        for (const ap of this._agentPersonas) {
+            if (chainIdSet.Has(ap.AgentID)) {
+                const key = NormalizeUUID(ap.AgentID);
+                const list = personasByAgentId.get(key) ?? [];
+                list.push(ap);
+                personasByAgentId.set(key, list);
+            }
+        }
+
+        const mergedByPersonaId = new Map<string, MJAIAgentPersonaEntity>();
+        const depthByPersonaId = new Map<string, number>();
+
+        idsRootToLeaf.forEach((id, depth) => {
+            const rows = personasByAgentId.get(NormalizeUUID(id)) ?? [];
+            for (const ap of rows) {
+                if (!ap.PersonaID) continue;
+                const normPersonaId = NormalizeUUID(ap.PersonaID);
+                if (ap.IsAllowed === false) {
+                    mergedByPersonaId.delete(normPersonaId);
+                    depthByPersonaId.delete(normPersonaId);
+                } else {
+                    mergedByPersonaId.set(normPersonaId, ap);
+                    depthByPersonaId.set(normPersonaId, depth);
+                }
+            }
+        });
+
+        const sortedRecords = Array.from(mergedByPersonaId.entries())
+            .sort(([idA, a], [idB, b]) => {
+                // Descendant IsDefault wins over ancestor IsDefault
+                const aDef = a.IsDefault ? 1 : 0;
+                const bDef = b.IsDefault ? 1 : 0;
+                if (aDef !== bDef) return bDef - aDef;
+                const depthA = depthByPersonaId.get(idA) ?? 0;
+                const depthB = depthByPersonaId.get(idB) ?? 0;
+                if (aDef === 1 && depthA !== depthB) return depthB - depthA;
+                return (a.Sequence ?? 0) - (b.Sequence ?? 0);
+            })
+            .map(([, ap]) => ap);
 
         const result: ResolvedAgentPersona[] = [];
-        for (const ap of agentRecords) {
+        for (const ap of sortedRecords) {
             const persona = this._personas.find(p => UUIDsEqual(p.ID, ap.PersonaID) && p.IsActive);
             if (persona) {
                 result.push({
@@ -3159,18 +3969,19 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     /**
      * Resolves the effective persona for an agent using the precedence chain:
-     * 1. Agent's default persona (AIAgentPersona where IsDefault = 1 and IsAllowed = 1)
-     * 2. First allowed agent persona (by Sequence)
-     * 3. Model/vendor default persona (from GetModelPersonas)
+     * 1. Explicit `options.preferredPersonaId` (e.g. from `AIAgentUserPolicy.PreferredPersonaID`)
+     * 2. Agent's default persona across its `BaseAgentID` chain (`AIAgentPersona` where `IsDefault = 1`, leaf wins)
+     * 3. First allowed agent persona (by Sequence)
+     * 4. Model/vendor default persona (from GetModelPersonas)
      *
      * In all cases, merges agent-level StyleOverride (Tone, SpeakingStyle) over the persona's defaults.
      *
      * @param agentId - The agent ID
-     * @param options - Optional overrides for modelId, vendorId, modalityName
+     * @param options - Optional overrides for modelId, vendorId, modalityName, preferredPersonaId
      */
     public ResolveAgentPersona(
         agentId: string,
-        options?: { modelId?: string; vendorId?: string; modalityName?: string }
+        options?: { modelId?: string; vendorId?: string; modalityName?: string; preferredPersonaId?: string | null }
     ): EffectiveAgentPersona | null {
         const modalityName = options?.modalityName ?? 'Audio';
         const agentPersonas = this.GetAgentPersonas(agentId);
@@ -3178,7 +3989,28 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         let chosenPersona: MJAIPersonaEntity | null = null;
         let chosenAgentPersona: MJAIAgentPersonaEntity | undefined = undefined;
 
-        if (agentPersonas.length > 0) {
+        // 1. Honor explicit preferredPersonaId (e.g., user policy override) if active
+        if (options?.preferredPersonaId) {
+            const matchedAgentPersona = agentPersonas.find(ap =>
+                UUIDsEqual(ap.Persona.ID, options.preferredPersonaId)
+            );
+            if (matchedAgentPersona) {
+                chosenPersona = matchedAgentPersona.Persona;
+                chosenAgentPersona = matchedAgentPersona.AgentPersona;
+            } else {
+                const catalogPersona = this._personas.find(
+                    p => UUIDsEqual(p.ID, options.preferredPersonaId) && p.IsActive
+                );
+                if (catalogPersona) {
+                    chosenPersona = catalogPersona;
+                    // Still preserve the agent's default StyleOverride if one exists on this agent
+                    chosenAgentPersona = agentPersonas.find(ap => ap.AgentPersona.IsDefault)?.AgentPersona ?? agentPersonas[0]?.AgentPersona;
+                }
+            }
+        }
+
+        // 2. Agent's (or inherited ancestor's) default / first allowed persona
+        if (!chosenPersona && agentPersonas.length > 0) {
             const defaultAP = agentPersonas.find(ap => ap.AgentPersona.IsDefault);
             const selected = defaultAP ?? agentPersonas[0];
             chosenPersona = selected.Persona;
