@@ -437,13 +437,13 @@ describe('ConversationListComponent (DOM) — who can share from the menu', () =
     }, { GetSharedByInfo: sharedWithMe });
   };
 
-  it('shares a conversation you hold Owner access to, like the chat header does', () => {
+  it('refuses sharing a conversation you do not own even with an Owner-level grant', () => {
     const { f } = renderWithGrant('Owner', (c) => selectRows(c, ['U1', 'U2']));
     rightClickOn(f, rowFor(f, 'Loose One'));
     findItem(f, 'Share').click();
     f.detectChanges();
-    expect(f.componentInstance.ShareContexts.map(s => s.ResourceID).sort()).toEqual(['U1', 'U2']);
-    expect(f.componentInstance.ShareNotice).toBeNull();
+    expect(f.componentInstance.ShareContexts.map(s => s.ResourceID)).toEqual(['U1']);
+    expect(f.componentInstance.ShareNotice).toContain('1 of 2');
   });
 
   it('leaves out a conversation you hold only Edit access to', () => {

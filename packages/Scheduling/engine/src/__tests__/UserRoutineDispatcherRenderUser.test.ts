@@ -13,9 +13,18 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
 }));
-vi.mock('@memberjunction/ai-agents', () => ({ AgentRunner: class {} }));
-vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
+vi.mock('@memberjunction/ai-agents', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-agents')>()),
+    AgentRunner: class {},
+}));
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),
+    AIPromptRunner: class {},
+}));
+vi.mock('@memberjunction/actions', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions')>()),
+    ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } },
+}));
 
 import { UserInfo } from '@memberjunction/core';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -41,6 +50,6 @@ describe('UserRoutineDispatcherDriver: notification render user', () => {
         const output = await renderMessage(routine, run, routineUser);
 
         expect(output).toBe('rendered');
-        expect(render.mock.calls[0][5]).toEqual({ ContextUser: routineUser });
+        expect(render.mock.calls[0][5]).toEqual({ ContextUser: routineUser, autoescape: false });
     });
 });

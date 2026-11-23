@@ -93,6 +93,10 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
                 },
                 SetCachedPolicy: (...args: Parameters<typeof setCachedPolicyMock>) => setCachedPolicyMock(...args),
                 ClearCache: vi.fn(),
+                GetActiveExecutingAgentID: () => actual.AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID(),
+                GetActivePolicyCeilingAgentIDs: () => actual.AgentUserPolicyEngine.Instance.GetActivePolicyCeilingAgentIDs(),
+                GetEffectivePolicyAgentChain: (explicit?: string | null) =>
+                    actual.AgentUserPolicyEngine.Instance.GetEffectivePolicyAgentChain(explicit),
                 BuildPromptPolicyContextBlock: (...args: Parameters<typeof buildSummaryMock>) => buildSummaryMock(...args),
                 SnapshotPolicy: (p: MJAIAgentUserPolicyEntity) => actual.AgentUserPolicyEngine.Instance.SnapshotPolicy(p),
                 DetectAgentPolicyWidening: (
@@ -110,6 +114,68 @@ vi.mock('@memberjunction/ai-agents', () => ({
             TriggerWakeForWorkstream: (...args: unknown[]) => triggerWakeForWorkstreamMock(...args),
         },
     },
+    CheckActivePolicyForAgentAndUser: async (
+        agentID: string,
+        userID: string,
+        contextUser: UserInfo
+    ) => {
+        const res = await runViewMock(
+            {
+                EntityName: 'MJ: AI Agent User Policies',
+                ExtraFilter: `(AgentID = '${agentID}' AND UserID = '${userID}')`,
+                Fields: ['ID', 'AgentID', 'UserID', 'Status', 'AllowInterAgentCoordination', 'EmailChannelMode', 'Agent'],
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        if (!res?.Success) {
+            return {
+                Allowed: false,
+                Reason: 'Policy lookup failed.',
+                Policy: null,
+                LookupStatus: 'error',
+            };
+        }
+        const row = (res.Results as Array<{ Status?: string }> | undefined)?.[0] ?? null;
+        if (!row) {
+            return {
+                Allowed: false,
+                Reason: `User ${userID} has no coordination policy for agent ${agentID}.`,
+                Policy: null,
+                LookupStatus: 'not_found',
+            };
+        }
+        return {
+            Allowed: row.Status === 'Active',
+            Reason: row.Status === 'Active' ? 'Active policy verified.' : `Policy status is ${row.Status}.`,
+            Policy: row,
+            LookupStatus: 'found',
+        };
+    },
+    LookupActiveRhythmTemplateForWorkstream: vi.fn(async () => null),
+    ResolveSeededRoutineAgentConfigurationID: (p: {
+        explicitAgentConfigurationID?: string | null;
+        templateDefaultAgentConfigurationID?: string | null;
+    }) =>
+        p.explicitAgentConfigurationID !== undefined
+            ? (p.explicitAgentConfigurationID ?? null)
+            : (p.templateDefaultAgentConfigurationID ?? null),
+    ResolveRoutineSeededAgentConfigurationID: vi.fn(async (p: {
+        explicitAgentConfigurationID?: string | null;
+        templateDefaultAgentConfigurationID?: string | null;
+    }) =>
+        p.explicitAgentConfigurationID !== undefined
+            ? (p.explicitAgentConfigurationID ?? null)
+            : (p.templateDefaultAgentConfigurationID ?? null)
+    ),
+    ResolveAgentConfigurationIDInput: vi.fn(
+        async (p: { agentConfigurationID?: string | null; modelTier?: string | null }) => {
+            if (p.agentConfigurationID === undefined && (!p.modelTier || !p.modelTier.trim())) {
+                return { Provided: false, ConfigurationID: null };
+            }
+            return { Provided: true, ConfigurationID: p.agentConfigurationID ?? p.modelTier ?? null };
+        }
+    ),
 }));
 
 import { ScheduleNextAgentWakeAction } from '../custom/ai/schedule-next-agent-wake.action';
@@ -144,9 +210,27 @@ describe('Chief of Staff Actions Suite', () => {
         agentsList.length = 0;
         agentsList.push({ ID: 'cos-agent-id', Name: 'Chief of Staff' });
         canUserRunAgentMock.mockReset().mockReturnValue(true);
-        runViewMock.mockReset().mockImplementation(async (rvParams?: { EntityName?: string }) => {
+        runViewMock.mockReset().mockImplementation(async (rvParams?: { EntityName?: string; ExtraFilter?: string }) => {
             if (rvParams?.EntityName === 'MJ: Users') {
                 return { Success: true, Results: [{ ID: 'target-user', IsActive: true }] };
+            }
+            if (rvParams?.EntityName === 'MJ: AI Agent User Policies') {
+                const match = rvParams.ExtraFilter?.match(/UserID\s*=\s*'([^']+)'/i);
+                const userID = match?.[1] ?? 'user-abc';
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'policy-active-default',
+                            AgentID: 'cos-agent-id',
+                            UserID: userID,
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                };
             }
             return { Success: true, Results: [] };
         });
@@ -286,6 +370,39 @@ describe('Chief of Staff Actions Suite', () => {
             expect(routineStub.ScheduleMode).toBe('Recurring');
             expect(routineStub.CronExpression).toBe('0 8 * * 1-5');
         });
+
+        it('rejects ScheduleNextAgentWakeAction with POLICY_DENIED when user has no policy or Paused policy', async () => {
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+            const noPolicyRes = await invokeAction(new ScheduleNextAgentWakeAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-no-policy'),
+                Filters: [],
+                Params: [
+                    { Name: 'AgentName', Type: 'Input', Value: 'Chief of Staff' },
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                ],
+            });
+            expect(noPolicyRes.Success).toBe(false);
+            expect(noPolicyRes.ResultCode).toBe('POLICY_DENIED');
+
+            runViewMock.mockResolvedValueOnce({
+                Success: true,
+                Results: [{ ID: 'pol-p', AgentID: 'cos-agent-id', UserID: 'user-paused', Status: 'Paused' }],
+            });
+            const pausedRes = await invokeAction(new ScheduleNextAgentWakeAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-paused'),
+                Filters: [],
+                Params: [
+                    { Name: 'AgentName', Type: 'Input', Value: 'Chief of Staff' },
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                ],
+            });
+            expect(pausedRes.Success).toBe(false);
+            expect(pausedRes.ResultCode).toBe('POLICY_DENIED');
+        });
     });
 
     describe('ScheduleNextAgentWakeAction — the declared parameter names', () => {
@@ -353,6 +470,89 @@ describe('Chief of Staff Actions Suite', () => {
             expect((await result).Success).toBe(true);
             expect(stub.Timezone).toBe('America/Chicago');
         });
+
+        it('rejects self-attested ConfirmedByUser and unverified RhythmTemplateID in agent context, requiring an Approved ConfirmedApprovalRequestID', async () => {
+            const stub = routineStub();
+            getEntityObjectMock.mockResolvedValue(stub);
+
+            // Self-attested ConfirmedByUser=true is rejected when Context.AgentID is set
+            const selfAttestedParams: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-abc'),
+                Context: { AgentID: 'cos-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 9 * * 1-5' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Self-attested recurring' },
+                    { Name: 'ConfirmedByUser', Type: 'Input', Value: true },
+                ],
+            };
+            const selfAttestedRes = await invokeAction(new ScheduleNextAgentWakeAction(), selfAttestedParams);
+            expect(selfAttestedRes.Success).toBe(false);
+            expect(selfAttestedRes.ResultCode).toBe('APPROVAL_REQUIRED');
+
+            // Unverified RhythmTemplateID is rejected with VALIDATION_ERROR
+            const fakeTplParams: RunActionParams = {
+                ...selfAttestedParams,
+                Params: [
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 9 * * 1-5' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Fake template' },
+                    { Name: 'RhythmTemplateID', Type: 'Input', Value: 'nonexistent-tpl' },
+                ],
+            };
+            const fakeTplRes = await invokeAction(new ScheduleNextAgentWakeAction(), fakeTplParams);
+            expect(fakeTplRes.Success).toBe(false);
+            expect(fakeTplRes.ResultCode).toBe('VALIDATION_ERROR');
+
+            // Server-verified Approved MJ: AI Agent Requests row succeeds in agent context
+            runViewMock.mockImplementation(async (rvParams?: { EntityName?: string }) => {
+                if (rvParams?.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-ok-1',
+                                AgentID: 'cos-agent-id',
+                                UserID: 'user-abc',
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
+                if (rvParams?.EntityName === 'MJ: AI Agent Requests') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'req-ok-1',
+                                AgentID: 'cos-agent-id',
+                                RequestForUserID: 'user-abc',
+                                Status: 'Approved',
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            });
+
+            const approvedParams: RunActionParams = {
+                ...selfAttestedParams,
+                Params: [
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 9 * * 1-5' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Approved recurring' },
+                    { Name: 'ConfirmedApprovalRequestID', Type: 'Input', Value: 'req-ok-1' },
+                ],
+            };
+            const approvedRes = await invokeAction(new ScheduleNextAgentWakeAction(), approvedParams);
+            expect(approvedRes.Success).toBe(true);
+            expect(stub.Save).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('ConfigureAgentUserPolicyAction', () => {
@@ -406,6 +606,55 @@ describe('Chief of Staff Actions Suite', () => {
             expect(policyStub.CoordinationMode).toBe('Coordinator');
             expect(policyStub.EmailChannelMode).toBe('SendAsAgent');
             expect(setCachedPolicyMock).toHaveBeenCalledWith(policyStub);
+        });
+
+        it('applies Autonomous Slice 3 defaults for omitted coordination and channel modes on a new policy', async () => {
+            const newPolicyStub = {
+                ID: 'policy-new-default',
+                AgentID: '',
+                UserID: '',
+                DisplayNameOverride: null as string | null,
+                OnboardingStatus: undefined as MJAIAgentUserPolicyEntity['OnboardingStatus'] | undefined,
+                OnboardedAt: null as Date | null,
+                CoordinationMode: undefined as MJAIAgentUserPolicyEntity['CoordinationMode'] | undefined,
+                AllowInterAgentCoordination: undefined as boolean | undefined,
+                DefaultDataAccessMode: undefined as MJAIAgentUserPolicyEntity['DefaultDataAccessMode'] | undefined,
+                EmailChannelMode: undefined as MJAIAgentUserPolicyEntity['EmailChannelMode'] | undefined,
+                CalendarChannelMode: undefined as MJAIAgentUserPolicyEntity['CalendarChannelMode'] | undefined,
+                PhoneChannelMode: undefined as MJAIAgentUserPolicyEntity['PhoneChannelMode'] | undefined,
+                MessagingChannelMode: undefined as MJAIAgentUserPolicyEntity['MessagingChannelMode'] | undefined,
+                InstructionsOverride: null as string | null,
+                RequireApprovalForExternalComms: undefined as boolean | undefined,
+                RequireApprovalForFinancials: undefined as boolean | undefined,
+                RequireApprovalForDestructiveActions: undefined as boolean | undefined,
+                AutoApproveAmountThreshold: null as number | null,
+                Status: undefined as MJAIAgentUserPolicyEntity['Status'] | undefined,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+            getEntityObjectMock.mockResolvedValueOnce(newPolicyStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-default-1'),
+                Filters: [],
+                Params: [
+                    { Name: 'AgentID', Type: 'Input', Value: 'cos-agent-id' },
+                ],
+            };
+
+            const res = await invokeAction(new ConfigureAgentUserPolicyAction(), params);
+            expect(res.Success).toBe(true);
+            expect(newPolicyStub.Status).toBe('Active');
+            expect(newPolicyStub.CoordinationMode).toBe('Autonomous');
+            expect(newPolicyStub.EmailChannelMode).toBe('DraftOnly');
+            expect(newPolicyStub.CalendarChannelMode).toBe('ProposeWithApproval');
+            expect(newPolicyStub.PhoneChannelMode).toBe('Disabled');
+            expect(newPolicyStub.MessagingChannelMode).toBe('Enabled');
+            expect(newPolicyStub.RequireApprovalForExternalComms).toBe(true);
+            expect(newPolicyStub.RequireApprovalForFinancials).toBe(true);
+            expect(newPolicyStub.RequireApprovalForDestructiveActions).toBe(true);
+            expect(newPolicyStub.AutoApproveAmountThreshold).toBeNull();
         });
     });
 
@@ -516,6 +765,29 @@ describe('Chief of Staff Actions Suite', () => {
                 Status: 'Active',
                 PhoneChannelMode: 'InboundOnly',
             });
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser(),
+                Filters: [],
+                Params: [
+                    { Name: 'TargetPhoneNumber', Type: 'Input', Value: '+15551234567' },
+                    { Name: 'TargetRecipientName', Type: 'Input', Value: 'Bistro Luma' },
+                    { Name: 'Objective', Type: 'Input', Value: 'Book dinner for 4 at 7:00 PM on Friday' },
+                ],
+            };
+
+            const res = await invokeAction(new PrepareOutboundCallBriefAction(), params);
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('POLICY_DENIED');
+        });
+
+        it('defaults missing PhoneChannelMode to Disabled (Off) and denies outbound call preparation', async () => {
+            const policyWithoutPhoneMode: Partial<MJAIAgentUserPolicyEntity> = {
+                Status: 'Active',
+                PhoneChannelMode: undefined,
+            };
+            getPolicyMock.mockResolvedValueOnce(policyWithoutPhoneMode);
 
             const params: RunActionParams = {
                 Action: {} as RunActionParams['Action'],

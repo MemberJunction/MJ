@@ -1090,6 +1090,17 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Staleness checks and shared-storage snapshot adoption stay enabled while saves are in flight:
+   * `GetDatasetStatusByName('MJ_Metadata')` runs on the connection pool (`ignoreAmbientTransaction`),
+   * and adopting a peer's snapshot atomically swaps `_localMetadata` without mutating any
+   * `EntityInfo` held by an in-flight save. If a full DB reload is still required, `Refresh()`
+   * waits for in-flight saves via {@link waitForSavesToFinish}.
+   */
+  protected override get AllowRefreshCheck(): boolean {
+    return true;
+  }
+
+  /**
    * Gets the MemberJunction core schema name (defaults to __mj if not configured)
    */
   public get MJCoreSchemaName(): string {
@@ -2381,9 +2392,12 @@ export class SQLServerDataProvider
   /**
    * Renders a binary field value as a T-SQL hexadecimal literal (`0x…`).
    *
-   * A binary field's value in a `BaseEntity` is a base64 string. SQL Server has no implicit
-   * conversion from a quoted string to `varbinary` — a quoted base64 value would either fail or be
-   * stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
+   * A binary field's value in a `BaseEntity` is a base64 string. Outside a transaction group, a save
+   * sends a binary value to SQL Server as a typed parameter (see `saveParameters.ts`). This literal is
+   * used where the value appears in SQL text: the statement a transaction group executes, and the
+   * rendered statement that is logged, captured into migrations and shown in errors. SQL Server has no
+   * implicit conversion from a quoted string to `varbinary` — a quoted base64 value would either fail
+   * or be stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
    * which is unambiguous, needs no escaping and works on every SQL Server version. A byte array
    * (e.g. a Buffer set by server code) is accepted as well.
    *
@@ -2394,14 +2408,16 @@ export class SQLServerDataProvider
    *   the save instead of being stored as garbage.
    */
   /**
-   * Largest binary value, in decoded bytes, that a save will inline as a `0x…` hex literal.
+   * Largest binary value, in decoded bytes, that a save accepts.
    *
-   * A save is one T-SQL batch, and SQL Server caps a batch at 65,536 × the network packet size
-   * (256 MB at the default 4 KB). The batch is UTF-16, so the literal costs 4 bytes per blob byte,
-   * and with Record Changes on an update the same bytes travel again as base64 in `ChangesJSON`
-   * (old and new) and `FullRecordJSON` — about 12 bytes per blob byte, a ceiling near 20 MB. Node
-   * also holds the hex, the batch and those JSON strings at once. Above this limit the save fails
-   * here with a message that says so, instead of a batch-size error from the server.
+   * Every binary value a save writes is decoded and checked against this limit. Outside a
+   * transaction group the value reaches SQL Server as a typed parameter (see `saveParameters.ts`).
+   * A transaction group executes the rendered statement text, where the value is a `0x…` hex literal:
+   * that batch is UTF-16, so the literal costs 4 bytes per blob byte, and SQL Server caps a batch at
+   * 65,536 × the network packet size (256 MB at the default 4 KB). With Record Changes on an update
+   * the same bytes also travel as base64 in `ChangesJSON` (old and new) and `FullRecordJSON`, and Node
+   * holds the bytes and those strings at once. Above this limit the save fails here with a message
+   * that says so, instead of a batch-size or memory error.
    */
   public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
 
@@ -3808,13 +3824,16 @@ IF ${varName} IS NOT NULL
    * @returns Promise<boolean> - true if refresh was performed, false if skipped or no refresh needed
    */
   public async RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
-    // Skip refresh if a transaction is active
-    if (this.IsTransactionActive) {
+    // Only skip for an active transaction when metadata reads would join it. Since #4514,
+    // `datasetReadsOnPool('MJ_Metadata')` routes status and metadata reads onto the connection
+    // pool (`ignoreAmbientTransaction: true`) whenever `!this.MetadataReadsJoinTransaction`, so an
+    // unrelated ambient transaction on the global provider (e.g. a scheduled job writing rows)
+    // must not drop a peer metadata notice or scheduled check.
+    if (this.IsTransactionActive && this.MetadataReadsJoinTransaction) {
       LogStatus('Skipping metadata refresh - transaction is active');
       return false;
     }
 
-    // Call parent implementation if no transaction
     return super.RefreshIfNeeded(providerToUse, bypassMinCheckInterval);
   }
 

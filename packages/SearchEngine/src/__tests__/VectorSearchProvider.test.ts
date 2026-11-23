@@ -130,7 +130,14 @@ vi.mock('@memberjunction/global', () => ({
             ClassFactory: {
                 CreateInstance: vi.fn(),
             },
+            GetEventListener: () => ({ subscribe: () => ({ unsubscribe: () => { /* no-op */ } }) }),
         },
+    },
+    MJEventType: { ComponentEvent: 'ComponentEvent' },
+    EscapeSQLString: (v: string) => v.replace(/'/g, "''").replace(/\0/g, ''),
+    UserScopedCacheKey: (userID: string | null | undefined, ...parts: string[]) => {
+        if (!userID || userID.trim() === '') return null;
+        return [...parts, `u:${userID.trim().toLowerCase()}`].join(':');
     },
     UUIDsEqual: (a: unknown, b: unknown) =>
         typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase(),
@@ -158,6 +165,7 @@ describe('VectorSearchProvider', () => {
     let contextUser: UserInfo;
 
     beforeEach(() => {
+        VectorSearchProvider.ClearCaches();
         provider = new VectorSearchProvider();
         contextUser = createMockUser();
         mockRunViewFn.mockReset();
@@ -880,6 +888,7 @@ describe('VectorSearchProvider', () => {
 
             mockRunViewFn.mockResolvedValue({ Success: true, Results: [index('idx-1', 'embed-model-1')] });
             await provider.Search('pinned query: shared driver', 5, undefined, contextUser);
+            VectorSearchProvider.ClearCaches();
             mockRunViewFn.mockResolvedValue({ Success: true, Results: [index('idx-3', 'embed-model-3')] });
             await provider.Search('pinned query: shared driver', 5, undefined, contextUser);
 

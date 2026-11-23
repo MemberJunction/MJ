@@ -478,6 +478,60 @@ END`;
       expect(result).not.toContain('@@ROWCOUNT');
     });
 
+    it('should convert uncommented spUpdate IF @@ROWCOUNT = 0 SELECT TOP 0 ... ELSE SELECT ... to IF NOT FOUND THEN ... END IF;', () => {
+      const input = `CREATE PROCEDURE [__mj].[spUpdateUser]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[User]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [__mj_UpdatedAt] = GETUTCDATE()
+    WHERE
+        [ID] = @ID
+
+    IF @@ROWCOUNT = 0
+        SELECT TOP 0 * FROM [__mj].[vwUsers] WHERE 1=0
+    ELSE
+        SELECT * FROM [__mj].[vwUsers] WHERE [ID] = @ID
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('IF NOT FOUND THEN');
+      expect(result).toContain('RETURN;');
+      expect(result).toContain('RETURN QUERY SELECT * FROM __mj."vwUsers" WHERE "ID" = p_ID;');
+      expect(result).toContain('END IF;');
+      expect(result).not.toContain('LIMIT 0');
+      expect(result).not.toContain('WHERE 1=0');
+      expect(result).not.toContain('_v_row_count');
+      expect(result).toMatch(/WHERE\s+"ID"\s*=\s*p_ID;\s*\n\s*IF NOT FOUND THEN/);
+    });
+
+    it('should convert uncommented spDelete IF @@ROWCOUNT = 0 SELECT NULL AS [ID] ELSE SELECT @ID AS [ID] to IF NOT FOUND THEN ... END IF;', () => {
+      const input = `CREATE PROCEDURE [__mj].[spDeleteUser]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM [__mj].[User] WHERE [ID] = @ID
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID]
+    ELSE
+        SELECT @ID AS [ID]
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('WHERE "ID" = p_ID;');
+      expect(result).toContain('IF NOT FOUND THEN');
+      expect(result).toContain('RETURN QUERY SELECT NULL::UUID AS "_result_id";');
+      expect(result).toContain('RETURN QUERY SELECT p_ID::UUID AS "_result_id";');
+      expect(result).toContain('END IF;');
+      expect(result).not.toContain('_v_row_count');
+    });
+
     it('should convert PRINT to RAISE NOTICE', () => {
       const input = `CREATE PROCEDURE [__mj].[spTest]
 AS

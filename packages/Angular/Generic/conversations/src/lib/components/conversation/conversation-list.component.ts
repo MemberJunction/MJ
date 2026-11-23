@@ -407,11 +407,20 @@ interface ListContextMenu {
         <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
           <div class="conversation-name">
             {{ conversation.Name }}
+            @if (conversation.ParentID) {
+              <span class="side-thread-badge"
+                    [class.side-thread-badge--shared]="IsSideThreadShared(conversation)"
+                    [title]="SideThreadTooltip(conversation)"
+                    data-testid="conversation-list-side-thread-badge">
+                <i class="fas" [class.fa-lock]="!IsSideThreadShared(conversation)" [class.fa-code-branch]="IsSideThreadShared(conversation)"></i>
+                <span>{{ IsSideThreadShared(conversation) ? 'Shared side thread' : 'Private' }}</span>
+              </span>
+            }
             @if (IsSharedWithMe(conversation)) {
               <i class="fas fa-share-nodes shared-indicator"
                  [title]="SharedWithMeTooltip(conversation)"></i>
             }
-            @if (conversation.ProjectID && IsConversationInheritingFolderAccess(conversation)) {
+            @if (!conversation.ParentID && conversation.ProjectID && IsConversationInheritingFolderAccess(conversation)) {
               <i class="fas fa-folder-open shared-indicator inherits-indicator"
                  title="Shown to people with access to its folder: inherits folder access"></i>
             }
@@ -823,6 +832,22 @@ interface ListContextMenu {
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
     .shared-indicator { font-size: 10px; color: color-mix(in srgb, var(--conv-list-ink) 55%, transparent); flex-shrink: 0; }
     .conversation-item.active .shared-indicator { color: color-mix(in srgb, var(--conv-list-active-ink) 85%, transparent); }
+    .side-thread-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 500;
+      background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 75%, transparent);
+      flex-shrink: 0;
+    }
+    .side-thread-badge--shared {
+      background: color-mix(in srgb, var(--conv-list-accent) 16%, transparent);
+      color: var(--conv-list-accent);
+    }
     .conversation-preview { font-size: 12px; color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-item.active .conversation-preview { color: color-mix(in srgb, var(--conv-list-active-ink) 80%, transparent); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -1291,7 +1316,7 @@ interface ListContextMenu {
       padding: 6px 16px;
       font-size: 11px;
       font-style: italic;
-      color: color-mix(in srgb, var(--conv-list-ink) 45%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 75%, transparent);
     }
     .ungrouped-section.drag-over {
       background: color-mix(in srgb, var(--conv-list-accent) 12%, transparent);
@@ -1471,7 +1496,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   private selectionAnchorId: string | null = null;
 
   /** Why Share is unavailable, shown on its disabled button. */
-  public readonly ShareRefusedReason = 'Only the owner, or someone with Owner access, can share a conversation';
+  public readonly ShareRefusedReason = 'Only the owner can share a conversation';
 
   /** Why Delete is unavailable, shown on its disabled buttons. Same rule the server enforces. */
   public readonly DeleteRefusedReason = CONVERSATION_DELETE_REFUSED_REASON;
@@ -2759,6 +2784,25 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     const info = this.engine.GetSharedByInfo(conversation.ID);
     if (!info) return 'Shared with you';
     return `Shared by ${info.Email ?? info.Name ?? 'another user'}`;
+  }
+
+  /** True when a `ParentID` side conversation has been explicitly shared with the user. */
+  public IsSideThreadShared(conversation: MJConversationEntity): boolean {
+    if (!conversation.ParentID) return false;
+    return (
+      this.IsSharedWithMe(conversation) ||
+      Boolean(this.engine.IsConversationExplicitlyShared?.(conversation.ID))
+    );
+  }
+
+  /** Tooltip describing privacy/sharing status of a `ParentID` side thread. */
+  public SideThreadTooltip(conversation: MJConversationEntity): string {
+    if (this.IsSideThreadShared(conversation)) {
+      return this.IsSharedWithMe(conversation)
+        ? this.SharedWithMeTooltip(conversation)
+        : 'Explicitly shared side thread';
+    }
+    return 'Private side conversation — hidden from others unless explicitly shared';
   }
 
   ToggleSelectionMode(): void {

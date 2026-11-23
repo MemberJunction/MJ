@@ -32,7 +32,14 @@
             @if (AvailableAgents.length > 0) {
                 <div class="cos-agent-picker">
                     <span class="cos-agent-picker__label">
-                        <i class="fa-solid fa-robot"></i> Agent
+                        <span class="cos-agent-picker__avatar" aria-hidden="true">
+                            @if (SelectedAgentAvatarUrl) {
+                                <img [src]="SelectedAgentAvatarUrl" [alt]="SelectedAgentDisplayName" (error)="OnSelectedAgentAvatarError()" />
+                            } @else {
+                                <i [class]="SelectedAgentIconClass"></i>
+                            }
+                        </span>
+                        Agent
                     </span>
                     <mj-dropdown
                         [Data]="AvailableAgents"
@@ -58,23 +65,6 @@
     </mj-page-header>
 
     <mj-page-body>
-        @if (FeedbackBanner) {
-            <div class="cos-banner"
-                 [class.cos-banner--success]="FeedbackBanner.Type === 'success'"
-                 [class.cos-banner--error]="FeedbackBanner.Type === 'error'"
-                 role="status">
-                <div class="cos-banner__content">
-                    <i class="fa-solid"
-                       [class.fa-circle-check]="FeedbackBanner.Type === 'success'"
-                       [class.fa-circle-exclamation]="FeedbackBanner.Type === 'error'"></i>
-                    <span>{{ FeedbackBanner.Message }}</span>
-                </div>
-                <button mjButton variant="flat" size="sm" (click)="DismissBanner()" aria-label="Dismiss notification">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-        }
-
         @if (IsLoading) {
             <div class="cos-loading">
                 <mj-loading text="Loading approvals and wakes..."></mj-loading>

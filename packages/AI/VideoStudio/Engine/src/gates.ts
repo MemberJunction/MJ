@@ -36,6 +36,21 @@ export interface GateEvaluationContext {
     InitialRoundCount?: number;
 }
 
+/**
+ * Ordered stage sub-agent names under the root `Video Studio` agent.
+ */
+export const VIDEO_STUDIO_STAGES = [
+    'Video Studio - Director',
+    'Video Studio - Art Director',
+    'Video Studio - Storyboard',
+    'Video Studio - Pre-Production',
+    'Video Studio - Motion Engineer',
+    'Video Studio - Render',
+    'Video Studio - Critic',
+] as const;
+
+export type VideoStudioStageName = (typeof VIDEO_STUDIO_STAGES)[number];
+
 const CANONICAL_STAGE_SUFFIXES = [
     'Director',
     'Art Director',
@@ -46,7 +61,45 @@ const CANONICAL_STAGE_SUFFIXES = [
     'Critic',
 ] as const;
 
-function normalizeStageName(stageName: string): string {
+/**
+ * Resolves a stage sub-agent name to its canonical `VideoStudioStageName`, or `null` when it is
+ * not one of the 7 Video Studio stages.
+ */
+export function ResolveCanonicalStage(name: string | undefined | null): VideoStudioStageName | null {
+    if (!name) {
+        return null;
+    }
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    const strippedLower = trimmed.replace(/^video\s+studio\s*-\s*/i, '').trim().toLowerCase();
+    for (const stage of VIDEO_STUDIO_STAGES) {
+        if (lower === stage.toLowerCase()) {
+            return stage;
+        }
+        const suffixLower = stage.replace('Video Studio - ', '').toLowerCase();
+        if (strippedLower === suffixLower && /^video\s+studio\s*-\s*/i.test(trimmed)) {
+            return stage;
+        }
+    }
+    return null;
+}
+
+/**
+ * Returns `true` when `name` refers to a Video Studio stage sub-agent.
+ */
+export function IsVideoStudioStageName(name: string | undefined | null): boolean {
+    if (!name) {
+        return false;
+    }
+    return ResolveCanonicalStage(name) !== null || /^video\s+studio\s*-\s*/i.test(name.trim());
+}
+
+/**
+ * Strips the `'Video Studio - '` prefix and normalizes a stage name to its canonical short name
+ * (`'Director'`, `'Art Director'`, `'Storyboard'`, `'Pre-Production'`, `'Motion Engineer'`,
+ * `'Render'`, `'Critic'`), or the trimmed stripped string when unknown.
+ */
+export function NormalizeStageName(stageName: string): string {
     const stripped = (stageName ?? '')
         .trim()
         .replace(/^video\s+studio\s*-\s*/i, '')
@@ -805,7 +858,7 @@ export function CheckStagePrerequisite(
     initialRoundCount = 0,
 ): string | null {
     const safeSpec = spec ?? {};
-    const stage = normalizeStageName(stageName);
+    const stage = NormalizeStageName(stageName);
     const g1 = findExistingGate(gates, 'G1');
     const g2 = findExistingGate(gates, 'G2');
     const g3 = findExistingGate(gates, 'G3');
@@ -937,7 +990,7 @@ export function ClearStaleEvidence<T extends Partial<VideoGenerationSpec>>(
     if (!spec) {
         return spec;
     }
-    const stage = normalizeStageName(stageName);
+    const stage = NormalizeStageName(stageName);
 
     if (stage === 'Director' || stage === 'Art Director' || stage === 'Storyboard') {
         if (Array.isArray(spec.Review?.Gates)) {
@@ -1216,7 +1269,7 @@ export function DescribeStoryboardForApproval(spec: Partial<VideoGenerationSpec>
  */
 export function DescribeStageProgress(stageName: string, spec: Partial<VideoGenerationSpec>): string {
     const safeSpec = spec ?? {};
-    const stage = normalizeStageName(stageName);
+    const stage = NormalizeStageName(stageName);
     const formats = ResolveDeliverableFormats(safeSpec, []);
     const formatCount = formats.length;
     const formatLabel = `${formatCount} ${formatCount === 1 ? 'format' : 'formats'}`;

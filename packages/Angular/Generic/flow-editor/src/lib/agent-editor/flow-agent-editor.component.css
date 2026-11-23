@@ -311,7 +311,23 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 
 .mj-agent-editor-diagram mj-flow-editor {
   flex: 1;
+  min-width: 0;
   display: flex;
+}
+
+.mj-agent-editor-split-playbook {
+  width: 340px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-agent-editor-split-playbook mj-agent-step-list {
+  flex: 1;
+  min-height: 0;
 }
 
 .mj-agent-editor-list {

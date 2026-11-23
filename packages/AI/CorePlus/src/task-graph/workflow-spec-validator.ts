@@ -11,6 +11,7 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import { IsTaskGraphIsolationLevel, TASK_GRAPH_ISOLATION_LEVELS } from '@memberjunction/core';
 import { FormatValidationErrors, ValidateTaskGraphSpec } from './task-graph-validator';
 import {
     ENTITY_INVOCATION_TYPES,
@@ -37,6 +38,13 @@ export function ValidateWorkflowSpec(spec: WorkflowSpec): WorkflowSpecValidation
 
     if (!spec?.name?.trim()) {
         errors.push({ Code: 'MissingName', Message: 'A workflow needs a name.' });
+    }
+
+    if (spec?.isolation !== undefined && !IsTaskGraphIsolationLevel(spec.isolation)) {
+        errors.push({
+            Code: 'InvalidIsolation',
+            Message: `Invalid workflow isolation level "${String(spec.isolation)}". Expected one of: ${TASK_GRAPH_ISOLATION_LEVELS.join(', ')}.`,
+        });
     }
 
     if (!spec?.graph) {

@@ -6,6 +6,7 @@
       "Description": "Business-friendly orchestrator agent that helps users explore their data and build saved queries. Delegates technical SQL work to the Query Strategist sub-agent. Presents results visually with diagrams and formatted tables, hiding SQL complexity unless the user asks for it.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "InstantiationMode": "Optional",
       "AcceptsSkills": "All",
       "SkillActivationMode": "Auto",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Data",
@@ -45,6 +46,25 @@
               "List Workspace Artifacts"
             ]
           }
+        },
+        "instantiation": {
+          "suggestedNames": [
+            "Revenue Analyst",
+            "Pipeline Inspector",
+            "Ops Metrics Scout"
+          ],
+          "suggestedIcons": [
+            "fa-solid fa-chart-line",
+            "fa-solid fa-database",
+            "fa-solid fa-table-columns",
+            "fa-solid fa-hammer"
+          ],
+          "suggestedPersonaNames": [
+            "Alloy",
+            "Kore",
+            "Onyx",
+            "Sage"
+          ]
         }
       }
     },
@@ -483,6 +503,26 @@
                 "sync": {
                   "lastModified": "2026-11-18T00:24:47.280Z",
                   "checksum": "e9b61ca75b6273dd85663b4826aeaec6e434a7f3948c7a223ce485f019f6adfb"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Graph Context",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "81F24722-81C5-4A2C-A3AE-A2B3A8E05003"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Find Graph Path",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4B7BEFDF-66C2-484E-BFA5-8181D668B181"
                 }
               }
             ],

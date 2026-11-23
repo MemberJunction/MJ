@@ -123,12 +123,12 @@ describe('ChiefOfStaffApprovalsComponent — a routine\'s briefings', () => {
 });
 
 describe('ChiefOfStaffApprovalsComponent — moving between pages', () => {
-  it('opens another page through its nav item in the Chief of Staff app', () => {
+  it('opens another page through its nav item in the My Agents app (falling back to Chief of Staff)', () => {
     const { component, openNavItemByName } = createComponent();
 
     component.OpenPage('governance');
 
-    expect(openNavItemByName).toHaveBeenCalledWith('Governance', undefined, 'cos-app');
+    expect(openNavItemByName).toHaveBeenCalledWith('Agents', undefined, 'cos-app');
   });
 
   it('preserves a non-default selected agent when moving between pages', () => {
@@ -138,7 +138,7 @@ describe('ChiefOfStaffApprovalsComponent — moving between pages', () => {
     component.OpenPage('governance');
 
     expect(openNavItemByName).toHaveBeenCalledWith(
-      'Governance',
+      'Agents',
       { agent: 'Software Factory' },
       'cos-app',
       { queryParams: { agent: 'Software Factory' } },

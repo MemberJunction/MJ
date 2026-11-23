@@ -32,6 +32,7 @@ import {
   ArtifactViewerViewMode,
   BaseArtifactViewerPluginComponent,
   IArtifactVersionDiffViewer,
+  type ArtifactExportOption,
   type PreVerifiedFrozenSnapshotEntry,
 } from '../base-artifact-viewer.component';
 import { ResolvePreVerifiedFrozenSnapshotState } from '../../utils/frozen-snapshot-verification.util';
@@ -5907,6 +5908,26 @@ export class MarkdownArtifactViewerComponent
     this.FlushPendingEdits();
     const html = this.renderDocumentPrintableHtml();
     this.importExportService.ExportPrintablePdf(html, this.getDisplayTitle() || 'Document', orientation);
+  }
+
+  /** Word and Markdown, then the PDF entries. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return [
+      { Key: 'docx', Label: 'Word (.docx)', Icon: 'fa-solid fa-file-word', Description: 'Opens in Word' },
+      { Key: 'md', Label: 'Markdown (.md)', Icon: 'fa-brands fa-markdown', Description: 'Plain text with formatting marks' },
+      ...super.GetExportOptions(),
+    ];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key === 'docx') {
+      return this.OnExportDocx();
+    }
+    if (key === 'md') {
+      this.OnExportMarkdown();
+      return;
+    }
+    return super.RunExport(key);
   }
 
   /**

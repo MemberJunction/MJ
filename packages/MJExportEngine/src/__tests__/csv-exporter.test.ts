@@ -56,6 +56,35 @@ describe('CSVExporter', () => {
             expect(result.error).toContain('No columns');
         });
 
+        describe('spreadsheet formula injection', () => {
+            async function exportCell(value: unknown): Promise<string> {
+                const result = await exporter.export([{ Cell: value }]);
+                const [, cell] = new TextDecoder().decode(result.data).split('\r\n');
+                return cell;
+            }
+
+            it.each([
+                ['=HYPERLINK("http://evil.example","x")', `"'=HYPERLINK(""http://evil.example"",""x"")"`],
+                ['+SUM(A1:A9)', "'+SUM(A1:A9)"],
+                ['-2+3+cmd|x', "'-2+3+cmd|x"],
+                ['@SUM(A1)', "'@SUM(A1)"],
+                ['\t=1+1', "'\t=1+1"],
+            ])('prefixes the text cell %j with a quote so it is not run as a formula', async (value, expected) => {
+                expect(await exportCell(value)).toBe(expected);
+            });
+
+            it.each([
+                [-12.5, '-12.5'],
+                ['-12.50', '-12.50'],
+                ['+15551212', '+15551212'],
+                ['-1e5', '-1e5'],
+                ['Alice', 'Alice'],
+                ['a=b', 'a=b'],
+            ])('leaves %j as it is', async (value, expected) => {
+                expect(await exportCell(value)).toBe(expected);
+            });
+        });
+
         it('should handle values with commas', async () => {
             const data = [{ Description: 'Hello, World' }];
             const result = await exporter.export(data);

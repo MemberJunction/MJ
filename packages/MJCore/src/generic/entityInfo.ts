@@ -5,6 +5,7 @@ import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { MarkupFilterOptions, RowFilterParameterBinder, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
+import type { DatabasePlatform } from "./platformSQL"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString, CanonicalPrimaryKeyValue } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
@@ -5578,14 +5579,14 @@ export class EntityInfo extends BaseInfo {
      * @param returnPrefix
      * @returns
      */
-    public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+    public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, platform?: DatabasePlatform): string {
         // Central exemption check: if the user holds any role that grants this
         // permission without an RLS filter, they are exempt — return no filter.
         if (this.UserExemptFromRowLevelSecurity(user, type)) {
             return '';
         }
 
-        const sRLSSQL = this.roleRowFilterClause(user, type, null);
+        const sRLSSQL = this.roleRowFilterClause(user, type, null, platform);
         if (sRLSSQL.length === 0) {
             return '';
         }
@@ -5593,20 +5594,35 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Resolves the database platform for RLS filter variant selection: uses an explicit
+     * caller-supplied platform when provided, otherwise reads `PlatformKey` from the
+     * entity's owning metadata provider when available.
+     */
+    private resolveRLSPlatform(explicitPlatform?: DatabasePlatform): DatabasePlatform | undefined {
+        if (explicitPlatform) {
+            return explicitPlatform;
+        }
+        const provider = MetadataProviderFor(this) as { PlatformKey?: DatabasePlatform } | undefined;
+        return provider?.PlatformKey;
+    }
+
+    /**
      * The role layer of the row filter, '' when no role filter applies. Callers check the
      * role-RLS exemption first. With a `binder`, user values bind as parameters
      * ({@link RowLevelSecurityFilterInfo.MarkupFilterParameterized}).
      */
-    private roleRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
+    private roleRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null, platform?: DatabasePlatform): string {
         const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
         if (!userRLS || userRLS.length === 0) {
             return '';
         }
+        const resolvedPlatform = this.resolveRLSPlatform(platform);
+        const options: MarkupFilterOptions | undefined = resolvedPlatform ? { platform: resolvedPlatform } : undefined;
         // The user is NOT exempt, so every filter that applies is OR'd together. Each filter is
         // parenthesized, and a group of two or more is parenthesized as a whole, so a predicate the
         // caller ANDs beside the clause (`WHERE ID = @p0 AND <clause>`) applies to every filter rather
         // than binding to the first one only. A single filter keeps its one pair of parentheses.
-        const terms = userRLS.map((rls) => `(${binder ? rls.MarkupFilterParameterized(user, binder) : rls.MarkupFilterText(user)})`);
+        const terms = userRLS.map((rls) => `(${binder ? rls.MarkupFilterParameterized(user, binder, options) : rls.MarkupFilterText(user, options)})`);
         return terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
     }
 
@@ -5637,8 +5653,8 @@ export class EntityInfo extends BaseInfo {
      * must call this without a binder: the literal clause is what keeps two users from sharing
      * a cached result.
      */
-    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, binder?: RowFilterParameterBinder): string {
-        const sql = this.effectiveRowFilterClause(user, type, binder ?? null);
+    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, binder?: RowFilterParameterBinder, platform?: DatabasePlatform): string {
+        const sql = this.effectiveRowFilterClause(user, type, binder ?? null, platform);
         if (sql.length === 0) {
             return '';
         }
@@ -5646,16 +5662,16 @@ export class EntityInfo extends BaseInfo {
     }
 
     /** The composed row-filter clause without a prefix; literal when `binder` is null. */
-    private effectiveRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
+    private effectiveRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null, platform?: DatabasePlatform): string {
         const layers: string[] = [];
         // The literal form goes through GetUserRowLevelSecurityWhereClause, which applies the exemption itself.
         const roleClause = binder === null
-            ? this.GetUserRowLevelSecurityWhereClause(user, type, '')
-            : (this.UserExemptFromRowLevelSecurity(user, type) ? '' : this.roleRowFilterClause(user, type, binder));
+            ? this.GetUserRowLevelSecurityWhereClause(user, type, '', platform)
+            : (this.UserExemptFromRowLevelSecurity(user, type) ? '' : this.roleRowFilterClause(user, type, binder, platform));
         if (roleClause && roleClause.length > 0) {
             layers.push(`(${roleClause})`);
         }
-        const keyClause = this.getAPIKeyRowFilterClause(user, type, binder);
+        const keyClause = this.getAPIKeyRowFilterClause(user, type, binder, platform);
         if (keyClause && keyClause.length > 0) {
             layers.push(`(${keyClause})`);
         }
@@ -5670,7 +5686,7 @@ export class EntityInfo extends BaseInfo {
      * or unloaded) contributes `(1=0)`, and unresolved tokens inside a filter collapse it
      * to `(1=0)` via the match-nothing markup mode.
      */
-    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
+    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null, platform?: DatabasePlatform): string {
         const bindings = user?.APIKeyRowFilters;
         if (!bindings || bindings.length === 0) {
             return '';
@@ -5679,6 +5695,7 @@ export class EntityInfo extends BaseInfo {
         if (mine.length === 0) {
             return '';
         }
+        const resolvedPlatform = this.resolveRLSPlatform(platform);
         const clauses = [...mine]
             .sort((a, b) => a.FilterID.localeCompare(b.FilterID)) // deterministic order for the cache fingerprint (INV-2)
             .map(b => {
@@ -5687,7 +5704,10 @@ export class EntityInfo extends BaseInfo {
                     LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
                     return '(1=0)';
                 }
-                const options: MarkupFilterOptions = { unresolvedBehavior: 'match-nothing' };
+                const options: MarkupFilterOptions = {
+                    unresolvedBehavior: 'match-nothing',
+                    ...(resolvedPlatform ? { platform: resolvedPlatform } : {}),
+                };
                 return `(${binder ? filter.MarkupFilterParameterized(user, binder, options) : filter.MarkupFilterText(user, options)})`;
             });
         return clauses.join(' AND ');

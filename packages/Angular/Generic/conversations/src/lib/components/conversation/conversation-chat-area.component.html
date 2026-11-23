@@ -40,6 +40,7 @@
       showArtifactIndicator: showArtifactIndicator
     }"></ng-container>
   } @else if (conversation || HasPreConversationHeader) {
+    @if (!AccessDeniedMessage) {
     <!-- Default header — also renders BEFORE a conversation exists when the
          embedder has pre-conversation chrome to surface (currently just the
          mode picker — agent / share / export / members / artifacts all
@@ -64,6 +65,16 @@
               <span>with <b>{{ CurrentOwnerAgentName }}</b></span>
             </span>
           }
+        }
+        @if (IsSideThread) {
+          <span
+            class="side-thread-privacy-badge"
+            [class.side-thread-privacy-badge--shared]="IsSideThreadExplicitlyShared"
+            data-testid="side-thread-privacy-badge"
+            [title]="IsSideThreadExplicitlyShared ? 'Explicitly shared side thread' : 'Private side conversation — only visible to you unless explicitly shared'">
+            <i class="fa-solid" [class.fa-lock]="!IsSideThreadExplicitlyShared" [class.fa-code-branch]="IsSideThreadExplicitlyShared"></i>
+            <span>{{ IsSideThreadExplicitlyShared ? 'Shared side thread' : 'Private side thread' }}</span>
+          </span>
         }
         @if (sharedByBadge) {
           <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
@@ -177,6 +188,7 @@
         }
       </div>
     </div>
+    }
   }
 
   <!-- Header title. Main: the conversation name. A fork: the path, the conversation and each parent fork
@@ -269,6 +281,13 @@
             <mj-loading text="Loading conversation..." size="large"></mj-loading>
           </div>
         }
+      } @else if (AccessDeniedMessage) {
+        <div class="conversation-access-denied" data-testid="conversation-access-denied">
+          <mj-empty-state
+            Icon="fa-solid fa-lock"
+            Title="Access Denied"
+            [Message]="AccessDeniedMessage" />
+        </div>
       } @else if ((isNewConversation || !conversationId) && !suppressNewConversationEmptyState) {
         <!-- emptyState slot — when a consumer projects mjChatSlot="emptyState",
              they take over the entire empty-state region (including any send
@@ -401,6 +420,7 @@
               [ReadOnly]="EffectiveReadOnly"
               [AllowStopRun]="AllowStopRun"
               [InFlightCount]="InFlightCount"
+              [StoppableDetailIds]="StoppableDetailIds"
               [OpenLinksInNewTab]="OpenLinksInNewTab"
               [assistantDisplayName]="assistantDisplayName"
               [assistantAvatarUrl]="assistantAvatarUrl"

@@ -31,6 +31,12 @@ export interface GraphTypeDescriptor {
     /** Sort and priority rank order (lower = higher priority). */
     readonly Rank: number;
     readonly IconClass?: string | null;
+    /** Authority tier given to sources feeding graphs of this type when the source names none. `null` = unranked. */
+    readonly DefaultAuthorityTierID?: string | null;
+    /** Concept taxonomy mode used when a source names none. */
+    readonly DefaultConceptTaxonomyMode?: ConceptTaxonomyMode | null;
+    /** Metadata grounding depth used when a source names none. */
+    readonly DefaultGroundingMode?: GraphGroundingMode | null;
 }
 
 /** Descriptor for a row in `MJ: Graph Concept Types` (`__mj.GraphConceptType`). */
@@ -72,70 +78,62 @@ export function GetConceptTypeRank(
 }
 
 /**
- * Governance / evidentiary weight of a source document or concept.
- * Seeded `MJ: Graph Authority Tiers` names plus any organization-configured authority tier defined in `MJ: Graph Authority Tiers`.
- * Higher-ranked tiers outrank lower tiers when resolving contradictions across multiple Content Sources.
+ * Name of a row in `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier`). Tiers are pure metadata:
+ * an organization renames, adds, removes, or re-ranks them in that table, and no code knows the names.
  */
-export type GraphAuthorityTier =
-    | 'Bylaws'
-    | 'BoardPolicy'
-    | 'Board Policy'
-    | 'ExecutiveSOP'
-    | 'Executive SOP'
-    | 'DepartmentPractice'
-    | 'Department Practice'
-    | 'Reference'
-    | 'Inferred'
-    | (string & {});
+export type GraphAuthorityTier = string;
 
 /** Descriptor for a row in `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier`). */
 export interface GraphAuthorityTierDescriptor {
     readonly ID: string;
     readonly Name: GraphAuthorityTier;
     readonly Description?: string | null;
-    /** Evidentiary precedence rank (higher = more authoritative, e.g., Bylaws = 100, Reference = 20). */
+    /** Evidentiary precedence rank (higher = more authoritative). */
     readonly Rank: number;
     readonly IconClass?: string | null;
 }
 
-/** Numeric precedence rank for seeded `GraphAuthorityTier` values (higher = more authoritative). */
-export const AuthorityTierPrecedence: Readonly<Record<string, number>> = {
-    Bylaws: 100,
-    BoardPolicy: 80,
-    'Board Policy': 80,
-    ExecutiveSOP: 60,
-    'Executive SOP': 60,
-    DepartmentPractice: 40,
-    'Department Practice': 40,
-    Reference: 20,
-    Inferred: 10,
-} as const;
+/** Rank of a source or concept that carries no authority tier, or one that matches no configured tier. Below every real tier. */
+export const UNRANKED_AUTHORITY_RANK = 0;
+
+/** Display label for a source or concept with no authority tier. Never compared against tier names. */
+export const UNRANKED_AUTHORITY_LABEL = 'Unranked';
+
+/** Normalizes a tier name for matching: case-insensitive and whitespace-insensitive (`BoardPolicy` matches `Board Policy`). */
+function normalizeTierName(name: string): string {
+    return name.trim().toLowerCase().replace(/\s+/g, '');
+}
 
 /**
- * Returns the numeric precedence rank of an authority tier (higher = more authoritative),
- * consulting organization-configured `MJ: Graph Authority Tiers` descriptors first and
- * falling back to {@link AuthorityTierPrecedence} (default `20`).
+ * Finds the configured `MJ: Graph Authority Tiers` row for a tier reference, which may be the row's
+ * ID or its name (matched case- and whitespace-insensitively). Returns `null` when nothing matches.
+ */
+export function FindAuthorityTier(
+    tierNameOrID: string | null | undefined,
+    configuredTiers: readonly GraphAuthorityTierDescriptor[],
+): GraphAuthorityTierDescriptor | null {
+    const ref = tierNameOrID?.trim();
+    if (!ref || configuredTiers.length === 0) {
+        return null;
+    }
+    const lowerRef = ref.toLowerCase();
+    const byID = configuredTiers.find((t) => t.ID.trim().toLowerCase() === lowerRef);
+    if (byID) {
+        return byID;
+    }
+    const normalized = normalizeTierName(ref);
+    return configuredTiers.find((t) => normalizeTierName(t.Name) === normalized) ?? null;
+}
+
+/**
+ * Precedence rank of an authority tier (higher = more authoritative), read only from the configured
+ * `MJ: Graph Authority Tiers` rows. A missing or unmatched tier ranks {@link UNRANKED_AUTHORITY_RANK}.
  */
 export function GetAuthorityTierRank(
-    tier: GraphAuthorityTier | undefined | null,
-    configuredTiers?: readonly GraphAuthorityTierDescriptor[],
+    tierNameOrID: GraphAuthorityTier | null | undefined,
+    configuredTiers: readonly GraphAuthorityTierDescriptor[],
 ): number {
-    if (!tier) return AuthorityTierPrecedence.Reference;
-    const normalized = tier.trim().toLowerCase().replace(/\s+/g, '');
-    if (configuredTiers && configuredTiers.length > 0) {
-        const match = configuredTiers.find(
-            (t) =>
-                t.Name.trim().toLowerCase().replace(/\s+/g, '') === normalized ||
-                t.ID.trim().toLowerCase() === tier.trim().toLowerCase(),
-        );
-        if (match) return match.Rank;
-    }
-    for (const [key, rank] of Object.entries(AuthorityTierPrecedence)) {
-        if (key.toLowerCase().replace(/\s+/g, '') === normalized) {
-            return rank;
-        }
-    }
-    return AuthorityTierPrecedence.Reference;
+    return FindAuthorityTier(tierNameOrID, configuredTiers)?.Rank ?? UNRANKED_AUTHORITY_RANK;
 }
 
 /**
@@ -163,101 +161,106 @@ export type GraphGroundingMode =
 
 /**
  * Per-source or per-run Graph Overlay configuration stored under `ContentSource.Configuration.GraphOverlay`.
+ * Every field is optional; what a source leaves unset comes from the target graph's `MJ: Graph Types` row.
  */
 export interface ContentSourceGraphOverlayConfig {
     /** When true, runs concept & graph-edge synthesis over ingested Content Items and Chunks. */
     EnableGraphOverlay?: boolean;
     /** Target `MJ: Graphs` ID. Overrides or supplements `ContentSource.GraphID`. */
     GraphID?: string | null;
-    /** Target graph's `GraphType` name, used to select sensible defaults (`'Canon'` vs `'Knowledge'`). */
+    /** Informational graph type name. The real type is read from the target graph's `GraphTypeID`. */
     TargetGraphType?: SemanticGraphType;
-    /** Explicit override or resolved `GraphType.IsCanon` flag indicating whether the target graph feeds institutional Canon. */
+    /** Used only when the target graph's type is not known; the graph type's `IsCanon` always wins. */
     IsCanon?: boolean;
-    /** How new concepts are handled. Defaults to `'propose-only'` when `IsCanon` is true and `'auto-grow'` otherwise. */
+    /** How new concepts are handled. Defaults to the graph type's `DefaultConceptTaxonomyMode`. */
     ConceptTaxonomyMode?: ConceptTaxonomyMode;
-    /** Authority tier stamped on concepts and `SourcedFrom` edges originating from this Content Source. */
+    /** Authority tier (name or ID) stamped on concepts and edges from this source. Defaults to the graph type's `DefaultAuthorityTierID`. */
     AuthorityTier?: GraphAuthorityTier;
-    /** Metadata grounding depth. Defaults to `'full-canon'` when `IsCanon` is true and `'none'` otherwise. */
+    /** Authority tier ID; takes precedence over `AuthorityTier`. */
+    AuthorityTierID?: string | null;
+    /** Metadata grounding depth. Defaults to the graph type's `DefaultGroundingMode`. */
     GroundingMode?: GraphGroundingMode;
     /** Minimum lexical/vector similarity score (0..1) to bind a chunk/tag cluster to an existing `GraphConcept`. Default 0.82. */
     ConceptMatchThreshold?: number;
     /** Maximum new `GraphConcept`s that may be proposed/created in a single pipeline run. `null` = unlimited. */
     MaxNewConceptsPerRun?: number | null;
-    /** Registration key of the `BaseConceptSynthesizer` implementation to use. Defaults to `'ManagedPrompt'`. */
+    /** Registration key of the `BaseConceptSynthesizer` implementation to use. Defaults to `'Deterministic'`. */
     SynthesizerKey?: string;
 }
 
-/** Fully-resolved Graph Overlay settings with defaults filled in based on `TargetGraphType` and `IsCanon`. */
+/** Fully-resolved Graph Overlay settings. */
 export interface ResolvedGraphOverlayConfig {
     readonly EnableGraphOverlay: boolean;
     readonly GraphID: string | null;
-    readonly TargetGraphType: SemanticGraphType;
+    /** The target graph's type name, or the configured name when the type is not known; `null` when neither is. */
+    readonly TargetGraphType: SemanticGraphType | null;
     readonly IsCanon: boolean;
     readonly ConceptTaxonomyMode: ConceptTaxonomyMode;
-    readonly AuthorityTier: GraphAuthorityTier;
+    /** Authority tier name, or `null` when the source is unranked. */
+    readonly AuthorityTier: GraphAuthorityTier | null;
+    /** Authority tier ID when it resolved against `MJ: Graph Authority Tiers`; otherwise `null`. */
+    readonly AuthorityTierID: string | null;
     readonly GroundingMode: GraphGroundingMode;
     readonly ConceptMatchThreshold: number;
     readonly MaxNewConceptsPerRun: number | null;
     readonly SynthesizerKey: string;
 }
 
+/** Metadata used to fill in what a source's configuration leaves unset. */
+export interface GraphOverlayMetadata {
+    /** The `MJ: Graph Types` row of the target graph, when known. */
+    readonly GraphType?: GraphTypeDescriptor | null;
+    /** Active `MJ: Graph Authority Tiers` rows. When given, a configured tier must match one of them. */
+    readonly AuthorityTiers?: readonly GraphAuthorityTierDescriptor[];
+}
+
 /**
- * Resolves `ContentSourceGraphOverlayConfig` across configuration layers
- * (`ContentSourceType.Configuration` → `ContentSource.Configuration` → Run `Configuration`),
- * applying defaults tailored to whether the target graph is canonical (`IsCanon` or `TargetGraphType === 'Canon'`).
+ * Converts a `MJ: Graph Types.DefaultConceptTaxonomyMode` value (written for people, e.g. `Propose Only`)
+ * to the pipeline's {@link ConceptTaxonomyMode}. Returns `null` for an unrecognized value.
  */
-export function ResolveGraphOverlayConfig(
+export function TaxonomyModeFromGraphTypeValue(value: string | null | undefined): ConceptTaxonomyMode | null {
+    const mode = toPipelineToken(value);
+    return isValidTaxonomyMode(mode) ? mode : null;
+}
+
+/**
+ * Converts a `MJ: Graph Types.DefaultGroundingMode` value (e.g. `Schema and Queries`) to the
+ * pipeline's {@link GraphGroundingMode}. Returns `null` for an unrecognized value.
+ */
+export function GroundingModeFromGraphTypeValue(value: string | null | undefined): GraphGroundingMode | null {
+    const mode = toPipelineToken(value);
+    return isValidGroundingMode(mode) ? mode : null;
+}
+
+function toPipelineToken(value: string | null | undefined): string {
+    return (value ?? '').trim().toLowerCase().replace(/\s+/g, '-');
+}
+
+/** Thrown when a source configures an authority tier that matches no active `MJ: Graph Authority Tiers` row. */
+export class UnknownAuthorityTierError extends Error {
+    constructor(public readonly TierReference: string) {
+        super(
+            `Graph overlay authority tier '${TierReference}' does not match any active row in 'MJ: Graph Authority Tiers'. ` +
+                `Use an existing tier name or ID, or add the tier.`,
+        );
+        this.name = 'UnknownAuthorityTierError';
+    }
+}
+
+/**
+ * Merges `ContentSourceGraphOverlayConfig` across configuration layers
+ * (`ContentSourceType.Configuration` → `ContentSource.Configuration` → Run `Configuration`) without
+ * applying any defaults, so {@link FinalizeGraphOverlayConfig} can tell what was set from what was not.
+ */
+export function MergeGraphOverlayConfig(
     explicitGraphID: string | null | undefined,
     ...configurations: Array<Readonly<Record<string, unknown>> | undefined>
-): ResolvedGraphOverlayConfig {
+): ContentSourceGraphOverlayConfig {
     const merged: ContentSourceGraphOverlayConfig = {};
-
     for (let i = 0; i < configurations.length; i++) {
         const cfg = configurations[i];
         if (cfg) {
-            const optionsObj = cfg.Options as Record<string, unknown> | undefined;
-            const overlay = (cfg.GraphOverlay ?? optionsObj?.GraphOverlay ?? cfg) as Partial<ContentSourceGraphOverlayConfig>;
-
-            if (typeof overlay.EnableGraphOverlay === 'boolean') {
-                merged.EnableGraphOverlay = overlay.EnableGraphOverlay;
-            }
-            if (typeof overlay.GraphID === 'string' && overlay.GraphID.trim().length > 0) {
-                merged.GraphID = overlay.GraphID.trim();
-            }
-            if (isValidGraphType(overlay.TargetGraphType)) {
-                merged.TargetGraphType = overlay.TargetGraphType.trim();
-            }
-            if (typeof overlay.IsCanon === 'boolean') {
-                merged.IsCanon = overlay.IsCanon;
-            }
-            if (isValidTaxonomyMode(overlay.ConceptTaxonomyMode)) {
-                merged.ConceptTaxonomyMode = overlay.ConceptTaxonomyMode;
-            }
-            if (isValidAuthorityTier(overlay.AuthorityTier)) {
-                merged.AuthorityTier = overlay.AuthorityTier;
-            }
-            if (isValidGroundingMode(overlay.GroundingMode)) {
-                merged.GroundingMode = overlay.GroundingMode;
-            }
-            if (
-                typeof overlay.ConceptMatchThreshold === 'number' &&
-                Number.isFinite(overlay.ConceptMatchThreshold) &&
-                overlay.ConceptMatchThreshold >= 0 &&
-                overlay.ConceptMatchThreshold <= 1
-            ) {
-                merged.ConceptMatchThreshold = overlay.ConceptMatchThreshold;
-            }
-            if (
-                overlay.MaxNewConceptsPerRun === null ||
-                (typeof overlay.MaxNewConceptsPerRun === 'number' &&
-                    Number.isFinite(overlay.MaxNewConceptsPerRun) &&
-                    overlay.MaxNewConceptsPerRun >= 0)
-            ) {
-                merged.MaxNewConceptsPerRun = overlay.MaxNewConceptsPerRun;
-            }
-            if (typeof overlay.SynthesizerKey === 'string' && overlay.SynthesizerKey.trim().length > 0) {
-                merged.SynthesizerKey = overlay.SynthesizerKey.trim();
-            }
+            mergeOverlayLayer(merged, readOverlayLayer(cfg));
         }
         // The first-class ContentSource.GraphID FK column takes precedence over any GraphID
         // inside source-level JSON configuration (configurations[0]), while still allowing
@@ -266,37 +269,128 @@ export function ResolveGraphOverlayConfig(
             merged.GraphID = explicitGraphID.trim();
         }
     }
+    if (!merged.GraphID && explicitGraphID?.trim()) {
+        merged.GraphID = explicitGraphID.trim();
+    }
+    return merged;
+}
 
-    const graphID = merged.GraphID || explicitGraphID?.trim() || null;
-    const graphType: SemanticGraphType = merged.TargetGraphType ?? 'Knowledge';
-    const isCanon = merged.IsCanon ?? graphType === 'Canon';
-
+/**
+ * Fills in what a merged configuration leaves unset, from the target graph's type and the active
+ * authority tiers. Precedence for each setting: the source's own value, then the graph type's default.
+ * When no graph type is known the only fallbacks are structural (a Canon graph never auto-approves,
+ * grounding is off, and the source is unranked); no tier, mode, or type is ever chosen by name.
+ *
+ * @throws {UnknownAuthorityTierError} when tiers are supplied and the configured tier matches none of them.
+ */
+export function FinalizeGraphOverlayConfig(
+    merged: ContentSourceGraphOverlayConfig,
+    metadata: GraphOverlayMetadata = {},
+): ResolvedGraphOverlayConfig {
+    const graphType = metadata.GraphType ?? null;
+    const isCanon = graphType ? graphType.IsCanon : (merged.IsCanon ?? false);
+    const tier = resolveConfiguredTier(merged, graphType, metadata.AuthorityTiers ?? []);
     return {
-        EnableGraphOverlay: merged.EnableGraphOverlay ?? graphID !== null,
-        GraphID: graphID,
-        TargetGraphType: graphType,
+        EnableGraphOverlay: merged.EnableGraphOverlay ?? merged.GraphID != null,
+        GraphID: merged.GraphID ?? null,
+        TargetGraphType: graphType?.Name ?? merged.TargetGraphType ?? null,
         IsCanon: isCanon,
-        ConceptTaxonomyMode: merged.ConceptTaxonomyMode ?? (isCanon ? 'propose-only' : 'auto-grow'),
-        AuthorityTier: merged.AuthorityTier ?? (isCanon ? 'ExecutiveSOP' : 'Reference'),
-        GroundingMode: merged.GroundingMode ?? (isCanon ? 'full-canon' : 'none'),
+        ConceptTaxonomyMode:
+            merged.ConceptTaxonomyMode ?? graphType?.DefaultConceptTaxonomyMode ?? (isCanon ? 'propose-only' : 'auto-grow'),
+        AuthorityTier: tier.Name,
+        AuthorityTierID: tier.ID,
+        GroundingMode: merged.GroundingMode ?? graphType?.DefaultGroundingMode ?? 'none',
         ConceptMatchThreshold: merged.ConceptMatchThreshold ?? 0.82,
         MaxNewConceptsPerRun: merged.MaxNewConceptsPerRun ?? null,
         SynthesizerKey: merged.SynthesizerKey ?? 'Deterministic',
     };
 }
 
-function isValidGraphType(val: unknown): val is SemanticGraphType {
+/**
+ * Merges configuration layers and fills in defaults in one step. Callers that know the target graph's
+ * type and the active tiers should pass them, so defaults come from metadata.
+ */
+export function ResolveGraphOverlayConfig(
+    explicitGraphID: string | null | undefined,
+    ...configurations: Array<Readonly<Record<string, unknown>> | undefined>
+): ResolvedGraphOverlayConfig {
+    return FinalizeGraphOverlayConfig(MergeGraphOverlayConfig(explicitGraphID, ...configurations));
+}
+
+/** The tier a source resolves to: its own reference, else the graph type's default, else unranked. */
+function resolveConfiguredTier(
+    merged: ContentSourceGraphOverlayConfig,
+    graphType: GraphTypeDescriptor | null,
+    tiers: readonly GraphAuthorityTierDescriptor[],
+): { Name: string | null; ID: string | null } {
+    const configuredRef = merged.AuthorityTierID?.trim() || merged.AuthorityTier?.trim() || null;
+    if (configuredRef) {
+        if (tiers.length === 0) {
+            // Tiers not loaded: keep the reference as given; it is ranked when tiers are available.
+            return { Name: merged.AuthorityTier?.trim() || null, ID: merged.AuthorityTierID?.trim() || null };
+        }
+        const match = FindAuthorityTier(configuredRef, tiers);
+        if (!match) {
+            throw new UnknownAuthorityTierError(configuredRef);
+        }
+        return { Name: match.Name, ID: match.ID };
+    }
+    const defaultTier = FindAuthorityTier(graphType?.DefaultAuthorityTierID, tiers);
+    if (defaultTier) {
+        return { Name: defaultTier.Name, ID: defaultTier.ID };
+    }
+    return { Name: null, ID: graphType?.DefaultAuthorityTierID?.trim() || null };
+}
+
+/**
+ * Reads one configuration layer. Accepts both the pipeline keys (`EnableGraphOverlay`, `AuthorityTier`)
+ * and the documented `IContentSourceGraphOverlayConfig` JSON keys (`Enabled`, `DefaultAuthorityTier`,
+ * `DefaultAuthorityTierID`), so either spelling configures the same thing.
+ */
+function readOverlayLayer(cfg: Readonly<Record<string, unknown>>): Record<string, unknown> {
+    const optionsObj = cfg.Options as Record<string, unknown> | undefined;
+    const overlay = (cfg.GraphOverlay ?? optionsObj?.GraphOverlay ?? cfg) as Record<string, unknown>;
+    return {
+        ...overlay,
+        EnableGraphOverlay: overlay.EnableGraphOverlay ?? overlay.Enabled,
+        AuthorityTier: overlay.AuthorityTier ?? overlay.DefaultAuthorityTier,
+        AuthorityTierID: overlay.AuthorityTierID ?? overlay.DefaultAuthorityTierID,
+    };
+}
+
+function mergeOverlayLayer(merged: ContentSourceGraphOverlayConfig, overlay: Record<string, unknown>): void {
+    if (typeof overlay.EnableGraphOverlay === 'boolean') merged.EnableGraphOverlay = overlay.EnableGraphOverlay;
+    if (isNonEmptyString(overlay.GraphID)) merged.GraphID = overlay.GraphID.trim();
+    if (isNonEmptyString(overlay.TargetGraphType)) merged.TargetGraphType = overlay.TargetGraphType.trim();
+    if (typeof overlay.IsCanon === 'boolean') merged.IsCanon = overlay.IsCanon;
+    if (isValidTaxonomyMode(overlay.ConceptTaxonomyMode)) merged.ConceptTaxonomyMode = overlay.ConceptTaxonomyMode;
+    if (isNonEmptyString(overlay.AuthorityTier)) merged.AuthorityTier = overlay.AuthorityTier.trim();
+    if (isNonEmptyString(overlay.AuthorityTierID)) merged.AuthorityTierID = overlay.AuthorityTierID.trim();
+    if (isValidGroundingMode(overlay.GroundingMode)) merged.GroundingMode = overlay.GroundingMode;
+    if (isUnitInterval(overlay.ConceptMatchThreshold)) merged.ConceptMatchThreshold = overlay.ConceptMatchThreshold;
+    if (overlay.MaxNewConceptsPerRun === null) merged.MaxNewConceptsPerRun = null;
+    else if (isNonNegativeNumber(overlay.MaxNewConceptsPerRun)) merged.MaxNewConceptsPerRun = overlay.MaxNewConceptsPerRun;
+    if (isNonEmptyString(overlay.SynthesizerKey)) merged.SynthesizerKey = overlay.SynthesizerKey.trim();
+}
+
+function isNonEmptyString(val: unknown): val is string {
     return typeof val === 'string' && val.trim().length > 0;
 }
 
+function isUnitInterval(val: unknown): val is number {
+    return typeof val === 'number' && Number.isFinite(val) && val >= 0 && val <= 1;
+}
+
+function isNonNegativeNumber(val: unknown): val is number {
+    return typeof val === 'number' && Number.isFinite(val) && val >= 0;
+}
+
+/** True for a valid {@link ConceptTaxonomyMode}. */
 function isValidTaxonomyMode(val: unknown): val is ConceptTaxonomyMode {
     return val === 'constrained' || val === 'propose-only' || val === 'auto-grow';
 }
 
-function isValidAuthorityTier(val: unknown): val is GraphAuthorityTier {
-    return typeof val === 'string' && val.trim().length > 0;
-}
-
+/** True for a valid {@link GraphGroundingMode}. */
 function isValidGroundingMode(val: unknown): val is GraphGroundingMode {
     return val === 'none' || val === 'schema-and-queries' || val === 'full-canon';
 }

@@ -414,6 +414,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     const message = new Message();
     message.From = process.env.NOTIFICATION_FROM_EMAIL || 'notifications@memberjunction.com';
     message.To = user.Email;
+    message.Body = params.message;
     message.HTMLBodyTemplate = templateEntity;
     message.ContextData = params.templateData || {};
     message.Subject = params.title;

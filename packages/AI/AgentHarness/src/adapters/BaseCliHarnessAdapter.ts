@@ -1,5 +1,6 @@
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
+import { StripHarnessApiKeyEnvironment } from '../HarnessCredentialResolver.js';
 import { HarnessSessionConfig, HarnessTurnEvent } from '../types.js';
 import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
@@ -159,10 +160,14 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
      */
     protected startTurnProcess(input: string, isFirstTurn: boolean): HarnessProcess {
         const config = this.config!;
+        const env: Record<string, string> = { ...config.Environment };
+        if (config.AuthMode === 'cli-login') {
+            StripHarnessApiKeyEnvironment(env);
+        }
         return config.Executor.Run({
             Command: this.ExecutablePath,
             Args: this.BuildTurnArgs(input, isFirstTurn),
-            Environment: config.Environment,
+            Environment: env,
             WorkingDirectory: config.WorkspacePath,
             CancellationToken: config.CancellationToken,
         });

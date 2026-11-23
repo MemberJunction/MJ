@@ -15,20 +15,33 @@
 }
 
 <!--
-  Standard-form switch: only when a custom form hides the CodeGen form. Placed
-  above the anchor so the dynamically-created form renders below it.
+  Custom-view / standard-form notice strip: shown when a custom form hides the CodeGen form.
+  Switching between custom and standard views lives in the form toolbar's More (...) menu across
+  all viewports; the custom-view notice can be dismissed per entity via UserInfoEngine.
 -->
 @if (!Loading && ShowFormModeSwitch && HasStandardFormAlternative && !HidesModeStrip) {
   <div class="mj-form-host-mode-strip">
     <i class="fa-solid" [class.fa-wand-magic-sparkles]="FormMode === 'default'" [class.fa-table-list]="FormMode === 'standard'" aria-hidden="true"></i>
     <span class="mj-form-host-mode-text" aria-live="polite">
-      {{ FormMode === 'standard' ? 'Standard form — all form fields, same permissions.' : 'Custom view. Some fields may only be editable in the standard form.' }}
+      {{ FormMode === 'standard'
+        ? 'Standard form — all form fields, same permissions.'
+        : 'Custom view — some fields may only be editable in the standard form (available in the More menu).' }}
     </span>
-    <button #modeSwitch mjButton Variant="outline" Size="sm" type="button"
-      class="mj-form-host-mode-switch"
-      (click)="OnModeSwitchClick()">
-      {{ FormMode === 'standard' ? 'Back to custom view' : 'Open standard form' }}
-    </button>
+    @if (FormMode === 'standard') {
+      <button #modeSwitch mjButton Variant="outline" Size="sm" type="button"
+        class="mj-form-host-mode-switch"
+        (click)="OnModeSwitchClick()">
+        Back to custom view
+      </button>
+    } @else {
+      <button type="button"
+        class="mj-form-host-mode-dismiss"
+        aria-label="Dismiss custom view notice"
+        title="Dismiss notice for this entity"
+        (click)="DismissCustomViewBanner()">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
+    }
   </div>
 }
 

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { GRAPH_DEFAULT_EDGE_TYPE } from '../../../graph/BaseGraphEdgeProvider';
 import { RecordLinkEdgeProvider } from '../../../graph/providers/RecordLinkEdgeProvider';
 import { FakeGraphProvider, IDS } from '../graphTestFixtures';
 import { Caller, Ctx } from './providerTestContext';
@@ -42,6 +43,22 @@ describe('RecordLinkEdgeProvider', () => {
         const filter = provider.ReadsOf('MJ: Record Links')[0].Filter;
         expect(filter.match(/\[SourceEntityID\] = /g)).toHaveLength(1);
         expect(filter).toContain("'acc-1', 'acc-2'");
+    });
+
+    it('names an untyped link RelatedTo, which an edge-type filter written with or without the space matches', async () => {
+        const provider = new FakeGraphProvider();
+        provider.Rows = {
+            'MJ: Record Links': [
+                { ID: 'link-2', SourceEntityID: IDS.Accounts, SourceRecordID: 'acc-100', TargetEntityID: IDS.Contacts, TargetRecordID: 'con-200', LinkType: null },
+            ],
+        };
+        const nodes = [{ EntityName: 'Accounts', EntityID: IDS.Accounts, RecordID: 'acc-100' }];
+        const plain = await new RecordLinkEdgeProvider().GetEdges({ Nodes: nodes, Direction: 'Out' }, Ctx(provider, {}));
+        expect(plain.map((e) => e.TypeName)).toEqual([GRAPH_DEFAULT_EDGE_TYPE]);
+        for (const filter of ['RelatedTo', 'Related To']) {
+            const filtered = await new RecordLinkEdgeProvider().GetEdges({ Nodes: nodes, Direction: 'Out', EdgeTypes: [filter] }, Ctx(provider, {}));
+            expect(filtered).toHaveLength(1);
+        }
     });
 
     it('returns nothing for an empty frontier', async () => {

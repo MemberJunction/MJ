@@ -92,13 +92,17 @@ export function CompileFlowAgentToTaskGraph(
     agentID: string,
     agentName: string,
     reasoning?: string,
+    isolation?: FlowCompilerOptions['Isolation'],
 ): FlowCompileResult {
     const stepEntities = AIEngine.Instance.GetAgentSteps(agentID) ?? [];
     const pathEntities = stepEntities.flatMap((s) => AIEngine.Instance.GetPathsFromStep(s.ID) ?? []);
+    const resolvedIsolation =
+        isolation ?? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, agentID))?.Isolation;
 
     const options: FlowCompilerOptions = {
         WorkflowName: agentName,
         Reasoning: reasoning,
+        ...(resolvedIsolation ? { Isolation: resolvedIsolation } : {}),
         ResolveAgentName: (id) => AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, id))?.Name ?? null,
         ResolveActionName: (id) => ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, id))?.Name ?? null,
         ResolvePromptName: (id) => AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, id))?.Name ?? null,

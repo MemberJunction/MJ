@@ -8,11 +8,13 @@
 
 import { MJGlobal } from '@memberjunction/global';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import { BaseAgent } from './base-agent';
 
 /**
  * Creates the {@link BaseAgent} instance that runs `agent` (#4112): the subclass registered under the
- * agent's own trimmed `DriverClass`, or a plain `BaseAgent` when it declares none.
+ * agent's own trimmed `DriverClass` (or inherited from its `BaseAgentID` prototype chain when the
+ * derived agent leaves `DriverClass` null), or a plain `BaseAgent` when neither declares one.
  *
  * - **No agent-type fallback.** `AIAgentType.DriverClass` names a `BaseAgentType` subclass
  *   (`LoopAgentType`, `FlowAgentType`, …), a different registry; it never resolved a `BaseAgent`.
@@ -23,12 +25,18 @@ import { BaseAgent } from './base-agent';
  * - **An unregistered key throws.** Falling back to `BaseAgent` would run different code than the
  *   agent is configured for, with only a deduped console warning to show for it.
  *
- * @param agent The agent row (only `Name` and `DriverClass` are read).
+ * @param agent The agent row (`Name`, `DriverClass`, and optional `ID`/`BaseAgentID` for inheritance).
  * @returns The instance to call `Execute` on.
  * @throws When `DriverClass` is set and no `BaseAgent` subclass is registered under it.
  */
-export async function CreateAgentInstance(agent: Pick<MJAIAgentEntityExtended, 'Name' | 'DriverClass'>): Promise<BaseAgent> {
-    const driverClass = agent.DriverClass?.trim() || undefined;
+export async function CreateAgentInstance(
+    agent: Pick<MJAIAgentEntityExtended, 'Name' | 'DriverClass'> & Partial<Pick<MJAIAgentEntityExtended, 'ID' | 'BaseAgentID'>>
+): Promise<BaseAgent> {
+    let driverClass = agent.DriverClass?.trim() || undefined;
+    if (!driverClass && agent.BaseAgentID && agent.ID && typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+        const effective = AIEngine.Instance.ResolveEffectiveAgentProperties(agent as MJAIAgentEntityExtended);
+        driverClass = effective.DriverClass?.trim() || undefined;
+    }
     if (!driverClass) {
         return new BaseAgent();
     }
