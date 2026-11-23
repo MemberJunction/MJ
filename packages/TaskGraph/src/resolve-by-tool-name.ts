@@ -9,7 +9,7 @@
  *
  * @module @memberjunction/task-graph
  */
-import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LogError, RunView, ValidateDecisionReadResult, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { SanitizeToolName, SUB_AGENT_TOOL_PREFIX } from '@memberjunction/ai-agents';
 
@@ -89,17 +89,22 @@ export async function ResolveRecordsByNameOrToolName(
             ExtraFilter: options.ActiveOnly ? `Name IN (${quoted}) AND Status = 'Active'` : `Name IN (${quoted})`,
             Fields: options.ActiveOnly ? ['ID', 'Name', 'Status'] : ['ID', 'Name'],
             ResultType: 'simple',
+            IgnoreMaxRows: true,
         },
         options.ContextUser,
     );
 
-    if (!exact.Success) {
-        const reason = exact.ErrorMessage || `RunView on "${options.EntityName}" failed`;
+    const validatedExact = ValidateDecisionReadResult(exact, {
+        EntityName: options.EntityName,
+        OperationName: 'ResolveRecordsByNameOrToolName.exact',
+    });
+    if ('Error' in validatedExact) {
+        const reason = validatedExact.ErrorMessage || `RunView on "${options.EntityName}" failed`;
         LogError(`[TaskGraph] Failed to resolve "${options.EntityName}" by name: ${reason}`);
         return { Success: false, ErrorMessage: reason };
     }
 
-    const exactRows = exact.Results ?? [];
+    const exactRows = validatedExact.Results;
     const batchAllowedIds =
         options.FilterCandidates && exactRows.length > 0
             ? new Set((await options.FilterCandidates(exactRows)).map((r) => r.ID))
@@ -143,18 +148,23 @@ export async function ResolveRecordsByNameOrToolName(
                 ExtraFilter: `Status='Active'`,
                 Fields: ['ID', 'Name'],
                 ResultType: 'simple',
+                IgnoreMaxRows: true,
             },
             options.ContextUser,
         );
 
-        if (!fallback.Success) {
-            const reason = fallback.ErrorMessage || `Fallback RunView on "${options.EntityName}" failed`;
+        const validatedFallback = ValidateDecisionReadResult(fallback, {
+            EntityName: options.EntityName,
+            OperationName: 'ResolveRecordsByNameOrToolName.fallback',
+        });
+        if ('Error' in validatedFallback) {
+            const reason = validatedFallback.ErrorMessage || `Fallback RunView on "${options.EntityName}" failed`;
             LogError(`[TaskGraph] Failed to query active "${options.EntityName}" for tool-name resolution: ${reason}`);
             return { Success: false, ErrorMessage: reason };
         }
 
         const subAgentPrefix = (SUB_AGENT_TOOL_PREFIX ?? 'delegate_to_').toLowerCase();
-        const activeRecords = fallback.Results ?? [];
+        const activeRecords = validatedFallback.Results;
         for (const rawName of unresolvedForFallback) {
             const trimmed = rawName.trim();
             const stripped =

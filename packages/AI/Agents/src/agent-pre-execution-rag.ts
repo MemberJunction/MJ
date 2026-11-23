@@ -578,7 +578,9 @@ export class AgentPreExecutionRAG {
             source: r.SourceType,
             tags: r.Tags,
             matchedAt: r.MatchedAt?.toISOString?.() ?? null,
-            scopeID: r.ProviderId
+            scopeID: r.OriginatingScopeID ?? r.ProviderId,
+            ...(r.OriginatingScopeName !== undefined ? { scopeName: r.OriginatingScopeName } : {}),
+            ...(r.OriginatingScopes !== undefined ? { originatingScopes: r.OriginatingScopes } : {}),
         }));
 
         return {

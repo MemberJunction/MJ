@@ -76,5 +76,6 @@ export * from './TypedActionPolicyGuard';
 export * from './limits-diagnostics';
 export * from './runaway-governance';
 export * from './limits-operations';
+export * from './workflow-budget';
 
 
