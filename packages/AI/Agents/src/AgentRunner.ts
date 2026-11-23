@@ -18,7 +18,8 @@ import { ChatMessage } from '@memberjunction/ai';
 import {
     ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
     WithAgentRunDataTrustApplied, MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended,
-    AgentHandoffResult, AgentExecutionProgressCallback, AgentExecutionStreamingCallback
+    AgentHandoffResult, AgentExecutionProgressCallback, AgentExecutionStreamingCallback,
+    CreateWorkflowBudget, SynchronizeWorkflowBudget,
 } from '@memberjunction/ai-core-plus';
 import { ResolveConversationAgentPreset, AgentPresetSource } from '@memberjunction/ai-engine-base';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
@@ -248,6 +249,12 @@ export class AgentRunner {
                 Message: byUser ? 'Stopped by user' : `Stopped: ${run.ErrorMessage || 'the run was cancelled'}`,
             };
         }
+        if (run?.Status === 'Paused' || agentResult.paused) {
+            return {
+                Status: 'Complete',
+                Message: run?.Message || 'Paused awaiting human approval',
+            };
+        }
         return {
             Status: agentResult.success ? 'Complete' : 'Error',
             Message: run?.Message || (agentResult.success ? '✅ Completed' : run?.ErrorMessage || '❌ Failed'),
@@ -334,16 +341,25 @@ export class AgentRunner {
             // Ensure caller params carries the shared AgentTreeBudget reference before any shallow
             // clone occurs in hydrateConversationArtifacts or Execute.
             if (!params.treeBudget) {
-                params.treeBudget = {
-                    maxTreeSteps: params.maxTreeSteps,
-                    maxTreeTokens: params.maxTreeTokens,
-                    maxTreeCost: params.maxTreeCost,
-                    maxTreeDurationMs: params.maxTreeDurationMs,
-                    totalSteps: 0,
-                    totalTokens: 0,
-                    totalCost: 0,
-                    startedAtMs: Date.now()
-                };
+                params.treeBudget = CreateWorkflowBudget({
+                    MaxTreeSteps: params.maxTreeSteps,
+                    MaxTreeTokens: params.maxTreeTokens,
+                    MaxTreeCost: params.maxTreeCost,
+                    MaxTreeDurationMs: params.maxTreeDurationMs,
+                    WorkflowMaxCostUsd: params.workflowMaxCostUsd,
+                    WorkflowMaxDurationMs: params.workflowMaxDurationMs,
+                    WorkflowStartedAtMs: params.workflowStartedAtMs,
+                });
+            } else {
+                SynchronizeWorkflowBudget(params.treeBudget, {
+                    MaxTreeSteps: params.maxTreeSteps,
+                    MaxTreeTokens: params.maxTreeTokens,
+                    MaxTreeCost: params.maxTreeCost,
+                    MaxTreeDurationMs: params.maxTreeDurationMs,
+                    WorkflowMaxCostUsd: params.workflowMaxCostUsd,
+                    WorkflowMaxDurationMs: params.workflowMaxDurationMs,
+                    WorkflowStartedAtMs: params.workflowStartedAtMs,
+                });
             }
 
             // A conversation-linked run must see the conversation's artifacts no matter which

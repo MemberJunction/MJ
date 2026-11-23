@@ -154,7 +154,11 @@ export class DeterministicConceptSynthesizer extends BaseConceptSynthesizer {
             });
         }
 
-        // 3. Schema & Operational Grounding edges (when GroundingMode !== 'none')
+        // 3. Schema & Operational Grounding edges (when GroundingMode !== 'none').
+        // Describes, Defines, Measures and Implements run ARTIFACT -> CONCEPT: the entity, view, query,
+        // skill or action is the source and the concept the target. That is the direction the
+        // `MJ: Graph Edge Type Endpoints` rows enforce and the one `CanonGraphEngine.ExplainEntity`
+        // classifies (an entity `Describes` a concept; a query `Measures` it).
         if (OverlayConfig.GroundingMode !== 'none' && cluster.GroundingMatches.length > 0) {
             for (const match of cluster.GroundingMatches) {
                 const isOperational =
@@ -164,14 +168,14 @@ export class DeterministicConceptSynthesizer extends BaseConceptSynthesizer {
                 }
                 edges.push({
                     EdgeTypeName: match.SuggestedEdgeType,
-                    SourceEntityName: 'MJ: Graph Concepts',
-                    SourceRecordID: conceptRecordPlaceholder,
-                    TargetEntityName: match.Target.EntityName,
-                    TargetRecordID: match.Target.RecordID,
+                    SourceEntityName: match.Target.EntityName,
+                    SourceRecordID: match.Target.RecordID,
+                    TargetEntityName: 'MJ: Graph Concepts',
+                    TargetRecordID: conceptRecordPlaceholder,
                     Weight: Number(Math.min(1, match.MatchScore).toFixed(4)),
                     Confidence: Number(Math.min(1, match.MatchScore).toFixed(4)),
                     Origin: 'Inferred',
-                    Description: `Concept '${conceptName}' ${match.SuggestedEdgeType.toLowerCase()} ${match.Target.EntityName} '${match.Target.Name}'.`,
+                    Description: `${match.Target.EntityName} '${match.Target.Name}' ${match.SuggestedEdgeType.toLowerCase()} concept '${conceptName}'.`,
                     Attributes: {
                         targetName: match.Target.Name,
                         matchScore: match.MatchScore,

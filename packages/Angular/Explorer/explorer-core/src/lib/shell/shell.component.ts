@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewCon
 import { AngularAdapterService } from '@memberjunction/ng-react';
 import { ActivatedRoute, Router, NavigationEnd, NavigationError, NavigationCancel } from '@angular/router';
 import { Subscription, combineLatest, Subject } from 'rxjs';
-import { filter, takeUntil } from 'rxjs/operators';
+import { filter, skip, takeUntil } from 'rxjs/operators';
 import {
   ApplicationManager,
   WorkspaceStateManager,
@@ -42,6 +42,12 @@ import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AppSwitcherStyle } from './components/header/app-switcher.component';
 import { ApplyShellChromePolicy, BaseShellChromePolicy, ShellChromeFlags } from './shell-chrome-policy';
+import {
+  ApplyShellChromeVisibilityToFlags,
+  ShellChromePolicyService,
+  ShellChromeVisibility,
+  UNRESTRICTED_SHELL_CHROME_VISIBILITY
+} from './services/shell-chrome-policy.service';
 import { SetReadinessBeacon } from './readiness-beacon';
 import { FindDashboardTabForUrl, OpenDashboardForUrl, ParseAppDashboardUrl } from './dashboard-tab-for-url';
 import { ApplyDeepLinkToRestoredWorkspace } from './deep-link-workspace';
@@ -234,6 +240,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private animationSequence: AnimationStep[] = [];
   private currentAnimationIndex = 0;
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Zero-grant no-access state
+  public HasZeroApplicationGrants = false;
+  public IsRefreshingAccess = false;
+  public NoAccessRefreshError = '';
+
   // Loading recovery reset
   ShowResetOption = false;
 
@@ -457,11 +468,33 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // depend on when a template happens to be evaluated.
           recordOpenStyle: this.resolvedRecordOpenStyle,
       };
-      const flags = ApplyShellChromePolicy(baseline, this.chromePolicy);
-      if (engine.Loaded) {
+      const hostScoped = ApplyShellChromePolicy(baseline, this.chromePolicy);
+      const flags = ApplyShellChromeVisibilityToFlags(hostScoped, this.getPolicyVisibility());
+      if (engine.Loaded && (!this.shellChromePolicyService || UserInfoEngine.Instance.Loaded || Boolean(UserInfoEngine.Instance.LoadedForUserId))) {
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /**
+   * Resolves current shell chrome visibility from `ShellChromePolicyService`, falling back
+   * safely to unrestricted visibility when constructed outside Angular DI in unit test harnesses.
+   */
+  private getPolicyVisibility(): ShellChromeVisibility {
+      if (!this.shellChromePolicyService) {
+          return UNRESTRICTED_SHELL_CHROME_VISIBILITY;
+      }
+      let providerForPolicy: ShellComponent['ProviderToUse'] | null = null;
+      try {
+          providerForPolicy = this.ProviderToUse ?? null;
+      } catch {
+          providerForPolicy = null;
+      }
+      const restrictedAppId = this.authBase?.GetSessionScope?.()?.restrictedToApplicationId ?? null;
+      return this.shellChromePolicyService.GetVisibility({
+          provider: providerForPolicy,
+          sessionRestrictedToApplicationId: restrictedAppId,
+      });
   }
 
   /**
@@ -478,6 +511,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /** The policy's answer may have changed: forget the cached flags and repaint. */
   private onChromePolicyChanged(): void {
       this._chromeFlags = null;
+      if (this.userMenu) {
+          this.userMenu.UpdateContext({
+              showAdminMenuItems: this.ShowAdminMenuItems
+          });
+          this.refreshMenuElements();
+      }
       this.cdr.markForCheck();
   }
 
@@ -568,6 +607,45 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
   get ShowSearchPreview(): boolean {
       return this.chromeFlags.searchPreview;
+  }
+  /** Visibility gate for administrative and workspace-management user menu items. */
+  public get ShowAdminMenuItems(): boolean {
+      return this.getPolicyVisibility().showAdminMenuItems;
+  }
+  /** True when the authenticated session resolves to a restricted participant profile. */
+  public get IsRestrictedParticipant(): boolean {
+      return this.getPolicyVisibility().isRestrictedParticipant;
+  }
+  /** Command palette is only mounted when either global search or app switching is enabled. */
+  public get ShowCommandPalette(): boolean {
+      return this.ShowSearchBar || this.ShowAppSwitcher;
+  }
+  /** Template visibility predicate for user menu items under `@if`/`@for` control flow. */
+  public IsUserMenuItemVisible(item: UserMenuItem): boolean {
+      return this.ShowAdminMenuItems || (!item.adminOnly && !item.developerOnly);
+  }
+  /**
+   * Returns visible user-menu elements with leading, trailing, and consecutive
+   * `UserMenuDivider` entries stripped so hidden item groups never leave orphan dividers.
+   */
+  public GetVisibleUserMenuElements(): UserMenuElement[] {
+      const elements = this.UserMenuElements ?? [];
+      const result: UserMenuElement[] = [];
+      for (const element of elements) {
+          if (isUserMenuDivider(element)) {
+              if (result.length > 0 && !isUserMenuDivider(result[result.length - 1])) {
+                  result.push(element);
+              }
+              continue;
+          }
+          if (this.IsUserMenuItemVisible(element)) {
+              result.push(element);
+          }
+      }
+      if (result.length > 0 && isUserMenuDivider(result[result.length - 1])) {
+          result.pop();
+      }
+      return result;
   }
   /**
    * Two-layer gate for the unified Ctrl+K command palette (omnibar):
@@ -759,6 +837,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /** Warms the React runtime (CDN scripts) after login; see InitializeShell(). Field-injected so the constructor signature is unchanged. */
   private reactAdapter = inject(AngularAdapterService);
   private diagnosticsService = inject(MJDiagnosticsService, { optional: true });
+  private readonly shellChromePolicyService = inject(ShellChromePolicyService, { optional: true });
   public DiagnosticDialogOpen = false;
 
   constructor(
@@ -970,6 +1049,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.chromePolicy.Changed.subscribe(() => this.onChromePolicyChanged())
     );
 
+    // Sync participant shell chrome policy once startup/UserInfoEngine completes and on updates
+    if (this.shellChromePolicyService) {
+      this.shellChromePolicyService.Refresh({
+        provider: this.ProviderToUse,
+        sessionRestrictedToApplicationId: this.authBase.GetSessionScope()?.restrictedToApplicationId ?? null,
+      });
+      this.subscriptions.push(
+        this.shellChromePolicyService.Visibility$
+          .pipe(skip(1), takeUntil(this.destroy$))
+          .subscribe(() => this.onChromePolicyChanged())
+      );
+    }
+
     // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
     this.subscriptions.push(
       this.activityService.Activities$.subscribe(items => {
@@ -1044,6 +1136,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (apps.length === 0) {
           await this.handleNoAppsAvailable();
           return;
+        }
+
+        if (this.HasZeroApplicationGrants) {
+          this.HasZeroApplicationGrants = false;
+          this.NoAccessRefreshError = '';
+          this.IsRefreshingAccess = false;
+          this.shellChromePolicyService?.Refresh({
+            provider: this.ProviderToUse,
+            sessionRestrictedToApplicationId: this.authBase.GetSessionScope()?.restrictedToApplicationId ?? null,
+          });
+          this._chromeFlags = null;
+          this.cdr.detectChanges();
         }
 
         // App-locked session (e.g. magic-link): ignore whatever app the URL names
@@ -1129,7 +1233,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Replay any tab requests that were queued before we subscribed
     // This handles the case where ResourceResolver creates requests before shell is ready
     const queuedRequests = this.tabService.GetQueuedRequests();
-    if (queuedRequests.length > 0) {
+    if (queuedRequests.length > 0 && !this.HasZeroApplicationGrants) {
       for (const request of queuedRequests) {
         await this.processTabRequest(request);
       }
@@ -1243,15 +1347,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const isDeepLink = initialUrl.length > 1 && initialUrl !== '/';
 
     let deepLinkResolved = false;
-    if (isDeepLink) {
-      // User navigated to a specific URL — sync workspace to match the URL,
-      // not the other way around. The ResourceResolver will have created a tab
-      // for this URL; we just need to activate it.
-      deepLinkResolved = await this.syncWorkspaceWithUrl(this.router.url);
-    }
+    if (!this.HasZeroApplicationGrants) {
+      if (isDeepLink) {
+        // User navigated to a specific URL — sync workspace to match the URL,
+        // not the other way around. The ResourceResolver will have created a tab
+        // for this URL; we just need to activate it.
+        deepLinkResolved = await this.syncWorkspaceWithUrl(this.router.url);
+      }
 
-    if (!deepLinkResolved && !this.pendingAppPath) {
-      await this.restoreOrOpenFallbackTab();
+      if (!deepLinkResolved && !this.pendingAppPath) {
+        await this.restoreOrOpenFallbackTab();
+      }
     }
 
     // Force change detection to sync Angular's expected values after all async
@@ -1315,6 +1421,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Process a tab request (from subscription or replay)
    */
   private async processTabRequest(request: any): Promise<void> {
+    if (this.HasZeroApplicationGrants) {
+      return;
+    }
     const app = this.appManager.GetAppById(request.ApplicationId);
     const appColor = app?.GetColor() || '#757575';
 
@@ -1500,6 +1609,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    *   rather than the first navigation — that field's comment says why.
    */
   private async syncWorkspaceWithUrl(url: string, navigatedAt: number = this.lastNavigationAt): Promise<boolean> {
+    if (this.HasZeroApplicationGrants) {
+      return false;
+    }
     const config = this.workspaceManager.GetConfiguration();
     if (!config?.tabs) {
       return false;
@@ -1605,6 +1717,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * opens a default tab on the active or landing application so the loading screen always clears.
    */
   private async restoreOrOpenFallbackTab(): Promise<void> {
+    if (this.HasZeroApplicationGrants) {
+      return;
+    }
     const config = this.workspaceManager.GetConfiguration();
     const activeTab = config?.activeTabId
       ? config.tabs?.find(tab => tab.id === config.activeTabId)
@@ -3224,7 +3339,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
       appliedTheme: this.themeService.AppliedTheme,
-      feedbackEnabled
+      feedbackEnabled,
+      showAdminMenuItems: this.ShowAdminMenuItems
     };
 
     // Initialize menu
@@ -3277,6 +3393,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   async OnUserMenuItemClick(itemId: string): Promise<void> {
     if (!this.userMenu) return;
+
+    if (!this.ShowAdminMenuItems) {
+      const targetItem = this.userMenu.GetMenuItems().find(i => i.id === itemId);
+      if (targetItem && (targetItem.adminOnly || targetItem.developerOnly)) {
+        return;
+      }
+    }
 
     const result = await this.userMenu.HandleItemClick(itemId);
 
@@ -3877,7 +4000,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
 
       if (event.key === '/') {
-          if (event.defaultPrevented) {
+          if (event.defaultPrevented || this.shouldBlockCommandPaletteHotkey()) {
               return;
           }
           event.preventDefault();
@@ -3891,6 +4014,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
 
       if (event.key === 'k') {
+          if (event.defaultPrevented || !this.ShowSearchBar) {
+              return;
+          }
           const target = event.target as HTMLElement;
           const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
           if (inEditable && !this.UseOmnibar) {
@@ -3900,6 +4026,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           event.stopPropagation();
           this.OnHeaderSearchClick();
       }
+  }
+
+  private shouldBlockCommandPaletteHotkey(): boolean {
+      if (!this._chromeFlags && !this.shellChromePolicyService) {
+          return false;
+      }
+      return !this.ShowCommandPalette;
   }
 
   /** Header search affordance / Ctrl+K: route to whichever search surface applies.
@@ -4214,21 +4347,87 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   /**
-   * Handle when user has no apps available at all
+   * Handle when user has no apps available at all by rendering the branded no-access view
+   * inside the scoped Explorer shell chrome without mounting broken workspace tabs.
    */
   private async handleNoAppsAvailable(): Promise<void> {
     LogStatus('User has no applications available');
 
-    // Stop loading animation and show the dialog
+    this.ActiveApp = null;
+    this.HasZeroApplicationGrants = true;
+    this.IsRefreshingAccess = false;
+    this.shellChromePolicyService?.Refresh({
+      provider: this.getProviderSafe(),
+      sessionRestrictedToApplicationId: this.authBase.GetSessionScope()?.restrictedToApplicationId ?? null,
+    });
+    this._chromeFlags = null;
+    if (this.userMenu) {
+      this.userMenu.UpdateContext({
+        showAdminMenuItems: this.ShowAdminMenuItems,
+      });
+      this.refreshMenuElements();
+    }
+
+    // Stop loading animation and surface the branded no-access state
     this.stopLoadingAnimation();
     this.Loading = false;
     this.cdr.detectChanges();
+  }
 
-    setTimeout(() => {
-      if (this.AppAccessDialog) {
-        this.AppAccessDialog.show({ type: 'no_apps' });
+  /**
+   * Re-evaluates application grants when the user triggers Refresh Access from `ShellNoAccessComponent`.
+   */
+  public async OnRefreshNoAccessGrants(): Promise<void> {
+    if (this.IsRefreshingAccess) {
+      return;
+    }
+
+    this.IsRefreshingAccess = true;
+    this.NoAccessRefreshError = '';
+    this.cdr.markForCheck();
+
+    try {
+      const engine = this.resolveUserInfoEngineForShell();
+      await engine.Config(true);
+      await this.appManager.ReloadUserApplications();
+      this.shellChromePolicyService?.Refresh({
+        provider: this.getProviderSafe(),
+        sessionRestrictedToApplicationId: this.authBase.GetSessionScope()?.restrictedToApplicationId ?? null,
+      });
+      this._chromeFlags = null;
+
+      const updatedApps = this.appManager.GetAllApps();
+      if (updatedApps.length === 0) {
+        this.HasZeroApplicationGrants = true;
+        this.NoAccessRefreshError = 'No application access has been assigned yet.';
+      } else {
+        this.HasZeroApplicationGrants = false;
+        this.NoAccessRefreshError = '';
+        this.cdr.detectChanges();
+        if (!this.appManager.GetActiveApp()) {
+          await this.openLandingApp(updatedApps);
+        }
       }
-    }, 0);
+    } catch (error) {
+      this.NoAccessRefreshError = error instanceof Error
+        ? error.message
+        : 'Unable to refresh access right now. Please try again.';
+    } finally {
+      this.IsRefreshingAccess = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private resolveUserInfoEngineForShell(): UserInfoEngine {
+    try {
+      const provider = this.getProviderSafe();
+      if (provider && provider.InstanceConnectionString) {
+        return UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine;
+      }
+    } catch {
+      // Fall back to default singleton in isolated harnesses
+    }
+    return UserInfoEngine.Instance;
   }
 
   /**

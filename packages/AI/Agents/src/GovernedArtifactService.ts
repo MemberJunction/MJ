@@ -12,7 +12,7 @@ import {
   NormalizeUUID,
   UUIDsEqual,
 } from '@memberjunction/global';
-import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LimitsConfigResolver, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   ArtifactPermissionEngine,
@@ -2900,10 +2900,10 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
 
     const rv = RunView.FromMetadataProvider(params.provider);
     const sqlFilters: string[] = [];
-    const MAX_DIRECT_IN_IDS = 2500;
+    const maxDirectInIds = LimitsConfigResolver.Resolve().Limits.Tuning.MaxDirectInIds;
     const ID_IN_CHUNK_SIZE = 500;
     const appendChunkedIdInFilter = (ids: string[]): boolean => {
-      if (ids.length === 0 || ids.length > MAX_DIRECT_IN_IDS) {
+      if (ids.length === 0 || ids.length > maxDirectInIds) {
         return false;
       }
       const chunks: string[] = [];
@@ -3046,12 +3046,12 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       const fetchLimit = Math.min(Math.max((offset + maxResults) * 2, maxResults), 500);
       const allArtResults: ArtifactListRow[] = [];
 
-      if (collectionId && readableIdsInMemoryFilter && readableIdsInMemoryFilter.size > MAX_DIRECT_IN_IDS) {
-        // Collection exceeds single-query 2,500-ID cap (`N8`): query by 2,500-ID batches so items aren't silently truncated.
+      if (collectionId && readableIdsInMemoryFilter && readableIdsInMemoryFilter.size > maxDirectInIds) {
+        // Collection exceeds single-query ID cap (`N8`): query by batches so items aren't silently truncated.
         const colIds = Array.from(readableIdsInMemoryFilter);
         const baseFilter = sqlFilters.length > 0 ? sqlFilters.join(' AND ') : '';
-        for (let i = 0; i < colIds.length; i += MAX_DIRECT_IN_IDS) {
-          const batch = colIds.slice(i, i + MAX_DIRECT_IN_IDS);
+        for (let i = 0; i < colIds.length; i += maxDirectInIds) {
+          const batch = colIds.slice(i, i + maxDirectInIds);
           const batchOrChunks: string[] = [];
           for (let j = 0; j < batch.length; j += ID_IN_CHUNK_SIZE) {
             const slice = batch.slice(j, j + ID_IN_CHUNK_SIZE);

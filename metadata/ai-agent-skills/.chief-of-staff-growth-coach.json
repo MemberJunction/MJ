@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": "@lookup:MJ: AI Skills.Name=Growth Coach",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A5C240F4-2838-4CB5-8472-2E6F9A7C2D2C"
+    }
+  }
+]

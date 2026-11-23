@@ -564,6 +564,55 @@ describe('GraphEngine', () => {
             expect(ClampGraphMaxNodes(-3)).toBe(1);
         });
 
+        describe('FindPath', () => {
+            const n3 = NODE.Account('n3');
+
+            it('returns the fewest-hop path, in order, with the edge joining each pair', async () => {
+                const chainProv = chainProvider();
+                const engine = await configure(chainProv);
+                const path = await engine.FindPath('MJ Canon', canonSeed[0], n3, {}, analyst);
+                expect(path.Found).toBe(true);
+                expect(path.Nodes.map((n) => n.RecordID)).toEqual([IDS.ConceptOpenAr, 'n1', 'n2', 'n3']);
+                expect(path.Edges).toHaveLength(3);
+                expect(path.Edges[2].Source.RecordID).toBe('n2');
+                expect(path.PathWeight).toBeCloseTo(path.Nodes[3].PathWeight ?? 0);
+                expect(engine.DescribePathForPrompt(path)).toContain('### Graph Path (3 hops');
+                expect(engine.DescribePathForPrompt(path, chainProv as unknown as IMetadataProvider)).toContain('### Graph Path (3 hops');
+            });
+
+            it('says no path when the end is beyond the depth limit', async () => {
+                const engine = await configure(chainProvider());
+                const path = await engine.FindPath('MJ Canon', canonSeed[0], n3, { Depth: 2 }, analyst);
+                expect(path.Found).toBe(false);
+                expect(path.Nodes).toEqual([]);
+                expect(path.Message).toBe('No path found within 2 hops.');
+                expect(engine.DescribePathForPrompt(path)).toContain('No graph path found');
+            });
+
+            it('never routes through a node the caller cannot see, and gives a hidden end the same answer as an unconnected one', async () => {
+                const provider = chainProvider();
+                provider.HiddenFor[analyst.ID] = ['Accounts|n2'];
+                const engine = await configure(provider);
+                const around = await engine.FindPath('MJ Canon', canonSeed[0], n3, {}, analyst);
+                expect(around.Nodes.map((n) => n.RecordID)).toEqual([IDS.ConceptOpenAr, 'n1', 'n5', 'n4', 'n3']);
+                const hidden = await engine.FindPath('MJ Canon', canonSeed[0], NODE.Account('n2'), {}, analyst);
+                const missing = await engine.FindPath('MJ Canon', canonSeed[0], NODE.Account('no-such-row'), {}, analyst);
+                expect(hidden.Found).toBe(false);
+                expect(hidden.Message).toBe(missing.Message);
+            });
+
+            it('treats a path from a node to itself as found with no edges, and reports an unknown graph', async () => {
+                const engine = await configure(chainProvider());
+                const self = await engine.FindPath('MJ Canon', n3, n3, {}, analyst);
+                expect(self.Found).toBe(true);
+                expect(self.Nodes.map((n) => n.RecordID)).toEqual(['n3']);
+                expect(self.Edges).toEqual([]);
+                const unknown = await engine.FindPath('No Such Graph', canonSeed[0], n3, {}, analyst);
+                expect(unknown.Found).toBe(false);
+                expect(unknown.Message).toContain('was not found or is not active');
+            });
+        });
+
         it('returns the same nodes in the same order every run, with path provenance', async () => {
             const engine = await configure(chainProvider());
             const a = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 3 }, analyst);

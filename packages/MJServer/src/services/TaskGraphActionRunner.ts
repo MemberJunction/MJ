@@ -10,9 +10,9 @@
  * @module @memberjunction/server
  */
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam, type ActionRunAudience, type ActionRunScope, type MJActionEntityExtended } from '@memberjunction/actions-base';
+import { ActionParam, ActionRunScopeIsBounded, AUDIENCE_UNSUPPORTED_RESULT_CODE, type ActionRunAudience, type ActionRunScope, type MJActionEntityExtended } from '@memberjunction/actions-base';
 import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject, TAINTED_EGRESS_BLOCKED, type TaskRunScope, type TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
-import { MatchAudienceUsers } from '@memberjunction/ai-agents';
+import { ActionSupportsAudience, MatchAudienceUsers } from '@memberjunction/ai-agents';
 import { DatabaseProviderBase, LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -42,7 +42,26 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 return { Success: false, ErrorMessage: taintRefusal, ResultCode: TAINTED_EGRESS_BLOCKED, IsOutputTainted: true };
             }
 
-            const readerIds = envelope?.Audience?.ReaderUserIDs ?? [];
+            const envelopeAudience = envelope?.Audience;
+            const isStructuralAudience = envelopeAudience != null && 'Mode' in envelopeAudience && envelopeAudience.Mode === 'ScopeCommonReach';
+            const runScope = envelope?.RunScope ? ToActionRunScope(envelope.RunScope) : undefined;
+            if (isStructuralAudience) {
+                const hasConstrainingScope = ActionRunScopeIsBounded(runScope) || (runScope?.SearchScopeIDs?.length ?? 0) > 0;
+                if (!hasConstrainingScope) {
+                    const refusal = "Task security envelope uses Mode 'ScopeCommonReach' without a constraining RunScope (PrimaryScopeRecordID, SecondaryScopes, or SearchScopeIDs).";
+                    LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${refusal}`);
+                    return { Success: false, ErrorMessage: refusal, ResultCode: AUDIENCE_UNSUPPORTED_RESULT_CODE };
+                }
+                if (!this.actionSupportsAudience(action)) {
+                    const refusal = `Action '${action.Name}' is not available under structural common-reach audience.`;
+                    LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${refusal}`);
+                    return { Success: false, ErrorMessage: refusal, ResultCode: AUDIENCE_UNSUPPORTED_RESULT_CODE };
+                }
+            }
+
+            const readerIds = !isStructuralAudience && envelopeAudience && 'ReaderUserIDs' in envelopeAudience
+                ? envelopeAudience.ReaderUserIDs
+                : [];
             const readers = readerIds.length > 0 ? await this.resolveAudienceReaders(readerIds, params.Provider) : { Readers: [] };
             if ('Refusal' in readers) {
                 LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${readers.Refusal}`);
@@ -60,7 +79,8 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 // transition question with nothing to answer it, and fail closed on every retry.
                 Filters: [],
                 ...(audience ? { Audience: audience } : {}),
-                ...(envelope?.RunScope ? { RunScope: ToActionRunScope(envelope.RunScope) } : {}),
+                ...(isStructuralAudience ? { IsStructuralAudience: true } : {}),
+                ...(runScope ? { RunScope: runScope } : {}),
             });
             const isOutputTainted = this.outputIsUntrusted(action);
 
@@ -199,6 +219,14 @@ export class TaskGraphActionRunner implements TaskActionRunner {
             };
         }
         return { Readers: match.Readers };
+    }
+
+    /**
+     * Checks via ClassFactory whether an action declares `SupportsAudience === true`.
+     * Runtime actions and unregistered classes fail closed under structural common-reach audience mode.
+     */
+    private actionSupportsAudience(action: MJActionEntityExtended): boolean {
+        return ActionSupportsAudience(action);
     }
 }
 

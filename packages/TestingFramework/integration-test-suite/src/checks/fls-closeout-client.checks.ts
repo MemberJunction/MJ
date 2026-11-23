@@ -102,6 +102,8 @@ interface CloseoutClientState extends MintedUserKeyIds {
     /** The REST base URL once a minted key is honoured there; absent when REST is off. */
     RestBase?: string;
     RestSkipReason?: string;
+    /** Set when REST answered but never honoured a minted key on a scoped route: the REST checks fail. */
+    RestProvisionError?: string;
 }
 
 const state: CloseoutClientState = { CreatedKeyIds: [], CreatedScopeRuleIds: [] };
@@ -287,29 +289,64 @@ export function ClassifyRestProbe(status: number, headers: Headers): RestProbeVe
     return 'retry';
 }
 
-/** Waits (bounded) until REST honours the minted reader key; records why REST is unavailable otherwise. */
-async function probeRest(): Promise<void> {
+/**
+ * The probe request: a RunView of the fixture row, so it needs the `view:run` scope.
+ *
+ * REST enforces API-key scopes (MJ 6817), and a minted key's scope rule reaches MJAPI's scope cache
+ * some time after the key itself authenticates. A route with no scope check (`/users/current`)
+ * answers 200 as soon as the key authenticates, so probing it declared REST ready before the
+ * `full_access` rule had arrived, and the first scoped call (CW7's runView, CW8's create) was
+ * refused with "No matching key scope rules".
+ */
+function scopedProbe(rawKey: string, fixtureEmployeeID: string): ReturnType<typeof rest> {
+    return rest(rawKey, 'POST', `/views/${encodeURIComponent(SEEDED_FLS_ENTITY)}`,
+        { ExtraFilter: `ID = '${fixtureEmployeeID}'`, ResultType: 'simple', MaxRows: 1, BypassCache: true });
+}
+
+/**
+ * Waits (bounded) until REST honours every minted key on a scoped route; records why REST is
+ * unavailable otherwise.
+ */
+async function probeRest(fixtureEmployeeID: string): Promise<void> {
+    const keys = [state.ReaderRawKey, state.MultiRawKey].filter((k): k is string => !!k);
+    for (const key of keys) {
+        if (!(await probeRestKey(key, fixtureEmployeeID))) {
+            return;
+        }
+    }
+    state.RestBase = RestBaseUrl();
+}
+
+/** Polls one key until REST honours it; false (with `RestSkipReason` set) when REST is off or never honours it. */
+async function probeRestKey(rawKey: string, fixtureEmployeeID: string): Promise<boolean> {
     const deadline = Date.now() + REST_READY_TIMEOUT_MS;
     let last = '';
+    let restAnswered = false;
     for (;;) {
         try {
-            const probe = await rest(state.ReaderRawKey!, 'GET', '/users/current');
+            const probe = await scopedProbe(rawKey, fixtureEmployeeID);
+            restAnswered = true;
             const verdict = ClassifyRestProbe(probe.Status, probe.Headers);
             if (verdict === 'ready') {
-                state.RestBase = RestBaseUrl();
-                return;
+                return true;
             }
             if (verdict === 'not-enabled') {
                 state.RestSkipReason = `REST is not enabled on MJAPI (${RestBaseUrl()} answered HTTP ${probe.Status}${probe.Status === 404 ? '' : ' from the GraphQL endpoint'}); set MJ_REST_API_ENABLED=true`;
-                return;
+                return false;
             }
-            last = `HTTP ${probe.Status}`;
+            last = `HTTP ${probe.Status}: ${restText(probe.Body)}`;
         } catch (e) {
             last = ErrorText(e);
         }
         if (Date.now() > deadline) {
-            state.RestSkipReason = `REST at ${RestBaseUrl()} never accepted the minted key (${last})`;
-            return;
+            // REST answered but kept refusing a full_access key: a failure, not REST being unavailable.
+            const message = `REST at ${RestBaseUrl()} never accepted the minted key on a scoped route within ${REST_READY_TIMEOUT_MS / 1000}s (${last})`;
+            if (restAnswered) {
+                state.RestProvisionError = message;
+            } else {
+                state.RestSkipReason = message;
+            }
+            return false;
         }
         await sleep(REST_READY_POLL_MS);
     }
@@ -365,13 +402,13 @@ async function provisionRest(ctx: IntegrationCheckContext, fx: FlsClientFixture)
     if (multiID) {
         state.MultiRawKey = await MintFullAccessUserKey(ctx, state, multiID, 'IT134 FLS close-out REST multi (mj-integration-test)');
     }
-    await probeRest();
+    await probeRest(fx.FixtureEmployeeID!);
 }
 
 async function setupCloseoutClient(ctx: IntegrationCheckContext): Promise<void> {
     Object.assign(state, {
         Markers: undefined, ProvisionError: undefined, MultiSkipReason: undefined, TitleRuleID: undefined, TitleRuleBefore: undefined, CompanyID: undefined,
-        ReaderRawKey: undefined, MultiRawKey: undefined, RestBase: undefined, RestSkipReason: undefined,
+        ReaderRawKey: undefined, MultiRawKey: undefined, RestBase: undefined, RestSkipReason: undefined, RestProvisionError: undefined,
         CreatedKeyIds: [], CreatedScopeRuleIds: [],
     });
     await SetupFlsClientFixture(ctx);
@@ -531,6 +568,9 @@ export async function CheckCw6ClientTransactionGroupCreate(ctx: IntegrationCheck
 /** The REST checks' preconditions: the fixture, and REST answering with the minted keys. */
 function readyForRest(ctx: IntegrationCheckContext, checkId: string): ReadyWire {
     const r = ready(ctx, checkId);
+    if (state.RestProvisionError) {
+        Assert(false, `${checkId}: ${state.RestProvisionError}`);
+    }
     if (!state.RestBase) {
         return skip(checkId, state.RestSkipReason ?? 'REST was not provisioned');
     }

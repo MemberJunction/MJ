@@ -20,6 +20,8 @@
  * @since 2.131.0
  */
 
+import { CODE_FALLBACK_LIMITS } from '@memberjunction/core';
+
 
 
 /**
@@ -678,7 +680,7 @@ export interface LoopAgentTypePromptParams {
  * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so the
  * total number of calls is bounded separately, by {@link MAX_DECISION_CALLS_PER_TURN}.
  */
-export const MAX_DECISION_REQUESTS_PER_TURN = 8;
+export const MAX_DECISION_REQUESTS_PER_TURN = CODE_FALLBACK_LIMITS.ResourceGuards.MaxDecisionRequestsPerTurn;
 
 /**
  * The most decision calls one agent turn's requests make in total, counting every `forEachItemIn`
@@ -686,7 +688,7 @@ export const MAX_DECISION_REQUESTS_PER_TURN = 8;
  * could send 800 calls, each with its own step and prompt run, before the run's cost guardrails
  * (checked between steps) could stop them.
  */
-export const MAX_DECISION_CALLS_PER_TURN = 100;
+export const MAX_DECISION_CALLS_PER_TURN = CODE_FALLBACK_LIMITS.ResourceGuards.MaxDecisionCallsPerTurn;
 
 /** Every {@link FinishIfMode}, for validation. Mode names are case-sensitive. */
 export const FINISH_IF_MODES: readonly FinishIfMode[] = ['off', 'shadow', 'on'];
@@ -725,14 +727,14 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeScratchpadDocs: true,
     specializationPlacement: 'auto',
     trailingStateMode: 'auto',
-    scratchpadMaxTasks: 50,
+    scratchpadMaxTasks: CODE_FALLBACK_LIMITS.Tuning.ScratchpadMaxTasks,
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
     // Off: the master switch for decision-model use. Every automatic use of a decision model needs it.
     decisionsEnabled: false,
     includeDecisionsDocs: false,
-    decisionsMaxItems: 100,
+    decisionsMaxItems: CODE_FALLBACK_LIMITS.Tuning.DecisionsMaxItems,
     decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
     decisionsMaxCallsPerTurn: MAX_DECISION_CALLS_PER_TURN,
     decisionPromptName: 'Default Decision',
@@ -747,7 +749,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1,
     maxSkillsInPrompt: -1,
-    maxSkillDecisionCandidates: 30,
+    maxSkillDecisionCandidates: CODE_FALLBACK_LIMITS.Tuning.MaxSkillDecisionCandidates,
     clientToolResultMaxChars: -1,
     decisionDiscovery: false,
     untrustedActionNames: [],

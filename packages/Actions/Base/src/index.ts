@@ -1,5 +1,6 @@
 export * from './ActionEngine-Base';
 export * from './ActionAudience';
+export * from './SupportsAudienceContract';
 export * from './CompanyIntegrationResolver';
 export * from './DurableEntityActionSubmitter';
 export * from './EntityChangeContext';

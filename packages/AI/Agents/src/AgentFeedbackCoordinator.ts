@@ -19,6 +19,7 @@ import {
     RunViewParams,
     RunViewResult,
     UserInfo,
+    ValidateDecisionReadResult,
 } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
@@ -654,8 +655,12 @@ export class AgentFeedbackCoordinator {
             rv.RunViews([this.buildActiveUsersView(candidateUserIDs), ...modeViews], params.contextUser),
             countViews.length > 0 ? rv.RunViews(countViews, params.contextUser) : Promise.resolve<RunViewResult[]>([]),
         ]);
-        if (!usersResult?.Success) {
-            LogError(`Failed to load active users for list ${listId}: ${usersResult?.ErrorMessage || 'unknown error'}`);
+        const validatedUsers = ValidateDecisionReadResult(usersResult, {
+            EntityName: 'MJ: Users',
+            OperationName: 'AgentFeedbackCoordinator.selectFromActiveListMembers',
+        });
+        if ('Error' in validatedUsers) {
+            LogError(`Failed to load active users for list ${listId}: ${validatedUsers.ErrorMessage || 'unknown error'}`);
             return params.contextUser?.ID ?? null;
         }
 

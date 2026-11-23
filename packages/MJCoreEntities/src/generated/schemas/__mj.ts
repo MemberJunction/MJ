@@ -2240,6 +2240,12 @@ export const MJAIAgentRhythmTemplateSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultAgentConfigurationID: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentConfigurationID
+        * * Display Name: Default Agent Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -2248,6 +2254,10 @@ export const MJAIAgentRhythmTemplateSchema = z.object({
         * * Field Name: Skill
         * * Display Name: Skill
         * * SQL Data Type: nvarchar(255)`),
+    DefaultAgentConfiguration: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentConfiguration
+        * * Display Name: Default Agent Configuration
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJAIAgentRhythmTemplateEntityType = z.infer<typeof MJAIAgentRhythmTemplateSchema>;
@@ -4321,7 +4331,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: CoordinationMode
         * * Display Name: Coordination Mode
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: Observer
+        * * Default Value: Autonomous
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -4356,7 +4366,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: PhoneChannelMode
         * * Display Name: Phone Channel Mode
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: InboundOnly
+        * * Default Value: Disabled
     * * Value List Type: List
     * * Possible Values 
     *   * Disabled
@@ -4378,7 +4388,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: CalendarChannelMode
         * * Display Name: Calendar Channel Mode
         * * SQL Data Type: nvarchar(30)
-        * * Default Value: ReadOnly
+        * * Default Value: ProposeWithApproval
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -4998,6 +5008,18 @@ if this limit is exceeded.`),
         * * Display Name: Max Sub Agent Consult Rounds
         * * SQL Data Type: int
         * * Description: Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3).`),
+    Isolation: z.union([z.literal('Container'), z.literal('InProcess'), z.literal('Process'), z.literal('Worker')]).describe(`
+        * * Field Name: Isolation
+        * * Display Name: Isolation
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: InProcess
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Container
+    *   * InProcess
+    *   * Process
+    *   * Worker
+        * * Description: Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation).`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -10470,6 +10492,11 @@ export const MJAgentChannelSchema = z.object({
         * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
 });
 
 export type MJAgentChannelEntityType = z.infer<typeof MJAgentChannelSchema>;
@@ -13146,6 +13173,11 @@ export const MJCommentSchema = z.object({
         * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
     CommentType: z.string().nullable().describe(`
         * * Field Name: CommentType
         * * Display Name: Comment Type Name
@@ -18054,6 +18086,12 @@ export const MJConversationSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)
         * * Default Value: 7F81FF57-C5A8-464D-B3B4-35A4FCF10717
         * * Description: Foreign key to ConversationType identifying the kind of conversation (defaults to Chat). CodeGen exposes the joined ConversationType.Name as the virtual Type field.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+        * * Description: Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations.`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -18102,6 +18140,30 @@ export const MJConversationSchema = z.object({
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Parent ID Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Parent ID Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Parent ID Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Parent ID Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
@@ -25075,6 +25137,11 @@ export const MJFieldSuggestionSchema = z.object({
         * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
     AIPromptRun: z.string().nullable().describe(`
         * * Field Name: AIPromptRun
         * * Display Name: AI Prompt Run Details
@@ -41705,6 +41772,12 @@ export const MJUserRoutineSchema = z.object({
         * * Display Name: Last Checked At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions.`),
+    AgentConfigurationID: z.string().nullable().describe(`
+        * * Field Name: AgentConfigurationID
+        * * Display Name: Agent Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional AI Configuration (model tier such as Fast, Standard, or High Power) used when executing this routine's Agent target. Seeded from the originating rhythm template's DefaultAgentConfigurationID on creation and changeable by the user or agent.`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
@@ -41721,6 +41794,10 @@ export const MJUserRoutineSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation Name
         * * SQL Data Type: nvarchar(255)`),
+    AgentConfiguration: z.string().nullable().describe(`
+        * * Field Name: AgentConfiguration
+        * * Display Name: Agent Configuration
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJUserRoutineEntityType = z.infer<typeof MJUserRoutineSchema>;

@@ -38,7 +38,7 @@ export type WaitingStepRow = {
 };
 
 /** A waiting step's kind, or `null` for any task that is not one. */
-export type WaitingStepKind = 'External' | 'Wait' | 'ProviderHuman';
+export type WaitingStepKind = 'External' | 'Enqueue' | 'EnqueueFanOut' | 'Wait' | 'ProviderHuman';
 
 /** Parses `Task.Configuration`, yielding an empty bag for anything unusable. */
 export function ParseStepConfiguration(raw: string | null | undefined): TaskStepConfiguration {
@@ -53,7 +53,16 @@ export function ParseStepConfiguration(raw: string | null | undefined): TaskStep
 
 /** Which kind of waiting step this task is, or `null`. */
 export function WaitingStepKindOf(task: WaitingStepRow): WaitingStepKind | null {
-    if (task.StepType === 'External') return 'External';
+    if (task.StepType === 'External') {
+        const cfg = ParseStepConfiguration(task.Configuration);
+        if (cfg.stepKind === 'Enqueue' || cfg.enqueue) return 'Enqueue';
+        return 'External';
+    }
+    if (task.StepType === 'ForEach') {
+        const cfg = ParseStepConfiguration(task.Configuration);
+        if (cfg.forEach?.enqueue) return 'EnqueueFanOut';
+        return null;
+    }
     if (task.StepType === 'Wait') return 'Wait';
     if (task.StepType === 'Human') {
         const provider = ParseStepConfiguration(task.Configuration).human?.provider;
@@ -149,6 +158,10 @@ export function WaitingStepDueAt(
             return ResolveWaitDueAt(config.wait, payload, now);
         case 'External':
             return { Value: DeadlineFrom(config.external?.expiresInHours, now) };
+        case 'Enqueue':
+            return { Value: DeadlineFrom(config.enqueue?.expiresInHours, now) };
+        case 'EnqueueFanOut':
+            return { Value: DeadlineFrom(config.forEach?.enqueue?.expiresInHours, now) };
         case 'ProviderHuman':
             return { Value: DeadlineFrom(config.human?.expiresInHours, now) };
     }
