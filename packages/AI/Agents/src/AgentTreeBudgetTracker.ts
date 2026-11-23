@@ -238,10 +238,10 @@ export class AgentTreeBudgetTracker {
      * falling back to direct `promptRun` columns (`TokensUsed` / `TokensPrompt` + `TokensCompletion`
      * and `Cost`) or the `AIPromptRunResult` summary fields when `promptRun` is not populated.
      */
-    public RecordPromptUsage(
+    public RecordPromptUsage<TResult = object>(
         budget: AgentTreeBudget,
         promptRun?: MJAIPromptRunEntity | null,
-        promptResult?: AIPromptRunResult<unknown>,
+        promptResult?: AIPromptRunResult<TResult>,
         attribution?: WorkflowBudgetAttributionContext
     ): { TokensDelta: number; CostDelta: number } {
         const tokensDelta = this.extractPromptTokensDelta(promptRun, promptResult);
@@ -466,9 +466,9 @@ export class AgentTreeBudgetTracker {
         }
     }
 
-    private extractPromptTokensDelta(
+    private extractPromptTokensDelta<TResult = object>(
         promptRun?: MJAIPromptRunEntity | null,
-        promptResult?: AIPromptRunResult<unknown>
+        promptResult?: AIPromptRunResult<TResult>
     ): number {
         if (promptRun) {
             if (promptRun.TokensUsedRollup != null && promptRun.TokensUsedRollup > 0) {
@@ -513,9 +513,9 @@ export class AgentTreeBudgetTracker {
         return 0;
     }
 
-    private extractPromptCostDelta(
+    private extractPromptCostDelta<TResult = object>(
         promptRun?: MJAIPromptRunEntity | null,
-        promptResult?: AIPromptRunResult<unknown>
+        promptResult?: AIPromptRunResult<TResult>
     ): number {
         if (promptRun) {
             if (promptRun.TotalCost != null && promptRun.TotalCost > 0) {

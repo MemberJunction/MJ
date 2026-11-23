@@ -444,8 +444,23 @@ describe('AudienceNamedPersonAgentRequestService (MJ-3)', () => {
         vi.restoreAllMocks();
     });
 
+    interface MockAgentRequestRecord {
+        ID?: string;
+        AgentID?: string;
+        RequestTypeID?: string;
+        RequestedAt?: Date;
+        RequestForUserID?: string;
+        Status?: string;
+        Priority?: number;
+        Request?: string;
+        Comments?: string;
+        OriginatingAgentRunID?: string | null;
+        NewRecord?: () => void;
+        Save?: () => Promise<boolean>;
+    }
+
     function makeRequestProvider(
-        savedRequest: Record<string, unknown>,
+        savedRequest: MockAgentRequestRecord,
         canCreate: boolean = true
     ): IMetadataProvider {
         const entityInfo = {

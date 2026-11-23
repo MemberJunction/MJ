@@ -16,6 +16,9 @@ import {
 import {
     AssertAllowsNamedPersonAgentRequests,
     NamedPersonAgentRequestRegistry,
+    type ActionAudienceMode,
+    type ContractJSONObject,
+    type NamedPersonAgentRequestDeliveryMode,
     type NamedPersonAgentRequestHandler,
     type NamedPersonAgentRequestPayload,
     type NamedPersonAgentRequestReceipt,
@@ -25,6 +28,17 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 
 const DEFAULT_REQUEST_TYPE_NAME = 'Approval';
+
+interface NonSensitiveAgentRequestComments {
+    NamedPersonRequest: true;
+    SenderUserID: string;
+    DeliveryMode: NamedPersonAgentRequestDeliveryMode;
+    OriginatingConversationDetailID?: string;
+    AudienceMode?: ActionAudienceMode;
+    HasServerBoundScope?: boolean;
+    ServerBoundScopeKeyCount?: number;
+    Metadata?: ContractJSONObject;
+}
 
 /**
  * Default server-side {@link NamedPersonAgentRequestHandler} creating `MJ: AI Agent Requests`
@@ -315,7 +329,9 @@ export class AudienceNamedPersonAgentRequestService implements NamedPersonAgentR
         return a.trim().toLowerCase() === b.trim().toLowerCase();
     }
 
-    private buildNonSensitiveRequestComments(payload: NamedPersonAgentRequestPayload): Record<string, unknown> {
+    private buildNonSensitiveRequestComments(
+        payload: NamedPersonAgentRequestPayload
+    ): NonSensitiveAgentRequestComments {
         const scopeKeys = payload.ServerBoundScope
             ? Object.entries(payload.ServerBoundScope).filter((entry) => entry[1] !== undefined)
             : [];
