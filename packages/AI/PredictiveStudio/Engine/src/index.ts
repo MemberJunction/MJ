@@ -12,7 +12,8 @@
 
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 
-import { PredictiveStudioEvidenceGuard, PredictiveStudioStatusGuard } from './registry';
+import { PredictiveStudioEvidenceGuard, PredictiveStudioPublishRecordGuard, PredictiveStudioStatusGuard } from './registry';
+import { PredictiveStudioScoringBindingGuard } from './governance';
 
 // The self-managing Python-sidecar client `MLSidecar` lives in its own package,
 // `@memberjunction/predictive-studio-sidecar` — import it directly from there.
@@ -55,9 +56,15 @@ export * from './governance';
 
 // The registry's PreSave guards, registered once per process by every process that loads the Engine (MJAPI among
 // them): the status guard (only the lifecycle gate changes MJ: ML Models.Status, re-derived on every publish) and the
-// evidence guard (stored evidence is write-once). Both are idempotent, across copies of this module too.
+// evidence guard (stored evidence is write-once), and the publish-record guard (MJ: ML Model Publish Records rows are
+// created only by SignOffService and the lifecycle gate, and never changed or deleted). Each is idempotent, across
+// copies of this module too.
 PredictiveStudioStatusGuard.Register();
 PredictiveStudioEvidenceGuard.Register();
+PredictiveStudioPublishRecordGuard.Register();
+// The scoring binding guard: a binding's Status changes only through ScoringBindings.Withdraw, its ViewAuthorizationID
+// only for a caller holding the stored authorization.
+PredictiveStudioScoringBindingGuard.Register();
 
 // Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10), and the daily prediction
 // retention job's driver (PredictiveStudioPredictionRetentionJobDriver, registered with BaseScheduledJob on load).

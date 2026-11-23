@@ -48,7 +48,7 @@ describe('ScoringLineage.Join and Complete', () => {
 
 describe('EmptyColumnRuntime.Empty', () => {
   const assembled: ScoringAssembly = {
-    Status: 'assembled', Matrix: { columns: ['IncomeK', 'Plan'], rows: [[10, 'Gold'], [20, 'Silver']] }, Columns: [], HashColumns: null, RowIDs: ['a', 'b'],
+    Status: 'assembled', Matrix: { columns: ['IncomeK', 'Plan'], rows: [[10, 'Gold'], [20, 'Silver']] }, Columns: [], HashColumns: null, RowIDs: ['a', 'b'], Skipped: [],
   };
 
   it('sets the named column null on every row and leaves the others and the input untouched', () => {

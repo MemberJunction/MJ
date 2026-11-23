@@ -44,7 +44,20 @@ export type ProtocolChoice =
 export interface MonitoredPromotion {
   readonly Margin?: number;
   readonly DummyBaselineOnly?: boolean;
+  /**
+   * The protocol's `autoPublishKeepBaseline`; default false (the product default). The gate harness calls MJAPI with an
+   * API key, a non-interactive credential the lifecycle gate records as a `system` initiator (D4-280), so only a
+   * protocol that sets this lets the harness publish a model whose stored decision keeps the simple baseline (D-031).
+   */
+  readonly AutoPublishKeepBaseline?: boolean;
 }
+
+/**
+ * The promotion settings of a fixture pipeline that is not monitored: a kept simple baseline is published automatically,
+ * so a fixture the gate publishes reaches `Published` whatever its stored decision (the route OF4-30 gives the agent
+ * gates). A monitored pipeline keeps the product default, so the challenger outcomes its gates measure are the product's.
+ */
+const FIXTURE_PROMOTION: MonitoredPromotion = { AutoPublishKeepBaseline: true };
 
 /** The T3 pipeline's default protocol: five one-month rolling origins after at least 24 training months, expanding window. */
 const T3_ROLLING_ORIGIN: ProtocolChoice = { Kind: 'explicit', Holdout: { kind: 'rolling-origin', origins: 5, horizonPeriods: 1, gapPeriods: 0, minTrainPeriods: 24, window: 'expanding' } };
@@ -101,7 +114,7 @@ interface ProvisionOptions {
   readonly FeatureSteps?: FeatureStepGraph;
   /** The protocol's retrain triggers; default none. */
   readonly Triggers?: readonly RetrainTrigger[];
-  /** The protocol's promotion settings beyond the defaults (D4-238); default none. */
+  /** The protocol's promotion settings beyond the defaults (D4-238); default {@link FIXTURE_PROMOTION}. */
   readonly Promotion?: MonitoredPromotion;
 }
 
@@ -273,8 +286,9 @@ export class UnitFixtures {
     const kept = usable ? base.baselines : base.baselines.filter((b) => b.kind !== 'incumbent-heuristic');
     const baselines = promotion.DummyBaselineOnly === true ? kept.filter((b) => b.kind === 'dummy') : kept;
     const margin = promotion.Margin === undefined ? base.promotion.margin : EvaluationProtocol.ToNonNegative(promotion.Margin);
+    const autoPublishKeepBaseline = promotion.AutoPublishKeepBaseline === true;
     return {
-      ...base, baselines, promotion: { ...base.promotion, comparators: baselines, margin },
+      ...base, baselines, promotion: { ...base.promotion, comparators: baselines, margin, autoPublishKeepBaseline },
       ...(triggers !== null ? { retrainTriggers: triggers } : {}),
       ...(choice.Kind === 'explicit' && choice.InnerValidation ? { innerValidation: choice.InnerValidation } : {}),
       ...(choice.Kind === 'explicit' && choice.Slices ? { slices: choice.Slices } : {}),
@@ -298,7 +312,7 @@ export class UnitFixtures {
   private static async provision(h: TruthHarness, o: ProvisionOptions): Promise<ProvisionedUnitPipeline> {
     const { Draft: draft, Features: features, Algorithm: algorithm, Protocol: protocol, Guard: guard, FeatureSteps: featureSteps } = o;
     const triggers = o.Triggers || null;
-    const promotion = o.Promotion || {};
+    const promotion = o.Promotion || FIXTURE_PROMOTION;
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -437,7 +451,7 @@ export class UnitFixtures {
   public static ProvisionMonitoredWorldPipeline(h: TruthHarness, world: string, features: readonly string[], trainThrough: string, triggers: readonly RetrainTrigger[]): Promise<ProvisionedUnitPipeline> {
     const base = UnitFixtures.WorldRenewalUnitDraft(h, world, false);
     const draft: UnitDraft = { ...base, Name: `${base.Name} — monitored through ${trainThrough}`, Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: trainThrough } } };
-    return UnitFixtures.provision(h, { Draft: draft, Features: features, Algorithm: 'Logistic Regression', Protocol: { Kind: 'year-cutoff' }, FeatureSteps: UnitFixtures.worldRenewalSteps(h, world, { Features: features }), Triggers: triggers });
+    return UnitFixtures.provision(h, { Draft: draft, Features: features, Algorithm: 'Logistic Regression', Protocol: { Kind: 'year-cutoff' }, FeatureSteps: UnitFixtures.worldRenewalSteps(h, world, { Features: features }), Triggers: triggers, Promotion: {} });
   }
 
   /** The C3 task (W9-multiclass s42): the three attendance outcomes in the artifact's order, `NoShow` the adverse class. */

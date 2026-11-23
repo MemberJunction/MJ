@@ -379,7 +379,7 @@ class ServingRuntime implements IScoringModelRuntime {
             Loaded: loaded,
             Assemble: async (ids) => ({
                 Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map((id) => [0.1 + (index.Get(id) || 0) / 10]) },
-                Columns: [...FEATURES], HashColumns: null, RowIDs: [...ids],
+                Columns: [...FEATURES], HashColumns: null, RowIDs: [...ids], Skipped: [],
             }),
         };
     }

@@ -1,10 +1,10 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
-  MJActionParamEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJConversationDetailEntity, MJMLEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLTrainingPipelineEntity,
+  MJActionParamEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJConversationDetailEntity, MJMLEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity, MJMLPredictionUnitEntity, MJRecordProcessEntity, MJMLTrainingSnapshotEntity, MJScheduledJobEntity, MJMLModelScoringBindingEntity,
 } from '@memberjunction/core-entities';
-import { PredictiveStudioWithdrawScoringBindingOperation } from '@memberjunction/core-entities';
-import { MonitoringJobs } from '@memberjunction/predictive-studio';
+import { MJMLModelPublishRecordEntity, PredictiveStudioWithdrawScoringBindingOperation } from '@memberjunction/core-entities';
+import { MonitoringJobs, PublishRecordWriteAuthorisations } from '@memberjunction/predictive-studio';
 import { EscapeSQLString, UUIDMap } from '@memberjunction/global';
 import { ResolveStorageDriver } from '@memberjunction/storage';
 import { JsonParse, TRAINING_RUN_RESULTS_SCHEMA, TrainingRunResultsParser } from '@memberjunction/predictive-studio-core';
@@ -764,6 +764,9 @@ export class HarnessCleanup {
   ): Promise<string[]> {
     const failures = await HarnessCleanup.mapBounded(rows, maxInFlight, async (row) => {
       const id = row.ID; // read before Delete(): a deleted entity object no longer carries its field values
+      // The publish ledger is append-only (PredictiveStudioPublishRecordGuard): the harness authorises the delete of
+      // each fixture record it created, one-shot.
+      if (row instanceof MJMLModelPublishRecordEntity) PublishRecordWriteAuthorisations.Instance.AuthoriseDelete(row);
       if (await row.Delete()) {
         onDeleted(id);
         return null;

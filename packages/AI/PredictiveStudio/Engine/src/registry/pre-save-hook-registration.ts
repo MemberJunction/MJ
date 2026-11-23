@@ -7,9 +7,9 @@
  * installs) finds the first copy's hook and does not add its own. Each guard's `Register()` also keeps a module-level
  * flag, so a repeated call in one copy returns at once.
  */
-import { GetDataHooks, RegisterDataHook, type PreSaveHook } from '@memberjunction/core';
+import { GetDataHooks, RegisterDataHook, type PreDeleteHook, type PreSaveHook } from '@memberjunction/core';
 
-/** Registers marked `PreSave` hooks once per process. */
+/** Registers marked `PreSave` (and `PreDelete`) hooks once per process. */
 export class PreSaveHookRegistration {
   /** True when a `PreSave` hook carrying `mark` is registered (by any copy of the module). */
   public static IsRegistered(mark: symbol): boolean {
@@ -43,6 +43,42 @@ export class PreSaveHookRegistration {
    */
   public static Unregister(mark: symbol): boolean {
     const hooks = GetDataHooks<PreSaveHook>('PreSave');
+    let removed = false;
+    for (let i = hooks.length - 1; i >= 0; i--) {
+      if (Object.prototype.hasOwnProperty.call(hooks[i], mark)) {
+        hooks.splice(i, 1);
+        removed = true;
+      }
+    }
+    return removed;
+  }
+
+  /** The registered `PreDelete` hooks that carry `mark`. */
+  public static PreDeleteHooksMarked(mark: symbol): readonly PreDeleteHook[] {
+    return GetDataHooks<PreDeleteHook>('PreDelete').filter((h) => Object.prototype.hasOwnProperty.call(h, mark));
+  }
+
+  /**
+   * Marks `hook` with `mark` and registers it as a `PreDelete` hook, unless a hook carrying `mark` is registered already
+   * (the `PreDelete` counterpart of {@link RegisterOnce}).
+   *
+   * @returns true when this call registered `hook`; false when a marked hook was already there
+   */
+  public static RegisterPreDeleteOnce(mark: symbol, hook: PreDeleteHook): boolean {
+    if (PreSaveHookRegistration.PreDeleteHooksMarked(mark).length > 0) return false;
+    Object.defineProperty(hook, mark, { value: true, enumerable: false });
+    RegisterDataHook('PreDelete', hook);
+    return true;
+  }
+
+  /**
+   * Removes every registered `PreDelete` hook carrying `mark`, in place (the `PreDelete` counterpart of
+   * {@link Unregister}). Nothing in production calls it.
+   *
+   * @returns true when at least one marked hook was removed
+   */
+  public static UnregisterPreDelete(mark: symbol): boolean {
+    const hooks = GetDataHooks<PreDeleteHook>('PreDelete');
     let removed = false;
     for (let i = hooks.length - 1; i >= 0; i--) {
       if (Object.prototype.hasOwnProperty.call(hooks[i], mark)) {

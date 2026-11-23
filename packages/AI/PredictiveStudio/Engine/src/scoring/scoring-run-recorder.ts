@@ -70,11 +70,16 @@ export class ScoringRunRecorder {
         run.FirstErrors = JSON.stringify(result.FirstErrors.slice(0, SCORING_FIRST_ERRORS_MAX));
         run.Skipped = Math.max(0, result.Total - run.Written - result.Failed);
         break;
-      case 'completed':
+      case 'completed': {
+        const skipped = result.SkippedRecords || [];
         run.Total = result.Total;
         run.Written = result.Written;
         run.ArtifactSha256 = result.ArtifactSha256;
+        run.Skipped = skipped.length;
+        // A completed run has no failed record: FirstErrors names the first skipped ones and why, so the reason is kept.
+        if (skipped.length > 0) run.FirstErrors = JSON.stringify(skipped.slice(0, SCORING_FIRST_ERRORS_MAX));
         break;
+      }
     }
     await ScoringRunRecorder.save(run, 'close');
   }

@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 
+import type { ISidecarPredictor } from '../types';
+
 import { ScoringService } from '../scoring-service';
 import { ScoringBindings } from '../scoring-binding';
 import { ModelNeedsTrainingError } from '../model-readiness';
+import { PUBLISH_LOCK_QUERIES } from '../../registry/publish-locks';
 import {
   AdverseOf, BATCH, ProbabilityOf, RUN_DATE, Records, ScoringServiceWorld, ThreeBatches, ValueOf, type WorldModelOptions, type WorldModelRef,
 } from '../../__tests__/fakes/scoring-service-world';
@@ -114,6 +117,13 @@ describe('ScoringService.Score — refusals', () => {
     expect([world.Values.Calls(), world.Target.Writes, runs.Statuses()]).toEqual([[], 0, ['refused']]);
   });
 
+  it('refuses an assembly with a feature column empty on every row (check 6) with a refused run, and writes nothing', async () => {
+    world.Runtime.EmptyColumns.set(published.ID, 'Tenure');
+    const r = await new ScoringService(ctx()).Score(binding, scope, asOf, false);
+    expect(r).toMatchObject({ Status: 'refused', ModelID: published.ID, Reason: { kind: 'nan-or-empty-feature-column', columns: ['Tenure'] } });
+    expect([world.Values.Calls(), world.Target.Writes, runs.Statuses()]).toEqual([[], 0, ['refused']]);
+  });
+
   it('refuses a binding with no view authorization (fail closed)', async () => {
     const r = await new ScoringService(ctx()).Score(await world.Changed(binding, { ViewAuthorizationID: null }), scope, asOf, false);
     expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'binding-not-authorized' } });
@@ -193,6 +203,77 @@ describe('ScoringService.Score — refusals', () => {
     const r = await new ScoringService(ctx()).Score(await world.Binding(untrained, { FeatureName: 'Untrained' }), scope, asOf, false);
     expect(r).toMatchObject({ Status: 'failed', FirstErrors: [{ message: expect.stringContaining('needs training') }] });
     expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining('needs training')]);
+  });
+});
+
+describe('ScoringService — a record the assembly cannot cover is skipped, not the scope refused (R5)', () => {
+  const REASON = 'not scored: the change history of Memberships.Tenure does not cover its decision date';
+
+  it('Score writes the covered records, records the uncovered one as skipped with its reason, and completes', async () => {
+    world.Runtime.Uncovered.set(published.ID, new Map([['r2', REASON]]));
+    const r = await new ScoringService(ctx()).Score(binding, Records('r1', 'r2', 'r3'), asOf, false);
+    expect(r).toMatchObject({ Status: 'completed', Total: 3, Written: 2, SkippedRecords: [{ recordId: 'r2', message: REASON }] });
+    expect(runs.Last()).toMatchObject({ Status: 'completed', Total: 3, Written: 2, Skipped: 1 });
+    expect(JSON.parse(String(runs.Last()['FirstErrors']))).toEqual([{ recordId: 'r2', message: REASON }]);
+    expect(world.Values.Store().map((v) => v['RecordID'])).toEqual(['r1', 'r3']);
+  });
+
+  it('a scope none of whose records is covered completes with nothing written and every record skipped', async () => {
+    world.Runtime.Uncovered.set(published.ID, new Map([['r1', REASON], ['r2', REASON]]));
+    const r = await new ScoringService(ctx()).Score(binding, Records('r1', 'r2'), asOf, false);
+    expect(r).toMatchObject({ Status: 'completed', Total: 2, Written: 0, SkippedRecords: [{ recordId: 'r1' }, { recordId: 'r2' }] });
+    expect([world.Values.Calls(), runs.Last()['Skipped']]).toEqual([[], 2]);
+  });
+
+  it('Predict returns the covered rows and records the skipped one on its run', async () => {
+    world.Runtime.Uncovered.set(published.ID, new Map([['r2', REASON]]));
+    const p = await new ScoringService(ctx()).Predict(world.RequestFor(published.ID, Records('r1', 'r2')));
+    expect(p.Result).toMatchObject({ Status: 'completed', Total: 2, SkippedRecords: [{ recordId: 'r2', message: REASON }] });
+    expect(p.Rows.map((row) => row.recordId)).toEqual(['r1']);
+    expect(runs.Last()).toMatchObject({ Skipped: 1 });
+  });
+});
+
+describe('ScoringService.Score — a binding withdrawn while the run is in flight (R5)', () => {
+  /** A context whose sidecar withdraws the binding (another session's committed save) just before its `n`th call answers. */
+  const withdrawingAt = (n: number): ReturnType<ScoringServiceWorld['Ctx']> => {
+    const base = ctx();
+    let calls = 0;
+    const sidecar: ISidecarPredictor = {
+      predict: async (req) => {
+        if (++calls === n) await Withdrawn(binding);
+        return world.Sidecar.predict(req);
+      },
+    };
+    return { ...base, Seams: { ...base.Seams, Sidecar: sidecar } };
+  };
+
+  it('stops at the next batch: batch 1 stays, batch 2 is rolled back, and the run ends failed naming the withdrawal', async () => {
+    const r = await new ScoringService(withdrawingAt(2)).Score(binding, ThreeBatches(), asOf, false);
+    expect(r).toMatchObject({ Status: 'failed', Total: 3 * BATCH, Failed: 0, FirstErrors: [{ recordId: '', message: expect.stringContaining(`binding ${binding.ID} was withdrawn during the run`) }] });
+    expect(runs.Last()).toMatchObject({ Status: 'failed', Written: BATCH, Failed: 0, Skipped: 2 * BATCH });
+    expect(world.Values.Store().length).toBe(BATCH);
+    expect(world.Store.Transactions).toEqual(['begin', 'commit', 'begin', 'rollback']);
+  });
+
+  it('each writing batch reads the status through the binding lock Query, held to its commit, so a withdrawal waits for the batch in flight', async () => {
+    world.Store.Reads.length = 0;
+    await new ScoringService(ctx()).Score(binding, ThreeBatches(), asOf, false);
+    expect(world.Store.Reads.filter((r) => r === `query ${PUBLISH_LOCK_QUERIES.LockScoringBindingForBatch}`)).toHaveLength(3);
+    expect(world.Store.Transactions).toEqual(['begin', 'commit', 'begin', 'commit', 'begin', 'commit']);
+  });
+
+  it('a dry run takes no lock: it writes nothing a withdrawal could clear', async () => {
+    world.Store.Reads.length = 0;
+    await new ScoringService(ctx()).Score(binding, ThreeBatches(), asOf, true);
+    expect(world.Store.Reads).not.toContain(`query ${PUBLISH_LOCK_QUERIES.LockScoringBindingForBatch}`);
+  });
+
+  it('a dry run stops at the next batch too, with the preview of the batches before it', async () => {
+    const service = new ScoringService(withdrawingAt(2));
+    const r = await service.Score(await WithColumn(binding, '$.Value'), ThreeBatches(), asOf, true);
+    expect(r).toMatchObject({ Status: 'failed', Failed: 0 });
+    expect(service.DryRunPreview().map((p) => p.RecordID)).toEqual(['m1', 'm2', 'm3']);
   });
 });
 

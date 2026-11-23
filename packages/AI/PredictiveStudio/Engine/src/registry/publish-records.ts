@@ -4,7 +4,9 @@
  * Writing and finding `MJ: ML Model Publish Records` rows (§5.1, D-029, D4-56): the gate writes one `publish` row per
  * applied publish and one `refusal` row per withheld attempt; a run whose decision shipped no model row gets one
  * run-level `refusal` row (`ModelID` null, `Purpose = 'evaluate'`). Every read and write runs on the caller's provider
- * as its user. The rows are immutable once saved (`MJMLModelPublishRecordEntityServer.Validate()`).
+ * as its user. The rows are immutable once saved (`MJMLModelPublishRecordEntityServer.Validate()`), and a row is
+ * created only under a one-shot `PublishRecordWriteAuthorisations` entry that `PredictiveStudioPublishRecordGuard`
+ * checks, so no other save can add one.
  */
 import type { MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
 import { Canonicalize, EscapeSQLString } from '@memberjunction/global';
@@ -13,6 +15,7 @@ import type { Actor, EvidenceSnapshot, GateDecision, TransitionRefusal } from '@
 import { SnapshotHash } from '../snapshot/snapshot-hash';
 import { GateRefusals } from './gate-refusals';
 import type { PublishApprover } from './gate-context';
+import { PublishRecordWriteAuthorisations } from './publish-record-write-authorisations';
 import type { RegistryContext } from './registry-context';
 import { StoredRowReads } from './stored-row-reads';
 
@@ -234,9 +237,9 @@ export class PublishRecords {
     row.UserID = approver.Kind === 'user' ? approver.UserID : null;
   }
 
-  /** Saves a record; a failure names the record kind, its model and its training run. */
+  /** Saves a new record under its one-shot create authorisation; a failure names the record kind, its model and its training run. */
   private static async saveOrThrow(row: MJMLModelPublishRecordEntity, kind: 'publish' | 'refusal'): Promise<string> {
-    if (await row.Save()) return row.ID;
+    if (await PublishRecordWriteAuthorisations.SaveNew(row)) return row.ID;
     throw new Error(
       `Saving the ${kind} record of ML Model ${row.ModelID || '(none: a run-level record)'} for training run ${row.TrainingRunID || '(none)'} failed: ` +
         `${row.LatestResult?.CompleteMessage || 'unknown error'}`,

@@ -764,7 +764,7 @@ describe('M5.12 harness', () => {
   });
 
   describe('concurrent publish: two runs of one binding and as-of date at once', () => {
-    it('two concurrent runs of one as-of date leave one row per key (the loser\'s batch fails on UQ_FeatureValue_ModelRow and is reported, never duplicated)', async () => {
+    it('two concurrent runs of one as-of date leave one row per key: the later insert replaces the earlier one (last writer wins), neither run fails', async () => {
       const f = servingFixtures();
       const binding = await newBinding(f.UnitPipeline.ID, 'two runs at once');
       const values = new BarrierValues(2, 60_000);
@@ -772,17 +772,15 @@ describe('M5.12 harness', () => {
       const providers = await Promise.all([MLModelInferenceProcessor.BatchProvider(server.Provider), MLModelInferenceProcessor.BatchProvider(server.Provider)]);
       const runOne = (i: number): Promise<ScoringResult> => new ScoringService(scoringCtx(server.User, providers[i].Provider, { Values: values })).Score(binding, scope(), runDay(), false);
       const out = await quietly(() => Promise.all([runOne(0), runOne(1)])).finally(() => Promise.all(providers.map((p) => p.Independent?.ReleaseIndependentInstance())));
-      const statuses = out.Result.map((r) => r.Status).sort();
-      const loser = out.Result.find((r) => r.Status === 'failed');
-      expect(statuses).toEqual(['completed', 'failed']);
-      expect(loser?.Status === 'failed' ? loser.FirstErrors.map((e) => e.message).join('\n') : '').toContain('UQ_FeatureValue_ModelRow');
+      // D4-291: the insert that loses the race on UQ_FeatureValue_ModelRow replaces the other run's row (as WriteOne does).
+      expect(out.Result.map((r) => r.Status)).toEqual(['completed', 'completed']);
       const rows = await modelRows(binding.ID);
       expect([rows.length, new Set(rows.map((r) => r.RecordID.toLowerCase())).size]).toEqual([f.RecordIDs.length, f.RecordIDs.length]);
       const runs = await scoringRuns(binding.ID);
-      expect(runs.map((r) => [r.Status, r.Written]).sort()).toEqual([['completed', 4], ['failed', 0]]);
-      // The loser's report: its run row stores the failure, naming the constraint.
-      const failed = runs.find((r) => r.Status === 'failed');
-      expect((failed?.FirstErrorsObject || []).map((e) => e.message).join('\n')).toContain('UQ_FeatureValue_ModelRow');
+      expect(runs.map((r) => r.Status)).toEqual(['completed', 'completed']);
+      // Every stored row names one of the two runs; no row is orphaned or duplicated.
+      expect(rows.every((r) => runs.some((run) => UUIDsEqual(run.ID, r.MLScoringRunID)))).toBe(true);
+      // The provider logs the duplicate-key error the losing insert hit before the writer replaced the row: nothing else.
       expect(out.Unexpected.every((l) => l.includes('UQ_FeatureValue_ModelRow'))).toBe(true);
     }, CASE_TIMEOUT_MS);
   });

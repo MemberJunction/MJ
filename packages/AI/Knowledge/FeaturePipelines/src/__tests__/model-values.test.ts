@@ -266,6 +266,34 @@ describe('FeatureValueCacheService model rows and binding-scoped Human rows', ()
         expect(err).toMatchObject({ FeatureName: 'ChurnRisk', RecordID: 'r1', ProviderMessage: 'UQ_FeatureValue_ModelRow violated' });
     });
 
+    // Two same-day runs of a binding: the other run inserts r1 on the key between this run's read and its insert (R5).
+    describe('an insert that loses the race on UQ_FeatureValue_ModelRow', () => {
+        const duplicate = "Cannot insert duplicate key row in object '__mj.FeatureValue' with unique index 'UQ_FeatureValue_ModelRow'. The duplicate key value is (...).";
+        const OTHER_RUN = '7a1e0c33-2b9d-4f61-8c04-5e3d1a7b9f22';
+        /** A provider whose new-row factory lets the other run commit r1 first, so this run's insert hits the key. */
+        const racing = (seedOtherRun: boolean): IMetadataProvider => ({
+            GetEntityObject: vi.fn(async () => {
+                if (seedOtherRun) {
+                    store.Seed({ RecordProcessID: null, Source: 'Model', MLModelScoringBindingID: BIND, RecordID: 'r1', FeatureName: 'ChurnRisk', EffectiveAsOf: DAY1, ValueNumeric: 0.1, MLScoringRunID: OTHER_RUN });
+                }
+                store.FailNextSave(duplicate);
+                return store.NewRow();
+            }),
+        } as Partial<IMetadataProvider> as IMetadataProvider);
+
+        it('replaces the row the other run inserted on the key with this run\'s value and lineage, counting it Replaced', async () => {
+            const out = await svc.RecordModelValues(ModelRef({ Rows: [Row('r1', 0.7)], Provider: racing(true) }));
+            expect(out).toEqual({ Inserted: 0, Replaced: 1 });
+            expect(store.Rows('Model').map((r) => [r.RecordID, r.ValueNumeric, r.MLScoringRunID])).toEqual([['r1', 0.7, RUN]]);
+        });
+
+        it('throws the save error when no row holds the key after all (the failure was not the race)', async () => {
+            const err = await svc.RecordModelValues(ModelRef({ Rows: [Row('r1', 0.7)], Provider: racing(false) })).catch((e: Error) => e);
+            expect(err).toBeInstanceOf(FeatureValueSaveError);
+            expect(err).toMatchObject({ RecordID: 'r1', ProviderMessage: duplicate });
+        });
+    });
+
     it('refuses a RecordProcessID null without a binding ID before reading', async () => {
         await expect(svc.GetLatestValue({ ...HumanRef(), RecordProcessID: null, Source: 'Human' }))
             .rejects.toMatchObject({ name: 'FeatureValueKeyError', Field: 'MLModelScoringBindingID' });

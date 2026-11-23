@@ -8,7 +8,8 @@
  *
  * Per CLAUDE.md "Actions are boundaries": this action never writes the model; it validates `ModelID` and `Transition`,
  * delegates to the gate through {@link ModelTransitionDelegation} (shared with the `PredictiveStudio.PromoteModel`
- * operation) with the context user as the initiator, and maps the gate's answer to a result code. A leakage flag is
+ * operation) with the caller as the initiator ({@link CallerInitiators.OfActionRun}: the agent run when the action runs
+ * inside one, else the context user), and maps the gate's answer to a result code. A leakage flag is
  * acknowledged only by a person's sign-off record, which an action cannot make (D4-04), so a flagged model is refused
  * `LEAKAGE_FLAGGED`.
  *
@@ -26,6 +27,7 @@ import { LifecycleGate } from '../registry/lifecycle-gate';
 import { GateContexts } from '../registry/gate-seams';
 import { GateRefusals } from '../registry/gate-refusals';
 import { ModelTransitionDelegation, type ModelTransitionResult } from '../operations/delegation';
+import { CallerInitiators } from '../operations/caller-initiator';
 
 /** The driver-class key this action registers under (matches the metadata row). */
 export { PROMOTE_MODEL_DRIVER_CLASS } from './driver-classes';
@@ -62,7 +64,7 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
     }
     try {
       const result = await ModelTransitionDelegation.Apply(
-        { ModelID: modelId, Transition: transition, Reason: this.getStringParam(params, 'Reason') || null, SignOffID: null, Initiator: { kind: 'human', userId: params.ContextUser.ID } },
+        { ModelID: modelId, Transition: transition, Reason: this.getStringParam(params, 'Reason') || null, SignOffID: null, Initiator: CallerInitiators.OfActionRun(params) },
         GateContexts.ForRequest({ ContextUser: params.ContextUser, Provider: params.Provider || Metadata.Provider }), // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
         this.CreateLifecycleGate(),
       );

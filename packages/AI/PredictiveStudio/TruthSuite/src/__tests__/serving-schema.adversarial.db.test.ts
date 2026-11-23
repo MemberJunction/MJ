@@ -5,7 +5,7 @@
 // to refuse the inconsistent row, naming the constraint that refused it. The last suite runs CodeGen's entity delete
 // procedure on an entity whose pipeline holds a row of every serving table, and expects each row cleared in order.
 import { randomBytes, randomUUID } from 'crypto';
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import sql from 'mssql';
 import { RunView, type BaseEntity, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
@@ -24,6 +24,7 @@ import type {
 } from '@memberjunction/core-entities';
 import { MJMLModelSchema } from '@memberjunction/core-entities';
 import { SemanticsRules, type OutputSemantics, type PersistedModelStatus } from '@memberjunction/predictive-studio-core';
+import { PublishRecordWriteAuthorisations } from '@memberjunction/predictive-studio';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
 import { TruthConnection } from '../db/connection';
@@ -176,6 +177,9 @@ async function NewPublishRecord(ctx: IntegrationBootstrapContext, overrides: Pub
   if (overrides.OverridesFlags !== undefined) r.OverridesFlags = overrides.OverridesFlags;
   if (overrides.Reason !== undefined) r.Reason = overrides.Reason;
   if (overrides.Refusal !== undefined) r.Refusal = overrides.Refusal;
+  // These cases test the table's own constraints, so the row is saved under its writer's one-shot authorisation
+  // (PredictiveStudioPublishRecordGuard refuses any other create before the database sees it).
+  PublishRecordWriteAuthorisations.Instance.AuthoriseCreate(r, r.Kind);
   return r;
 }
 
@@ -937,8 +941,17 @@ describe('spDeleteEntityWithCoreDependencies removes an entity with its serving 
 
 // ── the hand-written blocks that must apply twice ─────────────────────────────────────────────────────────────────
 
-/** The migration whose hand-written Entity insert the run-twice case re-applies, from the repository root. */
-const SERVING_MIGRATION = new URL('../../../../../../migrations/v6/V202611201631__v6.3.x__PS_Honest_Serving_Schema.sql', import.meta.url);
+/** The migrations folder the serving migration sits in, from the repository root. */
+const MIGRATIONS_V6 = new URL('../../../../../../migrations/v6/', import.meta.url);
+/**
+ * The migration whose hand-written Entity insert the run-twice case re-applies, found by its name pattern (its
+ * timestamp changes every time a merge of next retimes it after next's newest migration).
+ */
+function servingMigration(): URL {
+  const name = readdirSync(MIGRATIONS_V6).find((f) => /^V\d+__v6\.3\.x__PS_Honest_Serving_Schema\.sql$/.test(f));
+  if (!name) throw new Error('the PS Honest Serving migration is not in migrations/v6');
+  return new URL(name, MIGRATIONS_V6);
+}
 /**
  * The entities the census looks up: MJ: Feature Values and MJ: ML Models are existing core entities, and the
  * virtual entity's ID is this migration's literal. FeatureValue's Role and MLModelID, with their metadata rows, are
@@ -979,7 +992,7 @@ function sliceBetween(text: string, start: string, end: string): string {
  * sends, with the schema placeholder resolved.
  */
 function idempotentBatches(schema: string): string[] {
-  const text = readFileSync(SERVING_MIGRATION, 'utf8');
+  const text = readFileSync(servingMigration(), 'utf8');
   const section = sliceBetween(text, '-- 5. vwLatestFeatureValues and the MJ: Latest Feature Values virtual entity', '-- 6. FeatureValue: model predictions and their lineage');
   const entityInsert = sliceBetween(section, `IF NOT EXISTS (SELECT 1 FROM [\${flyway:defaultSchema}].[Entity] WHERE [ID] = '${LATEST_VALUES_ENTITY_ID}')`, '\nGO');
   return entityInsert

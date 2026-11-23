@@ -183,7 +183,7 @@ class StubRuntime implements IScoringModelRuntime {
     return {
       Loaded: loaded,
       Assemble: async (ids) => ({
-        Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map((id) => [byId.Get(id) || 0]) }, Columns: [...FEATURES], HashColumns: null, RowIDs: [...ids],
+        Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map((id) => [byId.Get(id) || 0]) }, Columns: [...FEATURES], HashColumns: null, RowIDs: [...ids], Skipped: [],
       }),
     };
   }

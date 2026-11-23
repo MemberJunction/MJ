@@ -224,13 +224,19 @@ describe('PredictionRetention.BackfillBindingViewAuthorization', () => {
 });
 
 describe('PredictionRetention.ExpiredFilter', () => {
-  it('selects the binding\'s Model rows strictly before the cutoff', () => {
-    expect(PredictionRetention.ExpiredFilter("o'brien", BOUNDARY_DAY))
-      .toBe(`MLModelScoringBindingID = 'o''brien' AND Source = 'Model' AND EffectiveAsOf < '2026-10-20T00:00:00.000Z'`);
+  const VIEW = '[__mj].[vwFeatureValues]';
+  /** The keep clause: each record's newest Champion row of the binding, ranked as `ScoringBindings.Newest` ranks. */
+  const keep = (binding: string): string =>
+    `ID NOT IN (SELECT ID FROM (SELECT ID, ROW_NUMBER() OVER (PARTITION BY RecordID ORDER BY EffectiveAsOf DESC, ComputedAt DESC, ID DESC) AS NewestRank`
+    + ` FROM ${VIEW} WHERE MLModelScoringBindingID = '${binding}' AND Source = 'Model' AND Role = 'Champion') AS ChampionRows WHERE NewestRank = 1)`;
+
+  it('selects the binding\'s Model rows strictly before the cutoff, keeping each record\'s newest Champion row', () => {
+    expect(PredictionRetention.ExpiredFilter("o'brien", BOUNDARY_DAY, VIEW))
+      .toBe(`MLModelScoringBindingID = 'o''brien' AND Source = 'Model' AND EffectiveAsOf < '2026-10-20T00:00:00.000Z' AND ${keep("o''brien")}`);
   });
 
   it('leaves out the rows whose delete already failed this run', () => {
-    expect(PredictionRetention.ExpiredFilter('b', BOUNDARY_DAY, ['x1', "x'2"]))
-      .toBe(`MLModelScoringBindingID = 'b' AND Source = 'Model' AND EffectiveAsOf < '2026-10-20T00:00:00.000Z' AND ID NOT IN ('x1', 'x''2')`);
+    expect(PredictionRetention.ExpiredFilter('b', BOUNDARY_DAY, VIEW, ['x1', "x'2"]))
+      .toBe(`MLModelScoringBindingID = 'b' AND Source = 'Model' AND EffectiveAsOf < '2026-10-20T00:00:00.000Z' AND ${keep('b')} AND ID NOT IN ('x1', 'x''2')`);
   });
 });

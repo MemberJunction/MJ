@@ -13,7 +13,8 @@
  * - {@link ScoringService.Predict} is the model path; it records its run and writes no Feature Value and no column.
  *
  * A refusal writes the refused run row and nothing else. A batch in which any record fails writes nothing; the run
- * stops there and ends `failed` with counts and first errors, and the batches before it stay (D4-09).
+ * stops there and ends `failed` with counts and first errors, and the batches before it stay (D4-09). A binding
+ * withdrawn while the run is in flight stops it the same way at the next batch, with no record counted failed.
  */
 import { LogError, RunView, type BaseEntity, type EntityFieldInfo, type EntityInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLScoringRunEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
@@ -36,6 +37,7 @@ import {
 import { PreChangeArtifacts } from '../migration/pre-change-artifacts';
 import { ArtifactRegistry } from '../registry/artifact-registry';
 import { ProviderTransactions } from '../registry/provider-transactions';
+import { PUBLISH_LOCK_QUERIES, PublishLocks } from '../registry/publish-locks';
 import { PublishRecords } from '../registry/publish-records';
 import { StoredRowReads } from '../registry/stored-row-reads';
 import { BindingHumanValueGuard, type BindingGuardSnapshot } from './binding-human-value-guard';
@@ -80,8 +82,13 @@ interface ReadyModel extends ResolvedModel {
 /** The assembled scope of a call that passed checks 1–6. */
 interface AssembledScope {
   readonly Ready: ReadyModel;
+  /** The records to score: the scope's records less the skipped ones. */
   readonly RecordIDs: readonly string[];
   readonly Assembled: ScoringAssembled | null;
+  /** The scope's records the assembly could not cover, each with why; they are counted skipped, never scored. */
+  readonly Skipped: readonly ScoringRowError[];
+  /** Every record of the scope, scored or skipped. */
+  readonly Total: number;
 }
 
 /** The live challenger of a binding run: its ready model, its own run row and the run's records it samples. */
@@ -114,6 +121,14 @@ class BatchFailure extends Error {
   constructor(message: string, public readonly Errors: readonly ScoringRowError[]) {
     super(message);
     this.name = 'BatchFailure';
+  }
+}
+
+/** The binding was withdrawn after the run began: the batch that saw it writes nothing and the run stops there. */
+class BindingWithdrawnDuringRun extends Error {
+  constructor(bindingId: string) {
+    super(`the scoring binding ${bindingId} was withdrawn during the run; the remaining records were not scored`);
+    this.name = 'BindingWithdrawnDuringRun';
   }
 }
 
@@ -322,7 +337,9 @@ export class ScoringService {
     const assembly = await ready.Prepared.Assemble(recordIds, keyField, unitRule ? 'unit-rule' : asOf, entityName, this.ctx);
     if (assembly.Status === 'refused') return { kind: 'assembly-refused', refusal: assembly.Refusal };
     if (assembly.Status === 'missing-columns') return ScoringService.missingColumns(ready.Model, assembly.Columns);
-    if (assembly.RowIDs.length !== recordIds.length) throw new Error(`ScoringService: assembly returned ${assembly.RowIDs.length} rows for ${recordIds.length} records`);
+    if (assembly.RowIDs.length + assembly.Skipped.length !== recordIds.length) {
+      throw new Error(`ScoringService: assembly returned ${assembly.RowIDs.length} rows and ${assembly.Skipped.length} skipped for ${recordIds.length} records`);
+    }
     return assembly;
   }
 
@@ -362,16 +379,24 @@ export class ScoringService {
   }
 
   /**
-   * One batch in one provider transaction: the column copy is planned first (its guard reads the binding's earlier
-   * rows), then the champion's rows, the challenger's rows and the column writes. A dry run writes nothing and keeps
-   * the preview. Returns the champion rows written.
+   * One batch in one provider transaction. Its first statement reads the binding's stored `Status` under a shared lock
+   * held to the batch's commit (`Predictive Studio: Lock Scoring Binding For Batch`, D4-289): a binding withdrawn since
+   * the run began stops the run there with nothing written ({@link BindingWithdrawnDuringRun}), and a `Withdraw` that
+   * starts while the batch is in flight waits at its status update (the lock's exclusive counterpart) until the batch
+   * commits, then clears what it wrote. So no batch writes values or copies after `Withdraw` cleared them, under
+   * `READ_COMMITTED_SNAPSHOT` too: the lock read is a locking read, never a row version. Then the column copy is planned
+   * (its guard reads the binding's earlier rows), and the champion's rows, the challenger's rows and the column writes
+   * follow. A dry run writes nothing, takes no lock, checks the status before its preview, and keeps the preview.
+   * Returns the champion rows written.
    */
   protected async WriteBatch(binding: MJMLModelScoringBindingEntity, run: MJMLScoringRunEntity, rows: readonly ScoredRow[], challenger: { readonly Run: MJMLScoringRunEntity; readonly Rows: readonly ScoredRow[] } | null, asOf: Date, dryRun: boolean): Promise<number> {
     if (dryRun) {
+      await this.assertNotWithdrawn(binding.ID);
       this.preview.push(...(await this.previewBatch(binding, run, rows, asOf)));
       return 0;
     }
     return ProviderTransactions.Run(this.ctx, `scoring batch of binding '${binding.ID}'`, async () => {
+      await this.lockNotWithdrawn(binding.ID);
       const copies = await this.planCopies(binding, run, rows, asOf, true);
       await this.seams.Values.RecordModelValues(this.valuesParams(binding, run, rows, 'Champion', asOf));
       if (challenger !== null) await this.seams.Values.RecordModelValues(this.valuesParams(binding, challenger.Run, challenger.Rows, 'Challenger', asOf));
@@ -405,22 +430,27 @@ export class ScoringService {
     return this.scoreBatches(binding, scoped, run, challenger, day, dryRun);
   }
 
-  /** Checks 1–3, the scope read, the assembly and checks 4–6; an empty scope assembles nothing. */
+  /**
+   * Checks 1–3, the scope read, the assembly and checks 4–6; an empty scope assembles nothing. Records the assembly
+   * could not cover are carried as skipped, and a scope with none left to score is scored as an empty one.
+   */
   private async assembleScope(resolved: ResolvedModel, bindingEntity: string | null, scope: ScoringScope, day: Date): Promise<AssembledScope | ScoringRefusal> {
     const ready = await this.RunChecksBeforeAssembly(resolved, bindingEntity, scope, day);
     if ('kind' in ready) return ready;
     const read = await this.ReadScope(scope);
     if ('kind' in read) return read;
-    if (read.RecordIDs.length === 0) return { Ready: ready, RecordIDs: [], Assembled: null };
+    const total = read.RecordIDs.length;
+    if (total === 0) return { Ready: ready, RecordIDs: [], Assembled: null, Skipped: [], Total: 0 };
     const assembled = await this.Assemble(ready, read.RecordIDs, read.KeyField, day, scope.entity);
     if ('kind' in assembled) return assembled;
+    if (assembled.RowIDs.length === 0) return { Ready: ready, RecordIDs: [], Assembled: null, Skipped: assembled.Skipped, Total: total };
     const after = this.RunChecksAfterAssembly(ready.Model, assembled);
-    return after !== null ? after : { Ready: ready, RecordIDs: assembled.RowIDs, Assembled: assembled };
+    return after !== null ? after : { Ready: ready, RecordIDs: assembled.RowIDs, Assembled: assembled, Skipped: assembled.Skipped, Total: total };
   }
 
   /** The batches: predict, write; the first failing batch ends the run `failed` with the batches before it kept. */
   private async scoreBatches(binding: MJMLModelScoringBindingEntity, scoped: AssembledScope, run: MJMLScoringRunEntity, challenger: ChallengerRun | null, day: Date, dryRun: boolean): Promise<ScoringResult> {
-    const total = scoped.RecordIDs.length;
+    const total = scoped.Total;
     for (const batch of this.batches(scoped)) {
       try {
         const rows = await this.PredictBatch(scoped.Ready, run, batch.Rows, batch.IDs, batch.Columns, day);
@@ -430,11 +460,12 @@ export class ScoringService {
         if (challenger !== null && mirror !== null) challenger.Written += mirror.Rows.length;
       } catch (e) {
         await this.closeChallenger(challenger);
-        return this.CloseRun(run, ScoringService.failed(run, scoped.Ready.Model, total, batch.IDs, e));
+        // A withdrawal fails no record: the batch wrote nothing, and its records and the rest count as skipped.
+        return this.CloseRun(run, ScoringService.failed(run, scoped.Ready.Model, total, e instanceof BindingWithdrawnDuringRun ? [] : batch.IDs, e));
       }
     }
     await this.closeChallenger(challenger);
-    return this.CloseRun(run, this.completed(scoped.Ready, run, total, dryRun));
+    return this.CloseRun(run, this.completed(scoped.Ready, run, total, dryRun, run.Written, scoped.Skipped));
   }
 
   /** The assembled rows in batches of the seams' batch size. */
@@ -581,10 +612,10 @@ export class ScoringService {
       try {
         rows.push(...(await this.PredictBatch(scoped.Ready, run, batch.Rows, batch.IDs, batch.Columns, day)));
       } catch (e) {
-        return { Result: await this.CloseRun(run, ScoringService.failed(run, resolved.Model, scoped.RecordIDs.length, batch.IDs, e)), Rows: rows };
+        return { Result: await this.CloseRun(run, ScoringService.failed(run, resolved.Model, scoped.Total, batch.IDs, e)), Rows: rows };
       }
     }
-    return { Result: await this.CloseRun(run, this.completed(scoped.Ready, run, scoped.RecordIDs.length, request.DryRun, 0)), Rows: rows };
+    return { Result: await this.CloseRun(run, this.completed(scoped.Ready, run, scoped.Total, request.DryRun, 0, scoped.Skipped)), Rows: rows };
   }
 
   // ----- helpers ---------------------------------------------------------------------------------------------------
@@ -603,6 +634,26 @@ export class ScoringService {
     const writable = dryRun ? null : this.CheckCallerWritesFeatureValues();
     if (writable !== null) return writable;
     return (await this.storedBindingStatus(binding.ID)) === 'Withdrawn' ? { kind: 'binding-withdrawn', bindingId: binding.ID } : null;
+  }
+
+  /** @throws BindingWithdrawnDuringRun when the binding's stored `Status` is now `Withdrawn` */
+  private async assertNotWithdrawn(bindingId: string): Promise<void> {
+    if ((await this.storedBindingStatus(bindingId)) === 'Withdrawn') throw new BindingWithdrawnDuringRun(bindingId);
+  }
+
+  /**
+   * Takes the batch's shared lock on the binding row (held to the transaction's end) and reads its `Status` through it.
+   * Must run inside the batch's transaction.
+   *
+   * @throws BindingWithdrawnDuringRun when the binding's stored `Status` is now `Withdrawn`
+   * @throws Error when the query fails or the binding row is gone
+   */
+  private async lockNotWithdrawn(bindingId: string): Promise<void> {
+    const read = await PublishLocks.RunStored(PUBLISH_LOCK_QUERIES.LockScoringBindingForBatch, { BindingID: bindingId }, this.ctx);
+    if (!read.Success) throw new Error(`ScoringService: locking binding '${bindingId}' for the batch failed: ${read.ErrorMessage}`);
+    const row = read.Results[0];
+    if (!row) throw new Error(`ScoringService: binding '${bindingId}' no longer exists`);
+    if (row['Status'] === 'Withdrawn') throw new BindingWithdrawnDuringRun(bindingId);
   }
 
   /**
@@ -634,9 +685,10 @@ export class ScoringService {
     return this.CloseRun(run, ScoringService.failed(run, model, run.Total, [], e));
   }
 
-  /** The completed result. */
-  private completed(ready: ReadyModel, run: MJMLScoringRunEntity, total: number, dryRun: boolean, written: number = run.Written): ScoringResult {
-    return { Status: 'completed', ScoringRunID: run.ID, ModelID: ready.Model.ID, ModelVersion: ready.Model.Version, ArtifactSha256: ready.Sha256, Total: total, Written: written, DryRun: dryRun };
+  /** The completed result; `SkippedRecords` only when the assembly skipped any. */
+  private completed(ready: ReadyModel, run: MJMLScoringRunEntity, total: number, dryRun: boolean, written: number = run.Written, skipped: readonly ScoringRowError[] = []): ScoringResult {
+    const result: ScoringResult = { Status: 'completed', ScoringRunID: run.ID, ModelID: ready.Model.ID, ModelVersion: ready.Model.Version, ArtifactSha256: ready.Sha256, Total: total, Written: written, DryRun: dryRun };
+    return skipped.length > 0 ? { ...result, SkippedRecords: [...skipped] } : result;
   }
 
   /**

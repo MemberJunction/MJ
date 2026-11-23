@@ -113,6 +113,24 @@ describe('ScoringBindings.Upsert — update', () => {
     expect(factory.Bindings[0]).toMatchObject({ Status: 'Withdrawn', SaveCallCount: 0 });
   });
 
+  it('keeps the existing binding\'s custom view authorization when the update names none (R5: a re-run never widens who sees predictions)', async () => {
+    const factory = new FakeEntityFactory(() => Object.assign(new FakeBinding(), { ViewAuthorizationID: 'auth-custom' }));
+    const binding = (await ScoringBindings.Upsert(input({ bindingId: 'existing-7', viewAuthorizationId: undefined }), factory, USER)) as unknown as FakeBinding;
+    expect(binding).toMatchObject({ ViewAuthorizationID: 'auth-custom', SaveCallCount: 1 });
+  });
+
+  it('sets the view authorization an update names explicitly', async () => {
+    const factory = new FakeEntityFactory(() => Object.assign(new FakeBinding(), { ViewAuthorizationID: 'auth-custom' }));
+    const binding = (await ScoringBindings.Upsert(input({ bindingId: 'existing-7', viewAuthorizationId: 'auth-2' }), factory, USER)) as unknown as FakeBinding;
+    expect(binding.ViewAuthorizationID).toBe('auth-2');
+  });
+
+  it('refuses to create a binding with no view authorization, saving nothing', async () => {
+    const factory = new FakeEntityFactory();
+    await expect(ScoringBindings.Upsert(input({ viewAuthorizationId: undefined }), factory, USER)).rejects.toThrow(/needs a view authorization/);
+    expect(factory.Bindings[0].SaveCallCount).toBe(0);
+  });
+
   it('throws when the binding to update does not exist', async () => {
     await expect(ScoringBindings.Upsert(input({ bindingId: 'missing' }), new FakeEntityFactory(), USER)).rejects.toThrow(/scoring binding 'missing' not found/);
   });
@@ -282,6 +300,13 @@ describe('ScoringBindings.ResolveViewAuthorizationID', () => {
     expect(ScoringBindings.ResolveViewAuthorizationID('auth-explicit', provider)).toBe('auth-explicit');
     expect(ScoringBindings.ResolveViewAuthorizationID(undefined, provider)).toBe('auth-seeded');
     expect(ScoringBindings.ResolveViewAuthorizationID('  ', provider)).toBe('auth-seeded');
+  });
+
+  it('ViewAuthorizationForUpsert: an explicit one always; none for an update (keep the stored one); the seeded one for a create', () => {
+    const provider = withAuthorizations([{ ID: 'auth-seeded', Name: 'View Model Predictions' }]);
+    expect(ScoringBindings.ViewAuthorizationForUpsert(' auth-explicit ', 'existing-7', provider)).toBe('auth-explicit');
+    expect(ScoringBindings.ViewAuthorizationForUpsert(null, 'existing-7', provider)).toBeUndefined();
+    expect(ScoringBindings.ViewAuthorizationForUpsert(undefined, undefined, provider)).toBe('auth-seeded');
   });
 
   it('refuses with a typed error naming the authorization when it is not loaded (never a silent null)', () => {

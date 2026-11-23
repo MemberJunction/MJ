@@ -45,6 +45,8 @@ export const PUBLISH_LOCK_QUERIES = {
   LockModel: 'Predictive Studio: Lock Model For Publish',
   NextModelVersion: 'Predictive Studio: Next Model Version',
   RunningTrainingRun: 'Predictive Studio: Running Training Run',
+  /** A scoring batch's held shared lock on its binding row, returning its `Status` (review R5, D4-289). */
+  LockScoringBindingForBatch: 'Predictive Studio: Lock Scoring Binding For Batch',
 } as const;
 
 /** Thrown when a registry read needs `RunQuery` and the provider cannot run saved queries. */

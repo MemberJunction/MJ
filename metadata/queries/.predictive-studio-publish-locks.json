@@ -166,5 +166,43 @@
         }
       ]
     }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Scoring Binding For Batch",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Hold this scoring binding for my scoring batch and tell me its current status, so a withdrawal cannot clear the binding's predictions while my batch is still writing them.",
+      "Description": "Takes a shared lock on one MJ: ML Model Scoring Bindings row for the rest of the caller's transaction and returns its Status. Predictive Studio's scoring service runs it first in every writing batch and stops the run when the binding is Withdrawn; a withdrawal waits for the batches in flight.",
+      "SQL": "@file:SQL/predictive-studio-lock-scoring-binding-for-batch.sql",
+      "TechnicalDescription": "SELECT Status FROM MLModelScoringBinding WITH (HOLDLOCK) WHERE ID = BindingID. Must run inside the caller's transaction on the caller's provider: the shared (and key-range) lock is held until commit or rollback, and HOLDLOCK makes it a locking read under READ_COMMITTED_SNAPSHOT too. ScoringBindings.Withdraw updates the row's Status first in its own transaction, so it waits for every batch holding the lock and its clearing of the binding's values and copies sees what they wrote (review R5, D4-289). Shared locks are compatible: concurrent runs of one binding do not serialise. Returns one row when the binding exists, none otherwise. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "0CEE54E6-B15E-4874-9836-6BE6F47CD54D"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "BindingID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Model Scoring Bindings row to lock and read.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0A740E41-805A-4DE7-A3FB-AF98873B6858"
+          }
+        }
+      ]
+    }
   }
 ]

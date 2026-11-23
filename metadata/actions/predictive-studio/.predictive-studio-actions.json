@@ -413,14 +413,14 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional. The scoring binding to score through: its pipeline's Published model scores the scope, and the scores are written as the binding's Feature Values (and copied into its column, when it names one). Without it, the predictions are returned and nothing is written."
+            "Description": "Optional. The scoring binding to score through: its pipeline's Published model scores the scope, and the scores are written as the binding's Feature Values (and copied into its column, when it names one). ModelID must name that model (a call naming another version is refused INVALID_INPUT). Without it, the predictions are returned and nothing is written."
           },
           "primaryKey": {
             "ID": "FAEDA21E-56FD-4835-B718-1E3B2A9ACF5B"
           },
           "sync": {
-            "lastModified": "2026-11-18T09:33:28.599Z",
-            "checksum": "412515fec87462b7e0b7946b83782713089c956867aa65e718a09ffddb403a0a"
+            "lastModified": "2026-11-23T06:45:51.343Z",
+            "checksum": "fd0ff705152bafac972ac1cb3236497a15a9d4a6cee62c6333f53c9c20aa2381"
           }
         },
         {
@@ -882,14 +882,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_INPUT",
             "IsSuccess": false,
-            "Description": "The input breaks the action's contract (a BindingID whose pipeline is not the model's, an unknown entity or key, a non-UUID id); the message names the field."
+            "Description": "The input breaks the action's contract (a BindingID whose pipeline is not the model's, a ModelID that is not the model the binding scores with, an unknown entity or key, a non-UUID id); the message names the field."
           },
           "primaryKey": {
             "ID": "0E15135C-21B1-4DBD-B02C-84356B740D5A"
           },
           "sync": {
-            "lastModified": "2026-11-18T14:45:29.027Z",
-            "checksum": "ae81142357b24fb0ad857ea1cf0866ffbd551422f587be0e2169bd0bb908bd69"
+            "lastModified": "2026-11-23T06:45:51.416Z",
+            "checksum": "82acc118641aa2c2852ebf02b6c9b6d28f7a4c6e739762ab72abb39fb173e915"
           }
         }
       ]

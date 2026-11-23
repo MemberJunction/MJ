@@ -79,8 +79,6 @@ import {
   type MatrixData,
   type OutcomeConfig,
   type PredictionUnitSpec,
-  type AssemblyRefusal,
-  type UncoveredRowsCount,
   type ArtifactLoad,
   LABEL_COLUMN,
   PredictionUnit,
@@ -113,7 +111,7 @@ import {
 } from './model-readiness';
 import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString as escapeSQL } from '@memberjunction/global';
-import type { ScoredRow, ScoringResult } from '@memberjunction/predictive-studio-core';
+import type { ScoredRow, ScoringResult, ScoringRowError } from '@memberjunction/predictive-studio-core';
 import { CompositeKey, DatabaseProviderBase, type IMetadataProvider } from '@memberjunction/core';
 import { StoredRowReads } from '../registry/stored-row-reads';
 import { ScoringChecks } from './scoring-checks';
@@ -394,8 +392,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     try {
       const model = await this.ensureModel(context);
       const row = this.recordToPlain(record);
-      const assembly = await this.assembleFeatures(model, [row], context);
-      const featureRows = MLModelInferenceProcessor.MatrixToFeatureRows(assembly.matrix, model.featureSchema);
+      const batch = await this.assembleFeatures(model, [row], context);
+      const skipped = batch.Skipped[0];
+      if (skipped) return { Status: 'Skipped', Warnings: [skipped] };
+      const featureRows = MLModelInferenceProcessor.MatrixToFeatureRows(batch.Assembly.matrix, model.featureSchema);
       const response = await this.callSidecar(model, featureRows);
       const prediction = response.predictions[0];
       if (!prediction) {
@@ -413,7 +413,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * Batch-score many records in one sidecar round-trip. The warm model is loaded
    * once; features for all rows are assembled together (transform-only), then a
    * single `/predict` carries every row. Returns one {@link RecordResult} per
-   * input record, positionally aligned. Useful for bulk scoring paths;
+   * input record, positionally aligned; a record a Prediction Unit's change history does not cover (its unit's policy
+   * `exclude-and-count`) is `Skipped` with the reason in `Warnings`, and the rest are scored. Useful for bulk scoring paths;
    * the per-record `WriteBackProcessor` wrapper still owns write-back when the
    * engine drives records individually.
    *
@@ -428,17 +429,19 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     try {
       const model = await this.ensureModel(context);
       const rows = records.map((r) => this.recordToPlain(r));
-      const assembly = await this.assembleFeatures(model, rows, context);
-      const featureRows = MLModelInferenceProcessor.MatrixToFeatureRows(assembly.matrix, model.featureSchema);
-      const response = await this.callSidecar(model, featureRows);
-      const results = records.map((rec, i) => {
-        const prediction = response.predictions[i];
+      const batch = await this.assembleFeatures(model, rows, context);
+      const featureRows = MLModelInferenceProcessor.MatrixToFeatureRows(batch.Assembly.matrix, model.featureSchema);
+      const predictions = featureRows.length > 0 ? (await this.callSidecar(model, featureRows)).predictions : [];
+      let next = 0;
+      return records.map((rec, i): RecordResult => {
+        const skipped = batch.Skipped[i];
+        if (skipped) return { Status: 'Skipped', Warnings: [skipped] };
+        const prediction = predictions[next++];
         if (!prediction) {
-          return { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
+          return { Status: 'Failed', ErrorMessage: 'Sidecar returned no prediction for the record' };
         }
-        return { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction, rec.RecordID) };
+        return { Status: 'Succeeded', ResultPayload: this.toPayload(model, prediction, rec.RecordID) };
       });
-      return results;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MLModelInferenceProcessor: batch scoring failed: ${message}`);
@@ -490,16 +493,21 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   }
 
   /**
-   * The record results of a bound batch, aligned with `ids`: a completed run's records succeed with their scores; a
+   * The record results of a bound batch, aligned with `ids`: a completed run's records succeed with their scores (a
+   * record the run skipped is `Skipped` with the run's reason in `Warnings`); a
    * failed or refused run fails every record with the run in plain words (a failing record with its own error), the
    * structured result on the payload. Pure.
    */
   public static BoundResults(ids: readonly string[], result: ScoringResult, rows: readonly ScoredRow[]): RecordResult[] {
     if (result.Status === 'completed') {
       const byId = new Map(rows.map((r) => [r.recordId.toLowerCase(), r]));
-      return ids.map((id) => {
+      const skipped = new Map((result.SkippedRecords || []).map((r) => [r.recordId.toLowerCase(), r.message]));
+      return ids.map((id): RecordResult => {
         const row = byId.get(id.toLowerCase());
-        return row ? { Status: 'Succeeded' as const, ResultPayload: MLModelInferenceProcessor.boundPayload(row) } : { Status: 'Failed' as const, ErrorMessage: `Scoring run ${result.ScoringRunID} returned no score for the record` };
+        if (row) return { Status: 'Succeeded', ResultPayload: MLModelInferenceProcessor.boundPayload(row) };
+        const reason = skipped.get(id.toLowerCase());
+        if (reason) return { Status: 'Skipped', Warnings: [reason], ResultPayload: { scoringRunId: result.ScoringRunID, status: result.Status } };
+        return { Status: 'Failed', ErrorMessage: `Scoring run ${result.ScoringRunID} returned no score for the record` };
       });
     }
     const message = ScoringRefusedError.Describe(result);
@@ -613,7 +621,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   public async AssembleTransformOnly(rows: SourceRow[], context: RecordProcessorContext): Promise<FeatureAssemblyResult> {
     const model = await this.ensureModel(context);
     if (model.unit !== null) throw new Error(`MLModelInferenceProcessor: model '${model.modelId}' was trained on a Prediction Unit; assemble it as of a date`);
-    return this.assembleFeatures(model, rows, context);
+    return (await this.assembleFeatures(model, rows, context)).Assembly;
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
@@ -767,8 +775,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     model: LoadedModel,
     rows: SourceRow[],
     context: RecordProcessorContext,
-  ): Promise<FeatureAssemblyResult> {
-    if (model.unit !== null) return this.assembleUnitFeatures(model, rows, context);
+  ): Promise<BatchAssembly> {
+    if (model.unit !== null) return this.assembleUnitFeatures(model, model.unit, rows, context);
     const assembly = await this.assembler.assemble({
       targetEntityName: model.targetEntityName,
       records: rows,
@@ -784,7 +792,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       provider: context.Provider,
     });
     this.assertHasColumns(model, assembly);
-    return assembly;
+    return { Assembly: assembly, Skipped: rows.map(() => null) };
   }
 
   /** Refuse to score with an empty matrix when the model's schema expects features (degenerate predictions). */
@@ -800,25 +808,29 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /**
    * A unit model's matrix, assembled as of each row's decision date. A refusal is thrown as a typed
-   * {@link TrainingRefusedError}. A row the history cannot read as of its decision date (its history starts after it,
-   * or its parent was hard-deleted before it) fails the whole batch, since the results are aligned by position: it is
-   * thrown as the typed `decision-date-before-change-history` refusal training's `refuse` policy raises, built from the
-   * first uncovered entity field, whatever the unit's `onUncoveredRow` policy.
+   * {@link TrainingRefusedError}: under the unit's `onUncoveredRow: 'refuse'` that includes a row the history cannot
+   * read as of its decision date. Under `exclude-and-count` such a row is left out of the matrix and its reason is
+   * returned at its input position ({@link UncoveredSkips}), so the other rows are still scored.
    */
-  private async assembleUnitFeatures(model: LoadedModel, rows: SourceRow[], context: RecordProcessorContext): Promise<FeatureAssemblyResult> {
+  private async assembleUnitFeatures(model: LoadedModel, unit: LoadedUnitModel, rows: SourceRow[], context: RecordProcessorContext): Promise<BatchAssembly> {
     const assembled = await this.AssembleForScoring(rows, context, 'unit-rule');
     if (assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembled.Refusal });
-    const first = assembled.UncoveredRowsExcluded[0];
-    if (first) throw new TrainingRefusedError({ stage: 'assembly', reason: MLModelInferenceProcessor.uncoveredRefusal(assembled, first) });
     const assembly = AsOfFeatureAssembler.ToFeatureAssemblyResult(assembled, null, LABEL_COLUMN);
     this.assertHasColumns(model, assembly);
-    return assembly;
+    const skips = new Map(MLModelInferenceProcessor.UncoveredSkips(assembled).map((s) => [s.recordId.toLowerCase(), s.message]));
+    const rowEntity = this.scoringSeams(context).Metadata.Entity(unit.RowEntity);
+    if (!rowEntity) throw new Error(`MLModelInferenceProcessor: the unit row entity "${unit.RowEntity}" of model '${this.modelId}' is not registered`);
+    return { Assembly: assembly, Skipped: rows.map((row) => skips.get(this.rowKey(row, rowEntity).toLowerCase()) || null) };
   }
 
-  /** The refusal of an uncovered entity field: its history start is the one the assembly's coverage reports for it. */
-  private static uncoveredRefusal(assembled: AsOfAssembledMatrix, first: UncoveredRowsCount): AssemblyRefusal {
-    const coverage = assembled.Coverage.find((c) => c.entity === first.entity && c.field === first.field);
-    return { kind: 'decision-date-before-change-history', entity: first.entity, field: first.field, historyStart: coverage?.historyStart || null, rowsAffected: first.rows };
+  /**
+   * The rows an assembly left out because a value they read is not covered by its change history, in the order met,
+   * each with the fields its history does not cover. Pure.
+   */
+  public static UncoveredSkips(assembled: AsOfAssembledMatrix): ScoringRowError[] {
+    return [...assembled.UncoveredFieldsByRow].map(([recordId, fields]) => ({
+      recordId, message: `not scored: the change history of ${fields.join(', ')} does not cover its decision date`,
+    }));
   }
 
   // region: as-of assembly (unit models) ----------------------------------------
@@ -1013,6 +1025,12 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     // No preloaded row — surface the ids so assembly can at least key the record.
     return { [this.primaryKeyField]: record.RecordID };
   }
+}
+
+/** A batch's feature matrix and, per input row, why it was left out of the matrix (null: assembled, in matrix order). */
+interface BatchAssembly {
+  readonly Assembly: FeatureAssemblyResult;
+  readonly Skipped: readonly (string | null)[];
 }
 
 /** The structured payload a successful scoring run carries on its `RecordResult`. */

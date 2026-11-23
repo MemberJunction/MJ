@@ -103,7 +103,7 @@ export interface ScoringBindingRequest {
   readonly ValueKind: ScoringValueKind | undefined;
   /** The prediction's feature name; defaults to the model's pipeline name (the plan's default for a binding, §5.8.6). */
   readonly FeatureName: string | undefined;
-  /** Who may see the predictions; defaults through {@link ScoringBindings.ResolveViewAuthorizationID}. */
+  /** Who may see the predictions: a new binding defaults to the seeded one, an existing binding keeps its own ({@link ScoringBindings.ViewAuthorizationForUpsert}). */
   readonly ViewAuthorizationID: string | undefined;
   /** The binding mode — `'Scheduled'` or `'OnDemand'`. */
   readonly Mode: ScoringBindingMode;
@@ -139,12 +139,13 @@ export async function CreateScoringBinding(request: ScoringBindingRequest): Prom
     const model = await readBindingModel(request, user);
     const featureName = IsNonEmpty(request.FeatureName) ? request.FeatureName.trim() : model.Pipeline || model.PipelineID;
     const existing = await readExistingBinding(request, featureName, user);
+    const bindingId = existing !== null && UUIDsEqual(existing.MLTrainingPipelineID, model.PipelineID) ? existing.ID : undefined;
     return await ScoringBindings.Upsert(
       {
-        bindingId: existing !== null && UUIDsEqual(existing.MLTrainingPipelineID, model.PipelineID) ? existing.ID : undefined,
+        bindingId,
         mlTrainingPipelineId: model.PipelineID,
         featureName,
-        viewAuthorizationId: ScoringBindings.ResolveViewAuthorizationID(request.ViewAuthorizationID, request.Provider),
+        viewAuthorizationId: ScoringBindings.ViewAuthorizationForUpsert(request.ViewAuthorizationID, bindingId, request.Provider),
         targetEntityId: request.TargetEntityID,
         recordProcessId: request.RecordProcessID,
         targetColumn: request.TargetColumn,

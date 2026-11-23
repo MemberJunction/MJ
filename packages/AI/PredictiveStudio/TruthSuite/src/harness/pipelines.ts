@@ -1,8 +1,9 @@
 import { EntityFieldTSType, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import { MetadataEntityFactory, PipelineMigration } from '@memberjunction/predictive-studio';
+import type { MJMLEvaluationProtocolEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { EvaluationProtocolVersioning, MetadataEntityFactory, PipelineMigration } from '@memberjunction/predictive-studio';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
+  EvaluationProtocol,
   TIME_INDEX_HOLD_REASON,
   UtcDay,
   type CandidateFeatureKind,
@@ -89,6 +90,27 @@ export class HarnessPipelines {
     if (!(await p.Save())) throw new Error(`pipeline save failed: ${p.LatestResult?.CompleteMessage || 'no message'}`);
     if (spec.AsOf.Mode === 'none') await HarnessPipelines.migrate(provider, user, p);
     return p;
+  }
+
+  /**
+   * Points a protocol-bound pipeline at the next version of its Evaluation Protocol with `autoPublishKeepBaseline: true`
+   * and returns that version's ID; null (nothing saved) for a pipeline bound to no protocol. The gate harness calls
+   * MJAPI with an API key, which the lifecycle gate records as a `system` initiator (D4-280), so a fixture the gate
+   * publishes reaches `Published` with a kept simple baseline only under this setting (D-031; OF4-30 for the agent
+   * gates). Authored by `user` as a person. Throws when a read or a save fails.
+   */
+  public static async PublishKeptBaselines(provider: IMetadataProvider, user: UserInfo, p: MJMLTrainingPipelineEntity): Promise<string | null> {
+    if (!p.EvaluationProtocolID) return null;
+    const factory = new MetadataEntityFactory(provider);
+    const latest = await factory.getEntityObject<MJMLEvaluationProtocolEntity>('MJ: ML Evaluation Protocols', user);
+    if (!(await latest.Load(p.EvaluationProtocolID))) throw new Error(`pipeline ${p.Name}: Evaluation Protocol ${p.EvaluationProtocolID} not found`);
+    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(latest);
+    if (parsed.Ok === false) throw new Error(`pipeline ${p.Name}: Evaluation Protocol ${latest.ID} does not parse: ${parsed.Errors.join('; ')}`);
+    const promotion = { ...parsed.Value.promotion, autoPublishKeepBaseline: true };
+    const next = await EvaluationProtocolVersioning.CreateNextEvaluationProtocolVersion(latest, { promotion }, { kind: 'human', userId: user.ID }, factory, user);
+    p.EvaluationProtocolID = next.ID;
+    if (!(await p.Save())) throw new Error(`pipeline ${p.Name}: pointing it at Evaluation Protocol v${next.Version} failed: ${p.LatestResult?.CompleteMessage || 'no message'}`);
+    return next.ID;
   }
 
   /** Binds version 1 of the pipeline's unit and protocol through the pipeline migration; throws unless it migrated. */

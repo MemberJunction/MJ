@@ -11,6 +11,7 @@ import type {
   PredictionUnitSpec,
   PredictionUnitColumns,
   FeatureColumnSpec,
+  ScoringResult,
 } from '@memberjunction/predictive-studio-core';
 import type {
   RecordProcessorContext,
@@ -789,18 +790,19 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     }
   });
 
-  it('fails the batch with a typed refusal naming the entity and field when a scored row\'s parent was hard-deleted before its decision date', async () => {
+  it('skips a scored row whose parent was hard-deleted before its decision date, naming the field, and scores the rest of the batch (R5)', async () => {
     // Deleted 2025-03-01: training reads y2024-1 and excludes y2025-1 (exclude-and-count); scoring y2025-1 cannot read it.
-    const { deps } = await unitModel(undefined, pipelineUnits, new Set<string>(), worldWithDeletedPerson('2025-03-01T00:00:00Z', false, 'exclude-and-count'));
+    const { deps, sidecar } = await unitModel(undefined, pipelineUnits, new Set<string>(), worldWithDeletedPerson('2025-03-01T00:00:00Z', false, 'exclude-and-count'));
     const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps });
     const assembled = await processor.AssembleForScoring([{ ID: 'y2025-1' }], ctx(), 'unit-rule');
     expect(assembled.Status === 'assembled' && assembled.UncoveredRowsExcluded).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
-    const errors = ConsoleCapture.Errors();
-    const records: RecordRef[] = [{ EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2024-1' }, { EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2025-1' }];
+    const records: RecordRef[] = [{ EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2025-1' }, { EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2024-1' }];
     const results = await processor.ProcessBatch(records, ctx(UnitYearsWorld.YearsEntity.ID));
-    const refusal = TrainingRefusedError.DescribeTrainingRefusal({ stage: 'assembly', reason: { kind: 'decision-date-before-change-history', entity: 'People', field: 'Status', historyStart: '2023-01-01T00:00:00.000Z', rowsAffected: 1 } });
-    expect(results).toEqual([{ Status: 'Failed', ErrorMessage: refusal }, { Status: 'Failed', ErrorMessage: refusal }]);
-    expect(ConsoleCapture.Lines(errors)).toEqual([`MLModelInferenceProcessor: batch scoring failed: ${refusal}`]);
+    expect(results.map((r) => [r.Status, r.Warnings || null])).toEqual([
+      ['Skipped', ['not scored: the change history of People.Status does not cover its decision date']], ['Succeeded', null],
+    ]);
+    expect(sidecar.Requests[sidecar.Requests.length - 1].rows).toHaveLength(1);
+    expect(results[1].ResultPayload).toMatchObject({ modelId: 'model-1' });
   });
 
   it('fails the run when the training rows cannot be read, naming the cause', async () => {
@@ -1111,5 +1113,13 @@ describe('MLModelInferenceProcessor — an unbound process writes no Feature Val
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('MLModelInferenceProcessor.BoundResults — a record the run skipped (R5)', () => {
+  it('reports a skipped record as Skipped with the run\'s reason, not as a failure', () => {
+    const reason = 'not scored: the change history of People.Status does not cover its decision date';
+    const result: ScoringResult = { Status: 'completed', ScoringRunID: 'run-1', ModelID: 'model-1', ModelVersion: 1, ArtifactSha256: 'a'.repeat(64), Total: 1, Written: 0, DryRun: false, SkippedRecords: [{ recordId: 'Y2', message: reason }] };
+    expect(MLModelInferenceProcessor.BoundResults(['y2'], result, [])).toEqual([{ Status: 'Skipped', Warnings: [reason], ResultPayload: { scoringRunId: 'run-1', status: 'completed' } }]);
   });
 });

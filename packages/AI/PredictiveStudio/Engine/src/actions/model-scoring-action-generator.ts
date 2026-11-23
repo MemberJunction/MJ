@@ -66,7 +66,7 @@ interface ParamSpec {
  * action writes (the `ScoringResult` union's fields).
  */
 const SCORING_RUN_PARAM_SPECS: readonly ParamSpec[] = [
-  { Name: 'BindingID', Type: 'Input', ValueType: 'Scalar', IsRequired: false, Description: 'Optional. The scoring binding to score through: its Feature Values (and column copy) are written. Without it, the predictions are returned and nothing is written.' },
+  { Name: 'BindingID', Type: 'Input', ValueType: 'Scalar', IsRequired: false, Description: 'Optional. The scoring binding to score through: its Feature Values (and column copy) are written. This model must be the one the binding pipeline serves (its Published model), else the call is refused INVALID_INPUT. Without it, the predictions are returned and nothing is written.' },
   { Name: 'AsOfDate', Type: 'Input', ValueType: 'Scalar', IsRequired: false, Description: 'Optional. The date the scope is scored as of (ISO); the run date when omitted.' },
   { Name: 'ScoringRunID', Type: 'Output', ValueType: 'Scalar', IsRequired: false, Description: 'The MJ: ML Scoring Runs row of the call (also on a refused or failed run).' },
   { Name: 'Status', Type: 'Output', ValueType: 'Scalar', IsRequired: false, Description: 'The scoring run\'s status: completed, refused or failed.' },

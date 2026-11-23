@@ -36,6 +36,7 @@ import {
     LoadMLModelInferenceProcessor,
     LoadPredictiveStudioActions,
     TRAIN_MODEL_DRIVER_CLASS,
+    ScoringBindingStatusAuthorisations,
     type MLInferenceDeps,
 } from '@memberjunction/predictive-studio';
 // The sidecar request/response contracts live in the Core package (the engine consumes them and, per
@@ -325,9 +326,13 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         // Cleanup: delete the fixtures child → parent (binding → model → pipeline) so FKs never block a
         // delete. Each is guarded + best-effort — a mid-Setup crash may have created only some (R4).
         if (f.Binding) {
-            // A binding deletes only once withdrawn (it has no column copy to clear here).
+            // A binding deletes only once withdrawn (it has no column copy to clear here). Its Status changes only under
+            // the withdrawal's one-shot authorisation (PredictiveStudioScoringBindingGuard); the fixture's authorization
+            // is any loaded one, which the run's user need not hold, so this teardown authorises the change itself.
             f.Binding.Status = 'Withdrawn';
+            ScoringBindingStatusAuthorisations.Instance.Authorise(f.Binding, { From: 'Active', To: 'Withdrawn' });
             if (await f.Binding.Save().catch(() => false)) await f.Binding.Delete().catch(() => undefined);
+            ScoringBindingStatusAuthorisations.Instance.Revoke(f.Binding);
         }
         if (f.Model) {
             await f.Model.Delete().catch(() => undefined);

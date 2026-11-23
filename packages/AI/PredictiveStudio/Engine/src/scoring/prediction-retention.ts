@@ -4,7 +4,10 @@
  * The daily prediction maintenance of §5.8.7 (D4-25, D4-28): the binding backfill, which gives every binding without
  * a view authorization the seeded "View Model Predictions" one, and the retention sweep, which deletes a binding's
  * `Source = 'Model'` Feature Values older than its `RetentionDays` — active and withdrawn bindings alike — and never a
- * binding, model or pipeline. `MJ: Latest Feature Values` reads the live table, so nothing is refreshed afterwards.
+ * binding, model or pipeline. Each record's newest `Champion` row of the binding is kept however old it is: the column
+ * copy's human-value guard reads "no copied row" as "a person entered this" (`BindingHumanValueGuard.IsHumanOwned`),
+ * so deleting it would turn the binding's own stale copy into a preserved `Human` value. `MJ: Latest Feature Values`
+ * reads the live table, so nothing is refreshed afterwards.
  *
  * The reads and writes go through an {@link IPredictionRetentionStore}; the production store
  * ({@link ProviderPredictionRetentionStore}) reads with `RunView` on the context's provider as its user and deletes each
@@ -15,6 +18,7 @@ import type { MJFeatureValueEntity, MJMLModelScoringBindingEntity } from '@membe
 import { EscapeSQLString } from '@memberjunction/global';
 import { PredictionViewAuthorization, UtcDay } from '@memberjunction/predictive-studio-core';
 import type { RegistryContext } from '../registry/registry-context';
+import { ScoringBindingAuthorizationBackfills } from '../governance/scoring-binding-authorization-backfills';
 
 /** The binding columns the sweep reads. */
 export type RetentionBindingRow = Pick<MJMLModelScoringBindingEntity, 'ID' | 'FeatureName' | 'Status' | 'RetentionDays'>;
@@ -57,7 +61,8 @@ export interface IPredictionRetentionStore {
   ReadBindingsWithoutViewAuthorization(): Promise<UnauthorizedBinding[]>;
   /**
    * Deletes, oldest first, at most `max` of the binding's `Source = 'Model'` rows whose `EffectiveAsOf` is before
-   * `before`, one `BaseEntity.Delete()` each, skipping the rows in `skipIDs` (those whose delete already failed this
+   * `before`, one `BaseEntity.Delete()` each, never a record's newest `Champion` row of the binding (the copy the
+   * human-value guard compares the column with), skipping the rows in `skipIDs` (those whose delete already failed this
    * run, so a row that keeps failing is neither retried nor allowed to fill every later batch).
    */
   DeleteExpiredModelRows(bindingId: string, before: Date, max: number, skipIDs: readonly string[]): Promise<RetentionBatchOutcome>;
@@ -188,10 +193,17 @@ export class PredictionRetention {
 
   /**
    * The `ExtraFilter` of one batch read: the binding's `Source = 'Model'` rows with an `EffectiveAsOf` before
-   * `before` (a strict comparison: the cutoff instant itself is kept), less the rows in `skipIDs`. Pure.
+   * `before` (a strict comparison: the cutoff instant itself is kept), less each record's newest `Champion` row of the
+   * binding (ranked as `ScoringBindings.Newest` ranks: `EffectiveAsOf`, then `ComputedAt`; `ID` breaks a full tie) and
+   * less the rows in `skipIDs`. Pure.
+   *
+   * @param featureValuesView the bracketed `[schema].[view]` of `MJ: Feature Values` the keep subquery reads
    */
-  public static ExpiredFilter(bindingId: string, before: Date, skipIDs: readonly string[] = []): string {
-    const filter = `MLModelScoringBindingID = '${EscapeSQLString(bindingId)}' AND Source = 'Model' AND EffectiveAsOf < '${before.toISOString()}'`;
+  public static ExpiredFilter(bindingId: string, before: Date, featureValuesView: string, skipIDs: readonly string[] = []): string {
+    const binding = `MLModelScoringBindingID = '${EscapeSQLString(bindingId)}' AND Source = 'Model'`;
+    const newestChampion = `SELECT ID FROM (SELECT ID, ROW_NUMBER() OVER (PARTITION BY RecordID ORDER BY EffectiveAsOf DESC, ComputedAt DESC, ID DESC) AS NewestRank`
+      + ` FROM ${featureValuesView} WHERE ${binding} AND Role = 'Champion') AS ChampionRows WHERE NewestRank = 1`;
+    const filter = `${binding} AND EffectiveAsOf < '${before.toISOString()}' AND ID NOT IN (${newestChampion})`;
     if (skipIDs.length === 0) return filter;
     return `${filter} AND ID NOT IN (${skipIDs.map((id) => `'${EscapeSQLString(id)}'`).join(', ')})`;
   }
@@ -240,15 +252,23 @@ export class ProviderPredictionRetentionStore implements IPredictionRetentionSto
       ID: binding.ID,
       Assign: async (authorizationId: string): Promise<string | null> => {
         binding.ViewAuthorizationID = authorizationId;
-        return (await binding.Save()) ? null : binding.LatestResult?.CompleteMessage || 'Save() returned false';
+        // The binding guard lets only this backfill assign an authorization to a binding stored without one (D4-28).
+        ScoringBindingAuthorizationBackfills.Instance.Authorise(binding, authorizationId);
+        try {
+          return (await binding.Save()) ? null : binding.LatestResult?.CompleteMessage || 'Save() returned false';
+        } finally {
+          ScoringBindingAuthorizationBackfills.Instance.Revoke(binding);
+        }
       },
     }));
   }
 
   /** @inheritdoc */
   public async DeleteExpiredModelRows(bindingId: string, before: Date, max: number, skipIDs: readonly string[]): Promise<RetentionBatchOutcome> {
+    const values = this.provider.EntityByName('MJ: Feature Values');
+    if (!values) throw new Error('PredictionRetention: the provider does not describe MJ: Feature Values, so the newest copies cannot be kept');
     const r = await RunView.FromMetadataProvider(this.provider).RunView<MJFeatureValueEntity>({
-      EntityName: 'MJ: Feature Values', ExtraFilter: PredictionRetention.ExpiredFilter(bindingId, before, skipIDs),
+      EntityName: 'MJ: Feature Values', ExtraFilter: PredictionRetention.ExpiredFilter(bindingId, before, `[${values.SchemaName}].[${values.BaseView}]`, skipIDs),
       OrderBy: 'EffectiveAsOf ASC, ID ASC', MaxRows: max, ResultType: 'entity_object', BypassCache: true,
     }, this.user);
     if (!r.Success) throw new Error(`PredictionRetention: reading binding ${bindingId}'s expired predictions failed: ${r.ErrorMessage || 'unknown error'}`);

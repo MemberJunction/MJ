@@ -3,7 +3,10 @@
  *
  * `StoredSignOffLookup` — the lifecycle gate's sign-off seam (`GateContext.SignOffLookup`, §5.2), filled from
  * `MJ: ML Model Publish Records`: the request's approving `sign-off` record, only while the evidence it was made over
- * is the evidence the stored rows give now. Read past the RunView cache (D4-108); every ID comparison is `UUIDsEqual`.
+ * is the evidence the stored rows give now, and only while the row has the shape `SignOffService` writes: a person as
+ * approver who is also its initiator. Rows are created only by `SignOffService` (`PredictiveStudioPublishRecordGuard`);
+ * the shape check keeps a row written any other way (SQL, a future writer) from approving a publish. Read past the
+ * RunView cache (D4-108); every ID comparison is `UUIDsEqual`.
  */
 import type { MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
@@ -17,8 +20,8 @@ import { StoredRowReads } from '../registry/stored-row-reads';
 export class StoredSignOffLookup implements IGateSignOffLookup {
   /**
    * The `sign-off` record `request.signOffId` names, when it is for `request.modelId` and `request.purpose`, its
-   * decision is `approve`, and its stored `EvidenceSha256` equals `evidenceSha256` (the evidence rebuilt from stored
-   * rows in this publish); null otherwise. A request without a `signOffId`, or with one that is not a UUID, returns null
+   * decision is `approve`, its stored `EvidenceSha256` equals `evidenceSha256` (the evidence rebuilt from stored rows in
+   * this publish), and it was written as `SignOffService` writes it ({@link WrittenBySignOffService}); null otherwise. A request without a `signOffId`, or with one that is not a UUID, returns null
    * without a read.
    *
    * @throws Error when the read fails, or the record's stored evidence or `OverridesFlags` does not parse
@@ -29,7 +32,18 @@ export class StoredSignOffLookup implements IGateSignOffLookup {
     const row = await StoredSignOffLookup.readRecord(id, ctx);
     if (row === null || !UUIDsEqual(row.ID, id) || row.ModelID === null || !UUIDsEqual(row.ModelID, request.modelId)) return null;
     if (row.Kind !== 'sign-off' || row.Purpose !== request.purpose || row.Decision !== 'approve' || row.EvidenceSha256 !== evidenceSha256) return null;
+    if (!StoredSignOffLookup.WrittenBySignOffService(row)) return null;
     return StoredSignOffLookup.toSignOff(row, row.ModelID);
+  }
+
+  /**
+   * True when `row` has the shape `SignOffService` writes: `ApproverKind` `user` with a `UserID`, and an `Initiator`
+   * that parses to `{ kind: 'human', userId }` naming that same user (the approver is its own initiator). Pure.
+   */
+  public static WrittenBySignOffService(row: Pick<MJMLModelPublishRecordEntity, 'ApproverKind' | 'UserID' | 'InitiatorObject'>): boolean {
+    if (row.ApproverKind !== 'user' || row.UserID === null) return false;
+    const initiator: MJMLModelPublishRecordEntity['InitiatorObject'] | null = row.InitiatorObject;
+    return initiator !== null && initiator.kind === 'human' && UUIDsEqual(initiator.userId, row.UserID);
   }
 
   /** The `SignOff` view of an approving record. */

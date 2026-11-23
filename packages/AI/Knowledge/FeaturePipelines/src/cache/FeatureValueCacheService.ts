@@ -489,7 +489,8 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
      * `UQ_FeatureValue_ModelRow` (binding, entity, record, as-of instant, role): a row already on its key (a same as-of
      * date re-run) is replaced in place, value and lineage; any other is inserted. The batch's existing rows are read in
      * one query; the rows are saved one at a time in the caller's transaction. `ValueKeyHash` stays null, `ComputedAt` is
-     * the write time.
+     * the write time. An insert that fails on `UQ_FeatureValue_ModelRow` because another run of the binding inserted the
+     * key after this batch's read (two same-day runs) replaces that row, as the later re-run it is, and counts Replaced.
      * @returns How many rows were inserted and how many replaced.
      * @throws FeatureValueKeyError when a record appears twice in the batch (nothing is written); FeatureValueSaveError
      * when a row cannot be saved; Error when the existing rows cannot be read.
@@ -504,8 +505,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         // Sequential, not Promise.all: the caller's entity transaction belongs to one async scope
         for (const row of params.Rows) {
             const stored = existing.get(FeatureValueCacheService.recordKey(row.RecordID));
-            await this.WriteModelRow(params, row, stored);
-            outcome[stored ? 'Replaced' : 'Inserted']++;
+            outcome[await this.WriteModelRow(params, row, stored)]++;
         }
         return outcome;
     }
@@ -551,17 +551,45 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
-     * Saves one prediction: replaces `stored` in place, or inserts a new row on its key.
-     * @throws FeatureValueSaveError when the save fails.
+     * Saves one prediction: replaces `stored` in place, or inserts a new row on its key. An insert that fails on
+     * `UQ_FeatureValue_ModelRow` reads the key again (fresh): a row another run inserted there since this batch's read is
+     * replaced in place, as {@link WriteOne} settles the same race on its key.
+     * @returns 'Replaced' when a row on the key was replaced, 'Inserted' when a new row was saved.
+     * @throws FeatureValueSaveError when the save fails (an insert's, when no row holds the key on the second read).
      */
-    protected async WriteModelRow(params: RecordModelValuesParams, row: ModelValueRow, stored: MJFeatureValueEntity | undefined): Promise<void> {
-        const fv = stored || (await params.Provider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', params.ContextUser));
-        if (!stored) {
-            fv.NewRecord();
-            this.AssignModelKeyColumns(fv, params, row);
+    protected async WriteModelRow(params: RecordModelValuesParams, row: ModelValueRow, stored: MJFeatureValueEntity | undefined): Promise<keyof RecordModelValuesOutcome> {
+        if (stored) {
+            await this.SaveModelRow(params, row, stored);
+            return 'Replaced';
         }
+        const fv = await params.Provider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', params.ContextUser);
+        fv.NewRecord();
+        this.AssignModelKeyColumns(fv, params, row);
         this.AssignModelValueColumns(fv, params, row);
         const failure = await this.SaveFailure(fv);
+        if (failure === null) {
+            return 'Inserted';
+        }
+        const concurrent = failure.includes(FeatureValueCacheService.ModelRowIndexName)
+            ? (await this.LoadModelRows({ ...params, Rows: [row] })).get(FeatureValueCacheService.recordKey(row.RecordID))
+            : undefined;
+        if (!concurrent) {
+            throw new FeatureValueSaveError(params.FeatureName, row.RecordID, failure);
+        }
+        await this.SaveModelRow(params, row, concurrent);
+        return 'Replaced';
+    }
+
+    /** The unique index on a Model row's key (binding, entity, record, as-of instant, role): a second insert fails on it. */
+    protected static readonly ModelRowIndexName = 'UQ_FeatureValue_ModelRow';
+
+    /**
+     * Replaces a stored Model row's value and lineage in place.
+     * @throws FeatureValueSaveError when the save fails.
+     */
+    protected async SaveModelRow(params: RecordModelValuesParams, row: ModelValueRow, stored: MJFeatureValueEntity): Promise<void> {
+        this.AssignModelValueColumns(stored, params, row);
+        const failure = await this.SaveFailure(stored);
         if (failure !== null) {
             throw new FeatureValueSaveError(params.FeatureName, row.RecordID, failure);
         }

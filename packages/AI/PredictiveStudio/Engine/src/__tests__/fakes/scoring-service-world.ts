@@ -227,6 +227,10 @@ export class RuntimeDouble implements IScoringModelRuntime {
   public readonly Renamed = new Map<string, { readonly From: string; readonly To: string }>();
   /** Models whose assembly refuses, with the refusal. */
   public readonly Refusals = new Map<string, AssemblyRefusal>();
+  /** Per model, a feature column its assembly leaves null on every row (check 6 refuses it). */
+  public readonly EmptyColumns = new Map<string, string>();
+  /** Per model, the records its assembly cannot cover (dropped as skipped), with the reason. */
+  public readonly Uncovered = new Map<string, ReadonlyMap<string, string>>();
   /** The provider each assembly read through (its caller's context), in call order. */
   public readonly AssemblyProviders: IMetadataProvider[] = [];
   /** Every assembly's as-of argument, in call order. */
@@ -248,16 +252,18 @@ export class RuntimeDouble implements IScoringModelRuntime {
       Loaded: loaded,
       Assemble: async (ids, _key, asOf, _entity, ctx) => {
         this.AssemblyProviders.push(ctx.Provider);
-        return refusal ? { Status: 'refused', Refusal: refusal } : this.assemble(loaded, renamed, ids, asOf);
+        return refusal ? { Status: 'refused', Refusal: refusal } : this.assemble(loaded, renamed, ids, asOf, this.Uncovered.get(model.ID) || new Map<string, string>(), this.EmptyColumns.get(model.ID) || null);
       },
     };
   }
-  private assemble(loaded: LoadedModel, renamed: { readonly From: string; readonly To: string } | undefined, ids: readonly string[], asOf: 'unit-rule' | Date): ScoringAssembly {
+  private assemble(loaded: LoadedModel, renamed: { readonly From: string; readonly To: string } | undefined, all: readonly string[], asOf: 'unit-rule' | Date, uncovered: ReadonlyMap<string, string>, empty: string | null): ScoringAssembly {
     this.AsOfs.push(asOf);
     const columns = loaded.featureSchema.map((c) => (renamed && c.Name === renamed.From ? renamed.To : c.Name));
+    const ids = all.filter((id) => !uncovered.has(id));
     return {
-      Status: 'assembled', Matrix: { columns, rows: ids.map((id) => columns.map((c) => (c === 'Tenure' ? ScoreOf(id) : 3))) },
+      Status: 'assembled', Matrix: { columns, rows: ids.map((id) => columns.map((c) => (c === empty ? null : c === 'Tenure' ? ScoreOf(id) : 3))) },
       Columns: columns.map((Name) => ({ Name, Kind: 'numeric' })), RowIDs: [...ids],
+      Skipped: all.filter((id) => uncovered.has(id)).map((recordId) => ({ recordId, message: uncovered.get(recordId) || '' })),
       HashColumns: loaded.unit === null ? null : columns.map((name) => ({ name, encoding: 'numeric', sourceColumn: name })),
     };
   }

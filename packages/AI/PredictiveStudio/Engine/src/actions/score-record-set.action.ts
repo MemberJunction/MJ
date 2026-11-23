@@ -47,7 +47,7 @@ export interface ScoreRecordSetScope {
 
 /** What the runner is asked to score. */
 export interface ScoreRecordSetRequest {
-  /** The model; with a `bindingId` it must be a model of the binding's pipeline. */
+  /** The model; with a `bindingId` it must be the model the binding scores with (its pipeline's serving model). */
   modelId: string;
   /** The binding to score through and write for; without it the call predicts and writes nothing. */
   bindingId?: string;

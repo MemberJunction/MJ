@@ -20,6 +20,7 @@ import { StorageProviderArtifactLoader } from '../../scoring/storage-provider-ar
 import type { GateContext, PublishRequest } from '../../registry/gate-context';
 import { GateContexts } from '../../registry/gate-seams';
 import { LifecycleGate } from '../../registry/lifecycle-gate';
+import { PublishRecordWriteAuthorisations } from '../../registry/publish-record-write-authorisations';
 import { PublishRecords } from '../../registry/publish-records';
 import { StoredEvidenceBuilder } from '../evidence-builder';
 import { SignOffService, type SignOffInput } from '../sign-off-service';
@@ -145,6 +146,25 @@ describe('SignOffService.Record (additions)', () => {
     store.FailingSaves.set('MJ: ML Model Publish Records', 'constraint violated');
     await expect(service.Record(approve, human, ctx)).rejects.toThrow('constraint violated');
   });
+  it('refuses to record a sign-off for a person other than the context user, writing no row', async () => {
+    const someoneElse: HumanActor = { kind: 'human', userId: '6A1D2E3F-0000-4000-8000-00000000C0DE' };
+    await expect(service.Record(approve, someoneElse, ctx)).rejects.toThrow('is not the context user');
+    expect(store.PublishRecords(model.ID)).toHaveLength(0);
+    const sameUserOtherCase: HumanActor = { kind: 'human', userId: GateWorld.User.ID.toLowerCase() };
+    expect(await service.Record(approve, sameUserOtherCase, ctx)).toMatchObject({ Ok: true });
+  });
+  it('saves its row, and the gate its publish row, under a one-shot authorisation of the row\'s kind, revoked after the save', async () => {
+    const authorise = vi.spyOn(PublishRecordWriteAuthorisations.Instance, 'AuthoriseCreate');
+    try {
+      const signed = await service.Record(approve, human, ctx);
+      if (signed.Ok === false) throw new Error(`refused: ${signed.Refusal}`);
+      await gate.Publish({ ...request, initiator: human, signOffId: signed.SignOffRecordID }, ctx);
+      expect(authorise.mock.calls.map(([, kind]) => kind)).toEqual(['sign-off', 'publish']);
+      for (const [row] of authorise.mock.calls) expect(PublishRecordWriteAuthorisations.Instance.TakeCreate(row)).toBeNull();
+    } finally {
+      authorise.mockRestore();
+    }
+  });
   it('throws for a model that does not exist', async () => {
     await expect(service.Record({ ...approve, modelId: '0B1C2D3E-0000-4000-8000-00000000DEAD' }, human, ctx)).rejects.toThrow('does not exist');
   });
@@ -181,6 +201,29 @@ describe('StoredSignOffLookup', () => {
     const rejected = await service.Record({ ...approve, decision: 'reject' }, human, ctx);
     if (rejected.Ok === false) throw new Error(`refused: ${rejected.Refusal}`);
     expect(await lookup.FindApproving({ ...req, signOffId: rejected.SignOffRecordID }, rejected.EvidenceSha256, ctx)).toBeNull();
+  });
+  it('(b) does not accept a sign-off row that SignOffService did not write: its initiator is not its approving person', async () => {
+    // A row saved around SignOffService is refused at save (PredictiveStudioPublishRecordGuard); this is the gate's own
+    // check of the row's shape, so a row written by SQL or by any future writer still cannot approve a publish.
+    store.PinProtocol(model.ID, { requiresHumanSignOff: true });
+    const rebuilt = PublishRecords.EvidenceSha256(await service.BuildEvidence(model.ID, ctx));
+    const lookup = new StoredSignOffLookup();
+    const forgedInitiators: readonly (string | null)[] = [
+      JSON.stringify({ kind: 'agent', agentRunId: agentRun }),
+      JSON.stringify({ kind: 'system', component: 'forged' }),
+      JSON.stringify({ kind: 'human', userId: '6A1D2E3F-0000-4000-8000-00000000C0DE' }),
+      null,
+    ];
+    for (const initiator of forgedInitiators) {
+      const id = store.SignOff(model.ID, 'approve', rebuilt);
+      const row = store.Row('MJ: ML Model Publish Records', id);
+      if (!row) throw new Error('the fixture sign-off was not stored');
+      row['Initiator'] = initiator;
+      expect(await lookup.FindApproving({ modelId: model.ID, purpose: 'publish', signOffId: id }, rebuilt, ctx)).toBeNull();
+      expect(await gate.Publish({ ...request, initiator: human, signOffId: id }, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'no-sign-off' } });
+    }
+    const signed = await service.Record(approve, human, ctx);
+    expect(await gate.Publish({ ...request, initiator: human, signOffId: signed.Ok ? signed.SignOffRecordID : null }, ctx)).toMatchObject({ Kind: 'published', Approver: 'user' });
   });
   it('a request with no signOffId, or one that is not a UUID, returns null without a read', async () => {
     const reads = store.ReadCount();

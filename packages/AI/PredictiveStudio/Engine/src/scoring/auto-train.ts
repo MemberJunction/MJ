@@ -398,7 +398,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
       bindingId: same ? same.ID : undefined,
       mlTrainingPipelineId: request.pipelineId,
       featureName: declared.featureName,
-      viewAuthorizationId: ScoringBindings.ResolveViewAuthorizationID(declared.viewAuthorizationId, ctx.Provider),
+      viewAuthorizationId: ScoringBindings.ViewAuthorizationForUpsert(declared.viewAuthorizationId, same ? same.ID : undefined, ctx.Provider),
       targetEntityId: rp.EntityID,
       recordProcessId: rp.ID,
       targetColumn: declared.targetColumn || null,

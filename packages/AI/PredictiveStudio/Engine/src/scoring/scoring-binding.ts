@@ -16,6 +16,7 @@ import type { MJFeatureValueEntity, MJMLModelScoringBindingEntity } from '@membe
 import { EscapeSQLString, ResolveMappingRef } from '@memberjunction/global';
 import { PredictionViewAuthorization, JsonParse, type JsonValue } from '@memberjunction/predictive-studio-core';
 import type { IEntityFactory } from '../training';
+import { ScoringBindingStatusAuthorisations } from '../governance/scoring-binding-status-authorisations';
 import { ProviderTransactions } from '../registry/provider-transactions';
 import type { RegistryContext } from '../registry/registry-context';
 import { StoredRowReads } from '../registry/stored-row-reads';
@@ -34,8 +35,11 @@ export interface ScoringBindingInput {
   mlTrainingPipelineId: string;
   /** The prediction's feature name, unique per target entity. */
   featureName: string;
-  /** The `MJ: Authorizations` id a user must hold to see the binding's predictions. */
-  viewAuthorizationId: string;
+  /**
+   * The `MJ: Authorizations` id a user must hold to see the binding's predictions: required to create a binding; on an
+   * update, omit it to keep the binding's stored one ({@link ScoringBindings.ViewAuthorizationForUpsert}).
+   */
+  viewAuthorizationId?: string;
   /** The entity whose records are scored. */
   targetEntityId: string;
   /** The `MJ: Record Processes` id that runs the scoring, or null when none does. */
@@ -124,7 +128,8 @@ export class ScoringBindings {
    * @param factory the entity-creation seam (production: `MetadataEntityFactory`)
    * @param contextUser request user — required server-side for isolation/audit
    * @throws BindingWithdrawnError when the binding to update is `Withdrawn` (it is never reactivated silently)
-   * @throws when the binding to update does not exist, or the `Save()` fails (its `CompleteMessage`)
+   * @throws when the binding to update does not exist, a new binding names no view authorization, or the `Save()`
+   * fails (its `CompleteMessage`)
    */
   public static async Upsert(input: ScoringBindingInput, factory: IEntityFactory, contextUser: UserInfo): Promise<MJMLModelScoringBindingEntity> {
     const binding = await factory.getEntityObject<MJMLModelScoringBindingEntity>('MJ: ML Model Scoring Bindings', contextUser);
@@ -132,6 +137,7 @@ export class ScoringBindings {
       if (!(await binding.Load(input.bindingId))) throw new Error(`ScoringBindings.Upsert: scoring binding '${input.bindingId}' not found`);
       if (binding.Status === 'Withdrawn') throw new BindingWithdrawnError(binding.ID, binding.FeatureName);
     } else {
+      if (!input.viewAuthorizationId) throw new Error(`ScoringBindings.Upsert: the new scoring binding "${input.featureName}" needs a view authorization`);
       binding.NewRecord();
       binding.Status = 'Active';
     }
@@ -142,6 +148,19 @@ export class ScoringBindings {
       throw new Error(`Failed to save ML Model Scoring Binding: ${message}`);
     }
     return binding;
+  }
+
+  /**
+   * The `viewAuthorizationId` an {@link Upsert} passes: `given` (trimmed) when set; otherwise, for an update of
+   * `existingBindingId`, none, so the binding keeps the authorization it has (a re-run of auto-train or of a scoring
+   * process never resets a custom one, which could widen who sees the predictions); for a create, the seeded default
+   * ({@link ResolveViewAuthorizationID}).
+   *
+   * @throws ViewAuthorizationNotLoadedError when a create names none and the provider holds no seeded authorization
+   */
+  public static ViewAuthorizationForUpsert(given: string | null | undefined, existingBindingId: string | undefined, provider: IMetadataProvider): string | undefined {
+    if (given && given.trim().length > 0) return given.trim();
+    return existingBindingId ? undefined : ScoringBindings.ResolveViewAuthorizationID(given, provider);
   }
 
   /**
@@ -173,7 +192,7 @@ export class ScoringBindings {
       const binding = await ScoringBindings.loadBinding(bindingId, ctx);
       if (!(await ScoringBindings.CallerHoldsBinding(binding, ctx))) throw new BindingNotAuthorizedError(binding.ID, ctx.ContextUser.ID);
       binding.Status = 'Withdrawn';
-      if (!(await binding.Save())) throw new Error(`ScoringBindings.Withdraw: saving binding '${bindingId}' as Withdrawn failed: ${binding.LatestResult?.CompleteMessage || 'unknown error'}`);
+      if (!(await ScoringBindings.saveWithdrawn(binding))) throw new Error(`ScoringBindings.Withdraw: saving binding '${bindingId}' as Withdrawn failed: ${binding.LatestResult?.CompleteMessage || 'unknown error'}`);
       return ScoringBindings.clearCopies(binding, ctx);
     });
   }
@@ -253,13 +272,26 @@ export class ScoringBindings {
   private static applyInput(binding: MJMLModelScoringBindingEntity, input: ScoringBindingInput): void {
     binding.MLTrainingPipelineID = input.mlTrainingPipelineId;
     binding.FeatureName = input.featureName;
-    binding.ViewAuthorizationID = input.viewAuthorizationId;
+    if (input.viewAuthorizationId) binding.ViewAuthorizationID = input.viewAuthorizationId;
     binding.TargetEntityID = input.targetEntityId;
     binding.RecordProcessID = input.recordProcessId;
     binding.Mode = input.mode;
     if (input.targetColumn !== undefined) binding.TargetColumn = input.targetColumn;
     if (input.targetColumnSource !== undefined) binding.TargetColumnSource = input.targetColumnSource;
     if (input.retentionDays !== undefined) binding.RetentionDays = input.retentionDays;
+  }
+
+  /**
+   * Saves `binding` as `Withdrawn` under the one-shot status authorisation `PredictiveStudioScoringBindingGuard` requires
+   * (a plain save cannot change a binding's `Status`), revoking whatever the save left.
+   */
+  private static async saveWithdrawn(binding: MJMLModelScoringBindingEntity): Promise<boolean> {
+    ScoringBindingStatusAuthorisations.Instance.Authorise(binding, { From: 'Active', To: 'Withdrawn' });
+    try {
+      return await binding.Save();
+    } finally {
+      ScoringBindingStatusAuthorisations.Instance.Revoke(binding);
+    }
   }
 
   /** The binding, loaded on the context's provider. */

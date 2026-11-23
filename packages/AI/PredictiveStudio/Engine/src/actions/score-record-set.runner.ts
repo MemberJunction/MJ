@@ -128,7 +128,34 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     if (!UUIDsEqual(binding.MLTrainingPipelineID, model.PipelineID)) {
       throw PredictiveStudioRefusals.InvalidInput(OPERATION_KEY, 'modelId', `'${model.ID}' is not a model of binding '${binding.ID}''s pipeline '${binding.MLTrainingPipelineID}'`);
     }
+    await this.refuseModelBindingDoesNotServe(binding, model, ctx);
     return binding;
+  }
+
+  /**
+   * A binding scores with its pipeline's serving model, not with a version the caller names (§5.8.3, D-058), so a
+   * `modelId` that is not that model is refused `INVALID_INPUT` naming the serving model, before any run row: a
+   * generated "Score with <model> vN" Action of a superseded version, or a caller naming an older version, never has its
+   * call answered by another version (review R5 question 2, D4-286). The serving model is read by `ScoringService`'s rule
+   * (`ResolvePublishedModel`): the pipeline's newest Published model, else its newest model kept serving while
+   * Unevaluated. With neither, nothing is refused here: `Score` refuses the run `no-published-model` with its run row.
+   */
+  private async refuseModelBindingDoesNotServe(binding: MJMLModelScoringBindingEntity, model: RunnerModelRow, ctx: ScoringContext): Promise<void> {
+    const pipeline = EscapeSQLString(binding.MLTrainingPipelineID);
+    const serving = (await this.newestModel(`PipelineID='${pipeline}' AND Status='Published'`, ctx))
+      || (await this.newestModel(`PipelineID='${pipeline}' AND Status='Unevaluated' AND ServingWhileUnevaluated=1`, ctx));
+    if (serving === null || UUIDsEqual(serving.ID, model.ID)) return;
+    throw PredictiveStudioRefusals.InvalidInput(OPERATION_KEY, 'modelId',
+      `'${model.ID}' is not the model binding '${binding.ID}' scores with: its pipeline serves ML Model '${serving.ID}' v${serving.Version}; name that model, or score without the binding to predict with '${model.ID}'`);
+  }
+
+  /** The newest-version model matching `filter`, read past the cache; null when there is none. */
+  private async newestModel(filter: string, ctx: ScoringContext): Promise<Pick<MJMLModelEntity, 'ID' | 'Version'> | null> {
+    const read = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJMLModelEntity, 'ID' | 'Version'>>({
+      EntityName: 'MJ: ML Models', ExtraFilter: filter, Fields: ['ID', 'Version'], OrderBy: 'Version DESC', ResultType: 'simple', MaxRows: 1, BypassCache: true,
+    }, ctx.ContextUser);
+    if (!read.Success) throw new Error(`Score Record Set: reading the serving ML Model failed: ${read.ErrorMessage}`);
+    return read.Results[0] || null;
   }
 
   /**

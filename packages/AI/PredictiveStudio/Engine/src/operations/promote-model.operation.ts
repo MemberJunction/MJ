@@ -7,7 +7,9 @@
  *
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter — it carries no lifecycle logic. The
  * transition → gate mapping is {@link ModelTransitionDelegation}, shared with the Promote action. The caller is the
- * initiator (`{ kind: 'human', userId }`), so an interactive user is recorded as the approver of a publish.
+ * initiator ({@link CallerInitiators.OfOperationCall}): an interactive user is `{ kind: 'human', userId }` and is recorded
+ * as the approver of a publish; an API-key caller or the MJ system user is a `system` caller, which publishes under the
+ * automatic rules (approver `automated-gate`) and may not roll back.
  *
  * An input that breaks the wire contract (no `modelId`, a `transition` the contract does not have, a non-string `reason`
  * or `signOffId`) is refused before any read with `INVALID_INPUT` naming the field (`PredictiveStudioRefusals.InvalidInput`,
@@ -29,6 +31,7 @@ import { LifecycleGate } from '../registry/lifecycle-gate';
 import { GateContexts } from '../registry/gate-seams';
 import { ModelTransitionDelegation, type ModelTransitionResult } from './delegation';
 import { PredictiveStudioRefusals } from './refusals';
+import { CallerInitiators } from './caller-initiator';
 
 /**
  * Server implementation of `PredictiveStudio.PromoteModel`. Extends the CodeGen-emitted
@@ -42,7 +45,7 @@ export class PredictiveStudioPromoteModelServerOperation extends PredictiveStudi
     input: PredictiveStudioPromoteModelInput,
     provider: IMetadataProvider,
     user: UserInfo,
-    _context: RemoteOpServerContext,
+    context: RemoteOpServerContext,
   ): Promise<PredictiveStudioPromoteModelOutput> {
     if (!input || typeof input.modelId !== 'string' || input.modelId.trim().length === 0) {
       throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, 'modelId', 'is required');
@@ -56,7 +59,7 @@ export class PredictiveStudioPromoteModelServerOperation extends PredictiveStudi
       if (value !== undefined && value !== null && typeof value !== 'string') throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, field, 'must be a string when given');
     }
     const result = await ModelTransitionDelegation.Apply(
-      { ModelID: input.modelId, Transition: transition, Reason: input.reason || null, SignOffID: input.signOffId || null, Initiator: { kind: 'human', userId: user.ID } },
+      { ModelID: input.modelId, Transition: transition, Reason: input.reason || null, SignOffID: input.signOffId || null, Initiator: CallerInitiators.OfOperationCall(user, context) },
       GateContexts.ForRequest({ ContextUser: user, Provider: provider }),
       this.CreateLifecycleGate(),
     );

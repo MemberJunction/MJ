@@ -97,7 +97,7 @@ describe('Score Record Set — the inline-predictions limit (predict-only calls)
     const error = await run({ modelId: published().ID, scope: { records: ['r1', 'r2', 'r3'] }, maxInlinePredictions: 2 }).catch((e: Error) => e);
     expect(error).toBeInstanceOf(ReadCapExceededError);
     expect(error instanceof ReadCapExceededError ? [error.MaxRows, error.RowsMatched] : null).toEqual([2, 3]);
-    expect(error.message).toMatch(/BindingID/);
+    expect(error instanceof ReadCapExceededError ? error.message : '').toMatch(/BindingID/);
     expect(world.Runs()).toHaveLength(0);
   });
 

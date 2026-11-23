@@ -133,7 +133,7 @@ class Psd1Runtime implements IScoringModelRuntime {
         };
         return {
             Loaded: loaded,
-            Assemble: async (ids) => ({ Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map(() => [1]) }, Columns: [...PSD1_FEATURES], HashColumns: null, RowIDs: [...ids] }),
+            Assemble: async (ids) => ({ Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map(() => [1]) }, Columns: [...PSD1_FEATURES], HashColumns: null, RowIDs: [...ids], Skipped: [] }),
         };
     }
 }

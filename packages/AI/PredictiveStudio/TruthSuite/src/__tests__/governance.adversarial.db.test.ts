@@ -1248,7 +1248,7 @@ describe('deleted parent or child — a model\'s entity deleted, a signed-off mo
     // The order claim, statically: in the newest migration that (re)creates the procedure, and in the procedure the
     // database holds, the output-binding delete precedes the model delete.
     const migration = newestProcMigration();
-    expect(migration.Name).toBe('V202611201631__v6.3.x__PS_Honest_Serving_Schema.sql');
+    expect(migration.Name).toMatch(/^V\d+__v6\.3\.x__PS_Honest_Serving_Schema\.sql$/);
     const proc = sliceBetween(migration.Text, PROC_MARKER, '\nGO');
     const [bindingAt, modelAt] = [proc.indexOf(BINDING_DELETE), proc.indexOf(MODEL_DELETE)];
     expect(bindingAt).toBeGreaterThan(0);

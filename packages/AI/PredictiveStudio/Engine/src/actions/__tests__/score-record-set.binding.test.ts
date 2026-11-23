@@ -166,6 +166,34 @@ describe('Score Record Set on ScoringService', () => {
     expect(world.Runs()).toHaveLength(0);
   });
 
+  it('a model of the binding\'s pipeline that is not the one the binding scores with is refused before any run row', async () => {
+    const published = world.Model();
+    const archived = world.Model({ Status: 'Archived' }, published.PipelineID);
+    const binding = await world.Binding(published);
+    const out = await op.ExecuteServer({ modelId: archived.ID, bindingId: binding.ID, scope: { records: ['r1'] } }, context);
+    expect(out).toMatchObject({ Success: false, ResultCode: 'INVALID_INPUT' });
+    expect(out.ErrorMessage).toContain(published.ID);
+    expect([world.Runs().length, world.Values.Calls().length]).toEqual([0, 0]);
+  });
+
+  it('a binding whose pipeline serves a model kept while Unevaluated admits that model, and refuses another of the pipeline', async () => {
+    const serving = world.Model({ Status: 'Unevaluated', ServingWhileUnevaluated: true, Unit: null });
+    const draft = world.Model({ Status: 'Draft' }, serving.PipelineID);
+    const binding = await world.Binding(serving);
+    expect(await op.ExecuteServer({ modelId: draft.ID, bindingId: binding.ID, scope: { records: ['r1'] } }, context)).toMatchObject({ Success: false, ResultCode: 'INVALID_INPUT' });
+    expect(world.Runs()).toHaveLength(0);
+    const out = await op.ExecuteServer({ modelId: serving.ID, bindingId: binding.ID, scope: { records: ['r1'] } }, context);
+    expect(out.ResultCode).not.toBe('INVALID_INPUT');
+    expect(UUIDsEqual(String(lastRun()['ModelID']), serving.ID)).toBe(true);
+  });
+
+  it('a binding whose pipeline serves no model leaves the refusal to the scoring run (NO_PUBLISHED_MODEL, a refused run row)', async () => {
+    const draft = world.Model({ Status: 'Draft' });
+    const binding = await world.Binding(draft);
+    expect(await op.ExecuteServer({ modelId: draft.ID, bindingId: binding.ID, scope: { records: ['r1'] } }, context)).toMatchObject({ Success: false, ResultCode: 'NO_PUBLISHED_MODEL' });
+    expect(lastRun()).toMatchObject({ Status: 'refused' });
+  });
+
   it('a failed run returns SCORING_RUN_FAILED with its counts, and the batches before it stay', async () => {
     const published = world.Model();
     const binding = await world.Binding(published);

@@ -328,10 +328,10 @@ export class ProviderMigrationReads implements IPipelineMigrationReads {
     });
   }
 
-  /** One column of every row, read completely (a truncated read throws: the mapping must see every row). */
+  /** One column of every row, read completely (a refused read — truncated, or a column the user may not read — throws: the mapping must see every row). */
   private async readColumn(entity: AssemblyEntityInfo, field: string): Promise<CellValue[]> {
     const read = await CompleteReader.ReadCompletely(new RunViewDataAccess(this.user, this.provider), { EntityName: entity.Name, KeyField: entity.PrimaryKey, Fields: [field] }, { mode: 'paged', pageSize: 50_000 });
-    if (read.Status === 'refused') throw new Error(`Reading ${entity.Name}.${field} was truncated: ${JSON.stringify(read.Refusal)}`);
+    if (read.Status === 'refused') throw new Error(`Reading ${entity.Name}.${field} was refused: ${JSON.stringify(read.Refusal)}`);
     return read.Rows.map((r) => r[field]);
   }
 

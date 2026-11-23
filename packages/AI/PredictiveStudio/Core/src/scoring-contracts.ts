@@ -183,4 +183,10 @@ export type ScoringResult =
       readonly Total: number;
       readonly Written: number;
       readonly DryRun: boolean;
+      /**
+       * The scope's records the run did not score, each with why: a record whose change history does not cover its
+       * decision date is dropped from the run rather than refusing it (its unit's policy `exclude-and-count`). Absent
+       * or empty when every record was scored.
+       */
+      readonly SkippedRecords?: readonly ScoringRowError[];
     };

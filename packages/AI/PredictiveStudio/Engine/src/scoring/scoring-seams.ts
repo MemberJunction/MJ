@@ -17,6 +17,7 @@ import {
   type AssemblyRefusal,
   type FeatureSchemaEntry,
   type MatrixData,
+  type ScoringRowError,
   type SnapshotFeatureColumn,
 } from '@memberjunction/predictive-studio-core';
 
@@ -43,6 +44,8 @@ export interface ScoringAssembled {
   readonly HashColumns: readonly SnapshotFeatureColumn[] | null;
   /** The record of each matrix row, in matrix order. */
   readonly RowIDs: readonly string[];
+  /** The requested records the assembly left out, each with why (not in `RowIDs`); empty when every record assembled. */
+  readonly Skipped: readonly ScoringRowError[];
 }
 
 /**
@@ -164,15 +167,14 @@ export class InferenceScoringRuntime implements IScoringModelRuntime {
     }
   }
 
-  /** A unit model's rows, read as of `asOf`; a row the history cannot cover refuses, as training's `refuse` policy does. */
+  /**
+   * A unit model's rows, read as of `asOf`. A row the history cannot cover is handled by the unit's `onUncoveredRow`
+   * policy: under `refuse` the assembly refuses (the refused outcome); under `exclude-and-count` the row is left out and
+   * returned in `Skipped` with the fields its history does not cover, and the other rows are scored.
+   */
   private static async asOf(processor: MLModelInferenceProcessor, rows: SourceRow[], asOf: 'unit-rule' | Date, context: RecordProcessorContext): Promise<ScoringAssembly> {
     const assembled = await processor.AssembleForScoring(rows, context, asOf);
     if (assembled.Status === 'refused') return assembled;
-    const first = assembled.UncoveredRowsExcluded[0];
-    if (first) {
-      const coverage = assembled.Coverage.find((c) => c.entity === first.entity && c.field === first.field);
-      return { Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: first.entity, field: first.field, historyStart: coverage?.historyStart || null, rowsAffected: first.rows } };
-    }
     const result = AsOfFeatureAssembler.ToFeatureAssemblyResult(assembled, null, LABEL_COLUMN);
     return {
       Status: 'assembled',
@@ -180,6 +182,7 @@ export class InferenceScoringRuntime implements IScoringModelRuntime {
       Columns: result.featureSchema,
       HashColumns: assembled.Columns.map((c) => ({ name: c.Name, encoding: c.Encoding, sourceColumn: c.SourceColumn })),
       RowIDs: assembled.Rows.map((r) => r.RowID),
+      Skipped: MLModelInferenceProcessor.UncoveredSkips(assembled),
     };
   }
 
@@ -187,7 +190,7 @@ export class InferenceScoringRuntime implements IScoringModelRuntime {
   private static async transformOnly(processor: MLModelInferenceProcessor, scope: ScopedRecords, context: RecordProcessorContext): Promise<ScoringAssembly> {
     const rows = await InferenceScoringRuntime.readScopeRows(scope, context);
     const result = await processor.AssembleTransformOnly(rows, context);
-    return { Status: 'assembled', Matrix: result.matrix, Columns: result.featureSchema, HashColumns: null, RowIDs: [...scope.RecordIDs] };
+    return { Status: 'assembled', Matrix: result.matrix, Columns: result.featureSchema, HashColumns: null, RowIDs: [...scope.RecordIDs], Skipped: [] };
   }
 
   /**

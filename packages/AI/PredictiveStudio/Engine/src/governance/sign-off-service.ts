@@ -6,13 +6,15 @@
  * the evidence built from stored rows with its SHA-256. The lifecycle gate writes the `publish` and `refusal` rows; this
  * service writes only sign-offs. It takes a `HumanActor`, so only a caller that has already established a person can
  * reach it: the `PredictiveStudio.SignOffModel` operation refuses an API-key caller and the system user before calling
- * it, and no Action wraps it (D4-04), so an agent cannot sign off.
+ * it, and no Action wraps it (D4-04), so an agent cannot sign off. The approver must be the context user, and the row
+ * is saved under the one-shot authorisation `PredictiveStudioPublishRecordGuard` requires of every new publish record.
  */
 import type { MJMLModelEntity, MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { EvidenceSnapshot, HumanActor, LeakageFlag, SignOff, SignOffRecordResult } from '@memberjunction/predictive-studio-core';
 
 import type { GateContext, PublishRequest } from '../registry/gate-context';
+import { PublishRecordWriteAuthorisations } from '../registry/publish-record-write-authorisations';
 import { PublishRecords } from '../registry/publish-records';
 import { StoredRowReads } from '../registry/stored-row-reads';
 
@@ -46,11 +48,16 @@ export class SignOffService {
   /**
    * Records `approver`'s sign-off of `input.modelId`: refused `overrides-without-reason` when it overrides a flag with a
    * blank reason, and `model-archived` for an Archived model (D4-19); otherwise one `sign-off` row over the evidence
-   * built now, whose ID and evidence hash are returned (a publish passes the ID as its `signOffId`).
+   * built now, whose ID and evidence hash are returned (a publish passes the ID as its `signOffId`). The approver is the
+   * context user: the ledger never names a person who did not make the sign-off.
    *
-   * @throws Error when the model does not exist, a read fails, the evidence cannot be built, or the row is not saved
+   * @throws Error when the approver is not the context user, the model does not exist, a read fails, the evidence
+   *   cannot be built, or the row is not saved
    */
   public async Record(input: SignOffInput, approver: HumanActor, ctx: GateContext): Promise<SignOffRecordResult> {
+    if (!UUIDsEqual(approver.userId, ctx.ContextUser.ID)) {
+      throw new Error(`SignOffService: the approver ${approver.userId} is not the context user ${ctx.ContextUser.ID}; a sign-off is recorded only as the person who makes it`);
+    }
     if (input.overridesFlags.length > 0 && input.reason.trim().length === 0) return { Ok: false, Refusal: 'overrides-without-reason' };
     const model = await SignOffService.readModel(input.modelId, ctx);
     if (model.Status === 'Archived') return { Ok: false, Refusal: 'model-archived' };
@@ -78,7 +85,7 @@ export class SignOffService {
     row.Evidence = JSON.stringify(evidence);
     row.EvidenceSha256 = evidenceSha256;
     row.OverridesFlags = JSON.stringify([...new Set(input.overridesFlags)]);
-    if (await row.Save()) return row.ID;
+    if (await PublishRecordWriteAuthorisations.SaveNew(row)) return row.ID;
     throw new Error(`Saving the sign-off record of ML Model ${model.ID} failed: ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
   }
 

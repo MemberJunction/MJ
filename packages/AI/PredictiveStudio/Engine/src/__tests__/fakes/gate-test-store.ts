@@ -510,6 +510,10 @@ export class GateTestStore {
         const model = this.Row('MJ: ML Models', p['ModelID']);
         return model ? [{ Status: model['Status'] }] : [];
       }
+      case 'Predictive Studio: Lock Scoring Binding For Batch': {
+        const binding = this.Row('MJ: ML Model Scoring Bindings', p['BindingID']);
+        return binding ? [{ Status: binding['Status'] }] : [];
+      }
       case 'Predictive Studio: Running Training Run': {
         const after = Date.parse(p['StartedAfter']);
         const running = this.TrainingRuns(p['PipelineID'])

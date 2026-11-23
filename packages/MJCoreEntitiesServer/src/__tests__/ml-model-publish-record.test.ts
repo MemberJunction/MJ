@@ -6,7 +6,7 @@
  * data provider records saves instead of writing them.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { EntityInfo, UserInfo, UserRoleInfo, type BaseEntity, type IEntityDataProvider, type RecordChange } from '@memberjunction/core';
+import { EntityDeleteOptions, EntityInfo, UserInfo, UserRoleInfo, type BaseEntity, type IEntityDataProvider, type RecordChange } from '@memberjunction/core';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -101,5 +101,15 @@ describe('MJMLModelPublishRecordEntityServer — publish records are immutable',
     fresh.NewRecord();
     fresh.Reason = 'new';
     expect(fresh.Validate().Success).toBe(true);
+  });
+});
+
+describe('MJMLModelPublishRecordEntityServer — a ReplayOnly delete is refused (review item 1 of PR #6517)', () => {
+  it('refuses a ReplayOnly delete, which skips the PreDelete hooks that keep the ledger append-only, before the provider is called', async () => {
+    const r = await SavedPublishRecord(acceptingProvider());   // AcceptingProvider.Delete throws, so reaching it fails the test
+    const options = new EntityDeleteOptions();
+    options.ReplayOnly = true;
+    expect(await r.Delete(options)).toBe(false);
+    expect(r.LatestResult?.CompleteMessage).toContain('ReplayOnly delete');
   });
 });

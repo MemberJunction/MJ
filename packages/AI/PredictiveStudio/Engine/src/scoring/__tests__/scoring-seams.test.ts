@@ -15,6 +15,8 @@ import { InferenceScoringRuntime, MemoizedScoringRuntime, type IScoringModelRunt
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type { ScoringContext } from '../scoring-context';
 import type { LoadedModel } from '../types';
+import type { AsOfAssembledMatrix, AsOfAssemblyResult } from '../../feature-assembly/as-of/as-of-assembler';
+import type { PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 
 /** The copy table the scope names: its rows carry the renamed `DistanceZMiles`, not the trained `DistanceZ`. */
 const COPY_ROWS: Record<string, SourceRow> = { r1: { ID: 'r1', Tenure: 4, DistanceZMiles: 1.5 }, r2: { ID: 'r2', Tenure: 9, DistanceZMiles: 0.2 } };
@@ -69,6 +71,43 @@ describe('InferenceScoringRuntime — a model without a Prediction Unit', () => 
     const processor = new SelectProcessor({ modelId: 'm1', deps: { modelLoader: { loadModel: async () => null }, sidecar: { predict: async () => ({ predictions: [], classOrder: null }) }, artifactLoader: { load: async () => ({ Kind: 'absent' as const, FileID: 'f1' }) } } });
     const out = await InferenceScoringRuntime.Assemble(processor, LOADED, { RecordIDs: ['r4', 'r3'], KeyField: 'ID', EntityName: 'Copy Table' }, new Date('2026-03-04T00:00:00Z'), context);
     expect(out.Status === 'assembled' ? [out.RowIDs, out.Matrix.rows] : out).toEqual([['r4', 'r3'], [[5, 8], [2, 7]]]);
+  });
+});
+
+describe('InferenceScoringRuntime — a Prediction Unit model whose history does not cover a record (R5)', () => {
+  /** The unit assembly of y1 and y2 under `exclude-and-count`: y2's decision date precedes People.Status's history. */
+  const ASSEMBLED: AsOfAssembledMatrix = {
+    Status: 'assembled',
+    Columns: [{ Name: 'Tenure', Encoding: 'numeric', SourceColumn: 'Years.Tenure', FeatureName: 'Tenure' }],
+    Rows: [{ RowID: 'y1', Values: [4], Provenance: [] }],
+    ExcludedRowIDs: new Set(['y2']),
+    UncoveredFieldsByRow: new Map([['y2', ['People.Status']]]),
+    UncoveredRowsExcluded: [{ entity: 'People', field: 'Status', rows: 1 }],
+    Coverage: [], Preprocessing: [], ColumnProvenance: [], CategoryLevels: new Map<string, readonly string[]>(),
+  };
+  class UnitProcessor extends MLModelInferenceProcessor {
+    public override async AssembleForScoring(): Promise<AsOfAssemblyResult> {
+      return ASSEMBLED;
+    }
+  }
+  const SPEC: PredictionUnitSpec = {
+    id: 'U1', lineageRootId: 'U1', version: 1, name: 'unit',
+    rows: { kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'fixed', date: '2026-01-01' }, filter: [] },
+    label: { rule: { kind: 'column', column: 'Renewed' }, windowDays: 1, gapDays: 0, outcome: { kind: 'binary', classOrder: ['lapsed', 'renewed'], adverseIndex: 0 }, labelVersion: 1 },
+    censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-10-21' } },
+    history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' }, groupKey: null, temporal: null,
+    decision: { action: 'review', actorRole: 'analyst', capacityPerPeriod: null, period: 'month' },
+    incumbent: { kind: 'none' }, authoredBy: { kind: 'system', component: 'test' },
+  };
+  const UNIT_LOADED: LoadedModel = { ...LOADED, unit: { Spec: SPEC, Features: [], RowEntity: 'Years', CategoryLevels: new Map() } };
+
+  it('drops the uncovered record as skipped, naming the field its history does not cover, and assembles the rest', async () => {
+    const context: RecordProcessorContext = { ContextUser: { ID: 'u1' } as unknown as UserInfo, Provider: new CopyTableProvider() as unknown as IMetadataProvider };
+    const processor = new UnitProcessor({ modelId: 'm1', deps: { modelLoader: { loadModel: async () => null }, sidecar: { predict: async () => ({ predictions: [], classOrder: null }) }, artifactLoader: { load: async () => ({ Kind: 'absent' as const, FileID: 'f1' }) } } });
+    const out = await InferenceScoringRuntime.Assemble(processor, UNIT_LOADED, { RecordIDs: ['y1', 'y2'], KeyField: 'ID', EntityName: 'Years' }, 'unit-rule', context);
+    expect(out.Status === 'assembled' ? [out.RowIDs, out.Matrix.rows, out.Skipped] : out).toEqual([
+      ['y1'], [[4]], [{ recordId: 'y2', message: 'not scored: the change history of People.Status does not cover its decision date' }],
+    ]);
   });
 });
 

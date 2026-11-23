@@ -10965,6 +10965,94 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
 - **D4-276 · The honest-serving specs' helpers sit beside them** (D4-274's item 5). `EXPLORER_BASE_URL`, `RequiredEnv`,
   `SqlTextLiteral` and `RedeemSignInLink` move unchanged into `e2e/specs/ps-honest-serving.helpers.ts` (not a spec:
   `testMatch` is `**/*.spec.ts`), imported by the two honest-serving specs; the allowlist names it.
+- **D4-279 · The publish ledger is written only by its two writers and is append-only** (review R5 item 1). Only
+  `SignOffService` (`sign-off`) and `PublishRecords` (`publish`/`refusal`, through the lifecycle gate and the registry
+  check) create `MJ: ML Model Publish Records` rows: each authorises the exact entity instance it saves, for its `Kind`
+  (`PublishRecordWriteAuthorisations`, one-shot), and `PredictiveStudioPublishRecordGuard` (a `PreSave` and a
+  `PreDelete` hook the Engine entry point registers in every process, MJAPI included) refuses any other create before
+  the database sees it — the `Status` guard's pattern. Entity permission (`CanCreate` for Developer/Integration) no
+  longer lets a caller write a ledger row directly. Updates are refused (entity subclass and guard); deletes are refused
+  unless authorised one-shot in-process (the TruthSuite DB lane's cleanup of its own fixture rows); a `ReplayOnly`
+  delete is refused by `MJMLModelPublishRecordEntityServer.Delete`; SQL cascades (`spDeleteEntityWithCoreDependencies`)
+  are unchanged. The gate harness, an API caller over GraphQL, deletes its own fixture rows with SQL over its own pool
+  before its entity-layer cleanup (`HarnessPublishLedger`, as it deletes its notifications, D4-146), matched only by the
+  run's pipelines and models. As defence in depth the gate accepts a sign-off only in `SignOffService`'s shape (a person
+  as approver who is also its initiator), and `SignOffService.Record` refuses an approver who is not the context user.
+- **D4-280 · A Promote call's initiator is derived from the call, never assumed** (review R5 item 2). The Promote ML
+  Model action: an `agent` naming the run when `Context.AgentRunID` is a UUID (BaseAgent stamps it on every action it
+  dispatches); `system` when the context names an agent without a valid run, or the context user is the MJ system user;
+  otherwise the context user (`human`). `PredictiveStudio.PromoteModel`: `system` (`API key`) when the call carries
+  `apiKeyHash`, `system` (`system user`) for the MJ system user, otherwise the caller (`human`). An API key is a
+  non-interactive credential (§3.2, F-TR-10): it publishes what the automatic rules allow, cannot publish a
+  `KeepBaseline` model without `autoPublishKeepBaseline`, and cannot roll back. A context key only ever narrows the
+  caller to a non-person. `Actor` gains no kind. Residual: an action run with no agent context under a real user (a
+  scheduled job running the action as its owner) is recorded as that user — `RunActionParams` carries no transport
+  signal (OF4-27's class). The gate harness calls MJAPI with an API key, so its fixture protocols publish a kept
+  baseline (`autoPublishKeepBaseline: true`, OF4-30's route) — every unit-fixture protocol except a monitored
+  pipeline's, which keeps the product default so the challenger outcomes its gates measure are the product's, and
+  every protocol-bound pipeline the gate harness creates (its next protocol version, authored by the suite user).
+- **D4-281 · A chat request is not a person's explicit publish** (review R5 item 2). §5.1's "explicit publish request
+  from an interactive user" is one the person makes themselves, through the model detail (`PSSignOffPanelComponent` →
+  `PredictiveStudio.PromoteModel` as their session). In chat the LLM decides whether to call Promote, and nothing the
+  Action receives proves a person asked for this publish of this model, so an agent-run publish is always `agent`: a
+  `KeepBaseline` model publishes from chat only under `autoPublishKeepBaseline`; otherwise the agent reports the refusal
+  and points the user to the model detail (the agent prompt says so). A framework-verified chat approval would be a
+  shared Agents/Conversations change, outside PS. The 2026-11-22 chat walk's KeepBaseline publish is now refused
+  `keep-baseline-not-auto-published`, as intended.
+- **D4-282 · A reject sign-off is a recorded decision, not a veto** (review R5 question). A publish consumes the one
+  sign-off it names, which must be an approve over the current evidence hash (§5, M4b.1; C8). A later reject over the
+  same evidence does not revoke an earlier approve; making it do so is a plan change for the owner.
+- **D4-283 · Signing off and publishing are Developer and Integration capabilities** (review R5 question). Sign-off is
+  governed by entity permission (D4-128) and the publish it feeds needs `CanUpdate` on `MJ: ML Models`; the stock UI
+  role reads the ledger and evidence but does not sign off. An organisation that wants others to sign off grants their
+  role `CanCreate` on publish records (and `CanUpdate` on models to publish); since D4-279 that grant writes a row only
+  through `PredictiveStudio.SignOffModel`. `SignOffService` never writes as the system user on a person's behalf.
+- **D4-284 · A binding's `Status` changes only through `Withdraw`; its `ViewAuthorizationID` only by a holder** (review
+  R5 question). `PredictiveStudioScoringBindingGuard` (`PreSave`, reads the stored row, fails closed) refuses a `Status`
+  change without `ScoringBindings.Withdraw`'s one-shot `Active → Withdrawn` authorisation (nothing reactivates a
+  withdrawn binding), and a `ViewAuthorizationID` change by a caller who does not hold the stored authorization (D4-60).
+  The binding editor's plain save stays the authoring surface for the authorization.
+- **D4-285 · Updating a binding keeps its view authorization; the retention backfill assigns a missing one under a
+  one-shot authorisation** (review R5 finding). `ScoringBindings.Upsert` on an existing binding changes
+  `ViewAuthorizationID` only when the caller names one explicitly; re-running auto-train or re-creating a scoring
+  process keeps a custom authorization, and only a new binding defaults to the seeded "View Model Predictions". The
+  daily retention job's backfill (D4-28) assigns a binding stored without one through
+  `ScoringBindingAuthorizationBackfills`, which the D4-284 guard accepts only when the stored value is null and the
+  entry names exactly the new value.
+- **D4-286 · With a `BindingID`, `ModelID` must name the binding's serving model** (review R5 question). Score Record
+  Set refuses `INVALID_INPUT`, naming the serving model (newest Published, else newest `Unevaluated` +
+  `ServingWhileUnevaluated`), before any run row; with no serving model the run is still refused `NO_PUBLISHED_MODEL`.
+  Residual: a publish landing between the check and `Score` scores with the newly published model, which is the
+  binding's contract, and `ScoringResult.ModelID` names it.
+- **D4-287 · A feature field the caller cannot read refuses the assembly by name** (review R5 question, FLS). Every
+  feature read on the Predict path runs as the caller through `RunView`, so FLS applies and a denied value never reaches
+  the sidecar; a denied field comes back absent, which the as-of route read as missing and imputed. Both routes now
+  refuse it `unresolved-column {entity, field}` (scoring and training). It is never read as missing.
+- **D4-288 · Retention never deletes a record's newest `Champion` row of a binding** (review R5 finding), whatever its
+  age: it is the column copy the human-value guard compares against, and "no copied row" reads as "a person entered
+  this". Cost: one row per scored record past `RetentionDays`.
+- **D4-289 · A withdrawal stops a scoring run at its next batch, and waits for the batch in flight** (review R5
+  finding). Each writing batch's first statement reads the binding's `Status` under a shared lock held to its commit
+  (stored Query `Predictive Studio: Lock Scoring Binding For Batch`, `WITH (HOLDLOCK)`, a locking read under
+  `READ_COMMITTED_SNAPSHOT` too). A binding withdrawn since the run began stops the run there: the batch is rolled back
+  with nothing written and the run ends `failed`, none failed, the rest skipped, the withdrawal in `FirstErrors` (not
+  `refused`: earlier batches wrote). `Withdraw`'s first write updates the row's `Status`, so it waits for every batch
+  holding the lock and then clears what they wrote. Shared locks are compatible: concurrent runs of one binding do not
+  serialise. A dry run takes no lock. Measured on the agent database (RCSI on): the status update times out (1222)
+  while a batch holds the lock and succeeds after; a plain read returns the old row version during an uncommitted
+  withdrawal, the lock read waits.
+- **D4-290 · At scoring, an uncovered record follows its unit's `onUncoveredRow`** (review R5 finding). Under
+  `exclude-and-count` it is skipped with its reason (run `Skipped`, `FirstErrors`, `SkippedRecords`, the RSP detail
+  `Skipped` with the reason in `Warnings`) and the rest are scored; under `refuse` the run is refused (the default for
+  new units).
+- **D4-291 · A Model-row insert that loses the race on `UQ_FeatureValue_ModelRow` replaces the winner's row** (review
+  R5 finding) and counts it `Replaced`: last writer wins, as a same-as-of re-run (D4-09). It never fails the batch.
+- **D4-292 · The view-gate RLS filter ships a PostgreSQL variant** (review R5 item 3; overrides, for this one item, the
+  standing "no PostgreSQL work" rule, flagged to the owner). `PlatformVariants` carries the PG `FilterText` with every
+  identifier quoted (the unquoted T-SQL text folds `Source`, `MLModelScoringBindingID` and `__mj.MLModelScoringBinding`
+  to lower case and fails every non-system read of `MJ: Feature Values` / `MJ: Latest Feature Values` on PostgreSQL),
+  `_meta {translatedBy:'manual', sourceDialect:'sqlserver', verified:false}`: unverified against a PostgreSQL database.
+  A metadata test reads each platform's text through `RowLevelSecurityFilterInfo.GetPlatformFilterText`.
 
 #### Kickoff review (D-070)
 
@@ -11376,7 +11464,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT, TZ<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->1ced84f945<!-- /gen:head -->
+- Head: <!-- gen:head -->717de4bcba<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,

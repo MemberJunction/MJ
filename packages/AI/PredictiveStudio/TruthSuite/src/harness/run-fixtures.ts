@@ -15,6 +15,7 @@ import { JudgeBridge } from './judge-bridge';
 import { HarnessArtifacts } from './artifacts';
 import { HarnessCleanup, RunRecords } from './cleanup';
 import { HarnessNotifications } from './notifications';
+import { HarnessPublishLedger } from './publish-ledger';
 import { HarnessWorldTruth } from './world-truth';
 import { HarnessProvenance } from './provenance';
 import { HarnessSidecar } from './sidecar';
@@ -102,6 +103,7 @@ export class RunFixtures {
       await RunFixtures.recordPipelineBindings(h, user, agentPipelines);
       const notifications = await HarnessNotifications.SubjectsOf(h.Provider, user, h.Created);
       failures.push(...(await HarnessNotifications.Delete(conn.Pool, h.Provider, notifications)));
+      failures.push(...(await HarnessPublishLedger.Delete(conn.Pool, h.Provider, h.Created)));
       failures.push(...(await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(h.Provider, user), h.Created)));
     } catch (e) {
       failures.push(e instanceof Error ? e.message : String(e));
@@ -159,7 +161,7 @@ export class RunFixtures {
   /**
    * Memoised W1 s42 logistic-regression model that scores: evaluated and then published through the lifecycle gate by
    * the suite user ({@link PublishModel}). W1 s42's stored decision keeps the simple baseline, so `evaluate` alone
-   * leaves it `KeepBaseline`, which the scorer refuses; an interactive publish of `KeepBaseline` is allowed (§5.1).
+   * leaves it `KeepBaseline`, which the scorer refuses; its protocol publishes a kept baseline ({@link createRecordedPipeline}).
    */
   public static W1S42PublishedModel(h: TruthHarness): Promise<CandidateModel> {
     RunFixtures.w1Published ||= (async (): Promise<CandidateModel> => {
@@ -217,10 +219,17 @@ export class RunFixtures {
     }
   }
 
-  /** Creates a pipeline and records the unit and protocol the migration bound to it: they are this run's rows too, so cleanup deletes them. */
+  /**
+   * Creates a pipeline and records the unit and protocol the migration bound to it: they are this run's rows too, so
+   * cleanup deletes them. A protocol-bound pipeline is then pointed at a protocol version that publishes a kept simple
+   * baseline ({@link HarnessPipelines.PublishKeptBaselines}), recorded too, so {@link PublishModel} reaches `Published`
+   * over the harness's API key.
+   */
   private static async createRecordedPipeline(ctx: RunContext, created: RunRecords, spec: PipelineSpec): Promise<MJMLTrainingPipelineEntity> {
     const p = await HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec);
     created.RecordPipelineBindings(p);
+    const publishing = await HarnessPipelines.PublishKeptBaselines(ctx.Provider, ctx.User, p);
+    if (publishing !== null) created.RecordEvaluationProtocol(publishing);
     return p;
   }
 
