@@ -19,6 +19,8 @@ graph TD
         C --> I[SchemaValidatorOracle]
         C --> J[SQLValidatorOracle]
         C --> K[TraceValidatorOracle]
+        C --> Q[RubricOracle]
+        C --> R["...and six more built-ins"]
 
         D --> L[Variable Resolver]
         D --> M[Scoring Calculator]
@@ -111,6 +113,12 @@ graph LR
 | `SQLValidatorOracle` | Validates output by running SQL queries |
 | `TraceValidatorOracle` | Validates execution trace/steps of an agent run |
 | `RubricOracle` | Judges the test run with a rubric. The subject is the test run and the context is the test |
+| `TraceSubAgentValidatorOracle` (`trace-validate-sub-agents`) | Validates which sub-agents an agent run dispatched (`requiredAgents`, `forbiddenAgents`, walked through Sub-Agent steps) and the minimum Prompt iterations (`minIterations`) |
+| `AgentDecisionOracle` (`agent-decision-match`) | Reads the decision a prompt-eval turn made, from the envelope or native tool calls, and compares it with an encoding-independent expectation |
+| `ResponseWellFormedOracle` (`response-well-formed`) | Checks that a prompt-eval turn's output was usable at all (not malformed), without judging whether the decision was right |
+| `DecisionLabelMatchOracle` (`decision-label-match`) | Compares one Likelihood's probability in a Decision Eval run (default `continues`) against the point's label at a threshold; `ambiguous` labels are advisory |
+| `DiscoveryLabelMatchOracle` (`discovery-label-match`) | Scores an agent-discovery run against its label: the labelled agent was chosen, or, for a `none` label, no suggestion would be injected |
+| `DecisionJudgeOracle` (`decision-judge`) | Judges output against the same criteria and trace as `LLMJudgeOracle`, asking a typed decision model one Likelihood question per criterion (`passThreshold`, `promptName`, `timeoutMS`) |
 
 A test run picks one rubric. The first source that names one wins: the run override, the `rubric` oracle's own config, `Test.RubricID`, `TestSuite.RubricID` walking up `ParentID`, then the agent's default Evaluation rubric. The published version is pinned when the suite run starts, so a publish during the run does not split the suite. An explicitly named version is used as given. When a rubric is resolved and the test did not configure a `rubric` oracle, the driver adds one. A test that already has an `llm-judge` oracle keeps that list, and the agent's Evaluation rubric is not added. The added rubric oracle always gates status. It contributes to the score when `scoringWeights` is absent or already names `rubric`.
 

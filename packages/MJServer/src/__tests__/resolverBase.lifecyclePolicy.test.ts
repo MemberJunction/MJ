@@ -150,6 +150,48 @@ describe('ResolverBase lifecycle policy truth-loading & ClientCrudBoundary (3.1)
         expect(probe.CheckMustLoadTruth(plainEntityInfo, completeOldValues, user)).toBe(true);
     });
 
+    it('forces MustLoadTruthFromDatabase = true for MJ: Graph Concepts and MJ: Graph Edges', () => {
+        const conceptInfo = new EntityInfo({
+            ID: '88888888-1111-2222-3333-444444444444',
+            Name: 'MJ: Graph Concepts',
+            BaseTable: 'GraphConcept',
+            BaseView: 'vwGraphConcepts',
+            SchemaName: '__mj',
+            TrackRecordChanges: false,
+            AllowCreateAPI: true,
+            AllowUpdateAPI: true,
+            AllowDeleteAPI: true,
+            EntityFields: [
+                {
+                    ID: 'gc-id',
+                    EntityID: '88888888-1111-2222-3333-444444444444',
+                    Name: 'ID',
+                    CodeName: 'ID',
+                    Type: 'uniqueidentifier',
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                    Sequence: 1,
+                },
+                {
+                    ID: 'gc-status',
+                    EntityID: '88888888-1111-2222-3333-444444444444',
+                    Name: 'Status',
+                    CodeName: 'Status',
+                    Type: 'nvarchar',
+                    Length: 20,
+                    AllowsNull: false,
+                    AllowUpdateAPI: true,
+                    Sequence: 2,
+                },
+            ],
+        });
+        const oldValues = [
+            { Key: 'ID', Value: 'gc-1' },
+            { Key: 'Status', Value: 'Proposed' },
+        ];
+        expect(probe.CheckMustLoadTruth(conceptInfo, oldValues, user)).toBe(true);
+    });
+
     it('blocks direct client CreateRecord against ServerOperationOnly entities even when an outer server operation scope is active', async () => {
         const governedInfo = buildProbeEntityInfo({
             configurationJson: JSON.stringify({

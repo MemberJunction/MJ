@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { DEFAULT_WORK_QUEUE_CONFIG, WorkQueueSchema } from './services/workQueueConfig.js';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
+import { LimitsConfigResolver, LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 import { ArtifactGuestSharingEnabledDefault } from './magicLinkConfigUnits.js';
 import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
+import { NormalizeInviteOnlyUserHandling } from './auth/inviteOnlyPolicy.js';
 import { DEFAULT_ROUTE_RATE_LIMITS, type RouteRateLimitName } from './routeRateLimitConfigUnits.js';
 import {
   AgentRunWatchdogDefaultsFromEnv,
@@ -62,6 +63,27 @@ const userHandlingInfoSchema = z.object({
       preset: z.string().optional().default('template'),
     })
     .optional(),
+  /**
+   * When true, enables **invite-only external authentication mode**:
+   * - Refuses uninvited sign-ins with an explicit authentication error (`autoCreateNewUsers` forced off).
+   * - Refuses unverified external email claims (`requireVerifiedEmail` forced on; fails closed unless
+   *   the provider is explicitly exempted in `verifiedEmailOptionalProviders` and never negated).
+   * - Never auto-grants `'UI'` or any `newUserRoles` (`newUserRoles` forced empty).
+   *
+   * Defaults to `false` to preserve existing open/domain-gated deployments.
+   */
+  inviteOnly: z.boolean().optional().default(false),
+  /**
+   * When true (or automatically implied by `inviteOnly: true`), external JWT sign-ins must carry
+   * a verified email assertion (`email_verified === true` or Entra ID `xms_edov === true`).
+   */
+  requireVerifiedEmail: z.boolean().optional().default(false),
+  /**
+   * Provider names (`'azure'`) or issuer URLs whose tokens may omit standard OIDC `email_verified`
+   * claims under `inviteOnly`/`requireVerifiedEmail` (e.g. Microsoft Entra ID tenants). An explicit
+   * `email_verified: false` or `xms_edov: false` claim is ALWAYS refused regardless of this list.
+   */
+  verifiedEmailOptionalProviders: z.array(z.string()).optional().default([]),
 });
 
 const databaseSettingsInfoSchema = z.object({
@@ -553,6 +575,17 @@ const decisionsSchema = z.object({
    * calibration is fitted. Env: `MJ_TAG_MATCH_DECISION_MODE`.
    */
   tagMatch: z.string().optional().default(process.env.MJ_TAG_MATCH_DECISION_MODE || 'Shadow'),
+});
+
+/**
+ * Who answers human-in-the-loop asks: workflow Human steps that name no provider, and agents' feedback
+ * questions. By default the built-in inbox (`MJ: AI Agent Requests`). Set `defaultProvider` to the key a
+ * human-task provider registers under (for example `BizAppsTasks`) to send those asks there instead. The
+ * provider must declare `CanBeDefault` in its registration; one that does not, or is not loaded, is ignored
+ * with an error at startup and asks stay in the inbox. Env: `MJ_HUMAN_TASKS_DEFAULT_PROVIDER`.
+ */
+const humanTasksSchema = z.object({
+  defaultProvider: z.string().optional().default(process.env.MJ_HUMAN_TASKS_DEFAULT_PROVIDER || ''),
 });
 
 const magicLinkSchema = z.object({
@@ -1069,6 +1102,189 @@ const devAuthSchema = z.object({
   defaultEmail: z.string().optional(),
 }).passthrough();
 
+const limitsScopeBudgetSchema = z.object({
+  maxCostUsd: z.number().nonnegative().nullable().optional(),
+  MaxCostUsd: z.number().nonnegative().nullable().optional(),
+  maxWallClockMs: z.number().int().positive().nullable().optional(),
+  MaxWallClockMs: z.number().int().positive().nullable().optional(),
+}).passthrough();
+
+const limitsRunScopeBudgetSchema = limitsScopeBudgetSchema.extend({
+  maxTokens: z.number().int().positive().nullable().optional(),
+  MaxTokens: z.number().int().positive().nullable().optional(),
+}).passthrough();
+
+const limitsUserDailyScopeBudgetSchema = limitsScopeBudgetSchema.extend({
+  dayBoundaryTimezone: z.string().min(1).optional(),
+  DayBoundaryTimezone: z.string().min(1).optional(),
+}).passthrough();
+
+const limitsBudgetsSchema = z.object({
+  perRun: limitsRunScopeBudgetSchema.optional(),
+  PerRun: limitsRunScopeBudgetSchema.optional(),
+  perRoutine: limitsScopeBudgetSchema.optional(),
+  PerRoutine: limitsScopeBudgetSchema.optional(),
+  perUserPerDay: limitsUserDailyScopeBudgetSchema.optional(),
+  PerUserPerDay: limitsUserDailyScopeBudgetSchema.optional(),
+  countPausedTimeTowardsWallClock: z.boolean().optional(),
+  CountPausedTimeTowardsWallClock: z.boolean().optional(),
+  allowedInFlightOvershootUsd: z.number().nonnegative().optional(),
+  AllowedInFlightOvershootUsd: z.number().nonnegative().optional(),
+  allowedInFlightOvershootMs: z.number().nonnegative().optional(),
+  AllowedInFlightOvershootMs: z.number().nonnegative().optional(),
+}).passthrough();
+
+const limitsProgressDetectorSchema = z.object({
+  enabled: z.boolean().optional(),
+  Enabled: z.boolean().optional(),
+  windowSize: z.number().int().positive().optional(),
+  WindowSize: z.number().int().positive().optional(),
+  minIterationsBeforeCheck: z.number().int().positive().optional(),
+  MinIterationsBeforeCheck: z.number().int().positive().optional(),
+  duplicateStepRatioThreshold: z.number().min(0).max(1).optional(),
+  DuplicateStepRatioThreshold: z.number().min(0).max(1).optional(),
+  noPayloadDeltaWindowCount: z.number().int().positive().optional(),
+  NoPayloadDeltaWindowCount: z.number().int().positive().optional(),
+  repeatingErrorWindowCount: z.number().int().positive().optional(),
+  RepeatingErrorWindowCount: z.number().int().positive().optional(),
+  ambiguityLowScoreThreshold: z.number().min(0).max(1).optional(),
+  AmbiguityLowScoreThreshold: z.number().min(0).max(1).optional(),
+  ambiguityHighScoreThreshold: z.number().min(0).max(1).optional(),
+  AmbiguityHighScoreThreshold: z.number().min(0).max(1).optional(),
+  fastJudgeEnabled: z.boolean().optional(),
+  FastJudgeEnabled: z.boolean().optional(),
+  fastJudgeTimeoutMs: z.number().int().positive().optional(),
+  FastJudgeTimeoutMs: z.number().int().positive().optional(),
+  fastJudgeMinIntervalIterations: z.number().int().positive().optional(),
+  FastJudgeMinIntervalIterations: z.number().int().positive().optional(),
+  fastJudgeMaxInputChars: z.number().int().positive().optional(),
+  FastJudgeMaxInputChars: z.number().int().positive().optional(),
+  fastJudgeFailureFallback: z.enum(['ContinueWithWarning', 'PauseForHuman']).optional(),
+  FastJudgeFailureFallback: z.enum(['ContinueWithWarning', 'PauseForHuman']).optional(),
+}).passthrough();
+
+const limitsResourceGuardsSchema = z.object({
+  maxValidationRetries: z.number().int().positive().optional(),
+  MaxValidationRetries: z.number().int().positive().optional(),
+  maxConsecutiveFailedSteps: z.number().int().positive().optional(),
+  MaxConsecutiveFailedSteps: z.number().int().positive().optional(),
+  maxConsecutiveUnproductiveRetries: z.number().int().positive().optional(),
+  MaxConsecutiveUnproductiveRetries: z.number().int().positive().optional(),
+  maxRepeatedFailingStep: z.number().int().positive().optional(),
+  MaxRepeatedFailingStep: z.number().int().positive().optional(),
+  maxConsecutiveReadToolPreemptions: z.number().int().positive().optional(),
+  MaxConsecutiveReadToolPreemptions: z.number().int().positive().optional(),
+  finalPayloadValidationMaxRetries: z.number().int().positive().optional(),
+  FinalPayloadValidationMaxRetries: z.number().int().positive().optional(),
+  maxRunChainLength: z.number().int().positive().optional(),
+  MaxRunChainLength: z.number().int().positive().optional(),
+  maxAgentRunTreeDepth: z.number().int().positive().optional(),
+  MaxAgentRunTreeDepth: z.number().int().positive().optional(),
+  maxHandoffHops: z.number().int().positive().optional(),
+  MaxHandoffHops: z.number().int().positive().optional(),
+  maxSubAgentConsultRounds: z.number().int().positive().optional(),
+  MaxSubAgentConsultRounds: z.number().int().positive().optional(),
+  maxDecisionRequestsPerTurn: z.number().int().positive().optional(),
+  MaxDecisionRequestsPerTurn: z.number().int().positive().optional(),
+  maxDecisionCallsPerTurn: z.number().int().positive().optional(),
+  MaxDecisionCallsPerTurn: z.number().int().positive().optional(),
+  maxConversationToolCallsPerTurn: z.number().int().positive().optional(),
+  MaxConversationToolCallsPerTurn: z.number().int().positive().optional(),
+  maxSettlementRetryPasses: z.number().int().positive().optional(),
+  MaxSettlementRetryPasses: z.number().int().positive().optional(),
+  maxReinvokeDepth: z.number().int().positive().optional(),
+  MaxReinvokeDepth: z.number().int().positive().optional(),
+  maxProviderRaiseAttempts: z.number().int().positive().optional(),
+  MaxProviderRaiseAttempts: z.number().int().positive().optional(),
+  clientToolTimeoutMs: z.number().int().positive().optional(),
+  ClientToolTimeoutMs: z.number().int().positive().optional(),
+  pipelineDeadlineMs: z.number().int().positive().optional(),
+  PipelineDeadlineMs: z.number().int().positive().optional(),
+  maxPipelineStages: z.number().int().positive().optional(),
+  MaxPipelineStages: z.number().int().positive().optional(),
+  maxMapElements: z.number().int().positive().optional(),
+  MaxMapElements: z.number().int().positive().optional(),
+  maxLoopConcurrency: z.number().int().positive().optional(),
+  MaxLoopConcurrency: z.number().int().positive().optional(),
+  maxRealtimeConsecutiveAgentTurns: z.number().int().positive().optional(),
+  MaxRealtimeConsecutiveAgentTurns: z.number().int().positive().optional(),
+}).passthrough();
+
+const limitsTuningSchema = z.object({
+  maxPerAgentCacheEntries: z.number().int().positive().optional(),
+  MaxPerAgentCacheEntries: z.number().int().positive().optional(),
+  maxClientToolSessions: z.number().int().positive().optional(),
+  MaxClientToolSessions: z.number().int().positive().optional(),
+  maxToolsPerSession: z.number().int().positive().optional(),
+  MaxToolsPerSession: z.number().int().positive().optional(),
+  compactionDefaultContextTokens: z.number().int().positive().optional(),
+  CompactionDefaultContextTokens: z.number().int().positive().optional(),
+  compactionDefaultTriggerPercent: z.number().int().positive().optional(),
+  CompactionDefaultTriggerPercent: z.number().int().positive().optional(),
+  compactionDefaultTargetPercent: z.number().int().positive().optional(),
+  CompactionDefaultTargetPercent: z.number().int().positive().optional(),
+  compactionMinGainTokens: z.number().int().positive().optional(),
+  CompactionMinGainTokens: z.number().int().positive().optional(),
+  compactionMinMessages: z.number().int().positive().optional(),
+  CompactionMinMessages: z.number().int().positive().optional(),
+  compactionMaxDeltaMessageChars: z.number().int().positive().optional(),
+  CompactionMaxDeltaMessageChars: z.number().int().positive().optional(),
+  maxSkillDecisionCandidates: z.number().int().positive().optional(),
+  MaxSkillDecisionCandidates: z.number().int().positive().optional(),
+  maxHandoffCandidates: z.number().int().positive().optional(),
+  MaxHandoffCandidates: z.number().int().positive().optional(),
+  queryCacheDefaultMaxSize: z.number().int().positive().optional(),
+  QueryCacheDefaultMaxSize: z.number().int().positive().optional(),
+  queryCacheDefaultTtlMinutes: z.number().int().positive().optional(),
+  QueryCacheDefaultTtlMinutes: z.number().int().positive().optional(),
+  scratchpadMaxTasks: z.number().int().positive().optional(),
+  ScratchpadMaxTasks: z.number().int().positive().optional(),
+  decisionsMaxItems: z.number().int().positive().optional(),
+  DecisionsMaxItems: z.number().int().positive().optional(),
+  maxInitialArtifactOperations: z.number().int().positive().optional(),
+  MaxInitialArtifactOperations: z.number().int().positive().optional(),
+  maxDirectInIds: z.number().int().positive().optional(),
+  MaxDirectInIds: z.number().int().positive().optional(),
+  maxAgentsOfferedInDraft: z.number().int().positive().optional(),
+  MaxAgentsOfferedInDraft: z.number().int().positive().optional(),
+  maxStepsPerSignal: z.number().int().positive().optional(),
+  MaxStepsPerSignal: z.number().int().positive().optional(),
+}).passthrough();
+
+/**
+ * Optional `limits` block in `mj.config.cjs` providing Tier 2 (`MjConfig`) overrides for
+ * `LimitsConfigResolver` (`@memberjunction/core`). When omitted, `LimitsConfigResolver` falls
+ * back to `DEFAULT_MJ_LIMITS_CONFIG` (`CODE_FALLBACK_LIMITS`).
+ */
+export const LimitsConfigSchema = z.object({
+  agentChannelConsecutiveTurns: z.number().int().positive().optional(),
+  AgentChannelConsecutiveTurns: z.number().int().positive().optional(),
+  agentChannelWakesPerHour: z.number().int().positive().optional(),
+  AgentChannelWakesPerHour: z.number().int().positive().optional(),
+  agentAbsoluteIterations: z.number().int().positive().optional(),
+  AgentAbsoluteIterations: z.number().int().positive().optional(),
+  maxTasksPerAgentGraph: z.number().int().positive().optional(),
+  MaxTasksPerAgentGraph: z.number().int().positive().optional(),
+  whileLoopMaxIterations: z.number().int().positive().optional(),
+  WhileLoopMaxIterations: z.number().int().positive().optional(),
+  forEachMaxIterations: z.number().int().positive().optional(),
+  ForEachMaxIterations: z.number().int().positive().optional(),
+  maxTasksPerGraph: z.number().int().positive().optional(),
+  MaxTasksPerGraph: z.number().int().positive().optional(),
+  briefingContributorTimeoutMs: z.number().int().positive().optional(),
+  BriefingContributorTimeoutMs: z.number().int().positive().optional(),
+  briefingMaxContributorChars: z.number().int().positive().optional(),
+  BriefingMaxContributorChars: z.number().int().positive().optional(),
+  budgets: limitsBudgetsSchema.optional(),
+  Budgets: limitsBudgetsSchema.optional(),
+  progressDetector: limitsProgressDetectorSchema.optional(),
+  ProgressDetector: limitsProgressDetectorSchema.optional(),
+  resourceGuards: limitsResourceGuardsSchema.optional(),
+  ResourceGuards: limitsResourceGuardsSchema.optional(),
+  tuning: limitsTuningSchema.optional(),
+  Tuning: limitsTuningSchema.optional(),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
@@ -1099,9 +1315,11 @@ const configInfoSchema = z.object({
   aiPromptRuns: aiPromptRunsSchema.optional(),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
   decisions: decisionsSchema.optional().default({}),
+  humanTasks: humanTasksSchema.optional().default({}),
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
   startup: startupSchema.optional().default({}),
+  limits: LimitsConfigSchema.optional(),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -1186,6 +1404,7 @@ export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type CorsConfig = z.infer<typeof corsSchema>;
 export type RateLimitConfig = z.infer<typeof rateLimitSchema>;
 export type StartupConfig = z.infer<typeof startupSchema>;
+export type LimitsConfigInput = z.infer<typeof LimitsConfigSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**
@@ -1247,7 +1466,10 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     // is, rather than as an address nobody can receive mail at.
     contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
-    UserApplications: []
+    UserApplications: [],
+    inviteOnly: false,
+    requireVerifiedEmail: false,
+    verifiedEmailOptionalProviders: [],
   },
 
   // Database settings (with environment variable for cache refresh)
@@ -1465,6 +1687,15 @@ export function LoadConfig() {
       '[SECURITY] Local dev auth (MJ_DEV_AUTH_ENABLED) is strictly forbidden when NODE_ENV=production. Refusing to start.'
     );
   }
+
+  // Enforce invite-only security invariants at config load so inherited defaults
+  // (autoCreateNewUsers: true, newUserRoles: ['UI']) can never silently bypass invite-only mode.
+  configParsing.data.userHandling = NormalizeInviteOnlyUserHandling(configParsing.data.userHandling);
+
+  // Register optional Tier 2 (`MjConfig`) execution limits with the process-wide resolver.
+  // When `limits` is omitted in mj.config.cjs, passing `null` clears any prior override so
+  // LimitsConfigResolver falls back to DEFAULT_MJ_LIMITS_CONFIG.
+  LimitsConfigResolver.Instance.RegisterMjConfigLimits(configParsing.data.limits ?? null);
 
   return configParsing.data;
 }

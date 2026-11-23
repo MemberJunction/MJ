@@ -432,6 +432,97 @@ export interface DiagnosticsReactivateSenderOutput {
     Status: 'Active';
 }
 
+/**
+ * One end of a `Graph.FindPath` request: a record (`EntityName` + `RecordID`), or a concept
+ * (`Concept` = its name, a synonym, or its ID). A record reference wins when both are given.
+ */
+export interface GraphFindPathEndpoint {
+    /** Registered entity name of the record, e.g. "MJ: Queries" or "Invoices". */
+    EntityName?: string;
+    /** The record's key, in compact URL-segment form (the bare value for a single-column key). */
+    RecordID?: string;
+    /** A concept's name, synonym or ID in the graph. */
+    Concept?: string;
+}
+
+/** Input for `Graph.FindPath`. */
+export interface GraphFindPathInput {
+    /** Name or ID of an active graph. Default: "MJ Canon". */
+    GraphName?: string;
+    /** Start of the path. */
+    From: GraphFindPathEndpoint;
+    /** End of the path. */
+    To: GraphFindPathEndpoint;
+    /** Maximum hops, 1 to 4. Default: 4. */
+    Depth?: number;
+    /** Maximum nodes the search may visit, 1 to 200. Default: 200. */
+    MaxNodes?: number;
+    /** Optional allow-list of edge type names to follow. */
+    EdgeTypes?: string[];
+    /** Optional minimum edge weight to follow, 0 to 1. */
+    MinWeight?: number;
+    /** When true, also follow edges and match concepts still awaiting review. Default: false. */
+    IncludeProposed?: boolean;
+}
+
+/** A node on a `Graph.FindPath` path. */
+export interface GraphFindPathNode {
+    /** Canonical node key. */
+    Key: string;
+    EntityName: string;
+    RecordID: string;
+    Label: string;
+    Icon: string | null;
+    Description: string | null;
+}
+
+/** An edge on a `Graph.FindPath` path, in its own direction (a hop may run against it). */
+export interface GraphFindPathEdge {
+    /** Stored edge ID, or `derived:<provider>:<type>:<sourceKey>:<targetKey>`. */
+    ID: string;
+    TypeName: string;
+    SourceEntityName: string;
+    SourceRecordID: string;
+    TargetEntityName: string;
+    TargetRecordID: string;
+    IsDirected: boolean;
+    Weight: number;
+    Description: string | null;
+    Origin: 'Derived' | 'Declared' | 'Inferred';
+    Status: 'Proposed' | 'Approved' | 'Rejected';
+}
+
+/** A concept an ambiguous endpoint fits, for the caller to choose from. */
+export interface GraphFindPathCandidate {
+    Name: string;
+    RecordID: string;
+    Description: string | null;
+    Score: number;
+}
+
+/**
+ * Output of `Graph.FindPath`. `Status` says what kind of answer this is:
+ * - `Found`: `Nodes` run from From to To, and `Edges[i]` joins `Nodes[i]` and `Nodes[i + 1]`.
+ * - `NoPath`: the endpoints are not connected within the limits by anything the caller may see.
+ *   A record the caller cannot see gives this same answer.
+ * - `AmbiguousEndpoint`: `Endpoint` names the side and `Candidates` lists the concepts it fits.
+ * - `EndpointNotFound`: `Endpoint` names the side whose concept could not be found or seen by the caller.
+ * - `GraphNotFound`: the graph is unknown or not active.
+ */
+export interface GraphFindPathOutput {
+    Status: 'Found' | 'NoPath' | 'AmbiguousEndpoint' | 'EndpointNotFound' | 'GraphNotFound';
+    Nodes: GraphFindPathNode[];
+    Edges: GraphFindPathEdge[];
+    /** Product of the path's edge weights, decayed per hop (0 when none was found). */
+    PathWeight: number;
+    /** The path as compact Markdown, one line per hop. */
+    PromptText: string;
+    /** Which endpoint was ambiguous or not found, when that is the status. */
+    Endpoint?: 'From' | 'To';
+    Candidates: GraphFindPathCandidate[];
+    Message?: string;
+}
+
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -1349,6 +1440,24 @@ export interface TaskGraphControlOutput {
     errorMessage?: string;
 }
 
+/** Input for TaskGraph.CompleteWaitingStep. Exactly one of taskID / correlationKey. */
+export interface TaskGraphCompleteWaitingStepInput {
+    taskID?: string;
+    correlationKey?: string;
+    status?: 'Complete' | 'Failed';
+    payload?: Record<string, unknown> | null;
+    errorMessage?: string | null;
+}
+
+/** Output of TaskGraph.CompleteWaitingStep. */
+export interface TaskGraphCompleteWaitingStepOutput {
+    success: boolean;
+    completed: string[];
+    buffered: string[];
+    refused: Array<{ taskID: string; reason: string }>;
+    errorMessage?: string;
+}
+
 /** Input for the step-scoped intervention verbs. */
 export interface TaskGraphTaskInterventionInput {
     taskID: string;
@@ -1438,15 +1547,17 @@ export interface TaskGraphSubmitInput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
-                | { assignToUserID?: string; instructions?: string }
+                | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1848,15 +1959,17 @@ export interface WorkflowDraftOutput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
-                | { assignToUserID?: string; instructions?: string }
+                | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1867,6 +1980,8 @@ export interface WorkflowDraftOutput {
         durable?: boolean;
         /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
         failureSemantics?: 'block' | 'edges';
+        /** Per-graph execution isolation level ('Worker' default for newly drafted workflows). */
+        isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
     };
     /** Why drafting failed, or why the model's output was rejected. */
     errorMessage?: string;
@@ -1879,6 +1994,8 @@ export interface WorkflowSaveInput {
         name: string;
         description?: string;
         status: 'Active' | 'Paused' | 'Draft';
+        /** Optional workflow-level execution isolation override (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
+        isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
         graph: {
             workflowName: string;
             reasoning?: string;
@@ -1887,15 +2004,17 @@ export interface WorkflowSaveInput {
                 tempId: string;
                 name: string;
                 description: string;
-                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
                 configuration:
                     | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                     | { actionName: string; inputMapping?: string; outputMapping?: string }
-                    | { assignToUserID?: string; instructions?: string }
+                    | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                     | { promptName: string; templateParameters?: Record<string, string> }
                     | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                     | { condition: string; itemVariable?: string; maxIterations?: number }
-                    | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                    | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                    | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
                 dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
                 policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
                 /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1906,6 +2025,8 @@ export interface WorkflowSaveInput {
             durable?: boolean;
             /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
             failureSemantics?: 'block' | 'edges';
+            /** Per-graph execution isolation level override. */
+            isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
         };
         triggers: Array<
             | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }
@@ -2258,6 +2379,22 @@ export class DiagnosticsUploadClientCaptureOperation extends BaseRemotableOperat
 }
 
 // ============================================================
+// Graph.FindPath — Find Graph Path
+// ============================================================
+/**
+ * Find Graph Path
+ * Find the fewest-hop path between two nodes of a semantic graph (default MJ Canon) that the caller may see. Each endpoint is a record or a concept name, synonym or ID; an endpoint that fits several concepts comes back AmbiguousEndpoint with the candidates. Read-only. Implemented by GraphFindPathServerOperation in @memberjunction/core-entities-server over GraphEngine.FindPath.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Graph.FindPath'. This generated base provides the typed contract only (client-safe).
+ */
+export class GraphFindPathOperation extends BaseRemotableOperation<GraphFindPathInput, GraphFindPathOutput> {
+    public readonly OperationKey = "Graph.FindPath";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_75cf012a87110c1f";
+}
+
+// ============================================================
 // PredictiveStudio.ControlExperimentSession — Control Experiment Session
 // ============================================================
 /**
@@ -2580,6 +2717,23 @@ export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphCo
 }
 
 // ============================================================
+// TaskGraph.CompleteWaitingStep — Complete Waiting Workflow Step
+// ============================================================
+/**
+ * Complete Waiting Workflow Step
+ * Complete (or fail) a waiting External or provider-Human workflow step, by task ID or by correlation key. The supplied payload is merged into the workflow payload, so downstream paths can branch on it. A signal for a step that has not been reached yet is held on the step and applied when it is. Wait steps (they complete on their own clock) and built-in inbox Human steps (they complete through their request) are refused. The caller must own the workflow run or be an Owner-type user; matched steps the caller may not complete are reported, not skipped. Implemented by TaskGraphCompleteWaitingStepServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.CompleteWaitingStep'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphCompleteWaitingStepOperation extends BaseRemotableOperation<TaskGraphCompleteWaitingStepInput, TaskGraphCompleteWaitingStepOutput> {
+    public readonly OperationKey = "TaskGraph.CompleteWaitingStep";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ce2fbcd9c8ab5e26";
+}
+
+// ============================================================
 // TaskGraph.ForceCompleteTask — Force Complete Workflow Step
 // ============================================================
 /**
@@ -2746,7 +2900,7 @@ export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSu
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_08cd68d5cfacf880";
+    public readonly ContractFingerprint = "ro_fp_8f1f452387b6790a";
 }
 
 // ============================================================
@@ -2949,7 +3103,7 @@ export class WorkflowDraftOperation extends BaseRemotableOperation<WorkflowDraft
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_7a54f25b89c43fef";
+    public readonly ContractFingerprint = "ro_fp_1453e143e70e1bae";
 }
 
 // ============================================================
@@ -2966,7 +3120,7 @@ export class WorkflowSaveOperation extends BaseRemotableOperation<WorkflowSaveIn
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:write";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_f8c19b5a79876f33";
+    public readonly ContractFingerprint = "ro_fp_4649d0191277725e";
 }
 
 // ============================================================
@@ -2983,6 +3137,6 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_2ebd29835c1d8b0c";
+    public readonly ContractFingerprint = "ro_fp_06d97b8424f9ad49";
 }
 

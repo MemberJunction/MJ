@@ -20,7 +20,7 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { Readable } from 'stream';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
@@ -223,7 +223,8 @@ function buildPoolConfig(): sql.config {
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer <token> header
- * 4. URL query parameter (apiKey or api_key)
+ *
+ * API keys are never read from the URL query string (see `ExtractCredentials` in auth/AuthGate.ts).
  *
  * @param request - The incoming HTTP request
  * @returns The extracted API key string, or null if not found
@@ -241,16 +242,22 @@ function extractAPIKeyFromRequest(request: Request | http.IncomingMessage): stri
         }
     }
 
-    // Check URL query parameters as fallback
-    if (!apiKey && request.url) {
-        const url = new URL(request.url, `http://${request.headers.host}`);
-        const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
-        if (queryKey) {
-            apiKey = queryKey;
-        }
-    }
-
     return apiKey || null;
+}
+
+/**
+ * Compares two secrets without leaking, through timing, how many leading bytes matched.
+ * `timingSafeEqual` needs equal-length inputs, so a length mismatch is answered after a
+ * same-cost self-comparison: only the length (not secret for a fixed-format key) is observable.
+ */
+function constantTimeEquals(provided: string, expected: string): boolean {
+    const providedBytes = Buffer.from(provided, 'utf8');
+    const expectedBytes = Buffer.from(expected, 'utf8');
+    if (providedBytes.length !== expectedBytes.length) {
+        timingSafeEqual(providedBytes, providedBytes);
+        return false;
+    }
+    return timingSafeEqual(providedBytes, expectedBytes);
 }
 
 /**
@@ -326,7 +333,9 @@ async function validateApiKey(
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
-        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+        // Constant-time comparison: this is the superadmin credential, and a byte-by-byte `===`
+        // leaks how much of a guess matched through response timing.
+        if (configuredSystemApiKey && constantTimeEquals(apiKey, configuredSystemApiKey)) {
             return {
                 valid: true,
                 user: systemUser,

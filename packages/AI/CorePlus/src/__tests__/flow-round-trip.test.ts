@@ -158,7 +158,7 @@ describe('Flow → TaskGraphSpec → Flow', () => {
 });
 
 describe('losses are reported rather than silent', () => {
-    it('reports a person’s step instead of dropping it unannounced', () => {
+    it('round-trips a person’s step instead of dropping it', () => {
         const compiled = CompileFlowToTaskGraph(
             [{ ID: 'a', Name: 'A', StepType: 'Sub-Agent', StartingStep: true, Status: 'Active', SubAgentID: 's' }],
             [],
@@ -169,7 +169,27 @@ describe('losses are reported rather than silent', () => {
             tasks: [...compiled.Spec!.tasks, { tempId: 'h', name: 'Approve', description: '', kind: 'Human' as const, configuration: {}, dependsOn: ['a'] }],
         };
         const saved = ConvertTaskGraphToAgentSpec(withHuman, saveOptions());
-        expect(saved.Losses.some((l) => l.Kind === 'HumanTask' && l.Detail.includes('Approve'))).toBe(true);
+        expect(saved.Losses.some((l) => l.Kind === 'HumanTask')).toBe(false);
+        expect(saved.Spec!.Steps!.some((s) => s.StepType === 'Human' && s.Name === 'Approve')).toBe(true);
+    });
+
+    it('compiles drawn External and Wait steps, and saves them back unchanged', () => {
+        const compiled = CompileFlowToTaskGraph(
+            [
+                { ID: 'e', Name: 'Await payment', StepType: 'External', StartingStep: true, Status: 'Active', Configuration: JSON.stringify({ domain: 'stripe', correlationKey: 'payload.invoiceId', expiresInHours: 72 }) },
+                { ID: 'w', Name: 'Cool off', StepType: 'Wait', StartingStep: false, Status: 'Active', Configuration: JSON.stringify({ durationSeconds: 86400 }) },
+            ],
+            [{ ID: 'p', OriginStepID: 'e', DestinationStepID: 'w', Priority: 0 }],
+            options,
+        );
+        expect(compiled.Errors).toEqual([]);
+        const kinds = compiled.Spec!.tasks.map((t) => [t.kind, t.configuration]);
+        expect(kinds).toContainEqual(['External', { domain: 'stripe', correlationKey: 'payload.invoiceId', expiresInHours: 72 }]);
+        expect(kinds).toContainEqual(['Wait', { durationSeconds: 86400 }]);
+
+        const saved = ConvertTaskGraphToAgentSpec(compiled.Spec!, saveOptions());
+        expect(saved.Losses).toEqual([]);
+        expect(saved.Spec!.Steps!.map((s) => s.StepType).sort()).toEqual(['External', 'Wait']);
     });
 
     it('does NOT report an action step as a human-task loss', () => {

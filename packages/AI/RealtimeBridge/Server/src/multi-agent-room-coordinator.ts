@@ -55,10 +55,11 @@
  * in-memory room/floor state, so it is exhaustively unit-testable with no network, DB, or real session.
  */
 
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver } from '@memberjunction/core';
 import { IsBackchannel, type UtteranceShape } from '@memberjunction/ai-bridge-base';
 
 /** Default cap on consecutive agent turns (no human between) before agents are denied. See rule 7 above. */
-export const DEFAULT_MAX_CONSECUTIVE_AGENT_TURNS = 8;
+export const DEFAULT_MAX_CONSECUTIVE_AGENT_TURNS = CODE_FALLBACK_LIMITS.ResourceGuards.MaxRealtimeConsecutiveAgentTurns;
 
 /** How long (ms) a yielded floor stays reserved for the agent it was handed to. */
 export const DEFAULT_HANDOFF_TTL_MS = 5000;
@@ -258,7 +259,7 @@ export class MultiAgentRoomCoordinator {
     /** Injected clock for floor-held timestamps, hand-off expiry and the human-speech hold; defaults to `Date.now`. */
     private readonly now: () => number;
 
-    private maxConsecutiveAgentTurns = DEFAULT_MAX_CONSECUTIVE_AGENT_TURNS;
+    private maxConsecutiveAgentTurns = LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxRealtimeConsecutiveAgentTurns;
     private handoffTtlMs = DEFAULT_HANDOFF_TTL_MS;
     private humanSpeechHoldMs = DEFAULT_HUMAN_SPEECH_HOLD_MS;
 

@@ -14,7 +14,7 @@ export interface IndependentProviderFactory {
 /**
  * Mints a connection-scoped provider for each delivery and releases it when the delivery settles (#6273). Use it when
  * deliveries run in parallel: handlers that share one provider share its transaction state, so their transactions
- * interleave. This is what MJAPI does per delivery; `mj queue work --concurrency N` uses it for N > 1.
+ * interleave. This is what MJAPI does per delivery; `mj queue work` uses it at every concurrency.
  */
 export class IndependentProviderSource implements WorkQueueProviderSource {
     constructor(private readonly base: IndependentProviderFactory) {}

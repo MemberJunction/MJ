@@ -124,6 +124,8 @@ Schema Files/
 !/docs/decisions/
 !/docs/telemetry-shareable-schema.md
 !/docs/opentelemetry-setup.md
+!/docs/limits-sweep-inventory.csv
+!/docs/limits-config-and-sweep.md
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old
@@ -195,6 +197,7 @@ report.json
 report.html
 packages/MJAPI/src/generated/class-registrations-manifest.ts
 packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
+packages/MJExplorer/src/app/generated/public-pages.generated.ts
 .needs-manifest-rebuild
 
 # Test coverage output

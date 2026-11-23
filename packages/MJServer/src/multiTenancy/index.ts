@@ -69,21 +69,36 @@ export function CreateTenantMiddleware(config: MultiTenancyConfig): RequestHandl
         return;
       }
       const tenantId = rawHeader;
-      if (tenantId) {
-        if (!IsValidTenantId(tenantId)) {
-          // Reject the REQUEST, never degrade to an unscoped session: a malformed
-          // tenant header that silently attaches nothing produces a session with NO
-          // tenant filter at all — strictly worse than failing loudly.
-          res.status(400).json({ error: 'Invalid tenant identifier' });
+      if (!tenantId) {
+        // An ABSENT header is the same fail-open case as a malformed one: the tenant
+        // hooks treat a user with no TenantContext as unscoped, so a client that simply
+        // omits the header would see every tenant's rows. With multi-tenancy enabled and
+        // header context configured, every non-admin request must name its tenant.
+        // Admin-role users are exempt because the hooks already bypass filtering for them, and
+        // so is the system user: the system API key is the server-to-server credential (jobs,
+        // callbacks) and belongs to no tenant.
+        if (userPayload.isSystemUser || isAdminUser(userPayload.userRecord as UserInfo, config.adminRoles)) {
+          next();
           return;
         }
-        // Clone before stamping: userRecord is very often the SHARED UserCache
-        // instance, and stamping it in place races concurrent requests for the
-        // same user (one request's tenant becomes another's, same-instant).
-        const sessionUser = CloneUserForSessionContext(userPayload.userRecord as UserInfo);
-        AttachTenantContext(sessionUser, tenantId, 'header');
-        userPayload.userRecord = sessionUser;
+        res.status(400).json({
+          error: `Missing ${config.tenantHeader} header: multi-tenancy is enabled with header context, so every request must identify its tenant.`,
+        });
+        return;
       }
+      if (!IsValidTenantId(tenantId)) {
+        // Reject the REQUEST, never degrade to an unscoped session: a malformed
+        // tenant header that silently attaches nothing produces a session with NO
+        // tenant filter at all — strictly worse than failing loudly.
+        res.status(400).json({ error: 'Invalid tenant identifier' });
+        return;
+      }
+      // Clone before stamping: userRecord is very often the SHARED UserCache
+      // instance, and stamping it in place races concurrent requests for the
+      // same user (one request's tenant becomes another's, same-instant).
+      const sessionUser = CloneUserForSessionContext(userPayload.userRecord as UserInfo);
+      AttachTenantContext(sessionUser, tenantId, 'header');
+      userPayload.userRecord = sessionUser;
     }
     next();
   };

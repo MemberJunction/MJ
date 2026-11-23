@@ -378,10 +378,23 @@ export class ActionResolver extends ResolverBase {
                            p.Type.trim().toLowerCase() === 'both');
     const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? undefined;
     const projected = ProjectActionParamValuesForUser(outputs, user, provider, { UnreadableEntityObjects: 'keep' }) ?? outputs;
+    const receipt = result.ChatReceipt;
+    if (receipt) {
+      const safeProjected = projected.map((p) => CopyScalarsAndArrays(p));
+      return {
+        Success: result.Success,
+        Message: receipt.Summary,
+        ResultCode: result.Result?.ResultCode ?? result.ResultCode,
+        ResultData: JSON.stringify({
+          ChatReceipt: receipt,
+          Params: safeProjected,
+        }),
+      };
+    }
     return {
       Success: result.Success,
       Message: result.Message,
-      ResultCode: result.Result?.ResultCode,
+      ResultCode: result.Result?.ResultCode ?? result.ResultCode,
       ResultData: projected.length > 0 ? JSON.stringify(CopyScalarsAndArrays(projected)) : undefined
     };
   }

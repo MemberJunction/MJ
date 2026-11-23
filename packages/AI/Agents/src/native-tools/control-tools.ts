@@ -22,7 +22,7 @@ export const COMPLETE_TASK_TOOL = 'complete_task';
 export const SUB_AGENT_TOOL_PREFIX = 'delegate_to_';
 /** The fixed control tools. Sub-agent tools are recognised by {@link SUB_AGENT_TOOL_PREFIX}. */
 export const NATIVE_CONTROL_TOOL_NAMES: readonly string[] = [PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL];
-/** Providers cap tool names at 64 characters. */
+// ProtocolLimit: OpenAI / Anthropic / Gemini chat-completions function tool name maximum length is 64 characters
 const MAX_TOOL_NAME_LENGTH = 64;
 
 /** Every tool the agent can declare, and what a call to it means. Discriminated on `kind`. */

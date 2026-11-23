@@ -1,0 +1,17 @@
+{
+  "entity": "MJ: Row Level Security Filters",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".agent-channel-rls-filters.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": false,
+    "filter": "Name LIKE 'UI: Agent Channel%' OR Name LIKE 'UI: Agent Suggestions%'",
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true
+  }
+}

@@ -22,9 +22,13 @@ import { BaseHarnessAdapter } from './adapters/BaseHarnessAdapter.js';
 import {
     ApplyGitHubEnvironmentConventions,
     ExtractHarnessCredentialSecret,
+    GetLocalCliLoginCommand,
+    IsHarnessApiKeyEnvVar,
     NormalizeAntigravityEnvironment,
     ResolveDriverVendorFallbackEnvironment,
+    ResolveEffectiveHarnessAuthMode,
     ScrubHarnessSecrets,
+    StripHarnessApiKeyEnvironment,
 } from './HarnessCredentialResolver.js';
 import { ISandboxProvider, SandboxHandle, SandboxWorkspaceOptions, WorkspaceKey } from './sandbox/ISandboxProvider.js';
 import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
@@ -32,6 +36,7 @@ import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';
 import { CloudSandboxProvider } from './sandbox/CloudSandboxProvider.js';
 import {
     CloudSandboxOptions,
+    HarnessAuthMode,
     HarnessTurnResult,
     HarnessWorkspaceScope,
     HarnessNetworkPolicy,
@@ -136,6 +141,7 @@ export interface HarnessAgentConfig {
     harnessName?: string;
     model?: string;
     effort?: HarnessReasoningEffort;
+    authMode?: HarnessAuthMode;
     sandbox?: {
         provider?: HarnessSandboxProviderType;
         image?: string;
@@ -157,6 +163,7 @@ const KNOWN_HARNESS_CONFIG_KEYS: ReadonlySet<string> = new Set([
     'harnessName',
     'model',
     'effort',
+    'authMode',
     'sandbox',
     'mcpServerUrl',
     'mcpCredential',
@@ -199,6 +206,7 @@ export class HarnessAgentBase extends BaseAgent {
     protected sandboxHandle: SandboxHandle | null = null;
     protected harnessRow: MJAIAgentHarnessEntity | null = null;
     protected sessionEnvironment: Record<string, string> = {};
+    protected effectiveAuthMode: 'cli-login' | 'api-key' = 'api-key';
     protected configuredModel: string | undefined = undefined;
     protected configuredEffort: HarnessReasoningEffort | undefined = undefined;
     protected persistedEffortLevel: number | undefined = undefined;
@@ -276,7 +284,7 @@ export class HarnessAgentBase extends BaseAgent {
             resolvedAdditionalDirectories: config.sandbox?.workspace?.additionalDirectories,
         });
 
-        const environment = await this.resolveGrantedEnvironment(contextUser);
+        const environment = await this.resolveGrantedEnvironment(contextUser, config);
         this.sessionEnvironment = environment;
 
         // Permissions are declared in agent metadata and applied BEFORE the session starts, so
@@ -316,6 +324,7 @@ export class HarnessAgentBase extends BaseAgent {
             AdditionalDirectories:
                 this.sandboxHandle.AdditionalDirectories ?? config.sandbox?.workspace?.additionalDirectories,
             Environment: environment,
+            AuthMode: this.effectiveAuthMode,
             McpServerUrl: mcpBinding.mcpServerUrl,
             McpCredential: mcpBinding.mcpCredential,
             Model: resolvedModel,
@@ -324,8 +333,11 @@ export class HarnessAgentBase extends BaseAgent {
             SandboxMetadata: this.sandboxHandle.Metadata,
         });
 
+        const authModeLabel =
+            this.effectiveAuthMode === 'cli-login' ? 'cli-login (subscription)' : 'api-key';
         LogStatus(
-            `Harness session started for '${harness.Name}' (${harness.DriverClass})` +
+            `Harness session started for '${harness.Name}' (${harness.DriverClass}) ` +
+                `authMode=${authModeLabel}` +
                 `${resolvedModel ? ` model=${resolvedModel}` : ''}` +
                 `${resolvedEffort ? ` effort=${resolvedEffort}` : ''}`,
         );
@@ -751,8 +763,12 @@ export class HarnessAgentBase extends BaseAgent {
      * dev and single-tenant installs, and the reason multi-tenant deployments should grant
      * explicitly. The distinction is logged, not silent.
      */
-    private async resolveGrantedEnvironment(contextUser?: UserInfo): Promise<Record<string, string>> {
+    protected async resolveGrantedEnvironment(
+        contextUser?: UserInfo,
+        config?: HarnessAgentConfig,
+    ): Promise<Record<string, string>> {
         const environment: Record<string, string> = {};
+        let hasExplicitApiKeyGrant = false;
         try {
             const rv = new RunView();
             const grants = await rv.RunView<MJAIAgentCredentialEntity>(
@@ -782,6 +798,9 @@ export class HarnessAgentBase extends BaseAgent {
                 );
                 if (secret) {
                     environment[grant.EnvVariableName] = secret;
+                    if (IsHarnessApiKeyEnvVar(grant.EnvVariableName)) {
+                        hasExplicitApiKeyGrant = true;
+                    }
                     continue;
                 }
                 const fromEnv = process.env[grant.EnvVariableName];
@@ -791,18 +810,58 @@ export class HarnessAgentBase extends BaseAgent {
                             'falling back to the server environment.',
                     );
                     environment[grant.EnvVariableName] = fromEnv;
+                    if (IsHarnessApiKeyEnvVar(grant.EnvVariableName)) {
+                        hasExplicitApiKeyGrant = true;
+                    }
                 }
             }
+        } catch (e) {
+            LogError(`Failed to load harness credential grants: ${describeError(e)}`);
+        }
 
-            if (Object.keys(environment).length === 0) {
-                this.applyVendorKeyFallback(environment);
-            } else if (
-                this.harnessRow?.DriverClass === 'AntigravityCliAdapter' ||
-                this.harnessRow?.DriverClass === 'AntigravityCloudAdapter'
-            ) {
-                NormalizeAntigravityEnvironment(environment);
-            }
+        const driverClass = this.harnessRow?.DriverClass ?? '';
+        const authResolution = ResolveEffectiveHarnessAuthMode(driverClass, {
+            configuredAuthMode: config?.authMode,
+            harnessConfigurationJson: this.harnessRow?.CapabilitySettings,
+            hasExplicitApiKeyGrant,
+            env: process.env,
+        });
 
+        if (
+            authResolution.requestedMode === 'cli-login' &&
+            authResolution.isLocalCliDriver &&
+            !authResolution.hasLocalLogin
+        ) {
+            const loginCommand = GetLocalCliLoginCommand(driverClass);
+            throw new Error(
+                `Harness '${this.harnessRow?.Name ?? driverClass}' (${driverClass}) is configured with ` +
+                    `authMode='cli-login', but no local CLI login session was detected. ` +
+                    `Sign in with \`${loginCommand}\` to use your subscription plan, or switch ` +
+                    `authMode to 'api-key' (in AIAgent.TypeConfiguration, AIAgentHarness.CapabilitySettings, ` +
+                    `or MJ_HARNESS_AUTH_MODE=api-key).`,
+            );
+        }
+
+        this.effectiveAuthMode = authResolution.effectiveMode;
+
+        if (authResolution.effectiveMode === 'cli-login') {
+            StripHarnessApiKeyEnvironment(environment);
+            LogStatus(
+                `Harness '${this.harnessRow?.Name ?? driverClass}' (${driverClass}) resolved authMode=cli-login ` +
+                    `(subscription; indicator=${authResolution.indicatorPath ?? 'detected'}); ` +
+                    `skipping API-key fallback and stripping provider API-key env vars.`,
+            );
+        } else if (Object.keys(environment).length === 0) {
+            this.applyVendorKeyFallback(environment);
+        } else if (
+            driverClass === 'AntigravityCliAdapter' ||
+            driverClass === 'AntigravityCloudAdapter'
+        ) {
+            NormalizeAntigravityEnvironment(environment);
+        }
+
+        try {
+            const rv = new RunView();
             // If no explicit GitHub credential grant resolved, check if the calling user has an active
             // personal 3LO GitHub credential (UserOAuth3LO:GitHub:<userId>) scoped strictly to them.
             let isUserDelegatedGitHub = false;
@@ -826,7 +885,7 @@ export class HarnessAgentBase extends BaseAgent {
                     : undefined,
             );
         } catch (e) {
-            LogError(`Failed to resolve harness environment: ${describeError(e)}`);
+            LogError(`Failed to resolve harness GitHub environment: ${describeError(e)}`);
         }
         return environment;
     }
@@ -1399,6 +1458,7 @@ export class HarnessAgentBase extends BaseAgent {
         this.sandboxProvider = null;
         this.harnessRow = null;
         this.sessionEnvironment = {};
+        this.effectiveAuthMode = 'api-key';
         this.configuredModel = undefined;
         this.configuredEffort = undefined;
         this.persistedEffortLevel = undefined;

@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (500 classes)
+// @memberjunction/core-entities (508 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -47,12 +47,15 @@ import {
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -79,6 +82,7 @@ import {
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRhythmTemplateEntity,
     MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
@@ -92,6 +96,7 @@ import {
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
@@ -151,6 +156,8 @@ import {
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -538,6 +545,7 @@ import {
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -771,7 +779,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (122 classes)
+// @memberjunction/ng-dashboards (124 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -783,6 +791,7 @@ import {
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
+    AdminLimitsResourceComponent,
     AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
@@ -792,6 +801,7 @@ import {
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ChiefOfStaffAgentChannelsComponent,
     ChiefOfStaffApprovalsComponent,
     ChiefOfStaffGovernanceComponent,
     ChiefOfStaffOverviewComponent,
@@ -947,12 +957,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -979,6 +992,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRhythmTemplateEntity,
     MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
@@ -992,6 +1006,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
@@ -1051,6 +1066,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1118,6 +1135,10 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
     MJContentSourceParamEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJContentSourceTypeEntity,
     MJContentSourceTypeParamEntity,
     MJContentTypeAttributeEntity,
@@ -1125,10 +1146,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationBranchEntity,
     MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
@@ -1322,6 +1339,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
@@ -1329,10 +1350,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
@@ -1446,6 +1463,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     MJAIAgentEntityExtended,
@@ -1525,6 +1543,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SettingsComponent,
     SqlLoggingComponent,
     UserManagementComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     RubricEngineBase,
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
@@ -1533,10 +1555,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ActionCategoryHierarchyPanel,
     BrandKitAssetsPanelComponent,
     BrandKitGenerationPolicyPanelComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1615,6 +1633,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
+    AdminLimitsResourceComponent,
     AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
@@ -1624,6 +1643,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ChiefOfStaffAgentChannelsComponent,
     ChiefOfStaffApprovalsComponent,
     ChiefOfStaffGovernanceComponent,
     ChiefOfStaffOverviewComponent,
@@ -1727,6 +1747,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     ArtifactResource,
     ChatCollectionsResource,
     ChatConversationsResource,
@@ -1737,10 +1761,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListDetailResource,
     OmnibarAgentProvider,
     OmnibarCommandProvider,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     OmnibarRecordProvider,
     OmnibarSearchProvider,
     QueryResource,
@@ -1761,7 +1781,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 805;
+export const CLASS_REGISTRATIONS_COUNT = 815;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

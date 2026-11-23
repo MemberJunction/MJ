@@ -18,8 +18,8 @@
  * @module @memberjunction/ai-core-plus
  */
 import { GetGlobalObjectStore, MJGlobal } from '@memberjunction/global';
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import type { TaskGraphSpec } from './task-graph-spec';
+import { UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
+import type { TaskGraphDispatchMode, TaskGraphSpec } from './task-graph-spec';
 import type { TaskSecurityEnvelope } from './task-security-envelope';
 import { SanitizeForPersistence } from '../safe-persist';
 
@@ -32,6 +32,16 @@ export type TaskGraphSubmitRequest = {
     ConversationDetailID?: string | null;
     /** The agent run that emitted the graph, for provenance and continuation routing. */
     AgentRunID?: string | null;
+    /** Optional submitting agent ID for Tier-3 `AgentOrWorkflowMetadata` & Tier-4 `UserAgentPolicy` resolution. */
+    AgentID?: string | null;
+    /** Optional routine or scheduled job run ID for `PerRoutine` budget tracking. */
+    RoutineID?: string | null;
+    /** Optional Tier-5 limits override for the submitted graph. */
+    LimitsOverride?: MJLimitsOverride;
+    /** Optional explicit Tier-4 user-agent policy limits override. */
+    UserPolicyLimitsOverride?: MJLimitsOverride;
+    /** Optional explicit opt-in/opt-out flag for dispatcher governance evaluation. */
+    EnableGovernance?: boolean;
     /**
      * How many task-graph continuations led to the run that is submitting this graph.
      *
@@ -76,6 +86,10 @@ export type TaskGraphSubmitRequest = {
      * first poll.
      */
     Debug?: TaskGraphStartDebug;
+    /** Execution dispatch mode (`'Inline'` default, or `'Queue'` to enqueue the graph run onto WorkQueue). */
+    Dispatch?: TaskGraphDispatchMode;
+    /** Optional WorkQueue topic override when `Dispatch === 'Queue'`. */
+    QueueTopic?: string;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
 };
@@ -124,6 +138,10 @@ export type TaskGraphSubmitOutcome = {
     Success: boolean;
     /** Parent task representing the whole graph — the handle for status, cancel and retry. */
     ParentTaskID?: string;
+    /** Effective dispatch mode honored by submission (`'Inline'` or `'Queue'`). */
+    Dispatch?: TaskGraphDispatchMode;
+    /** WorkQueue message identifier when dispatched via queue. */
+    QueueMessageID?: string;
     /** Every validation failure, not just the first, when the graph was rejected. */
     ErrorMessage?: string;
 };

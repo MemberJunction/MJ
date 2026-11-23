@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { BaseEntity, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
-import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, ApplyDefaultAgentUserPolicyValues } from '@memberjunction/ai-core-plus';
 
 AgentUserPolicyEngine.Instance.RegisterExecutingAgentContextStore(new AsyncLocalStorage<string>());
 
@@ -34,8 +34,11 @@ export class MJAIAgentUserPolicyEntityServer extends MJAIAgentUserPolicyEntity {
     public ExecutingAgentID: string | null = null;
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        if (!this.IsSaved && !this.UserID && this.ContextCurrentUser) {
-            this.UserID = this.ContextCurrentUser.ID;
+        if (!this.IsSaved) {
+            if (!this.UserID && this.ContextCurrentUser) {
+                this.UserID = this.ContextCurrentUser.ID;
+            }
+            ApplyDefaultAgentUserPolicyValues(this);
         }
         return super.Save(options);
     }
