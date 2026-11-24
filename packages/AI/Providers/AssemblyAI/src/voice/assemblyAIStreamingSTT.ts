@@ -52,6 +52,9 @@ const BYTES_PER_SAMPLE = 2;
 /** The model keeps 1750 characters of both sides of the conversation; a reply should not take all of it. */
 const MAX_AGENT_CONTEXT_CHARS = 1000;
 
+/** AssemblyAI refuses a session with more. */
+const MAX_KEYTERMS = 100;
+
 /** Opens a speech-to-text session. Rejects, with nothing left open, when it cannot. */
 export async function OpenAssemblyAISTT(
     options: AssemblyAISTTOptions,
@@ -83,9 +86,17 @@ function buildUrl(options: AssemblyAISTTOptions): string {
         url.searchParams.set('vad_threshold', String(options.VadThreshold));
     }
     if (options.Keyterms && options.Keyterms.length > 0) {
-        url.searchParams.set('keyterms_prompt', JSON.stringify(options.Keyterms));
+        url.searchParams.set('keyterms_prompt', JSON.stringify(acceptedKeyterms(options.Keyterms)));
     }
     return url.toString();
+}
+
+/** The first terms, up to the provider's limit: a call with fewer terms is better than no call. */
+function acceptedKeyterms(keyterms: string[]): string[] {
+    if (keyterms.length > MAX_KEYTERMS) {
+        console.warn(`AssemblyAI STT: ${keyterms.length} keyterms given; using the first ${MAX_KEYTERMS}, the most it accepts`);
+    }
+    return keyterms.slice(0, MAX_KEYTERMS);
 }
 
 function dispatch(frame: JSONObject, handlers: AssemblyAISTTHandlers): void {

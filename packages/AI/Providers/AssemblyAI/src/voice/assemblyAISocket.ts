@@ -20,14 +20,28 @@ const OPEN_TIMEOUT_MS = 10_000;
 /** How long a terminated session has to confirm before its socket is closed anyway, in ms. */
 const TERMINATE_TIMEOUT_MS = 2_000;
 
-/** Opens the real socket. The key travels in a header, never in the URL, so it reaches no access log. */
-export const OpenAssemblyAISocket: AssemblyAISocketOpener = (url, apiKey) => {
+/** Bytes a socket may have queued after a send: as much as MJAPI's realtime relay holds for a provider. */
+const MAX_BUFFERED_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Opens the real socket. The key travels in a header, never in the URL, so it reaches no access log.
+ *
+ * A provider that stops reading is dropped once more than `maxBufferedBytes` are queued for it, which its owner sees as
+ * any other lost connection. Dropped rather than closed: a close frame waits behind the queue, and keeps it in memory.
+ */
+export const OpenAssemblyAISocket = (url: string, apiKey: string, maxBufferedBytes: number = MAX_BUFFERED_BYTES): AssemblyAISocket => {
     const ws = new WebSocket(url, { headers: { Authorization: apiKey } });
     let failure = '';
     const socket: AssemblyAISocket = {
         OnMessage: null,
         OnClose: null,
-        Send: (data) => ws.send(data),
+        Send: (data) => {
+            ws.send(data);
+            if (ws.bufferedAmount > maxBufferedBytes) {
+                failure = `the provider stopped reading, with ${ws.bufferedAmount} bytes queued (limit ${maxBufferedBytes})`;
+                ws.terminate();
+            }
+        },
         Close: () => ws.close(),
     };
     ws.on('message', (data, isBinary) => {

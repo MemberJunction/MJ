@@ -40,6 +40,24 @@ describe('AssemblyAI streaming STT', () => {
         expect(socket.ApiKey).toBe('secret');
     });
 
+    it('sends at most the 100 keyterms the provider accepts, and warns about the rest without naming them', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const terms = Array.from({ length: 103 }, (_, i) => `term-${i}`);
+        await open({ Keyterms: terms });
+        expect(JSON.parse(new URL(socket.Url).searchParams.get('keyterms_prompt') ?? '')).toEqual(terms.slice(0, 100));
+        const logged = warn.mock.calls.flat().join(' ');
+        expect(logged).toContain('103');
+        expect(logged).not.toContain('term-');
+    });
+
+    it('sends exactly 100 keyterms without a warning', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const terms = Array.from({ length: 100 }, (_, i) => `term-${i}`);
+        await open({ Keyterms: terms });
+        expect(JSON.parse(new URL(socket.Url).searchParams.get('keyterms_prompt') ?? '')).toEqual(terms);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
     it('rejects with the provider message, and closes, when the provider refuses', async () => {
         const opening = start();
         const failed = expect(opening).rejects.toThrow(/Invalid API key/);

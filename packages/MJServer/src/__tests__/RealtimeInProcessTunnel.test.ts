@@ -159,6 +159,20 @@ describe('RealtimeInProcessTunnel', () => {
         expect(logged).not.toContain('ticket=');
     });
 
+    it('tells the upstream once when it closes the call while it is being opened', async () => {
+        const ws = connect((peer) => {
+            const opening = record(peer);
+            peer.Close(1011, 'provider refused');
+            return opening;
+        });
+        expect(await closeOf(ws)).toBe(1011);
+        expect(upstream?.ClosedCount).toBe(1);
+        // Nothing is left running for the call: no ping, and no second report once the browser's close arrives.
+        await new Promise((r) => setTimeout(r, FAST.PingIntervalMs * 4));
+        expect(upstream?.ClosedCount).toBe(1);
+        expect(upstream?.Frames).toEqual([]);
+    });
+
     it('closes 1011 when the upstream throws on a frame', async () => {
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         let closed = 0;
