@@ -977,7 +977,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
     // Helpers
     // -----------------------------------------------------------------------
 
-    private findTable(payload: SnapshotPayload, tableName: string): SnapshotTable | undefined {
+    private findTable(payload: SnapshotPayload, tableName: string | undefined): SnapshotTable | undefined {
         const exact = payload.tables.find(t => t.name === tableName);
         if (exact) return exact;
         if (typeof tableName === 'string' && tableName.trim().length > 0) {

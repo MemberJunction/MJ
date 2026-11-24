@@ -120,40 +120,48 @@ export function GetActionConfigObject(
 }
 
 /**
+ * Returns the effective `MJAIAgentActionEntity` rows for `agentId`, walking `BaseAgentID`
+ * prototype inheritance via `AIEngine.Instance.GetEffectiveAgentActions` when available and
+ * falling back to `AIEngine.Instance.AgentActions` only for lightweight test mocks that omit
+ * `GetEffectiveAgentActions`.
+ */
+function resolveEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[] {
+    const engine = AIEngine.Instance;
+    if (typeof engine?.GetEffectiveAgentActions === 'function') {
+        return engine.GetEffectiveAgentActions(agentId);
+    }
+    return (engine?.AgentActions ?? []).filter(aa => UUIDsEqual(aa.AgentID, agentId));
+}
+
+/**
+ * Indexes already-resolved effective `MJAIAgentActionEntity` rows (which may include rows
+ * inherited from a `BaseAgentID` ancestor) by `ActionID` for O(1) case-insensitive UUID lookup.
+ */
+export function IndexEffectiveAgentActions(
+    agentActions: readonly MJAIAgentActionEntity[]
+): UUIDMap<MJAIAgentActionEntity> {
+    const active = agentActions.filter(aa => !aa.Status || aa.Status === 'Active');
+    return IndexByUUID(active, aa => aa.ActionID);
+}
+
+/**
  * Indexes effective active `MJAIAgentActionEntity` rows for a single agent by `ActionID`
  * in one linear pass so loops over actions perform O(1) case-insensitive UUID lookups.
  *
- * When `agentActions` is omitted, walks the `BaseAgentID` prototype inheritance chain via
- * `AIEngine.Instance.GetEffectiveAgentActions(agentId)` when available, falling back to
- * filtering `AIEngine.Instance.AgentActions` by `AgentID` for lightweight mocks that only stub
- * the `AgentActions` getter.
+ * When `agentActions` is provided, filters that collection to active rows belonging to `agentId`.
+ * When omitted, resolves effective rows (including `BaseAgentID` inheritance) via `AIEngine`.
  */
 export function IndexActiveAgentActions(
     agentId: string,
-    agentActions?: readonly MJAIAgentActionEntity[],
-    alreadyScopedToAgent = false
+    agentActions?: readonly MJAIAgentActionEntity[]
 ): UUIDMap<MJAIAgentActionEntity> {
     if (agentActions !== undefined) {
-        const active = alreadyScopedToAgent
-            ? agentActions.filter(aa => !aa.Status || aa.Status === 'Active')
-            : agentActions.filter(aa => UUIDsEqual(aa.AgentID, agentId) && (!aa.Status || aa.Status === 'Active'));
+        const active = agentActions.filter(
+            aa => UUIDsEqual(aa.AgentID, agentId) && (!aa.Status || aa.Status === 'Active')
+        );
         return IndexByUUID(active, aa => aa.ActionID);
     }
-    const engine = AIEngine.Instance;
-    const inherited =
-        typeof engine?.GetEffectiveAgentActions === 'function'
-            ? engine.GetEffectiveAgentActions(agentId)
-            : [];
-    if (inherited.length > 0) {
-        return IndexByUUID(
-            inherited.filter(aa => !aa.Status || aa.Status === 'Active'),
-            aa => aa.ActionID
-        );
-    }
-    const fallback = (engine?.AgentActions ?? []).filter(
-        aa => UUIDsEqual(aa.AgentID, agentId) && (!aa.Status || aa.Status === 'Active')
-    );
-    return IndexByUUID(fallback, aa => aa.ActionID);
+    return IndexEffectiveAgentActions(resolveEffectiveAgentActions(agentId));
 }
 
 function findActiveAgentAction(
@@ -164,20 +172,8 @@ function findActiveAgentAction(
     if (agentActionsByActionId) {
         return agentActionsByActionId.Get(actionId);
     }
-    const engine = AIEngine.Instance;
-    const inherited =
-        typeof engine?.GetEffectiveAgentActions === 'function'
-            ? engine.GetEffectiveAgentActions(agentId)
-            : [];
-    if (inherited.length > 0) {
-        return inherited.find(aa => UUIDsEqual(aa.ActionID, actionId) && (!aa.Status || aa.Status === 'Active'));
-    }
-    const agentActions = engine?.AgentActions ?? [];
-    return agentActions.find(
-        aa =>
-            UUIDsEqual(aa.AgentID, agentId) &&
-            UUIDsEqual(aa.ActionID, actionId) &&
-            (!aa.Status || aa.Status === 'Active')
+    return resolveEffectiveAgentActions(agentId).find(
+        aa => UUIDsEqual(aa.ActionID, actionId) && (!aa.Status || aa.Status === 'Active')
     );
 }
 
@@ -397,6 +393,58 @@ export function PickMostRestrictiveExpirationConfig(
     return best;
 }
 
+type ExpirationMetadataFields = Pick<
+    AgentChatMessageMetadata,
+    'expirationTurns' | 'expirationMode' | 'compactMode' | 'compactLength' | 'compactPromptId'
+>;
+
+/**
+ * Projects an active `ResolvedActionExpirationConfig` onto `AgentChatMessageMetadata` expiration
+ * fields, returning an empty object when the config is absent or inactive (`'None'`).
+ */
+export function ExpirationConfigToMetadataFields(
+    config?: ResolvedActionExpirationConfig
+): Partial<ExpirationMetadataFields> {
+    if (!config || config.ExpirationMode === 'None') {
+        return {};
+    }
+    return {
+        expirationTurns: config.ExpirationTurns,
+        expirationMode: config.ExpirationMode,
+        compactMode: config.CompactMode,
+        compactLength: config.CompactLength,
+        compactPromptId: config.CompactPromptID,
+    };
+}
+
+/**
+ * Extracts a `ResolvedActionExpirationConfig` from `AgentChatMessageMetadata` when expiration
+ * settings are present.
+ */
+export function MetadataToExpirationConfig(
+    metadata?: AgentChatMessageMetadata
+): ResolvedActionExpirationConfig | undefined {
+    if (metadata?.expirationTurns == null || !metadata.expirationMode) {
+        return undefined;
+    }
+    return {
+        ExpirationTurns: metadata.expirationTurns,
+        ExpirationMode: metadata.expirationMode,
+        CompactMode: metadata.compactMode,
+        CompactLength: metadata.compactLength,
+        CompactPromptID: metadata.compactPromptId,
+    };
+}
+
+function normalizeMatchedActions(
+    matchedActions?: MJActionEntityExtended | readonly (MJActionEntityExtended | undefined)[]
+): MJActionEntityExtended[] {
+    if (Array.isArray(matchedActions)) {
+        return matchedActions.filter((a): a is MJActionEntityExtended => a != null);
+    }
+    return matchedActions ? [matchedActions as MJActionEntityExtended] : [];
+}
+
 /**
  * Resolves conversation message expiration metadata for a `ForEach`/`While` loop result message
  * using the unified `ResolveActionExpirationConfig` hierarchy across one or more loop-body actions.
@@ -416,24 +464,10 @@ export function ResolveLoopExpirationMetadata(
 
     const fromOverride = resolveOverrideExpiration(params.messageExpirationOverride);
     if (fromOverride) {
-        return fromOverride.ExpirationMode === 'None'
-            ? baseMetadata
-            : {
-                ...baseMetadata,
-                expirationTurns: fromOverride.ExpirationTurns,
-                expirationMode: fromOverride.ExpirationMode,
-                compactMode: fromOverride.CompactMode,
-                compactLength: fromOverride.CompactLength,
-                compactPromptId: fromOverride.CompactPromptID,
-            };
+        return { ...baseMetadata, ...ExpirationConfigToMetadataFields(fromOverride) };
     }
 
-    const actions: MJActionEntityExtended[] = Array.isArray(matchedActions)
-        ? matchedActions.filter((a): a is MJActionEntityExtended => a != null)
-        : matchedActions
-            ? [matchedActions as MJActionEntityExtended]
-            : [];
-
+    const actions = normalizeMatchedActions(matchedActions);
     if (actions.length > 0) {
         const indexedActions = agentActionsByActionId ?? IndexActiveAgentActions(params.agent.ID);
         const resolvedList = actions.map(action =>
@@ -441,35 +475,20 @@ export function ResolveLoopExpirationMetadata(
         );
         const mostRestrictive = PickMostRestrictiveExpirationConfig(resolvedList);
         if (mostRestrictive) {
-            return {
-                ...baseMetadata,
-                expirationTurns: mostRestrictive.ExpirationTurns,
-                expirationMode: mostRestrictive.ExpirationMode,
-                compactMode: mostRestrictive.CompactMode,
-                compactLength: mostRestrictive.CompactLength,
-                compactPromptId: mostRestrictive.CompactPromptID,
-            };
+            return { ...baseMetadata, ...ExpirationConfigToMetadataFields(mostRestrictive) };
         }
         if (resolvedList.every(r => r?.ExpirationMode === 'None')) {
             return baseMetadata;
         }
     }
 
-    return {
-        ...baseMetadata,
-        expirationTurns: 3,
-        expirationMode: 'Remove',
-    };
+    return { ...baseMetadata, expirationTurns: 3, expirationMode: 'Remove' };
 }
 
-/**
- * Picks the more restrictive active expiration settings between two metadata objects,
- * ignoring inactive `'None'` entries so an unexpirable sibling never masks an expirable rule.
- */
-export function PickMoreRestrictiveExpiration(
+function pickMoreRestrictiveExpiration(
     a: AgentChatMessageMetadata,
     b: AgentChatMessageMetadata
-): Pick<AgentChatMessageMetadata, 'expirationTurns' | 'expirationMode' | 'compactMode' | 'compactLength' | 'compactPromptId'> {
+): ExpirationMetadataFields {
     const isActive = (m: AgentChatMessageMetadata): boolean =>
         m.expirationTurns != null && m.expirationMode != null && m.expirationMode !== 'None';
     const aActive = isActive(a);
@@ -483,9 +502,9 @@ export function PickMoreRestrictiveExpiration(
         return {
             expirationTurns: chosen.expirationTurns,
             expirationMode: chosen.expirationMode,
-            compactMode: chosen.compactMode ?? a.compactMode ?? b.compactMode,
-            compactLength: chosen.compactLength ?? a.compactLength ?? b.compactLength,
-            compactPromptId: chosen.compactPromptId ?? a.compactPromptId ?? b.compactPromptId,
+            compactMode: chosen.compactMode,
+            compactLength: chosen.compactLength,
+            compactPromptId: chosen.compactPromptId,
         };
     }
     const active = bActive ? b : aActive ? a : undefined;
@@ -496,6 +515,13 @@ export function PickMoreRestrictiveExpiration(
         compactLength: active ? active.compactLength : (a.compactLength ?? b.compactLength),
         compactPromptId: active ? active.compactPromptId : (a.compactPromptId ?? b.compactPromptId),
     };
+}
+
+function stripExpirationFields(
+    meta: AgentChatMessageMetadata
+): Omit<AgentChatMessageMetadata, keyof ExpirationMetadataFields> {
+    const { expirationTurns: _t, expirationMode: _m, compactMode: _cm, compactLength: _cl, compactPromptId: _cp, ...rest } = meta;
+    return rest;
 }
 
 /**
@@ -514,12 +540,12 @@ export function MergeToolTurnMetadata(
         const combined = [...(x ?? []), ...(y ?? [])];
         return combined.length > 0 ? Array.from(new Set(combined)) : undefined;
     };
-    const exp = PickMoreRestrictiveExpiration(a, b);
+    const exp = pickMoreRestrictiveExpiration(a, b);
     const artifactIds = mergeStringArrays(a.artifactIds, b.artifactIds);
     const pendingSpilloverIds = mergeStringArrays(a.pendingSpilloverIds, b.pendingSpilloverIds);
     return {
-        ...a,
-        ...b,
+        ...stripExpirationFields(a),
+        ...stripExpirationFields(b),
         turnAdded: Math.min(a.turnAdded ?? b.turnAdded ?? 0, b.turnAdded ?? a.turnAdded ?? 0),
         messageType: a.messageType || b.messageType,
         ...(exp.expirationTurns !== undefined ? { expirationTurns: exp.expirationTurns } : {}),
@@ -654,6 +680,40 @@ function exceedsJsonCharBudget(val: unknown, charThreshold: number): boolean {
     return visit(val, 1);
 }
 
+/**
+ * Serializes an action output payload to JSON without allowing circular references or `BigInt`
+ * values to crash compaction or context recovery.
+ */
+function safeJsonStringify(value: unknown, pretty: boolean, contextLabel: string): string | undefined {
+    try {
+        // fls-guard: action output params already scoped to the run's contextUser and audience in ExecuteSingleAction
+        return pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+    } catch (err) {
+        LogError(
+            `ActionResultSpilloverManager: skipping non-JSON-serializable ${contextLabel}: ${err instanceof Error ? err.message : String(err)}`
+        );
+        return undefined;
+    }
+}
+
+/**
+ * Cheap strict-JSON check for spilled string payloads: verifies matching `{...}` or `[...]`
+ * delimiters before parsing so large bracket-prefixed logs or markdown skip JSON parsing entirely.
+ */
+function isJsonStringPayload(trimmed: string): boolean {
+    const hasObjectDelimiters = trimmed.startsWith('{') && trimmed.endsWith('}');
+    const hasArrayDelimiters = trimmed.startsWith('[') && trimmed.endsWith(']');
+    if (!hasObjectDelimiters && !hasArrayDelimiters) {
+        return false;
+    }
+    try {
+        const parsed: unknown = JSON.parse(trimmed);
+        return parsed !== null && typeof parsed === 'object';
+    } catch {
+        return false;
+    }
+}
+
 function wouldTabularRowsSpillOver(
     rows: Array<Record<string, unknown>>,
     thresholds: ActionSpilloverThresholds
@@ -663,9 +723,11 @@ function wouldTabularRowsSpillOver(
     }
     let approxChars = 2;
     for (let i = 0; i < rows.length; i++) {
-        // fls-guard: action output params already scoped to the run's contextUser and audience in ExecuteSingleAction
-        const rowJson = JSON.stringify(rows[i]);
-        approxChars += (rowJson ? rowJson.length : 4) + (i > 0 ? 1 : 0);
+        const rowJson = safeJsonStringify(rows[i], false, 'tabular row');
+        if (rowJson === undefined) {
+            return false;
+        }
+        approxChars += rowJson.length + (i > 0 ? 1 : 0);
         if (approxChars >= thresholds.CharThreshold) {
             return true;
         }
@@ -698,6 +760,15 @@ function inferSnapshotColumns(
 
 type SpilloverTrustMetadata = Partial<Pick<InputArtifact, 'trustLevel' | 'sourceName'>>;
 
+function extractRawColumnsMetadata(outputParams: ActionParam[]): Array<Record<string, unknown>> | undefined {
+    const columnsParam = outputParams.find(
+        p => p.Name?.trim().toLowerCase() === 'columns' && Array.isArray(p.Value)
+    );
+    return Array.isArray(columnsParam?.Value)
+        ? (columnsParam.Value as Array<Record<string, unknown>>)
+        : undefined;
+}
+
 function buildTabularSpilloverArtifacts(
     actionName: string,
     outputParams: ActionParam[],
@@ -705,12 +776,7 @@ function buildTabularSpilloverArtifacts(
     thresholds: ActionSpilloverThresholds,
     trustMetadata: SpilloverTrustMetadata
 ): InputArtifact[] {
-    const columnsParam = outputParams.find(
-        p => p.Name?.trim().toLowerCase() === 'columns' && Array.isArray(p.Value)
-    );
-    const rawColumns = Array.isArray(columnsParam?.Value)
-        ? (columnsParam.Value as Array<Record<string, unknown>>)
-        : undefined;
+    const rawColumns = extractRawColumnsMetadata(outputParams);
     const artifacts: InputArtifact[] = [];
 
     for (const param of outputParams) {
@@ -723,10 +789,14 @@ function buildTabularSpilloverArtifacts(
         }
         const tableName = param.Name || 'Results';
         const columns = inferSnapshotColumns(rows[0], rawColumns);
-        // fls-guard: action output params already scoped to the run's contextUser and audience in ExecuteSingleAction
-        const snapshotJson = JSON.stringify({
-            tables: [{ name: tableName, columns, rows, metadata: { rowCount: rows.length } }],
-        });
+        const snapshotJson = safeJsonStringify(
+            { tables: [{ name: tableName, columns, rows, metadata: { rowCount: rows.length } }] },
+            false,
+            `tabular spillover for '${actionName}.${tableName}'`
+        );
+        if (!snapshotJson) {
+            continue;
+        }
         artifacts.push({
             name: `${actionName} — ${tableName} (Step ${stepNumber})`,
             typeName: 'Data Snapshot',
@@ -742,6 +812,33 @@ function buildTabularSpilloverArtifacts(
     return artifacts;
 }
 
+function buildStringSpilloverArtifact(
+    actionName: string,
+    paramName: string,
+    val: string,
+    stepNumber: number,
+    trustMetadata: SpilloverTrustMetadata
+): InputArtifact {
+    const lowerName = paramName.trim().toLowerCase();
+    const trimmed = val.trim();
+    const isJsonString = isJsonStringPayload(trimmed);
+    const isCsv =
+        !isJsonString &&
+        (lowerName.includes('csv') ||
+            (lowerName === 'formattedresults' && trimmed.includes(',') && trimmed.includes('\n')));
+    return {
+        name: `${actionName} — ${paramName} (Step ${stepNumber})`,
+        typeName: isJsonString ? 'JSON' : isCsv ? 'CSV' : 'Text',
+        toolLibraryClass: isJsonString ? 'JSONToolLibrary' : isCsv ? 'CSVToolLibrary' : 'TextToolLibrary',
+        mimeType: isJsonString ? 'application/json' : isCsv ? 'text/csv' : 'text/plain',
+        content: val,
+        description: `Output from action "${actionName}" (${paramName}, ${val.length} chars).`,
+        deliveryMode: 'ToolsOnly',
+        forceToolsOnly: true,
+        ...trustMetadata,
+    };
+}
+
 function buildSingleParamSpilloverArtifact(
     actionName: string,
     param: ActionParam,
@@ -754,9 +851,8 @@ function buildSingleParamSpilloverArtifact(
         return undefined;
     }
     if (typeof val === 'object') {
-        // fls-guard: action output params already scoped to the run's contextUser and audience in ExecuteSingleAction
-        const serialized = JSON.stringify(val, null, 2);
-        if (serialized.length < charThreshold) {
+        const serialized = safeJsonStringify(val, true, `object spillover for '${actionName}.${param.Name}'`);
+        if (!serialized || serialized.length < charThreshold) {
             return undefined;
         }
         return {
@@ -774,23 +870,7 @@ function buildSingleParamSpilloverArtifact(
     if (!isSpilloverStringParam(val, charThreshold)) {
         return undefined;
     }
-    const lowerName = (param.Name || '').trim().toLowerCase();
-    const trimmed = val.trim();
-    const isJsonString =
-        (trimmed.startsWith('{') || trimmed.startsWith('[')) && CleanAndParseJSON<unknown>(trimmed, false) != null;
-    const isCsv =
-        lowerName.includes('csv') || (lowerName === 'formattedresults' && trimmed.includes(',') && trimmed.includes('\n'));
-    return {
-        name: `${actionName} — ${param.Name} (Step ${stepNumber})`,
-        typeName: isJsonString ? 'JSON' : isCsv ? 'CSV' : 'Text',
-        toolLibraryClass: isJsonString ? 'JSONToolLibrary' : isCsv ? 'CSVToolLibrary' : 'TextToolLibrary',
-        mimeType: isJsonString ? 'application/json' : isCsv ? 'text/csv' : 'text/plain',
-        content: val,
-        description: `Output from action "${actionName}" (${param.Name}, ${val.length} chars).`,
-        deliveryMode: 'ToolsOnly',
-        forceToolsOnly: true,
-        ...trustMetadata,
-    };
+    return buildStringSpilloverArtifact(actionName, param.Name || 'Output', val, stepNumber, trustMetadata);
 }
 
 function buildParamSpilloverArtifacts(
@@ -825,9 +905,7 @@ function buildMessageSpilloverArtifact(
     if (typeof message !== 'string' || message.length < charThreshold) {
         return undefined;
     }
-    const trimmed = message.trim();
-    const isJsonString =
-        (trimmed.startsWith('{') || trimmed.startsWith('[')) && CleanAndParseJSON<unknown>(trimmed, false) != null;
+    const isJsonString = isJsonStringPayload(message.trim());
     return {
         name: `${actionName} — Output (Step ${stepNumber})`,
         typeName: isJsonString ? 'JSON' : 'Text',

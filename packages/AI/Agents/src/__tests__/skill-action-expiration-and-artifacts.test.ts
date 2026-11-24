@@ -6,10 +6,13 @@ import { BaseAgent } from '../base-agent';
 import {
     ActionResultSpilloverManager,
     ClearIncompleteActionExpirationWarnings,
+    ExpirationConfigToMetadataFields,
     FormatArtifactSpilloverHint,
     GetActionConfigObject,
     IndexActiveAgentActions,
+    IndexEffectiveAgentActions,
     MergeToolTurnMetadata,
+    MetadataToExpirationConfig,
     PickMostRestrictiveExpirationConfig,
     ResolveActionExpirationConfig,
     ResolveActionMaxExecutionsPerRun,
@@ -297,7 +300,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
 
     describe('ResolveActionExpirationConfig', () => {
         it('resolves expiration and compaction settings from Action.Config_Object when an action comes from a Skill (no AIAgentAction row)', () => {
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const adhocQueryAction = makeActionEntity(RUN_ADHOC_QUERY_ID, 'Run Ad-hoc Query', {
                 resultExpirationTurns: 1,
@@ -317,7 +320,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
         });
 
         it('parses raw Config_ JSON strings when Config_Object is not pre-hydrated', () => {
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const rawOnlyAction = {
                 ID: RUN_ADHOC_QUERY_ID,
@@ -355,7 +358,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
 
             // DB-constraint-compliant Compact/AI Summary row: ResultExpirationMode='Compact' sets CompactMode='AI Summary'
             // (CK_AIAgentAction_CompactModeRequired), leaving CompactPromptID null to inherit Action.Config.compactPromptId.
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([
                 makeAgentAction({
                     ResultExpirationTurns: 3,
                     ResultExpirationMode: 'Compact',
@@ -409,7 +412,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                 'DEFAULT-PROMPT-ID'
             );
 
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([
                 makeAgentAction({
                     ResultExpirationTurns: 3,
                     ResultExpirationMode: 'Compact',
@@ -437,7 +440,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                 compactLength: 2000,
             });
 
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([
                 makeAgentAction({
                     ResultExpirationTurns: null,
                     ResultExpirationMode: 'None',
@@ -487,7 +490,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                 compactLength: 2000,
             });
 
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([
                 makeAgentAction({
                     ResultExpirationTurns: 2,
                     ResultExpirationMode: 'Compact',
@@ -553,7 +556,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
 
         it('logs a one-time LogError warning when Action.Config specifies incomplete expiration settings (case-insensitive UUID dedupe)', () => {
             ClearIncompleteActionExpirationWarnings();
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
             const logErrorSpy = vi.spyOn(CoreLogging, 'LogError').mockImplementation(() => {});
 
             const upperId = 'AAAAAAAA-0000-0000-0000-000000000901';
@@ -646,7 +649,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                 compactLength: 2000,
             });
 
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const params = makeExecuteParams();
             const metadata = ResolveLoopExpirationMetadata(params, 2, adhocQueryAction);
@@ -668,7 +671,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                 compactLength: 2000,
             });
 
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const withoutTurns = ResolveLoopExpirationMetadata(
                 makeExecuteParams({ messageExpirationOverride: { expirationMode: 'None' } }),
@@ -701,7 +704,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                 ResultExpirationMode: 'None',
             });
 
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([optOutRow]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([optOutRow]);
 
             const params = makeExecuteParams();
             const metadata = ResolveLoopExpirationMetadata(params, 3, adhocQueryAction);
@@ -717,7 +720,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
         });
 
         it('resolves maxExecutionsPerRun from Action.Config when no AIAgentAction row limit is set', () => {
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const limitedAction = makeActionEntity(RUN_ADHOC_QUERY_ID, 'Run Ad-hoc Query', {
                 maxExecutionsPerRun: 5,
@@ -1431,7 +1434,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
 
         it('ignores ResultExpirationMode: None when resolving parallel action expiration and queues spillover lazily in executeActionsStep', async () => {
             const agent = new UnifiedActionPathwayProbeAgent();
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const nonExpiringAction = makeActionEntity('00000000-0000-0000-0000-000000000101', 'Fast Ping', {
                 resultExpirationTurns: 0,
@@ -1597,7 +1600,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
 
         it('honors params.messageExpirationOverride = { expirationMode: "None" } in executeActionsStep so caller opt-out is never silently overridden', async () => {
             const agent = new UnifiedActionPathwayProbeAgent();
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const compactingAction = makeActionEntity(RUN_ADHOC_QUERY_ID, 'Run Ad-hoc Query', {
                 resultExpirationTurns: 2,
@@ -2113,7 +2116,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
 
         it('queues exactly one lazy spillover on ForEach loop completion (not per internal iteration) and materializes when expired/compacted', async () => {
             const agent = new UnifiedActionPathwayProbeAgent();
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const adhocQueryAction = makeActionEntity(RUN_ADHOC_QUERY_ID, 'Run Ad-hoc Query', {
                 resultExpirationTurns: 1,
@@ -2185,7 +2188,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
         });
 
         it('suppresses deferred spillover registration and artifact hints when includeArtifactToolsDocs is false or workspace is disabled', async () => {
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const compactingAction = makeActionEntity(RUN_ADHOC_QUERY_ID, 'Run Ad-hoc Query', {
                 resultExpirationTurns: 1,
@@ -2248,7 +2251,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
             const agent = new UnifiedActionPathwayProbeAgent();
 
             // Mirror Query Strategist's direct AIAgentAction rows (ResultExpirationTurns = null -> inherits Action.Config)
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([
                 makeAgentAction({ AgentID: QUERY_STRATEGIST_ID, ActionID: RUN_ADHOC_QUERY_ID, ResultExpirationTurns: null }),
                 makeAgentAction({ AgentID: QUERY_STRATEGIST_ID, ActionID: RUN_STORED_QUERY_ID, ResultExpirationTurns: null }),
             ]);
@@ -2515,7 +2518,7 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
 
             // 2. Multi-step ForEach loop resolves expiration across ALL steps (not only steps[0]) and preserves untrusted envelope source
             const agent = new UnifiedActionPathwayProbeAgent();
-            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
 
             const nonExpiringStep = makeActionEntity('00000000-0000-0000-0000-000000000201', 'Fast Ping');
             const externalQueryStep = makeActionEntity(RUN_ADHOC_QUERY_ID, 'Fetch Web Page', {
@@ -2683,6 +2686,163 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
                 ExpirationMode: 'Remove',
             });
             expect(ResolveActionMaxExecutionsPerRun(adhoc, derivedInstanceId, undefined, derivedIndexed)).toBe(6);
+        });
+
+        it('handles circular/BigInt spillover payloads safely, prevents loser compact* leakage in MergeToolTurnMetadata, suppresses dead post-run user artifact hints, avoids AgentActions fallback scans, and classifies bracket-prefixed logs as Text', async () => {
+            // M1: Circular and BigInt payloads never throw out of WouldSpillOver / Materialize
+            const logErrorSpy = vi.spyOn(CoreLogging, 'LogError').mockImplementation(() => {});
+            const spillover = new ActionResultSpilloverManager();
+            const artifactMgr = new ArtifactToolManager();
+            artifactMgr.Initialize([], { workspaceEnabled: true });
+            const removeCfg: ResolvedActionExpirationConfig = { ExpirationTurns: 1, ExpirationMode: 'Remove' };
+
+            const circularPayload: Record<string, unknown> = { body: 'x'.repeat(1200) };
+            circularPayload.self = circularPayload;
+            const bigIntPayload = { id: BigInt(12345678901234567890n), body: 'y'.repeat(1200) };
+            const circularRow: Record<string, unknown> = { col: 'z'.repeat(1200) };
+            circularRow.self = circularRow;
+
+            const token = spillover.QueueDeferred(
+                {
+                    ActionName: 'Circular Action',
+                    OutputParams: [
+                        { Name: 'CircularObj', Type: 'Output', Value: circularPayload },
+                        { Name: 'BigIntObj', Type: 'Output', Value: bigIntPayload },
+                        { Name: 'Rows', Type: 'Output', Value: [circularRow] },
+                    ],
+                    StepNumber: 1,
+                    ExpirationConfig: removeCfg,
+                },
+                artifactMgr
+            );
+            const msgWithCircular: AgentChatMessage = {
+                role: 'user',
+                content: 'payload',
+                metadata: token ? { turnAdded: 1, messageType: 'action-result', pendingSpilloverIds: [token] } : { turnAdded: 1, messageType: 'action-result' },
+            };
+            expect(() => spillover.Materialize(msgWithCircular)).not.toThrow();
+            expect(artifactMgr.HasArtifacts()).toBe(false);
+            expect(logErrorSpy).toHaveBeenCalled();
+
+            // M2: MergeToolTurnMetadata does not leak loser's compactMode/compactLength/compactPromptId onto the winner
+            const removeBeatsCompact = MergeToolTurnMetadata(
+                {
+                    turnAdded: 2,
+                    messageType: 'action-result',
+                    expirationTurns: 1,
+                    expirationMode: 'Remove',
+                },
+                {
+                    turnAdded: 2,
+                    messageType: 'action-result',
+                    expirationTurns: 1,
+                    expirationMode: 'Compact',
+                    compactMode: 'AI Summary',
+                    compactLength: 500,
+                    compactPromptId: 'prompt-loser',
+                }
+            );
+            expect(removeBeatsCompact?.expirationMode).toBe('Remove');
+            expect(removeBeatsCompact?.compactMode).toBeUndefined();
+            expect(removeBeatsCompact?.compactLength).toBeUndefined();
+            expect(removeBeatsCompact?.compactPromptId).toBeUndefined();
+
+            const firstNBeatsAiSummary = MergeToolTurnMetadata(
+                {
+                    turnAdded: 2,
+                    messageType: 'action-result',
+                    expirationTurns: 1,
+                    expirationMode: 'Compact',
+                    compactMode: 'First N Chars',
+                    compactLength: 200,
+                },
+                {
+                    turnAdded: 2,
+                    messageType: 'action-result',
+                    expirationTurns: 1,
+                    expirationMode: 'Compact',
+                    compactMode: 'AI Summary',
+                    compactLength: 600,
+                    compactPromptId: 'prompt-loser',
+                }
+            );
+            expect(firstNBeatsAiSummary?.compactMode).toBe('First N Chars');
+            expect(firstNBeatsAiSummary?.compactLength).toBe(200);
+            expect(firstNBeatsAiSummary?.compactPromptId).toBeUndefined();
+
+            // M3: runPostRunCompaction on an expanded user message with prior metadata.artifactIds must NOT emit dead Artifact hints
+            const agent = new UnifiedActionPathwayProbeAgent(true);
+            const alphaId = agent.GetArtifactManager().RegisterArtifact({
+                name: 'Spilled Query',
+                typeName: 'Text',
+                mimeType: 'text/plain',
+                content: 'full query output',
+                deliveryMode: 'ToolsOnly',
+                forceToolsOnly: true,
+            });
+            const expandedUserMsg: AgentChatMessage = {
+                role: 'user',
+                content: 'D'.repeat(2500),
+                metadata: {
+                    turnAdded: 1,
+                    messageType: 'action-result',
+                    wasCompacted: false,
+                    artifactIds: [alphaId],
+                },
+            };
+            const postRunParams = makeExecuteParams({
+                compactAfterRun: { enabled: true, messageCountThreshold: 3 },
+                conversationMessages: [
+                    { role: 'user', content: 'Initial question' },
+                    expandedUserMsg,
+                    { role: 'assistant', content: 'Final answer' },
+                ],
+            });
+            await agent.RunPostCompaction(postRunParams, makeAgentRun());
+            const postRunCompacted = postRunParams.conversationMessages[1].content as string;
+            expect(postRunCompacted).toContain('[Compacted: showing first 200');
+            expect(postRunCompacted).not.toContain(`Artifact ${alphaId}`);
+            expect(postRunCompacted).not.toContain('artifact tools');
+
+            // R1: Skill-only agent with 0 AIAgentAction rows calls GetEffectiveAgentActions once and never falls back to AgentActions
+            const effectiveSpy = vi.spyOn(AIEngine.Instance, 'GetEffectiveAgentActions').mockReturnValue([]);
+            const globalActionsSpy = vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockImplementation(() => {
+                throw new Error('Must not scan global AgentActions when GetEffectiveAgentActions exists');
+            });
+            expect(IndexActiveAgentActions(SAGE_AGENT_ID).Size).toBe(0);
+            expect(effectiveSpy).toHaveBeenCalledTimes(1);
+            expect(globalActionsSpy).not.toHaveBeenCalled();
+            expect(IndexEffectiveAgentActions([makeAgentAction({ Status: 'Revoked' })]).Size).toBe(0);
+
+            // R3: ExpirationConfigToMetadataFields <-> MetadataToExpirationConfig round-trip
+            const roundTripCfg: ResolvedActionExpirationConfig = {
+                ExpirationTurns: 2,
+                ExpirationMode: 'Compact',
+                CompactMode: 'First N Chars',
+                CompactLength: 800,
+                CompactPromptID: 'p-1',
+            };
+            const projected = ExpirationConfigToMetadataFields(roundTripCfg);
+            expect(MetadataToExpirationConfig({ turnAdded: 1, ...projected })).toEqual(roundTripCfg);
+            expect(ExpirationConfigToMetadataFields({ ExpirationTurns: 0, ExpirationMode: 'None' })).toEqual({});
+
+            // R4: Bracket-prefixed plain text logs classify as TextToolLibrary while valid JSON classifies as JSONToolLibrary
+            const bracketLog = `[INFO] 2026-11-23 starting job\n${'log line\n'.repeat(120)}`;
+            const jsonText = JSON.stringify({ ok: true, items: Array.from({ length: 40 }, (_, i) => ({ id: i, label: 'item' })) });
+            const candidates = spillover.CollectCandidates({
+                ActionName: 'Inspect Logs',
+                OutputParams: [
+                    { Name: 'LogText', Type: 'Output', Value: bracketLog },
+                    { Name: 'JsonText', Type: 'Output', Value: jsonText },
+                ],
+                StepNumber: 1,
+                ExpirationConfig: removeCfg,
+            });
+            const byName = new Map(candidates.map(c => [c.name, c]));
+            expect(byName.get('Inspect Logs — LogText (Step 1)')?.toolLibraryClass).toBe('TextToolLibrary');
+            expect(byName.get('Inspect Logs — LogText (Step 1)')?.typeName).toBe('Text');
+            expect(byName.get('Inspect Logs — JsonText (Step 1)')?.toolLibraryClass).toBe('JSONToolLibrary');
+            expect(byName.get('Inspect Logs — JsonText (Step 1)')?.typeName).toBe('JSON');
         });
     });
 

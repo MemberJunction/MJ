@@ -236,11 +236,6 @@ export class ArtifactToolManager {
     }
   }
 
-  /** Sets or updates the run-level external-data taint provider for newly created artifacts. */
-  SetRunTaintProvider(provider?: () => ActiveRunTaint | undefined): void {
-    this.getRunTaint = provider;
-  }
-
   /** Initialize with input artifacts, assigning alpha IDs and optional persistence context (`A4`) */
   Initialize(inputArtifacts: InputArtifact[], options?: ArtifactToolManagerOptions): void {
     this.Clear();

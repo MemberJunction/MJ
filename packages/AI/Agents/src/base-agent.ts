@@ -217,10 +217,12 @@ import { ScratchpadManager } from './ScratchpadManager';
 import { type ActiveRunTaint, ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import {
     ActionResultSpilloverManager,
+    ExpirationConfigToMetadataFields,
     FormatArtifactSpilloverHint,
     GetActionConfigObject,
-    IndexActiveAgentActions,
+    IndexEffectiveAgentActions,
     MergeToolTurnMetadata,
+    MetadataToExpirationConfig,
     PickMostRestrictiveExpirationConfig,
     ResolveActionExpirationConfig,
     ResolveActionMaxExecutionsPerRun,
@@ -312,7 +314,7 @@ import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 import { GetValueFromPath } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
-import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData, ExtractUntrustedEnvelope, TruncatePreservingUntrustedEnvelope } from './client-tool-results';
+import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData, ExtractUntrustedEnvelope, TruncatePreservingUntrustedEnvelope, type UntrustedEnvelopeMatch } from './client-tool-results';
 import {
     CanAgentOwnSubAgentConsults,
     FormatReloadedConsultsMessage,
@@ -3487,7 +3489,6 @@ export class BaseAgent {
                 contextUser: params.contextUser,
                 provider: this.ProviderToUse,
                 getAgentRun: () => this._agentRun,
-                getRunTaint: () => this.GetHighestRunTaint(),
                 agentName: params.agent?.Name ?? undefined,
                 workspaceEnabled: true,
             });
@@ -6771,11 +6772,8 @@ export class BaseAgent {
      * Indexes effective active `AIAgentAction` rows (including `BaseAgentID`-inherited rows) by
      * `ActionID` for O(1) lookup inside action/loop loops.
      */
-    private indexEffectiveAgentActions(agentId: string): ReturnType<typeof IndexActiveAgentActions> {
-        const effective = this.getEffectiveAgentActions(agentId);
-        return effective.length > 0
-            ? IndexActiveAgentActions(agentId, effective, true)
-            : IndexActiveAgentActions(agentId);
+    private indexEffectiveAgentActions(agentId: string): ReturnType<typeof IndexEffectiveAgentActions> {
+        return IndexEffectiveAgentActions(this.getEffectiveAgentActions(agentId));
     }
 
     /**
@@ -11783,6 +11781,20 @@ export class BaseAgent {
         return saved > 0 ? { compacted, saved } : null;
     }
 
+    private formatFirstNCharsCompaction(
+        body: string,
+        envelope: UntrustedEnvelopeMatch | null,
+        maxChars: number,
+        expandable: boolean,
+        artifactHint: string
+    ): string {
+        const truncated = `${body.substring(0, maxChars)}...`;
+        const renderedBody = envelope
+            ? WrapUntrustedExternalData(truncated, envelope.Source, envelope.TrustLevel)
+            : truncated;
+        return `${renderedBody}\n\n[Compacted: showing first ${maxChars} of ${body.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}${artifactHint}]`;
+    }
+
     private wouldUserMessageCompactSaveTokens(
         originalMessage: AgentChatMessage,
         originalTokens: number,
@@ -11807,12 +11819,7 @@ export class BaseAgent {
             : hasOwnedPending
                 ? FormatArtifactSpilloverHint(['A'], true)
                 : '';
-        const truncated = `${body.substring(0, maxChars)}...`;
-        const renderedBody = envelope
-            ? WrapUntrustedExternalData(truncated, envelope.Source, envelope.TrustLevel)
-            : truncated;
-        const expandable = !(originalMessage.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
-        const preview = `${renderedBody}\n\n[Compacted: showing first ${maxChars} of ${body.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}${expectedHint}]`;
+        const preview = this.formatFirstNCharsCompaction(body, envelope, maxChars, true, expectedHint);
         return originalTokens - this.estimateTokens(preview) > 0;
     }
 
@@ -21922,15 +21929,7 @@ The context is now within limits. Please retry your request with the recovered c
             const metadata: AgentChatMessageMetadata = {
                 turnAdded: this._promptTurnCount,
                 messageType: 'action-result',
-                ...(mostRestrictiveExpiration
-                    ? {
-                        expirationTurns: mostRestrictiveExpiration.ExpirationTurns,
-                        expirationMode: mostRestrictiveExpiration.ExpirationMode,
-                        compactMode: mostRestrictiveExpiration.CompactMode,
-                        compactLength: mostRestrictiveExpiration.CompactLength,
-                        compactPromptId: mostRestrictiveExpiration.CompactPromptID,
-                    }
-                    : {}),
+                ...ExpirationConfigToMetadataFields(mostRestrictiveExpiration),
                 ...(allPendingSpilloverIds.length > 0 ? { pendingSpilloverIds: allPendingSpilloverIds } : {}),
             };
 
@@ -24197,6 +24196,31 @@ The context is now within limits. Please retry your request with the recovered c
         return (op.steps ?? []).map(s => s.name).filter((n): n is string => typeof n === 'string' && n.length > 0);
     }
 
+    private queueLoopResultSpillover(
+        loopType: 'ForEach' | 'While',
+        actionNames: readonly string[],
+        content: string,
+        metadata: AgentChatMessageMetadata
+    ): void {
+        const envelope = ExtractUntrustedEnvelope(content);
+        const actionLabel = actionNames.length > 0 ? `${loopType}: ${actionNames.join(' → ')}` : `${loopType} Loop`;
+        const pendingSpilloverId = this._actionSpilloverManager.QueueDeferred(
+            {
+                ActionName: actionLabel,
+                OutputParams: [],
+                Message: envelope ? envelope.UnwrappedText : content,
+                StepNumber: this._promptTurnCount,
+                ExpirationConfig: MetadataToExpirationConfig(metadata),
+                TrustLevel: envelope ? envelope.TrustLevel : 'Trusted',
+                SourceName: envelope?.Source,
+            },
+            this._artifactToolManager
+        );
+        if (pendingSpilloverId) {
+            metadata.pendingSpilloverIds = [pendingSpilloverId];
+        }
+    }
+
     /**
      * Helper: Inject loop results into conversation with expiration/compaction metadata.
      * Uses the same lifecycle as non-loop action results so results persist for N turns
@@ -24220,33 +24244,7 @@ The context is now within limits. Please retry your request with the recovered c
         const metadata = this.resolveLoopExpirationMetadata(params, names);
 
         if (results.length > 0 && this.areArtifactToolsEnabled(params)) {
-            const envelope = ExtractUntrustedEnvelope(content);
-            const loopExpirationConfig: ResolvedActionExpirationConfig | undefined =
-                metadata.expirationTurns != null && metadata.expirationMode
-                    ? {
-                        ExpirationTurns: metadata.expirationTurns,
-                        ExpirationMode: metadata.expirationMode,
-                        CompactMode: metadata.compactMode,
-                        CompactLength: metadata.compactLength,
-                        CompactPromptID: metadata.compactPromptId,
-                    }
-                    : undefined;
-            const actionLabel = names.length > 0 ? `${loopType}: ${names.join(' → ')}` : `${loopType} Loop`;
-            const pendingSpilloverId = this._actionSpilloverManager.QueueDeferred(
-                {
-                    ActionName: actionLabel,
-                    OutputParams: [],
-                    Message: envelope ? envelope.UnwrappedText : content,
-                    StepNumber: this._promptTurnCount,
-                    ExpirationConfig: loopExpirationConfig,
-                    TrustLevel: envelope ? envelope.TrustLevel : 'Trusted',
-                    SourceName: envelope?.Source,
-                },
-                this._artifactToolManager
-            );
-            if (pendingSpilloverId) {
-                metadata.pendingSpilloverIds = [pendingSpilloverId];
-            }
+            this.queueLoopResultSpillover(loopType, names, content, metadata);
         }
 
         params.conversationMessages.push({
@@ -25875,6 +25873,7 @@ The context is now within limits. Please retry your request with the recovered c
                             compactLength,
                             compactPromptId,
                             originalLength: originalText.length,
+                            includeArtifactHints: false,
                         },
                         params
                     );
@@ -26111,11 +26110,13 @@ The context is now within limits. Please retry your request with the recovered c
             compactLength: number;
             compactPromptId: string;
             originalLength: number;
+            includeArtifactHints?: boolean;
         },
         params: ExecuteAgentParams
     ): Promise<string> {
         const originalContent = ReplaceMediaBlocksWithStubs(message.content);
         const envelope = ExtractUntrustedEnvelope(originalContent);
+        const allowArtifactHints = metadata.includeArtifactHints !== false;
 
         switch (metadata.compactMode) {
             case 'First N Chars': {
@@ -26126,21 +26127,17 @@ The context is now within limits. Please retry your request with the recovered c
                     return originalContent; // Already short enough
                 }
 
-                const toolsEnabled = this.areArtifactToolsEnabled(params);
+                const toolsEnabled = allowArtifactHints && this.areArtifactToolsEnabled(params);
                 if (toolsEnabled) {
                     this._actionSpilloverManager.Materialize(message);
                 }
 
-                const truncated = `${bodyToCompact.substring(0, length)}...`;
-                const renderedBody = envelope
-                    ? WrapUntrustedExternalData(truncated, envelope.Source, envelope.TrustLevel)
-                    : truncated;
                 // A native-only agent has no message expansion, so its tool results do not offer it.
                 const expandable = !(message.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
                 const artifactHint = toolsEnabled
                     ? FormatArtifactSpilloverHint(message.metadata?.artifactIds, this._artifactToolManager.HasArtifacts())
                     : '';
-                return `${renderedBody}\n\n[Compacted: showing first ${length} of ${bodyToCompact.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}${artifactHint}]`;
+                return this.formatFirstNCharsCompaction(bodyToCompact, envelope, length, expandable, artifactHint);
             }
 
             case 'AI Summary': {
@@ -26202,7 +26199,7 @@ The context is now within limits. Please retry your request with the recovered c
                         );
                     }
 
-                    const toolsEnabled = this.areArtifactToolsEnabled(params);
+                    const toolsEnabled = allowArtifactHints && this.areArtifactToolsEnabled(params);
                     if (toolsEnabled) {
                         this._actionSpilloverManager.Materialize(message);
                     }
