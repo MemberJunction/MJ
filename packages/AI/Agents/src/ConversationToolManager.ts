@@ -9,14 +9,16 @@
  * demand instead of trusting the summary. Zero turn cost — calls ride the
  * `conversationToolCalls` inline response field, mirroring `artifactToolCalls`.
  *
- * All reads are served from `ConversationEngine`'s per-conversation cache (one query on
- * a cold miss, in-memory afterward).
+ * All reads are loaded fresh per agent run via `ConversationEngine.LoadWindowRowsFresh`
+ * (respecting `contextUser` RLS and the run's `provider`) and memoized on the per-run
+ * `ConversationToolManager` instance until `Clear()` runs at run teardown — never populating
+ * `ConversationEngine`'s process-global UI detail cache on the server.
  *
  * @module @memberjunction/ai-agents
  */
 
-import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, UserInfo } from '@memberjunction/core';
-import { ConversationBranchRow, ConversationEngine, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { CODE_FALLBACK_LIMITS, IMetadataProvider, LimitsConfigResolver, UserInfo } from '@memberjunction/core';
+import { ConversationBranchRow, ConversationEngine, ConversationWindowSourceRow } from '@memberjunction/core-entities';
 import { FormatSequencedHistoryLine } from './conversation-history-format';
 
 /**
@@ -151,12 +153,13 @@ export function GetMaxConversationToolCallsPerTurn(): number {
 
 /**
  * Per-run manager for conversation-history retrieval tools. Initialized with the run's
- * conversationId (the availability gate — no conversation, no tools) and serving all
- * reads from the ConversationEngine cache.
+ * conversationId (the availability gate — no conversation, no tools) and caching loaded
+ * rows only on this manager instance for the lifetime of the single agent run.
  */
 export class ConversationToolManager {
     private conversationId: string | null = null;
     private contextUser: UserInfo | null = null;
+    private provider: IMetadataProvider | undefined = undefined;
     private summaryHost: ConversationToolSummaryHost | null = null;
     /** The run's history floor: rows written before it are never paged in. Null reads everything. */
     private historyFrom: Date | null = null;
@@ -164,6 +167,8 @@ export class ConversationToolManager {
     private branchId: string | null = null;
     /** The conversation's branch rows, loaded once per run by BaseAgent. */
     private branches: ConversationBranchRow[] = [];
+    /** Per-run memoized ordered conversation rows; released on `Clear()` / next `Initialize()`. */
+    private runDetailsCache: ConversationWindowSourceRow[] | null = null;
 
     /**
      * Arms the manager for a run. Pass null conversationId to disable (programmatic runs).
@@ -174,19 +179,23 @@ export class ConversationToolManager {
      * @param branchId The run's branch (`ExecuteAgentParams.ConversationBranchID`); null is the trunk.
      *   Every tool sees only the rows on that branch's path.
      * @param branches The conversation's branch rows, used to resolve the branch path.
+     * @param provider Optional per-request metadata provider used for fresh RLS-scoped reads.
      */
     public Initialize(
         conversationId: string | null,
         contextUser: UserInfo,
         historyFrom: Date | null = null,
         branchId: string | null = null,
-        branches: ConversationBranchRow[] = []
+        branches: ConversationBranchRow[] = [],
+        provider?: IMetadataProvider
     ): void {
         this.conversationId = conversationId;
         this.contextUser = contextUser;
+        this.provider = provider;
         this.historyFrom = historyFrom;
         this.branchId = branchId;
         this.branches = branches;
+        this.runDetailsCache = null;
     }
 
     /** Wires the recursive-sub-call seam (BaseAgent owns prompt execution). */
@@ -194,14 +203,16 @@ export class ConversationToolManager {
         this.summaryHost = host;
     }
 
-    /** Disarms the manager (per-run reset). */
+    /** Disarms the manager and releases any per-run cached conversation rows. */
     public Clear(): void {
         this.conversationId = null;
         this.contextUser = null;
+        this.provider = undefined;
         this.summaryHost = null;
         this.historyFrom = null;
         this.branchId = null;
         this.branches = [];
+        this.runDetailsCache = null;
     }
 
     /** True when the run has a conversation to page against. */
@@ -278,7 +289,7 @@ export class ConversationToolManager {
      * current task needs, on a cheap sub-call model.
      */
     private async summarizeRange(
-        details: MJConversationDetailEntity[],
+        details: ConversationWindowSourceRow[],
         input: ConversationToolCall['input']
     ): Promise<{ data: unknown; promptRunId?: string }> {
         if (!this.summaryHost) {
@@ -314,7 +325,7 @@ export class ConversationToolManager {
     }
 
     /** `[seq N] Role: text` rendering (shared shape) with a total input budget for the sub-call model. */
-    private renderRangeForSummary(details: MJConversationDetailEntity[]): string {
+    private renderRangeForSummary(details: ConversationWindowSourceRow[]): string {
         const lines: string[] = [];
         let usedChars = 0;
         for (const detail of details) {
@@ -331,30 +342,45 @@ export class ConversationToolManager {
 
     /**
      * The conversation history the run may read — the rows on the run's branch path that no
-     * rerun replaced (all of them, or from its floor) — ordered by Sequence, from the engine cache.
+     * rerun replaced (all of them, or from its floor) — ordered by Sequence and cached only on
+     * this per-run manager instance (never on `ConversationEngine`'s process-global cache).
      */
-    private async loadOrderedDetails(): Promise<MJConversationDetailEntity[]> {
+    private async loadOrderedDetails(): Promise<ConversationWindowSourceRow[]> {
         if (!this.conversationId || !this.contextUser) {
             throw new Error('Conversation tools are unavailable: no conversation is associated with this run');
         }
-        const cache = await ConversationEngine.Instance.LoadConversationDetails(this.conversationId, this.contextUser);
-        const onPath = ConversationEngine.FilterRowsToBranchPath(cache.Details, this.branchId, this.branches)
-            .filter(d => d.ReplacedAt == null);
+        if (this.runDetailsCache) {
+            return this.runDetailsCache;
+        }
+        const rows = await ConversationEngine.LoadWindowRowsFresh(
+            this.conversationId,
+            this.contextUser,
+            this.provider,
+            this.historyFrom,
+            this.branchId
+        );
+        type MaybeBranchedRow = ConversationWindowSourceRow & { BranchID?: string | null };
+        const branchedRows = rows as MaybeBranchedRow[];
+        const onPath: ConversationWindowSourceRow[] = branchedRows.some(r => 'BranchID' in r)
+            ? ConversationEngine.FilterRowsToBranchPath(branchedRows, this.branchId, this.branches)
+            : rows;
+        const live = onPath.filter(d => d.ReplacedAt == null);
         const floor = this.historyFrom;
-        const visible = floor ? onPath.filter(d => ConversationToolManager.isAtOrAfter(d.__mj_CreatedAt, floor)) : onPath;
-        return [...visible].sort((a, b) => a.Sequence - b.Sequence);
+        const visible = floor ? live.filter(d => ConversationToolManager.isAtOrAfter(d.__mj_CreatedAt, floor)) : live;
+        this.runDetailsCache = [...visible].sort((a, b) => a.Sequence - b.Sequence);
+        return this.runDetailsCache;
     }
 
     /**
      * True when a row was written at or after the floor. A row whose timestamp is missing or
      * unreadable can't be shown to be after it, so it is treated as before it.
      */
-    private static isAtOrAfter(createdAt: Date | null | undefined, floor: Date): boolean {
+    private static isAtOrAfter(createdAt: Date | string | null | undefined, floor: Date): boolean {
         const time = createdAt ? new Date(createdAt).getTime() : Number.NaN;
         return !Number.isNaN(time) && time >= floor.getTime();
     }
 
-    private getMessageBySequence(details: MJConversationDetailEntity[], input: ConversationToolCall['input']): ConversationToolMessage {
+    private getMessageBySequence(details: ConversationWindowSourceRow[], input: ConversationToolCall['input']): ConversationToolMessage {
         if (typeof input.sequence !== 'number') {
             throw new Error(`getMessageBySequence requires a numeric 'sequence' input`);
         }
@@ -365,7 +391,7 @@ export class ConversationToolManager {
         return this.toToolMessage(detail);
     }
 
-    private getMessagesByRange(details: MJConversationDetailEntity[], input: ConversationToolCall['input']): { messages: ConversationToolMessage[]; truncated?: string } {
+    private getMessagesByRange(details: ConversationWindowSourceRow[], input: ConversationToolCall['input']): { messages: ConversationToolMessage[]; truncated?: string } {
         const { startSequence, endSequence } = input;
         if (typeof startSequence !== 'number' || typeof endSequence !== 'number' || startSequence > endSequence) {
             throw new Error(`getMessagesByRange requires numeric 'startSequence' <= 'endSequence'`);
@@ -392,7 +418,7 @@ export class ConversationToolManager {
         return { messages };
     }
 
-    private searchConversation(details: MJConversationDetailEntity[], input: ConversationToolCall['input']): { hits: ConversationSearchHit[]; totalMatches: number; warning?: string } {
+    private searchConversation(details: ConversationWindowSourceRow[], input: ConversationToolCall['input']): { hits: ConversationSearchHit[]; totalMatches: number; warning?: string } {
         if (!input.query || input.query.trim().length === 0) {
             throw new Error(`searchConversation requires a non-empty 'query'`);
         }
@@ -461,7 +487,7 @@ export class ConversationToolManager {
     }
 
     /** Role and sequence-range filters applied to every candidate message in a search. */
-    private passesSearchFilters(detail: MJConversationDetailEntity, input: ConversationToolCall['input']): boolean {
+    private passesSearchFilters(detail: ConversationWindowSourceRow, input: ConversationToolCall['input']): boolean {
         const roleFilter = input.role?.toLowerCase();
         if (roleFilter && (detail.Role || '').toLowerCase() !== roleFilter) return false;
         if (typeof input.startSequence === 'number' && detail.Sequence < input.startSequence) return false;
@@ -479,7 +505,7 @@ export class ConversationToolManager {
         return `${prefix}${text.slice(start, end)}${suffix}`;
     }
 
-    private toToolMessage(detail: MJConversationDetailEntity): ConversationToolMessage {
+    private toToolMessage(detail: ConversationWindowSourceRow): ConversationToolMessage {
         return {
             sequence: detail.Sequence,
             role: detail.Role || '',

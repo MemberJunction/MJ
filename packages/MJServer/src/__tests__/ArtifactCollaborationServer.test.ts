@@ -98,7 +98,6 @@ import {
     YJS_MESSAGE_PERMISSION_STATUS,
     YJS_MESSAGE_SYNC
 } from '../collaboration/ArtifactCollaborationServer.js';
-import { ServerWatermarkStore } from '../collaboration/ServerWatermarkStore.js';
 import {
     type IYjsRoomRelay,
     InMemoryYjsRelayBus,
@@ -149,39 +148,68 @@ function createTestUser(id: string, name: string, email: string): UserInfo {
     return u;
 }
 
-describe('ArtifactCollaborationServer server watermarks stay bounded', () => {
+describe('ArtifactCollaborationServer server watermarks drop BaseVersionText once compacted', () => {
     type WatermarkRecorder = {
         recordServerWatermark(room: {
             RoomKey: string;
-            BaseVersionID?: string;
+            Doc?: Y.Doc;
+            BaseVersionID?: string | null;
             BaseVersionNumber?: number;
             BaseVersionText?: string;
         }): void;
     };
-    type SharedCollabState = { ServerVersionWatermarks: ServerWatermarkStore };
+    type StoredWatermark = {
+        BaseVersionID: string | null;
+        BaseVersionNumber: number;
+        BaseVersionText?: string;
+    };
+    type SharedCollabState = { ServerVersionWatermarks: Map<string, StoredWatermark> };
     const sharedStateKey = '___SINGLETON__MJ_COLLAB_SHARED_STATE';
 
-    it('keeps a capped number of watermarks however many rooms record one', () => {
+    it('omits BaseVersionText when working state matches base version, retains while uncompacted, and drops on compaction', () => {
         const recorder = ArtifactCollaborationServer.Instance as unknown as WatermarkRecorder;
-        const roomCount = ServerWatermarkStore.DEFAULT_MAX_ENTRIES * 2;
-        for (let i = 0; i < roomCount; i++) {
-            recorder.recordServerWatermark({
-                RoomKey: `default::room-${i}`,
-                BaseVersionID: `version-${i}`,
-                BaseVersionNumber: 1,
-                BaseVersionText: `artifact ${i} text`,
-            });
-        }
+        const largeBody = 'x'.repeat(500_000);
+        const doc = new Y.Doc();
+        doc.getText('content').insert(0, largeBody);
+
+        // 1. Clean/compacted room (Doc content === BaseVersionText) retains zero document text in watermark
+        recorder.recordServerWatermark({
+            RoomKey: 'default::room-compacted',
+            Doc: doc,
+            BaseVersionID: 'version-1',
+            BaseVersionNumber: 1,
+            BaseVersionText: largeBody,
+        });
 
         const shared = GetGlobalObjectStore()[sharedStateKey] as SharedCollabState;
-        const store = shared.ServerVersionWatermarks;
-        expect(store).toBeInstanceOf(ServerWatermarkStore);
-        expect(store.Size).toBe(ServerWatermarkStore.DEFAULT_MAX_ENTRIES);
-        // The newest room still resumes from its watermark; the oldest fell back to the cold path.
-        expect(store.Get(`default::room-${roomCount - 1}`)?.BaseVersionID).toBe(`version-${roomCount - 1}`);
-        expect(store.Get('default::room-0')).toBeUndefined();
+        const watermarks = shared.ServerVersionWatermarks;
+        expect(watermarks.get('default::room-compacted')?.BaseVersionID).toBe('version-1');
+        expect(watermarks.get('default::room-compacted')?.BaseVersionText).toBeUndefined();
 
-        store.Clear();
+        // 2. Uncompacted edit (Doc content !== BaseVersionText) keeps BaseVersionText for 3-way merge,
+        //    then drops it immediately once compacted to version-2
+        doc.getText('content').insert(largeBody.length, '\nuncompacted note');
+        recorder.recordServerWatermark({
+            RoomKey: 'default::room-compacted',
+            Doc: doc,
+            BaseVersionID: 'version-1',
+            BaseVersionNumber: 1,
+            BaseVersionText: largeBody,
+        });
+        expect(watermarks.get('default::room-compacted')?.BaseVersionText).toBe(largeBody);
+
+        recorder.recordServerWatermark({
+            RoomKey: 'default::room-compacted',
+            Doc: doc,
+            BaseVersionID: 'version-2',
+            BaseVersionNumber: 2,
+            BaseVersionText: doc.getText('content').toString(),
+        });
+        expect(watermarks.get('default::room-compacted')?.BaseVersionID).toBe('version-2');
+        expect(watermarks.get('default::room-compacted')?.BaseVersionText).toBeUndefined();
+
+        watermarks.clear();
+        doc.destroy();
     });
 });
 

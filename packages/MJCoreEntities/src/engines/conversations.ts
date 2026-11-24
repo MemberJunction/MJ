@@ -1391,20 +1391,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     // INTERNAL STATE
     // ========================================================================
 
-    /**
-     * Most conversations whose details stay cached at once. Each entry holds every message entity of
-     * a conversation plus its agent runs, artifacts, ratings and avatars, and the engine lives for the
-     * whole process (MJAPI, where agent conversation tools fill it) or browser session, so without a
-     * cap it kept the full history of every conversation ever touched. Past the cap the least
-     * recently used conversation is dropped; its next read reloads it in one round trip.
-     */
-    public static readonly MAX_CACHED_CONVERSATION_DETAILS = 50;
-
-    /**
-     * Detail cache keyed by normalized conversation ID, in least-to-most recently used order.
-     * Read it through {@link readDetailCache} and write it through {@link storeDetailCache} so
-     * recency and the {@link MAX_CACHED_CONVERSATION_DETAILS} cap are maintained.
-     */
+    /** Detail cache keyed by normalized conversation ID */
     private _detailCache = new Map<string, ConversationDetailCache>();
 
     /** Track the environment ID used for the last load */
@@ -3730,7 +3717,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         // Return cached if available and not forcing
         if (!forceRefresh) {
-            const cached = this.readDetailCache(key);
+            const cached = this._detailCache.get(key);
             if (cached) {
                 return ConversationEngine.scopedEntry(cached, scope);
             }
@@ -3765,7 +3752,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         // Build the cache entry from the rich query result
         const cacheEntry = await this.buildDetailCacheFromRawData(rawData, contextUser);
-        this.storeDetailCache(key, cacheEntry);
+        this._detailCache.set(key, cacheEntry);
 
         return ConversationEngine.scopedEntry(cacheEntry, scope);
     }
@@ -4296,7 +4283,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     ): Promise<ConversationDetailCache> {
         ConversationEngine.assertScopeOf(conversationId, scope);
         const key = NormalizeUUID(conversationId);
-        const existing = this.readDetailCache(key);
+        const existing = this._detailCache.get(key);
 
         // No cache yet — do a full load
         if (!existing) {
@@ -4421,7 +4408,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public GetCachedDetails(conversationId: string): MJConversationDetailEntity[] | undefined {
         const key = NormalizeUUID(conversationId);
-        return this.readDetailCache(key)?.Details;
+        return this._detailCache.get(key)?.Details;
     }
 
     /**
@@ -4436,12 +4423,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public GetCachedDetailEntry(conversationId: string): ConversationDetailCache | undefined {
         const key = NormalizeUUID(conversationId);
-        return this.readDetailCache(key);
-    }
-
-    /** Number of conversations whose details are currently cached. Exposed for diagnostics and tests. */
-    public get CachedConversationDetailCount(): number {
-        return this._detailCache.size;
+        return this._detailCache.get(key);
     }
 
     /**
@@ -5372,7 +5354,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public AddDetailToCache(conversationId: string, detail: MJConversationDetailEntity): void {
         const key = NormalizeUUID(conversationId);
-        const cached = this.readDetailCache(key);
+        const cached = this._detailCache.get(key);
         if (cached) {
             cached.Details.push(detail);
         }
@@ -5387,7 +5369,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public UpdateDetailInCache(conversationId: string, detail: MJConversationDetailEntity): void {
         const key = NormalizeUUID(conversationId);
-        const cached = this.readDetailCache(key);
+        const cached = this._detailCache.get(key);
         if (cached) {
             const idx = cached.Details.findIndex(d => UUIDsEqual(d.ID, detail.ID));
             if (idx >= 0) {
@@ -5409,7 +5391,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public GetAgentRunForDetail(conversationId: string, detailId: string): MJAIAgentRunEntity | undefined {
         const key = NormalizeUUID(conversationId);
-        const cached = this.readDetailCache(key);
+        const cached = this._detailCache.get(key);
         if (!cached) return undefined;
 
         // Search by detail ID (agent runs are keyed by the detail they belong to)
@@ -5429,7 +5411,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public GetAgentRunsMap(conversationId: string): Map<string, MJAIAgentRunEntity> {
         const key = NormalizeUUID(conversationId);
-        return this.readDetailCache(key)?.AgentRunsByDetailId ?? new Map();
+        return this._detailCache.get(key)?.AgentRunsByDetailId ?? new Map();
     }
 
     /**
@@ -5443,7 +5425,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public SetAgentRunForDetail(conversationId: string, detailId: string, agentRun: MJAIAgentRunEntity): void {
         const key = NormalizeUUID(conversationId);
-        const cached = this.readDetailCache(key);
+        const cached = this._detailCache.get(key);
         if (!cached) {
             return;
         }
@@ -5578,7 +5560,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     ): Promise<boolean> {
         // Try to use the cached detail entity to avoid a DB round-trip
         const key = NormalizeUUID(conversationId);
-        const cachedEntry = this.readDetailCache(key);
+        const cachedEntry = this._detailCache.get(key);
         let detail: MJConversationDetailEntity | undefined = cachedEntry?.Details.find(d => UUIDsEqual(d.ID, detailId));
 
         if (!detail) {
@@ -5866,7 +5848,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (!id || !conversationId) return true;
 
         const key = NormalizeUUID(conversationId);
-        const cached = this.readDetailCache(key);
+        const cached = this._detailCache.get(key);
         if (!cached) return true;
 
         if (action === 'save') {
@@ -6161,36 +6143,6 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const idSet = new Set(ids.map(id => NormalizeUUID(id)));
         const filtered = this._conversations$.value.filter(c => !idSet.has(NormalizeUUID(c.ID)));
         this._conversations$.next(filtered);
-    }
-
-    /**
-     * Returns the cached details for a normalized conversation ID and marks that conversation most
-     * recently used, so the conversations in active use are the last to be evicted.
-     */
-    private readDetailCache(key: string): ConversationDetailCache | undefined {
-        const entry = this._detailCache.get(key);
-        if (entry) {
-            // Map keeps insertion order: delete + re-insert moves the entry to the newest end.
-            this._detailCache.delete(key);
-            this._detailCache.set(key, entry);
-        }
-        return entry;
-    }
-
-    /**
-     * Caches the details for a normalized conversation ID as most recently used, then evicts the
-     * least recently used conversations past {@link MAX_CACHED_CONVERSATION_DETAILS}.
-     */
-    private storeDetailCache(key: string, entry: ConversationDetailCache): void {
-        this._detailCache.delete(key);
-        this._detailCache.set(key, entry);
-        while (this._detailCache.size > ConversationEngine.MAX_CACHED_CONVERSATION_DETAILS) {
-            const oldestKey = this._detailCache.keys().next().value;
-            if (oldestKey === undefined) {
-                break;
-            }
-            this._detailCache.delete(oldestKey);
-        }
     }
 
     /**

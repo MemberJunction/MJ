@@ -331,17 +331,12 @@ export abstract class BaseModelRunner {
   private readonly _pendingFailoverFields = new WeakMap<MJAIPromptRunEntityExtended, (run: MJAIPromptRunEntityExtended) => void>();
 
   /**
-   * Tracks `MJAIPromptRunEntityExtended` instances created on this runner by normalized UUID so a child
-   * prompt run (`params.parentPromptRunId`) whose parent's INSERT is still in flight can chain its INSERT
-   * via `_promptRunQueue.InsertAfter(childRun, parentRun)` and never violate `FK_AIPromptRun_ParentID`.
+   * Tracks `MJAIPromptRunEntityExtended` instances created on this runner by normalized UUID while
+   * their initial INSERT is in flight so a child prompt run (`params.parentPromptRunId`) can chain
+   * its INSERT via `_promptRunQueue.InsertAfter(childRun, parentRun)` (`FK_AIPromptRun_ParentID`).
+   * Each entry removes itself deterministically as soon as `_promptRunQueue.Settled(promptRun)` resolves.
    */
   private readonly _trackedPromptRunsById = new Map<string, MJAIPromptRunEntityExtended>();
-
-  /**
-   * Hard cap on {@link _trackedPromptRunsById}. Saved runs are pruned on every insert, so in practice
-   * only runs whose INSERT is still pending (or failed) remain; the cap covers the failed ones.
-   */
-  private static readonly MAX_TRACKED_PROMPT_RUNS = 256;
 
   protected _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
@@ -1522,30 +1517,6 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Records a prompt run so a later child run can chain its INSERT after this one. An entry is only
-   * useful while its INSERT is pending: once `IsSaved` is true a child inserts normally. Long-lived
-   * runners (the shared realtime turn moderator, `LLMDecision`, `LLMReranker`, computer-use) never
-   * call {@link FlushPendingSaves}, so saved entries are pruned here and the map is capped, instead
-   * of keeping every prompt run entity for the runner's lifetime.
-   */
-  private trackPromptRun(promptRun: MJAIPromptRunEntityExtended): void {
-    const tracked = this._trackedPromptRunsById;
-    for (const [key, run] of tracked) {
-      if (run.IsSaved) {
-        tracked.delete(key);
-      }
-    }
-    while (tracked.size >= BaseModelRunner.MAX_TRACKED_PROMPT_RUNS) {
-      const oldestKey = tracked.keys().next().value;
-      if (oldestKey === undefined) {
-        break;
-      }
-      tracked.delete(oldestKey);
-    }
-    tracked.set(NormalizeUUID(promptRun.ID), promptRun);
-  }
-
-  /**
    * Creates the `MJ: AI Prompt Runs` record for one model call, fills the fields every runner shares,
    * lets the subclass add its own request fields, then queues the INSERT (fire-and-forget).
    *
@@ -1676,8 +1647,9 @@ export abstract class BaseModelRunner {
 
       applyRequestFields?.(promptRun);
 
-      if (promptRun.ID) {
-        this.trackPromptRun(promptRun);
+      const trackedKey = promptRun.ID ? NormalizeUUID(promptRun.ID) : null;
+      if (trackedKey) {
+        this._trackedPromptRunsById.set(trackedKey, promptRun);
       }
 
       // Persist the initial 'Running' record fire-and-forget. The ID was already assigned by
@@ -1694,6 +1666,16 @@ export abstract class BaseModelRunner {
         this._promptRunQueue.InsertAfter(promptRun, parentRun);
       } else {
         this._promptRunQueue.Insert(promptRun);
+      }
+      if (trackedKey) {
+        // Deterministically remove the run from the parent-chaining map as soon as its INSERT settles
+        // (succeeded or failed), so long-lived runners never accumulate entries and concurrent in-flight
+        // parent runs are never evicted under an arbitrary count cap.
+        void this._promptRunQueue.Settled(promptRun).finally(() => {
+          if (this._trackedPromptRunsById.get(trackedKey) === promptRun) {
+            this._trackedPromptRunsById.delete(trackedKey);
+          }
+        });
       }
 
       // Invoke callback if provided. The ID is available without awaiting the save (client-generated

@@ -1,4 +1,3 @@
-import { MJLruCache } from '@memberjunction/global';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 /**
@@ -13,83 +12,84 @@ export interface StreamableSession<TTransport extends StreamableSessionClosable 
     Server: StreamableSessionClosable;
 }
 
-/** Limits for a {@link StreamableSessionStore}. */
+/** Configuration for a {@link StreamableSessionStore}. */
 export interface StreamableSessionStoreOptions {
-    /** Most sessions kept at once. Defaults to {@link StreamableSessionStore.DEFAULT_MAX_SESSIONS}. */
-    MaxSessions?: number;
-    /** How long a session may go unused before it is closed. Defaults to {@link StreamableSessionStore.DEFAULT_IDLE_TTL_MS}. */
+    /**
+     * How long a session may go unused before it is closed and removed (ms).
+     * Defaults to {@link StreamableSessionStore.DEFAULT_IDLE_TTL_MS}. Pass `0` to disable idle expiry.
+     */
     IdleTtlMs?: number;
-    /** How often idle sessions are swept. Defaults to {@link StreamableSessionStore.DEFAULT_SWEEP_INTERVAL_MS}. */
+    /**
+     * How often idle sessions are swept (ms).
+     * Defaults to {@link StreamableSessionStore.DEFAULT_SWEEP_INTERVAL_MS}. Pass `0` to disable background sweeps.
+     */
     SweepIntervalMs?: number;
-    /** Receives a failure to close an evicted session. Defaults to `console.error`. */
-    OnCloseError?: (sessionId: string, error: unknown) => void;
+    /** Receives a failure to close an expired or shut-down session. Defaults to `console.error`. */
+    OnCloseError?: (sessionId: string, error: Error) => void;
+}
+
+interface TrackedSessionEntry<TTransport extends StreamableSessionClosable> {
+    Session: StreamableSession<TTransport>;
+    LastActiveAtMs: number;
 }
 
 /**
- * Bounded store of the MCP server's Streamable HTTP sessions, keyed by `Mcp-Session-Id`.
+ * Lifecycle store for the MCP server's Streamable HTTP sessions, keyed by `Mcp-Session-Id`.
  *
  * A session is created by an `initialize` POST and normally ends when the client sends an HTTP
- * DELETE. Clients that crash, sleep, lose their network or simply reconnect never send that DELETE,
- * and each abandoned session keeps a whole `McpServer` — every registered tool and its schemas —
- * alive. A plain `Map` therefore grew for the life of the process, at a rate any authenticated
- * client controls.
- *
- * This store closes and drops a session once it has been idle for {@link IdleTtlMs} (using a session
- * refreshes it), and closes the least recently used session when a new one would exceed
- * {@link MaxSessions}. A client whose session was evicted sees exactly what it sees after a server
- * restart: its session ID is unknown, so it must initialize again.
+ * DELETE (firing `transport.onclose` -> {@link Remove}). Clients that crash, sleep, or lose their
+ * network without sending DELETE leave idle sessions behind; {@link PruneIdle} (driven by a periodic
+ * `.unref()`'d timer and lazy checks on {@link GetTransport}) closes and removes sessions once they
+ * exceed {@link IdleTtlMs} without ever evicting active sessions under an arbitrary count cap.
  */
 export class StreamableSessionStore<TTransport extends StreamableSessionClosable = StreamableSessionClosable> {
-    public static readonly DEFAULT_MAX_SESSIONS = 1_000;
     public static readonly DEFAULT_IDLE_TTL_MS = 24 * 60 * 60 * 1000;
     public static readonly DEFAULT_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
-    private readonly sessions: MJLruCache<string, StreamableSession<TTransport>>;
+    private readonly sessions = new Map<string, TrackedSessionEntry<TTransport>>();
+    private readonly idleTtlMs: number;
     private readonly sweepIntervalMs: number;
-    private readonly onCloseError: (sessionId: string, error: unknown) => void;
+    private readonly onCloseError: (sessionId: string, error: Error) => void;
     private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
     constructor(options: StreamableSessionStoreOptions = {}) {
+        this.idleTtlMs = options.IdleTtlMs ?? StreamableSessionStore.DEFAULT_IDLE_TTL_MS;
         this.sweepIntervalMs = options.SweepIntervalMs ?? StreamableSessionStore.DEFAULT_SWEEP_INTERVAL_MS;
         this.onCloseError =
             options.OnCloseError ??
             ((sessionId, error) => console.error(`[StreamableHTTP] Error closing session ${sessionId}:`, error));
-        this.sessions = new MJLruCache<string, StreamableSession<TTransport>>({
-            maxSize: options.MaxSessions ?? StreamableSessionStore.DEFAULT_MAX_SESSIONS,
-            ttlMs: options.IdleTtlMs ?? StreamableSessionStore.DEFAULT_IDLE_TTL_MS,
-            onEvict: (sessionId, session, reason) => {
-                // 'delete' means the session already closed (client DELETE / transport close) or was
-                // replaced; every other reason is the store ending a session nobody closed.
-                if (reason !== 'delete') {
-                    this.closeSession(sessionId, session);
-                }
-            },
-        });
     }
 
-    /** Number of sessions currently held (idle sessions leave on the next sweep or lookup). */
+    /** Number of sessions currently tracked. */
     public get Size(): number {
-        return this.sessions.Size;
+        return this.sessions.size;
     }
 
     /**
      * Returns the transport for a session, or `undefined` when the session is unknown or has idled
-     * out. A hit counts as use: it restarts the session's idle clock and makes it most recently used.
+     * out. A hit counts as activity and restarts the session's idle clock.
      */
     public GetTransport(sessionId: string): TTransport | undefined {
-        const session = this.sessions.Get(sessionId);
-        if (!session) {
+        const entry = this.sessions.get(sessionId);
+        if (!entry) {
             return undefined;
         }
-        // Re-store to restart the idle TTL (a read alone only refreshes recency).
-        this.sessions.Delete(sessionId);
-        this.sessions.Set(sessionId, session);
-        return session.Transport;
+        const now = Date.now();
+        if (this.isExpired(entry, now)) {
+            this.sessions.delete(sessionId);
+            this.closeSession(sessionId, entry.Session);
+            return undefined;
+        }
+        entry.LastActiveAtMs = now;
+        return entry.Session.Transport;
     }
 
-    /** Starts tracking a session and makes sure the idle sweep is running. */
+    /** Starts tracking a session and ensures the idle sweep timer is running when enabled. */
     public Add(sessionId: string, session: StreamableSession<TTransport>): void {
-        this.sessions.Set(sessionId, session);
+        this.sessions.set(sessionId, {
+            Session: session,
+            LastActiveAtMs: Date.now(),
+        });
         this.ensureSweepTimer();
     }
 
@@ -98,25 +98,54 @@ export class StreamableSessionStore<TTransport extends StreamableSessionClosable
      * does not close anything itself.
      */
     public Remove(sessionId: string): boolean {
-        return this.sessions.Delete(sessionId);
+        const removed = this.sessions.delete(sessionId);
+        if (this.sessions.size === 0 && this.sweepTimer) {
+            clearInterval(this.sweepTimer);
+            this.sweepTimer = null;
+        }
+        return removed;
     }
 
-    /** Closes and drops every session that has been idle past the TTL. Returns how many were closed. */
+    /** Closes and drops every session that has been idle past {@link IdleTtlMs}. Returns how many were closed. */
     public PruneIdle(): number {
-        return this.sessions.Prune();
+        if (this.idleTtlMs <= 0) {
+            return 0;
+        }
+        const now = Date.now();
+        let closedCount = 0;
+        for (const [sessionId, entry] of this.sessions) {
+            if (this.isExpired(entry, now)) {
+                this.sessions.delete(sessionId);
+                this.closeSession(sessionId, entry.Session);
+                closedCount++;
+            }
+        }
+        if (this.sessions.size === 0 && this.sweepTimer) {
+            clearInterval(this.sweepTimer);
+            this.sweepTimer = null;
+        }
+        return closedCount;
     }
 
-    /** Closes every session and stops the idle sweep. */
+    /** Closes every tracked session and stops the idle sweep timer. */
     public CloseAll(): void {
         if (this.sweepTimer) {
             clearInterval(this.sweepTimer);
             this.sweepTimer = null;
         }
-        this.sessions.Clear();
+        const entries = Array.from(this.sessions.entries());
+        this.sessions.clear();
+        for (const [sessionId, entry] of entries) {
+            this.closeSession(sessionId, entry.Session);
+        }
+    }
+
+    private isExpired(entry: TrackedSessionEntry<TTransport>, now: number): boolean {
+        return this.idleTtlMs > 0 && now - entry.LastActiveAtMs >= this.idleTtlMs;
     }
 
     private ensureSweepTimer(): void {
-        if (this.sweepTimer || this.sweepIntervalMs <= 0) {
+        if (this.sweepTimer || this.sweepIntervalMs <= 0 || this.idleTtlMs <= 0) {
             return;
         }
         this.sweepTimer = setInterval(() => this.PruneIdle(), this.sweepIntervalMs);
@@ -126,8 +155,7 @@ export class StreamableSessionStore<TTransport extends StreamableSessionClosable
 
     /**
      * Closes a session's server (which closes the transport it is connected to) and then the
-     * transport itself, in case the two were never connected. Failures are reported, never thrown:
-     * eviction runs from a timer and from unrelated requests.
+     * transport itself, in case the two were never connected. Failures are reported, never thrown.
      */
     private closeSession(sessionId: string, session: StreamableSession<TTransport>): void {
         void this.closeQuietly(sessionId, session.Server).then(() => this.closeQuietly(sessionId, session.Transport));
@@ -136,8 +164,8 @@ export class StreamableSessionStore<TTransport extends StreamableSessionClosable
     private async closeQuietly(sessionId: string, target: StreamableSessionClosable): Promise<void> {
         try {
             await target.close();
-        } catch (error) {
-            this.onCloseError(sessionId, error);
+        } catch (err) {
+            this.onCloseError(sessionId, err instanceof Error ? err : new Error(String(err)));
         }
     }
 }
@@ -158,8 +186,8 @@ export async function ReleaseUnstoredStreamableSession(
         }
         try {
             await target.close();
-        } catch (error) {
-            console.error('[StreamableHTTP] Error releasing an unstored session:', error);
+        } catch (err) {
+            console.error('[StreamableHTTP] Error releasing an unstored session:', err);
         }
     }
 }

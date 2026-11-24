@@ -1499,11 +1499,13 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
         // STREAMABLE HTTP TRANSPORT (newer MCP protocol - single endpoint)
         // =====================================================================
 
-        // Store for Streamable HTTP sessions (session ID -> transport + its McpServer). Bounded: a
-        // session that idles out, or is the least recently used past the cap, is closed and dropped,
-        // because clients that vanish without an HTTP DELETE would otherwise pin a whole McpServer
-        // each for the life of the process.
-        const streamableSessions = new StreamableSessionStore<StreamableHTTPServerTransport>();
+        // Store for Streamable HTTP sessions (session ID -> transport + its McpServer). Active
+        // sessions stay open regardless of count; sessions closed by HTTP DELETE leave via onclose,
+        // and abandoned sessions are closed once idle past `mcpServerSettings.sessionIdleTtlMs`.
+        const streamableSessions = new StreamableSessionStore<StreamableHTTPServerTransport>({
+            IdleTtlMs: _config?.mcpServerSettings?.sessionIdleTtlMs,
+            SweepIntervalMs: _config?.mcpServerSettings?.sessionSweepIntervalMs,
+        });
 
         // Streamable HTTP endpoint - handles both GET (SSE stream) and POST (messages)
         // This is the newer, recommended MCP transport

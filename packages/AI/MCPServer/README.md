@@ -238,12 +238,12 @@ To avoid rebuilding entity/agent/action/prompt tool definitions and Zod paramete
 
 ## Streamable HTTP Session Lifetime
 
-Each Streamable HTTP session owns its own `McpServer`, and a session normally ends when the client sends an HTTP `DELETE`. Clients that crash, sleep or lose their network never send one, so the server bounds the sessions it keeps (`StreamableSessionStore`):
+Each Streamable HTTP session owns its own `McpServer`, and a session normally ends when the client sends an HTTP `DELETE`. Clients that crash, sleep or lose their network never send one, so `StreamableSessionStore` tracks session activity without evicting active sessions under an arbitrary count cap:
 
-- A session that has not been used for **24 hours** is closed and dropped. Every request on a session restarts its idle clock.
-- At most **1,000** sessions are kept. A new session past that closes the least recently used one.
+- A session that has not been used for `mcpServerSettings.sessionIdleTtlMs` (default **24 hours**) is closed and dropped (`mcpServerSettings.sessionSweepIntervalMs` controls background sweep cadence, default **5 minutes**). Every request on a session restarts its idle clock.
+- Sessions closed explicitly by the client leave immediately via `transport.onclose`.
 
-A client whose session was closed this way sees the same thing it sees after a server restart: its `Mcp-Session-Id` is unknown, so it has to send a new `initialize` request.
+A client whose idle session expired sees the same thing it sees after a server restart: its `Mcp-Session-Id` is unknown, so it sends a new `initialize` request.
 
 ## CLI Options
 

@@ -57,7 +57,6 @@ import { configInfo } from '../config.js';
 import { getUserPayload } from '../context.js';
 import type { DataSourceInfo } from '../types.js';
 import { InMemoryYjsRoomRelay, type IYjsRoomRelay, type YjsRelayMessage } from './YjsRoomRelay.js';
-import { ServerWatermarkStore } from './ServerWatermarkStore.js';
 import {
     ARTIFACT_AGENT_PRESENCE_HOOK_KEY,
     ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY,
@@ -479,6 +478,20 @@ interface AuthenticatedUpgradeResult {
     Provider?: IMetadataProvider | null;
 }
 
+interface ServerPersistedWatermark {
+    BaseVersionID: string | null;
+    BaseVersionNumber: number;
+    /**
+     * Present (`''`) only for base-0 rooms with no persisted `MJ: Artifact Versions` row yet.
+     * Omitted whenever a version row exists in the database so closed rooms retain zero artifact
+     * document bodies in memory (hydration falls back to `MJ: Artifact Versions` on demand).
+     */
+    BaseVersionText?: string;
+    LastAppliedRestoreVersionID: string | null;
+    LastAppliedRestoreVersionNumber: number;
+    UpdatedAtMs: number;
+}
+
 interface WorkingStateProjection {
     ID: string;
     ArtifactID?: string;
@@ -599,12 +612,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512;
     private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8;
-    /**
-     * Cap on artifacts in `CompactedVectorKeysByArtifact` (shared collaboration state). Each artifact
-     * contributes at least two keys to `CompactedStateVectors`, so more than half the vector cap can
-     * never all be live.
-     */
-    private static readonly MAX_TRACKED_COMPACTED_ARTIFACTS = ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS / 2;
     private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144;
     private static readonly SYNC_WAIT_TIMEOUT_MS = 1500;
     private static readonly MAX_CONTROLLED_CLIENT_IDS_PER_CONN = 32;
@@ -620,11 +627,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 SavedSnapshotB64?: string;
                 VersionID: string;
                 ContentHash: string;
+                ArtifactIndexKey?: string;
             }
         >;
         CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
         InFlightCompactionVersionIds: Set<string>;
-        ServerVersionWatermarks: ServerWatermarkStore;
+        ServerVersionWatermarks: Map<string, ServerPersistedWatermark>;
     } {
         const store = GetGlobalObjectStore();
         const storeKey = '___SINGLETON__MJ_COLLAB_SHARED_STATE';
@@ -633,7 +641,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 CompactedStateVectors: new Map(),
                 CompactedVectorKeysByArtifact: new Map(),
                 InFlightCompactionVersionIds: new Set<string>(),
-                ServerVersionWatermarks: new ServerWatermarkStore(),
+                ServerVersionWatermarks: new Map<string, ServerPersistedWatermark>(),
             };
         }
         const state = store[storeKey] as {
@@ -645,15 +653,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     SavedSnapshotB64?: string;
                     VersionID: string;
                     ContentHash: string;
+                    ArtifactIndexKey?: string;
                 }
             >;
             CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
             InFlightCompactionVersionIds: Set<string>;
-            ServerVersionWatermarks?: ServerWatermarkStore;
+            ServerVersionWatermarks?: Map<string, ServerPersistedWatermark>;
         };
-        // Also replaces a store left in the global slot by an older build of this module.
-        if (!(state.ServerVersionWatermarks instanceof ServerWatermarkStore)) {
-            state.ServerVersionWatermarks = new ServerWatermarkStore();
+        if (!(state.ServerVersionWatermarks instanceof Map)) {
+            state.ServerVersionWatermarks = new Map<string, ServerPersistedWatermark>();
         }
         return state as {
             CompactedStateVectors: Map<
@@ -664,11 +672,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     SavedSnapshotB64?: string;
                     VersionID: string;
                     ContentHash: string;
+                    ArtifactIndexKey?: string;
                 }
             >;
             CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
             InFlightCompactionVersionIds: Set<string>;
-            ServerVersionWatermarks: ServerWatermarkStore;
+            ServerVersionWatermarks: Map<string, ServerPersistedWatermark>;
         };
     }
 
@@ -915,10 +924,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private recordServerWatermark(room: CollaborationRoom): void {
         const shared = ArtifactCollaborationServer.getSharedCollabState();
-        shared.ServerVersionWatermarks.Set(room.RoomKey, {
-            BaseVersionID: room.BaseVersionID ?? null,
-            BaseVersionNumber: Math.max(room.BaseVersionNumber ?? 0, room.RejectedOobVersionNumber ?? 0),
-            BaseVersionText: room.BaseVersionText ?? '',
+        const effectiveVersionNumber = Math.max(room.BaseVersionNumber ?? 0, room.RejectedOobVersionNumber ?? 0);
+        const baseVersionId = room.BaseVersionID && room.BaseVersionID.trim().length > 0 ? room.BaseVersionID : null;
+        const hasPersistedVersionRow = Boolean(baseVersionId) || effectiveVersionNumber > 0;
+        const baseText = room.BaseVersionText ?? '';
+        const currentDocText = room.Doc ? this.extractRoomSerializedContent(room.Doc) : baseText;
+        const hasUncompactedEdits = currentDocText !== baseText;
+        // 3-way merge on room re-hydration only needs `BaseVersionText` when the persisted working
+        // state diverges from the base version (`Working !== Base`) or on base-0 rooms with no DB
+        // version row. Once a room compacts (`Working === Base`), `Merge(Base, Base, Incoming) === Incoming`,
+        // so `BaseVersionText` is omitted and closed rooms retain zero duplicate artifact bodies in RAM.
+        const retainBaseText = !hasPersistedVersionRow || hasUncompactedEdits;
+        shared.ServerVersionWatermarks.set(room.RoomKey, {
+            BaseVersionID: baseVersionId,
+            BaseVersionNumber: effectiveVersionNumber,
+            ...(retainBaseText ? { BaseVersionText: baseText } : {}),
             LastAppliedRestoreVersionID: room.LastAppliedRestoreVersionID ?? null,
             LastAppliedRestoreVersionNumber: room.LastAppliedRestoreVersionNumber ?? 0,
             UpdatedAtMs: Date.now(),
@@ -1730,7 +1750,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         room.BaseVersionNumber,
                         room.RejectedOobVersionNumber ?? 0
                     );
-                    const serverWatermark = sharedState.ServerVersionWatermarks.Get(room.RoomKey);
+                    const serverWatermark = sharedState.ServerVersionWatermarks.get(room.RoomKey);
                     if (serverWatermark && serverWatermark.BaseVersionNumber > effectiveRoomVersion) {
                         return false;
                     }
@@ -2929,7 +2949,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         sharedState.InFlightCompactionVersionIds.clear();
         sharedState.CompactedStateVectors.clear();
         sharedState.CompactedVectorKeysByArtifact.clear();
-        sharedState.ServerVersionWatermarks.Clear();
+        sharedState.ServerVersionWatermarks.clear();
         for (const waiters of this._pendingSyncWaiters.values()) {
             for (const waiter of waiters) {
                 waiter.settle(false);
@@ -3177,13 +3197,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const map = sharedState.CompactedStateVectors;
         const pKey = providerKey || 'default';
         const normArtId = NormalizeUUID(artifactId);
+        const perArtifactKey = `${pKey}::${normArtId}`;
+        const indexedEntry = { ...entry, ArtifactIndexKey: perArtifactKey };
         const verKey = `${pKey}::ver:${NormalizeUUID(versionId)}`;
         const artKey = `${pKey}::art:${normArtId}:v:${versionNumber}`;
-        map.set(verKey, entry);
-        map.set(artKey, entry);
+        map.set(verKey, indexedEntry);
+        map.set(artKey, indexedEntry);
 
         const perArtifactMap = sharedState.CompactedVectorKeysByArtifact;
-        const perArtifactKey = `${pKey}::${normArtId}`;
         const existingPerArtifact = perArtifactMap.get(perArtifactKey) ?? [];
         const filteredPerArtifact = existingPerArtifact.filter(
             (item) => item.verKey !== verKey && item.artKey !== artKey
@@ -3200,29 +3221,26 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             map.delete(evicted.verKey);
             map.delete(evicted.artKey);
         }
-        // Re-insert so the artifact becomes most recent, then evict the least recent artifacts (and
-        // their vectors) past the cap. Without this the index kept one entry per artifact ever
-        // compacted for the life of the process, even after the global cap dropped its vectors.
-        perArtifactMap.delete(perArtifactKey);
         perArtifactMap.set(perArtifactKey, filteredPerArtifact);
-        while (perArtifactMap.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_ARTIFACTS) {
-            const oldestArtifactKey = perArtifactMap.keys().next().value;
-            if (oldestArtifactKey === undefined) {
-                break;
-            }
-            for (const evicted of perArtifactMap.get(oldestArtifactKey) ?? []) {
-                map.delete(evicted.verKey);
-                map.delete(evicted.artKey);
-            }
-            perArtifactMap.delete(oldestArtifactKey);
-        }
 
         while (map.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS) {
             const oldestKey = map.keys().next().value;
             if (oldestKey === undefined) {
                 break;
             }
+            const evictedEntry = map.get(oldestKey);
             map.delete(oldestKey);
+            if (evictedEntry?.ArtifactIndexKey) {
+                const pairs = perArtifactMap.get(evictedEntry.ArtifactIndexKey);
+                if (pairs) {
+                    const remaining = pairs.filter((p) => map.has(p.verKey) || map.has(p.artKey));
+                    if (remaining.length === 0) {
+                        perArtifactMap.delete(evictedEntry.ArtifactIndexKey);
+                    } else if (remaining.length !== pairs.length) {
+                        perArtifactMap.set(evictedEntry.ArtifactIndexKey, remaining);
+                    }
+                }
+            }
         }
     }
 
@@ -6140,7 +6158,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const sharedState = ArtifactCollaborationServer.getSharedCollabState();
-            const serverWatermark = sharedState.ServerVersionWatermarks.Get(room.RoomKey);
+            const serverWatermark = sharedState.ServerVersionWatermarks.get(room.RoomKey);
             if (serverWatermark?.LastAppliedRestoreVersionID) {
                 room.LastAppliedRestoreVersionID = serverWatermark.LastAppliedRestoreVersionID;
             }

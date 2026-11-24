@@ -1,8 +1,7 @@
 /**
- * Memory-leak audit Round 23: the in-process artifact suggestion store (shared by the document,
- * spreadsheet and slide-deck tool libraries) was a process-global `Map` that gained a key for every
- * artifact a suggestion tool touched, and for every distinct content hash in the standalone path,
- * and was never trimmed. It is now a bounded LRU with a TTL.
+ * Artifact suggestion fallback store lifecycle tests: active keys are never dropped under an
+ * arbitrary count cap, standalone ephemeral edits replace the superseded content-hash key on
+ * accept, and abandoned keys expire cleanly after `STORED_SUGGESTIONS_TTL_MS`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -13,7 +12,6 @@ import {
     ExecuteReviewSuggestionTool,
     GetStoredArtifactSuggestionKeyCount,
     GetStoredArtifactSuggestions,
-    MAX_STORED_SUGGESTION_KEYS,
     SetStoredArtifactSuggestions,
     STORED_SUGGESTIONS_TTL_MS,
     type ArtifactSuggestionRecord,
@@ -65,32 +63,45 @@ describe('artifact suggestion store', () => {
         expect(GetStoredArtifactSuggestions('artifact:unknown')).toEqual([]);
     });
 
-    it('holds at most MAX_STORED_SUGGESTION_KEYS keys, dropping the least recently used', () => {
-        for (let i = 0; i < MAX_STORED_SUGGESTION_KEYS + 100; i++) {
+    it('retains active suggestion keys without arbitrary count eviction while expiring idle ones after TTL', () => {
+        vi.useFakeTimers();
+        for (let i = 0; i < 650; i++) {
             SetStoredArtifactSuggestions(`artifact:${i}`, [suggestion(`s-${i}`)]);
         }
 
-        expect(GetStoredArtifactSuggestionKeyCount()).toBe(MAX_STORED_SUGGESTION_KEYS);
-        expect(GetStoredArtifactSuggestions('artifact:0')).toEqual([]);
-        expect(GetStoredArtifactSuggestions(`artifact:${MAX_STORED_SUGGESTION_KEYS + 99}`)).toHaveLength(1);
+        expect(GetStoredArtifactSuggestionKeyCount()).toBe(650);
+        expect(GetStoredArtifactSuggestions('artifact:0')).toHaveLength(1);
+
+        // Touch artifact:0 halfway through the TTL so its idle clock restarts; the rest expire
+        vi.advanceTimersByTime(STORED_SUGGESTIONS_TTL_MS - 1_000);
+        expect(GetStoredArtifactSuggestions('artifact:0')).toHaveLength(1);
+
+        vi.advanceTimersByTime(2_000);
+        expect(GetStoredArtifactSuggestionKeyCount()).toBe(1);
+        expect(GetStoredArtifactSuggestions('artifact:1')).toEqual([]);
+        expect(GetStoredArtifactSuggestions('artifact:0')).toHaveLength(1);
     });
 
-    it('stays bounded when the propose tool runs against ever-changing standalone content', async () => {
-        for (let i = 0; i < MAX_STORED_SUGGESTION_KEYS + 50; i++) {
-            await propose(`hello from document revision ${i}`);
+    it('replaces superseded ephemeral content-hash keys when standalone suggestions are accepted', async () => {
+        let content = 'hello step 0';
+        for (let i = 1; i <= 10; i++) {
+            const suggestionId = await propose(content);
+            const nextContent = `hello step ${i}`;
+            const reviewed = await ExecuteReviewSuggestionTool({
+                domain: 'document',
+                artifactContent: content,
+                input: { suggestionId, decision: 'accept' },
+                applyAcceptedSuggestion: async () => ({ ok: true, updatedContent: nextContent, revisionHash: `rev-${i}` }),
+            });
+            expect(reviewed.success).toBe(true);
+            content = nextContent;
         }
 
-        expect(GetStoredArtifactSuggestionKeyCount()).toBe(MAX_STORED_SUGGESTION_KEYS);
-    });
-
-    it('forgets a key nobody touched for the TTL', () => {
-        vi.useFakeTimers();
-        SetStoredArtifactSuggestions('artifact:stale', [suggestion('s1')]);
-
-        vi.advanceTimersByTime(STORED_SUGGESTIONS_TTL_MS + 1);
-
-        expect(GetStoredArtifactSuggestions('artifact:stale')).toEqual([]);
-        expect(GetStoredArtifactSuggestionKeyCount()).toBe(0);
+        // Only the latest revision's ephemeral hash remains; all 10 superseded revision hashes were deleted
+        expect(GetStoredArtifactSuggestionKeyCount()).toBe(1);
+        const currentKey = ComputeArtifactSuggestionStoreKey('document', content);
+        expect(GetStoredArtifactSuggestions(currentKey)).toHaveLength(10);
+        expect(GetStoredArtifactSuggestions(ComputeArtifactSuggestionStoreKey('document', 'hello step 0'))).toEqual([]);
     });
 
     it('still carries a suggestion from propose through list to review', async () => {
@@ -113,9 +124,8 @@ describe('artifact suggestion store', () => {
         });
         expect(reviewed.success).toBe(true);
 
-        // The accepted list is mirrored under the new content's key, so a follow-up call on the
-        // updated document still sees it.
-        const mirrored = GetStoredArtifactSuggestions(ComputeArtifactSuggestionStoreKey('document', updatedContent));
-        expect(mirrored.map((s) => s.Status)).toEqual(['Accepted']);
+        const handedOff = GetStoredArtifactSuggestions(ComputeArtifactSuggestionStoreKey('document', updatedContent));
+        expect(handedOff.map((s) => s.Status)).toEqual(['Accepted']);
+        expect(GetStoredArtifactSuggestions(ComputeArtifactSuggestionStoreKey('document', content))).toEqual([]);
     });
 });

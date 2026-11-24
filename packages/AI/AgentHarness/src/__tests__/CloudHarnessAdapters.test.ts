@@ -567,16 +567,28 @@ describe('CloudDetachedSessionRegistry stays bounded', () => {
         expect(registry.DetachedSessionCount).toBe(0);
     });
 
-    it('drops the least recently used session once more than the cap were never harvested', () => {
+    it('retains all active pending detached sessions without arbitrary count eviction and clears on EndSession cancel', async () => {
         const registry = CloudDetachedSessionRegistry.Instance;
-        const cap = CloudDetachedSessionRegistry.MAX_DETACHED_SESSIONS;
-        for (let i = 0; i < cap + 20; i++) {
+        for (let i = 0; i < 600; i++) {
             registry.MarkDetached(`session-${i}`, new Set([`evt-${i}`]));
         }
 
-        expect(registry.DetachedSessionCount).toBe(cap);
+        expect(registry.DetachedSessionCount).toBe(600);
+        expect(registry.GetDetached('session-0')?.SessionId).toBe('session-0');
+        expect(registry.GetDetached('session-599')?.SessionId).toBe('session-599');
+
+        // A resumed adapter whose session ends without re-detaching clears its detached entry deterministically
+        const cancelledAdapter = new AntigravityCloudAdapter(
+            new MockCloudHttpTransport(() => jsonHttpResponse({ id: 'session-0', status: 'cancelled' })),
+        );
+        await cancelledAdapter.StartSession({
+            Executor: new CloudDisallowedProcessExecutor('test'),
+            WorkspacePath: '/ws',
+            Environment: { GEMINI_API_KEY: 'test-key' },
+            ResumeSessionId: 'session-0',
+        });
+        await cancelledAdapter.EndSession();
         expect(registry.GetDetached('session-0')).toBeUndefined();
-        expect(registry.GetDetached(`session-${cap + 19}`)?.SessionId).toBe(`session-${cap + 19}`);
     });
 
     it('forgets a detached session that nobody resumed within the TTL', () => {

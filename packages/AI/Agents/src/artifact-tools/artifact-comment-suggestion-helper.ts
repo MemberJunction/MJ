@@ -7,7 +7,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
     EscapeSQLString,
     GetGlobalObjectStore,
-    MJLruCache,
     NormalizeUUID,
     UUIDsEqual,
 } from '@memberjunction/global';
@@ -77,41 +76,45 @@ export interface EmbeddedArtifactAccessResult {
 const ARTIFACT_SUGGESTIONS_STORE_KEY = '___MJ_ARTIFACT_SUGGESTIONS_STORE___';
 
 /**
- * Upper bound on the keys held by the in-process suggestion store. The store gains one key per
- * artifact a suggestion tool touches (`artifact:<id>`) and one per distinct content hash in the
- * standalone path (`ephemeral:<domain>:<hash>`, a new one on every accepted suggestion), so an
- * unbounded map grew for the life of the process.
- */
-export const MAX_STORED_SUGGESTION_KEYS = 500;
-
-/**
- * How long an untouched key stays in the store. The store is only a fallback: the live room and the
- * latest version's `Configuration` are authoritative whenever an artifact id is present, so an
- * expired key costs at most one re-read from those sources.
+ * How long an untouched fallback key stays in the in-process suggestion store.
+ * The live collaboration room and persisted `MJ: Artifact Versions.Configuration` are authoritative
+ * whenever an artifact ID is present; idle expiry clears abandoned standalone/fallback keys without
+ * evicting active artifacts under an arbitrary count cap.
  */
 export const STORED_SUGGESTIONS_TTL_MS = 2 * 60 * 60 * 1000;
 
-type ArtifactSuggestionStore = MJLruCache<string, ArtifactSuggestionRecord[]>;
-
-function createSuggestionStore(): ArtifactSuggestionStore {
-    return new MJLruCache<string, ArtifactSuggestionRecord[]>({
-        maxSize: MAX_STORED_SUGGESTION_KEYS,
-        ttlMs: STORED_SUGGESTIONS_TTL_MS,
-    });
+interface TimedSuggestionStoreEntry {
+    Suggestions: ArtifactSuggestionRecord[];
+    ExpiresAtMs: number;
 }
+
+type ArtifactSuggestionStore = Map<string, TimedSuggestionStoreEntry>;
+
+let fallbackLocalStore: ArtifactSuggestionStore | null = null;
 
 function getSuggestionStore(): ArtifactSuggestionStore {
     const globalStore = GetGlobalObjectStore();
     if (!globalStore) {
-        return createSuggestionStore();
+        if (!fallbackLocalStore) {
+            fallbackLocalStore = new Map<string, TimedSuggestionStoreEntry>();
+        }
+        return fallbackLocalStore;
     }
     const existing = globalStore[ARTIFACT_SUGGESTIONS_STORE_KEY];
-    if (existing instanceof MJLruCache) {
+    if (existing instanceof Map) {
         return existing as ArtifactSuggestionStore;
     }
-    const created = createSuggestionStore();
+    const created: ArtifactSuggestionStore = new Map<string, TimedSuggestionStoreEntry>();
     globalStore[ARTIFACT_SUGGESTIONS_STORE_KEY] = created;
     return created;
+}
+
+function pruneExpiredSuggestions(store: ArtifactSuggestionStore, now: number): void {
+    for (const [key, entry] of store) {
+        if (entry.ExpiresAtMs <= now) {
+            store.delete(key);
+        }
+    }
 }
 
 export function ComputeArtifactSuggestionStoreKey(
@@ -130,25 +133,44 @@ export function ComputeArtifactSuggestionStoreKey(
 }
 
 export function GetStoredArtifactSuggestions(key: string): ArtifactSuggestionRecord[] {
-    const list = getSuggestionStore().Get(key);
-    return list ? list.map((s) => ({ ...s, Anchor: { ...s.Anchor } })) : [];
+    const store = getSuggestionStore();
+    const entry = store.get(key);
+    if (!entry) {
+        return [];
+    }
+    const now = Date.now();
+    if (entry.ExpiresAtMs <= now) {
+        store.delete(key);
+        return [];
+    }
+    entry.ExpiresAtMs = now + STORED_SUGGESTIONS_TTL_MS;
+    return entry.Suggestions.map((s) => ({ ...s, Anchor: { ...s.Anchor } }));
 }
 
 export function SetStoredArtifactSuggestions(key: string, suggestions: ArtifactSuggestionRecord[]): void {
-    getSuggestionStore().Set(
-        key,
-        suggestions.map((s) => ({ ...s, Anchor: { ...s.Anchor } }))
-    );
+    const store = getSuggestionStore();
+    const now = Date.now();
+    pruneExpiredSuggestions(store, now);
+    store.set(key, {
+        Suggestions: suggestions.map((s) => ({ ...s, Anchor: { ...s.Anchor } })),
+        ExpiresAtMs: now + STORED_SUGGESTIONS_TTL_MS,
+    });
 }
 
-/** Number of keys currently held by the in-process suggestion store. Exposed for diagnostics and tests. */
+export function DeleteStoredArtifactSuggestions(key: string): boolean {
+    return getSuggestionStore().delete(key);
+}
+
+/** Number of non-expired keys currently held by the in-process suggestion store. Exposed for diagnostics and tests. */
 export function GetStoredArtifactSuggestionKeyCount(): number {
-    return getSuggestionStore().Size;
+    const store = getSuggestionStore();
+    pruneExpiredSuggestions(store, Date.now());
+    return store.size;
 }
 
 /** Empties the in-process suggestion store. The live room and persisted `Configuration` are unaffected. */
 export function ClearStoredArtifactSuggestions(): void {
-    getSuggestionStore().Clear();
+    getSuggestionStore().clear();
 }
 
 /**
@@ -1075,12 +1097,16 @@ export async function ExecuteReviewSuggestionTool(params: {
     };
     const updatedList = [...list];
     updatedList[idx] = updatedRecord;
-    SetStoredArtifactSuggestions(storeKey, updatedList);
-
-    // If the store key was content-hashed (ephemeral standalone test), keep a mirror under the new content hash
+    // If the store key was content-hashed (ephemeral standalone mode), hand off to the new content
+    // hash and delete the superseded pre-edit content hash so old revision hashes never accumulate.
     if (!params.context?.artifactId?.trim()) {
         const nextKey = ComputeArtifactSuggestionStoreKey(params.domain, applied.updatedContent, params.context);
         SetStoredArtifactSuggestions(nextKey, updatedList);
+        if (nextKey !== storeKey) {
+            DeleteStoredArtifactSuggestions(storeKey);
+        }
+    } else {
+        SetStoredArtifactSuggestions(storeKey, updatedList);
     }
 
     return {

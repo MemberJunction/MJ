@@ -3395,7 +3395,8 @@ export class BaseAgent {
                 params.contextUser,
                 wrappedParams.ConversationHistoryFrom ?? null,
                 wrappedParams.ConversationBranchID ?? null,
-                this._conversationBranches
+                this._conversationBranches,
+                this.ProviderToUse
             );
             this._conversationToolManager.SetSummaryHost(this.buildConversationSummaryHost(wrappedParams));
 
@@ -4047,11 +4048,13 @@ export class BaseAgent {
         };
     }
 
-    /** Clears what bounds one run — its validated scope and its hydrated audience — once the run is over. */
+    /** Clears what bounds one run — its validated scope, hydrated audience, and per-run conversation tool cache — once the run is over. */
     private clearRunBoundState(): void {
         this._runScope = undefined;
         this._audienceReaders = undefined;
         this._audienceSource = undefined;
+        this._conversationToolManager.Clear();
+        this._conversationBranches = [];
     }
 
     /**

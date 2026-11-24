@@ -1,4 +1,4 @@
-import { BaseSingleton, MJLruCache } from '@memberjunction/global';
+import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
 import {
@@ -143,26 +143,25 @@ export interface DetachedSessionState {
     DetachedAtIso: string;
 }
 
+interface TimedDetachedSessionEntry {
+    State: DetachedSessionState;
+    ExpiresAtMs: number;
+}
+
 /**
  * Process-wide registry of cloud sessions that detached in `adaptive-wake` mode and have not yet
  * been harvested by a subsequent `AgentWake`. Uses `BaseSingleton` for global object store safety.
  *
- * Bounded: an entry is only removed when a later turn IN THIS PROCESS sees the session reach a
- * terminal state. A wake handled by another replica, a cancelled or abandoned run, or a resume that
- * errors never does that, so entries (each holding the session's whole emitted-event-key set) would
- * otherwise stay for the life of the process. Losing an entry is safe: a resume that finds none
- * behaves as it does on another replica or after a restart.
+ * Lifecycle: entries are removed deterministically when a resumed turn reaches a terminal state or
+ * ends via `EndSession()` without re-detaching, and abandoned entries (woken on another replica or
+ * never resumed) expire after {@link DETACHED_SESSION_TTL_MS} without evicting active detached
+ * sessions under an arbitrary count cap.
  */
 export class CloudDetachedSessionRegistry extends BaseSingleton<CloudDetachedSessionRegistry> {
-    /** Most detached sessions tracked at once; the least recently used is dropped past this. */
-    public static readonly MAX_DETACHED_SESSIONS = 500;
-    /** A detached session nobody resumed for this long is forgotten. */
+    /** Default idle lifetime before an unresumed detached session is forgotten (24 hours). */
     public static readonly DETACHED_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
-    private readonly entries = new MJLruCache<string, DetachedSessionState>({
-        maxSize: CloudDetachedSessionRegistry.MAX_DETACHED_SESSIONS,
-        ttlMs: CloudDetachedSessionRegistry.DETACHED_SESSION_TTL_MS,
-    });
+    private readonly entries = new Map<string, TimedDetachedSessionEntry>();
 
     public constructor() {
         super();
@@ -172,31 +171,55 @@ export class CloudDetachedSessionRegistry extends BaseSingleton<CloudDetachedSes
         return CloudDetachedSessionRegistry.getInstance<CloudDetachedSessionRegistry>();
     }
 
-    public MarkDetached(sessionId: string, emittedEventKeys: ReadonlySet<string>): void {
-        // Each detach is also the moment to drop sessions that idled past the TTL without a wake.
-        this.entries.Prune();
-        this.entries.Set(sessionId, {
-            SessionId: sessionId,
-            EmittedEventKeys: new Set(emittedEventKeys),
-            DetachedAtIso: new Date().toISOString(),
+    public MarkDetached(
+        sessionId: string,
+        emittedEventKeys: ReadonlySet<string>,
+        ttlMs: number = CloudDetachedSessionRegistry.DETACHED_SESSION_TTL_MS
+    ): void {
+        const now = Date.now();
+        this.pruneExpired(now);
+        this.entries.set(sessionId, {
+            State: {
+                SessionId: sessionId,
+                EmittedEventKeys: new Set(emittedEventKeys),
+                DetachedAtIso: new Date(now).toISOString(),
+            },
+            ExpiresAtMs: now + ttlMs,
         });
     }
 
     public GetDetached(sessionId: string): DetachedSessionState | undefined {
-        return this.entries.Get(sessionId);
+        const entry = this.entries.get(sessionId);
+        if (!entry) {
+            return undefined;
+        }
+        if (entry.ExpiresAtMs <= Date.now()) {
+            this.entries.delete(sessionId);
+            return undefined;
+        }
+        return entry.State;
     }
 
     public ClearDetached(sessionId: string): void {
-        this.entries.Delete(sessionId);
+        this.entries.delete(sessionId);
     }
 
     public ClearAll(): void {
-        this.entries.Clear();
+        this.entries.clear();
     }
 
-    /** Number of detached sessions currently tracked. Exposed for diagnostics and tests. */
+    /** Number of non-expired detached sessions currently tracked. Exposed for diagnostics and tests. */
     public get DetachedSessionCount(): number {
-        return this.entries.Size;
+        this.pruneExpired(Date.now());
+        return this.entries.size;
+    }
+
+    private pruneExpired(now: number): void {
+        for (const [key, entry] of this.entries) {
+            if (entry.ExpiresAtMs <= now) {
+                this.entries.delete(key);
+            }
+        }
     }
 }
 
@@ -661,6 +684,10 @@ export abstract class BaseCloudHarnessAdapter extends BaseHarnessAdapter {
             );
             this.config = null;
             return;
+        }
+
+        if (this.sessionId) {
+            CloudDetachedSessionRegistry.Instance.ClearDetached(this.sessionId);
         }
 
         if (this.sessionId && this.lastExecutionState === 'running') {

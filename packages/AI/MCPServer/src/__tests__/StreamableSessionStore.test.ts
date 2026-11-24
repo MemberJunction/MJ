@@ -1,7 +1,7 @@
 /**
- * Memory-leak audit Round 23: the MCP server kept every Streamable HTTP session in a plain `Map`
- * that only an HTTP DELETE from the client ever trimmed, so each client that vanished without one
- * left a whole `McpServer` behind. `StreamableSessionStore` closes idle and excess sessions.
+ * Streamable HTTP session lifecycle tests: active sessions are never dropped under an arbitrary
+ * count cap, closed sessions untrack cleanly via `onclose` / `Remove`, and abandoned sessions
+ * close deterministically once idle past `IdleTtlMs`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -52,39 +52,20 @@ describe('StreamableSessionStore', () => {
         expect(store.Size).toBe(1);
     });
 
-    it('closes the least recently used session when a new one exceeds the cap', async () => {
-        store = new StreamableSessionStore<FakeClosable>({ MaxSessions: 2 });
-        const first = fakeSession();
-        const second = fakeSession();
-        const third = fakeSession();
-        store.Add('first', first);
-        store.Add('second', second);
-
-        // 'first' is used again, so 'second' is now the least recently used.
-        store.GetTransport('first');
-        store.Add('third', third);
-        await flushCloses();
-
-        expect(store.Size).toBe(2);
-        expect(store.GetTransport('second')).toBeUndefined();
-        expect(second.Server.close).toHaveBeenCalledTimes(1);
-        expect(second.Transport.close).toHaveBeenCalledTimes(1);
-        expect(first.Server.close).not.toHaveBeenCalled();
-        expect(third.Server.close).not.toHaveBeenCalled();
-    });
-
-    it('stays bounded when clients keep initializing without ever sending DELETE', async () => {
-        store = new StreamableSessionStore<FakeClosable>({ MaxSessions: 50 });
+    it('never evicts active sessions regardless of concurrent session count', async () => {
+        store = new StreamableSessionStore<FakeClosable>({ IdleTtlMs: 60_000, SweepIntervalMs: 10_000 });
         const sessions: Array<ReturnType<typeof fakeSession>> = [];
-        for (let i = 0; i < 500; i++) {
+        for (let i = 0; i < 1_500; i++) {
             const session = fakeSession();
             sessions.push(session);
             store.Add(`session-${i}`, session);
         }
         await flushCloses();
 
-        expect(store.Size).toBe(50);
-        expect(sessions.filter((s) => s.Server.close.mock.calls.length === 1)).toHaveLength(450);
+        expect(store.Size).toBe(1_500);
+        expect(store.GetTransport('session-0')).toBe(sessions[0].Transport);
+        expect(store.GetTransport('session-1499')).toBe(sessions[1_499].Transport);
+        expect(sessions.some((s) => s.Server.close.mock.calls.length > 0)).toBe(false);
     });
 
     it('the periodic sweep closes a session nobody used for the idle TTL', async () => {
@@ -100,6 +81,8 @@ describe('StreamableSessionStore', () => {
         expect(store.Size).toBe(0);
         expect(idle.Server.close).toHaveBeenCalledTimes(1);
         expect(idle.Transport.close).toHaveBeenCalledTimes(1);
+        // Sweep timer automatically stops once the last session leaves
+        expect(vi.getTimerCount()).toBe(0);
     });
 
     it('using a session restarts its idle clock', async () => {
@@ -129,16 +112,18 @@ describe('StreamableSessionStore', () => {
         expect(idle.Server.close).toHaveBeenCalledTimes(1);
     });
 
-    it('Remove stops tracking a session without closing it again', async () => {
+    it('Remove stops tracking a session without closing it again and clears the sweep timer when empty', async () => {
         store = new StreamableSessionStore<FakeClosable>();
         const session = fakeSession();
         store.Add('s1', session);
+        expect(vi.getTimerCount()).toBe(1);
 
         expect(store.Remove('s1')).toBe(true);
         expect(store.Remove('s1')).toBe(false);
         await flushCloses();
 
         expect(store.Size).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
         expect(session.Server.close).not.toHaveBeenCalled();
         expect(session.Transport.close).not.toHaveBeenCalled();
     });
@@ -160,14 +145,19 @@ describe('StreamableSessionStore', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
-    it('reports a close failure instead of throwing, and still closes the transport', async () => {
+    it('reports a close failure on idle expiry instead of throwing, and still closes the transport', async () => {
         const onCloseError = vi.fn();
-        store = new StreamableSessionStore<FakeClosable>({ MaxSessions: 1, OnCloseError: onCloseError });
+        store = new StreamableSessionStore<FakeClosable>({
+            IdleTtlMs: 1_000,
+            SweepIntervalMs: 0,
+            OnCloseError: onCloseError,
+        });
         const broken = fakeSession();
         broken.Server.close.mockRejectedValueOnce(new Error('server close failed'));
         store.Add('broken', broken);
 
-        store.Add('next', fakeSession());
+        await vi.advanceTimersByTimeAsync(1_500);
+        expect(store.PruneIdle()).toBe(1);
         await flushCloses();
 
         expect(onCloseError).toHaveBeenCalledTimes(1);
@@ -210,7 +200,6 @@ describe('Streamable HTTP session teardown against the real MCP SDK', () => {
         await transport.close();
 
         expect(untrack).toHaveBeenCalledTimes(1);
-        // The SDK's own close handling ran too: the server dropped its transport.
         expect(server.isConnected()).toBe(false);
     });
 
@@ -221,25 +210,32 @@ describe('Streamable HTTP session teardown against the real MCP SDK', () => {
 
         await transport.close();
 
-        // The server never learned its transport closed.
         expect(server.isConnected()).toBe(true);
     });
 
-    it('evicting a real session closes its server and transport and untracks it exactly once', async () => {
-        const store = new StreamableSessionStore<StreamableHTTPServerTransport>({ MaxSessions: 1, SweepIntervalMs: 0 });
-        const { server, transport } = createConnectedPair();
-        const untrack = vi.fn(() => store.Remove('session-1'));
-        transport.onclose = untrack;
-        await server.connect(transport);
-        store.Add('session-1', { Transport: transport, Server: server });
+    it('idle-expiring a real session closes its server and transport and untracks it cleanly', async () => {
+        vi.useFakeTimers();
+        try {
+            const store = new StreamableSessionStore<StreamableHTTPServerTransport>({
+                IdleTtlMs: 5_000,
+                SweepIntervalMs: 0,
+            });
+            const { server, transport } = createConnectedPair();
+            const untrack = vi.fn(() => store.Remove('session-1'));
+            transport.onclose = untrack;
+            await server.connect(transport);
+            store.Add('session-1', { Transport: transport, Server: server });
 
-        // A second session pushes the first past the cap.
-        store.Add('session-2', { Transport: closable(), Server: closable() });
-        await vi.waitFor(() => expect(server.isConnected()).toBe(false));
+            await vi.advanceTimersByTimeAsync(6_000);
+            expect(store.PruneIdle()).toBe(1);
+            await vi.waitFor(() => expect(server.isConnected()).toBe(false));
 
-        expect(untrack).toHaveBeenCalled();
-        expect(store.Size).toBe(1);
-        expect(store.GetTransport('session-1')).toBeUndefined();
-        store.CloseAll();
+            expect(untrack).toHaveBeenCalled();
+            expect(store.Size).toBe(0);
+            expect(store.GetTransport('session-1')).toBeUndefined();
+            store.CloseAll();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

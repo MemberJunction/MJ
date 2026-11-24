@@ -709,7 +709,7 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
         expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-saved-fresh');
     });
 
-    it('stays bounded when every lookup arrives on a fresh per-request provider object', async () => {
+    it('never retains per-request provider entries in defaultPolicyCache and supports WeakMap scoping without arbitrary caps', async () => {
         const runViewFn = vi.fn().mockResolvedValue({
             Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1,
         });
@@ -717,18 +717,30 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
             RunView: runViewFn,
         } as Partial<RunView> as RunView);
 
-        // MJServer builds one provider per request; each one is a new cache scope.
-        for (let i = 0; i < 2_100; i++) {
+        // MJServer builds one provider per request; each one lives in a WeakMap keyed by provider identity,
+        // so defaultPolicyCache stays at 0 and all concurrent live providers remain cached without eviction.
+        const liveProviders: IMetadataProvider[] = [];
+        for (let i = 0; i < 2_500; i++) {
             const perRequestProvider = {} as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider;
+            liveProviders.push(perRequestProvider);
             await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
                 provider: perRequestProvider,
             });
         }
-        expect(engine.CachedPolicySlotCount).toBeLessThanOrEqual(2_000);
+        expect(engine.DefaultCachedPolicySlotCount).toBe(0);
 
-        // Clearing the pair still reaches every provider-scoped slot that survived eviction.
+        // Repeat lookup on provider #0 still hits its WeakMap slot (not arbitrarily evicted by provider #2499)
+        await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider: liveProviders[0],
+        });
+        expect(runViewFn).toHaveBeenCalledTimes(2_500);
+
+        // Clearing the pair invalidates every still-live provider's slot via generation stamp
         engine.ClearCache('agent-cos', 'user-alice-1');
-        expect(engine.CachedPolicySlotCount).toBe(0);
+        await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider: liveProviders[0],
+        });
+        expect(runViewFn).toHaveBeenCalledTimes(2_501);
     });
 
     it('clears one (agent, user) pair across providers without touching other pairs', () => {
@@ -743,7 +755,6 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
         expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerA)).toBeNull();
         expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)).toBeNull();
         expect(engine.GetCachedPolicy('agent-cos', 'user-bob-2', providerA)?.ID).toBe('bob-a');
-        expect(engine.CachedPolicySlotCount).toBe(1);
     });
 
     it('never leaks a cached "none" across providers and expires negative cache entries after TTL', async () => {

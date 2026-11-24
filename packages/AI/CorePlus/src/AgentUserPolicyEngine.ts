@@ -26,7 +26,6 @@ import {
     MJEvent,
     MJEventType,
     MJGlobal,
-    MJLruCache,
     SafeExpressionEvaluator,
     SafeJSONParse,
     SQLExpressionValidator,
@@ -313,31 +312,34 @@ interface NodeProcessWithBuiltinModule {
     getBuiltinModule?: (id: string) => { AsyncLocalStorage?: new () => ExecutingAgentContextStore } | undefined;
 }
 
+interface StampedPolicyCacheEntry {
+    Entry: PolicyCacheEntry;
+    Stamp: number;
+}
+
 /**
  * Singleton engine that loads and evaluates `MJ: AI Agent User Policies` records.
  */
 export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> {
-    private static readonly _providerIds = new WeakMap<object, number>();
-    private static _nextProviderId = 1;
     private static readonly NONE_POLICY_CACHE_TTL_MS = 30_000;
-    /**
-     * Upper bound on cached `(provider, agent, user)` slots. MJServer builds a fresh provider object
-     * per request, and the cache key is scoped by provider identity, so without a bound every agent
-     * run, wake trigger and policy-guarded CRUD action added a slot that was never read again (and
-     * whose cached entity pinned that request's provider).
-     */
-    private static readonly MAX_POLICY_CACHE_ENTRIES = 2_000;
-    /** Found policies are also re-read after this long, so a slot never pins a request's provider for good. */
-    private static readonly POLICY_CACHE_TTL_MS = 15 * 60 * 1000;
 
     private readonly expressionEvaluator = new SafeExpressionEvaluator();
-    private readonly policyCache = new MJLruCache<string, PolicyCacheEntry>({
-        maxSize: AgentUserPolicyEngine.MAX_POLICY_CACHE_ENTRIES,
-        ttlMs: AgentUserPolicyEngine.POLICY_CACHE_TTL_MS,
-        onEvict: (key) => this.unindexCacheKey(key),
-    });
-    /** `agent::user` pair → every cache key holding that pair, so a pair can be cleared across providers. */
-    private readonly cacheKeysByPair = new Map<string, Set<string>>();
+    /**
+     * Global/default-provider policy cache keyed by `agent::user` pair. Kept coherent via
+     * {@link HandleEntityEvent} (`save`, `delete`, `remote-invalidate`) without arbitrary size caps.
+     */
+    private readonly defaultPolicyCache = new Map<string, PolicyCacheEntry>();
+    /**
+     * Per-provider policy caches keyed weakly by `IMetadataProvider` object identity.
+     * MJServer constructs a fresh provider per GraphQL/HTTP request; storing per-provider slots in a
+     * `WeakMap` gives 100% intra-request cache hits while letting V8 garbage-collect both the provider
+     * and any cached `BaseEntity` attached to it as soon as the request finishes — with zero arbitrary
+     * entry caps and zero cross-request pinning.
+     */
+    private providerPolicyCaches = new WeakMap<object, Map<string, StampedPolicyCacheEntry>>();
+    /** Monotonic per-`agent::user` invalidation stamps so `ClearCache(agentId, userId)` invalidates live provider maps in O(1). */
+    private readonly invalidatedPairGeneration = new Map<string, number>();
+    private nextGeneration = 1;
     private executingAgentStore: ExecutingAgentContextStore | null = null;
     private entityEventSubscription: Subscription | null = null;
 
@@ -505,60 +507,62 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         return this.executingAgentStore.run(frame, fn);
     }
 
-    private getProviderScopePrefix(provider?: object | null): string {
-        if (!provider || typeof provider !== 'object') {
-            return 'default';
-        }
-        let id = AgentUserPolicyEngine._providerIds.get(provider);
-        if (id === undefined) {
-            id = AgentUserPolicyEngine._nextProviderId++;
-            AgentUserPolicyEngine._providerIds.set(provider, id);
-        }
-        return `p:${id}`;
-    }
-
-    private buildPairSuffix(agentId: string, userId: string): string {
+    private buildPairKey(agentId: string, userId: string): string {
         return `${agentId.trim().toLowerCase()}::${userId.trim().toLowerCase()}`;
     }
 
-    /** Build a canonical provider-scoped cache key for an `(agentId, userId, provider)` tuple. */
-    private buildCacheKey(agentId: string, userId: string, provider?: object | null): string {
-        return `${this.getProviderScopePrefix(provider)}::${this.buildPairSuffix(agentId, userId)}`;
-    }
-
-    /** The `agent::user` part of a cache key. The provider prefix (`default` / `p:N`) never contains `::`. */
-    private pairSuffixOfKey(key: string): string {
-        return key.slice(key.indexOf('::') + 2);
-    }
-
-    /** Writes one cache slot and records it in the pair index. */
-    private setCacheEntry(key: string, policy: MJAIAgentUserPolicyEntity | null, noneExpiresAt = 0): void {
-        this.policyCache.Set(key, { Policy: policy, NoneExpiresAt: noneExpiresAt });
-        const pair = this.pairSuffixOfKey(key);
-        let keys = this.cacheKeysByPair.get(pair);
-        if (!keys) {
-            keys = new Set<string>();
-            this.cacheKeysByPair.set(pair, keys);
-        }
-        keys.add(key);
-    }
-
-    /** `onEvict` hook: drops an evicted key from the pair index (and the pair once it is empty). */
-    private unindexCacheKey(key: string): void {
-        const pair = this.pairSuffixOfKey(key);
-        const keys = this.cacheKeysByPair.get(pair);
-        if (!keys) {
+    private setCacheEntry(
+        agentId: string,
+        userId: string,
+        provider: object | null | undefined,
+        policy: MJAIAgentUserPolicyEntity | null,
+        noneExpiresAt = 0
+    ): void {
+        const pair = this.buildPairKey(agentId, userId);
+        const entry: PolicyCacheEntry = { Policy: policy, NoneExpiresAt: noneExpiresAt };
+        if (provider && typeof provider === 'object') {
+            let map = this.providerPolicyCaches.get(provider);
+            if (!map) {
+                map = new Map<string, StampedPolicyCacheEntry>();
+                this.providerPolicyCaches.set(provider, map);
+            }
+            const stamp = this.invalidatedPairGeneration.get(pair) ?? 0;
+            map.set(pair, { Entry: entry, Stamp: stamp });
             return;
         }
-        keys.delete(key);
-        if (keys.size === 0) {
-            this.cacheKeysByPair.delete(pair);
-        }
+        this.defaultPolicyCache.set(pair, entry);
     }
 
-    /** Number of cached `(provider, agent, user)` slots. Exposed for diagnostics and tests. */
-    public get CachedPolicySlotCount(): number {
-        return this.policyCache.Size;
+    private getCacheEntry(agentId: string, userId: string, provider?: object | null): PolicyCacheEntry | undefined {
+        const pair = this.buildPairKey(agentId, userId);
+        if (provider && typeof provider === 'object') {
+            const map = this.providerPolicyCaches.get(provider);
+            const stamped = map?.get(pair);
+            if (!stamped) {
+                return undefined;
+            }
+            const minStamp = this.invalidatedPairGeneration.get(pair) ?? 0;
+            if (stamped.Stamp < minStamp) {
+                map?.delete(pair);
+                return undefined;
+            }
+            return stamped.Entry;
+        }
+        return this.defaultPolicyCache.get(pair);
+    }
+
+    private deleteCacheEntry(agentId: string, userId: string, provider?: object | null): void {
+        const pair = this.buildPairKey(agentId, userId);
+        if (provider && typeof provider === 'object') {
+            this.providerPolicyCaches.get(provider)?.delete(pair);
+            return;
+        }
+        this.defaultPolicyCache.delete(pair);
+    }
+
+    /** Number of default-provider cached `(agent, user)` slots (per-request provider caches live in a WeakMap). */
+    public get DefaultCachedPolicySlotCount(): number {
+        return this.defaultPolicyCache.size;
     }
 
     /** Put or update a policy entity in the in-memory cache. */
@@ -568,14 +572,14 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         }
         const entityProvider = (policy as { ProviderToUse?: object | null }).ProviderToUse ?? null;
         if (provider) {
-            this.setCacheEntry(this.buildCacheKey(policy.AgentID, policy.UserID, provider), policy);
+            this.setCacheEntry(policy.AgentID, policy.UserID, provider, policy);
             return;
         }
         // Evict any stale copies cached under other providers for this (agentId, userId) pair first.
         this.ClearCache(policy.AgentID, policy.UserID);
-        this.setCacheEntry(this.buildCacheKey(policy.AgentID, policy.UserID, null), policy);
+        this.setCacheEntry(policy.AgentID, policy.UserID, null, policy);
         if (entityProvider) {
-            this.setCacheEntry(this.buildCacheKey(policy.AgentID, policy.UserID, entityProvider), policy);
+            this.setCacheEntry(policy.AgentID, policy.UserID, entityProvider, policy);
         }
     }
 
@@ -589,29 +593,29 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             return null;
         }
         if (provider) {
-            const scoped = this.policyCache.Get(this.buildCacheKey(agentId, userId, provider));
+            const scoped = this.getCacheEntry(agentId, userId, provider);
             if (scoped) {
                 return scoped.Policy;
             }
         }
-        return this.policyCache.Get(this.buildCacheKey(agentId, userId, null))?.Policy ?? null;
+        return this.getCacheEntry(agentId, userId, null)?.Policy ?? null;
     }
 
     /** Clear all cached policies (or a single `(agentId, userId)` pair across all or one provider). */
     public ClearCache(agentId?: string, userId?: string, provider?: IMetadataProvider | null): void {
         if (agentId && userId) {
             if (provider) {
-                this.policyCache.Delete(this.buildCacheKey(agentId, userId, provider));
+                this.deleteCacheEntry(agentId, userId, provider);
                 return;
             }
-            const keys = this.cacheKeysByPair.get(this.buildPairSuffix(agentId, userId));
-            for (const k of Array.from(keys ?? [])) {
-                this.policyCache.Delete(k);
-            }
+            const pair = this.buildPairKey(agentId, userId);
+            this.defaultPolicyCache.delete(pair);
+            this.invalidatedPairGeneration.set(pair, this.nextGeneration++);
             return;
         }
-        this.policyCache.Clear();
-        this.cacheKeysByPair.clear();
+        this.defaultPolicyCache.clear();
+        this.providerPolicyCaches = new WeakMap<object, Map<string, StampedPolicyCacheEntry>>();
+        this.invalidatedPairGeneration.clear();
     }
 
     private resolvePolicyLookupUser(contextUser: UserInfo): UserInfo {
@@ -646,10 +650,8 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         options?: ResolvePolicyLookupOptions
     ): Promise<PolicyLookupResult> {
         const forceRefresh = options?.forceRefresh === true;
-        const scopedKey = this.buildCacheKey(agentId, userId, options?.provider);
-        const defaultKey = this.buildCacheKey(agentId, userId, null);
         if (!forceRefresh) {
-            const cached = this.policyCache.Get(scopedKey);
+            const cached = this.getCacheEntry(agentId, userId, options?.provider);
             if (cached) {
                 if (cached.Policy) {
                     return { status: 'found', policy: cached.Policy };
@@ -657,10 +659,10 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
                 if (Date.now() < cached.NoneExpiresAt) {
                     return { status: 'none', policy: null };
                 }
-                this.policyCache.Delete(scopedKey);
+                this.deleteCacheEntry(agentId, userId, options?.provider);
             }
             if (options?.provider) {
-                const defaultCached = this.policyCache.Get(defaultKey)?.Policy ?? null;
+                const defaultCached = this.getCacheEntry(agentId, userId, null)?.Policy ?? null;
                 if (defaultCached) {
                     return { status: 'found', policy: defaultCached };
                 }
@@ -691,10 +693,10 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             }
             if (result.Results.length > 0) {
                 const policy = result.Results[0];
-                this.setCacheEntry(scopedKey, policy);
+                this.setCacheEntry(agentId, userId, options?.provider, policy);
                 return { status: 'found', policy };
             }
-            this.setCacheEntry(scopedKey, null, Date.now() + AgentUserPolicyEngine.NONE_POLICY_CACHE_TTL_MS);
+            this.setCacheEntry(agentId, userId, options?.provider, null, Date.now() + AgentUserPolicyEngine.NONE_POLICY_CACHE_TTL_MS);
             return { status: 'none', policy: null };
         } catch (error) {
             const errMessage = error instanceof Error ? error.message : String(error);

@@ -7,7 +7,7 @@
 
 Memory-leak audit Round 22 fixes.
 
-- `AgentUserPolicyEngine` keeps its policy cache in a bounded `MJLruCache` (2,000 slots, 15 min TTL). MJServer builds a provider per request and the cache is scoped by provider, so every agent run, wake trigger and policy-guarded CRUD action used to add a slot that was never read again.
-- `BaseModelRunner` drops saved prompt runs from its parent-chaining table and caps it at 256, so long-lived runners that never call `FlushPendingSaves()` no longer keep every prompt-run entity.
-- `ArtifactCollaborationServer` evicts its per-artifact compacted-vector index past 256 artifacts instead of keeping one entry per artifact ever compacted.
+- `AgentUserPolicyEngine` scopes per-request `IMetadataProvider` policy caches via a `WeakMap` (with O(1) generation-stamped pair invalidation across live providers) instead of stringifying per-request provider IDs into a singleton `Map` that pinned dead request providers.
+- `BaseModelRunner` removes prompt runs from `_trackedPromptRunsById` deterministically in `_promptRunQueue.Settled(promptRun).finally(...)` as soon as each INSERT settles, so long-lived runners never accumulate prompt-run entities while keeping all concurrent in-flight parent runs tracked.
+- `ArtifactCollaborationServer` removes entries from `CompactedVectorKeysByArtifact` when `CompactedStateVectors` evicts their last vector key instead of keeping orphan per-artifact entries for the life of the process.
 - The Tasks view and message rows no longer restart their polling / elapsed-time intervals when a task load settles after the component is destroyed.

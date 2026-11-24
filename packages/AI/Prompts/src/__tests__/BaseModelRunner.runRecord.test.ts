@@ -465,13 +465,22 @@ describe('BaseModelRunner run record lifecycle', () => {
     expect(saveOrder).toEqual(['parent:start', 'parent:end', 'child:start', 'child:end']);
   });
 
-  it('a long-lived runner that never flushes drops saved prompt runs from its parent-chaining table', async () => {
+  it('removes prompt runs deterministically as soon as their INSERT settles (including failed INSERTs) without evicting concurrent in-flight runs', async () => {
     const runner = new TestModelRunner();
-    const provider: IMetadataProvider = {
+    const prompt = createMockPrompt();
+    const model = createMockModel();
+
+    // 1. Both succeeding and failing INSERTs clean themselves up to 0 once settled (even without FlushPendingSaves)
+    let callIdx = 0;
+    const settlingProvider: IMetadataProvider = {
       GetEntityObject: vi.fn(async () => {
+        const idx = callIdx++;
         const run = new FakePromptRun();
         const baseSave = run.Save.bind(run);
         run.Save = async () => {
+          if (idx % 2 === 1) {
+            return false; // failed INSERT (IsSaved remains false)
+          }
           const ok = await baseSave();
           (run as Record<string, unknown>)['IsSaved'] = ok;
           return ok;
@@ -479,36 +488,35 @@ describe('BaseModelRunner run record lifecycle', () => {
         return run as unknown;
       }),
     } as unknown as IMetadataProvider;
-    const prompt = createMockPrompt();
-    const model = createMockModel();
 
     for (let i = 0; i < 50; i++) {
-      await runner.invokeCreateRunRecord(prompt, model, { prompt, provider }, new Date());
-      // Let the fire-and-forget INSERT land, as it would between moderated turns.
-      await new Promise((r) => setTimeout(r, 0));
+      await runner.invokeCreateRunRecord(prompt, model, { prompt, provider: settlingProvider }, new Date());
     }
+    await new Promise((r) => setTimeout(r, 10));
+    expect(runner.TrackedPromptRunCount).toBe(0);
 
-    // Only the most recent run (tracked before its predecessors were pruned) can remain.
-    expect(runner.TrackedPromptRunCount).toBeLessThanOrEqual(1);
-  });
-
-  it('caps the parent-chaining table even when INSERTs never complete', async () => {
-    const runner = new TestModelRunner();
-    const provider: IMetadataProvider = {
+    // 2. Genuinely concurrent in-flight parent runs (>256) are all retained until settled, then drop to 0
+    const resolvers: Array<(ok: boolean) => void> = [];
+    const concurrentProvider: IMetadataProvider = {
       GetEntityObject: vi.fn(async () => {
         const run = new FakePromptRun();
-        run.Save = () => new Promise<boolean>(() => undefined); // never settles
+        run.Save = () => new Promise<boolean>((resolve) => resolvers.push(resolve));
         return run as unknown;
       }),
     } as unknown as IMetadataProvider;
-    const prompt = createMockPrompt();
-    const model = createMockModel();
 
     for (let i = 0; i < 300; i++) {
-      await runner.invokeCreateRunRecord(prompt, model, { prompt, provider }, new Date());
+      await runner.invokeCreateRunRecord(prompt, model, { prompt, provider: concurrentProvider }, new Date());
     }
+    await new Promise((r) => setTimeout(r, 0));
+    expect(resolvers).toHaveLength(300);
+    expect(runner.TrackedPromptRunCount).toBe(300);
 
-    expect(runner.TrackedPromptRunCount).toBe(256);
+    for (const resolve of resolvers) {
+      resolve(true);
+    }
+    await new Promise((r) => setTimeout(r, 10));
+    expect(runner.TrackedPromptRunCount).toBe(0);
   });
 });
 
