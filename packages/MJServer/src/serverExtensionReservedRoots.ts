@@ -19,6 +19,7 @@
 export const CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = [
     '/healthcheck',
     '/esignature',
+    '/comms',
     '/media',
     '/oauth',
     '/health',

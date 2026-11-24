@@ -31,6 +31,11 @@ export class EntityCommunicationParams {
      * process's default provider.
      */
     Provider?: IMetadataProvider & IRunViewProvider
+    /**
+     * Explicit opt-in to route this entity communication through the V2 compliance-gated pipeline.
+     * Defaults to `false` so existing V1 callers retain exact V1 behaviour.
+     */
+    UseV2?: boolean = false
 }
 export class EntityCommunicationResultItem {
     RecipientData: any

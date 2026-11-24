@@ -3570,6 +3570,131 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Communication Sender Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationSenderPermissions"
+        SectionName="Communication Sender Permissions"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationSenderPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Sender Permissions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Sender Permissions','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationSenderPermissions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSenderPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Principal Preferences Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationPrincipalPreferences"
+        SectionName="Communication Principal Preferences"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationPrincipalPreferences')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Principal Preferences','ChangedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Principal Preferences','ChangedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationPrincipalPreferences')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPrincipalPreferences', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Consent Audit Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationConsentAuditLogs"
+        SectionName="Communication Consent Audit Logs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationConsentAuditLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Consent Audit Logs','ChangedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Consent Audit Logs','ChangedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationConsentAuditLogs')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationConsentAuditLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Suppressions (Revoked By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationSuppressionsRevokedByUserID"
+        SectionName="Communication Suppressions (Revoked By User ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationSuppressionsRevokedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Suppressions','RevokedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Suppressions','RevokedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationSuppressionsRevokedByUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSuppressionsRevokedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Suppressions (Created By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationSuppressionsCreatedByUserID"
+        SectionName="Communication Suppressions (Created By User ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationSuppressionsCreatedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Suppressions','CreatedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Suppressions','CreatedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationSuppressionsCreatedByUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSuppressionsCreatedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

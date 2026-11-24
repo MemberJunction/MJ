@@ -25,7 +25,8 @@
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/core-entities": "6.3.0-edge.1",
     "@memberjunction/entity-communications-base": "6.3.0-edge.1",
-    "@memberjunction/global": "6.3.0-edge.1"
+    "@memberjunction/global": "6.3.0-edge.1",
+    "@memberjunction/templates": "6.3.0-edge.1"
   },
   "repository": {
     "type": "git",

@@ -39,6 +39,7 @@ vi.mock('../rest/OAuthCallbackHandler.js', () => ({
     CreateOAuthCallbackHandler: () => ({ callbackRouter: stubRouter(), authenticatedRouter: stubRouter() }),
 }));
 vi.mock('../rest/SignatureWebhookHandler.js', () => ({ CreateSignatureWebhookHandler: stubRouter }));
+vi.mock('../rest/CommsWebhookHandler.js', () => ({ CreateCommsWebhookHandler: stubRouter }));
 vi.mock('../rest/MediaStreamHandler.js', () => ({ CreateMediaStreamRouter: stubRouter }));
 vi.mock('../rest/RealtimeSdpBrokerHandler.js', () => ({ CreateRealtimeSdpBrokerRouter: stubRouter }));
 vi.mock('../auth/AuthProviderCatalogRouter.js', () => ({ CreateAuthProviderCatalogRouter: stubRouter, AUTH_CATALOG_MOUNT_PATH: '/auth' }));
@@ -107,6 +108,7 @@ const ROOT_MOUNTS_BEFORE_5674 = [
     '/healthcheck/live', // liveness, added with the startup gate (#4432)
     '/oauth',
     '/esignature',
+    '/comms',
     '/media',
     '/realtime/sdp-exchange',
     '/magic-link',
