@@ -284,6 +284,79 @@ describe('SQLServerDialect', () => {
             expect(sql).toContain('sp_addextendedproperty');
             expect(sql).toContain('User accounts');
         });
+
+        it('should escape identifier arguments and use N-prefixed Unicode literals consistently across all comment helpers', () => {
+            const expectedColSql = [
+                `EXEC sp_addextendedproperty`,
+                `    @name = N'MS_Description',`,
+                `    @value = N'd''s',`,
+                `    @level0type = N'SCHEMA', @level0name = N'My''S',`,
+                `    @level1type = N'TABLE', @level1name = N'T''',`,
+                `    @level2type = N'COLUMN', @level2name = N'C''';`,
+            ].join('\n');
+            expect(dialect.CommentOnColumn("My'S", "T'\0", "C'", "d's")).toBe(expectedColSql);
+
+            expect(dialect.CommentOnColumnIfAbsent("My'S", "T'\0", "C'", "d's")).toBe([
+                `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'My''S', N'TABLE', N'T''', N'COLUMN', N'C'''))`,
+                expectedColSql,
+            ].join('\n'));
+
+            const expectedObjSql = [
+                `EXEC sp_addextendedproperty`,
+                `    @name = N'MS_Description',`,
+                `    @value = N'd''s',`,
+                `    @level0type = N'SCHEMA', @level0name = N'My''S',`,
+                `    @level1type = N'TABLE', @level1name = N'T'''`,
+            ].join('\n');
+            expect(dialect.CommentOnObject('TABLE', "My'S", "T'\0", "d's")).toBe(expectedObjSql);
+
+            expect(dialect.CommentOnObjectIfAbsent('TABLE', "My'S", "T'\0", "d's")).toBe([
+                `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'My''S', N'TABLE', N'T''', NULL, NULL))`,
+                `${expectedObjSql};`,
+            ].join('\n'));
+
+            expect(dialect.CommentOnObjectIfAbsent("TYPE'", "My'S", "T'", 'desc')).toBe([
+                `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'My''S', N'TYPE''', N'T''', NULL, NULL))`,
+                `EXEC sp_addextendedproperty`,
+                `    @name = N'MS_Description',`,
+                `    @value = N'desc',`,
+                `    @level0type = N'SCHEMA', @level0name = N'My''S',`,
+                `    @level1type = N'TYPE''', @level1name = N'T''';`,
+            ].join('\n'));
+        });
+
+        it('should cap comments at MaxCommentLength (3,700 UTF-16 code units) without splitting surrogate pairs and strip NUL bytes', () => {
+            expect(dialect.MaxCommentLength).toBe(3700);
+            const longSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', 'X'.repeat(5000));
+            const match = longSql.match(/@value = N'([^']*)'/);
+            expect(match).not.toBeNull();
+            expect(match![1].length).toBe(3700);
+            expect(match![1].endsWith('...')).toBe(true);
+
+            // Emoji ('😀', 2 UTF-16 code units) straddling cut - 1 (3696) and cut (3697)
+            const prefixLen = dialect.MaxCommentLength! - 4;
+            const surrogateSql = dialect.CommentOnObject('TABLE', '__mj', 'User', 'A'.repeat(prefixLen) + '😀' + 'B'.repeat(50));
+            const surMatch = surrogateSql.match(/@value = N'([^']*)'/);
+            expect(surMatch).not.toBeNull();
+            expect(surMatch![1].length).toBe(prefixLen + 3);
+            expect(surMatch![1].endsWith('...')).toBe(true);
+            for (let i = 0; i < surMatch![1].length; i++) {
+                const code = surMatch![1].charCodeAt(i);
+                expect(code >= 0xD800 && code <= 0xDFFF).toBe(false);
+            }
+
+            const nulSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', 'hello\0world');
+            expect(nulSql).toContain("@value = N'helloworld'");
+
+            // Apostrophes double in T-SQL source text without inflating the evaluated sql_variant UTF-16 length beyond MaxCommentLength
+            const quotedDesc = "It's ".repeat(1000); // 5,000 chars with 1,000 apostrophes
+            const quotedSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', quotedDesc);
+            const quotedMatch = quotedSql.match(/@value = N'((?:[^']|'')*)'/);
+            expect(quotedMatch).not.toBeNull();
+            const unescaped = quotedMatch![1].replace(/''/g, "'");
+            expect(unescaped.length).toBe(dialect.MaxCommentLength);
+            expect(unescaped.endsWith('...')).toBe(true);
+        });
     });
 
     describe('IIF', () => {

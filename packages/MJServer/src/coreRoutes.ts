@@ -17,6 +17,7 @@ import { configInfo } from './config.js';
 import { ApiRoute } from './apiRoot.js';
 import { CreateOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { CreateSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
+import { CreateCommsWebhookHandler } from './rest/CommsWebhookHandler.js';
 import { CreateMediaStreamRouter } from './rest/MediaStreamHandler.js';
 import { CreateRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
 import { CreateMagicLinkHandler, CreateMagicLinkJwksRouter, MagicLinkService, RegisterMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
@@ -61,6 +62,14 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
 
     app.use(ApiRoute('/esignature'), cors<cors.CorsRequest>(), CreateSignatureWebhookHandler());
     log.LogIf('verbose', `[eSignature] Webhook route registered at ${ApiRoute('/esignature')}/webhook/:driverKey`);
+
+    app.use(ApiRoute('/comms'), cors<cors.CorsRequest>(), CreateCommsWebhookHandler({
+        WebhookRateLimit: configInfo.rateLimiting?.routes?.commsWebhooks,
+        TrackingRateLimit: configInfo.rateLimiting?.routes?.commsTracking,
+        UnsubscribeRateLimit: configInfo.rateLimiting?.routes?.commsUnsubscribe,
+        RateLimit: configInfo.rateLimiting?.routes?.comms,
+    }));
+    log.LogIf('verbose', `[Comms] Public webhook/tracking/unsubscribe routes registered at ${ApiRoute('/comms')}`);
 
     // The `?token=` query param is the capability; an <audio>/<video> element can't send Authorization headers.
     app.use(ApiRoute('/media'), cors<cors.CorsRequest>(), CreateMediaStreamRouter({

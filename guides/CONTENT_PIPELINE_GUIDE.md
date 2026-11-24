@@ -473,8 +473,9 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 
 `SegmentStage` splits `ContentItem.Text` into `MJ: Content Item Chunks` using [`@memberjunction/ai-segmentation`](CONTENT_SEGMENTATION_GUIDE.md):
 1. Resolves `SegmenterKey` through the 5-level configuration cascade (`StructuralText`, `AdaptiveBoundary`, `SemanticText`, `Transcript`, `FixedWindow`, or `SuggestSegmenterKey` auto-selection).
-2. Calls `segmenter.Segment(...)` using the target embedding model's token budget.
-3. **Chunk Replacement & Retirement (`PipelineProcessor.supersededChunks`)**:
+2. Cleans the stored text first. The cleaner follows the item's detected file type, through `Cleaners` maps (`{ "html": "Html", "pdf": "…" }`): the run's entry or `CleanerKey`, then the Content Source's entry for the file type, then the Content Type's (then the Content Source Type's), then the source's `CleanerKey` (its default), then the content type's (then the source type's), then `Html` for markup and `PlainText` otherwise. A cleaner key that is not registered is skipped with a warning. See [Cleaning](CONTENT_SEGMENTATION_GUIDE.md#cleaning-the-stage-before-segmentation).
+3. Calls `segmenter.Segment(...)` using the target embedding model's token budget.
+4. **Chunk Replacement & Retirement (`PipelineProcessor.supersededChunks`)**:
    - Before committing the new chunk rows (`MJ: Content Item Chunks` with `EmbeddingStatus = 'Pending'`), `PipelineProcessor.supersededChunks` queries all existing live chunks for the item (`ContentItemID` where `DeleteStatus IS NULL`).
    - After the new chunks commit without error, `PipelineProcessor.markOrphansForDeletion` passes every superseded chunk ID to `ContentPipelineDeleteMarker.MarkForDeletion`, setting `DeleteStatus = 'Pending'` on all prior chunks so the `Content Pipeline — Delete Chunks` process removes any stored vectors and hard-deletes unreferenced rows on its next run.
 

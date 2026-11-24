@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "SoftBounceThresholdPolicy",
+      "Description": "Automatically suppresses an endpoint after repeated consecutive soft bounces within a cooling-off period.",
+      "DriverClass": "SoftBounceThresholdPolicy",
+      "Parameters": {
+        "threshold": 5,
+        "cooldownDays": 30,
+        "scope": "Global"
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2A0A405B-03EA-419B-A93E-E4C5646F3CEB"
+    }
+  }
+]

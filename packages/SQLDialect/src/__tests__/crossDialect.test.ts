@@ -479,7 +479,7 @@ describe('Cross-Dialect Comparison Tests', () => {
             const ssComment = ss.CommentOnObject('TABLE', '__mj', 'Users', 'All user accounts');
             const pgComment = pg.CommentOnObject('TABLE', '__mj', 'Users', 'All user accounts');
             expect(ssComment).toContain('sp_addextendedproperty');
-            expect(pgComment).toBe('COMMENT ON TABLE __mj."Users" IS \'All user accounts\'');
+            expect(pgComment).toBe('COMMENT ON TABLE "__mj"."Users" IS \'All user accounts\'');
         });
 
         it('should both handle single quotes in comments', () => {

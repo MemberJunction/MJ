@@ -1,5 +1,5 @@
 /**
- * integration-schema-pipeline.checks.ts — the 'integration-schema-pipeline' bundle (ISP1–ISP4),
+ * integration-schema-pipeline.checks.ts — the 'integration-schema-pipeline' bundle (ISP1–ISP5),
  * deterministic tier (IT165).
  *
  * Exercises the Integration & Runtime Schema pipeline against the live database:
@@ -19,12 +19,20 @@
  *  - ISP4: Live INSERT + Soft FK JOIN + Organic Key lookup round-trips native types (boolean,
  *          decimal precision/scale, integer, date, datetimeoffset, uuid) and a 2,000-character
  *          non-key text value without truncation.
+ *  - ISP5: ALTER TABLE ADD COLUMN emits idempotent column descriptions on the live DB via both
+ *          SchemaEngine and integration-schema-builder, preserving multi-line `;\n`, `$$`, and
+ *          `GO` content verbatim, respecting SQL Server's `sql_variant` comment cap, skipping
+ *          whitespace-only descriptions, and surviving re-runs cleanly through RSU batch splitting.
  */
 import type { DatabasePlatform } from '@memberjunction/core';
 import { DecideTypeOverlay } from '@memberjunction/integration-engine';
-import { SchemaBuilder, TypeMapper } from '@memberjunction/integration-schema-builder';
+import {
+    SchemaBuilder,
+    SchemaEvolution as IntegrationSchemaEvolution,
+    TypeMapper,
+} from '@memberjunction/integration-schema-builder';
 import type { SourceFieldInfo, SourceSchemaInfo, TargetTableConfig } from '@memberjunction/integration-schema-builder';
-import { DDLGenerator, SchemaEvolution } from '@memberjunction/schema-engine';
+import { DDLGenerator, RuntimeSchemaManager, SchemaEvolution } from '@memberjunction/schema-engine';
 import type { ExistingTableInfo, TableDefinition } from '@memberjunction/schema-engine';
 import { GetDialect } from '@memberjunction/sql-dialect';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -52,17 +60,50 @@ function requireFixture(): PipelineFixture {
     return fixture;
 }
 
-/** Split multi-statement DDL output (separated by blank lines or T-SQL GO batch markers) and execute each against the live DB. */
+/** Split multi-statement DDL output via SQLDialect (quote-, identifier-, comment-, and dollar-quote-aware) and execute each top-level statement against the live DB. */
 async function executeDDLOutput(ctx: IntegrationCheckContext, ddlText: string): Promise<void> {
     const provider = RequireQueryDb(ctx.Provider, BUNDLE);
-    const blocks = ddlText
-        .replace(/^\s*GO\s*$/gim, '\n\n')
-        .split(/\n\s*\n/)
-        .map(b => b.trim())
-        .filter(b => b.length > 0 && !b.startsWith('--'));
-    for (const sql of blocks) {
-        await provider.ExecuteSQL(sql, undefined, { description: `${BUNDLE} DDL` }, ctx.User);
+    const dialect = GetDialect(requireFixture().Platform);
+    for (const batch of dialect.SplitBatches(ddlText)) {
+        for (const stmt of dialect.SplitStatements(batch)) {
+            if (!stmt || stmt.startsWith('--')) continue;
+            await provider.ExecuteSQL(stmt, undefined, { description: `${BUNDLE} DDL` }, ctx.User);
+        }
     }
+}
+
+async function readLiveColumnDescription(
+    ctx: IntegrationCheckContext,
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    platform: DatabasePlatform
+): Promise<string | null> {
+    const provider = RequireQueryDb(ctx.Provider, BUNDLE);
+    if (platform === 'postgresql') {
+        const rows = await provider.ExecuteSQL<{ description: string | null }>(
+            `SELECT d.description AS description ` +
+            `FROM pg_catalog.pg_description d ` +
+            `JOIN pg_catalog.pg_class c ON c.oid = d.objoid ` +
+            `JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace ` +
+            `JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = d.objsubid ` +
+            `WHERE n.nspname = '${schemaName}' AND c.relname = '${tableName}' AND a.attname = '${columnName}'`,
+            undefined,
+            { description: `${BUNDLE} readLiveColumnDescription pg` },
+            ctx.User
+        );
+        return rows?.[0]?.description ?? null;
+    }
+
+    const rows = await provider.ExecuteSQL<{ Description: string | null }>(
+        `SELECT CAST(value AS NVARCHAR(MAX)) AS Description ` +
+        `FROM sys.fn_listextendedproperty(` +
+        `N'MS_Description', N'SCHEMA', N'${schemaName}', N'TABLE', N'${tableName}', N'COLUMN', N'${columnName}')`,
+        undefined,
+        { description: `${BUNDLE} readLiveColumnDescription sqlserver` },
+        ctx.User
+    );
+    return rows?.[0]?.Description ?? null;
 }
 
 function makeSourceField(overrides: Partial<SourceFieldInfo> & { Name: string; SourceType: string }): SourceFieldInfo {
@@ -281,6 +322,113 @@ async function readLiveIndexes(
         IsUnique: Boolean(r.IsUnique),
         KeyColumns: r.KeyColumns,
     }));
+}
+
+async function verifySchemaEngineColumnDescriptions(
+    ctx: IntegrationCheckContext,
+    f: PipelineFixture
+): Promise<void> {
+    const provider = RequireQueryDb(ctx.Provider, BUNDLE);
+    const dialect = GetDialect(f.Platform);
+    const trickyDesc = "Customer's lifecycle notes (cost in $$):\n- A: Active;\nGO\n- I: Inactive;\n";
+    const longDesc = 'D'.repeat(4200);
+
+    const seSql = new SchemaEvolution().GenerateEvolutionMigration(
+        {
+            AddedColumns: [
+                {
+                    Name: 'LifecycleNotes',
+                    Type: 'text',
+                    RawSqlType: f.Platform === 'postgresql' ? 'TEXT' : 'NVARCHAR(MAX)',
+                    IsNullable: true,
+                    Description: trickyDesc,
+                },
+                {
+                    Name: 'LongAuditSummary',
+                    Type: 'text',
+                    RawSqlType: f.Platform === 'postgresql' ? 'TEXT' : 'NVARCHAR(MAX)',
+                    IsNullable: true,
+                    Description: longDesc,
+                },
+            ],
+            ModifiedColumns: [],
+            RemovedColumns: [],
+        },
+        f.SchemaName,
+        'Account',
+        f.Platform
+    );
+    const seBatches = RuntimeSchemaManager.SplitMigrationBatches(seSql, f.Platform);
+    AssertEqual(seBatches.length, 1, 'ISP5: standalone GO inside description stayed in a single batch');
+    for (const batch of seBatches) {
+        await provider.ExecuteSQL(batch, undefined, { description: `${BUNDLE} ISP5 SchemaEngine ADD COLUMN` }, ctx.User);
+    }
+
+    const lifecycleStored = await readLiveColumnDescription(ctx, f.SchemaName, 'Account', 'LifecycleNotes', f.Platform);
+    AssertEqual(lifecycleStored, trickyDesc, 'ISP5: multi-line description with apostrophe, ;\\n, $$, and GO round-tripped verbatim');
+
+    const longStored = await readLiveColumnDescription(ctx, f.SchemaName, 'Account', 'LongAuditSummary', f.Platform);
+    if (dialect.MaxCommentLength != null) {
+        AssertEqual(longStored?.length ?? 0, dialect.MaxCommentLength, 'ISP5: long SQL Server description capped to MaxCommentLength');
+        Assert(longStored?.endsWith('...') ?? false, 'ISP5: truncated SQL Server description ends with ellipsis');
+    } else {
+        AssertEqual(longStored, longDesc, 'ISP5: long PostgreSQL description stored uncapped');
+    }
+}
+
+async function verifyIntegrationColumnDescriptions(
+    ctx: IntegrationCheckContext,
+    f: PipelineFixture
+): Promise<void> {
+    const provider = RequireQueryDb(ctx.Provider, BUNDLE);
+    const tierDesc = "Vendor's tier code;\n1 = Gold";
+    const colType = f.Platform === 'postgresql' ? 'VARCHAR(50)' : 'NVARCHAR(50)';
+    const intSql = new IntegrationSchemaEvolution().GenerateEvolutionMigration(
+        {
+            AddedColumns: [
+                {
+                    SourceFieldName: 'external_tier',
+                    TargetColumnName: 'ExternalTier',
+                    TargetSqlType: colType,
+                    IsNullable: true,
+                    MaxLength: 50,
+                    Precision: null,
+                    Scale: null,
+                    DefaultValue: null,
+                    Description: tierDesc,
+                },
+                {
+                    SourceFieldName: 'blank_desc',
+                    TargetColumnName: 'BlankDescCol',
+                    TargetSqlType: colType,
+                    IsNullable: true,
+                    MaxLength: 50,
+                    Precision: null,
+                    Scale: null,
+                    DefaultValue: null,
+                    Description: '   \t\0 ',
+                },
+            ],
+            ModifiedColumns: [],
+            RemovedColumns: [],
+            Warnings: [],
+        },
+        f.SchemaName,
+        'Account',
+        f.Platform
+    );
+    // Run TWICE through RuntimeSchemaManager.SplitMigrationBatches to verify full re-run idempotency on live DB
+    for (let attempt = 0; attempt < 2; attempt++) {
+        for (const batch of RuntimeSchemaManager.SplitMigrationBatches(intSql, f.Platform)) {
+            await provider.ExecuteSQL(batch, undefined, { description: `${BUNDLE} ISP5 integration ADD COLUMN #${attempt + 1}` }, ctx.User);
+        }
+    }
+
+    const tierStored = await readLiveColumnDescription(ctx, f.SchemaName, 'Account', 'ExternalTier', f.Platform);
+    AssertEqual(tierStored, tierDesc, 'ISP5: integration-schema-builder ADD COLUMN description persisted and survived re-run');
+
+    const blankStored = await readLiveColumnDescription(ctx, f.SchemaName, 'Account', 'BlankDescCol', f.Platform);
+    AssertEqual(blankStored, null, 'ISP5: whitespace/NUL-only description emitted no column metadata');
 }
 
 export const IntegrationSchemaPipelineChecks: NamedCheck[] = [
@@ -688,6 +836,15 @@ export const IntegrationSchemaPipelineChecks: NamedCheck[] = [
             AssertEqual(Number(row.GrandTotal), 9876.54, 'ISP4: DECIMAL(18,2) GrandTotal round-tripped');
             AssertEqual(Number(row.LineCount), 3, 'ISP4: INT LineCount round-tripped');
             AssertEqual(Number(row.NotesLen), 2000, 'ISP4: non-key 2000-char Notes column stored without truncation');
+        },
+    },
+    {
+        Id: `${BUNDLE}.ISP5`,
+        Name: 'ISP5: ALTER TABLE ADD COLUMN persists idempotent descriptions on the live DB (multi-line ;/GO/$$, sql_variant cap, re-run safety)',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const f = requireFixture();
+            await verifySchemaEngineColumnDescriptions(ctx, f);
+            await verifyIntegrationColumnDescriptions(ctx, f);
         },
     },
 ];

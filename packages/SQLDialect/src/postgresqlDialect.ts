@@ -227,7 +227,7 @@ export class PostgreSQLBinding implements DialectBinding {
 export class PostgreSQLDialect extends SQLDialect {
     private readonly writer: DialectWriter = Object.freeze(new PostgreSQLWriter());
     private readonly binding: DialectBinding = Object.freeze(new PostgreSQLBinding());
-    private readonly ddl: DialectSchemaDDL = Object.freeze(new PostgreSQLSchemaDDL(this.writer));
+    private readonly ddl: DialectSchemaDDL = Object.freeze(new PostgreSQLSchemaDDL(this.writer, POSTGRESQL_LEXICAL));
 
     get PlatformKey(): DatabasePlatform {
         return 'postgresql';

@@ -592,3 +592,42 @@ describe('FunctionRule — Open App hierarchy TVFs (issue #5364 item 6)', () => 
     expect(out.split('\n').filter((l) => l.trim() && !l.startsWith('--'))).toEqual([]);
   });
 });
+
+// Regression: V202611170731 — MJ 6.3 CodeGen's hierarchy TVF counts children with
+// `OUTER APPLY (...) ch`, which only ViewRule rewrote; the function reached PG as T-SQL.
+describe('FunctionRule — APPLY in inline TVFs', () => {
+  it('rewrites OUTER APPLY to LEFT JOIN LATERAL ... ON TRUE', () => {
+    const sql = `CREATE FUNCTION [__mj].[fnWidgetParentID_GetHierarchyMeta]
+(
+    @RecordID uniqueidentifier,
+    @ParentID uniqueidentifier
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_Ancestors AS (
+        SELECT [ID], [ParentID], 0 AS [Depth] FROM [__mj].[Widget] WHERE [ID] = @RecordID
+        UNION ALL
+        SELECT p.[ID], p.[ParentID], c.[Depth] + 1 FROM [__mj].[Widget] p INNER JOIN CTE_Ancestors c ON p.[ID] = c.[ParentID]
+    )
+    SELECT TOP 1
+        a.[ID] AS [RootID],
+        ch.[ChildCount] AS [ChildCount]
+    FROM
+        CTE_Ancestors a
+    OUTER APPLY (
+        SELECT COUNT(1) AS [ChildCount]
+        FROM [__mj].[Widget]
+        WHERE [ParentID] = @RecordID
+    ) ch
+    WHERE
+        a.[ParentID] IS NULL OR @ParentID IS NULL
+    ORDER BY
+        a.[Depth] DESC
+)`;
+    const result = convert(sql);
+    expect(result).not.toMatch(/OUTER\s+APPLY/i);
+    expect(result).toMatch(/LEFT JOIN LATERAL \([\s\S]*?\) ch\n\s+ON TRUE/);
+  });
+});

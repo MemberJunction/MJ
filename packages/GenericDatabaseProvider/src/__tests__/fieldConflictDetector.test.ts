@@ -38,6 +38,33 @@ function makeEntityInfoStub(fields: Partial<EntityFieldInfo>[]): EntityInfo {
 }
 
 describe('fieldConflictDetector', () => {
+    it('does not report a conflict when a nullable boolean is stored as NULL and the caller loaded it as null', () => {
+        // PostgreSQL stores NULL where SQL Server's column default stores 0. The client's null old value
+        // reads as false, so the stored NULL has to as well, or every edit of that field is a "conflict".
+        const entityInfo = makeEntityInfoStub([
+            { Name: 'ID', IsPrimaryKey: true, ReadOnly: true },
+            { Name: 'IsNullable', Type: 'bit', TSType: EntityFieldTSType.Boolean, AllowsNull: true },
+        ]);
+        const baseline = { IsNullable: ClientOldValueToFieldValue(entityInfo.Fields[1], null) };
+
+        const result = DetectFieldConcurrencyConflicts(entityInfo, baseline, { IsNullable: true }, { IsNullable: null });
+
+        expect(result.ConflictingFields).toEqual([]);
+        expect(result.DBDifferences).toEqual([]);
+    });
+
+    it('reports a stored NULL boolean as a database change only when the caller loaded true', () => {
+        const entityInfo = makeEntityInfoStub([
+            { Name: 'ID', IsPrimaryKey: true, ReadOnly: true },
+            { Name: 'Flag', Type: 'bit', TSType: EntityFieldTSType.Boolean, AllowsNull: true },
+        ]);
+
+        const result = DetectFieldConcurrencyConflicts(entityInfo, { Flag: true }, { Flag: false }, { Flag: null });
+
+        expect(result.ConflictingFields).toEqual([]);
+        expect(result.DBDifferences).toEqual([{ FieldName: 'Flag', ClientOldValue: true, DBValue: null }]);
+    });
+
     it('detects overlapping field conflict when caller and DB modified the same field to different values', () => {
         const entityInfo = makeEntityInfoStub([
             { Name: 'ID', IsPrimaryKey: true, ReadOnly: true },

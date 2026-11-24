@@ -18,6 +18,7 @@
  * keeps the first entry per command key, and plugin-declared `static Usage` is read
  * first, so a migrated command always keeps its richer, curated metadata.
  */
+import type { Command } from '@oclif/core';
 import { CLIPluginRegistry, type PluginUsage, type PluginUsageFlag } from '@memberjunction/cli-core';
 import { GetDomainProfile } from './domain-profiles.js';
 
@@ -129,6 +130,43 @@ export function DeriveUsage(command: OclifCommandShape): PluginUsage {
 /** @deprecated Use {@link DeriveUsage}. */
 export function deriveUsage(command: OclifCommandShape): PluginUsage {
   return DeriveUsage(command);
+}
+
+/** Minimal subset of oclif's `Command.Loadable` needed to derive usage without unsafe casts. */
+export type OclifLoadableLike = Pick<
+  Command.Loadable,
+  'id' | 'description' | 'summary' | 'hidden' | 'examples'
+> &
+  Partial<Pick<Command.Loadable, 'flags'>>;
+
+/**
+ * Adapts oclif's native `Command.Loadable` entries (lowercase properties) into
+ * {@link OclifCommandShape} without unsafe type casts.
+ */
+export function FromOclifCommands(commands: readonly OclifLoadableLike[]): OclifCommandShape[] {
+  return commands.map((cmd): OclifCommandShape => {
+    const flags: Record<string, OclifFlagShape> = {};
+    if (cmd.flags) {
+      for (const [name, def] of Object.entries(cmd.flags)) {
+        if (!def) continue;
+        flags[name] = {
+          type: def.type,
+          Description: def.description,
+          Char: def.char,
+          options: 'options' in def && Array.isArray(def.options) ? def.options : undefined,
+          Required: def.required,
+        };
+      }
+    }
+    return {
+      Id: cmd.id,
+      Description: cmd.description,
+      summary: cmd.summary,
+      Hidden: cmd.hidden,
+      Flags: Object.keys(flags).length > 0 ? flags : undefined,
+      Examples: cmd.examples,
+    };
+  });
 }
 
 /**

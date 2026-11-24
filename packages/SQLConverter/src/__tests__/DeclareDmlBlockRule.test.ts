@@ -281,3 +281,32 @@ INSERT INTO [__mj].[Log] ([ID], [PersonID]) VALUES (NEWID(), @PersonID);`;
     });
   });
 });
+
+// Regression: V202611161547 — an apostrophe inside a block comment (`A guest's session`) opened a
+// phantom string in the rule's private segmenter, inverting every code/string segment after it, so
+// the MERGE's @var references were never renamed and later became `@"Var"`.
+describe('DeclareDmlBlockRule — comments with apostrophes', () => {
+  it('renames @vars after a block comment that contains an apostrophe', () => {
+    const sql = `/* A guest's session Conversation carries the scope. */
+DECLARE @FilterID UNIQUEIDENTIFIER = 'E5EEC668-2A81-46C2-AB14-D878B8E9A8CC';
+MERGE [__mj].[RowLevelSecurityFilter] AS tgt
+USING (VALUES (@FilterID, N'Name', N'It''s a description')) AS src (ID, Name, Description)
+ON tgt.ID = src.ID
+WHEN NOT MATCHED THEN INSERT (ID, Name, Description) VALUES (src.ID, src.Name, src.Description);`;
+    const result = convert(sql);
+    expect(result).toContain('(v_FilterID,');
+    expect(result).not.toContain('@');
+    // The comment and the string literal are left as written.
+    expect(result).toContain("A guest's session");
+    expect(result).toContain("'It''s a description'");
+  });
+
+  it('does not rename an @word inside a line comment', () => {
+    const sql = `DECLARE @X INT = 1;
+-- see @Y for details
+UPDATE [__mj].[T] SET [A] = @X;`;
+    const result = convert(sql);
+    expect(result).toContain('-- see @Y for details');
+    expect(result).toContain('v_X');
+  });
+});

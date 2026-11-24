@@ -17,7 +17,7 @@
  * `MJ: Lists` row, and deletes them afterwards, with the user's User Lists category if this run created
  * it. The checks are ordered: each builds on the state the last left.
  */
-import { RunView } from '@memberjunction/core';
+import { DatabaseProviderBase, RunView } from '@memberjunction/core';
 import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJListDetailEntity, MJListEntity, MJQueryCategoryEntity, MJQueryEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -40,9 +40,15 @@ function rolesEntity(md: IMetadataProvider): EntityInfo {
     return roles!;
 }
 
-/** Every role's ID, read from the entity's base view: what a conversation's SQL would return. */
-function rolesSQL(roles: EntityInfo, where = ''): string {
-    return `SELECT ID FROM [${roles.SchemaName}].[${roles.BaseView}]${where}`;
+/**
+ * Every role's ID, read from the entity's base view: what a conversation's SQL would return.
+ * Quoted by the provider so the same fixture runs on SQL Server and PostgreSQL.
+ */
+function rolesSQL(md: IMetadataProvider, where = ''): string {
+    Assert(md instanceof DatabaseProviderBase, 'list-from-query runs on the server transport and needs the database provider');
+    const db = md as DatabaseProviderBase;
+    const roles = rolesEntity(md);
+    return `SELECT ${db.QuoteIdentifier('ID')} FROM ${db.QuoteSchemaAndView(roles.SchemaName, roles.BaseView)}${where}`;
 }
 
 async function loadQuery(md: IMetadataProvider, user: UserInfo, id: string): Promise<MJQueryEntity> {
@@ -90,7 +96,7 @@ export const ListFromQueryChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const f = fx(ctx);
             const saved = await new UserListQueries(ctx.User, ctx.Provider).SaveAsync({
-                Name: QUERY_NAME, SQL: rolesSQL(rolesEntity(ctx.Provider)), Description: 'Fixture for the list-from-query bundle — safe to delete',
+                Name: QUERY_NAME, SQL: rolesSQL(ctx.Provider), Description: 'Fixture for the list-from-query bundle — safe to delete',
             });
             Assert('QueryID' in saved, `the query was not saved: ${'Reason' in saved ? saved.Reason : ''}`);
             if (!('QueryID' in saved)) return;
@@ -112,7 +118,7 @@ export const ListFromQueryChecks: NamedCheck[] = [
         Name: 'LQ2: saving under a name already used picks an unused one in the same category',
         Fn: async (ctx: IntegrationCheckContext) => {
             const f = fx(ctx);
-            const saved = await new UserListQueries(ctx.User, ctx.Provider).SaveAsync({ Name: QUERY_NAME, SQL: rolesSQL(rolesEntity(ctx.Provider)) });
+            const saved = await new UserListQueries(ctx.User, ctx.Provider).SaveAsync({ Name: QUERY_NAME, SQL: rolesSQL(ctx.Provider) });
             Assert('QueryID' in saved, `the second query was not saved: ${'Reason' in saved ? saved.Reason : ''}`);
             if (!('QueryID' in saved)) return;
             f.QueryIDs.push(saved.QueryID);
@@ -160,7 +166,7 @@ export const ListFromQueryChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const f = fx(ctx);
             const query = await loadQuery(ctx.Provider, ctx.User, f.QueryIDs[0]);
-            query.SQL = rolesSQL(rolesEntity(ctx.Provider), ' WHERE 1 = 0');
+            query.SQL = rolesSQL(ctx.Provider, ' WHERE 1 = 0');
             Assert(await query.Save(), `query edit failed: ${query.LatestResult?.CompleteMessage ?? 'unknown error'}`);
 
             const membersBefore = await memberCount(ctx.User, f.ListID!);

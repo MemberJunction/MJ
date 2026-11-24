@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT189 - Comms V2 Compliance Gate and Jurisdiction Rollup",
+    "Description": "Exercises ComplianceGate, JurisdictionResolver, and CommunicationSenderPermission hierarchy inheritance against live database entities.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Active suppressions block, expired suppressions allow, sender permissions persist, and US-CA rolls up into US."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "comms-v2-compliance"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B54871D2-F977-4CCC-9C70-86B0E994533D"
+  },
+  "sync": {
+    "lastModified": "2026-11-19T19:30:43.238Z",
+    "checksum": "ae26ab5b2353e19481cc741c2b80e4b51de1ef75f74c768d41d08f6253b6f8f9"
+  }
+}

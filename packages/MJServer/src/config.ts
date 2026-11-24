@@ -108,7 +108,40 @@ const databaseSettingsInfoSchema = z.object({
     readOnlyMax: z.number().optional(),
     idleTimeoutMillis: z.number().optional().default(30000),
     acquireTimeoutMillis: z.number().optional().default(30000),
+    /**
+     * How many MJAPI instances share the database. Only used by the PostgreSQL startup check that
+     * warns when the pools of every instance together could exceed the server's `max_connections`.
+     */
+    expectedInstances: z.number().int().positive().optional(),
   }).optional().default({}),
+  /** PostgreSQL-only connection settings. Each has a `PG_*` environment variable that overrides it. */
+  postgres: z.object({
+    /** TLS for every PostgreSQL pool. See `BuildPgSslConfig` in `@memberjunction/postgresql-dataprovider`. */
+    ssl: z.object({
+      /** `disable` | `require` | `verify-ca` | `verify-full`. Default: `disable` for local hosts, else `verify-full`. Env: `PG_SSL_MODE`. */
+      mode: z.enum(['disable', 'require', 'verify-ca', 'verify-full']).optional(),
+      /** PEM bundle of trusted CAs. Env: `PG_SSL_CA_FILE`. */
+      caFile: z.string().optional(),
+      /** Name to check the server certificate against. Env: `PG_SSL_SERVERNAME`. */
+      serverName: z.string().optional(),
+    }).optional(),
+    /** `password` (default), or a token mode such as `azure-entra` or `aws-rds-iam`. Env: `PG_AUTH_MODE`. */
+    authMode: z.string().optional(),
+    /**
+     * A read replica (Aurora reader endpoint, Azure read replica, HorizonDB replica) for the
+     * read-only pools, which still log in with the read-only login. Replicas lag the primary, so by
+     * default only the ad-hoc pool (caller-supplied SQL, reports, agents) moves there; application
+     * RunView reads stay on the primary so a save is visible to the next read.
+     */
+    readReplica: z.object({
+      /** Env: `PG_READ_REPLICA_HOST`. */
+      host: z.string().optional(),
+      /** Env: `PG_READ_REPLICA_PORT`. Defaults to the primary's port. */
+      port: z.number().int().positive().optional(),
+      /** `adhoc` (default): only the ad-hoc pool. `all-read-only`: the application read-only pool too. Env: `PG_READ_REPLICA_POOLS`. */
+      pools: z.enum(['adhoc', 'all-read-only']).optional(),
+    }).optional(),
+  }).optional(),
 });
  
 const viewingSystemInfoSchema = z.object({
@@ -495,6 +528,20 @@ function routeRateLimitSchema(name: RouteRateLimitName) {
   }).default({});
 }
 
+/**
+ * A per-route limiter whose unset fields stay unset, so `CreateCommsWebhookHandler` can fall back
+ * field by field: route group → the shared `comms` entry → the route group's default. A schema
+ * with defaults would fill every field and the fallback could never apply.
+ */
+const optionalRouteRateLimitSchema = z.object({
+    /** When false, the route has no per-route limiter. */
+    enabled: z.boolean().optional(),
+    /** Window length in milliseconds. */
+    windowMs: z.number().optional(),
+    /** Requests allowed per IP per window. */
+    maxRequests: z.number().optional(),
+}).optional();
+
 const rateLimitSchema = z.object({
   /** Master switch — when false (default), no rate limiting is applied. */
   enabled: z.boolean().default(false),
@@ -529,6 +576,11 @@ const rateLimitSchema = z.object({
     oauthAuthenticated: routeRateLimitSchema('oauthAuthenticated'),
     mediaUpload: routeRateLimitSchema('mediaUpload'),
     mediaRead: routeRateLimitSchema('mediaRead'),
+    /** Fallback for every `/comms` route group; a group's own entry overrides it field by field. */
+    comms: optionalRouteRateLimitSchema,
+    commsWebhooks: optionalRouteRateLimitSchema,
+    commsTracking: optionalRouteRateLimitSchema,
+    commsUnsubscribe: optionalRouteRateLimitSchema,
   }).default({}),
 });
 
