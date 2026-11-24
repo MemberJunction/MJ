@@ -10,10 +10,29 @@
  * @module @memberjunction/ai-agents
  */
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
+import type { ActiveRunTaint } from '../ArtifactToolManager';
 import { PipelineInvocable } from './pipeline.types';
 
 export class PipelineToolRegistry {
     private byName = new Map<string, PipelineInvocable>();
+    private highestTaint: ActiveRunTaint | undefined;
+
+    /** Records highest-severity external-data taint observed by a capability stage in this registry (`'Untrusted'` wins over `'SemiTrusted'`). */
+    public RecordTaint(sourceName: string, trustLevel: ActiveRunTaint['TrustLevel']): void {
+        if (!this.highestTaint || (this.highestTaint.TrustLevel === 'SemiTrusted' && trustLevel === 'Untrusted')) {
+            this.highestTaint = { TrustLevel: trustLevel, SourceName: sourceName };
+        }
+    }
+
+    /** Highest-severity external-data taint recorded during the current pipeline execution, if any. */
+    public get HighestTaint(): ActiveRunTaint | undefined {
+        return this.highestTaint;
+    }
+
+    /** Clears recorded taint at the start of a pipeline run so reusing a registry never bleeds taint across runs. */
+    public ResetTaint(): void {
+        this.highestTaint = undefined;
+    }
 
     /** Register an invocable. Throws if its name collides with an already-registered tool. */
     public Register(invocable: PipelineInvocable): void {
