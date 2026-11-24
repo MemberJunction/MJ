@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { BaseEntityResult } from '@memberjunction/core';
 import { TRAINING_RUN_RESULTS_SCHEMA, type MetricWithInterval, type StoredTrainerResult, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import {
-  HarnessCleanup, RecordIDSet, RunRecords, type CleanupEvaluationProtocolRow, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow,
-  type CleanupSnapshotRow, type CleanupStore, type CleanupTrainingRunRow,
+  HarnessCleanup, RecordIDSet, RunRecords, type CleanupActionParamRow, type CleanupAgentRunRow, type CleanupBindingRow, type CleanupAgentRunStepRow, type CleanupConversationDetailRow, type CleanupPromptRunRow, type CleanupEvaluationProtocolRow, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow,
+  type CleanupPublishRecordRow, type CleanupRecordProcessRow, type CleanupRow, type CleanupScheduledJobRow, type CleanupSnapshotRow, type CleanupStore, type CleanupTrainingRunRow,
 } from '../cleanup';
 
 const P1 = 'aaaaaaaa-0000-0000-0000-000000000001'; // the fake store's rows answer with these lower-case IDs
@@ -27,6 +27,11 @@ const RUN_UUID = '55555555-0000-0000-0000-000000000001';
 
 /** A completed protocol-bound run's stored results naming its finalist's file (F1, also the model's) and a member's. */
 function trainerResults(): string {
+  return JSON.stringify(trainerResultsEnvelope());
+}
+
+/** The envelope {@link trainerResults} stores. */
+function trainerResultsEnvelope(): TrainingRunResults {
   const mwi = (metric: MetricWithInterval['metric'], value: number): MetricWithInterval => ({ metric, value, interval: { level: 0.95, lower: value - 0.01, upper: value + 0.01 }, n: 100 });
   const artifact = (candidate: string, fileId: string) => ({ candidate, sha256: 'a'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: ['0', '1'], fileId });
   const trainer: StoredTrainerResult = {
@@ -45,23 +50,93 @@ function trainerResults(): string {
     unitResolution: { rowsRead: 1, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1, dataCutoff: '2026-01-01' },
     trainer, trainerRequest: null, carve: null, gate: null,
   };
-  return JSON.stringify(results);
+  return results;
 }
 
 /** What the fake store holds besides the fixed rows: RUN-1's snapshot, the snapshots it answers, failing object deletes. */
 interface FakeStoreOptions {
+  /** The binding withdrawal fails (the caller may not withdraw it). */
+  readonly FailWithdraw?: boolean;
   readonly RunSnapshotID?: string | null;
   readonly RunValidationResults?: string | null;
+  /** The model RUN-1 produced (its `ResultingModelID`). */
+  readonly RunResultingModelID?: string | null;
+  /** RUN-1's save fails. */
+  readonly FailRunSave?: boolean;
   readonly Snapshots?: readonly string[];
   readonly FailObjects?: ReadonlySet<string>;
   readonly ThrowObjects?: ReadonlySet<string>;
+  /** The store holds what the lifecycle gate writes for M1: a publish record, a monitoring job and a scoring Action with one param. */
+  readonly GateRows?: boolean;
+  /** The model rows are gone (deleted by SQL, as the delete procedure's model step does); their gate rows remain. */
+  readonly ModelsGone?: boolean;
+  /**
+   * The store holds what a full gate run writes, with the database's foreign keys: M1's sign-off, the publish record
+   * that consumed it (`SignOffID`), a run-level refusal naming only RUN-1, and M1's `Pending` monitoring job with one job
+   * run. A row is not deleted while a row that references it is still there.
+   */
+  readonly FullGateRun?: boolean;
+  /** The Process Run Details RP1's run answers with, in place of DETAIL-1. */
+  readonly Details?: readonly CleanupRow[];
+  /**
+   * The store holds what a builder-agent run leaves, with the database's foreign keys: run AR-1 in conversation CV-1
+   * (user message CD-1, reply CD-2), its sub-agent run AR-2, steps (AR-1's #1 Prompt → APR-1 and #2 Sub-Agent whose
+   * payload source is #1; AR-2's #1 Prompt → APR-2), APR-1's child prompt run APR-1C, and an agent example EX-1 drawn
+   * from AR-1 and CV-1.
+   */
+  readonly AgentRun?: boolean;
 }
+
+/** The builder-agent run's rows (FakeStoreOptions.AgentRun). */
+const AGENT_ROWS = ['EX-1', 'STEP-1-1', 'STEP-1-2', 'STEP-2-1', 'APR-1', 'APR-1C', 'APR-2', 'AR-1', 'AR-2', 'CD-1', 'CD-2', 'CV-1'] as const;
+/** Who references each agent-run row, under the database's foreign keys. */
+const AGENT_REFS: Readonly<Record<string, readonly string[]>> = {
+  'AR-1': ['AR-2', 'STEP-1-1', 'STEP-1-2', 'EX-1'],          // FK_AIAgentRun_ParentRun, FK_AIAgentRunStep_AgentRun, FK_AIAgentExample_SourceAIAgentRun
+  'AR-2': ['STEP-2-1'],
+  'STEP-1-1': ['STEP-1-2'],                                 // PayloadAtStartSourceStepID
+  'APR-1': ['APR-1C'],                                      // FK_AIPromptRun_Parent
+  'CD-1': ['CD-2', 'AR-1', 'EX-1'],                         // ConversationDetail.ParentID, AIAgentRun.ConversationDetailID, AIAgentExample.SourceConversationDetailID
+  'CV-1': ['CD-1', 'CD-2', 'AR-1', 'AR-2', 'EX-1'],         // ConversationID
+};
+
+/** The full gate run's rows (FakeStoreOptions.FullGateRun). */
+const SIGN_OFF = 'RECORD-SIGNOFF';
+const CONSUMER = 'RECORD-PUBLISH';
+const RUN_REFUSAL = 'RECORD-RUN-REFUSAL';
+const PENDING_JOB = 'JOB-PENDING-M1';
+const JOB_RUN = 'JOB-RUN-1';
+const OUTPUT_BINDING = 'OUTPUT-BINDING-1';
+const MONITORING_RESULT = 'MONITORING-RESULT-1';
 
 /** A fake store: answers from fixed rows, records each filter and every delete in order. */
 class FakeStore implements CleanupStore {
   public readonly Filters: string[] = [];
   public readonly Deleted: string[] = [];
-  constructor(private readonly fail: ReadonlySet<string> = new Set(), private readonly options: FakeStoreOptions = {}) {}
+  /** Awaited at the start of every row's `Delete()` (a case measures how many deletes are in flight at once). */
+  public BeforeDelete: (() => Promise<void>) | null = null;
+  /** The IDs deleted so far (a row referencing one of them no longer blocks its parent). */
+  private readonly deletedIds = new Set<string>();
+  /** The run's `ResultingModelID` as last saved (the model ↔ run foreign-key pair). */
+  private savedResultingModelID: string | null = null;
+  constructor(private readonly fail: ReadonlySet<string> = new Set(), private readonly options: FakeStoreOptions = {}) {
+    this.savedResultingModelID = options.RunResultingModelID || null;
+  }
+  /** Every row of a full gate run; the census `a full gate run leaves 0 PSTruth rows` counts what is left of them. */
+  public static readonly FullGateRunRows: readonly string[] = [SIGN_OFF, CONSUMER, RUN_REFUSAL, PENDING_JOB, JOB_RUN, OUTPUT_BINDING, M1, M2, 'RUN-1'];
+  /** The IDs still referencing `id` under the database's foreign keys, in the full-gate-run store. */
+  private referencedBy(id: string): string[] {
+    if (this.options.AgentRun) return (AGENT_REFS[id] || []).filter((r) => !this.deletedIds.has(r));
+    if (!this.options.FullGateRun) return [];
+    const refs: Record<string, string[]> = {
+      [SIGN_OFF]: [CONSUMER],                         // FK_MLModelPublishRecord_SignOff
+      [PENDING_JOB]: [JOB_RUN],                       // FK_ScheduledJobRun_ScheduledJob
+      [M1]: [SIGN_OFF, CONSUMER, OUTPUT_BINDING],     // FK_MLModelPublishRecord_Model, FK_MLOutputBinding_Model
+      'RUN-1': [RUN_REFUSAL, M1, M2],                 // FK_MLModelPublishRecord_Run, FK_MLModel_TrainingRun
+    };
+    const holders = (refs[id] || []).filter((r) => !this.deletedIds.has(r));
+    const runNamesIt = this.savedResultingModelID !== null && this.savedResultingModelID.toLowerCase() === id.toLowerCase() && !this.deletedIds.has('RUN-1');
+    return runNamesIt ? [...holders, 'RUN-1'] : holders;          // FK_MLTrainingRun_ResultingModel
+  }
   /** A row whose ID reads empty once deleted, as a deleted entity object's fields do. */
   private row(entity: string, id: string, pipelineId = '', artifactFileId: string | null = null): CleanupModelRow & CleanupRecordProcessRow {
     let deleted = false;
@@ -72,15 +147,49 @@ class FakeStore implements CleanupStore {
       Configuration: null,
       LatestResult: new BaseEntityResult(false, `${id} is still referenced`, 'delete'),
       Delete: async () => {
-        if (this.fail.has(id)) return false;
+        if (this.BeforeDelete) await this.BeforeDelete();
+        if (this.fail.has(id) || this.referencedBy(id).length > 0) return false;
         this.Deleted.push(`${entity}:${id}`);
+        this.deletedIds.add(id);
         deleted = true;
         return true;
       },
     };
   }
+  /** The agent-run rows not deleted. */
+  public get AgentRowsLeft(): string[] {
+    return AGENT_ROWS.filter((id) => !this.deletedIds.has(id));
+  }
+  public async AgentRuns(filter: string): Promise<CleanupAgentRunRow[]> {
+    this.Filters.push(`MJ: AI Agent Runs | ${filter}`);
+    if (!this.options.AgentRun) return [];
+    if (filter.startsWith('ID IN')) return [{ ...this.row('MJ: AI Agent Runs', 'AR-1'), ParentRunID: null, ConversationID: 'CV-1' }];
+    return filter.includes("'AR-1'") ? [{ ...this.row('MJ: AI Agent Runs', 'AR-2'), ParentRunID: 'AR-1', ConversationID: 'CV-1' }] : [];
+  }
+  public async AgentRunSteps(filter: string): Promise<CleanupAgentRunStepRow[]> {
+    this.Filters.push(`MJ: AI Agent Run Steps | ${filter}`);
+    if (!this.options.AgentRun) return [];
+    const step = (id: string, n: number, type: CleanupAgentRunStepRow['StepType'], target: string | null): CleanupAgentRunStepRow =>
+      ({ ...this.row('MJ: AI Agent Run Steps', id), StepNumber: n, StepType: type, TargetLogID: target });
+    return [step('STEP-1-1', 1, 'Prompt', 'APR-1'), step('STEP-1-2', 2, 'Sub-Agent', 'AR-2'), step('STEP-2-1', 1, 'Prompt', 'APR-2')];
+  }
+  public async PromptRuns(filter: string): Promise<CleanupPromptRunRow[]> {
+    this.Filters.push(`MJ: AI Prompt Runs | ${filter}`);
+    if (!this.options.AgentRun) return [];
+    return [{ ...this.row('MJ: AI Prompt Runs', 'APR-1'), ParentID: null }, { ...this.row('MJ: AI Prompt Runs', 'APR-1C'), ParentID: 'APR-1' }, { ...this.row('MJ: AI Prompt Runs', 'APR-2'), ParentID: null }];
+  }
+  public async ConversationDetails(filter: string): Promise<CleanupConversationDetailRow[]> {
+    this.Filters.push(`MJ: Conversation Details | ${filter}`);
+    if (!this.options.AgentRun) return [];
+    return [{ ...this.row('MJ: Conversation Details', 'CD-1'), ParentID: null }, { ...this.row('MJ: Conversation Details', 'CD-2'), ParentID: 'CD-1' }];
+  }
+  /** The full-gate-run rows not deleted. */
+  public get FullGateRunRowsLeft(): string[] {
+    return FakeStore.FullGateRunRows.filter((id) => !this.deletedIds.has(id));
+  }
   public async Models(filter: string): Promise<CleanupModelRow[]> {
     this.Filters.push(`MJ: ML Models | ${filter}`);
+    if (this.options.ModelsGone) return [];
     return [this.row('MJ: ML Models', M1, AGENT_P, F1), this.row('MJ: ML Models', M2, P1)];
   }
   public async PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]> {
@@ -89,9 +198,29 @@ class FakeStore implements CleanupStore {
   }
   public async EvaluationProtocols(filter: string): Promise<CleanupEvaluationProtocolRow[]> {
     this.Filters.push(`MJ: ML Evaluation Protocols | ${filter}`);
-    const ids = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const ids = [...new Set([...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]))];
     const versionOf: Record<string, number> = { [EP1]: 1, [EP2]: 2 };
-    return ids.map((id) => ({ ...this.row('MJ: ML Evaluation Protocols', id), Version: versionOf[id] || 1 }));
+    // EP2 is EP1's version 2: a lineage filter on EP1 finds it even when it was never recorded (a monitoring challenger's re-carve).
+    const lineage = /LineageRootID IN \([^)]*'([^']+)'/.exec(filter);
+    const withLineage = lineage !== null && lineage[1] === EP1 && !ids.includes(EP2) ? [...ids, EP2] : ids;
+    return withLineage.map((id) => ({ ...this.row('MJ: ML Evaluation Protocols', id), Version: versionOf[id] || 1 }));
+  }
+  /** The bindings withdrawn so far: a read after the withdrawal says `Withdrawn`, a copy read before still says `Active`. */
+  private readonly withdrawn = new Set<string>();
+  public async ScoringBindings(filter: string): Promise<CleanupBindingRow[]> {
+    this.Filters.push(`MJ: ML Model Scoring Bindings | ${filter}`);
+    return [{ id: 'BINDING-1', status: 'Active' as const }, { id: 'BINDING-WITHDRAWN', status: 'Withdrawn' as const }].map(({ id, status }) => {
+      const row = this.row('MJ: ML Model Scoring Bindings', id);
+      const statusNow: CleanupBindingRow['Status'] = this.withdrawn.has(id) ? 'Withdrawn' : status;
+      // As the server entity does, Delete() refuses a binding whose (in-memory) Status is not Withdrawn.
+      return { ...row, Status: statusNow, Delete: async () => (statusNow === 'Withdrawn' ? row.Delete() : false) };
+    });
+  }
+  public async WithdrawBinding(bindingId: string): Promise<string | null> {
+    if (this.options.FailWithdraw) return 'binding-not-authorized';
+    this.withdrawn.add(bindingId);
+    this.Deleted.push(`withdraw:${bindingId}`);
+    return null;
   }
   public async RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]> {
     this.Filters.push(`MJ: Record Processes | ${filter}`);
@@ -100,7 +229,18 @@ class FakeStore implements CleanupStore {
   }
   public async TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]> {
     this.Filters.push(`MJ: ML Training Runs | ${filter}`);
-    return [{ ...this.row('MJ: ML Training Runs', 'RUN-1'), TrainingSnapshotID: this.options.RunSnapshotID || null, ValidationResults: this.options.RunValidationResults || null }];
+    const run: CleanupTrainingRunRow = {
+      ...this.row('MJ: ML Training Runs', 'RUN-1'),
+      TrainingSnapshotID: this.options.RunSnapshotID || null, ValidationResults: this.options.RunValidationResults || null, ResultingModelID: this.options.RunResultingModelID || null,
+      LatestResult: new BaseEntityResult(false, 'RUN-1 save refused', 'update'),
+      Save: async () => {
+        if (this.options.FailRunSave) return false;
+        this.savedResultingModelID = run.ResultingModelID;
+        this.Deleted.push(`MJ: ML Training Runs:RUN-1 saved with ResultingModelID ${run.ResultingModelID === null ? 'null' : run.ResultingModelID}`);
+        return true;
+      },
+    };
+    return [run];
   }
   public async TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]> {
     this.Filters.push(`MJ: ML Training Snapshots | ${filter}`);
@@ -117,14 +257,48 @@ class FakeStore implements CleanupStore {
     this.Deleted.push(`object:${file.ProviderKey}`);
     return null;
   }
+  public async MonitoringJobs(): Promise<CleanupScheduledJobRow[]> {
+    this.Filters.push('MJ: Scheduled Jobs | monitoring type');
+    if (this.options.FullGateRun) return [{ ...this.row('MJ: Scheduled Jobs', PENDING_JOB), Configuration: JSON.stringify({ modelId: M1 }) }]; // Status 'Pending'
+    if (!this.options.GateRows) return [];
+    return [
+      { ...this.row('MJ: Scheduled Jobs', 'JOB-M1'), Configuration: JSON.stringify({ modelId: M1.toUpperCase() }) },
+      { ...this.row('MJ: Scheduled Jobs', 'JOB-OTHER'), Configuration: JSON.stringify({ modelId: 'ffffffff-0000-0000-0000-000000000009' }) },
+    ];
+  }
+  public async ActionParams(filter: string): Promise<CleanupActionParamRow[]> {
+    this.Filters.push(`MJ: Action Params | ${filter}`);
+    if (!this.options.GateRows) return [];
+    return filter.startsWith("Name = 'ModelID'")
+      ? [{ ...this.row('MJ: Action Params', 'PARAM-MODELID'), ActionID: 'ACT-1' }]
+      : [{ ...this.row('MJ: Action Params', 'PARAM-MODELID'), ActionID: 'ACT-1' }, { ...this.row('MJ: Action Params', 'PARAM-SCOPE'), ActionID: 'ACT-1' }];
+  }
+  public async PublishRecords(filter: string): Promise<CleanupPublishRecordRow[]> {
+    const entityName = 'MJ: ML Model Publish Records';
+    this.Filters.push(`${entityName} | ${filter}`);
+    if (this.options.FullGateRun) {
+      // The sign-off first: deleted in one stage with the record that consumed it, it is refused while that record exists.
+      return [{ ...this.row(entityName, SIGN_OFF), SignOffID: null }, { ...this.row(entityName, CONSUMER), SignOffID: SIGN_OFF }, { ...this.row(entityName, RUN_REFUSAL), SignOffID: null }];
+    }
+    return this.options.GateRows ? [{ ...this.row(entityName, 'RECORD-1'), SignOffID: null }] : [];
+  }
   public async Rows(entityName: string, filter: string): Promise<CleanupRow[]> {
     this.Filters.push(`${entityName} | ${filter}`);
+    if (entityName === 'MJ: Scheduled Job Runs') return this.options.FullGateRun ? [this.row(entityName, JOB_RUN)] : [];
+    if (entityName === 'MJ: Actions') return this.options.GateRows ? [this.row(entityName, 'ACT-1')] : [];
+    if (entityName === 'MJ: ML Output Bindings') return this.options.FullGateRun || this.options.GateRows ? [this.row(entityName, OUTPUT_BINDING)] : [];
+    if (entityName === 'MJ: ML Monitoring Results') return this.options.FullGateRun || this.options.GateRows ? [this.row(entityName, MONITORING_RESULT)] : [];
     if (entityName === 'MJ: ML Training Pipelines') return [this.row(entityName, P1), this.row(entityName, AGENT_P)];
     if (entityName === 'MJ: Process Runs') return [this.row(entityName, PR1)];
-    if (entityName === 'MJ: Process Run Details') return [this.row(entityName, 'DETAIL-1')];
+    if (entityName === 'MJ: Process Run Details') return this.options.Details ? [...this.options.Details] : [this.row(entityName, 'DETAIL-1')];
     if (entityName === 'MJ: Record Process Watermarks') return [];
     if (entityName === 'MJ: Files') return [...filter.matchAll(/'([^']+)'/g)].map((m) => this.row(entityName, m[1]));
-    return [this.row(entityName, 'BINDING-1')];
+    if (entityName === 'MJ: AI Agent Examples') return this.options.AgentRun ? [this.row(entityName, 'EX-1')] : [];
+    if (entityName === 'MJ: AI Agent Notes' || entityName === 'MJ: AI Agent Run Medias') return [];
+    if (entityName === 'MJ: Conversations') return this.options.AgentRun ? [this.row(entityName, 'CV-1')] : [];
+    if (entityName === 'MJ: Feature Values') return [this.row(entityName, 'FV-MODEL-1')];
+    if (entityName === 'MJ: ML Scoring Runs') return [this.row(entityName, 'SCORING-RUN-1')];
+    throw new Error(`FakeStore: unexpected read of ${entityName}`);
   }
 }
 
@@ -159,22 +333,131 @@ describe('HarnessCleanup.DeleteRecorded', () => {
       `MJ: ML Models | ID IN ('${M1}') OR PipelineID IN ('${P1}')`,
       `MJ: Record Processes | WorkType = 'ML Model'`,
       `MJ: Process Runs | RecordProcessID IN ('${RP1}')`,
-      `MJ: ML Model Scoring Bindings | MLModelID IN ('${M1}','${M2}')`,
+      `MJ: ML Model Scoring Bindings | MLTrainingPipelineID IN ('${P1}','${AGENT_P}')`,
+      `MJ: Feature Values | MLModelScoringBindingID IN ('BINDING-1','BINDING-WITHDRAWN')`,
+      `MJ: ML Scoring Runs | MLModelScoringBindingID IN ('BINDING-1','BINDING-WITHDRAWN') OR ModelID IN ('${M1}','${M2}')`,
       `MJ: Process Run Details | ProcessRunID IN ('${PR1}')`,
       `MJ: Record Process Watermarks | RecordProcessID IN ('${RP1}')`,
       `MJ: ML Training Runs | PipelineID IN ('${P1}','${AGENT_P}') OR ResultingModelID IN ('${M1}','${M2}')`,
       `MJ: ML Training Snapshots | PipelineID IN ('${P1}','${AGENT_P}')`,
       `MJ: Files | ID IN ('${F1}')`,
       `MJ: ML Training Pipelines | ID IN ('${P1}','${AGENT_P}')`,
+      `MJ: Scheduled Jobs | monitoring type`,
+      `MJ: Action Params | Name = 'ModelID' AND Type = 'Input' AND (DefaultValue IN ('${M1}','${M2}'))`,
+      `MJ: ML Model Publish Records | ModelID IN ('${M1}','${M2}') OR ReplacesModelID IN ('${M1}','${M2}') OR TrainingRunID IN ('RUN-1')`,
+      `MJ: ML Output Bindings | ModelID IN ('${M1}','${M2}')`,
+      `MJ: ML Monitoring Results | ModelID IN ('${M1}','${M2}')`,
+      // read again after the withdrawal: a row read before it still says Active and its Delete() is refused
+      `MJ: ML Model Scoring Bindings | ID IN ('BINDING-1','BINDING-WITHDRAWN')`,
     ]);
     expect(store.Filters.join(' ')).not.toMatch(/LIKE/i);
     expect(store.Deleted).toEqual([
-      'MJ: ML Model Scoring Bindings:BINDING-1', 'MJ: Process Run Details:DETAIL-1', `MJ: Process Runs:${PR1}`,
-      `MJ: Record Processes:${RP1}`, 'MJ: ML Training Runs:RUN-1',
-      `MJ: ML Models:${M1}`, `MJ: ML Models:${M2}`, `object:key/${F1}`, `MJ: Files:${F1}`, `MJ: ML Training Pipelines:${P1}`, `MJ: ML Training Pipelines:${AGENT_P}`,
+      'withdraw:BINDING-1', 'MJ: Feature Values:FV-MODEL-1', 'MJ: ML Scoring Runs:SCORING-RUN-1',
+      'MJ: ML Model Scoring Bindings:BINDING-1', 'MJ: ML Model Scoring Bindings:BINDING-WITHDRAWN', 'MJ: Process Run Details:DETAIL-1', `MJ: Process Runs:${PR1}`,
+      `MJ: Record Processes:${RP1}`,
+      `MJ: ML Models:${M1}`, `MJ: ML Models:${M2}`, 'MJ: ML Training Runs:RUN-1', `object:key/${F1}`, `MJ: Files:${F1}`, `MJ: ML Training Pipelines:${P1}`, `MJ: ML Training Pipelines:${AGENT_P}`,
     ]);
     expect(store.Deleted.join(' ')).not.toContain(RP_OTHER);
     expect(records.ModelIDs.Size + records.PipelineIDs.Size).toBe(0);
+  });
+
+  it('withdraws an active binding before deleting it, and reports a binding it could not withdraw', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    const store = new FakeStore(new Set(['BINDING-1']), { FailWithdraw: true });
+    const failures = await HarnessCleanup.DeleteRecorded(store, records);
+    expect(failures).toEqual(expect.arrayContaining([
+      'MJ: ML Model Scoring Bindings BINDING-1: could not be withdrawn before it is deleted: binding-not-authorized',
+    ]));
+    expect(store.Deleted).toContain('MJ: ML Model Scoring Bindings:BINDING-WITHDRAWN');
+    expect(store.Deleted).not.toContain('withdraw:BINDING-WITHDRAWN');
+  });
+
+  it('deletes what the lifecycle gate wrote for a model before the model: its publish records, its monitoring job, its generated scoring Action (params first) and its output bindings', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { GateRows: true });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    const at = (entry: string): number => store.Deleted.indexOf(entry);
+    for (const gateRow of ['MJ: ML Model Publish Records:RECORD-1', 'MJ: Scheduled Jobs:JOB-M1', 'MJ: Action Params:PARAM-MODELID', 'MJ: Action Params:PARAM-SCOPE', 'MJ: Actions:ACT-1', `MJ: ML Output Bindings:${OUTPUT_BINDING}`, `MJ: ML Monitoring Results:${MONITORING_RESULT}`]) {
+      expect(at(gateRow)).toBeGreaterThanOrEqual(0);
+      expect(at(gateRow)).toBeLessThan(at(`MJ: ML Models:${M1}`));
+    }
+    expect(at('MJ: Action Params:PARAM-SCOPE')).toBeLessThan(at('MJ: Actions:ACT-1'));
+    expect(at(`MJ: ML Monitoring Results:${MONITORING_RESULT}`)).toBeLessThan(at('MJ: Scheduled Jobs:JOB-M1'));
+    expect(store.Deleted).not.toContain('MJ: Scheduled Jobs:JOB-OTHER');
+    expect(store.Filters).toContain(`MJ: Actions | ParentID IS NOT NULL AND (ID IN ('ACT-1'))`);
+  });
+
+  it('deletes a recorded model\'s monitoring job when the model row is already gone (deleted by SQL)', async () => {
+    const records = new RunRecords();
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { GateRows: true, ModelsGone: true });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted).toContain('MJ: Scheduled Jobs:JOB-M1');
+    expect(store.Deleted).not.toContain('MJ: Scheduled Jobs:JOB-OTHER');
+  });
+
+  it('a full gate run leaves 0 PSTruth rows in the publish, monitoring-job and model tables', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { FullGateRun: true, RunResultingModelID: M1.toUpperCase() });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.FullGateRunRowsLeft).toEqual([]);
+    const at = (entry: string): number => store.Deleted.indexOf(entry);
+    expect(at(`MJ: ML Model Publish Records:${CONSUMER}`)).toBeLessThan(at(`MJ: ML Model Publish Records:${SIGN_OFF}`));
+    expect(at(`MJ: Scheduled Job Runs:${JOB_RUN}`)).toBeLessThan(at(`MJ: Scheduled Jobs:${PENDING_JOB}`));
+    expect(at(`MJ: ML Model Publish Records:${RUN_REFUSAL}`)).toBeLessThan(at('MJ: ML Training Runs:RUN-1'));
+    expect(at(`MJ: ML Models:${M1}`)).toBeLessThan(at('MJ: ML Training Runs:RUN-1'));
+    expect(store.Filters).toContain(`MJ: Scheduled Job Runs | ScheduledJobID IN ('${PENDING_JOB}')`);
+  });
+
+  it('deletes at most MAX_CONCURRENT_DELETES rows of a stage at a time, however many the stage has', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const rows: CleanupRow[] = Array.from({ length: 200 }, (_, i) => ({
+      ID: `DETAIL-${i}`,
+      LatestResult: new BaseEntityResult(true, '', 'delete'),
+      Delete: async () => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await new Promise<void>((resolve) => setTimeout(resolve, 1));
+        inFlight--;
+        return true;
+      },
+    }));
+    const store = new FakeStore(new Set(), { Details: rows });
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(peak).toBe(HarnessCleanup.MAX_CONCURRENT_DELETES);
+  });
+
+  it('clears and saves a run\'s ResultingModelID before deleting its model, and deletes the model before the run it names', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { RunResultingModelID: M2.toUpperCase() });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    const at = (entry: string): number => store.Deleted.indexOf(entry);
+    expect(at('MJ: ML Training Runs:RUN-1 saved with ResultingModelID null')).toBeGreaterThan(-1);
+    expect(at('MJ: ML Training Runs:RUN-1 saved with ResultingModelID null')).toBeLessThan(at(`MJ: ML Models:${M2}`));
+    expect(at(`MJ: ML Models:${M2}`)).toBeLessThan(at('MJ: ML Training Runs:RUN-1'));
+  });
+
+  it("reports a run whose ResultingModelID could not be cleared, and still deletes the rest", async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    const store = new FakeStore(new Set([M2, 'RUN-1']), { RunResultingModelID: M2, FailRunSave: true });
+    const failures = await HarnessCleanup.DeleteRecorded(store, records);
+    expect(failures).toEqual([
+      'MJ: ML Training Runs RUN-1: could not clear ResultingModelID before its model is deleted: RUN-1 save refused',
+      `MJ: ML Models ${M2}: ${M2} is still referenced`,
+      'MJ: ML Training Runs RUN-1: RUN-1 save refused',
+    ]);
+    expect(store.Deleted).toContain(`MJ: ML Models:${M1}`);
   });
 
   it("deletes the runs' and the pipelines' Training Snapshots after the runs, then each snapshot's stored objects and file rows", async () => {
@@ -259,7 +542,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
   it('reports a run whose results envelope does not parse, naming the run, and still deletes the rest', async () => {
     const records = new RunRecords();
     records.RecordPipeline(P1);
-    const unreadable = JSON.stringify({ ...JSON.parse(trainerResults()), trainer: { finalist: 'xgb', artifacts: [{ fileId: TF_GLM }] } });
+    const unreadable = JSON.stringify({ ...trainerResultsEnvelope(), trainer: { finalist: 'xgb', artifacts: [{ fileId: TF_GLM }] } });
     const store = new FakeStore(new Set(), { RunValidationResults: unreadable });
     const failures = await HarnessCleanup.DeleteRecorded(store, records);
     expect(failures).toHaveLength(1);
@@ -281,7 +564,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     records.RecordEvaluationProtocol(EP1);
     const store = new FakeStore();
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
-    expect(store.Filters).toContain(`MJ: ML Evaluation Protocols | ID IN ('${EP1}')`);
+    expect(store.Filters).toContain(`MJ: ML Evaluation Protocols | ID IN ('${EP1}') OR LineageRootID IN ('${EP1}')`);
     const at = (entry: string): number => store.Deleted.indexOf(entry);
     expect(at(`MJ: ML Training Pipelines:${P1}`)).toBeLessThan(at(`MJ: ML Evaluation Protocols:${EP1}`));
     expect(at(`MJ: ML Evaluation Protocols:${EP1}`)).toBeLessThan(at(`MJ: ML Prediction Units:${U1}`));
@@ -298,6 +581,14 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(records.EvaluationProtocolIDs.Size).toBe(0);
   });
 
+  it('deletes every version of a recorded protocol lineage, including a later version it never recorded (D4-180 re-carve)', async () => {
+    const records = new RunRecords();
+    records.RecordEvaluationProtocol(EP1);
+    const store = new FakeStore();
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted.filter((d) => d.startsWith('MJ: ML Evaluation Protocols'))).toEqual([`MJ: ML Evaluation Protocols:${EP2}`, `MJ: ML Evaluation Protocols:${EP1}`]);
+  });
+
   it('reports every failed delete and keeps its ID recorded', async () => {
     const records = new RunRecords();
     records.RecordPipeline(P1);
@@ -310,15 +601,69 @@ describe('HarnessCleanup.DeleteRecorded', () => {
 describe('RunRecords.RecordAgentRun', () => {
   it("records a failed run's pipelines even though it built no model", () => {
     const records = new RunRecords();
-    records.RecordAgentRun({ PipelineIDs: [P1, AGENT_P], BuildModelID: null });
+    records.RecordAgentRun({ AgentRunID: null, PipelineIDs: [P1, AGENT_P], BuildModelID: null });
     expect([...records.PipelineIDs].sort()).toEqual([P1, AGENT_P].sort());
     expect(records.ModelIDs.Size).toBe(0);
   });
-  it("records a successful run's pipeline and model", () => {
+  it("records a successful run's agent run, pipeline and model", () => {
     const records = new RunRecords();
-    records.RecordAgentRun({ PipelineIDs: [AGENT_P], BuildModelID: M1 });
+    records.RecordAgentRun({ AgentRunID: 'AR-1', PipelineIDs: [AGENT_P], BuildModelID: M1 });
+    expect([...records.AgentRunIDs]).toEqual(['AR-1']);
     expect([...records.PipelineIDs]).toEqual([AGENT_P]);
     expect([...records.ModelIDs]).toEqual([M1]);
+  });
+  it('records no agent run when the transport returned none', () => {
+    const records = new RunRecords();
+    records.RecordAgentRun({ AgentRunID: null, PipelineIDs: [AGENT_P], BuildModelID: null });
+    expect(records.AgentRunIDs.Size).toBe(0);
+  });
+});
+
+describe('HarnessCleanup.DeleteRecorded — the agent-run stage (D4-126)', () => {
+  it('deletes the recorded agent run and every row it left, children first, by ID', async () => {
+    const records = new RunRecords();
+    records.RecordAgentRun({ AgentRunID: 'AR-1', PipelineIDs: [], BuildModelID: null });
+    const store = new FakeStore(new Set(), { AgentRun: true });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.AgentRowsLeft).toEqual([]);
+    expect(records.AgentRunIDs.Size).toBe(0);
+    expect(store.Deleted).toEqual([
+      'MJ: AI Agent Examples:EX-1',
+      'MJ: AI Agent Run Steps:STEP-1-2', 'MJ: AI Agent Run Steps:STEP-1-1', 'MJ: AI Agent Run Steps:STEP-2-1',
+      'MJ: AI Prompt Runs:APR-1C', 'MJ: AI Prompt Runs:APR-1', 'MJ: AI Prompt Runs:APR-2',
+      'MJ: AI Agent Runs:AR-2', 'MJ: AI Agent Runs:AR-1',
+      'MJ: Conversation Details:CD-2', 'MJ: Conversation Details:CD-1',
+      'MJ: Conversations:CV-1',
+    ]);
+    expect(store.Filters).toEqual(expect.arrayContaining([
+      `MJ: AI Agent Runs | ID IN ('AR-1')`, `MJ: AI Agent Runs | ParentRunID IN ('AR-1')`, `MJ: AI Agent Run Steps | AgentRunID IN ('AR-2','AR-1')`,
+      `MJ: AI Prompt Runs | ID IN ('APR-1','APR-2') OR ParentID IN ('APR-1','APR-2')`, `MJ: Conversation Details | ConversationID IN ('CV-1')`, `MJ: Conversations | ID IN ('CV-1')`,
+      `MJ: AI Agent Examples | SourceAIAgentRunID IN ('AR-2','AR-1') OR SourceConversationID IN ('CV-1')`,
+    ]));
+    expect(store.Filters.join(' ')).not.toMatch(/LIKE/i);
+  });
+
+  it('deletes the agent-run stage one row at a time (its entities\' Delete() opens a transaction on the shared provider, #4786)', async () => {
+    const records = new RunRecords();
+    records.RecordAgentRun({ AgentRunID: 'AR-1', PipelineIDs: [], BuildModelID: null });
+    const store = new FakeStore(new Set(), { AgentRun: true });
+    let inFlight = 0;
+    let peak = 0;
+    store.BeforeDelete = async () => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise<void>((resolve) => setTimeout(resolve, 1));
+      inFlight--;
+    };
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted.length).toBe(12);
+    expect(peak).toBe(HarnessCleanup.SERIAL_DELETES);
+  });
+
+  it('reads no agent row when the run started no agent', async () => {
+    const store = new FakeStore(new Set(), { AgentRun: true });
+    await HarnessCleanup.DeleteRecorded(store, new RunRecords());
+    expect(store.Filters.filter((f) => /AI Agent|AI Prompt|Conversation/.test(f))).toEqual([]);
   });
 });
 
@@ -328,7 +673,7 @@ describe('RunRecords.RecordObservedModels (a name-prefix read only observes)', (
 
   it('records a model only when its pipeline was already recorded, and never records a pipeline', () => {
     const records = new RunRecords();
-    records.RecordAgentRun({ PipelineIDs: [AGENT_P], BuildModelID: null });
+    records.RecordAgentRun({ AgentRunID: null, PipelineIDs: [AGENT_P], BuildModelID: null });
     records.RecordObservedModels([
       { ModelID: M1, PipelineID: AGENT_P.toUpperCase() }, // SQL Server spelling of a recorded pipeline
       { ModelID: OTHER_M, PipelineID: OTHER_P },

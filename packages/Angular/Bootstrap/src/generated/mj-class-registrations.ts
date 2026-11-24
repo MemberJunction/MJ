@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (508 classes)
+// @memberjunction/core-entities (513 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -373,8 +373,12 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -539,6 +543,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -1288,8 +1293,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -1336,14 +1345,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
-    MJRecommendationRunEntity,
-    MJRecordChangeEntity,
-    MJRecordChangeReplayRunEntity,
-    MJRecordCloneLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecommendationRunEntity,
+    MJRecordChangeEntity,
+    MJRecordChangeReplayRunEntity,
+    MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
@@ -1458,6 +1467,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -1539,15 +1549,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ViewPartComponent,
     WebURLConfigPanelComponent,
     WebURLPartComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ApplicationManagementComponent,
     EntityPermissionsComponent,
     RoleManagementComponent,
     SettingsComponent,
     SqlLoggingComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     UserManagementComponent,
     RubricEngineBase,
     AIAgentCategoryHeaderPanel,
@@ -1743,15 +1753,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VersionHistoryRestoreResourceComponent,
     VideoStudioArchetypesResourceComponent,
     VideoStudioBrandKitsResourceComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     VideoStudioProductionsResourceComponent,
     VisualizeResourceComponent,
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     WorkflowsResourceComponent,
     ArtifactResource,
     ChatCollectionsResource,
@@ -1783,7 +1793,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 816;
+export const CLASS_REGISTRATIONS_COUNT = 821;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

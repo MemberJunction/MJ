@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DataFeatureSpec,
+  DataFeatureOutput,
   ValidateSpec,
   ResolveConstraint,
   RenderConstraintBlock,
@@ -270,7 +271,7 @@ describe('resolveConstraint & renderConstraintBlock (P1-1)', () => {
   });
 
   it('renders allowed values into the prompt constraint block automatically', () => {
-    const outputs = [
+    const outputs: DataFeatureOutput[] = [
       {
         Ref: '$.seniority',
         Name: 'SeniorityLevel',
@@ -622,6 +623,7 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
         Description: 'Scores items',
         Context: { Fields: ['CurrentJobTitle'] },
         PromptID: 'prompt-1',
+        Caching: { Cacheable: false },
         Outputs: [
           {
             Ref: '$.score',
@@ -642,20 +644,21 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
     });
 
     it('rejects fewer than 2 or more than 10 levels, or non-string/empty levels', () => {
-      const makeSpec = (levels: unknown) => ({
+      const makeSpec = (levels: string[]): DataFeatureSpec => ({
         Name: 'ScorePipeline',
         Description: 'Scores items',
         Context: { Fields: ['CurrentJobTitle'] },
         PromptID: 'prompt-1',
+        Caching: { Cacheable: false },
         Outputs: [
           {
             Ref: '$.score',
             Name: 'SentimentScore',
             Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
             Constraint: {
-              Type: 'numeric' as const,
-              Levels: levels as string[],
-              OnViolation: 'fail' as const,
+              Type: 'numeric',
+              Levels: levels,
+              OnViolation: 'fail',
             },
           },
         ],
@@ -678,6 +681,7 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
         Description: 'Categorizes seniority',
         Context: { Fields: ['CurrentJobTitle'] },
         PromptID: 'prompt-1',
+        Caching: { Cacheable: false },
         Outputs: [
           {
             Ref: '$.seniority',

@@ -11,7 +11,7 @@
  *
  * Per CLAUDE.md "transport-layer architecture", this is a THIN adapter: it carries no
  * scoring-process logic. The Record-Process + binding contract lives in
- * {@link createScoringProcess} (shared with the scheduled helper via the
+ * {@link CreateScoringProcess} (shared with the scheduled helper via the
  * `scoring-process-shared` primitives). Validation/save failures throw, so the
  * framework wraps them as a clean `EXECUTION_ERROR` result preserving the message.
  */
@@ -55,14 +55,16 @@ export class PredictiveStudioCreateScoringProcessServerOperation extends Predict
       valueKind: input.valueKind,
       primaryKeyField: input.primaryKeyField,
       name: input.name,
+      featureName: input.featureName,
+      viewAuthorizationId: input.viewAuthorizationId,
       contextUser: user,
       provider,
     });
 
     return {
       recordProcessId: result.recordProcess.ID,
-      wroteColumn: result.binding !== null,
-      scoringBindingId: result.binding?.ID,
+      wroteColumn: result.binding.TargetColumn !== null && result.binding.TargetColumn.length > 0,
+      scoringBindingId: result.binding.ID,
     };
   }
 }

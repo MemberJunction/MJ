@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "R1 -> S7.1",
+    "Description": "Gate G3.2 (owner PR 4, phase 3, dataset R1, criterion S7.1): replacing a Published R1 model's artifact bytes with another model's is refused at load by SHA-256 mismatch, 1 of 1 (FM-14; every record scored by the wrong model today). The check trains two Published R1 regression models on different holdout fractions (so their artifacts differ), overwrites the first's stored object with the second's bytes and scores the first: it must be refused ARTIFACT_HASH_MISMATCH with a message naming both the registered SHA-256 and the hash of the bytes found.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G3.2\",\"owner:PR4\",\"phase:3\",\"dataset:R1\",\"criterion:S7.1\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 900000,
+    "ExpectedOutcomes": {
+      "summary": "The swapped-artifact model is refused ARTIFACT_HASH_MISMATCH naming both hashes, 1 of 1."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-r1-s7-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "254B273C-89FB-40B5-9760-F6AFC4C26E17"
+  }
+}

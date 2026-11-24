@@ -151,7 +151,9 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDiagnosticBundlesCreatedByUserID', sectionName: 'Diagnostic Bundles (Created By User ID)', isExpanded: false },
             { sectionKey: 'mJDiagnosticBundlesApprovedByUserID', sectionName: 'Diagnostic Bundles (Approved By User ID)', isExpanded: false },
             { sectionKey: 'mJAgentChannelParticipants', sectionName: 'Agent Channel Participants', isExpanded: false },
-            { sectionKey: 'mJAIAgentSuggestions', sectionName: 'AI Agent Suggestions', isExpanded: false }
+            { sectionKey: 'mJMLModelPublishRecords', sectionName: 'ML Model Publish Records', isExpanded: false },
+            { sectionKey: 'mJAIAgentSuggestions', sectionName: 'AI Agent Suggestions', isExpanded: false },
+            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false }
         ]);
     }
 }

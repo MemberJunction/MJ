@@ -5,6 +5,7 @@ describe('PredictiveStudioRefusalCodes.IsRefusal', () => {
   it('accepts every refusal code', () => {
     for (const code of PredictiveStudioRefusalCodes.All) expect(PredictiveStudioRefusalCodes.IsRefusal(code)).toBe(true);
     expect(PredictiveStudioRefusalCodes.IsRefusal('INVALID_EVALUATION_SETTING')).toBe(true);
+    for (const code of ['NOT_HUMAN', 'OVERRIDES_WITHOUT_REASON', 'MODEL_ARCHIVED', 'INVALID_INPUT']) expect(PredictiveStudioRefusalCodes.IsRefusal(code)).toBe(true);
   });
 
   it('rejects generic result codes, unknown codes and a missing code', () => {
