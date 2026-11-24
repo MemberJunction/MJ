@@ -497,4 +497,63 @@ describe('External-data trust & taint containment across artifacts, pipelines, l
         expect(storedRead.trustLevel).toBe('Untrusted');
         expect(storedRead.sourceName).toBe('action:Fetch Web Page');
     });
+
+    it('upgrades trust when a tainted run mutates an existing Trusted workspace artifact', async () => {
+        const agent = new UnifiedActionPathwayProbeAgent();
+        const manager = agent.GetArtifactManager();
+        const trustedId = manager.RegisterArtifact({
+            name: 'Trusted Brief',
+            typeName: 'Document',
+            mimeType: 'text/markdown',
+            content: '# Executive Summary\n\nInitial trusted content.',
+            deliveryMode: 'ToolsOnly',
+            forceToolsOnly: true,
+        });
+
+        // Before the run ingests external data, reading the trusted artifact stays unwrapped
+        const cleanRead = await agent.RunNativeArtifactTool({
+            artifactId: trustedId,
+            tool: 'get_full',
+            input: {},
+        });
+        expect(cleanRead.IsError).toBe(false);
+        expect(cleanRead.Content).not.toContain('<untrusted_external_data');
+
+        // Run ingests untrusted web content via a real tool read, then mutates the existing trusted artifact
+        const webId = manager.RegisterArtifact({
+            name: 'External Page',
+            typeName: 'Text',
+            toolLibraryClass: 'TextToolLibrary',
+            mimeType: 'text/plain',
+            content: 'External prompt-injection payload',
+            deliveryMode: 'ToolsOnly',
+            forceToolsOnly: true,
+            trustLevel: 'Untrusted',
+            sourceName: 'action:Web Search',
+        });
+        await agent.RunNativeArtifactTool({ artifactId: webId, tool: 'get_lines', input: { start: 0, count: 1 } });
+        expect(agent.IsRunTainted).toBe(true);
+
+        const mutation = await manager.ExecuteSingleToolCall({
+            artifactId: trustedId,
+            tool: 'insert_block_after',
+            input: { markdown: 'Copied untrusted instructions from external page.' },
+        });
+        expect(mutation.result.success).toBe(true);
+        expect(mutation.trustLevel).toBe('Untrusted');
+        expect(mutation.sourceName).toBe('action:Web Search');
+
+        // Subsequent reads, native tool wrapping, and sub-agent exports all carry the upgraded taint
+        const taintedRead = await agent.RunNativeArtifactTool({
+            artifactId: trustedId,
+            tool: 'get_full',
+            input: {},
+        });
+        expect(taintedRead.IsError).toBe(false);
+        expect(taintedRead.Content).toContain('<untrusted_external_data source="action:Web Search" trust="Untrusted"');
+
+        const exportedBrief = manager.ExportInputArtifacts().find(a => a.name === 'Trusted Brief');
+        expect(exportedBrief?.trustLevel).toBe('Untrusted');
+        expect(exportedBrief?.sourceName).toBe('action:Web Search');
+    });
 });

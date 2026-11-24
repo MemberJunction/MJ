@@ -58,6 +58,10 @@ function isPlainRecord(val: unknown): val is Record<string, unknown> {
     return val !== null && typeof val === 'object' && !Array.isArray(val);
 }
 
+function isJsonContainer(val: unknown): val is unknown[] | Record<string, unknown> {
+    return Array.isArray(val) || isPlainRecord(val);
+}
+
 function isTabularRowArray(val: unknown): val is Array<Record<string, unknown>> {
     return Array.isArray(val) && val.length > 0 && val.every(isPlainRecord);
 }
@@ -104,22 +108,20 @@ function exceedsJsonCharBudget(val: unknown, charThreshold: number): boolean {
             state.chars += primitiveChars;
             return state.chars >= charThreshold;
         }
-        const obj = node as object;
-        if (state.ancestors.has(obj)) {
+        if (!isJsonContainer(node) || state.ancestors.has(node)) {
             return false;
         }
-        state.ancestors.add(obj);
+        state.ancestors.add(node);
         try {
             state.chars += 2;
-            if (Array.isArray(obj)) {
-                return obj.some(item => {
+            if (Array.isArray(node)) {
+                return node.some(item => {
                     state.chars += 2 + depth * 2 + (item === undefined ? 4 : 0);
                     return item === undefined ? state.chars >= charThreshold : visit(item, depth + 1);
                 });
             }
-            const record = obj as Record<string, unknown>;
-            return Object.keys(record).some(k => {
-                const propVal = record[k];
+            return Object.keys(node).some(k => {
+                const propVal = node[k];
                 if (propVal === undefined) {
                     return false;
                 }
@@ -127,7 +129,7 @@ function exceedsJsonCharBudget(val: unknown, charThreshold: number): boolean {
                 return visit(propVal, depth + 1);
             });
         } finally {
-            state.ancestors.delete(obj);
+            state.ancestors.delete(node);
         }
     };
     return visit(val, 1);
@@ -448,13 +450,6 @@ export class ActionResultSpilloverManager {
             : ` Full output remains queryable via artifact tools on Artifact ${joined}.`;
     }
 
-    /**
-     * Representative single-artifact spillover hint text used by context-recovery heuristics to
-     * estimate token overhead before materializing deferred spillovers.
-     */
-    public static readonly SAMPLE_SPILLOVER_HINT: string =
-        ActionResultSpilloverManager.FormatSpilloverHint(['A'], true);
-
     /** Number of unmaterialized deferred spillover entries currently queued for this run. */
     public get PendingCount(): number {
         let count = 0;
@@ -464,14 +459,15 @@ export class ActionResultSpilloverManager {
         return count;
     }
 
+    /** Number of unmaterialized deferred spillover entries queued on this manager for `message`. */
+    public PendingCountFor(message?: AgentChatMessage): number {
+        const meta = message?.metadata;
+        return meta ? (this.pendingByMetadata.get(meta)?.length ?? 0) : 0;
+    }
+
     /** True when `message` has at least one deferred spillover entry queued on this manager. */
     public HasPending(message?: AgentChatMessage): boolean {
-        const meta = message?.metadata;
-        if (!meta) {
-            return false;
-        }
-        const entries = this.pendingByMetadata.get(meta);
-        return Boolean(entries && entries.length > 0);
+        return this.PendingCountFor(message) > 0;
     }
 
     /** Discards all unmaterialized deferred spillover entries (called on run start/end). */

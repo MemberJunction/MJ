@@ -1743,6 +1743,16 @@ export class ArtifactToolManager {
           data: sanitizedData,
         };
 
+        // Propagate active run taint onto any artifact mutated during a tainted run so untrusted
+        // external content cannot be laundered through edits to an existing trusted artifact.
+        const mutatedTrust = this.resolveCreationTrust([targetEntry]);
+        if (mutatedTrust.trustLevel) {
+          targetEntry.trustLevel = mutatedTrust.trustLevel;
+        }
+        if (mutatedTrust.sourceName) {
+          targetEntry.sourceName = mutatedTrust.sourceName;
+        }
+
         if (targetEntry.artifactId) {
           const touchedSummary: GovernedRunArtifactSummary = {
             ArtifactID: targetEntry.artifactId,

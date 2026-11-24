@@ -987,4 +987,48 @@ describe('ActionResultSpilloverManager & lazy artifact spillover (#6395)', () =>
         expect(postRunCompacted).toContain('[Compacted: showing first 200');
         expect(postRunCompacted).not.toContain(`Artifact ${alphaId}`);
     });
+
+    it('accounts for per-block spillover hints on multi-block tool turns so no-op recovery does not materialize artifacts', async () => {
+        const agent = new UnifiedActionPathwayProbeAgent();
+        const cfg: ResolvedActionExpirationConfig = {
+            ExpirationTurns: 1,
+            ExpirationMode: 'Compact',
+            CompactMode: 'First N Chars',
+            CompactLength: 500,
+        };
+        // Two 580-char blocks: truncating to 500 + '[compacted from 580 chars]' saves ~52 chars per block
+        // (~104 chars / ~26 tokens total), which would falsely beat a 1x hint estimate (~19 tokens),
+        // but with per-block 2-artifact hints (~73 chars x 2 = ~146 chars) net savings are <= 0.
+        const blockTextA = 'A'.repeat(580);
+        const blockTextB = 'B'.repeat(580);
+        const meta: AgentChatMessageMetadata = { turnAdded: 1, messageType: 'action-result' };
+        expect(agent.QueueSpillover(meta, { ActionName: 'Run Query A', OutputParams: [{ Name: 'Payload', Type: 'Output', Value: blockTextA }], Message: blockTextA, StepNumber: 1, ExpirationConfig: cfg })).toBe(true);
+        expect(agent.QueueSpillover(meta, { ActionName: 'Run Query B', OutputParams: [{ Name: 'Payload', Type: 'Output', Value: blockTextB }], Message: blockTextB, StepNumber: 1, ExpirationConfig: cfg })).toBe(true);
+        expect(agent.GetSpilloverManager().PendingCountFor({ role: 'tool', content: [], metadata: meta })).toBe(2);
+
+        const conversationMessages: AgentChatMessage[] = [
+            { role: 'user', content: 'Run two queries' },
+            {
+                role: 'assistant',
+                content: '',
+                toolCalls: [
+                    { id: 'tc_multi_1', name: 'Run_Query_A', arguments: {} },
+                    { id: 'tc_multi_2', name: 'Run_Query_B', arguments: {} },
+                ],
+            },
+            BuildToolResultTurn(
+                [
+                    { toolCallId: 'tc_multi_1', toolName: 'Run_Query_A', content: blockTextA, isError: false },
+                    { toolCallId: 'tc_multi_2', toolName: 'Run_Query_B', content: blockTextB, isError: false },
+                ],
+                meta
+            ),
+        ];
+
+        await agent.RunCompactRecovery(makeExecuteParams({ conversationMessages }), 100_000, 5, 3);
+
+        expect(agent.GetArtifactManager().HasArtifacts()).toBe(false);
+        expect(agent.GetSpilloverManager().PendingCountFor(conversationMessages[2])).toBe(2);
+        expect(conversationMessages[2].metadata?.artifactIds).toBeUndefined();
+    });
 });

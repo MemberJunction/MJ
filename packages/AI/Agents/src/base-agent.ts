@@ -7804,7 +7804,14 @@ export class BaseAgent {
             this.PushToolResultTurn(params, BuildToolResultTurn(results, metadata) as AgentChatMessage);
         }
         if (orphans.length > 0) {
-            params.conversationMessages.push({ role: 'user', content: `Action results:\n${this.formatActionResultsAsMarkdown(orphans)}`, metadata } as AgentChatMessage);
+            // Avoid sharing the same metadata object reference across both messages when a turn
+            // emits native tool results and unpaired orphans together.
+            const orphanMetadata = results.length > 0 && metadata ? { ...metadata } : metadata;
+            params.conversationMessages.push({
+                role: 'user',
+                content: `Action results:\n${this.formatActionResultsAsMarkdown(orphans)}`,
+                metadata: orphanMetadata,
+            } as AgentChatMessage);
         }
         return answered;
     }
@@ -11741,17 +11748,19 @@ export class BaseAgent {
         );
     }
 
-    private estimateArtifactHintTokens(message: AgentChatMessage, params: ExecuteAgentParams): number {
+    private estimateSpilloverHintText(message: AgentChatMessage, params: ExecuteAgentParams): string {
         if (!this.areArtifactToolsEnabled(params)) {
-            return 0;
+            return '';
         }
-        const existingIds = message.metadata?.artifactIds;
-        if (existingIds?.length && this._artifactToolManager.HasArtifacts()) {
-            return this.heuristicTokenCount(ActionResultSpilloverManager.FormatSpilloverHint(existingIds, true));
+        const existingIds = this._artifactToolManager.HasArtifacts()
+            ? (message.metadata?.artifactIds ?? [])
+            : [];
+        const pendingCount = this._actionSpilloverManager.PendingCountFor(message);
+        if (existingIds.length === 0 && pendingCount === 0) {
+            return '';
         }
-        return this._actionSpilloverManager.HasPending(message)
-            ? this.heuristicTokenCount(ActionResultSpilloverManager.SAMPLE_SPILLOVER_HINT)
-            : 0;
+        const placeholderIds = Array.from({ length: pendingCount }, (_, idx) => String.fromCharCode(65 + (idx % 26)));
+        return ActionResultSpilloverManager.FormatSpilloverHint([...existingIds, ...placeholderIds], true);
     }
 
     private compactToolTurnForRecovery(
@@ -11762,9 +11771,9 @@ export class BaseAgent {
     ): { compacted: AgentChatMessage; saved: number } | null {
         const toolsEnabled = this.areArtifactToolsEnabled(params);
         if (toolsEnabled && this._actionSpilloverManager.HasPending(originalMessage)) {
-            const plain = this.formatToolRecoveryTurn(originalMessage, maxChars, '');
-            const hintTokens = this.estimateArtifactHintTokens(originalMessage, params);
-            if (originalTokens - (this.estimateTokens(plain.content) + hintTokens) <= 0) {
+            const previewHint = this.estimateSpilloverHintText(originalMessage, params);
+            const preview = this.formatToolRecoveryTurn(originalMessage, maxChars, previewHint);
+            if (originalTokens - this.estimateTokens(preview.content) <= 0) {
                 return null;
             }
             this._actionSpilloverManager.Materialize(originalMessage);
@@ -11811,9 +11820,9 @@ export class BaseAgent {
         if (body.length <= maxChars) {
             return false;
         }
-        const plain = this.formatFirstNCharsCompaction(body, envelope, maxChars, true, '');
-        const hintTokens = this.estimateArtifactHintTokens(originalMessage, params);
-        return originalTokens - (this.estimateTokens(plain) + hintTokens) > 0;
+        const previewHint = this.estimateSpilloverHintText(originalMessage, params);
+        const preview = this.formatFirstNCharsCompaction(body, envelope, maxChars, true, previewHint);
+        return originalTokens - this.estimateTokens(preview) > 0;
     }
 
     /**
