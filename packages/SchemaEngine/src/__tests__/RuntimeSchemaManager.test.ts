@@ -469,6 +469,67 @@ describe('RuntimeSchemaManager', () => {
         });
     });
 
+    describe('SplitMigrationBatches', () => {
+        it('keeps standalone GO lines inside SQL Server description literals intact while splitting real GO separators', () => {
+            const sql = [
+                "IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'hubspot')",
+                "    EXEC('CREATE SCHEMA [hubspot]');",
+                'GO',
+                'ALTER TABLE [hubspot].[Contact]',
+                '    ADD [Status] NVARCHAR(50) NULL;',
+                '',
+                "IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', N'COLUMN', N'Status'))",
+                'EXEC sp_addextendedproperty',
+                "    @name = N'MS_Description',",
+                "    @value = N'Click Submit to\nGO\nto next screen',",
+                "    @level0type = N'SCHEMA', @level0name = 'hubspot',",
+                "    @level1type = N'TABLE', @level1name = 'Contact',",
+                "    @level2type = N'COLUMN', @level2name = 'Status';",
+            ].join('\n');
+
+            const batches = RuntimeSchemaManager.SplitMigrationBatches(sql, 'sqlserver', '__mj');
+            expect(batches).toHaveLength(2);
+            expect(batches[0]).toContain('CREATE SCHEMA [hubspot]');
+            expect(batches[1]).toContain("@value = N'Click Submit to\nGO\nto next screen'");
+        });
+
+        it('chunks oversized (>32 KB) SQL Server and PostgreSQL batches without splitting ;+newline inside description literals', () => {
+            const trickyDesc = 'Status codes (cost in $$):\n- A: Active;\n- I: Inactive;\n- D: Deleted;\n';
+            const ssStatements: string[] = [];
+            const pgStatements: string[] = [];
+            for (let i = 0; i < 60; i++) {
+                const pad = 'P'.repeat(500);
+                ssStatements.push(
+                    `EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'${trickyDesc}${pad}', @level0type = N'SCHEMA', @level0name = 'hubspot', @level1type = N'TABLE', @level1name = 'Contact', @level2type = N'COLUMN', @level2name = 'Col${i}';`
+                );
+                pgStatements.push(
+                    `COMMENT ON COLUMN "hubspot"."Contact"."Col${i}" IS '${trickyDesc}${pad}';`
+                );
+            }
+
+            const ssLogs: string[] = [];
+            const ssBatches = RuntimeSchemaManager.SplitMigrationBatches(ssStatements.join('\n'), 'sqlserver', '__mj', (m) => ssLogs.push(m));
+            // 60 statements chunked at 25 per chunk => 3 batches (25, 25, 10)
+            expect(ssBatches).toHaveLength(3);
+            expect(ssLogs.some(l => l.includes('60 statements'))).toBe(true);
+            for (const batch of ssBatches) {
+                expect(batch).toContain(trickyDesc);
+            }
+
+            const pgBatches = RuntimeSchemaManager.SplitMigrationBatches(pgStatements.join('\n'), 'postgresql', '__mj');
+            expect(pgBatches).toHaveLength(3);
+            for (const batch of pgBatches) {
+                expect(batch).toContain(trickyDesc);
+            }
+        });
+
+        it('resolves ${flyway:defaultSchema} and never splits PostgreSQL scripts on standalone GO lines', () => {
+            const sql = "COMMENT ON TABLE \"${flyway:defaultSchema}\".\"Contact\" IS 'Press\nGO\nnow';";
+            const batches = RuntimeSchemaManager.SplitMigrationBatches(sql, 'postgresql', 'custom_mj');
+            expect(batches).toEqual(["COMMENT ON TABLE \"custom_mj\".\"Contact\" IS 'Press\nGO\nnow';"]);
+        });
+    });
+
     describe('RSUError', () => {
         it('should carry a code and message', () => {
             const error = new RSUError('TEST_CODE', 'Test message');

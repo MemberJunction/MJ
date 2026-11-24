@@ -1,0 +1,7 @@
+{
+  "extends": "../../../../tsconfig.angular.json",
+  "compilerOptions": {
+    "outDir": "./dist"
+  },
+  "include": ["src/public-api.ts", "src/lib/**/*.ts"]
+}

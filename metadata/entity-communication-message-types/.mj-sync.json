@@ -1,0 +1,40 @@
+{
+  "entity": "MJ: Entity Communication Message Types",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".entity-communication-message-types.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "EntityID": {
+        "entity": "MJ: Entities",
+        "field": "Name"
+      },
+      "BaseMessageTypeID": {
+        "entity": "MJ: Communication Base Message Types",
+        "field": "Type"
+      },
+      "CommunicationPrincipalID": {
+        "entity": "MJ: Communication Principals",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Entity Communication Fields": {
+        "entity": "MJ: Entity Communication Fields",
+        "foreignKey": "EntityCommunicationMessageTypeID"
+      }
+    }
+  }
+}

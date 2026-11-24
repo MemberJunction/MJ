@@ -100,6 +100,21 @@ describe('SQLGenerator', () => {
       expect(sql).toContain("User''s account data");
     });
 
+    it('should escape single quotes in schema, table, and column names in SQL Server extended properties', () => {
+      const state = createState();
+      state.schemas[0].name = "org's_schema";
+      state.schemas[0].tables[0].name = "Order's";
+      state.schemas[0].tables[0].columns[0].name = "Buyer'sID";
+      const sql = generator.Generate(state, { provider: 'sqlserver' });
+
+      expect(sql).toContain("SCHEMA_ID('org''s_schema')");
+      expect(sql).toContain("@level0name = N'org''s_schema'");
+      expect(sql).toContain("t.name = 'Order''s'");
+      expect(sql).toContain("@level1name = N'Order''s'");
+      expect(sql).toContain("c.name = 'Buyer''sID'");
+      expect(sql).toContain("@level2name = N'Buyer''sID'");
+    });
+
     it('should skip tables without descriptions', () => {
       const state = createState();
       state.schemas[0].tables[0].description = undefined;

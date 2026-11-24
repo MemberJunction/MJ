@@ -105,6 +105,7 @@ import { RegisterAudienceActionHostBindings } from './services/HostGrantedWorkfl
 import { InitializeConversationDetailWritePermissionProviders } from './services/ConversationDetailWritePermissionWiring.js';
 import { RegisterSemanticGraphExpansionService } from './services/RegisterSemanticGraphExpansion.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
+import { ConfigureCommsV2WorkQueue } from './services/CommsWorkQueueHandlers.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
@@ -287,6 +288,7 @@ export * from './resolvers/MCPResolver.js';
 export * from './resolvers/ActionResolver.js';
 export * from './resolvers/CacheStatsResolver.js';
 export * from './resolvers/EntityCommunicationsResolver.js';
+export * from './operations/CommsAdminOperations.js';
 export * from './resolvers/FeedbackResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
@@ -354,10 +356,12 @@ import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/Synthes
 import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
 import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
 import { LoadArtifactGuestShareOperations } from './operations/ArtifactGuestShareServerOperations.js';
+import { LoadCommsAdminOperations } from './operations/CommsAdminOperations.js';
 LoadSynthesizeArtifactFromSourcesOperation();
 LoadArtifactComplianceAuditOperation();
 LoadArtifactEvaluateAiFormulaOperation();
 LoadArtifactGuestShareOperations();
+LoadCommsAdminOperations();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
@@ -2057,6 +2061,9 @@ const setupComplete$ = new ReplaySubject(1);
   // re-plans on a timer, and self-registers with ShutdownRegistry, so gracefulShutdown's awaited
   // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
   // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
+  // Configure Comms V2 tracking URL, HMAC secret, and WorkQueue enqueue hook on all nodes (including API-only nodes)
+  ConfigureCommsV2WorkQueue(ApiRoute('/comms', { absolute: true }), undefined, Boolean(configInfo.workQueue?.enabled));
+
   const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
   if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
     const workQueuePool = dataSources[0]?.dataSource;
@@ -2749,6 +2756,8 @@ export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
 export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
 export type { StartupSummarySnapshot } from './logging/StartupLogger.js';
+export { CreateCommsWebhookHandler } from './rest/CommsWebhookHandler.js';
+export type { CommsActivityWorkPayload, CommsWebhookHandlerOptions } from './rest/CommsWebhookHandler.js';
 
 export * from './generic/RedisClusterPubSubEngine.js';
 export { WrapSharedCacheWithL1 } from './sharedCache.js';

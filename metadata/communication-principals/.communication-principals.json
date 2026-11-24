@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+      "Name": "Users",
+      "Description": "MemberJunction system users. Uses Name for FullName and existing Entity Communication Message Types / Entity Communication Fields for Email.",
+      "DriverClass": null,
+      "Configuration": {
+        "Slots": {
+          "FullName": "Name"
+        }
+      },
+      "DisplayOrder": 1,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0E4D2EB0-D32B-4B88-81BD-BFC5BC32E74D"
+    }
+  }
+]

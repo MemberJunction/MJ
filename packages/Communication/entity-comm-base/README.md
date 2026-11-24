@@ -109,6 +109,20 @@ const params: EntityCommunicationParams = {
 | `Message` | `Message` | Yes | Message content and optional templates |
 | `PreviewOnly` | `boolean` | No | Preview without sending |
 | `IncludeProcessedMessages` | `boolean` | No | Include rendered content in results |
+| `Provider` | `IMetadataProvider & IRunViewProvider` | No | Provider for the request, when not the process default |
+| `UseV2` | `boolean` | No | Route the communication through the Communications V2 compliance-gated pipeline. Defaults to `false`, which keeps V1 behavior. |
+
+#### `UseV2`: opting in to Communications V2
+
+With `UseV2: true` (or `Message.ContextData.UseV2 = true`), `EntityCommunicationsEngine.RunEntityCommunication()`
+in [`@memberjunction/entity-communications-server`](../entity-comm-server/README.md) sends each record as a V2
+principal: through the default sender, as an `Operational` message, with the compliance gate, compliance footer,
+unsubscribe headers and tracking applied. The result keeps the `EntityCommunicationResult` shape; recipients the
+gate blocks or defers come back as items with `Skipped: true` and a `SkipReason`.
+
+The flag is ignored, and the V1 path used, when the message sets `From`, CC or BCC recipients, or pairs a
+literal `Subject` with a body template. See the
+[Communications V2 Guide](../../../guides/COMMUNICATIONS_V2_GUIDE.md#10-v1-behavior-and-the-v1-bridge).
 
 ### EntityCommunicationResult / EntityCommunicationResultItem
 
