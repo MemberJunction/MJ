@@ -4,8 +4,9 @@ name: Integration Tier
 # @memberjunction/integration-test-suite package, dispatched by `mj test suite`
 # ("Integration Tests — Deterministic") against a fresh SQL Server on every PR that touches
 # server code or the integration metadata. A parallel PostgreSQL lane (`integration-postgres`,
-# a known-failures ratchet) gates the build rather than each PR: it blocks the build engineer's
-# PR that adds migrations-pg/ twins, and reports on the nightly. Single entry path: the per-bundle tsx
+# a known-failures ratchet) runs on the same PRs and blocks on a PostgreSQL regression; a parity
+# gap (PostgreSQL twins not converted yet) only leaves out the metadata that needs it, and blocks
+# only the build engineer's migrations-pg/ PR and the release. Single entry path: the per-bundle tsx
 # dispatchers and run-all.ts were removed in the July-2026 restructure.
 #
 # HOST-BASED lane (no Docker regression images). This PR gate provisions the DB directly on
@@ -84,7 +85,7 @@ on:
       - '.github/scripts/select-integration-tier.mjs'
       # The PostgreSQL lane's ratchet and its list: a PR that edits either must run that lane.
       - '.github/scripts/check-integration-known-failures.mjs'
-      - '.github/scripts/classify-pg-parity-gap.mjs'
+      - '.github/scripts/prune-pg-parity-gap.mjs'
       - '.github/integration-known-failures/**'
       # Root install inputs: the pnpm version pin (packageManager), the workspace globs and the
       # registry settings decide what the lane installs and builds.
@@ -199,8 +200,9 @@ jobs:
             # The PostgreSQL lane runs on the same PRs as the SQL Server lane (see its `if`). A feature
             # PR ships the T-SQL migration only, and the build engineer converts with /pg-migrate, so
             # a PostgreSQL database may lack the newest tables: a parity gap, which is not the PR's
-            # doing. `regressions` blocks on a regression and only warns on a parity gap; `gate`, for
-            # a PR that touches migrations-pg/ (the build engineer's PR), blocks on both.
+            # doing. `regressions` warns on a gap, leaves out only the metadata that needs it, runs the
+            # whole suite and blocks on any regression; `gate`, for a PR that touches migrations-pg/
+            # (the build engineer's PR), also blocks on the gap.
             if echo "$CHANGED" | grep -qE '^migrations-pg/'; then
               echo "pg=gate" >> "$GITHUB_OUTPUT"
             else
@@ -1022,15 +1024,20 @@ jobs:
   # No snapshot cache: migrate + both pushes take ~2 minutes on PostgreSQL.
   integration-postgres:
     name: Integration (PostgreSQL, deterministic)
-    # Two kinds of failure, treated differently. A REGRESSION (a check that fails and is not on the
-    # known-failures list, or a metadata push that fails for any reason but a missing entity) always
-    # blocks. A PARITY GAP (the metadata push refuses directories whose tables have no PostgreSQL
-    # migration yet) is the state of next, not the PR's doing: feature PRs ship T-SQL migrations
-    # only, and their PostgreSQL twins arrive with the build engineer's /pg-migrate PR. The
-    # `changes` job sets the mode: `regressions` (every PR the SQL Server lane runs on, and the
-    # nightly) warns on a parity gap and skips the suite; `gate` (a PR touching migrations-pg/, a
-    # dispatch, or the release gate publish.yml runs) blocks on it; `skip` (a merge into next)
-    # does not run. classify-pg-parity-gap.mjs tells the two kinds apart.
+    # A PARITY GAP is an entity the metadata names that the PostgreSQL database does not have yet:
+    # feature PRs ship T-SQL migrations only, and their PostgreSQL twins arrive with the build
+    # engineer's /pg-migrate PR. The gap is next's state, not the PR's doing, so it must not stop
+    # the suite. prune-pg-parity-gap.mjs finds it before the push and leaves out only the records
+    # that name a missing entity (and, to a fixed point, records that look them up); everything
+    # else is pushed and the whole suite runs. A REGRESSION always blocks: a push of the pruned
+    # metadata that fails, or a check that fails and is neither on the known-failures list nor
+    # names a missing entity in its message. The `changes` job sets the mode: `regressions` (every
+    # PR the SQL Server lane runs on, and the nightly) warns on a gap and prunes; `gate` (a PR
+    # touching migrations-pg/, a dispatch, or the release gate publish.yml runs) fails on a gap;
+    # `skip` (a merge into next) does not run.
+    #
+    # `complete` is true only when there was no gap and the suite met the ratchet: the pass record
+    # below needs it, so a run that left metadata out is never recorded as a full pass.
     needs: [changes, preflight]
     if: |
       !cancelled() && needs.preflight.result == 'success' &&
@@ -1039,6 +1046,8 @@ jobs:
       (github.event_name != 'pull_request' || needs.changes.outputs.pg == 'gate' || needs.changes.outputs.integration != 'false')
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    outputs:
+      complete: ${{ steps.ratchet.outputs.complete }}
     env:
       DB_PLATFORM: postgresql
       DB_HOST: localhost
@@ -1126,34 +1135,24 @@ jobs:
       - name: Migrate — apply migrations-pg
         run: node packages/MJCLI/bin/run.js migrate
 
-      # A failed push does not fail its step: the classifier below decides whether it is a parity
-      # gap or a regression, and the steps after it run only when there is no gap.
-      - name: Sync push — reconcile committed metadata
-        id: sync
-        continue-on-error: true
+      # The entities the database has, against those the metadata names. In `regressions` mode a gap
+      # is a warning and the pushes read a copy without the records that need a missing entity; in
+      # `gate` mode it fails here. Either way the pushes read /tmp/pg-metadata.
+      - name: Find a parity gap and prune the metadata that needs it
+        id: parity
         run: |
-          set -o pipefail
-          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci 2>&1 | tee /tmp/pg-sync-metadata.log
+          psql -v ON_ERROR_STOP=1 -tA -c 'SELECT "Name" FROM __mj."Entity"' > /tmp/pg-entities.txt
+          node .github/scripts/prune-pg-parity-gap.mjs --mode=${{ needs.changes.outputs.pg }} \
+            --present=/tmp/pg-entities.txt --out=/tmp/pg-metadata --entities-out=/tmp/pg-gap-entities.txt \
+            metadata metadata-optional/integration-test
+
+      - name: Sync push — reconcile committed metadata
+        run: node packages/MJCLI/bin/run.js sync push --dir=/tmp/pg-metadata/metadata --ci
 
       - name: Sync push — seed the optional integration metadata + RLS fixtures
-        id: sync-optional
-        if: steps.sync.outcome == 'success'
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci 2>&1 | tee /tmp/pg-sync-optional.log
-
-      - name: Classify a failed metadata push (parity gap or regression)
-        id: parity
-        if: steps.sync.outcome == 'failure' || steps.sync-optional.outcome == 'failure'
-        run: |
-          LOGS=()
-          [ "${{ steps.sync.outcome }}" = "failure" ] && LOGS+=(/tmp/pg-sync-metadata.log)
-          [ "${{ steps.sync-optional.outcome }}" = "failure" ] && LOGS+=(/tmp/pg-sync-optional.log)
-          node .github/scripts/classify-pg-parity-gap.mjs --mode=${{ needs.changes.outputs.pg }} "${LOGS[@]}"
+        run: node packages/MJCLI/bin/run.js sync push --dir=/tmp/pg-metadata/metadata-optional/integration-test --ci
 
       - name: Verify RLS integration fixtures were seeded
-        if: steps.parity.outputs.gap != 'true'
         run: |
           COUNT=$(psql -tA -c "SELECT COUNT(*) FROM __mj.\"User\" WHERE \"Email\" LIKE '%@integration.test'")
           echo "Seeded @integration.test fixture users: ${COUNT}/3"
@@ -1163,7 +1162,6 @@ jobs:
           fi
 
       - name: Generate throwaway encryption and collaboration HMAC keys for this run
-        if: steps.parity.outputs.gap != 'true'
         run: |
           echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
           echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
@@ -1172,14 +1170,12 @@ jobs:
 
       # PostgreSQL copies a database from a template, so the worker databases cost seconds.
       - name: Clone isolated worker databases for parallel server shards
-        if: steps.parity.outputs.gap != 'true'
         run: |
           for n in 1 2 3; do
             psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE test_s${n} TEMPLATE test"
           done
 
       - name: Boot MJAPI (client-transport members)
-        if: steps.parity.outputs.gap != 'true'
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
@@ -1193,7 +1189,6 @@ jobs:
       # Same shards as the SQL Server job. A shard's exit code is not the verdict here: the
       # known-failures check below is. A shard that crashes leaves no JSON, which fails that check.
       - name: Run integration tier (mj test)
-        if: steps.parity.outputs.gap != 'true'
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
@@ -1231,26 +1226,37 @@ jobs:
             echo "::endgroup::"
           done
 
+      # A failure that is not on the list fails here, unless its message names an entity the gap
+      # left out (reported, not gating). `complete` is written only after a pass with no gap.
       - name: Compare with the known PostgreSQL failures
-        if: steps.parity.outputs.gap != 'true'
-        run: node .github/scripts/check-integration-known-failures.mjs .github/integration-known-failures/postgresql.json /tmp/pg-shard-server-1.json /tmp/pg-shard-server-2.json /tmp/pg-shard-server-3.json /tmp/pg-shard-client.json
+        id: ratchet
+        run: |
+          node .github/scripts/check-integration-known-failures.mjs --gap-entities=/tmp/pg-gap-entities.txt \
+            .github/integration-known-failures/postgresql.json \
+            /tmp/pg-shard-server-1.json /tmp/pg-shard-server-2.json /tmp/pg-shard-server-3.json /tmp/pg-shard-client.json
+          if [ "${{ steps.parity.outputs.gap }}" = "false" ]; then
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::The suite passed the ratchet, but metadata was left out for the parity gap, so this run is not recorded as a full pass."
+          fi
 
       - name: MJAPI log on failure
         if: failure()
         run: tail -300 /tmp/pg-mjapi.log || true
 
   # A pass record lets a later run of this PR with the same change fingerprint (see the `changes`
-  # job) skip both deterministic lanes. It is written only when both passed, so a catch-up merge
-  # cannot skip past a PostgreSQL regression that the SQL Server lane did not see. A PostgreSQL
-  # lane that warned on a parity gap counts as passed: the gap is next's, not this PR's. A failure
-  # to save only costs that later skip, so it must not fail the run.
+  # job) skip both deterministic lanes. It is written only when both suites ran in full and passed:
+  # the SQL Server job succeeded, and the PostgreSQL job reported `complete` (no parity gap, so no
+  # metadata was left out, and the ratchet passed). A skipped PostgreSQL job, or one that pruned for
+  # a gap, records nothing, so a later run tests again. A failure to save only costs that later
+  # skip, so it must not fail the run.
   record-integration-pass:
     name: Record that these PR changes passed
     needs: [changes, integration-sqlserver, integration-postgres]
     if: |
       !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.fingerprint != '' &&
       needs.integration-sqlserver.result == 'success' &&
-      (needs.integration-postgres.result == 'success' || needs.integration-postgres.result == 'skipped')
+      needs.integration-postgres.result == 'success' && needs.integration-postgres.outputs.complete == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -103,7 +103,7 @@ export const TRIGGER_GLOBS = [
     '.github/scripts/check-fls-wire-bundles-ran.mjs',
     '.github/scripts/select-integration-tier.mjs',
     '.github/scripts/check-integration-known-failures.mjs',
-    '.github/scripts/classify-pg-parity-gap.mjs',
+    '.github/scripts/prune-pg-parity-gap.mjs',
     '.github/integration-known-failures/**',
     'package.json',
     'pnpm-workspace.yaml',

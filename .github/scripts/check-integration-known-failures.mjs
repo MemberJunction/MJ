@@ -6,7 +6,7 @@
  * the dialect gaps SQL Server cannot see, but PostgreSQL starts with a backlog of known failures.
  * Gating on "zero failures" would leave the lane red on every build until that backlog is cleared;
  * not gating at all would let new PostgreSQL breakage land unnoticed. This script sits between the
- * two. (integration.yml decides when it gates: the build engineer's migrations-pg PR, not feature PRs.)
+ * two. (integration.yml runs it on every PR the SQL Server lane runs on, and on the release.)
  *
  * - a failing check that is NOT on the known-failures list fails the job (a regression);
  * - a check on the list that now PASSES also fails the job, so the list is shortened in the same
@@ -20,11 +20,16 @@
  * A skip the suite's own skip gate does not allow (`details.SkipAllowed === false`) counts as a
  * failure, as it does for that gate.
  *
+ * - with `--gap-entities=<file>` (the entities missing from PostgreSQL, one per line, written by
+ *   prune-pg-parity-gap.mjs), an unlisted failure whose message names one of them is attributed to
+ *   that parity gap and reported, not failed. Any other unlisted failure still fails the job, so a
+ *   gap never hides a regression in the checks it does not touch.
+ *
  * Input: the JSON files `mj test suite --output` writes (one per shard), or `mj test run --output`. A failure is keyed by its
  * check ID (`bundle.CHECK`). A bundle that fails before any check runs reports one result whose ID
  * is not a check ID (`gate`, `setup`, ...); it is keyed as `<test name>#<id>` instead.
  *
- * Usage: node .github/scripts/check-integration-known-failures.mjs <known-failures.json> <shard.json>...
+ * Usage: node .github/scripts/check-integration-known-failures.mjs [--gap-entities=<file>] <known-failures.json> <shard.json>...
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -65,7 +70,7 @@ export function collectOutcomes(resultFile) {
  * Compares a run with the known-failures list. A key that fails in any shard counts as failed; one
  * that passes in some shard and fails in none counts as passed.
  */
-export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}) {
+export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}, gapEntities = []) {
     const byKey = new Map();
     for (const o of outcomes) {
         const prev = byKey.get(o.Key);
@@ -79,12 +84,20 @@ export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}) {
     const fixed = [];
     const notRun = [];
     const flakyFailed = [];
+    const gapFailures = [];
+    const namesGapEntity = (message) => {
+        const text = message.toLowerCase();
+        return gapEntities.some((e) => e.trim() !== '' && text.includes(e.trim().toLowerCase()));
+    };
     for (const [key, o] of byKey) {
         if (flakyKeys.has(key)) {
             if (o.Outcome === 'failed') flakyFailed.push(key);
             continue;
         }
-        if (o.Outcome === 'failed' && !known.has(key)) newFailures.push(o);
+        if (o.Outcome === 'failed' && !known.has(key)) {
+            if (namesGapEntity(o.Message)) gapFailures.push(o);
+            else newFailures.push(o);
+        }
         if (o.Outcome === 'passed' && known.has(key)) fixed.push(key);
     }
     for (const key of known) {
@@ -92,7 +105,7 @@ export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}) {
         if (!o || o.Outcome === 'skipped') notRun.push(key);
     }
     const stillFailing = [...known].filter((k) => byKey.get(k)?.Outcome === 'failed');
-    return { NewFailures: newFailures, Fixed: fixed, NotRun: notRun, StillFailing: stillFailing, FlakyFailed: flakyFailed, Checked: byKey.size };
+    return { NewFailures: newFailures, Fixed: fixed, NotRun: notRun, StillFailing: stillFailing, FlakyFailed: flakyFailed, GapFailures: gapFailures, Checked: byKey.size };
 }
 
 /** Human-readable report; returns the process exit code. */
@@ -101,6 +114,10 @@ export function report(result, log = console.log) {
     if ((result.FlakyFailed ?? []).length > 0) {
         log(`\n${result.FlakyFailed.length} check(s) on the flaky list failed this time (not gating):`);
         for (const key of result.FlakyFailed) log(`  ~ ${key}`);
+    }
+    if ((result.GapFailures ?? []).length > 0) {
+        log(`\n${result.GapFailures.length} check(s) failed on an entity missing from PostgreSQL (the parity gap; not gating):`);
+        for (const o of result.GapFailures) log(`  ~ ${o.Key}: ${o.Message.slice(0, 300)}`);
     }
     if (result.NotRun.length > 0) {
         log(`\n${result.NotRun.length} known failure(s) did not run this time (skipped or not selected):`);
@@ -118,11 +135,17 @@ export function report(result, log = console.log) {
 }
 
 function main(argv) {
-    const [listPath, ...shardPaths] = argv;
+    const gapPath = argv.find((a) => a.startsWith('--gap-entities='))?.slice('--gap-entities='.length);
+    const [listPath, ...shardPaths] = argv.filter((a) => !a.startsWith('--'));
     if (!listPath || shardPaths.length === 0) {
-        console.error('Usage: check-integration-known-failures.mjs <known-failures.json> <shard.json>...');
+        console.error('Usage: check-integration-known-failures.mjs [--gap-entities=<file>] <known-failures.json> <shard.json>...');
         return 2;
     }
+    if (gapPath !== undefined && !existsSync(gapPath)) {
+        console.error(`The gap entities file ${gapPath} is missing.`);
+        return 2;
+    }
+    const gapEntities = gapPath ? readFileSync(gapPath, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : [];
     const list = JSON.parse(readFileSync(listPath, 'utf8'));
     const knownFailures = list.KnownFailures ?? {};
     const flaky = list.Flaky ?? {};
@@ -139,7 +162,7 @@ function main(argv) {
         }
         outcomes.push(...collectOutcomes(JSON.parse(readFileSync(path, 'utf8'))));
     }
-    return report(compareWithKnownFailures(outcomes, knownFailures, flaky));
+    return report(compareWithKnownFailures(outcomes, knownFailures, flaky, gapEntities));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

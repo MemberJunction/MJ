@@ -96,6 +96,39 @@ describe('compareWithKnownFailures', () => {
         expect(report(result, () => {})).toBe(0);
     });
 
+    it('attributes an unlisted failure that names a missing entity to the parity gap, and does not gate on it', () => {
+        const result = compareWithKnownFailures(
+            [{ Key: 'a.G1', Outcome: 'failed', Message: 'Entity "MJ: AI Agent Rhythm Templates" not found in metadata' }],
+            {},
+            {},
+            ['mj: ai agent rhythm templates'],
+        );
+        expect(result.NewFailures).toEqual([]);
+        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.G1']);
+        expect(report(result, () => {})).toBe(0);
+    });
+
+    it('still gates on an unlisted failure that names no missing entity while a gap is open', () => {
+        const result = compareWithKnownFailures(
+            [
+                { Key: 'a.G1', Outcome: 'failed', Message: 'needs MJ: AI Agent Rhythm Templates' },
+                { Key: 'a.R1', Outcome: 'failed', Message: 'column "Foo" does not exist' },
+            ],
+            {},
+            {},
+            ['MJ: AI Agent Rhythm Templates'],
+        );
+        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.R1']);
+        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.G1']);
+        expect(report(result, () => {})).toBe(1);
+    });
+
+    it('attributes nothing to a gap when no entity is missing', () => {
+        const result = compareWithKnownFailures([{ Key: 'a.R1', Outcome: 'failed', Message: 'anything' }], {});
+        expect(result.GapFailures).toEqual([]);
+        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.R1']);
+    });
+
     it('lets a pass in one shard outrank a skip in another', () => {
         const result = compareWithKnownFailures(
             [{ Key: 'a.A1', Outcome: 'skipped', Message: '' }, { Key: 'a.A1', Outcome: 'passed', Message: '' }],
@@ -140,6 +173,19 @@ describe('CLI', () => {
         const both = join(dir, 'both.json');
         writeFileSync(both, JSON.stringify({ KnownFailures: { 'a.A1': 'r' }, Flaky: { 'a.A1': 'r' } }));
         expect(spawnSync(process.execPath, [SCRIPT, both, shardPath]).status).toBe(2);
+    });
+
+    it('exits 0 when the only unlisted failure names a missing entity, and 1 without the gap file', () => {
+        const gapShard = join(dir, 'gap-shard.json');
+        const gapFile = join(dir, 'gap.txt');
+        writeFileSync(gapShard, JSON.stringify(suiteRun(test('IT2', 'Failed', oracle('a.A3', false, false, 'Entity MJ: Agent Channels not found')))));
+        writeFileSync(gapFile, 'MJ: Agent Channels\n');
+        expect(spawnSync(process.execPath, [SCRIPT, `--gap-entities=${gapFile}`, listPath, gapShard]).status).toBe(0);
+        expect(spawnSync(process.execPath, [SCRIPT, listPath, gapShard]).status).toBe(1);
+    });
+
+    it('exits 2 when the gap entities file is missing', () => {
+        expect(spawnSync(process.execPath, [SCRIPT, `--gap-entities=${join(dir, 'nope.txt')}`, listPath, shardPath]).status).toBe(2);
     });
 
     it('exits 2 without arguments', () => {
