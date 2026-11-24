@@ -29,11 +29,14 @@
  *     asserts the call count in-process with a counting provider.
  *
  * NEEDS. MJAPI running with its work-queue host on (`workQueue.enabled`, the default) and
- * `metadata/` pushed (the comms.activity topic and subscription). CV2W2 also needs a key pair:
- * MJAPI started with COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID set to the public key, and this
- * process given the private key in MJ_IT_SENDGRID_WEBHOOK_PRIVATE_KEY (PEM, or base64 PKCS#8 DER);
- * without the private key CV2W2 skips (allowlisted, gate `credentials`). The `/comms` base URL is
- * MJ_IT_COMMS_URL, else the GraphQL endpoint's origin + MJAPI_BASE_PATH + `/comms`.
+ * `metadata/` pushed (the comms.activity topic and subscription). CV2W2 and CV2W3 sign webhooks
+ * with a key pair made for the run: the public half is saved, over GraphQL, on an `MJ: Credentials`
+ * row named for SendGrid, and the events are posted to `/comms/webhooks/sendgrid/:credentialId`, so
+ * no secret has to be configured anywhere. That needs MJAPI to hold a base encryption key
+ * (MJ_BASE_ENCRYPTION_KEY), which the CI lane generates per run. To test the instance-wide key
+ * instead, give this process MJ_IT_SENDGRID_WEBHOOK_PRIVATE_KEY (PEM, or base64 PKCS#8 DER) matching
+ * MJAPI's COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID; the checks then post to `/comms/webhooks/sendgrid`.
+ * The `/comms` base URL is MJ_IT_COMMS_URL, else the GraphQL endpoint's origin + MJAPI_BASE_PATH + `/comms`.
  *
  * FIXTURES. All created through MJAPI, named with the run's tag and tagged safe to delete; see
  * comms-v2-fixtures.ts for the naming rules and for the append-only rows teardown cannot remove.
@@ -46,6 +49,7 @@ import type { KeyObject } from 'node:crypto';
 import { Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import type {
+    MJCredentialEntity,
     MJCommunicationEndpointEntity,
     MJCommunicationLogEntity,
     MJCommunicationSuppressionEntity,
@@ -60,6 +64,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { COMMS_IT_TAG, COMMS_IT_TAG_ASCII, CommsCleanup, CommsTestAddress, NewCommsRunTag } from './comms-v2-fixtures';
+import { EncryptionUnavailableReason } from './fixture-gates';
 import { Sleep } from './wire-sessions';
 
 const BUNDLE = 'comms-v2-wire';
@@ -106,8 +111,17 @@ interface EntityCommsFixture {
     Endpoint: MJCommunicationEndpointEntity;
 }
 
+/** How webhooks are signed this run, and where they are posted so MJAPI verifies them with the matching key. */
+interface WebhookSigner {
+    PrivateKey: KeyObject;
+    /** `/webhooks/sendgrid/<credentialId>` for the run's credential, or `/webhooks/sendgrid` for the instance key. */
+    Path: string;
+}
+
 interface WireState {
     Refs: WireRefs;
+    Signer?: WebhookSigner;
+    WebhookCredential?: MJCredentialEntity;
     Endpoints: MJCommunicationEndpointEntity[];
     Logs: MJCommunicationLogEntity[];
     Suppressions: MJCommunicationSuppressionEntity[];
@@ -419,13 +433,68 @@ function hardBounceBody(s: WireState, recipient: WireRecipient, label: string): 
     ]);
 }
 
-function postWebhook(s: WireState, body: string, signature?: { Signature: string; Timestamp: string }): Promise<HttpAnswer> {
+function postWebhook(s: WireState, path: string, body: string, signature?: { Signature: string; Timestamp: string }): Promise<HttpAnswer> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (signature) {
         headers[SIGNATURE_HEADER] = signature.Signature;
         headers[TIMESTAMP_HEADER] = signature.Timestamp;
     }
-    return postComms(s, '/webhooks/sendgrid', headers, body);
+    return postComms(s, path, headers, body);
+}
+
+/** The credential type MJAPI's webhook route accepts for a SendGrid key: `API Key`, as the SendGrid provider uses. */
+async function apiKeyCredentialTypeId(user: UserInfo): Promise<string> {
+    const row = await requireRow<{ ID: string }>(user, 'MJ: Credential Types', "Name='API Key'", ['ID'], "the 'API Key' credential type");
+    return row.ID;
+}
+
+/**
+ * The signer for this run, built once. With MJ_IT_SENDGRID_WEBHOOK_PRIVATE_KEY set it uses the
+ * instance-wide key; otherwise it makes a P-256 key pair and saves the public half on a SendGrid
+ * credential over GraphQL. MJAPI resolves that credential by ID and requires `SendGrid` in its
+ * name or type. A lane whose MJAPI has no base encryption key cannot write the credential: the
+ * check then skips, and the skip is not allowlisted, so CI reports it.
+ */
+async function ensureWebhookSigner(s: WireState): Promise<WebhookSigner> {
+    if (s.Signer) {
+        return s.Signer;
+    }
+    const instanceKey = loadWebhookSigningKey();
+    if (instanceKey) {
+        s.Signer = { PrivateKey: instanceKey, Path: '/webhooks/sendgrid' };
+        return s.Signer;
+    }
+    const pair = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const publicPem = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const credential = await s.Refs.Wire.GetEntityObject<MJCredentialEntity>('MJ: Credentials', s.Refs.User);
+    credential.NewRecord();
+    credential.CredentialTypeID = await apiKeyCredentialTypeId(s.Refs.User);
+    credential.Name = `SendGrid webhook ${s.Refs.RunTag}`;
+    credential.Description = COMMS_IT_TAG;
+    credential.Values = JSON.stringify({ apiKey: `unused-${s.Refs.RunTag}`, webhookVerificationKey: publicPem });
+    credential.IsActive = true;
+    credential.IsDefault = false;
+    if (!(await credential.Save())) {
+        const message = credential.LatestResult?.CompleteMessage ?? '';
+        const skip = EncryptionUnavailableReason(message);
+        if (skip) {
+            SkipCheck(skip);
+        }
+        Assert(false, `saving the run's SendGrid webhook credential over GraphQL failed: ${message}`);
+    }
+    s.WebhookCredential = credential;
+    s.Signer = { PrivateKey: pair.privateKey, Path: `/webhooks/sendgrid/${credential.ID}` };
+    return s.Signer;
+}
+
+/** A 401 that came from checking the signature, not from MJAPI having no key to check it with. */
+function assertSignatureRefusal(answer: HttpAnswer, what: string): void {
+    AssertEqual(answer.Status, 401, `${what} must answer 401 (${JSON.stringify(answer.Body)})`);
+    const error = String(answer.Body.error ?? '');
+    Assert(
+        !/not configured/i.test(error),
+        `${what} was refused because MJAPI found no verification key ("${error}"), so the signature check never ran`,
+    );
 }
 
 function nowTimestamp(): string {
@@ -599,19 +668,16 @@ export const CommsV2WireChecks: NamedCheck[] = [
         Name: 'CV2W2: a correctly signed SendGrid webhook POST is consumed by the comms.activity handler and hard-bounce-suppresses the endpoint',
         Fn: async () => {
             const s = fx();
-            const key = loadWebhookSigningKey();
-            if (!key) {
-                SkipCheck(`${PRIVATE_KEY_ENV} is not set: signing needs the private key matching MJAPI's COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID`);
-            }
+            const signer = await ensureWebhookSigner(s);
             const recipient = await createRecipient(s, 'bounce');
             const body = hardBounceBody(s, recipient, 'bounce');
             const timestamp = nowTimestamp();
 
-            const answer = await postWebhook(s, body, { Signature: signWebhook(key, timestamp, body), Timestamp: timestamp });
+            const answer = await postWebhook(s, signer.Path, body, { Signature: signWebhook(signer.PrivateKey, timestamp, body), Timestamp: timestamp });
             AssertEqual(
                 answer.Status,
                 202,
-                `a correctly signed webhook must answer 202 (${JSON.stringify(answer.Body)}); a 401 means MJAPI's COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID is not the public half of ${PRIVATE_KEY_ENV}`,
+                `a correctly signed webhook to ${signer.Path} must answer 202 (${JSON.stringify(answer.Body)}); a 401 means MJAPI did not verify with the public half of this run's key`,
             );
             AssertEqual(answer.Body.accepted, true, 'the webhook answer must say accepted: true');
 
@@ -629,24 +695,23 @@ export const CommsV2WireChecks: NamedCheck[] = [
         Name: 'CV2W3: a SendGrid webhook POST with a bad signature is refused with 401 and suppresses nothing',
         Fn: async () => {
             const s = fx();
+            // Post where MJAPI holds a key, so each refusal is the signature check, not a missing key.
+            const signer = await ensureWebhookSigner(s);
             const recipient = await createRecipient(s, 'forged');
             const body = hardBounceBody(s, recipient, 'forged');
             const timestamp = nowTimestamp();
 
             const stranger = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey;
-            const wrongKey = await postWebhook(s, body, { Signature: signWebhook(stranger, timestamp, body), Timestamp: timestamp });
-            AssertEqual(wrongKey.Status, 401, `a webhook signed with another key must answer 401 (${JSON.stringify(wrongKey.Body)})`);
+            const wrongKey = await postWebhook(s, signer.Path, body, { Signature: signWebhook(stranger, timestamp, body), Timestamp: timestamp });
+            assertSignatureRefusal(wrongKey, 'a webhook signed with another key');
 
-            const unsigned = await postWebhook(s, body);
-            AssertEqual(unsigned.Status, 401, `a webhook with no signature headers must answer 401 (${JSON.stringify(unsigned.Body)})`);
+            const unsigned = await postWebhook(s, signer.Path, body);
+            assertSignatureRefusal(unsigned, 'a webhook with no signature headers');
 
-            // With the real key in hand, the sharper case: a valid signature over a different body.
-            const key = loadWebhookSigningKey();
-            if (key) {
-                const signedBody = hardBounceBody(s, recipient, 'forged-original');
-                const tampered = await postWebhook(s, body, { Signature: signWebhook(key, timestamp, signedBody), Timestamp: timestamp });
-                AssertEqual(tampered.Status, 401, `a webhook whose body changed after signing must answer 401 (${JSON.stringify(tampered.Body)})`);
-            }
+            // A valid signature over a different body.
+            const signedBody = hardBounceBody(s, recipient, 'forged-original');
+            const tampered = await postWebhook(s, signer.Path, body, { Signature: signWebhook(signer.PrivateKey, timestamp, signedBody), Timestamp: timestamp });
+            assertSignatureRefusal(tampered, 'a webhook whose body changed after signing');
 
             await Sleep(NEGATIVE_WAIT_MS);
             const suppressions = await readSuppressions(s.Refs.User, recipient.Endpoint.ID);
@@ -721,6 +786,7 @@ async function teardownState(s: WireState): Promise<void> {
     await cleanup.Delete(s.CreatedMessageType, 'temporary message-type mapping');
     await cleanup.Delete(s.Employee, 'fixture employee');
     await cleanup.Delete(s.CreatedCompany, 'fixture company');
+    await cleanup.Delete(s.WebhookCredential, "the run's SendGrid webhook credential");
     cleanup.Report();
 }
 
