@@ -1110,6 +1110,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The turbo build seed from next, as in integration-sqlserver (see the comment there).
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
       - name: Build integration graph + CLI + MJAPI
         run: |
           read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
