@@ -8,6 +8,7 @@ import { AppContext } from "../types.js";
 import { GetReadOnlyProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 
 @ObjectType()
 export class GetDataContextItemDataOutputType {
@@ -65,6 +66,7 @@ interface SQLItemGate {
  * refused on its own, and the other items still load. Items of the other types load through entity
  * permissions for the calling user.
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class GetDataContextDataResolver extends ResolverBase {
     /**
