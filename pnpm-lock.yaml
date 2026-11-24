@@ -17278,6 +17278,9 @@ importers:
       '@memberjunction/ai-prompts':
         specifier: 6.3.0-edge.1
         version: link:../../AI/Prompts
+      '@memberjunction/ai-segmentation':
+        specifier: 6.3.0-edge.1
+        version: link:../../AI/Segmentation
       '@memberjunction/ai-systemone':
         specifier: 6.3.0-edge.1
         version: link:../../AI/Providers/SystemOne
