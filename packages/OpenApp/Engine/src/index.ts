@@ -27,7 +27,8 @@ export type {
     AppOperationResult,
     InstalledAppInfo,
     ResolvedDependency,
-    PassthroughInstallOptions
+    PassthroughInstallOptions,
+    DependenciesFromHead
 } from './types/open-app-types.js';
 
 // Dependency resolution

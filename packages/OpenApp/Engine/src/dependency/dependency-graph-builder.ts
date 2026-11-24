@@ -276,8 +276,10 @@ async function ProcessEdge(
     graph.set(depName, node);
 
     // The installed version's own record. A repository cannot answer this reliably: its default
-    // branch moves ahead of the release, and the installed version may have no tag (#6877).
-    if (installed?.Dependencies) {
+    // branch moves ahead of the release, and the installed version may have no tag (#6877). Only
+    // a developer who runs the app from its default branch wants that branch instead.
+    const fromHead = installed?.FromHead === true && resolvedRepo !== '';
+    if (installed?.Dependencies && !fromHead) {
         SetNodeDependencies(node, installed.Dependencies, queue);
         return;
     }
@@ -305,12 +307,18 @@ async function ProcessEdge(
     const fetched = await fetchManifest(
         resolvedRepo,
         node.Subpath,
-        node.ResolvedVersion ?? node.InstalledVersion,
+        fromHead ? undefined : node.ResolvedVersion ?? node.InstalledVersion,
         installed ? depName : undefined
     );
     if (fetched.Success && fetched.Manifest) {
         node.EffectiveVersion = node.ResolvedVersion ?? fetched.Manifest.version;
         SetNodeDependencies(node, fetched.Manifest.dependencies ?? {}, queue);
+    } else if (fromHead && installed?.Dependencies) {
+        warnings.push(
+            `The default branch of installed app '${depName}' (v${node.InstalledVersion}) could not be read from ` +
+            `${resolvedRepo} (${fetched.ErrorMessage ?? 'unknown error'}): its recorded dependencies are used`
+        );
+        SetNodeDependencies(node, installed.Dependencies, queue);
     } else if (node.AlreadyInstalled) {
         // A leaf: the app is already in place, so this does not stop the operation.
         warnings.push(
