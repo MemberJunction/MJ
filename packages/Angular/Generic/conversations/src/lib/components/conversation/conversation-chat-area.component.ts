@@ -8519,9 +8519,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ensureRemoteBrowser().Open(this.ConversationId);
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
-    this.IsSideQuestionOpen = false;
-    this.SideQuestionTurnCount = 0;
-    this.sideQuestionSubDestroy$?.next();
     this.SelectedArtifactId = null;
     this.ShowRemoteBrowserPanel = true;
     this.cdr.detectChanges();

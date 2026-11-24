@@ -1688,6 +1688,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             includeAnchored?: boolean;
             includeRecordLinked?: boolean;
             includeAgentChannels?: boolean;
+            includeSideQuestions?: boolean;
         }
     ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
@@ -1935,6 +1936,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             includeAnchored?: boolean;
             includeRecordLinked?: boolean;
             includeAgentChannels?: boolean;
+            includeSideQuestions?: boolean;
         }
     ): Promise<string> {
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);

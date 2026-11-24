@@ -1494,8 +1494,9 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/messaging-adapters (2 classes)
+// @memberjunction/messaging-adapters (3 classes)
 import {
+    EmailUtilityMailboxExtension,
     SlackMessagingExtension,
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
@@ -1515,7 +1516,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (96 classes)
+// @memberjunction/core-entities-server (97 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -3020,6 +3021,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
+    EmailUtilityMailboxExtension,
     SlackMessagingExtension,
     TeamsMessagingExtension,
     ActionLogRetentionScheduledJobDriver,
@@ -3196,11 +3198,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
-    CreateEmployeeAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    CreateEmployeeAction,
     CreateFormContributionAction,
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
@@ -3400,11 +3402,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     AWSIoTCoreBroadcastProvider,
     ArtifactComplianceAuditServerOperation,
     ArtifactEvaluateAiFormulaServerOperation,
-    AzureWebPubSubBroadcastProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    AzureWebPubSubBroadcastProvider,
     CreateGuestShareLinkServerOperation,
     GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
@@ -3448,7 +3450,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1425;
+export const CLASS_REGISTRATIONS_COUNT = 1426;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

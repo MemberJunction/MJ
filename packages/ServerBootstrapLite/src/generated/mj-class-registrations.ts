@@ -1232,7 +1232,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (96 classes)
+// @memberjunction/core-entities-server (97 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -2635,11 +2635,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
-    MJTaskDependencyEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJTaskDependencyEntityServer,
     MJTaskEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
@@ -2839,11 +2839,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SyncMCPToolsAction,
     TavilySearchAction,
     TeamsWebhookAction,
-    TestMCPConnectionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
     TriggerAgentWakeAction,
