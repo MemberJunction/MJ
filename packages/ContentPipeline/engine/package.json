@@ -29,7 +29,6 @@
     "@memberjunction/core-entities": "6.3.0-edge.1",
     "@memberjunction/credentials": "6.3.0-edge.1",
     "@memberjunction/document-parsing": "6.3.0-edge.1",
-    "@memberjunction/generic-database-provider": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
     "@memberjunction/network-utils": "6.3.0-edge.1",
     "@memberjunction/record-set-processor": "6.3.0-edge.1",

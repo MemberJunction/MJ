@@ -99,6 +99,10 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
     Summary: 'Diagnose the local MJ environment and report what is misconfigured.',
     Runtime: { class: 'moderate', typicalSeconds: 15 },
   },
+  harness: {
+    Summary: 'Manage multi-account CLI subscription pools, balancing strategies, and cooldown controls for external agent harnesses.',
+    Runtime: { class: 'fast', note: 'local pool operations are instant; interactive login awaits user sign-in' },
+  },
   install: {
     Summary: 'Install MemberJunction, or seed the Claude Code pack into a repo.',
     Runtime: { class: 'slow', typicalSeconds: 300, note: 'downloads a release, installs packages, runs migrations' },

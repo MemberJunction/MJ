@@ -437,7 +437,7 @@ Security isn't an add-on you wire up per screen — it's generated into the data
 
 - **Row-level security & field permissions** — defined in metadata, baked into generated views/stored procedures, enforced at the data layer regardless of tier.
 - **Audit trail / Record Changes** — every `BaseEntity.Save()` and `Delete()` is tracked automatically. You get built-in version history without writing any of it. See *Entity Version Control* in [`.claude/rules/data-access.md`](../.claude/rules/data-access.md).
-- **Authentication** — Auth0, Azure AD (MSAL), and Okta supported out of the box via [auth-services](../packages/Angular/Explorer/auth-services/README.md) on the client and [MJServer](../packages/MJServer/README.md) on the server.
+- **Authentication** — Auth0, Azure AD (MSAL), and Okta supported out of the box via [auth-services](../packages/Angular/Generic/auth-services/README.md) on the client and [MJServer](../packages/MJServer/README.md) on the server.
 - **API authorization** — [APIKeys README](../packages/APIKeys/README.md) for scoped, key-based access.
 - **Field-level encryption** — [Encryption README](../packages/Encryption/README.md) for AES-256 encryption of sensitive columns.
 
