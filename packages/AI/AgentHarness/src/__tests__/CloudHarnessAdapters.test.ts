@@ -544,6 +544,68 @@ describe('AntigravityCliAdapter', () => {
     });
 });
 
+describe('CloudDetachedSessionRegistry stays bounded', () => {
+    beforeEach(() => {
+        CloudDetachedSessionRegistry.Instance.ClearAll();
+    });
+
+    afterEach(() => {
+        CloudDetachedSessionRegistry.Instance.ClearAll();
+        vi.useRealTimers();
+    });
+
+    it('keeps a detached session available for its resume', () => {
+        const registry = CloudDetachedSessionRegistry.Instance;
+        registry.MarkDetached('session-1', new Set(['evt-1', 'evt-2']));
+
+        const entry = registry.GetDetached('session-1');
+        expect(entry?.SessionId).toBe('session-1');
+        expect([...(entry?.EmittedEventKeys ?? [])]).toEqual(['evt-1', 'evt-2']);
+
+        registry.ClearDetached('session-1');
+        expect(registry.GetDetached('session-1')).toBeUndefined();
+        expect(registry.DetachedSessionCount).toBe(0);
+    });
+
+    it('retains all active pending detached sessions without arbitrary count eviction and clears on EndSession cancel', async () => {
+        const registry = CloudDetachedSessionRegistry.Instance;
+        for (let i = 0; i < 600; i++) {
+            registry.MarkDetached(`session-${i}`, new Set([`evt-${i}`]));
+        }
+
+        expect(registry.DetachedSessionCount).toBe(600);
+        expect(registry.GetDetached('session-0')?.SessionId).toBe('session-0');
+        expect(registry.GetDetached('session-599')?.SessionId).toBe('session-599');
+
+        // A resumed adapter whose session ends without re-detaching clears its detached entry deterministically
+        const cancelledAdapter = new AntigravityCloudAdapter(
+            new MockCloudHttpTransport(() => jsonHttpResponse({ id: 'session-0', status: 'cancelled' })),
+        );
+        await cancelledAdapter.StartSession({
+            Executor: new CloudDisallowedProcessExecutor('test'),
+            WorkspacePath: '/ws',
+            Environment: { GEMINI_API_KEY: 'test-key' },
+            ResumeSessionId: 'session-0',
+        });
+        await cancelledAdapter.EndSession();
+        expect(registry.GetDetached('session-0')).toBeUndefined();
+    });
+
+    it('forgets a detached session that nobody resumed within the TTL', () => {
+        vi.useFakeTimers();
+        const registry = CloudDetachedSessionRegistry.Instance;
+        registry.MarkDetached('abandoned', new Set(['evt']));
+
+        vi.advanceTimersByTime(CloudDetachedSessionRegistry.DETACHED_SESSION_TTL_MS + 1);
+        // The next detach sweeps the expired entry even though nothing ever read it again.
+        registry.MarkDetached('fresh', new Set(['evt']));
+
+        expect(registry.DetachedSessionCount).toBe(1);
+        expect(registry.GetDetached('abandoned')).toBeUndefined();
+        expect(registry.GetDetached('fresh')).toBeDefined();
+    });
+});
+
 describe('AntigravityCloudAdapter — bounded-poll, adaptive-wake handoff & resume', () => {
     beforeEach(() => {
         CloudDetachedSessionRegistry.Instance.ClearAll();
