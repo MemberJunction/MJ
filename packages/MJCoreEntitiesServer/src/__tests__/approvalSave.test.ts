@@ -125,6 +125,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public ExternalDataSourceID: string | null = null;
         public Description = 'kept';
         public CacheValidationSQL: string | null = null;
+        public OwnerUserID: string | null = 'approver-1';
     }
 
     return {
@@ -389,6 +390,110 @@ describe('MJQueryEntityServer', () => {
             db.stored = { Status: 'Pending', ...PENDING };
             db.canApproveQueries = false;
             expect(await withValidationSQL(null).Save()).toBe(true);
+        });
+    });
+
+    /**
+     * A query whose listed fields this save changes, with `storedStatus` as the Status it was loaded
+     * with (what `EntityField.OldValue` reports).
+     */
+    function editedQuery(dirtyFields: string[], storedStatus = 'Approved'): MJQueryEntityServer {
+        const query = create(MJQueryEntityServer);
+        // Extraction (a new query, or a changed SQL) is covered elsewhere; this harness does not model it.
+        query.ExtractionOverride = 'Skip';
+        Object.defineProperty(query, 'FieldIsDirty', { value: (name: string) => dirtyFields.includes(name) });
+        Object.defineProperty(query, 'GetFieldByName', {
+            value: (name: string) => ({ Dirty: dirtyFields.includes(name), OldValue: name === 'Status' ? storedStatus : undefined }),
+        });
+        return query;
+    }
+
+    describe('OwnerUserID', () => {
+        it('a new query from a user who does not hold Queries: Approve is theirs, whatever owner it names', async () => {
+            db.canApproveQueries = false;
+            const query = create(MJQueryEntityServer);
+            query.ExtractionOverride = 'Skip';
+            query.IsSaved = false;
+            query.Status = 'Pending';
+            query.OwnerUserID = 'someone-else';
+            expect(await query.Save()).toBe(true);
+            expect(query.OwnerUserID).toBe('approver-1');
+        });
+
+        it('a new query with no owner is owned by the user saving it', async () => {
+            const query = create(MJQueryEntityServer);
+            query.ExtractionOverride = 'Skip';
+            query.IsSaved = false;
+            query.OwnerUserID = null;
+            expect(await query.Save()).toBe(true);
+            expect(query.OwnerUserID).toBe('approver-1');
+        });
+
+        it('a holder may name another owner for a new query', async () => {
+            const query = create(MJQueryEntityServer);
+            query.ExtractionOverride = 'Skip';
+            query.IsSaved = false;
+            query.OwnerUserID = 'someone-else';
+            expect(await query.Save()).toBe(true);
+            expect(query.OwnerUserID).toBe('someone-else');
+        });
+
+        it('refuses, writing nothing, a change of owner from a user who does not hold Queries: Approve', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            db.canApproveQueries = false;
+            const query = editedQuery(['OwnerUserID'], 'Pending');
+            query.Status = 'Pending';
+            query.OwnerUserID = 'someone-else';
+            expect(await query.Save()).toBe(false);
+            expect(writes).toHaveLength(0);
+            expect(query.RegisterResultHistoryEntry).toHaveBeenCalledWith(expect.objectContaining({
+                Success: false,
+                Message: expect.stringContaining("Changing who owns a query needs the 'Queries: Approve' authorization"),
+            }));
+        });
+
+        it('lets a holder reassign a query', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            const query = editedQuery(['OwnerUserID'], 'Pending');
+            query.Status = 'Pending';
+            query.OwnerUserID = 'someone-else';
+            expect(await query.Save()).toBe(true);
+            expect(query.OwnerUserID).toBe('someone-else');
+        });
+    });
+
+    describe('a change to an Approved query\'s definition', () => {
+        it.each(['SQL', 'UsesTemplate', 'ExternalDataSourceID'])('from a user who does not hold Queries: Approve saves it as Pending (%s)', async (field) => {
+            db.stored = { Status: 'Approved', ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1' };
+            db.canApproveQueries = false;
+            const query = editedQuery([field]);
+            expect(await query.Save()).toBe(true);
+            expect(query.Status).toBe('Pending');
+            // The stored approval columns are kept; the status no longer claims them.
+            expect(writes[0]).toMatchObject({ ApprovedByUserID: 'original', ApprovedFingerprint: 'fp-d1' });
+        });
+
+        it('from a holder stays Approved', async () => {
+            db.stored = { Status: 'Approved', ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1' };
+            const query = editedQuery(['SQL']);
+            expect(await query.Save()).toBe(true);
+            expect(query.Status).toBe('Approved');
+        });
+
+        it('leaves an edit that does not touch the definition Approved', async () => {
+            db.stored = { Status: 'Approved', ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1' };
+            db.canApproveQueries = false;
+            const query = editedQuery(['Description']);
+            expect(await query.Save()).toBe(true);
+            expect(query.Status).toBe('Approved');
+        });
+
+        it('still refuses approving a changed draft, rather than quietly saving it as Pending', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            db.canApproveQueries = false;
+            const query = editedQuery(['SQL'], 'Pending');
+            expect(await query.Save()).toBe(false);
+            expect(writes).toHaveLength(0);
         });
     });
 

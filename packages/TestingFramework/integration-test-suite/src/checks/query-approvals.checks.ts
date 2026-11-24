@@ -149,9 +149,29 @@ async function storedStatus(queryID: string, user: UserInfo): Promise<string | n
     return result.Results[0].Status;
 }
 
+/** The query's owner as stored, bypassing every cache. */
+async function storedOwner(queryID: string, user: UserInfo): Promise<string | null> {
+    const result = await new RunView().RunView<{ OwnerUserID: string | null }>({
+        EntityName: 'MJ: Queries', ExtraFilter: `ID='${EscapeSQLString(queryID)}'`,
+        Fields: ['OwnerUserID'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    Assert(result.Success && result.Results.length === 1, `query ${queryID} did not read back: ${result.ErrorMessage}`);
+    return result.Results[0].OwnerUserID;
+}
+
+/** An active user other than the harness user, to own a query the UI user does not. */
+async function anotherUserID(ctx: IntegrationCheckContext): Promise<string> {
+    const result = await new RunView().RunView<{ ID: string }>({
+        EntityName: 'MJ: Users', ExtraFilter: `IsActive = 1 AND ID <> '${EscapeSQLString(ctx.User.ID)}'`,
+        Fields: ['ID'], ResultType: 'simple', MaxRows: 1,
+    }, ctx.User);
+    Assert(result.Success && result.Results.length === 1, `another active user is required to own a query and was not found: ${result.ErrorMessage}`);
+    return result.Results[0].ID;
+}
+
 /**
- * Reloads a fixture query as the holder and keeps that copy for teardown: the UI role has no
- * Delete on queries, so a copy the UI user saved could not delete itself.
+ * Reloads a fixture query as the holder and keeps that copy for teardown, so teardown deletes every
+ * fixture the same way whichever user saved it.
  */
 async function adoptAsHolder(ctx: IntegrationCheckContext, name: string, queryID: string): Promise<MJQueryEntity> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
@@ -323,7 +343,7 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             Assert(await asHolder.Load(draft.ID), `the draft ${draft.ID} did not load for the holder`);
             asHolder.Status = 'Approved';
             await saveOrThrow(asHolder, 'approving the draft as a holder', FixtureQuerySaveOptions());
-            // Teardown deletes as the holder: the UI role has no Delete on queries.
+            // Teardown deletes as the holder.
             fixtures!.Queries.set('IT120 UI Draft', asHolder);
             Assert(UUIDsEqual(asHolder.ApprovedByUserID, ctx.User.ID), `the approver must be the holder — got ${asHolder.ApprovedByUserID}`);
             AssertEqual(await storedStatus(draft.ID, ctx.User), 'Approved', 'the holder\'s approval must be stored');
@@ -402,6 +422,59 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             Assert(checked.success, `the cache check must succeed: ${checked.errorMessage}`);
             AssertEqual(checked.results[0]?.status, 'no_validation', "a draft's validation SQL must not be used by a cache check");
             AssertEqual(checked.results[0]?.results?.length, 3, 'the draft must return its rows from the normal run');
+        }
+    },
+    {
+        Id: 'query-approvals.QA9',
+        Name: "QA9: a UI user owns the queries they create, edits and deletes only those, and an owner's edit to an Approved query goes back to Pending",
+        Fn: async (ctx) => {
+            const ui = uiOnlyUser(ctx);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const otherUserID = await anotherUserID(ctx);
+
+            // A new query is owned by the user saving it, whatever owner a UI user names.
+            const draft = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            draft.Name = 'IT120 UI Owned Draft';
+            draft.CategoryID = fixtures!.Category.ID;
+            draft.SQL = `SELECT N FROM ${ROWS}`;
+            draft.Status = 'Pending';
+            draft.OwnerUserID = otherUserID;
+            await saveOrThrow(draft, 'saving a draft as the UI user', FixtureQuerySaveOptions());
+            fixtures!.Queries.set('IT120 UI Owned Draft', draft);
+            Assert(UUIDsEqual(await storedOwner(draft.ID, ctx.User), ui.ID), 'a UI user\'s new query must be stored as theirs');
+
+            // The owner edits their own draft; giving it away is refused.
+            draft.SQL = `SELECT N FROM ${ROWS} WHERE N > 1`;
+            await saveOrThrow(draft, 'editing the UI user\'s own draft', FixtureQuerySaveOptions());
+            draft.OwnerUserID = otherUserID;
+            AssertEqual(await draft.Save(FixtureQuerySaveOptions()), false, 'a UI user must not be able to give their query away');
+            Assert(UUIDsEqual(await storedOwner(draft.ID, ctx.User), ui.ID), 'a refused change of owner must leave the owner as stored');
+
+            // Someone else's query: readable, but the UI user can neither edit nor delete it.
+            const theirs = await createQuery('IT120 Another User\'s Query', `SELECT N FROM ${ROWS}`, ctx.User);
+            theirs.OwnerUserID = otherUserID;
+            await saveOrThrow(theirs, 'reassigning a query to another user as a holder', FixtureQuerySaveOptions());
+            const theirsAsUI = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            Assert(await theirsAsUI.Load(theirs.ID), 'the UI user must be able to read another user\'s query');
+            theirsAsUI.Description = 'edited by someone who does not own it';
+            AssertEqual(await theirsAsUI.Save(FixtureQuerySaveOptions()), false, 'a UI user must not be able to edit another user\'s query');
+            AssertEqual(await theirsAsUI.Delete(), false, 'a UI user must not be able to delete another user\'s query');
+
+            // A holder approves the UI user's query; the owner's edit to its SQL saves it as Pending.
+            const approved = await adoptAsHolder(ctx, 'IT120 UI Owned Draft', draft.ID);
+            approved.Status = 'Approved';
+            await saveOrThrow(approved, 'approving the UI user\'s query as a holder', FixtureQuerySaveOptions());
+            const edited = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            Assert(await edited.Load(draft.ID), 'the owner must be able to load their approved query');
+            edited.SQL = `SELECT N FROM ${ROWS} WHERE N = 3`;
+            await saveOrThrow(edited, 'editing the SQL of an approved query as its owner', FixtureQuerySaveOptions());
+            AssertEqual(await storedStatus(draft.ID, ctx.User), 'Pending', 'an owner\'s change to an approved query\'s SQL must save it as Pending');
+
+            // The owner deletes their own query.
+            Assert(await edited.Delete(), `the owner must be able to delete their own query: ${edited.LatestResult?.CompleteMessage}`);
+            fixtures!.Queries.delete('IT120 UI Owned Draft');
+            const gone = await new RunView().RunView({ EntityName: 'MJ: Queries', ExtraFilter: `ID='${EscapeSQLString(draft.ID)}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, ctx.User);
+            AssertEqual(gone.Results?.length, 0, 'the deleted query must be gone');
         }
     }
 ];

@@ -99692,6 +99692,20 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: OwnerUserID
+    * * Display Name: Owner User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who owns this query: who created it, unless a holder of the Queries: Approve authorization reassigned it. Set by the server on create. A user whose only query grant is the UI role updates and deletes only queries they own. Queries that existed before this column got their creator from Record Changes, or the system user when none was recorded.
+    */
+    get OwnerUserID(): string {
+        return this.Get('OwnerUserID');
+    }
+    set OwnerUserID(value: string) {
+        this.Set('OwnerUserID', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -99734,6 +99748,15 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     */
     get ApprovedByUser(): string | null {
         return this.Get('ApprovedByUser');
+    }
+
+    /**
+    * * Field Name: OwnerUser
+    * * Display Name: Owner User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OwnerUser(): string | null {
+        return this.Get('OwnerUser');
     }
 }
 

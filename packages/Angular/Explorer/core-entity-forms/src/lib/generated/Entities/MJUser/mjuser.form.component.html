@@ -3270,25 +3270,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Queries Section -->
+    <!-- Queries (Approved By User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJQueries"
-        SectionName="Queries"
+        SectionKey="mJQueriesApprovedByUserID"
+        SectionName="Queries (Approved By User ID)"
         Icon="fa-solid fa-clipboard-question"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJQueries')"
+        [BadgeCount]="GetSectionRowCount('mJQueriesApprovedByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Queries','ApprovedByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Queries','ApprovedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJQueries')"
+                [AllowLoad]="IsSectionExpanded('mJQueriesApprovedByUserID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJQueries', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJQueriesApprovedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -3689,6 +3689,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationSuppressionsCreatedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Queries (Owner User) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJQueriesOwnerUserID"
+        SectionName="Queries (Owner User)"
+        Icon="fa-solid fa-clipboard-question"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJQueriesOwnerUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Queries','OwnerUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Queries','OwnerUserID')"
+                [AllowLoad]="IsSectionExpanded('mJQueriesOwnerUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJQueriesOwnerUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -24,6 +24,8 @@ import {
     QueryDefinitionRows,
     QueryEngine,
     QUERY_APPROVAL_REFUSAL,
+    QUERY_DEFINITION_FIELD_NAMES,
+    QUERY_OWNER_REFUSAL,
     QUERY_VALIDATION_SQL_REFUSAL,
     UserCanApproveQueries,
 } from "@memberjunction/core-entities";
@@ -246,7 +248,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     private async saveOnServerAsync(options: EntitySaveOptions | undefined): Promise<boolean> {
         let approving: boolean;
         try {
-            if (!options?.ReplayOnly) this.assertMayWriteValidationSQL();
+            if (!options?.ReplayOnly) {
+                this.assertMayWriteValidationSQL();
+                this.applyOwnerRules();
+                this.returnEditedApprovalToPending();
+            }
             // Approving is a server act; a ReplayOnly save writes nothing, so it has nothing to stamp.
             approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'Status', this.Status, this.approverRule);
         } catch (e) {
@@ -291,6 +297,40 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         if (user && !UserCanApproveQueries(user, this.extractionProvider)) {
             throw new Error(QUERY_VALIDATION_SQL_REFUSAL);
         }
+    }
+
+    /**
+     * Who owns the query. A new query is owned by the user saving it: one who does not hold
+     * `Queries: Approve` always owns what they create, and a holder may name another owner. An
+     * existing query's owner changes only for a holder. A save with no context user is not
+     * checked, like the approval rules.
+     */
+    private applyOwnerRules(): void {
+        const user = this.ContextCurrentUser;
+        if (!user) return;
+        const canApprove = (): boolean => UserCanApproveQueries(user, this.extractionProvider);
+        if (!this.IsSaved) {
+            if (!this.OwnerUserID || (!UUIDsEqual(this.OwnerUserID, user.ID) && !canApprove())) this.OwnerUserID = user.ID;
+            return;
+        }
+        if (this.FieldIsDirty('OwnerUserID') && !canApprove()) {
+            throw new Error(QUERY_OWNER_REFUSAL);
+        }
+    }
+
+    /**
+     * Saves a change to an Approved query's definition (its SQL, template flag or external source)
+     * as Pending when the user saving it does not hold `Queries: Approve`. The approval named the
+     * definition a holder approved; a new one needs a holder too. Until then every surface that lists
+     * Approved queries stops offering it, not only the runs that check the fingerprint.
+     */
+    private returnEditedApprovalToPending(): void {
+        if (!this.IsSaved || this.Status !== 'Approved') return;
+        if (this.GetFieldByName('Status').OldValue !== 'Approved') return;
+        if (!QUERY_DEFINITION_FIELD_NAMES.some(name => this.FieldIsDirty(name))) return;
+        const user = this.ContextCurrentUser;
+        if (!user || UserCanApproveQueries(user, this.extractionProvider)) return;
+        this.Status = 'Pending';
     }
 
     /** Whether this object saves through a network (client) provider rather than to a database. */

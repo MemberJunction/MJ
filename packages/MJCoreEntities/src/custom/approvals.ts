@@ -33,8 +33,14 @@ import { QueryEngine } from '../engines/QueryEngine';
  */
 export type ApprovalState = 'Current' | 'NotApproved' | 'Stale';
 
+/**
+ * A query's material fields on its own row: what decides what it runs. The fingerprint covers
+ * these with the query's dialect and parameter rows.
+ */
+export const QUERY_DEFINITION_FIELD_NAMES = ['SQL', 'UsesTemplate', 'ExternalDataSourceID'] as const;
+
 /** A query's material fields. */
-export type QueryDefinitionFields = Pick<MJQueryEntity, 'SQL' | 'UsesTemplate' | 'ExternalDataSourceID'>;
+export type QueryDefinitionFields = Pick<MJQueryEntity, typeof QUERY_DEFINITION_FIELD_NAMES[number]>;
 
 /** A query's child rows that are part of its definition: dialect variants and the parameter contract. */
 export interface QueryDefinitionRows {
@@ -195,6 +201,10 @@ export const QUERY_APPROVAL_REFUSAL =
  */
 export const QUERY_VALIDATION_SQL_REFUSAL =
     `Setting a query's cache validation SQL needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization. Save it without one, and someone who holds it can add it.`;
+
+/** Why the server refused a save that changes who owns an existing query. */
+export const QUERY_OWNER_REFUSAL =
+    `Changing who owns a query needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization.`;
 
 /**
  * Whether this user may approve queries: they hold {@link APPROVE_QUERIES_AUTHORIZATION}, directly
