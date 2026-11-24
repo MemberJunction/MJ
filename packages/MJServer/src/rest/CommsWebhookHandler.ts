@@ -11,6 +11,12 @@
  * UUIDv4 UnsubscribeToken, or HMAC-SHA256 `sig` over `TrackingToken + ':' + u`) and is protected
  * by per-IP rate limiting.
  *
+ * The open and click routes do no database work on the request. A valid signature is all they
+ * check; the hit goes into an in-memory buffer ({@link CommsTrackingEventBuffer}) that publishes
+ * to the work queue in batches, and the `comms.activity` worker matches the token to a message.
+ * The one exception is an open pixel with no valid signature (mail sent before pixels were signed,
+ * or with no HMAC secret configured), which is still looked up before it is recorded.
+ *
  * @module @memberjunction/server/rest/CommsWebhookHandler
  */
 
@@ -23,6 +29,7 @@ import { IEntityDataProvider, IMetadataProvider, LogError, RunInEntityTransactio
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import {
     ComputeTrackingSignature,
+    VerifyOpenPixelSignature,
     VerifyTrackingSignature,
 } from '@memberjunction/communication-engine';
 import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
@@ -39,6 +46,7 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { CheckSendGridWebhookTimestamp, VerifySendGridWebhookSignature } from '@memberjunction/communication-sendgrid';
 import { WorkQueueEngine } from '@memberjunction/work-queue-engine';
+import { CommsTrackingEventBuffer, type CommsTrackingEventBufferOptions } from './CommsTrackingEventBuffer.js';
 import { CreateRouteRateLimiter } from './routeRateLimit.js';
 import type { RouteRateLimitSettings } from '../routeRateLimitConfigUnits.js';
 import {
@@ -221,11 +229,23 @@ export interface CommsWebhookHandlerOptions {
     /** Per-IP rate limit overrides for `/comms/unsubscribe*`, `/preferences*`, `/confirm*`. */
     UnsubscribeRateLimit?: Partial<RouteRateLimitSettings>;
     /**
-     * Override for verifying whether a TrackingToken or UnsubscribeToken exists before enqueueing
-     * activity. Defaults to a lookup on the Communication Logs table; overriding `PublishActivity`
-     * does not change that.
+     * Override for verifying whether an UnsubscribeToken, or the TrackingToken of an open pixel
+     * that carries no valid signature, exists before enqueueing activity. Defaults to a lookup on the
+     * Communication Logs table; overriding `PublishActivity` does not change that. Signed open
+     * pixels and click links are accepted on their signature and never reach it.
      */
     VerifyToken?: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>;
+    /**
+     * Tuning for the in-memory buffer that open and click hits wait in before they are published.
+     * Ignored when `TrackingEventBuffer` is given.
+     */
+    TrackingBuffer?: CommsTrackingEventBufferOptions;
+    /**
+     * The buffer open and click hits go into. Defaults to one that publishes through
+     * `PublishActivity` when that is overridden, and otherwise to the work queue in one call per
+     * batch. Pass one to control flushing, for example in a test.
+     */
+    TrackingEventBuffer?: CommsTrackingEventBuffer<CommsActivityWorkPayload>;
     /** Clock override (Unix seconds) for deterministic replay-window testing. */
     NowSeconds?: () => number;
     /** Override for loading preference center data by UnsubscribeToken. */
@@ -258,6 +278,12 @@ export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = 
     const elementSrc = options.PreferenceElementSrc ?? process.env.MJ_COMMS_PREFERENCE_ELEMENT_SRC;
     const generateNonce = options.GenerateNonce ?? (() => crypto.randomBytes(16).toString('base64'));
     const verifyToken = options.VerifyToken ?? defaultVerifyToken;
+    const trackingBuffer =
+        options.TrackingEventBuffer ??
+        new CommsTrackingEventBuffer<CommsActivityWorkPayload>(
+            options.PublishActivity ? publishEachWith(options.PublishActivity) : publishActivityPayloads,
+            options.TrackingBuffer,
+        );
 
     const webhookLimiter = CreateRouteRateLimiter(
         'commsWebhooks',
@@ -352,11 +378,11 @@ export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = 
     );
 
     router.get('/open/:token.gif', trackingLimiter, async (req, res) => {
-        await handleOpenPixel(req, res, publishActivity, verifyToken);
+        await handleOpenPixel(req, res, trackingBuffer, getHmacSecret, verifyToken);
     });
 
-    router.get('/click/:token', trackingLimiter, async (req, res) => {
-        await handleClickRedirect(req, res, publishActivity, getHmacSecret, verifyToken);
+    router.get('/click/:token', trackingLimiter, (req, res) => {
+        handleClickRedirect(req, res, trackingBuffer, getHmacSecret);
     });
 
     return router;
@@ -533,27 +559,20 @@ async function handleUnsubscribe(
 async function handleOpenPixel(
     req: express.Request,
     res: express.Response,
-    publishActivity: (payload: CommsActivityWorkPayload) => Promise<void>,
+    trackingBuffer: CommsTrackingEventBuffer<CommsActivityWorkPayload>,
+    getHmacSecret: () => string | undefined,
     verifyToken: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>,
 ): Promise<void> {
-    const rawToken = req.params.token;
-    const token = (Array.isArray(rawToken) ? rawToken[0] : rawToken)?.trim();
-
-    if (token && UUID_V4_REGEX.test(token)) {
-        try {
-            if (await verifyToken('tracking', token)) {
-                await publishActivity({
-                    Source: 'open-pixel',
-                    EventType: 'Opened',
-                    TrackingToken: token,
-                    OccurredAt: new Date().toISOString(),
-                    IPAddress: req.ip,
-                    UserAgent: req.get('user-agent'),
-                });
-            }
-        } catch (ex) {
-            LogError(`[CommsWebhook] Failed to enqueue open event: ${ex instanceof Error ? ex.message : String(ex)}`);
-        }
+    const token = extractRouteToken(req);
+    if (token && (await isRecordableOpen(req, token, getHmacSecret, verifyToken))) {
+        trackingBuffer.Add({
+            Source: 'open-pixel',
+            EventType: 'Opened',
+            TrackingToken: token,
+            OccurredAt: new Date().toISOString(),
+            IPAddress: req.ip,
+            UserAgent: req.get('user-agent'),
+        });
     }
 
     res.status(200);
@@ -565,13 +584,45 @@ async function handleOpenPixel(
     res.end(TRANSPARENT_GIF_1X1);
 }
 
-async function handleClickRedirect(
+/**
+ * Decides whether an open-pixel request is recorded. A pixel with a valid signature is recorded on
+ * that alone, with no database work. Any other request is recorded only when its tracking token is
+ * on a message log: that covers mail sent before pixels were signed, or with no HMAC secret
+ * configured, where nothing but a lookup can tell a real pixel from a guessed token.
+ *
+ * What the caller sends never chooses which check applies. A request that fails the signature check
+ * gets the lookup, whether its `sig` is wrong or absent, so neither check can be skipped.
+ */
+async function isRecordableOpen(
     req: express.Request,
-    res: express.Response,
-    publishActivity: (payload: CommsActivityWorkPayload) => Promise<void>,
+    token: string,
     getHmacSecret: () => string | undefined,
     verifyToken: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>,
-): Promise<void> {
+): Promise<boolean> {
+    const secret = getHmacSecret();
+    const signature = typeof req.query.sig === 'string' ? req.query.sig : '';
+    if (secret && VerifyOpenPixelSignature(token, signature, secret)) {
+        return true;
+    }
+    try {
+        return await verifyToken('tracking', token);
+    } catch (ex) {
+        LogError(`[CommsWebhook] Failed to verify an open pixel with no valid signature: ${ex instanceof Error ? ex.message : String(ex)}`);
+        return false;
+    }
+}
+
+/**
+ * Redirects a tracked link to its target and records the click. The signature covers the tracking
+ * token and the target, so a request that passes it is a link this system issued; no lookup is
+ * needed here, and the worker drops a click whose token matches no message.
+ */
+function handleClickRedirect(
+    req: express.Request,
+    res: express.Response,
+    trackingBuffer: CommsTrackingEventBuffer<CommsActivityWorkPayload>,
+    getHmacSecret: () => string | undefined,
+): void {
     const rawToken = req.params.token;
     const token = (Array.isArray(rawToken) ? rawToken[0] : rawToken)?.trim();
     const targetUrl = typeof req.query.u === 'string' ? req.query.u : undefined;
@@ -588,20 +639,16 @@ async function handleClickRedirect(
         return;
     }
 
-    try {
-        if (UUID_V4_REGEX.test(token) && (await verifyToken('tracking', token))) {
-            await publishActivity({
-                Source: 'click-redirect',
-                EventType: 'Clicked',
-                TrackingToken: token,
-                TargetURL: targetUrl,
-                OccurredAt: new Date().toISOString(),
-                IPAddress: req.ip,
-                UserAgent: req.get('user-agent'),
-            });
-        }
-    } catch (ex) {
-        LogError(`[CommsWebhook] Failed to enqueue click event: ${ex instanceof Error ? ex.message : String(ex)}`);
+    if (UUID_V4_REGEX.test(token)) {
+        trackingBuffer.Add({
+            Source: 'click-redirect',
+            EventType: 'Clicked',
+            TrackingToken: token,
+            TargetURL: targetUrl,
+            OccurredAt: new Date().toISOString(),
+            IPAddress: req.ip,
+            UserAgent: req.get('user-agent'),
+        });
     }
 
     res.redirect(302, targetUrl);
@@ -803,17 +850,47 @@ async function defaultResolveWebhookKey(credentialId?: string): Promise<string |
 }
 
 async function defaultPublishActivity(payload: CommsActivityWorkPayload): Promise<void> {
+    await publishActivityPayloads([payload]);
+}
+
+/** Publishes activity payloads to the work queue in one call. Throws when any of them is rejected. */
+async function publishActivityPayloads(payloads: CommsActivityWorkPayload[]): Promise<void> {
     if (WorkQueueEngine.Instance.Topics.length === 0) {
         const systemUser = getSystemUser();
         if (systemUser) {
             await WorkQueueEngine.Instance.Config(false, systemUser);
         }
     }
-    const results = await WorkQueueEngine.Instance.Publish(COMMS_ACTIVITY_TOPIC, [{ Payload: payload }]);
-    const rejected = results.find((r) => r.Status === 'Rejected');
-    if (rejected) {
-        throw new Error(`WorkQueue publish rejected (${rejected.Error?.Code ?? 'Unknown'}): ${rejected.Error?.Message ?? ''}`);
+    const results = await WorkQueueEngine.Instance.Publish(
+        COMMS_ACTIVITY_TOPIC,
+        payloads.map((payload) => ({ Payload: payload })),
+    );
+    const rejected = results.filter((r) => r.Status === 'Rejected');
+    if (rejected.length > 0) {
+        const first = rejected[0];
+        throw new Error(
+            `WorkQueue publish rejected ${rejected.length} of ${payloads.length} (${first.Error?.Code ?? 'Unknown'}): ${first.Error?.Message ?? ''}`,
+        );
     }
+}
+
+/**
+ * Adapts a one-at-a-time `PublishActivity` override to the tracking buffer's batch publisher. One
+ * payload failing does not stop the rest; the failures are reported together.
+ */
+function publishEachWith(
+    publishOne: (payload: CommsActivityWorkPayload) => Promise<void>,
+): (payloads: CommsActivityWorkPayload[]) => Promise<void> {
+    return async (payloads) => {
+        const outcomes = await Promise.allSettled(payloads.map((payload) => publishOne(payload)));
+        const failed = outcomes.filter((o): o is PromiseRejectedResult => o.status === 'rejected');
+        if (failed.length > 0) {
+            const reason = failed[0].reason;
+            throw new Error(
+                `${failed.length} of ${payloads.length} failed: ${reason instanceof Error ? reason.message : String(reason)}`,
+            );
+        }
+    };
 }
 
 function getSystemUser(): UserInfo | null {
