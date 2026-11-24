@@ -171,6 +171,8 @@ export type HarnessTurnEvent =
     | { Type: 'tool-result'; ToolCallId: string; ToolName?: string; Output: string; IsError?: boolean }
     /** Informational in-sandbox activity (file edit, shell command) for live view only. */
     | { Type: 'sandbox-activity'; Description: string }
+    /** Throttled liveness pulse emitted on raw stdout/stderr or unmapped adapter activity. */
+    | { Type: 'liveness-heartbeat'; Source?: 'stdout' | 'stderr' | 'event'; Timestamp?: string }
     /** The harness wants to do something the posture gates; becomes an `MJ: AI Agent Requests` row. */
     | { Type: 'permission-request'; RequestId: string; Description: string; Command?: string }
     /** Token/cost usage for the turn. Without this the run cannot be accounted for — see below. */
@@ -212,6 +214,10 @@ export interface HarnessTurnResult {
     ErrorMessage?: string;
     /** True when the turn was stopped because it exceeded limits.maxWallClockSeconds. */
     TimedOut?: boolean;
+    /** True when the turn was stopped by the inactivity watchdog or repeated tool-loop detector. */
+    Stalled?: boolean;
+    /** Descriptive diagnostic explaining why the turn was marked stalled. */
+    StallReason?: string;
     /** Vendor session id, persisted to `AIAgentRun.ExternalSessionID` for resume and log correlation. */
     SessionId?: string;
     /**
@@ -281,4 +287,55 @@ export interface HarnessPermissionPolicy {
     AllowedTools?: string[];
     /** Tool patterns the agent must never use. Takes precedence over {@link AllowedTools}. */
     DisallowedTools?: string[];
+}
+
+/**
+ * Runtime bounds and watchdog limits applied to a harness turn.
+ */
+export interface HarnessTurnLimits {
+    /** Hard wall-clock ceiling for a single turn, in seconds. */
+    maxWallClockSeconds?: number;
+    /**
+     * Rolling inactivity timeout in seconds. Reset on every emitted {@link HarnessTurnEvent}
+     * (including `liveness-heartbeat` pulses from raw stdout/stderr activity).
+     */
+    maxIdleSeconds?: number;
+    /**
+     * Maximum consecutive identical `(ToolName, canonical ArgumentsJson)` tool calls allowed
+     * before aborting the turn as stalled.
+     */
+    maxConsecutiveIdenticalToolCalls?: number;
+    /**
+     * Minimum interval in seconds between {@link HarnessActivityHeartbeatCallback} invocations
+     * while live events are streaming. Defaults to 60 seconds.
+     */
+    heartbeatIntervalSeconds?: number;
+}
+
+/**
+ * Activity heartbeat payload delivered to {@link HarnessActivityHeartbeatCallback} during a turn.
+ */
+export interface HarnessActivityHeartbeatInfo {
+    /** Wall-clock milliseconds elapsed since the current turn began. */
+    ElapsedMs: number;
+    /** Event `Type` of the latest {@link HarnessTurnEvent} observed. */
+    LastEventType: string;
+}
+
+/**
+ * Optional callback invoked periodically on live turn activity so callers can renew external
+ * run leases or publish liveness telemetry without polling.
+ */
+export type HarnessActivityHeartbeatCallback = (
+    info: HarnessActivityHeartbeatInfo,
+) => void | Promise<void>;
+
+/**
+ * Per-run execution limits and liveness hooks for a harness turn.
+ */
+export interface HarnessRunConfig {
+    /** Wall-clock, idle watchdog, repeated tool-loop, and heartbeat cadence limits. */
+    limits?: HarnessTurnLimits;
+    /** Optional hook invoked periodically on live turn activity. */
+    onActivityHeartbeat?: HarnessActivityHeartbeatCallback;
 }

@@ -19,10 +19,15 @@ import {
 import {
   CONVERSATION_CALL_HOST_CHANNELS,
   ConversationCallStartOptions,
+  IsMobileCallChannelAllowed,
   LoadRealtimeCaptureChannels,
+  MOBILE_DESKTOP_ONLY_CHANNEL_REASON,
   RealtimeCameraChannel,
   RealtimeScreenShareChannel,
 } from '../lib/components/realtime/capture/realtime-capture-channel';
+import { ClientContextChannel } from '../lib/components/realtime/channels/client-context-channel';
+import { RealtimeAvatarChannel } from '../lib/components/realtime/avatar/realtime-avatar-channel';
+import { RealtimeWhiteboardChannel } from '../lib/components/realtime/whiteboard/whiteboard-channel';
 import type { RealtimeCaptureSurfaceComponent } from '../lib/components/realtime/capture/realtime-capture-surface.component';
 
 LoadRealtimeCaptureChannels();
@@ -220,5 +225,30 @@ describe('the Camera and Screen Share channels', () => {
     expect(camera.Model.View.Status).toBe('off');
     expect(host.captures.observed).toBe(false);
     expect(host.sources.observed).toBe(false);
+  });
+
+  it('omits side-panel tab channels and screen share on narrow mobile viewports while keeping headless, avatar, and camera', () => {
+    expect(IsMobileCallChannelAllowed(new ClientContextChannel())).toBe(true);
+    expect(IsMobileCallChannelAllowed(new RealtimeAvatarChannel())).toBe(true);
+    expect(IsMobileCallChannelAllowed(new RealtimeCameraChannel())).toBe(true);
+    expect(IsMobileCallChannelAllowed(new RealtimeScreenShareChannel())).toBe(false);
+    expect(IsMobileCallChannelAllowed(new RealtimeWhiteboardChannel())).toBe(false);
+
+    const originalWindow = globalThis.window;
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: {
+          matchMedia: (query: string) => ({ matches: query.includes('860px') }),
+        },
+      });
+      const narrowOptions = ConversationCallStartOptions();
+      expect(narrowOptions.HostChannels).toEqual([{ ClientPluginClass: 'RealtimeCameraChannel' }]);
+      expect(narrowOptions.ChannelFilter).toBe(IsMobileCallChannelAllowed);
+      expect(narrowOptions.ChannelFilterReason).toBe(MOBILE_DESKTOP_ONLY_CHANNEL_REASON);
+      expect(narrowOptions.CameraCheck).toBe(true);
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    }
   });
 });
