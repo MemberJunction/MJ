@@ -2,6 +2,8 @@ export * from './types.js';
 export * from './HarnessAgentType.js';
 export * from './HarnessAgentBase.js';
 export * from './HarnessCredentialResolver.js';
+export * from './HarnessQuotaClassifier.js';
+export * from './HarnessAccountPoolService.js';
 
 export * from './adapters/BaseHarnessAdapter.js';
 export * from './adapters/BaseCliHarnessAdapter.js';

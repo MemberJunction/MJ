@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT186 - Agent Instances and Multi-Level Prototype Inheritance",
+    "Description": "Verifies 3-level BaseAgentID prototype inheritance, CodeGen hierarchy TVFs and vwAIAgents columns, live action/skill/instruction inheritance and child action veto, 2x2 RBAC privacy with Ancestor CanRun invariant and SQL RLS (UserAccessibleAIAgents), multi-instance primary uniqueness flip, ancestor policy ceiling intersection, sibling note memory isolation, and MJAIAgentEntityServer sandbox guards.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Multi-level BaseAgentID prototype inheritance, CodeGen hierarchy columns, 2x2 RBAC + Ancestor CanRun invariant, SQL RLS isolation, policy ceiling intersection, note isolation, and server sandbox guards all pass against live SQL Server."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-instances-and-inheritance"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A8837672-F4C1-4267-A73B-6682F637BA73"
+  }
+}

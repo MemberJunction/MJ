@@ -132,6 +132,15 @@ export function ApplyDefaultAgentUserPolicyValues(
 }
 
 /**
+ * One slot in the policy cache. `Policy === null` is a cached "no policy configured" result, which is
+ * only trusted until `NoneExpiresAt`; a found policy ignores `NoneExpiresAt`.
+ */
+interface PolicyCacheEntry {
+    Policy: MJAIAgentUserPolicyEntity | null;
+    NoneExpiresAt: number;
+}
+
+/**
  * Discriminated result of looking up a `(agentId, userId)` policy so security-critical
  * callers can distinguish "no policy row configured" from "policy lookup failed" and fail closed.
  */
@@ -303,17 +312,34 @@ interface NodeProcessWithBuiltinModule {
     getBuiltinModule?: (id: string) => { AsyncLocalStorage?: new () => ExecutingAgentContextStore } | undefined;
 }
 
+interface StampedPolicyCacheEntry {
+    Entry: PolicyCacheEntry;
+    Stamp: number;
+}
+
 /**
  * Singleton engine that loads and evaluates `MJ: AI Agent User Policies` records.
  */
 export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> {
-    private static readonly _providerIds = new WeakMap<object, number>();
-    private static _nextProviderId = 1;
-    private static readonly NONE_POLICY_CACHE_TTL_MS = 30_000;
+    private static readonly NONE_POLICY_CACHE_TTL_MS = 30_000; // 30s negative-cache TTL when no policy row exists yet for an (agent, user) pair
 
     private readonly expressionEvaluator = new SafeExpressionEvaluator();
-    private readonly policyCache = new Map<string, MJAIAgentUserPolicyEntity | null>();
-    private readonly nonePolicyCacheExpiry = new Map<string, number>();
+    /**
+     * Global/default-provider policy cache keyed by `agent::user` pair. Kept coherent via
+     * {@link HandleEntityEvent} (`save`, `delete`, `remote-invalidate`) without arbitrary size caps.
+     */
+    private readonly defaultPolicyCache = new Map<string, PolicyCacheEntry>();
+    /**
+     * Per-provider policy caches keyed weakly by `IMetadataProvider` object identity.
+     * MJServer constructs a fresh provider per GraphQL/HTTP request; storing per-provider slots in a
+     * `WeakMap` gives 100% intra-request cache hits while letting V8 garbage-collect both the provider
+     * and any cached `BaseEntity` attached to it as soon as the request finishes — with zero arbitrary
+     * entry caps and zero cross-request pinning.
+     */
+    private providerPolicyCaches = new WeakMap<object, Map<string, StampedPolicyCacheEntry>>();
+    /** Monotonic per-`agent::user` invalidation stamps so `ClearCache(agentId, userId)` invalidates live provider maps in O(1). */
+    private readonly invalidatedPairGeneration = new Map<string, number>();
+    private nextGeneration = 1;
     private executingAgentStore: ExecutingAgentContextStore | null = null;
     private entityEventSubscription: Subscription | null = null;
 
@@ -481,25 +507,62 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         return this.executingAgentStore.run(frame, fn);
     }
 
-    private getProviderScopePrefix(provider?: object | null): string {
-        if (!provider || typeof provider !== 'object') {
-            return 'default';
-        }
-        let id = AgentUserPolicyEngine._providerIds.get(provider);
-        if (id === undefined) {
-            id = AgentUserPolicyEngine._nextProviderId++;
-            AgentUserPolicyEngine._providerIds.set(provider, id);
-        }
-        return `p:${id}`;
-    }
-
-    private buildPairSuffix(agentId: string, userId: string): string {
+    private buildPairKey(agentId: string, userId: string): string {
         return `${agentId.trim().toLowerCase()}::${userId.trim().toLowerCase()}`;
     }
 
-    /** Build a canonical provider-scoped cache key for an `(agentId, userId, provider)` tuple. */
-    private buildCacheKey(agentId: string, userId: string, provider?: object | null): string {
-        return `${this.getProviderScopePrefix(provider)}::${this.buildPairSuffix(agentId, userId)}`;
+    private setCacheEntry(
+        agentId: string,
+        userId: string,
+        provider: object | null | undefined,
+        policy: MJAIAgentUserPolicyEntity | null,
+        noneExpiresAt = 0
+    ): void {
+        const pair = this.buildPairKey(agentId, userId);
+        const entry: PolicyCacheEntry = { Policy: policy, NoneExpiresAt: noneExpiresAt };
+        if (provider && typeof provider === 'object') {
+            let map = this.providerPolicyCaches.get(provider);
+            if (!map) {
+                map = new Map<string, StampedPolicyCacheEntry>();
+                this.providerPolicyCaches.set(provider, map);
+            }
+            const stamp = this.invalidatedPairGeneration.get(pair) ?? 0;
+            map.set(pair, { Entry: entry, Stamp: stamp });
+            return;
+        }
+        this.defaultPolicyCache.set(pair, entry);
+    }
+
+    private getCacheEntry(agentId: string, userId: string, provider?: object | null): PolicyCacheEntry | undefined {
+        const pair = this.buildPairKey(agentId, userId);
+        if (provider && typeof provider === 'object') {
+            const map = this.providerPolicyCaches.get(provider);
+            const stamped = map?.get(pair);
+            if (!stamped) {
+                return undefined;
+            }
+            const minStamp = this.invalidatedPairGeneration.get(pair) ?? 0;
+            if (stamped.Stamp < minStamp) {
+                map?.delete(pair);
+                return undefined;
+            }
+            return stamped.Entry;
+        }
+        return this.defaultPolicyCache.get(pair);
+    }
+
+    private deleteCacheEntry(agentId: string, userId: string, provider?: object | null): void {
+        const pair = this.buildPairKey(agentId, userId);
+        if (provider && typeof provider === 'object') {
+            this.providerPolicyCaches.get(provider)?.delete(pair);
+            return;
+        }
+        this.defaultPolicyCache.delete(pair);
+    }
+
+    /** Number of default-provider cached `(agent, user)` slots (per-request provider caches live in a WeakMap). */
+    public get DefaultCachedPolicySlotCount(): number {
+        return this.defaultPolicyCache.size;
     }
 
     /** Put or update a policy entity in the in-memory cache. */
@@ -509,16 +572,14 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         }
         const entityProvider = (policy as { ProviderToUse?: object | null }).ProviderToUse ?? null;
         if (provider) {
-            const key = this.buildCacheKey(policy.AgentID, policy.UserID, provider);
-            this.nonePolicyCacheExpiry.delete(key);
-            this.policyCache.set(key, policy);
+            this.setCacheEntry(policy.AgentID, policy.UserID, provider, policy);
             return;
         }
         // Evict any stale copies cached under other providers for this (agentId, userId) pair first.
         this.ClearCache(policy.AgentID, policy.UserID);
-        this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, null), policy);
+        this.setCacheEntry(policy.AgentID, policy.UserID, null, policy);
         if (entityProvider) {
-            this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, entityProvider), policy);
+            this.setCacheEntry(policy.AgentID, policy.UserID, entityProvider, policy);
         }
     }
 
@@ -532,34 +593,29 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             return null;
         }
         if (provider) {
-            const scopedKey = this.buildCacheKey(agentId, userId, provider);
-            if (this.policyCache.has(scopedKey)) {
-                return this.policyCache.get(scopedKey) ?? null;
+            const scoped = this.getCacheEntry(agentId, userId, provider);
+            if (scoped) {
+                return scoped.Policy;
             }
         }
-        return this.policyCache.get(this.buildCacheKey(agentId, userId, null)) ?? null;
+        return this.getCacheEntry(agentId, userId, null)?.Policy ?? null;
     }
 
     /** Clear all cached policies (or a single `(agentId, userId)` pair across all or one provider). */
     public ClearCache(agentId?: string, userId?: string, provider?: IMetadataProvider | null): void {
         if (agentId && userId) {
             if (provider) {
-                const key = this.buildCacheKey(agentId, userId, provider);
-                this.policyCache.delete(key);
-                this.nonePolicyCacheExpiry.delete(key);
+                this.deleteCacheEntry(agentId, userId, provider);
                 return;
             }
-            const suffix = `::${this.buildPairSuffix(agentId, userId)}`;
-            for (const k of Array.from(this.policyCache.keys())) {
-                if (k.endsWith(suffix)) {
-                    this.policyCache.delete(k);
-                    this.nonePolicyCacheExpiry.delete(k);
-                }
-            }
+            const pair = this.buildPairKey(agentId, userId);
+            this.defaultPolicyCache.delete(pair);
+            this.invalidatedPairGeneration.set(pair, this.nextGeneration++);
             return;
         }
-        this.policyCache.clear();
-        this.nonePolicyCacheExpiry.clear();
+        this.defaultPolicyCache.clear();
+        this.providerPolicyCaches = new WeakMap<object, Map<string, StampedPolicyCacheEntry>>();
+        this.invalidatedPairGeneration.clear();
     }
 
     private resolvePolicyLookupUser(contextUser: UserInfo): UserInfo {
@@ -594,23 +650,19 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         options?: ResolvePolicyLookupOptions
     ): Promise<PolicyLookupResult> {
         const forceRefresh = options?.forceRefresh === true;
-        const scopedKey = this.buildCacheKey(agentId, userId, options?.provider);
-        const defaultKey = this.buildCacheKey(agentId, userId, null);
         if (!forceRefresh) {
-            if (this.policyCache.has(scopedKey)) {
-                const cached = this.policyCache.get(scopedKey) ?? null;
-                if (cached) {
-                    return { status: 'found', policy: cached };
+            const cached = this.getCacheEntry(agentId, userId, options?.provider);
+            if (cached) {
+                if (cached.Policy) {
+                    return { status: 'found', policy: cached.Policy };
                 }
-                const exp = this.nonePolicyCacheExpiry.get(scopedKey) ?? 0;
-                if (Date.now() < exp) {
+                if (Date.now() < cached.NoneExpiresAt) {
                     return { status: 'none', policy: null };
                 }
-                this.policyCache.delete(scopedKey);
-                this.nonePolicyCacheExpiry.delete(scopedKey);
+                this.deleteCacheEntry(agentId, userId, options?.provider);
             }
             if (options?.provider) {
-                const defaultCached = this.policyCache.get(defaultKey) ?? null;
+                const defaultCached = this.getCacheEntry(agentId, userId, null)?.Policy ?? null;
                 if (defaultCached) {
                     return { status: 'found', policy: defaultCached };
                 }
@@ -641,12 +693,10 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             }
             if (result.Results.length > 0) {
                 const policy = result.Results[0];
-                this.nonePolicyCacheExpiry.delete(scopedKey);
-                this.policyCache.set(scopedKey, policy);
+                this.setCacheEntry(agentId, userId, options?.provider, policy);
                 return { status: 'found', policy };
             }
-            this.policyCache.set(scopedKey, null);
-            this.nonePolicyCacheExpiry.set(scopedKey, Date.now() + AgentUserPolicyEngine.NONE_POLICY_CACHE_TTL_MS);
+            this.setCacheEntry(agentId, userId, options?.provider, null, Date.now() + AgentUserPolicyEngine.NONE_POLICY_CACHE_TTL_MS);
             return { status: 'none', policy: null };
         } catch (error) {
             const errMessage = error instanceof Error ? error.message : String(error);
@@ -680,6 +730,251 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
     ): Promise<MJAIAgentUserPolicyEntity | null> {
         const lookup = await this.ResolvePolicyForAgentAndUser(agentId, userId, contextUser, { forceRefresh });
         return lookup.policy;
+    }
+
+    /**
+     * Resolves and intersects user policies across an agent's `BaseAgentID` prototype inheritance
+     * chain (`[rootAgentId, ..., leafAgentId]`) using strictest-wins ceiling semantics.
+     *
+     * Fast-path: when only a single agent in the chain has a policy row (the common case where
+     * only a personal instance like *Pepper* has a policy), returns that policy directly in O(1).
+     */
+    public async GetEffectivePolicyForAgentChain(
+        agentChainIds: readonly string[],
+        userId: string,
+        contextUser: UserInfo,
+        options?: ResolvePolicyLookupOptions
+    ): Promise<MJAIAgentUserPolicyEntity | null> {
+        const uniqueIds = this.deduplicateOrderedAgentIds(agentChainIds);
+        if (uniqueIds.length === 0 || !userId) {
+            return null;
+        }
+        const lookups = await Promise.all(
+            uniqueIds.map((agentId) => this.ResolvePolicyForAgentAndUser(agentId, userId, contextUser, options))
+        );
+        const policies: MJAIAgentUserPolicyEntity[] = [];
+        for (const lookup of lookups) {
+            if (lookup.status === 'found' && lookup.policy) {
+                policies.push(lookup.policy);
+            }
+        }
+        return this.IntersectPolicies(policies);
+    }
+
+    /**
+     * Synchronous counterpart to {@link GetEffectivePolicyForAgentChain} over already-cached
+     * policies in memory.
+     */
+    public GetCachedEffectivePolicyForAgentChain(
+        agentChainIds: readonly string[],
+        userId: string,
+        provider?: IMetadataProvider | null
+    ): MJAIAgentUserPolicyEntity | null {
+        const uniqueIds = this.deduplicateOrderedAgentIds(agentChainIds);
+        if (uniqueIds.length === 0 || !userId) {
+            return null;
+        }
+        const policies: MJAIAgentUserPolicyEntity[] = [];
+        for (const agentId of uniqueIds) {
+            const cached = this.GetCachedPolicy(agentId, userId, provider);
+            if (cached) {
+                policies.push(cached);
+            }
+        }
+        return this.IntersectPolicies(policies);
+    }
+
+    /**
+     * Combines an ordered list of policies from `[rootAgent ... leafAgent]` into a single
+     * effective policy using strictest-wins ceiling semantics:
+     * - `Status`, `CoordinationMode`, `DefaultDataAccessMode`, and all channel modes take the
+     *   minimum (most restrictive) rank across the chain.
+     * - `AllowInterAgentCoordination` is ANDed across the chain.
+     * - `RequireApprovalForExternalComms`, `RequireApprovalForFinancials`, and
+     *   `RequireApprovalForDestructiveActions` are ORed across the chain.
+     * - `AutoApproveAmountThreshold` takes the strictest ceiling (`null` beats any finite value;
+     *   otherwise `Math.min`).
+     * - `EntityAccessRules` and `ActionPolicyRules` concatenate root -> leaf so every ancestor
+     *   rule remains enforced alongside leaf narrowings.
+     * - Personalization metadata (`DisplayNameOverride`, `OnboardingStatus`, `PreferredPersonaID`)
+     *   takes the nearest descendant value (leaf wins), while non-empty `InstructionsOverride`
+     *   values stack root -> leaf.
+     *
+     * Does not mutate any input entity. Returns `null` when empty, or the single policy directly
+     * when only one policy is present.
+     */
+    public IntersectPolicies(
+        policies: ReadonlyArray<MJAIAgentUserPolicyEntity | null | undefined>
+    ): MJAIAgentUserPolicyEntity | null {
+        const present = policies.filter((p): p is MJAIAgentUserPolicyEntity => p != null);
+        if (present.length === 0) {
+            return null;
+        }
+        if (present.length === 1) {
+            return present[0];
+        }
+
+        const leaf = present[present.length - 1];
+
+        const statusRank: Record<MJAIAgentUserPolicyEntity['Status'], number> = {
+            Disabled: 0,
+            Paused: 1,
+            Active: 2,
+        };
+        const coordRank: Record<MJAIAgentUserPolicyEntity['CoordinationMode'], number> = {
+            Observer: 0,
+            Coordinator: 1,
+            Autonomous: 2,
+        };
+        const dataModeRank: Record<MJAIAgentUserPolicyEntity['DefaultDataAccessMode'], number> = {
+            AllowListOnly: 0,
+            ReadOnly: 1,
+            UserCeiling: 2,
+        };
+        const emailRank: Record<MJAIAgentUserPolicyEntity['EmailChannelMode'], number> = {
+            Disabled: 0,
+            ReadOnly: 1,
+            DraftOnly: 2,
+            SendAsAgent: 3,
+            SendAsUser: 4,
+        };
+        const phoneRank: Record<MJAIAgentUserPolicyEntity['PhoneChannelMode'], number> = {
+            Disabled: 0,
+            InboundOnly: 1,
+            OutboundWithApproval: 2,
+            OutboundAutonomous: 3,
+        };
+        const calendarRank: Record<MJAIAgentUserPolicyEntity['CalendarChannelMode'], number> = {
+            Disabled: 0,
+            ReadOnly: 1,
+            ProposeWithApproval: 2,
+            Autonomous: 3,
+        };
+        const msgRank: Record<MJAIAgentUserPolicyEntity['MessagingChannelMode'], number> = {
+            Disabled: 0,
+            Enabled: 1,
+        };
+
+        const pickStrictest = <T extends string>(values: readonly T[], ranks: Record<T, number>): T => {
+            let best = values[0];
+            let bestRank = ranks[best];
+            for (let i = 1; i < values.length; i++) {
+                const candidate = values[i];
+                const rank = ranks[candidate];
+                if (rank < bestRank) {
+                    best = candidate;
+                    bestRank = rank;
+                }
+            }
+            return best;
+        };
+
+        const effectiveStatus = pickStrictest(
+            present.map((p) => p.Status ?? DEFAULT_AGENT_USER_POLICY_POSTURE.Status),
+            statusRank
+        );
+        const effectiveCoordinationMode = pickStrictest(
+            present.map((p) => p.CoordinationMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CoordinationMode),
+            coordRank
+        );
+        const effectiveAllowInterAgent = present.every(
+            (p) => (p.AllowInterAgentCoordination ?? DEFAULT_AGENT_USER_POLICY_POSTURE.AllowInterAgentCoordination) === true
+        );
+        const effectiveDataMode = pickStrictest(
+            present.map((p) => p.DefaultDataAccessMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.DefaultDataAccessMode),
+            dataModeRank
+        );
+        const effectiveEmailMode = pickStrictest(
+            present.map((p) => p.EmailChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.EmailChannelMode),
+            emailRank
+        );
+        const effectivePhoneMode = pickStrictest(
+            present.map((p) => p.PhoneChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode),
+            phoneRank
+        );
+        const effectiveCalendarMode = pickStrictest(
+            present.map((p) => p.CalendarChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CalendarChannelMode),
+            calendarRank
+        );
+        const effectiveMessagingMode = pickStrictest(
+            present.map((p) => p.MessagingChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.MessagingChannelMode),
+            msgRank
+        );
+        const effectiveReqExternal = present.some((p) => p.RequireApprovalForExternalComms !== false);
+        const effectiveReqFinancials = present.some((p) => p.RequireApprovalForFinancials !== false);
+        const effectiveReqDestructive = present.some((p) => p.RequireApprovalForDestructiveActions !== false);
+
+        let effectiveAutoApproveThreshold: number | null = null;
+        if (present.every((p) => p.AutoApproveAmountThreshold != null)) {
+            effectiveAutoApproveThreshold = Math.min(
+                ...present.map((p) => p.AutoApproveAmountThreshold as number)
+            );
+        }
+
+        const combinedEntityRules: MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[] = [];
+        const combinedActionRules: MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[] = [];
+        const instructionParts: string[] = [];
+        for (const p of present) {
+            combinedEntityRules.push(...this.resolveEntityRules(p));
+            combinedActionRules.push(...this.resolveActionRules(p));
+            if (p.InstructionsOverride && p.InstructionsOverride.trim().length > 0) {
+                instructionParts.push(p.InstructionsOverride.trim());
+            }
+        }
+
+        const serializedEntityRules = combinedEntityRules.length > 0 ? JSON.stringify(combinedEntityRules) : null;
+        const serializedActionRules = combinedActionRules.length > 0 ? JSON.stringify(combinedActionRules) : null;
+        const stackedInstructions = instructionParts.length > 0 ? instructionParts.join('\n\n') : null;
+
+        let effectiveDisplayName: string | null = null;
+        let effectivePreferredPersonaId: string | null = null;
+        for (let i = present.length - 1; i >= 0; i--) {
+            if (!effectiveDisplayName && present[i].DisplayNameOverride?.trim()) {
+                effectiveDisplayName = present[i].DisplayNameOverride;
+            }
+            if (!effectivePreferredPersonaId && present[i].PreferredPersonaID) {
+                effectivePreferredPersonaId = present[i].PreferredPersonaID;
+            }
+        }
+
+        return Object.create(leaf, {
+            Status: { get: () => effectiveStatus, enumerable: true, configurable: true },
+            CoordinationMode: { get: () => effectiveCoordinationMode, enumerable: true, configurable: true },
+            AllowInterAgentCoordination: { get: () => effectiveAllowInterAgent, enumerable: true, configurable: true },
+            DefaultDataAccessMode: { get: () => effectiveDataMode, enumerable: true, configurable: true },
+            EmailChannelMode: { get: () => effectiveEmailMode, enumerable: true, configurable: true },
+            PhoneChannelMode: { get: () => effectivePhoneMode, enumerable: true, configurable: true },
+            CalendarChannelMode: { get: () => effectiveCalendarMode, enumerable: true, configurable: true },
+            MessagingChannelMode: { get: () => effectiveMessagingMode, enumerable: true, configurable: true },
+            RequireApprovalForExternalComms: { get: () => effectiveReqExternal, enumerable: true, configurable: true },
+            RequireApprovalForFinancials: { get: () => effectiveReqFinancials, enumerable: true, configurable: true },
+            RequireApprovalForDestructiveActions: { get: () => effectiveReqDestructive, enumerable: true, configurable: true },
+            AutoApproveAmountThreshold: { get: () => effectiveAutoApproveThreshold, enumerable: true, configurable: true },
+            EntityAccessRules: { get: () => serializedEntityRules, enumerable: true, configurable: true },
+            EntityAccessRulesObject: { get: () => combinedEntityRules, enumerable: true, configurable: true },
+            ActionPolicyRules: { get: () => serializedActionRules, enumerable: true, configurable: true },
+            ActionPolicyRulesObject: { get: () => combinedActionRules, enumerable: true, configurable: true },
+            DisplayNameOverride: { get: () => effectiveDisplayName, enumerable: true, configurable: true },
+            PreferredPersonaID: { get: () => effectivePreferredPersonaId, enumerable: true, configurable: true },
+            InstructionsOverride: { get: () => stackedInstructions, enumerable: true, configurable: true },
+        }) as MJAIAgentUserPolicyEntity;
+    }
+
+    private deduplicateOrderedAgentIds(agentIds: readonly string[]): string[] {
+        const seen = new Set<string>();
+        const result: string[] = [];
+        for (const id of agentIds) {
+            const trimmed = id?.trim();
+            if (!trimmed) {
+                continue;
+            }
+            const lower = trimmed.toLowerCase();
+            if (!seen.has(lower)) {
+                seen.add(lower);
+                result.push(trimmed);
+            }
+        }
+        return result;
     }
 
     /**

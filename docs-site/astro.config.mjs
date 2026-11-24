@@ -43,6 +43,9 @@ const CONTENT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'src
 const bizAppsItems = ['guides/bizapps.mdx', 'guides/bizapps.md'].some((file) => existsSync(path.join(CONTENT_DIR, file)))
   ? [{ label: 'BizApps', slug: 'guides/bizapps' }]
   : [];
+const cliRefItems = existsSync(path.join(CONTENT_DIR, 'packages/MJCLI/index.md'))
+  ? [{ label: 'CLI Reference (mj)', slug: 'packages/mjcli' }]
+  : [];
 
 export default defineConfig({
   site,
@@ -113,6 +116,7 @@ export default defineConfig({
           label: 'Reference',
           items: [
             { label: 'Metadata System', slug: 'metadata' },
+            ...cliRefItems,
             { label: 'API Reference (TypeDoc)', link: apiHref },
           ],
         },

@@ -1,0 +1,614 @@
+[
+  {
+    "fields": {
+      "Name": "CAN-SPAM",
+      "Description": "United States Controlling the Assault of Non-Solicited Pornography And Marketing Act of 2003. Opt-out regime for commercial email.",
+      "AppliesBy": "Sender",
+      "AppliesWhenJurisdictionUnknown": true,
+      "ReferenceURL": "https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business",
+      "Status": "Disabled"
+    },
+    "relatedEntities": {
+      "MJ: Communication Compliance Regime Jurisdictions": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "JurisdictionID": "@lookup:MJ: Jurisdictions.Code=US"
+          },
+          "primaryKey": {
+            "ID": "607CA80C-6E36-4535-8498-18DE7ECDA949"
+          }
+        }
+      ],
+      "MJ: Communication Compliance Regime Rules": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentModel",
+            "BaseMessageTypeID": "@lookup:MJ: Communication Base Message Types.Type=Email",
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "model": "opt-out",
+              "softOptIn": false
+            },
+            "Notes": "CAN-SPAM permits commercial email on an opt-out basis until the recipient unsubscribes.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "67EA3655-2370-4D16-8A5A-C2F8B3A5E3E7"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeMechanism",
+            "BaseMessageTypeID": "@lookup:MJ: Communication Base Message Types.Type=Email",
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "oneClickHeader": "required",
+              "footerLink": "required"
+            },
+            "Notes": "15 U.S.C. 7704(a)(3): clear and conspicuous opt-out mechanism required.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EB00F873-0F41-40EF-B4E9-691019DB7516"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeHonorWindow",
+            "BaseMessageTypeID": "@lookup:MJ: Communication Base Message Types.Type=Email",
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "maxHours": 240
+            },
+            "Notes": "15 U.S.C. 7704(a)(4): opt-out requests must be honored within 10 business days. 240 hours is 10 calendar days, which is stricter than the statute; raise it if you want the full business-day allowance.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C22A7374-9A7B-4D06-A818-59940CDDF665"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=SenderIdentification",
+            "BaseMessageTypeID": "@lookup:MJ: Communication Base Message Types.Type=Email",
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requirePostalAddress": true,
+              "requireSenderName": true
+            },
+            "Notes": "15 U.S.C. 7704(a)(5)(A)(iii): valid physical postal address and accurate sender header required.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B2B64F45-F162-47EE-AED4-7582F1EC982F"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5886414D-F376-4CE6-82EB-2CB955683FC3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GDPR",
+      "Description": "European Union General Data Protection Regulation (and ePrivacy Directive). Strict opt-in regime with consent evidence and tracking consent.",
+      "AppliesBy": "Recipient or Sender",
+      "AppliesWhenJurisdictionUnknown": true,
+      "ReferenceURL": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+      "Status": "Disabled"
+    },
+    "relatedEntities": {
+      "MJ: Communication Compliance Regime Jurisdictions": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "JurisdictionID": "@lookup:MJ: Jurisdictions.Code=EEA"
+          },
+          "primaryKey": {
+            "ID": "A517C1CB-FB43-4307-B941-6388AA823BE2"
+          }
+        }
+      ],
+      "MJ: Communication Compliance Regime Rules": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentModel",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "model": "opt-in",
+              "softOptIn": false
+            },
+            "Notes": "GDPR Art. 6(1)(a) & Art. 7: explicit prior opt-in consent required for marketing.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2655CEE0-CEB0-4196-830C-5077A37AAF22"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentEvidence",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requireSource": true,
+              "requireTimestamp": true,
+              "requireConsentText": true
+            },
+            "Notes": "GDPR Art. 7(1): controller must be able to demonstrate that the data subject has consented.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BA2711A7-8F4E-4ADC-A342-07384A669D66"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeMechanism",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "oneClickHeader": "required",
+              "footerLink": "required"
+            },
+            "Notes": "GDPR Art. 7(3): withdrawing consent must be as easy as giving it.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "09FECCA9-61C5-4231-9D53-2E10A987538C"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeHonorWindow",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "maxHours": 24
+            },
+            "Notes": "GDPR Art. 21(3): processing for direct marketing must cease immediately upon objection (24-hour operational SLA).",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AEC86A3C-A3CE-4055-9479-B1120018144B"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=SenderIdentification",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requirePostalAddress": true,
+              "requireSenderName": true
+            },
+            "Notes": "GDPR Art. 13 & ePrivacy Directive Art. 13(4): identity and contact details of the controller.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "090CD4FC-E333-4341-93B5-20C88C7D3576"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=TrackingConsent",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requireConsentForOpenPixel": true,
+              "requireConsentForClickTracking": true
+            },
+            "Notes": "ePrivacy Directive Art. 5(3) & GDPR: tracking pixels and link tracking require prior consent.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "73FC7448-3093-4F31-8B3B-1F34F9C64EBE"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "06B43DAF-0128-4734-8FD3-F02453E0188D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "UK GDPR",
+      "Description": "United Kingdom General Data Protection Regulation and PECR. Opt-in regime with PECR soft opt-in support for existing customers.",
+      "AppliesBy": "Recipient or Sender",
+      "AppliesWhenJurisdictionUnknown": true,
+      "ReferenceURL": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/",
+      "Status": "Disabled"
+    },
+    "relatedEntities": {
+      "MJ: Communication Compliance Regime Jurisdictions": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "JurisdictionID": "@lookup:MJ: Jurisdictions.Code=GB"
+          },
+          "primaryKey": {
+            "ID": "435C22CE-8E57-48D4-B685-287A29426BD0"
+          }
+        }
+      ],
+      "MJ: Communication Compliance Regime Rules": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentModel",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "model": "opt-in",
+              "softOptIn": true
+            },
+            "Notes": "UK GDPR & PECR Reg. 22: opt-in required with soft opt-in exception for existing customers.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D39933C0-B88C-4AD6-90C3-93B1D581704B"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentEvidence",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requireSource": true,
+              "requireTimestamp": true,
+              "requireConsentText": true
+            },
+            "Notes": "UK GDPR Art. 7(1): controller must demonstrate valid consent.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7A810AA6-D560-4EC9-960E-9621F01872D0"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeMechanism",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "oneClickHeader": "required",
+              "footerLink": "required"
+            },
+            "Notes": "UK GDPR Art. 7(3) & PECR: simple opt-out mechanism in every marketing message.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E7F92E5D-1654-4383-BF78-8B2E2154590B"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeHonorWindow",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "maxHours": 24
+            },
+            "Notes": "UK GDPR Art. 21(3): direct marketing must stop promptly upon objection (24-hour SLA).",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8F0BCD31-67A9-49D6-A678-5B46CFF4CA6A"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=SenderIdentification",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requirePostalAddress": true,
+              "requireSenderName": true
+            },
+            "Notes": "PECR Reg. 23: sender identity and valid address for opt-out requests required.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "02E65A90-3F78-4CA7-B39A-3ECD3AABC680"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=TrackingConsent",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requireConsentForOpenPixel": true,
+              "requireConsentForClickTracking": true
+            },
+            "Notes": "PECR Reg. 6: tracking pixels and link tracking require prior consent.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E2D4AA1-65A1-4506-B562-667763347F0A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B50EFFC1-CC3C-4394-AE44-936C62624BCD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "CASL",
+      "Description": "Canada's Anti-Spam Legislation. Opt-in regime with 2-year implied consent expiry and strict sender identification.",
+      "AppliesBy": "Recipient or Sender",
+      "AppliesWhenJurisdictionUnknown": true,
+      "ReferenceURL": "https://crtc.gc.ca/eng/internet/anti.htm",
+      "Status": "Disabled"
+    },
+    "relatedEntities": {
+      "MJ: Communication Compliance Regime Jurisdictions": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "JurisdictionID": "@lookup:MJ: Jurisdictions.Code=CA"
+          },
+          "primaryKey": {
+            "ID": "B3529700-F4CE-47F4-98C2-2D6094249B4A"
+          }
+        }
+      ],
+      "MJ: Communication Compliance Regime Rules": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentModel",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "model": "opt-in",
+              "softOptIn": true
+            },
+            "Notes": "CASL s. 6 & s. 10: express or implied consent (existing business relationship) required.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A246AB69-62FD-47A5-B76F-97BF0C300F29"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentEvidence",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requireSource": true,
+              "requireTimestamp": true,
+              "requireConsentText": false
+            },
+            "Notes": "CASL s. 13: onus of proving consent rests on the person alleging consent.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E4DBEC1B-C7C8-4D47-B456-24F677BC261F"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentExpiry",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "maxDays": 730,
+              "impliedOnly": true
+            },
+            "Notes": "CASL s. 10(10): implied consent from existing business relationship expires after 2 years (730 days) unless renewed.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "51F77C7C-15DD-40FA-A42C-302523D32F6E"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeMechanism",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "oneClickHeader": "required",
+              "footerLink": "required"
+            },
+            "Notes": "CASL s. 6(2)(c) & s. 11: unsubscribe mechanism must be set out clearly and prominently.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "171D393B-C892-422F-B308-28CE35084208"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeHonorWindow",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "maxHours": 240
+            },
+            "Notes": "CASL s. 11(3): unsubscribe requests must be given effect without delay and in any event within 10 business days. 240 hours is 10 calendar days, which is stricter than the statute; raise it if you want the full business-day allowance.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9347DBB5-9F72-4266-8CC1-8A5FF04B9E40"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=SenderIdentification",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "requirePostalAddress": true,
+              "requireSenderName": true
+            },
+            "Notes": "CASL s. 6(2)(a)-(b): sender identity and physical mailing address required.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E607966E-CA3E-4687-860E-66A5C1C0440B"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2E246EB1-5688-4CE5-AE19-FB868E426686"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TCPA",
+      "Description": "United States Telephone Consumer Protection Act. Requires prior express consent and enforces quiet hours (9 PM - 8 AM local time) for SMS/Phone.",
+      "AppliesBy": "Recipient",
+      "AppliesWhenJurisdictionUnknown": true,
+      "ReferenceURL": "https://www.fcc.gov/general/telemarketing-and-robocalls",
+      "Status": "Disabled"
+    },
+    "relatedEntities": {
+      "MJ: Communication Compliance Regime Jurisdictions": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "JurisdictionID": "@lookup:MJ: Jurisdictions.Code=US"
+          },
+          "primaryKey": {
+            "ID": "AB415848-56EF-4D2C-BCC4-3A147B2A50B9"
+          }
+        }
+      ],
+      "MJ: Communication Compliance Regime Rules": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=ConsentModel",
+            "BaseMessageTypeID": "@lookup:MJ: Communication Base Message Types.Type=SMS",
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "model": "opt-in",
+              "softOptIn": false
+            },
+            "Notes": "47 U.S.C. 227 & 47 CFR 64.1200: prior express written consent required for marketing SMS.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "72EC7532-A38B-4EE8-952A-68C2DF705FAA"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=QuietHours",
+            "BaseMessageTypeID": "@lookup:MJ: Communication Base Message Types.Type=SMS",
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "windows": [
+                {
+                  "startHour": 21,
+                  "endHour": 8
+                }
+              ]
+            },
+            "Notes": "47 CFR 64.1200(c)(1): no telephone solicitations before 8:00 a.m. or after 9:00 p.m. local time at the called party's location.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7E9A97B3-2014-4D82-8E08-D22DE7FFE7D1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "78587339-5A8D-4EED-AF0A-2FE62C35F556"
+    }
+  },
+  {
+    "fields": {
+      "Name": "CCPA",
+      "Description": "California Consumer Privacy Act / California Privacy Rights Act (CPRA). Enforces opt-out mechanism and honor window for California residents.",
+      "AppliesBy": "Recipient",
+      "AppliesWhenJurisdictionUnknown": true,
+      "ReferenceURL": "https://oag.ca.gov/privacy/ccpa",
+      "Status": "Disabled"
+    },
+    "relatedEntities": {
+      "MJ: Communication Compliance Regime Jurisdictions": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "JurisdictionID": "@lookup:MJ: Jurisdictions.Code=US-CA"
+          },
+          "primaryKey": {
+            "ID": "F813FE9E-AEF3-4B5C-A059-6007D62F573D"
+          }
+        }
+      ],
+      "MJ: Communication Compliance Regime Rules": [
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeMechanism",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "oneClickHeader": "required",
+              "footerLink": "required"
+            },
+            "Notes": "Cal. Civ. Code 1798.120 / 1798.135: clear and conspicuous opt-out link required.",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F3FD75AD-4130-4AE9-92BA-E63961CCC561"
+          }
+        },
+        {
+          "fields": {
+            "CommunicationComplianceRegimeID": "@parent:ID",
+            "CommunicationComplianceRuleTypeID": "@lookup:MJ: Communication Compliance Rule Types.Name=UnsubscribeHonorWindow",
+            "BaseMessageTypeID": null,
+            "MessageClass": "Marketing",
+            "Parameters": {
+              "maxHours": 360
+            },
+            "Notes": "CCPA Regs 11 CCR 7026(e): opt-out requests must be complied with as soon as feasibly possible, no later than 15 business days (360 hours).",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EA51FDB6-4258-4BE3-9FBD-2EDC6CAF57FB"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F96F906C-59E9-45CC-876E-46B12A95D508"
+    }
+  }
+]

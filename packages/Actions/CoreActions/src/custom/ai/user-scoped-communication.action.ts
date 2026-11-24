@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
@@ -142,24 +142,76 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         await AIEngine.Instance.Config(false, contextUser);
         const rawAgentId = this.getStringParam(params, 'AgentID');
         const rawAgentName = this.getStringParam(params, 'AgentName') ?? 'Chief of Staff';
+        const allAgents = AIEngine.Instance.Agents ?? [];
+
         const agent = rawAgentId
-            ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
-            : AIEngine.Instance.Agents.find(
-                  (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
-              );
+            ? allAgents.find((a) => UUIDsEqual(a.ID, rawAgentId))
+            : (typeof AIEngine.Instance.ResolveAgentForUser === 'function'
+                  ? AIEngine.Instance.ResolveAgentForUser(rawAgentName, contextUser)
+                  : undefined) ??
+              allAgents.find((a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase());
 
         if (!agent) {
             return { agentId: null, policy: null };
         }
 
+        // Resolve the full BaseAgentID prototype inheritance chain (root -> ... -> leaf) so derived
+        // instances like Pepper, Jarvis, and Cato enforce ancestor policy ceilings AND their own policy.
+        const chainIds = this.resolveAgentChainIds(agent.ID);
         const engine = AgentUserPolicyEngine.Instance;
-        const lookup = await engine.ResolvePolicyForAgentAndUser(agent.ID, contextUser.ID, contextUser, {
-            provider: params.Provider,
-        });
-        if (lookup.status === 'error') {
-            throw new Error(`Failed to verify user communication policy: ${lookup.errorMessage}`);
+        const policies: MJAIAgentUserPolicyEntity[] = [];
+
+        for (const chainAgentId of chainIds) {
+            const lookup = await engine.ResolvePolicyForAgentAndUser(chainAgentId, contextUser.ID, contextUser, {
+                provider: params.Provider,
+            });
+            if (lookup.status === 'error') {
+                throw new Error(`Failed to verify user communication policy: ${lookup.errorMessage}`);
+            }
+            if (lookup.status === 'found' && lookup.policy) {
+                policies.push(lookup.policy);
+            }
         }
-        return { agentId: agent.ID, policy: lookup.policy };
+
+        const effectivePolicy =
+            policies.length === 0
+                ? null
+                : policies.length === 1
+                  ? policies[0]
+                  : engine.IntersectPolicies(policies);
+        return { agentId: agent.ID, policy: effectivePolicy };
+    }
+
+    /**
+     * Resolves the ordered `[rootAgentId, ..., leafAgentId]` inheritance chain for `agentId`.
+     * Uses `AIEngine.Instance.GetAgentInheritanceChain` when available, falling back to a direct
+     * `BaseAgentID` walk over `AIEngine.Instance.Agents` for lightweight test mocks.
+     */
+    private resolveAgentChainIds(agentId: string): string[] {
+        if (typeof AIEngine.Instance.GetAgentInheritanceChain === 'function') {
+            const chain = AIEngine.Instance.GetAgentInheritanceChain(agentId);
+            if (Array.isArray(chain) && chain.length > 0) {
+                return chain.map((a) => a.ID);
+            }
+        }
+
+        const allAgents = AIEngine.Instance.Agents ?? [];
+        const agentsById = IndexByUUID(allAgents);
+        const orderedFromLeaf: string[] = [];
+        const visited = new UUIDSet();
+        let currentId: string | null | undefined = agentId;
+
+        while (currentId) {
+            if (visited.Has(currentId)) {
+                break;
+            }
+            visited.Add(currentId);
+            orderedFromLeaf.push(currentId);
+            const current = agentsById.Get(currentId);
+            currentId = current?.BaseAgentID ?? null;
+        }
+
+        return orderedFromLeaf.reverse();
     }
 
     protected async findUserUtilityMailbox(
@@ -334,6 +386,70 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         };
     }
 
+    protected isLocalJsonMockEnabled(): boolean {
+        return Boolean(process.env['MJ_MOCK_COMM_DIR']?.trim());
+    }
+
+    protected getLocalJsonMockProviderName(): string {
+        return 'Local JSON Mock';
+    }
+
+    /**
+     * Builds an active virtual view of the `'Local JSON Mock'` provider entity when
+     * `MJ_MOCK_COMM_DIR` is configured, ensuring `EnterpriseScopeMode = 'TenantWide'` and
+     * full calendar/free-busy/draft capabilities without mutating cached metadata rows.
+     */
+    protected buildVirtualLocalJsonProviderEntity(
+        existing?: MJCommunicationProviderEntity
+    ): MJCommunicationProviderEntity {
+        const providerName = this.getLocalJsonMockProviderName();
+        return Object.assign(Object.create(existing ?? Object.prototype), {
+            ID: existing?.ID ?? '693125EC-88F8-4594-B0C7-D0120A09688D',
+            Name: providerName,
+            Status: 'Active' as const,
+            SupportsSending: true,
+            SupportsReceiving: true,
+            SupportsScheduledSending: false,
+            SupportsForwarding: true,
+            SupportsReplying: true,
+            SupportsDrafts: true,
+            SupportsCalendar: true,
+            SupportsFreeBusy: true,
+            EnterpriseScopeMode: 'TenantWide' as const,
+            AllowedEmailDomains: existing?.AllowedEmailDomains ?? null,
+        }) as MJCommunicationProviderEntity;
+    }
+
+    /**
+     * Returns active communication providers for this environment, automatically activating
+     * `'Local JSON Mock'` whenever `MJ_MOCK_COMM_DIR` is non-empty.
+     */
+    protected getEffectiveActiveProviders(requireCalendar: boolean): MJCommunicationProviderEntity[] {
+        const allProviders = CommunicationEngine.Instance.Providers ?? [];
+        const mockName = this.getLocalJsonMockProviderName();
+        const mockEnabled = this.isLocalJsonMockEnabled();
+
+        const active: MJCommunicationProviderEntity[] = allProviders.filter(
+            (p) =>
+                p.Status === 'Active' &&
+                (!requireCalendar || p.SupportsCalendar) &&
+                (!mockEnabled || p.Name.trim().toLowerCase() !== mockName.toLowerCase())
+        );
+
+        if (mockEnabled) {
+            const existingMock = allProviders.find(
+                (p) => p.Name.trim().toLowerCase() === mockName.toLowerCase()
+            );
+            active.push(this.buildVirtualLocalJsonProviderEntity(existingMock));
+        }
+
+        return active;
+    }
+
+    protected resolveProviderInstanceByName(providerName: string): BaseCommunicationProvider {
+        return CommunicationEngine.Instance.GetProvider(providerName);
+    }
+
     protected async resolveActiveProvider(
         params: RunActionParams,
         contextUser: UserInfo,
@@ -344,15 +460,18 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
     } | null> {
         await CommunicationEngine.Instance.Config(false, contextUser);
         const requestedName = this.getStringParam(params, 'ProviderName');
-        const activeProviders = CommunicationEngine.Instance.Providers.filter(
-            (p) => p.Status === 'Active' && (!requireCalendar || p.SupportsCalendar)
-        );
+        const activeProviders = this.getEffectiveActiveProviders(requireCalendar);
+        const mockName = this.getLocalJsonMockProviderName();
+        const mockEnabled = this.isLocalJsonMockEnabled();
 
-        // Candidates in preference order. A provider that is Active in metadata may still have no
-        // class loaded in this server (Gmail here, say), and GetProvider throws for it; try the
-        // next one instead of giving up, so one unloaded provider cannot hide the loaded ones.
-        const byPreference = (p: MJCommunicationProviderEntity): number =>
-            p.Name === 'Microsoft Graph' ? 0 : p.Name === 'Gmail' ? 1 : 2;
+        // Candidates in preference order. When MJ_MOCK_COMM_DIR is explicitly set in local dev/CI,
+        // prefer Local JSON Mock unless the caller named another provider. Otherwise prefer MS Graph > Gmail.
+        const byPreference = (p: MJCommunicationProviderEntity): number => {
+            if (mockEnabled && p.Name.trim().toLowerCase() === mockName.toLowerCase()) return -1;
+            if (p.Name === 'Microsoft Graph') return 0;
+            if (p.Name === 'Gmail') return 1;
+            return 2;
+        };
         const candidates = requestedName
             ? activeProviders.filter((p) => p.Name.trim().toLowerCase() === requestedName.trim().toLowerCase())
             : [...activeProviders].sort((a, b) => byPreference(a) - byPreference(b));
@@ -360,7 +479,7 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         const unloadable: string[] = [];
         for (const candidate of candidates) {
             try {
-                const instance = CommunicationEngine.Instance.GetProvider(candidate.Name);
+                const instance = this.resolveProviderInstanceByName(candidate.Name);
                 this.lastProviderResolutionNote = null;
                 return { providerEntity: candidate, providerInstance: instance };
             } catch {
@@ -450,11 +569,11 @@ export class VerifyMyCommunicationCapabilitiesAction extends BaseUserScopedCommu
                 CalendarGate: MailboxGateDecision | null;
             }> = [];
 
-            const activeProviders = CommunicationEngine.Instance.Providers.filter((p) => p.Status === 'Active');
+            const activeProviders = this.getEffectiveActiveProviders(false);
             for (const prov of activeProviders) {
                 let instance: BaseCommunicationProvider | null = null;
                 try {
-                    instance = CommunicationEngine.Instance.GetProvider(prov.Name);
+                    instance = this.resolveProviderInstanceByName(prov.Name);
                 } catch {
                     instance = null;
                 }
@@ -1073,7 +1192,8 @@ export class ManageMyCalendarEventAction extends BaseUserScopedCommunicationActi
                             TargetMailbox: gate.TargetMailbox,
                             EventPreview: res.Event,
                             AttendeeEmails: attendeeEmails,
-                        }
+                        },
+                        params.Provider
                     );
                     this.setOutputParam(params, 'ApprovalRequestID', reqId);
                     this.setOutputParam(params, 'EventPreview', res.Event);
@@ -1138,7 +1258,8 @@ export class ManageMyCalendarEventAction extends BaseUserScopedCommunicationActi
                         contextUser,
                         agentId,
                         `Approve calendar update for event ${eventId}`,
-                        { Operation: 'UpdateCalendarEvent', EventID: eventId, Updates: updateParams }
+                        { Operation: 'UpdateCalendarEvent', EventID: eventId, Updates: updateParams },
+                        params.Provider
                     );
                     this.setOutputParam(params, 'ApprovalRequestID', reqId);
                     return {
@@ -1183,7 +1304,8 @@ export class ManageMyCalendarEventAction extends BaseUserScopedCommunicationActi
                         contextUser,
                         agentId,
                         `Approve RSVP '${responseType}' for event ${eventId}`,
-                        { Operation: 'RespondToCalendarEvent', EventID: eventId, Response: responseType }
+                        { Operation: 'RespondToCalendarEvent', EventID: eventId, Response: responseType },
+                        params.Provider
                     );
                     this.setOutputParam(params, 'ApprovalRequestID', reqId);
                     return {
@@ -1221,7 +1343,8 @@ export class ManageMyCalendarEventAction extends BaseUserScopedCommunicationActi
                     contextUser,
                     agentId,
                     `Approve cancellation of calendar event ${eventId}`,
-                    { Operation: 'CancelCalendarEvent', EventID: eventId }
+                    { Operation: 'CancelCalendarEvent', EventID: eventId },
+                    params.Provider
                 );
                 this.setOutputParam(params, 'ApprovalRequestID', reqId);
                 return {
@@ -1366,7 +1489,8 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                     contextUser,
                     agentId,
                     `Approve outbound email (${operation}) from ${fromLabel} to ${to}: ${subject}`,
-                    { Operation: operation, From: fromLabel, To: to, CCRecipients: cc, Subject: subject, Body: body, MessageID: messageId || null }
+                    { Operation: operation, From: fromLabel, To: to, CCRecipients: cc, Subject: subject, Body: body, MessageID: messageId || null },
+                    params.Provider
                 );
                 this.setOutputParam(params, 'ApprovalRequestID', reqId);
                 return {
@@ -1535,6 +1659,24 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                         Message: 'Send requires To.',
                         Params: params.Params,
                     };
+                }
+                const channelID = draftMessage.MessageType?.CommunicationBaseMessageTypeID;
+                if (channelID && process.env.MJ_COMMS_V1_COMPLIANCE_GATE === 'true') {
+                    const recipientsToGate = [to, ...(cc ?? [])].filter(Boolean);
+                    const complianceCheck = await CommunicationEngine.Instance.CheckV1ComplianceGateBatch(
+                        channelID,
+                        recipientsToGate,
+                        'Transactional',
+                        params.ContextUser,
+                    );
+                    if (!complianceCheck.Allowed) {
+                        return {
+                            Success: false,
+                            ResultCode: 'COMPLIANCE_BLOCKED',
+                            Message: complianceCheck.Detail ?? complianceCheck.Reason ?? 'Recipient blocked by compliance gate.',
+                            Params: params.Params,
+                        };
+                    }
                 }
                 const sendRes = await resolved.providerInstance.SendSingleMessage(draftMessage);
                 if (!sendRes.Success) {

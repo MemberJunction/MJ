@@ -105,6 +105,51 @@
       "reason": "Nullable reference; cleared so the row survives without the entity."
     },
     {
+      "table": "CommunicationEndpointPrincipal",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "CommunicationLog",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared with RecordID (CK_CommunicationLog_PrincipalPair both-or-neither CHECK) so the send history survives without the entity.",
+      "alsoNull": [
+        "RecordID"
+      ]
+    },
+    {
+      "table": "CommunicationPrincipal",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "CommunicationPrincipalPreference",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; a preference is a choice made by a record of the entity and has no meaning without it."
+    },
+    {
+      "table": "CommunicationSenderType",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; the sender type survives unbound."
+    },
+    {
+      "table": "CommunicationSuppression",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Principal-only rows are deleted: they record that a record of the entity opted out, and clearing the pair would violate CK_CommunicationSuppression_Target. Rows that also name an endpoint (a hard bounce or complaint against a principal) are kept with EntityID and RecordID cleared, so the address stays blocked, and their consent audit rows are kept too."
+    },
+    {
       "table": "CompanyIntegrationEntityMap",
       "column": "EntityID",
       "nullable": false,
@@ -419,6 +464,13 @@
       "reason": "Nullable reference; cleared so the row survives without the entity."
     },
     {
+      "table": "MLScoringRun",
+      "column": "ScopeEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
       "table": "MLTrainingPipeline",
       "column": "TargetEntityID",
       "nullable": false,
@@ -699,6 +751,22 @@
       "reason": "Nullable reference to a AIAgentNote row this proc deletes; cleared."
     },
     {
+      "table": "CommunicationConsentAuditLog",
+      "column": "CommunicationPrincipalPreferenceID",
+      "references": "CommunicationPrincipalPreference",
+      "nullable": true,
+      "action": "delete",
+      "reason": "An audit row references exactly one preference or suppression (CK_CommunicationConsentAuditLog_OneSubject), so it cannot be cleared; deleted with the preference."
+    },
+    {
+      "table": "CommunicationConsentAuditLog",
+      "column": "CommunicationSuppressionID",
+      "references": "CommunicationSuppression",
+      "nullable": true,
+      "action": "delete",
+      "reason": "An audit row references exactly one preference or suppression (CK_CommunicationConsentAuditLog_OneSubject), so it cannot be cleared; deleted with the suppression."
+    },
+    {
       "table": "CompanyIntegrationFieldMap",
       "column": "EntityMapID",
       "references": "CompanyIntegrationEntityMap",
@@ -713,6 +781,14 @@
       "nullable": false,
       "action": "delete",
       "reason": "NOT NULL reference to a CompanyIntegrationEntityMap row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityCommunicationMessageType",
+      "column": "CommunicationPrincipalID",
+      "references": "CommunicationPrincipal",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a CommunicationPrincipal row this proc deletes; cleared."
     },
     {
       "table": "ErrorLog",
@@ -915,20 +991,12 @@
       "reason": "Nullable reference to a List row this proc deletes; cleared."
     },
     {
-      "table": "FeatureValue",
-      "column": "MLModelID",
-      "references": "MLModel",
-      "nullable": true,
-      "action": "null",
-      "reason": "Nullable reference to a MLModel row this proc deletes; cleared."
-    },
-    {
       "table": "MLModelScoringBinding",
-      "column": "MLModelID",
-      "references": "MLModel",
+      "column": "MLTrainingPipelineID",
+      "references": "MLTrainingPipeline",
       "nullable": false,
       "action": "delete",
-      "reason": "NOT NULL reference to a MLModel row this proc deletes; deleted first."
+      "reason": "NOT NULL reference to a MLTrainingPipeline row this proc deletes; deleted first."
     },
     {
       "table": "MLTrainingRun",
@@ -969,6 +1037,118 @@
       "nullable": true,
       "action": "null",
       "reason": "Nullable reference to an MLTrainingSnapshot row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModelPublishRecord",
+      "column": "SignOffID",
+      "references": "MLModelPublishRecord",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModelPublishRecord row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModelPublishRecord",
+      "column": "ReplacesModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModel row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModelPublishRecord",
+      "column": "ModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to a MLModel row this proc deletes; deleted first, not cleared: a publish record is ledger evidence about its model, and nulling ModelID would turn a sign-off or publish into a row CK_MLModelPublishRecord_RunLevel refuses."
+    },
+    {
+      "table": "MLModelPublishRecord",
+      "column": "TrainingRunID",
+      "references": "MLTrainingRun",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLTrainingRun row this proc deletes; cleared on a record that has a ModelID, which keeps CK_MLModelPublishRecord_Subject satisfied. A run-level refusal (ModelID NULL) is deleted first instead, since clearing its run would break that CHECK."
+    },
+    {
+      "table": "MLModel",
+      "column": "TrainingRunID",
+      "references": "MLTrainingRun",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLTrainingRun row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModel",
+      "column": "TrainingSnapshotID",
+      "references": "MLTrainingSnapshot",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to an MLTrainingSnapshot row this proc deletes; cleared."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "MLModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModel row this proc deletes; cleared, after the model's own Source = 'Model' rows are deleted."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "MLModelScoringBindingID",
+      "references": "MLModelScoringBinding",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to a MLModelScoringBinding row this proc deletes; deleted, not cleared: a Model row, or a person's value on a binding with no Record Process, fails CK_FeatureValue_SourceLineage when nulled."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "MLScoringRunID",
+      "references": "MLScoringRun",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to a MLScoringRun row this proc deletes; deleted, not cleared: a Model row fails CK_FeatureValue_SourceLineage when nulled."
+    },
+    {
+      "table": "MLOutputBinding",
+      "column": "ModelID",
+      "references": "MLModel",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLModel row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLScoringRun",
+      "column": "ModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to a MLModel row this proc deletes; deleted first, not cleared: CK_MLScoringRun_Model forbids a null model on a run that is not refused."
+    },
+    {
+      "table": "MLScoringRun",
+      "column": "MLModelScoringBindingID",
+      "references": "MLModelScoringBinding",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModelScoringBinding row this proc deletes; cleared."
+    },
+    {
+      "table": "MLMonitoringResult",
+      "column": "ModelID",
+      "references": "MLModel",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLModel row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLMonitoringResult",
+      "column": "ChallengerRunID",
+      "references": "MLTrainingRun",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLTrainingRun row this proc deletes; cleared."
     },
     {
       "table": "FeatureValue",
@@ -1046,9 +1226,9 @@
       "table": "FeatureValue",
       "column": "RecordProcessID",
       "references": "RecordProcess",
-      "nullable": false,
+      "nullable": true,
       "action": "delete",
-      "reason": "NOT NULL reference to a RecordProcess row this proc deletes; deleted first."
+      "reason": "Nullable since a Model row carries none; a Pipeline row without its Record Process fails CK_FeatureValue_SourceLineage, so the process's rows are deleted."
     },
     {
       "table": "MLModelScoringBinding",

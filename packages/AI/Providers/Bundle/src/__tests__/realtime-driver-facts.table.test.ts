@@ -6,7 +6,7 @@ import { xAIRealtime } from '@memberjunction/ai-xai';
 import { GeminiRealtime } from '@memberjunction/ai-gemini';
 import { GeminiEnterpriseRealtime } from '@memberjunction/ai-vertex';
 import { ElevenLabsRealtime, ElevenRealtime } from '@memberjunction/ai-elevenlabs';
-import { AssemblyAIRealtime } from '@memberjunction/ai-assemblyai';
+import { AssemblyAIRealtime, AssemblyAIVoiceRealtime } from '@memberjunction/ai-assemblyai';
 import { InworldRealtime } from '@memberjunction/ai-inworld';
 
 /** The static shape every realtime driver class exposes; typed structurally so the table needs no cast. */
@@ -25,6 +25,7 @@ const EXPECTED: ReadonlyArray<readonly [DriverWithFacts, number | undefined]> = 
     [ElevenLabsRealtime, 7200],
     [ElevenRealtime, undefined],
     [AssemblyAIRealtime, undefined],
+    [AssemblyAIVoiceRealtime, undefined],
     [InworldRealtime, undefined],
 ];
 
@@ -43,6 +44,7 @@ const EXPECTED_TURN_SETTINGS: ReadonlyArray<readonly [DriverWithFacts, Supported
     // BuildElevenRealtimeTurnDetection: serverVad/semanticVad modes, eagerness (auto -> medium), threshold, silence.
     [ElevenRealtime, OPENAI_FAMILY_SETTINGS],
     [AssemblyAIRealtime, undefined],
+    [AssemblyAIVoiceRealtime, { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'exact' }],
     [InworldRealtime, undefined],
 ];
 

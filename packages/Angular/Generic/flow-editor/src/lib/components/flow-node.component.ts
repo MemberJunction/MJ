@@ -1,8 +1,8 @@
-import { Component, Input, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 import { FlowNode, FlowNodeTypeConfig } from '../interfaces/flow-types';
 
 /**
- * Renders a single node in the flow canvas.
+ * Renders a single step card in the flow canvas.
  * Applied with Foblex's fNode directive in the parent FlowEditorComponent template.
  * Contains input/output ports via Foblex's fNodeInput/fNodeOutput directives.
  */
@@ -19,6 +19,12 @@ export class FlowNodeComponent {
   @Input() TypeConfig: FlowNodeTypeConfig | null = null;
   @Input() ReadOnly = false;
   @Input() Compact = false;
+  @Input() XRayEnabled = false;
+  @Input() AllowBreakpointClick = false;
+
+  @Output() BreakpointClicked = new EventEmitter<FlowNode>();
+  @Output() QuickAddClicked = new EventEmitter<FlowNode>();
+  @Output() RunStepClicked = new EventEmitter<FlowNode>();
 
   get headerColor(): string {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     return this.TypeConfig?.Color ?? '#6B7280';
@@ -44,6 +50,7 @@ export class FlowNodeComponent {
       case 'running': return 'fa-spinner fa-spin';
       case 'disabled': return 'fa-ban';
       case 'pending': return 'fa-clock';
+      case 'skipped': return 'fa-forward';
       default: return '';
     }
   }
@@ -77,22 +84,72 @@ export class FlowNodeComponent {
     };
   }
 
-  get outputPort(): { ID: string; Side: string; Multiple: boolean; Disabled: boolean } | null {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  get outputPort(): { ID: string; Side: string; Multiple: boolean; Disabled: boolean; Label?: string } | null {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     const port = this.Node?.Ports?.find(p => p.Direction === 'output');
     if (!port) return null;
     return {
       ID: port.ID,
       Side: port.Side ?? 'bottom',
       Multiple: port.Multiple !== false,
-      Disabled: port.Disabled === true
+      Disabled: port.Disabled === true,
+      Label: port.Label
     };
+  }
+
+  /** All output ports on this node (enables multi-branch Decision outputs while remaining 100% back-compatible). */
+  public get OutputPorts(): Array<{ ID: string; Side: string; Multiple: boolean; Disabled: boolean; Label?: string }> {
+    return (this.Node?.Ports ?? [])
+      .filter(p => p.Direction === 'output')
+      .map(port => ({
+        ID: port.ID,
+        Side: port.Side ?? 'bottom',
+        Multiple: port.Multiple !== false,
+        Disabled: port.Disabled === true,
+        Label: port.Label
+      }));
+  }
+
+  /** True when live `NodeProgress` telemetry is available for this node. */
+  public get HasLiveProgress(): boolean {
+    return Boolean(this.Node?.ProgressMessage) || typeof this.Node?.ProgressPercent === 'number';
+  }
+
+  /** True when X-Ray mode has telemetry to show inside the card. */
+  public get ShowXRayPanel(): boolean {
+    if (!this.XRayEnabled || !this.Node) return false;
+    return Boolean(
+      (this.Node.XRayItems && this.Node.XRayItems.length > 0) ||
+      this.Node.Confidence ||
+      this.Node.TaintState ||
+      this.Node.SagaCompensationLabel ||
+      this.Node.CanStepSingle
+    );
+  }
+
+  public OnBreakpointClick(event: MouseEvent): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.BreakpointClicked.emit(this.Node);
+  }
+
+  public OnQuickAddClick(event: MouseEvent): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.QuickAddClicked.emit(this.Node);
+  }
+
+  public OnRunStepClick(event: MouseEvent): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.RunStepClicked.emit(this.Node);
   }
 
   // ── Loop Node Properties ───────────────────────────────────
 
-  /** Whether this node represents a loop (ForEach or While) */
+  /** Whether this node represents a loop (ForEach/While in Flow or ForEachTask/WhileTask in TaskGraph). */
   get isLoopNode(): boolean {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
-    return this.Node?.Type === 'ForEach' || this.Node?.Type === 'While';
+    const t = this.Node?.Type;
+    return t === 'ForEach' || t === 'While' || t === 'ForEachTask' || t === 'WhileTask';
   }
 
   /** Loop body type label (e.g., 'Action', 'Prompt', 'Sub-Agent') */

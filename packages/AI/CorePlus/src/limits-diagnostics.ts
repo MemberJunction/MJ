@@ -123,8 +123,20 @@ export interface ResolveAgentRunLimitsInput {
     CodeFallback?: MJLimitsOverride | null;
     MjConfigLimits?: MJLimitsOverride | null;
     Agent?: AgentLimitsMetadataInput | null;
+    /**
+     * Optional prototype-inheritance ancestor agents ordered `[rootAgent, ..., parentAgent]`
+     * (excluding `Agent` itself, or including it — deduplication is harmless under min clamping).
+     * Finite budget/iteration bounds on ancestors act as strictest-wins ceilings that descendants
+     * can narrow but never widen.
+     */
+    AncestorAgents?: ReadonlyArray<AgentLimitsMetadataInput> | null;
     WorkflowMetadata?: WorkflowLimitsMetadataInput | null;
     UserPolicy?: UserPolicyLimitsMetadataInput | null;
+    /**
+     * Optional user policies attached to prototype ancestors ordered `[rootPolicy, ..., parentPolicy]`.
+     * Finite bounds act as strictest-wins ceilings over `UserPolicy`.
+     */
+    AncestorUserPolicies?: ReadonlyArray<UserPolicyLimitsMetadataInput> | null;
     UserPolicyLimitsOverride?: MJLimitsOverride | null;
     RunParams?: Pick<
         ExecuteAgentParams,
@@ -505,12 +517,121 @@ export function ExtractRunOverrideLimits(
     return result;
 }
 
+function minOptionalNumber(a: number | undefined, b: number | undefined): number | undefined {
+    if (a !== undefined && b !== undefined) {
+        return Math.min(a, b);
+    }
+    return a !== undefined ? a : b;
+}
+
+/**
+ * Merges a child `MJLimitsOverride` onto an ancestor ceiling `MJLimitsOverride` using
+ * strictest-wins clamping on finite numeric upper bounds (iterations, costs, tokens, durations)
+ * so derived instances can narrow limits further but never exceed an ancestor's ceiling.
+ */
+function clampLimitsOverrideToCeiling(
+    ancestor: MJLimitsOverride,
+    descendant: MJLimitsOverride
+): MJLimitsOverride {
+    const merged = mergeLimitsOverrides(ancestor, descendant);
+
+    const clampScalar = (
+        key:
+            | 'AgentAbsoluteIterations'
+            | 'MaxTasksPerAgentGraph'
+            | 'MaxTasksPerGraph'
+            | 'WhileLoopMaxIterations'
+            | 'ForEachMaxIterations'
+            | 'AgentChannelConsecutiveTurns'
+            | 'AgentChannelWakesPerHour'
+    ): void => {
+        const clamped = minOptionalNumber(ancestor[key], descendant[key]);
+        if (clamped !== undefined) {
+            merged[key] = clamped;
+        }
+    };
+
+    clampScalar('AgentAbsoluteIterations');
+    clampScalar('MaxTasksPerAgentGraph');
+    clampScalar('MaxTasksPerGraph');
+    clampScalar('WhileLoopMaxIterations');
+    clampScalar('ForEachMaxIterations');
+    clampScalar('AgentChannelConsecutiveTurns');
+    clampScalar('AgentChannelWakesPerHour');
+
+    if (ancestor.Budgets?.PerRun || descendant.Budgets?.PerRun) {
+        const aPerRun = ancestor.Budgets?.PerRun;
+        const dPerRun = descendant.Budgets?.PerRun;
+        const maxCostUsd = minOptionalNumber(aPerRun?.MaxCostUsd, dPerRun?.MaxCostUsd);
+        const maxTokens = minOptionalNumber(aPerRun?.MaxTokens, dPerRun?.MaxTokens);
+        const maxWallClockMs = minOptionalNumber(aPerRun?.MaxWallClockMs, dPerRun?.MaxWallClockMs);
+        merged.Budgets = {
+            ...(merged.Budgets ?? {}),
+            PerRun: {
+                ...(merged.Budgets?.PerRun ?? {}),
+                ...(maxCostUsd !== undefined ? { MaxCostUsd: maxCostUsd } : {}),
+                ...(maxTokens !== undefined ? { MaxTokens: maxTokens } : {}),
+                ...(maxWallClockMs !== undefined ? { MaxWallClockMs: maxWallClockMs } : {}),
+            },
+        };
+    }
+
+    if (ancestor.Budgets?.PerRoutine || descendant.Budgets?.PerRoutine) {
+        const aPerRoutine = ancestor.Budgets?.PerRoutine;
+        const dPerRoutine = descendant.Budgets?.PerRoutine;
+        const maxCostUsd = minOptionalNumber(aPerRoutine?.MaxCostUsd, dPerRoutine?.MaxCostUsd);
+        const maxWallClockMs = minOptionalNumber(aPerRoutine?.MaxWallClockMs, dPerRoutine?.MaxWallClockMs);
+        merged.Budgets = {
+            ...(merged.Budgets ?? {}),
+            PerRoutine: {
+                ...(merged.Budgets?.PerRoutine ?? {}),
+                ...(maxCostUsd !== undefined ? { MaxCostUsd: maxCostUsd } : {}),
+                ...(maxWallClockMs !== undefined ? { MaxWallClockMs: maxWallClockMs } : {}),
+            },
+        };
+    }
+
+    if (ancestor.Budgets?.PerUserPerDay || descendant.Budgets?.PerUserPerDay) {
+        const aPerDay = ancestor.Budgets?.PerUserPerDay;
+        const dPerDay = descendant.Budgets?.PerUserPerDay;
+        const maxCostUsd = minOptionalNumber(aPerDay?.MaxCostUsd, dPerDay?.MaxCostUsd);
+        const maxWallClockMs = minOptionalNumber(aPerDay?.MaxWallClockMs, dPerDay?.MaxWallClockMs);
+        merged.Budgets = {
+            ...(merged.Budgets ?? {}),
+            PerUserPerDay: {
+                ...(merged.Budgets?.PerUserPerDay ?? {}),
+                ...(maxCostUsd !== undefined ? { MaxCostUsd: maxCostUsd } : {}),
+                ...(maxWallClockMs !== undefined ? { MaxWallClockMs: maxWallClockMs } : {}),
+            },
+        };
+    }
+
+    return merged;
+}
+
 /**
  * Resolves the 5-tier limits hierarchy for an agent or workflow execution context.
  */
 export function ResolveAgentRunLimits(input: ResolveAgentRunLimitsInput): MJLimitsResolutionResult {
-    const agentOrWorkflow = ExtractAgentMetadataLimitsOverride(input.Agent, input.WorkflowMetadata);
-    const userPolicy = ExtractUserPolicyLimitsOverride(input.UserPolicy, input.UserPolicyLimitsOverride);
+    let agentOrWorkflow: MJLimitsOverride = {};
+    if (input.AncestorAgents && input.AncestorAgents.length > 0) {
+        for (const ancestorAgent of input.AncestorAgents) {
+            const ancestorOverride = ExtractAgentMetadataLimitsOverride(ancestorAgent, null);
+            agentOrWorkflow = clampLimitsOverrideToCeiling(agentOrWorkflow, ancestorOverride);
+        }
+    }
+    const leafAgentOverride = ExtractAgentMetadataLimitsOverride(input.Agent, input.WorkflowMetadata);
+    agentOrWorkflow = clampLimitsOverrideToCeiling(agentOrWorkflow, leafAgentOverride);
+
+    let userPolicy: MJLimitsOverride = {};
+    if (input.AncestorUserPolicies && input.AncestorUserPolicies.length > 0) {
+        for (const ancestorPolicy of input.AncestorUserPolicies) {
+            const ancestorPolicyOverride = ExtractUserPolicyLimitsOverride(ancestorPolicy, null);
+            userPolicy = clampLimitsOverrideToCeiling(userPolicy, ancestorPolicyOverride);
+        }
+    }
+    const leafUserPolicyOverride = ExtractUserPolicyLimitsOverride(input.UserPolicy, input.UserPolicyLimitsOverride);
+    userPolicy = clampLimitsOverrideToCeiling(userPolicy, leafUserPolicyOverride);
     const runOverride = ExtractRunOverrideLimits(input.RunParams, input.RunOverride);
     const hasActiveUserPolicyLimits = Object.keys(userPolicy).length > 0;
     const contextUser = input.ContextUser ?? input.Options?.ContextUser ?? null;

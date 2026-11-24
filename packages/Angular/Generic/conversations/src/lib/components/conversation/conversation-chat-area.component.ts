@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type WorkflowSaveInput, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type ExecuteAgentResult, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
@@ -35,7 +35,7 @@ import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunctio
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
 import { ConfirmMoveIntoFolder } from '../../utils/folder-move';
 import { Subject, firstValueFrom } from 'rxjs';
-import { map, takeUntil } from 'rxjs/operators';
+import { debounceTime, filter, map, takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
@@ -106,7 +106,7 @@ import {
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { GetThreadReplyRoots, type ThreadReplyRevealRequest } from '../../utils/thread-replies';
-import { NormalizeUUID, UUIDsEqual, UUIDSet, UUIDMap, IndexByUUID, IsValidUUID } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, UUIDMap, IndexByUUID, IsValidUUID, MJGlobal, MJEventType, type MJEvent } from '@memberjunction/global';
 import { AgentAccentVar, type MessageHandoffInfo } from '../message/agent-handoff-card.component';
 import {
   BuildHandoffsByDetailId,
@@ -1202,7 +1202,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       rows,
       managerId,
       {
-        conversationManagerName: this.conversationManagerAgent?.Name ?? 'Sage',
+        conversationManagerName: this.conversationManagerAgent?.Name ?? null,
         isWithinFloor: msg => !this.AgentHistoryFrom || msg.__mj_CreatedAt >= this.AgentHistoryFrom,
       },
     );
@@ -1224,7 +1224,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const isManager = managerId ? UUIDsEqual(targetId, managerId) : false;
     const owner = {
       ID: targetId,
-      Name: meta?.Name || (isManager ? (this.conversationManagerAgent?.Name || 'Sage') : 'Agent'),
+      Name: meta?.Name || (isManager ? (this.conversationManagerAgent?.Name || 'Assistant') : 'Agent'),
       IsConversationManager: isManager,
     };
     this._cachedOwnerAgentKey = cacheKey;
@@ -1233,7 +1233,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   public get CurrentOwnerAgentName(): string {
-    return this.CurrentOwnerAgent?.Name || this.conversationManagerAgent?.Name || 'Sage';
+    return this.CurrentOwnerAgent?.Name || this.conversationManagerAgent?.Name || 'Assistant';
   }
 
   public get CurrentOwnerAccentVar(): string {
@@ -1287,6 +1287,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public OnAgentModePresetChanged(presetId: string | null): void {
     this.ActiveAgentConfigurationPresetId = presetId;
     this.cdr.markForCheck();
+  }
+
+  private async handleAgentCatalogInvalidated(): Promise<void> {
+    try {
+      const user = this.CurrentUser ?? this.ProviderToUse.CurrentUser;
+      // AIEngineBase auto-refreshes _agents/_agentPersonas/_agentPermissions in-memory on
+      // BaseEntity events; only reload the active conversation's DefaultAgentID if needed.
+      if (this.Conversation?.ID && user) {
+        const refreshed = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+        const loaded = await refreshed.InnerLoad(CompositeKey.FromID(this.Conversation.ID));
+        if (loaded && refreshed.DefaultAgentID !== this.Conversation.DefaultAgentID) {
+          this.Conversation.DefaultAgentID = refreshed.DefaultAgentID;
+        }
+      }
+      this.cdr.markForCheck();
+    } catch {
+      // Best-effort live refresh — never disrupt active chat
+    }
   }
 
   /** Greeting message shown in the empty state when no conversation is active */
@@ -3550,6 +3568,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.artifactPermissionService.Provider = p;
     this.attachmentService.Provider = p;
     this.analyzeArtifactService.Provider = p;
+
+    // Live-refresh AIEngineBase, @mention autocomplete, and active conversation's DefaultAgentID
+    // when personal agent instances are created/updated (e.g., conversational onboarding morphing
+    // the thread from Chief of Staff template into the user's new @Pepper instance).
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(
+        filter((event: MJEvent) => {
+          if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode || !event.args) {
+            return false;
+          }
+          const args = event.args as BaseEntityEvent;
+          const entityName = args.type === 'remote-invalidate' ? args.entityName : args.baseEntity?.EntityInfo?.Name;
+          const norm = entityName?.trim().toLowerCase() ?? '';
+          return (
+            norm === 'mj: ai agents' ||
+            norm === 'mj: ai agent personas' ||
+            norm === 'mj: ai agent permissions' ||
+            norm === 'mj: user settings'
+          );
+        }),
+        debounceTime(150),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        void this.handleAgentCatalogInvalidated();
+      });
 
     // Subscribe to actionable commands from UICommandHandlerService so we can
     // intercept and locally handle commands that depend on the conversation

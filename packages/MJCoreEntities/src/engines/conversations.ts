@@ -1671,7 +1671,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false,
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
+        options?: {
+            includeApplicationScoped?: boolean;
+            includeAnchored?: boolean;
+            includeRecordLinked?: boolean;
+            includeAgentChannels?: boolean;
+        }
     ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
         if (!forceRefresh && this._lastEnvironmentId === environmentId && this._conversations$.value.length > 0) {
@@ -1913,7 +1918,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public async GetVisibleConversationsFilter(
         environmentId: string,
         contextUser: UserInfo,
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
+        options?: {
+            includeApplicationScoped?: boolean;
+            includeAnchored?: boolean;
+            includeRecordLinked?: boolean;
+            includeAgentChannels?: boolean;
+        }
     ): Promise<string> {
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
         const sharedProjectIds = this.getSharedProjectIds(environmentId);
@@ -2144,11 +2154,26 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return ResourcePermissionEngine.Instance.GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
     }
 
+    private isAgentChannelTypeId(typeId: string | null | undefined): boolean {
+        if (!typeId) {
+            return false;
+        }
+        const agentChannelTypeId =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.AGENT_CHANNEL) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL;
+        return UUIDsEqual(typeId, agentChannelTypeId);
+    }
+
     private buildVisibleConversationsFilter(
         environmentId: string,
         userId: string,
         sharedConversationIds: string[],
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean },
+        options?: {
+            includeApplicationScoped?: boolean;
+            includeAnchored?: boolean;
+            includeRecordLinked?: boolean;
+            includeAgentChannels?: boolean;
+        },
         sharedProjectIds: string[] = []
     ): string {
         const ownershipClause = `UserID='${userId}'`;
@@ -2175,7 +2200,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const recordLinkedClause = options?.includeRecordLinked
             ? ''
             : ` AND LinkedEntityID IS NULL`;
-        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}`;
+        // Agent-to-agent coordination channels live in My Agents -> Agent Channels rather than
+        // the human Chat sidebar list unless explicitly requested.
+        const agentChannelTypeId =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.AGENT_CHANNEL) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL;
+        const agentChannelClause = options?.includeAgentChannels
+            ? ''
+            : ` AND (TypeID IS NULL OR TypeID <> '${EscapeSQLString(agentChannelTypeId)}')`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}${agentChannelClause}`;
     }
 
     /**
@@ -2673,6 +2706,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             conversation.ApplicationScope !== 'Application' &&
             conversation.AnchorType == null &&
             conversation.LinkedEntityID == null &&
+            !this.isAgentChannelTypeId(conversation.TypeID) &&
             !this.GetConversation(conversation.ID)
         ) {
             const updated = [conversation, ...this._conversations$.value];
@@ -3252,7 +3286,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (
             conversation.ApplicationScope === 'Application' ||
             conversation.AnchorType != null ||
-            conversation.LinkedEntityID != null
+            conversation.LinkedEntityID != null ||
+            this.isAgentChannelTypeId(conversation.TypeID)
         ) {
             return conversation;
         }
@@ -5768,6 +5803,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 const scope = data['ApplicationScope'] as string | undefined;
                 const anchorType = data['AnchorType'] as string | null | undefined;
                 const linkedEntityId = data['LinkedEntityID'] as string | null | undefined;
+                const typeId =
+                    (data['TypeID'] as string | null | undefined) ??
+                    (event.baseEntity as MJConversationEntity | null)?.TypeID ??
+                    null;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
                 const inLoadedEnvironment =
@@ -5777,6 +5816,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                     scope !== 'Application' &&
                     anchorType == null &&
                     linkedEntityId == null &&
+                    !this.isAgentChannelTypeId(typeId) &&
                     !isArchived &&
                     inLoadedEnvironment
                 ) {

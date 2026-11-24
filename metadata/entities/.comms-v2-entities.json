@@ -1,0 +1,65 @@
+[
+  {
+    "_comments": [
+      "Append-only compliance consent audit log: no update/delete API or record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Consent Audit Logs"
+    },
+    "fields": {
+      "Name": "MJ: Communication Consent Audit Logs",
+      "TrackRecordChanges": false,
+      "AllowCreateAPI": true,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false
+    }
+  },
+  {
+    "_comments": [
+      "High-volume activity event table: disable record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Activities"
+    },
+    "fields": {
+      "Name": "MJ: Communication Activities",
+      "TrackRecordChanges": false
+    }
+  },
+  {
+    "_comments": [
+      "High-volume provider webhook idempotency ledger: disable record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Provider Events"
+    },
+    "fields": {
+      "Name": "MJ: Communication Provider Events",
+      "TrackRecordChanges": false
+    }
+  },
+  {
+    "_comments": [
+      "Endpoints hold PII erased under GDPR: disable record-change tracking so erased addresses are not retained in RecordChange history"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Endpoints"
+    },
+    "fields": {
+      "Name": "MJ: Communication Endpoints",
+      "TrackRecordChanges": false
+    }
+  },
+  {
+    "_comments": [
+      "Per-chunk bookkeeping for chunked communication runs: high volume and written by the system, so no record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Run Chunks"
+    },
+    "fields": {
+      "Name": "MJ: Communication Run Chunks",
+      "TrackRecordChanges": false
+    }
+  }
+]

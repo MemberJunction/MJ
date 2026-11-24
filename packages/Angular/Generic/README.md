@@ -86,6 +86,7 @@ Components for managing credentials and resource access control.
 |---------|-----|-------------|
 | [credentials](./credentials/README.md) | `@memberjunction/ng-credentials` | Components for credential management -- panels and dialogs for creating and editing credentials |
 | [resource-permissions](./resource-permissions/README.md) | `@memberjunction/ng-resource-permissions` | Generic components for displaying/editing permissions for a resource |
+| [auth-services](./auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, Okta, Cognito, WorkOS, Magic Link, and Local Dev provider support |
 
 ### UI Utilities
 

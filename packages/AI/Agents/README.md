@@ -6,6 +6,7 @@ It also provides two capability layers any agent can opt into:
 
 - **Skills** — reusable capability bundles (instructions + Actions + sub-agents) an agent activates mid-run via a progressive-disclosure catalog. Availability is gated per-agent (`AIAgent.AcceptsSkills`); *self*-activation additionally requires the **double activation gate** (`AISkill.ActivationMode` × `AIAgent.SkillActivationMode`, both defaulting to `RequestedOnly` so autonomous skill expansion is always a deliberate double opt-in — users can still `/skill`-request any available skill). Every activation is recorded with **provenance of authority** on `AIAgentRunStep.Skills` (activation type, gate values, agent-stated reason), and Prompt/Actions/Sub-Agent steps carry per-step skill attribution. Skills are shareable via the dedicated skill-permissions model and portable via **SKILL.md** import/export.
 - **Plan Mode** — a per-request human-in-the-loop gate (`ExecuteAgentParams.planMode`) that makes an agent present a plan and get it approved before executing any Actions or Sub-Agents, built on the existing `MJ: AI Agent Requests` pause/resume flow.
+- **Consult & Handoff** (*owner: `@AN-BC` / `@memberjunction/ai-agents` maintainers*) — **Consult** (`ChatHandlingOption = 'Consult'`, [`src/sub-agent-consult.ts`](./src/sub-agent-consult.ts)) routes a sub-agent's `Chat` step back to its parent Loop agent for up to `MaxSubAgentConsultRounds` (default 3) before escalating to the human caller via `MJ: AI Agent Requests`, and resumes the paused child run via `resumeRunId`. **Handoff** (`step = 'Handoff'`, [`src/handoff-target.ts`](./src/handoff-target.ts)) lets a general router agent (such as Sage) transfer a conversation turn to a discoverable, permitted specialist agent (up to `MAX_HANDOFF_HOPS = 3` with cycle detection and target preset resolution). See [Sub-Agents Guide](./docs/sub-agents-guide.md), [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md), and the post-release review in [`plans/video-studio-ws3-consult-handoff-review.md`](../../../plans/video-studio-ws3-consult-handoff-review.md).
 
 **See the [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** for the full architecture, the three-layer gate, the SKILL.md format, and the plan-approval flow.
 
@@ -181,6 +182,13 @@ How a result's trust level is decided, first match wins:
 | 4 | `Trusted` |
 
 Client tools declare `TrustLevel` on their `ClientToolMetadata`; a browser DOM extractor should say `Untrusted`. In the `MJ: Actions` metadata catalog, `outputTrustLevel: "Untrusted"` is set on actions that ingest external content (web search and page content, inbox reader, HTTP request, URL metadata, RSS feeds, `Execute MCP Tool`), not on actions that send to an external system or list MJ's own MCP catalog.
+
+Trust labels propagate end to end across context-management and delegation boundaries:
+- **Spilled artifact tools (`ArtifactToolManager`)**: reads (`ExecuteSingleToolCall`), workspace listings (`list_workspace_artifacts`), refreshed artifacts (`refresh_and_snapshot_artifact`), source-link records (`follow_source_link`), mutations to existing workspace artifacts, and newly created or synthesized artifacts (`create_artifact`, `create_synthesized_artifact`) inherit the most restrictive `trustLevel`/`sourceName` of their source artifacts and the active run taint, and wrap returned content in `<untrusted_external_data>`.
+- **Sub-agent delegation (`ExportInputArtifacts`)**: parent artifacts passed to sub-agents preserve `trustLevel` and `sourceName`.
+- **Server-side pipelines (`Pipeline`)**: multi-stage pipelines taint and wrap their final output whenever any source stage reads from an untrusted or semi-trusted artifact or action.
+- **Compaction and emergency recovery**: `First N Chars` and `AI Summary` compaction as well as emergency context-recovery truncation (`TruncatePreservingUntrustedEnvelope`) preserve the outer `<untrusted_external_data>` XML boundary instead of slicing off the closing tag.
+- **Cross-run carry-forward**: `BuildPriorTurnToolResultsMessage` drops `Untrusted` and `SemiTrusted` artifact/action step outputs while preserving `Trusted` ones.
 
 ##### Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Gating
 
@@ -544,6 +552,14 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+For action results specifically, expiration, compaction, and per-run execution limits follow a unified 3-tier precedence (`ActionLifecycleResolver`) shared identically across directly-attached (`AIAgentAction`) and skill-bundled (`AISkillAction`) actions:
+
+1. `ExecuteAgentParams.messageExpirationOverride` — runtime caller override (passing `{ expirationMode: 'None' }` explicitly disables expiration for the run).
+2. Active `AIAgentAction` metadata — agent-specific `ResultExpirationTurns` / `ResultExpirationMode` / `CompactMode` / `CompactLength` / `CompactPromptID` / `MaxExecutionsPerRun` when `ResultExpirationTurns` is non-null (to opt a specific agent out of an `Action.Config` default via `AIAgentAction`, set `ResultExpirationMode = 'None'` with `ResultExpirationTurns = 0`).
+3. `Action.Config_Object` (`IActionConfiguration` JSON on `MJ: Actions.Config`) + `Action.DefaultCompactPromptID` — action-level defaults that apply automatically whenever no active `AIAgentAction` row sets `ResultExpirationTurns`.
+
+Mid-loop pruning/compaction runs once the conversation reaches the agent's compaction trigger (`isMidLoopCompactionThresholdReached` — 75% of `ContextWindowMaxTokens`, e.g. 90k tokens on Sage) or whenever `messageExpirationOverride` is passed, preserving provider prompt-cache prefixes on routine short turns. Large or tabular action outputs use lazy artifact spillover (`ActionResultSpilloverManager`) into `ArtifactToolManager`: results remain inline in conversation history (without mutating `_ARTIFACT_MANIFEST`) until compaction, expiration removal, or emergency context recovery actually fires, at which point they materialize as queryable workspace artifacts and leave stub pointers in the compacted message.
+
 ### With Post-Run Compaction, Scratchpad Pruning & Memory Extraction (`compactAfterRun`)
 
 Programmatic callers and multi-run workflows can opt into automatic post-run cleanup once an agent run settles via `ExecuteAgentParams.compactAfterRun`. When enabled (`true` or an `AgentPostRunCompactionConfig` object), `BaseAgent.finalizeAgentRun` executes a failure-isolated post-run compaction pass after pending step writes and the run record are saved:
@@ -800,6 +816,20 @@ Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
 - **Agent Category** -- business-domain default (e.g., Marketing → Box, Finance → SharePoint)
 - **Agent** -- per-agent override
 - **Runtime** -- `ExecuteAgentParams.override.storageAccountId` for programmatic callers
+
+## Agent Instances, Unified Persona & Primary Routing
+
+Derived agents (`BaseAgentID != null`) execute directly through `BaseAgent` and `AgentRunner` with full live prototype inheritance, unified text + voice persona injection, isolated per-instance memory, and primary-instance wake routing.
+
+| Component / Function | Responsibility |
+| --- | --- |
+| `BaseAgent` / `AgentRunner` / `CreateAgentInstance` | Resolves effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, relationships, skills, presets, run limits, and user-policy ceilings across `BaseAgentID` chains. |
+| `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) | Unifies text and Realtime voice persona by injecting `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` alongside the **Audience-Aware Tone Guardrail** (personal wit in 1:1 owner chat; professional on external emails, invites, and peer channels). |
+| `AgentContextInjector.filterNotesByScoping` | Inherits org/agent-wide notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes (`UserID != null`) strictly isolated per sibling instance (*Pepper* vs *Cato*). |
+| `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` | Routes inbound utility mailbox wakes, colleague inter-agent requests, Agent Channels, and workstreams to the recipient's active `IsPrimaryInstance = true` derived instance (with oldest-active and base-template fallback). |
+| `RealtimeClientSessionService` | Inherits persona and stacked standing instructions when opening live voice/realtime sessions on derived instances. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
 
 ## Dependencies
 

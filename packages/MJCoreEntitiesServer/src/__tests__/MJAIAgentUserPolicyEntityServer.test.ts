@@ -67,6 +67,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 });
 
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentUserPolicyEntityServer } from '../custom/MJAIAgentUserPolicyEntityServer.server';
 
 interface MockHooks {
@@ -238,5 +239,41 @@ describe('MJAIAgentUserPolicyEntityServer.Validate — agent context non-widenin
         expect(resA.Success).toBe(false);
         expect(resA.Errors.some((err) => /cannot widen privileges/i.test(err.Message))).toBe(true);
         expect(resB.Success).toBe(true);
+    });
+
+    it('permits template agent to initialize policy on newly minted derived child while blocking privilege widening', () => {
+        const DERIVED_PEPPER = 'CCCCCCCC-4C11-4E8A-9B01-1A2B3C4D5E01';
+        Reflect.set(AIEngineBase.Instance, '_agents', [
+            { ID: AGENT_A, Name: 'Chief of Staff', BaseAgentID: null, OwnerUserID: null, Status: 'Active' },
+            { ID: DERIVED_PEPPER, Name: 'Pepper', BaseAgentID: AGENT_A, OwnerUserID: OWNER, Status: 'Active' },
+        ]);
+
+        // Valid narrowed/default policy created by template AGENT_A for Alice's Pepper
+        const okPolicy = makeEntity();
+        okPolicy.IsSaved = false;
+        okPolicy.UserID = OWNER;
+        okPolicy.AgentID = DERIVED_PEPPER;
+        okPolicy.ExecutingAgentID = AGENT_A;
+        okPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        okPolicy.CoordinationMode = 'Observer';
+        okPolicy.DefaultDataAccessMode = 'ReadOnly';
+        okPolicy.EmailChannelMode = 'DraftOnly';
+        okPolicy.CalendarChannelMode = 'ProposeWithApproval';
+        okPolicy.RequireApprovalForExternalComms = true;
+        expect(okPolicy.Validate().Success).toBe(true);
+
+        // Attempting to widen EmailChannelMode to SendAsUser during template -> child creation MUST fail!
+        const widenedPolicy = makeEntity();
+        widenedPolicy.IsSaved = false;
+        widenedPolicy.UserID = OWNER;
+        widenedPolicy.AgentID = DERIVED_PEPPER;
+        widenedPolicy.ExecutingAgentID = AGENT_A;
+        widenedPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        widenedPolicy.EmailChannelMode = 'SendAsUser';
+        const widenedResult = widenedPolicy.Validate();
+        expect(widenedResult.Success).toBe(false);
+        expect(widenedResult.Errors.some((err) => /cannot widen privileges/i.test(err.Message))).toBe(true);
+
+        Reflect.set(AIEngineBase.Instance, '_agents', []);
     });
 });

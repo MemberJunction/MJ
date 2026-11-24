@@ -5,6 +5,7 @@ import {
 } from '../index';
 import {
   EvaluationProtocolRules,
+  GUARD_FIELDS,
   type EvaluationProtocolDraft,
   type ProtocolRefusal,
 } from '../evaluation-protocol-rules';
@@ -372,6 +373,19 @@ describe('MayEditGuardFields', () => {
 });
 
 describe('ChangedGuardFields', () => {
+  it('minMinorityClassRows is a guard field: an agent cannot lower it, a user can, and it is reported in GUARD_FIELDS order', () => {
+    const u = unit(binary);
+    const v1 = protocol(draftFor(u), 1, { kind: 'system', component: 'default-protocol' });
+    const lowered = (author: Actor) => protocol({ ...draftFor(u), minMinorityClassRows: v1.minMinorityClassRows - 1 }, 2, author);
+    expect(EvaluationProtocolRules.ChangedGuardFields(v1, lowered(agent))).toEqual(['minMinorityClassRows']);
+    expect(EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: lowered(agent), Previous: v1, AuthoredBy: agent })).toEqual([
+      { Kind: 'guard-field-edited-by-disallowed-author', Fields: ['minMinorityClassRows'], Author: 'agent', Setting: 'non-agent' },
+    ]);
+    expect(EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: lowered(human), Previous: v1, AuthoredBy: human })).toEqual([]);
+    const both = protocol({ ...draftFor(u), minMinorityClassRows: 1, guardFieldsEditableBy: 'human-only' }, 2, human);
+    expect(EvaluationProtocolRules.ChangedGuardFields(v1, both)).toEqual(['minMinorityClassRows', 'guardFieldsEditableBy']);
+    expect(GUARD_FIELDS).toEqual(['holdout', 'promotion', 'leakageAudit', 'exclusions', 'budgets', 'minMinorityClassRows', 'guardFieldsEditableBy']);
+  });
   it('ignores key order inside a guard field', () => {
     const u = unit(binary);
     const v1 = protocol(draftFor(u), 1);

@@ -203,6 +203,8 @@ jobs:
             .github/scripts/check-turbo-cache-env.mjs
             # The turbo root-data inputs guard runs in the guards job; its suite lives in __tests__ above.
             .github/scripts/check-turbo-root-inputs.mjs
+            # Video Studio real-render workflow: an edit to it must run the workflow guard suites.
+            .github/workflows/video-studio-render.yml
             # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
             # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
             # Its suite lives in __tests__ above, but without these entries a PR editing only one of
@@ -400,7 +402,7 @@ jobs:
       # (that is the other half of this fix), so pointing at it here would match nothing. And
       # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
       # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
-      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress + platform strings)
+      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress + platform strings + static numeric literals)
         if: ${{ !cancelled() }}
         run: >-
           pnpm --filter @memberjunction/global exec vitest run
@@ -410,6 +412,7 @@ jobs:
           src/__tests__/MultiProviderCompliance.test.ts
           src/__tests__/FieldSecurityEgressCompliance.test.ts
           src/__tests__/PlatformStringCompliance.test.ts
+          src/__tests__/StaticNumericLiteralCompliance.test.ts
 
       # The primary-key scanner is the same kind of repo-wide scan, hosted in MJCore. In MJCore's
       # per-package `test` task it ran only when a PR touched MJCore (core sits at the bottom of the

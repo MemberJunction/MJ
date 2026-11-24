@@ -345,13 +345,15 @@ describe('routes the workflow did not take', () => {
     };
     const runtime = { start: 'Complete', taken: 'Complete', 'not-taken': 'Skipped' } as const;
 
-    it('draws no edge into a step the workflow declined', () => {
-        expect(SpecToConnections(branching, runtime).some((c) => c.TargetNodeID === 'not-taken')).toBe(false);
+    it('marks an edge into a declined step as ghosted untaken by default (and hides when disabled)', () => {
+        const conns = SpecToConnections(branching, runtime);
+        const intoSkipped = conns.find((c) => c.TargetNodeID === 'not-taken');
+        expect(intoSkipped?.Untaken).toBe(true);
+        expect(intoSkipped?.Style).toBe('dashed');
+        expect(SpecToConnections(branching, runtime, { showUntakenPaths: false }).some((c) => c.TargetNodeID === 'not-taken')).toBe(false);
     });
 
-    it('draws no edge OUT of a declined step either', () => {
-        // An edge leaving a skipped step is as untravelled as one entering it — checking only the
-        // target would leave half of every abandoned branch drawn as though it had carried something.
+    it('marks an edge OUT of a declined step as ghosted untaken too (and hides when disabled)', () => {
         const withDownstream: TaskGraphSpec = {
             ...branching,
             tasks: [
@@ -360,7 +362,10 @@ describe('routes the workflow did not take', () => {
             ],
         };
         const conns = SpecToConnections(withDownstream, { ...runtime, after: 'Pending' });
-        expect(conns.some((c) => c.SourceNodeID === 'not-taken')).toBe(false);
+        const outOfSkipped = conns.find((c) => c.SourceNodeID === 'not-taken');
+        expect(outOfSkipped?.Untaken).toBe(true);
+        expect(outOfSkipped?.Style).toBe('dashed');
+        expect(SpecToConnections(withDownstream, { ...runtime, after: 'Pending' }, { showUntakenPaths: false }).some((c) => c.SourceNodeID === 'not-taken')).toBe(false);
     });
 
     it('keeps the edges along the route that WAS taken', () => {

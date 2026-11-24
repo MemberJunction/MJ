@@ -77,11 +77,32 @@ export const CHECK_CLI_TIMEOUT_MS = 120_000;
 const PACKAGE_ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * Resolves the installed version of `@hyperframes/<subpackage>` from its `package.json` at runtime.
- * Throws if the package's `package.json` cannot be read or lacks a valid `version` field.
+ * Finds `@hyperframes/<subpackage>/package.json` the way Node would find the package from `fromDir`:
+ * each `node_modules` folder from `fromDir` up to the filesystem root, nearest first. This covers
+ * nested installs (pnpm) and hoisted ones (npm, where the package sits in a parent `node_modules`).
+ * Reads the folders directly because `@hyperframes/producer` does not export `./package.json`, so
+ * `require.resolve('<pkg>/package.json')` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+ * Returns `undefined` when no folder has the package.
  */
-export function GetInstalledHyperFramesPackageVersion(subpackage = 'producer'): string {
-    const pkgJsonPath = path.join(PACKAGE_ROOT_DIR, 'node_modules', '@hyperframes', subpackage, 'package.json');
+export function ResolveHyperFramesPackageJsonPath(subpackage: string, fromDir: string = PACKAGE_ROOT_DIR): string | undefined {
+    const lookupDirs = createRequire(path.join(fromDir, 'package.json')).resolve.paths(`@hyperframes/${subpackage}`) ?? [];
+    return lookupDirs
+        .map((dir) => path.join(dir, '@hyperframes', subpackage, 'package.json'))
+        .find((candidate) => fssync.existsSync(candidate));
+}
+
+/**
+ * Resolves the installed version of `@hyperframes/<subpackage>` from its `package.json` at runtime.
+ * Throws if the package cannot be found from `fromDir`, or its `package.json` cannot be read or
+ * lacks a valid `version` field.
+ */
+export function GetInstalledHyperFramesPackageVersion(subpackage = 'producer', fromDir: string = PACKAGE_ROOT_DIR): string {
+    const pkgJsonPath = ResolveHyperFramesPackageJsonPath(subpackage, fromDir);
+    if (!pkgJsonPath) {
+        throw new Error(
+            `Unable to resolve installed version for @hyperframes/${subpackage}: not found in any node_modules folder from ${fromDir} up`,
+        );
+    }
     try {
         const raw = fssync.readFileSync(pkgJsonPath, 'utf8');
         const parsed = JSON.parse(raw) as { version?: unknown };

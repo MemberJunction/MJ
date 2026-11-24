@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W6 -> S8.4",
+    "Description": "Gate G6.5 (owner PR 4, phase 6, dataset W6-drift, criterion S8.4): the model trained on the 2023-and-earlier W6-drift s42 renewal rows flags a retrain once 2024+ outcomes arrive, 1 of 1 (monitoring reads realised renewals, not a row-count proxy).",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G6.5\", \"owner:PR4\", \"phase:6\", \"dataset:W6-drift\", \"criterion:S8.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 3600000,
+    "ExpectedOutcomes": {
+      "summary": "A 2024+ period flags a retrain."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w6-s8-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "3C6BA598-448D-47A6-8240-06432379A7B8"
+  }
+}

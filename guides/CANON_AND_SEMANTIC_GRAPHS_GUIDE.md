@@ -259,9 +259,16 @@ artifact type or the graph; both come from metadata, and the plan with its desig
    no-op; changed text replaces the item; a deleted or emptied artifact is removed.
 2. **Pipeline.** The item runs Segment, Tag, Embed and Graph like any other item. The Graph stage
    writes concepts with `Origin = 'Inferred'` and `SourcedFrom` / `Mentions` edges.
-3. **Links.** `[[Name]]` in a doc becomes a `LinksTo` row in `MJ: Record Links` to the artifact of that
-   name (same environment; the author's own artifact wins a tie), reconciled on every save. A graph's
-   `RecordLinkEdgeProvider` with `LinkTypes: ["LinksTo"]` projects it.
+3. **Links.** Durable record-mention tokens (`@{"_mode":"mention","type":"record","entityName":"...","name":"...","ID":"..."}`,
+   inserted via `[[` autocomplete in the MJ Docs editor using `ConversationUtility.CreateRecordLink`)
+   become `LinksTo` rows in `MJ: Record Links` targeting any entity (`TargetEntityID` from metadata,
+   `TargetRecordID` from `CompositeKey.ToCompactURLSegment()`), reconciled on every save. Name-to-ID
+   resolution happens only in the editor as the author picks a readable target; the server never
+   resolves names, and plain `[[Name]]` text stays plain text. A graph's `RecordLinkEdgeProvider`
+   with `LinkTypes: ["LinksTo"]` projects the links and hides endpoints a viewer cannot read.
+   In the viewer, tokens render as chips with their stored label—clickable when the viewer can open
+   the target, greyed with a "You don't have access" tooltip otherwise, and emitted as plain labels
+   on Markdown/PDF/DOCX export (Source mode shows raw tokens).
 4. **Relatedness.** `SharedConceptEdgeProvider` relates two records that were sources of the same
    concept (`SharesConceptWith`). It is derived on read as the viewer and stores nothing; the edge's
    `Attributes.SharedConceptIDs` explain it.
@@ -305,4 +312,5 @@ other surface or agent tool can call it the same way.
   clean teardown against a live database.
 - Unit: `ArtifactGraphIndexer.test.ts`, `GraphEvidenceRetractor.test.ts`, `ContentUploadIngestor.test.ts`
   (content-pipeline engine), `SharedConceptEdgeProvider.test.ts`, `RecordRelations.test.ts`,
-  `GraphAccessPolicy.test.ts` (core-entities), `artifact-related-panel.test.ts` (ng-artifacts).
+  `GraphAccessPolicy.test.ts` (core-entities), `artifact-related-panel.test.ts`,
+  `doc-record-link.util.test.ts`, `artifact-link-trigger.provider.test.ts` (ng-artifacts).

@@ -10,7 +10,7 @@
  * mapping reads only the fields it understands and ignores the rest.
  */
 
-import type { PredictiveStudioCreateScoringProcessInput } from '@memberjunction/core-entities';
+import type { PredictiveStudioCreateScoringProcessInput, RecordProcessRunNowOutput } from '@memberjunction/core-entities';
 
 /** Which records the run scores. Mirrors the dialog's segmented scope control. */
 export type OperateScopeMode = 'all' | 'view' | 'list';
@@ -23,7 +23,7 @@ export type OperateValueKind = 'score' | 'class';
 
 /**
  * The full knob state of the Operate dialog. The component holds exactly this object and
- * mutates it from the UI; {@link mapStateToCreateScoringInput} turns it into the Remote Op
+ * mutates it from the UI; {@link MapStateToCreateScoringInput} turns it into the Remote Op
  * input. New knobs append fields here (additive) without breaking existing mapping callers.
  */
 export interface OperateModelState {
@@ -53,7 +53,7 @@ export type OperateMappingError =
   | 'missing-list'
   | 'missing-output-field';
 
-/** Discriminated result of {@link mapStateToCreateScoringInput}. */
+/** Discriminated result of {@link MapStateToCreateScoringInput}. */
 export type OperateMappingResult =
   | { ok: true; input: PredictiveStudioCreateScoringProcessInput }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   | { ok: false; error: OperateMappingError };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -85,7 +85,7 @@ function buildScope(state: OperateModelState):
  * Contract enforced here (the thing the unit tests pin):
  * - **Scope** → exactly one selector on `scope`: `all` (default) / `viewId` / `listId`.
  * - **Output** → `outputField` is present ONLY in write-back mode (and must be non-empty);
- *   generic mode omits it entirely (predictions land in run history only — no binding).
+ *   generic mode omits it entirely (the binding names no column; predictions are its Feature Values).
  * - `valueKind` is attached only in write-back mode (the create op ignores it otherwise).
  *
  * Returns a discriminated result so the component can surface a precise, non-throwing error.
@@ -116,11 +116,6 @@ export function MapStateToCreateScoringInput(state: OperateModelState): OperateM
   return { ok: true, input };
 }
 
-/** @deprecated Use {@link MapStateToCreateScoringInput}. */
-export function mapStateToCreateScoringInput(state: OperateModelState): OperateMappingResult {
-  return MapStateToCreateScoringInput(state);
-}
-
 /** A short, user-facing message for a mapping error (used by the dialog's notifications). */
 export function DescribeOperateMappingError(error: OperateMappingError): string {
   switch (error) {
@@ -137,7 +132,20 @@ export function DescribeOperateMappingError(error: OperateMappingError): string 
   }
 }
 
-/** @deprecated Use {@link DescribeOperateMappingError}. */
-export function describeOperateMappingError(error: OperateMappingError): string {
-  return DescribeOperateMappingError(error);
+/** What the dialog tells the user after a run-now: the message and its notification style. */
+export interface OperateRunNotice {
+  readonly Message: string;
+  readonly Style: 'success' | 'warning' | 'error';
+}
+
+/**
+ * The notice for a run-now result. A completed run reports its counts; any other run reports its status and the run's
+ * error message, which for a scoring refusal or a failed batch names the refusal and the scoring run it was recorded
+ * on (the scoring binding's Record Process writes one scoring run per batch). Pure.
+ */
+export function OperateRunNoticeOf(output: RecordProcessRunNowOutput): OperateRunNotice {
+  const counts = `Scored ${output.success}/${output.processed} record(s) — ${output.status}.`;
+  if (output.status === 'Completed') return { Message: counts, Style: 'success' };
+  const why = output.errorMessage?.trim();
+  return { Message: why ? `${counts} ${why}` : counts, Style: output.status === 'Failed' ? 'error' : 'warning' };
 }

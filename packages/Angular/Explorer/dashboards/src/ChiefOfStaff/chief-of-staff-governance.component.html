@@ -1,355 +1,1246 @@
 <mj-page-layout>
     <mj-page-header
-        Title="Governance"
-        [Subtitle]="'How much ' + SelectedAgentDisplayName + ' may do on its own, and what needs your approval'"
-        Icon="fa-solid fa-shield-halved">
+        Title="Agents"
+        Subtitle="Personalize your agent instances, choose your default chat responder, and configure governance guardrails"
+        Icon="fa-solid fa-robot">
 
-
-        <ng-container toolbar>
-            @if (AvailableAgents.length > 0) {
-                <div class="cos-agent-picker">
-                    <span class="cos-agent-picker__label">
-                        <i class="fa-solid fa-robot"></i> Agent
-                    </span>
-                    <mj-dropdown
-                        [Data]="AvailableAgents"
-                        TextField="Name"
-                        ValueField="ID"
-                        [ValuePrimitive]="true"
-                        [(ngModel)]="SelectedAgentID"
-                        (ValueChange)="OnSelectedAgentSelectionChanged()">
-                    </mj-dropdown>
-                </div>
-            }
+        <div actions>
             <mj-refresh-button
                 [Loading]="IsLoading"
                 [ShowLabel]="true"
                 (Clicked)="LoadChiefOfStaffData()">
             </mj-refresh-button>
-        </ng-container>
+            <button
+                mjButton
+                variant="primary"
+                size="sm"
+                type="button"
+                (click)="OpenCreateInstanceModal()">
+                <i class="fa-solid fa-plus"></i> New Instance
+            </button>
+        </div>
     </mj-page-header>
 
     <mj-page-body>
-        @if (FeedbackBanner) {
-            <div class="cos-banner"
-                 [class.cos-banner--success]="FeedbackBanner.Type === 'success'"
-                 [class.cos-banner--error]="FeedbackBanner.Type === 'error'"
-                 role="status">
-                <div class="cos-banner__content">
-                    <i class="fa-solid"
-                       [class.fa-circle-check]="FeedbackBanner.Type === 'success'"
-                       [class.fa-circle-exclamation]="FeedbackBanner.Type === 'error'"></i>
-                    <span>{{ FeedbackBanner.Message }}</span>
+        <div class="cos-agents-workspace" [class.cos-agents-workspace--mobile-detail]="MobileShowingDetail">
+            <!-- Left Roster Rail -->
+            <aside class="cos-roster-rail" aria-label="Agent Roster">
+                <div class="cos-roster-search">
+                    <i class="fa-solid fa-magnifying-glass cos-roster-search__icon" aria-hidden="true"></i>
+                    <input
+                        class="cos-input cos-roster-search__input"
+                        type="search"
+                        [value]="RosterSearchText"
+                        placeholder="Filter agents..."
+                        aria-label="Filter agents"
+                        (input)="OnRosterSearchInput($event)" />
                 </div>
-                <button mjButton variant="flat" size="sm" (click)="DismissBanner()" aria-label="Dismiss notification">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-        }
 
-        @if (IsLoading) {
-            <div class="cos-loading">
-                <mj-loading text="Loading governance policy..."></mj-loading>
-            </div>
-        } @else {
-            <div class="cos-governance-container">
-                <div class="cos-governance-header">
-                    <div>
-                        <h3 class="cos-governance-header__title">
-                            <i class="fa-solid fa-shield-halved"></i> {{ SelectedAgentName }} Governance Policy
-                        </h3>
-                        <p class="cos-governance-header__subtitle">
-                            Backed by <code>MJ: AI Agent User Policies</code> — controls coordination autonomy, communication channels, and approval guardrails for {{ SelectedAgentDisplayName }}.
-                        </p>
-                    </div>
-                    <div class="cos-governance-header__actions">
-                        @if (PolicyEntity) {
-                            <button mjButton variant="outline" size="sm" (click)="OpenPolicyEntityRecord()">
-                                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Policy Record
-                            </button>
-                        }
-                        @if (PolicyDirty) {
-                            <button mjButton variant="outline" size="sm"
-                                    [disabled]="IsSavingPolicy"
-                                    (click)="ResetDraftPolicy()">
-                                Reset Changes
-                            </button>
-                        }
-                        <button mjButton variant="primary" size="sm"
-                                [disabled]="IsSavingPolicy || !PolicyDirty"
-                                (click)="SaveGovernancePolicy()">
-                            <i class="fa-solid fa-floppy-disk"></i>
-                            {{ IsSavingPolicy ? 'Saving...' : 'Save Policy Changes' }}
+                <!-- Section 1: MY AGENTS -->
+                <div class="cos-roster-section">
+                    <div class="cos-roster-section__header">
+                        <button
+                            type="button"
+                            class="cos-roster-section__toggle"
+                            [attr.aria-expanded]="MyAgentsSectionExpanded"
+                            (click)="ToggleMyAgentsSection()">
+                            <i class="fa-solid cos-roster-section__chevron"
+                               [class.fa-chevron-down]="MyAgentsSectionExpanded"
+                               [class.fa-chevron-right]="!MyAgentsSectionExpanded"
+                               aria-hidden="true"></i>
+                            <i class="fa-solid fa-wand-magic-sparkles cos-roster-section__icon" aria-hidden="true"></i>
+                            <span>My Agents</span>
+                            <span class="cos-roster-count">{{ FilteredMyOwnedAgents.length }}</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="cos-roster-header-icon-btn"
+                            title="Create new personal agent instance"
+                            aria-label="Create new personal agent instance"
+                            (click)="OpenCreateInstanceModal()">
+                            <i class="fa-solid fa-plus"></i>
                         </button>
                     </div>
+
+                    @if (MyAgentsSectionExpanded) {
+                        @if (FilteredMyOwnedAgents.length === 0) {
+                            <div class="cos-roster-empty">
+                                @if (MyOwnedAgents.length === 0) {
+                                    <span>No personal instances yet.</span>
+                                } @else {
+                                    <span>No personal instances match "{{ RosterSearchText }}".</span>
+                                }
+                            </div>
+                        } @else {
+                            <div class="cos-roster-list">
+                                @for (agent of FilteredMyOwnedAgents; track agent.ID) {
+                                    @let avatarUrl = GetAgentAvatarUrlById(agent.ID);
+                                    <div
+                                        class="cos-roster-item"
+                                        role="button"
+                                        tabindex="0"
+                                        [class.cos-roster-item--selected]="IsRosterAgentSelected(agent.ID)"
+                                        [attr.aria-current]="IsRosterAgentSelected(agent.ID) ? 'true' : null"
+                                        (click)="SelectRosterAgent(agent)"
+                                        (keydown.enter)="SelectRosterAgent(agent)"
+                                        (keydown.space)="SelectRosterAgent(agent); $event.preventDefault()">
+                                        <span class="cos-roster-item__left">
+                                            <span class="cos-agent-avatar cos-agent-avatar--sm" aria-hidden="true">
+                                                @if (avatarUrl) {
+                                                    <img [src]="avatarUrl" [alt]="agent.Name" (error)="OnAgentAvatarError(agent.ID)" />
+                                                } @else {
+                                                    <i [class]="GetAgentIconClassById(agent.ID)"></i>
+                                                }
+                                            </span>
+                                            <span class="cos-roster-item__text">
+                                                <span class="cos-roster-item__name">
+                                                    <span>{{ agent.Name }}</span>
+                                                    @if (agent.IsPrimaryInstance) {
+                                                        <i class="fa-solid fa-star cos-primary-star" title="Primary instance" aria-label="Primary"></i>
+                                                    }
+                                                </span>
+                                                <span class="cos-roster-item__sub">
+                                                    {{ agent.BaseAgentName || 'Personal Instance' }}
+                                                </span>
+                                            </span>
+                                        </span>
+                                        <span class="cos-roster-item__right">
+                                            @if (IsDefaultChatAgent(agent.ID)) {
+                                                <span class="cos-pill cos-pill--ok">Chat Default</span>
+                                            }
+                                            <button
+                                                type="button"
+                                                class="cos-roster-item__action-btn"
+                                                [title]="'Personalize ' + agent.Name"
+                                                [attr.aria-label]="'Personalize ' + agent.Name"
+                                                (click)="OnRosterPersonalizeClick(agent, $event)">
+                                                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                            </button>
+                                            <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
                 </div>
 
-                <!-- Section 1: Coordination Mode -->
-                <section class="cos-panel">
-                    <div class="cos-panel__header">
-                        <div>
-                            <h4 class="cos-panel__title">1. Autonomy & Coordination Mode</h4>
-                            <p class="cos-panel__subtitle">
-                                Select how proactively your Chief of Staff operates across your workspace
-                            </p>
+                <!-- Section 2: SHARED -->
+                <div class="cos-roster-section">
+                    <div class="cos-roster-section__header">
+                        <button
+                            type="button"
+                            class="cos-roster-section__toggle"
+                            [attr.aria-expanded]="SharedSectionExpanded"
+                            (click)="ToggleSharedSection()">
+                            <i class="fa-solid cos-roster-section__chevron"
+                               [class.fa-chevron-down]="SharedSectionExpanded"
+                               [class.fa-chevron-right]="!SharedSectionExpanded"
+                               aria-hidden="true"></i>
+                            <span>Shared</span>
+                            <span class="cos-roster-count">{{ FilteredSharedAgents.length }}</span>
+                        </button>
+                        @if (HiddenSystemAndDemoCount > 0) {
+                            <button
+                                type="button"
+                                class="cos-roster-filter-pill"
+                                [class.cos-roster-filter-pill--active]="ShowSystemAndDemo"
+                                [attr.aria-pressed]="ShowSystemAndDemo"
+                                [title]="ShowSystemAndDemo ? 'Hide System & Demo agents' : 'Show System & Demo agents (' + HiddenSystemAndDemoCount + ')'"
+                                (click)="ToggleShowSystemAndDemo($event)">
+                                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                                <span>{{ ShowSystemAndDemo ? 'All' : '+' + HiddenSystemAndDemoCount }}</span>
+                            </button>
+                        }
+                    </div>
+
+                    @if (!SharedSectionExpanded && PinnedCollapsedSharedAgents.length > 0) {
+                        <div class="cos-roster-list">
+                            @for (agent of PinnedCollapsedSharedAgents; track agent.ID) {
+                                @let avatarUrl = GetAgentAvatarUrlById(agent.ID);
+                                <div
+                                    class="cos-roster-item"
+                                    role="button"
+                                    tabindex="0"
+                                    [class.cos-roster-item--selected]="IsRosterAgentSelected(agent.ID)"
+                                    [attr.aria-current]="IsRosterAgentSelected(agent.ID) ? 'true' : null"
+                                    (click)="SelectRosterAgent(agent)"
+                                    (keydown.enter)="SelectRosterAgent(agent)"
+                                    (keydown.space)="SelectRosterAgent(agent); $event.preventDefault()">
+                                    <span class="cos-roster-item__left">
+                                        <span class="cos-agent-avatar cos-agent-avatar--sm" aria-hidden="true">
+                                            @if (avatarUrl) {
+                                                <img [src]="avatarUrl" [alt]="agent.Name" (error)="OnAgentAvatarError(agent.ID)" />
+                                            } @else {
+                                                <i [class]="GetAgentIconClassById(agent.ID)"></i>
+                                            }
+                                        </span>
+                                        <span class="cos-roster-item__text">
+                                            <span class="cos-roster-item__name">{{ agent.Name }}</span>
+                                            <span class="cos-roster-item__sub">
+                                                {{ agent.BaseAgentName ? ('Shared · ' + agent.BaseAgentName) : (agent.Category ? ('Shared · ' + agent.Category) : 'Shared · Specialist') }}
+                                            </span>
+                                        </span>
+                                    </span>
+                                    <span class="cos-roster-item__right">
+                                        @if (IsDefaultChatAgent(agent.ID)) {
+                                            <span class="cos-pill cos-pill--ok">Chat Default</span>
+                                        }
+                                        @if (CanCreateInstanceFromSharedRosterItem(agent)) {
+                                            <button
+                                                type="button"
+                                                class="cos-roster-item__action-btn"
+                                                [title]="'Create personal ' + agent.Name + ' instance'"
+                                                [attr.aria-label]="'Create personal ' + agent.Name + ' instance'"
+                                                (click)="OnRosterCreateFromTemplateClick(agent, $event)">
+                                                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                            </button>
+                                        }
+                                        <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
+                                    </span>
+                                </div>
+                            }
                         </div>
-                        <div class="cos-status-segmented" role="group" aria-label="Agent Status">
-                            @for (st of StatusOptions; track st) {
-                                <button mjButton
-                                        [variant]="DraftPolicy.Status === st ? 'primary' : 'outline'"
-                                        size="sm"
-                                        (click)="SetPolicyStatus(st)">
-                                    {{ st }}
+                    }
+
+                    @if (SharedSectionExpanded) {
+                        @if (FilteredSharedAgents.length === 0) {
+                            <div class="cos-roster-empty">
+                                <span>No shared agents match "{{ RosterSearchText }}".</span>
+                            </div>
+                        } @else {
+                            <div class="cos-roster-list">
+                                @for (agent of FilteredSharedAgents; track agent.ID) {
+                                    @let avatarUrl = GetAgentAvatarUrlById(agent.ID);
+                                    <div
+                                        class="cos-roster-item"
+                                        role="button"
+                                        tabindex="0"
+                                        [class.cos-roster-item--selected]="IsRosterAgentSelected(agent.ID)"
+                                        [attr.aria-current]="IsRosterAgentSelected(agent.ID) ? 'true' : null"
+                                        (click)="SelectRosterAgent(agent)"
+                                        (keydown.enter)="SelectRosterAgent(agent)"
+                                        (keydown.space)="SelectRosterAgent(agent); $event.preventDefault()">
+                                        <span class="cos-roster-item__left">
+                                            <span class="cos-agent-avatar cos-agent-avatar--sm" aria-hidden="true">
+                                                @if (avatarUrl) {
+                                                    <img [src]="avatarUrl" [alt]="agent.Name" (error)="OnAgentAvatarError(agent.ID)" />
+                                                } @else {
+                                                    <i [class]="GetAgentIconClassById(agent.ID)"></i>
+                                                }
+                                            </span>
+                                            <span class="cos-roster-item__text">
+                                                <span class="cos-roster-item__name">{{ agent.Name }}</span>
+                                                <span class="cos-roster-item__sub">
+                                                    {{ agent.BaseAgentName ? ('Shared · ' + agent.BaseAgentName) : (agent.Category ? ('Shared · ' + agent.Category) : 'Shared · Specialist') }}
+                                                </span>
+                                            </span>
+                                        </span>
+                                        <span class="cos-roster-item__right">
+                                            @if (IsDefaultChatAgent(agent.ID)) {
+                                                <span class="cos-pill cos-pill--ok">Chat Default</span>
+                                            }
+                                            @if (CanCreateInstanceFromSharedRosterItem(agent)) {
+                                                <button
+                                                    type="button"
+                                                    class="cos-roster-item__action-btn"
+                                                    [title]="'Create personal ' + agent.Name + ' instance'"
+                                                    [attr.aria-label]="'Create personal ' + agent.Name + ' instance'"
+                                                    (click)="OnRosterCreateFromTemplateClick(agent, $event)">
+                                                    <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                                </button>
+                                            }
+                                            <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (HiddenSystemAndDemoCount > 0) {
+                            <button
+                                type="button"
+                                class="cos-roster-more-toggle"
+                                (click)="ToggleShowSystemAndDemo($event)">
+                                @if (ShowSystemAndDemo) {
+                                    <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+                                    <span>Hide System &amp; Demo ({{ HiddenSystemAndDemoCount }})</span>
+                                } @else {
+                                    <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                                    <span>Show System &amp; Demo (+{{ HiddenSystemAndDemoCount }})</span>
+                                }
+                            </button>
+                        }
+                    }
+                </div>
+            </aside>
+
+            <!-- Right Detail Pane -->
+            <section class="cos-agent-detail-pane" aria-label="Selected Agent Details">
+                <div class="cos-mobile-back-bar">
+                    <button
+                        mjButton
+                        variant="flat"
+                        size="sm"
+                        type="button"
+                        (click)="ShowMobileRoster()">
+                        <i class="fa-solid fa-arrow-left"></i> All Agents
+                    </button>
+                    <span class="cos-mobile-back-bar__title">{{ SelectedAgentName }}</span>
+                </div>
+                @if (IsLoading && !SelectedAgentID) {
+                    <div class="cos-loading">
+                        <mj-loading text="Loading agent workspace..."></mj-loading>
+                    </div>
+                } @else if (!SelectedAgentID) {
+                    <div class="cos-empty-state">
+                        <i class="fa-solid fa-robot cos-empty-state__icon"></i>
+                        <h3>Select an agent</h3>
+                        <p>Choose an agent from the roster or create a new personal agent instance.</p>
+                    </div>
+                } @else {
+                    <!-- Hero Card -->
+                    <div class="cos-agent-hero">
+                        <div class="cos-agent-hero__identity">
+                            <span class="cos-agent-avatar cos-agent-avatar--lg" aria-hidden="true">
+                                @if (SelectedAgentAvatarUrl) {
+                                    <img [src]="SelectedAgentAvatarUrl" [alt]="SelectedAgentName" (error)="OnSelectedAgentAvatarError()" />
+                                } @else {
+                                    <i [class]="SelectedAgentIconClass"></i>
+                                }
+                            </span>
+                            <div class="cos-agent-hero__meta">
+                                <div class="cos-agent-hero__title-row">
+                                    <h2 class="cos-agent-hero__name">{{ SelectedAgentName }}</h2>
+                                    <span class="cos-pill cos-pill--info">{{ SelectedAgentKindLabel }}</span>
+                                    @if (IsAgentPrimaryById(SelectedAgentID)) {
+                                        <span class="cos-pill cos-pill--warn">
+                                            <i class="fa-solid fa-star"></i> Primary
+                                        </span>
+                                    }
+                                    @if (IsDefaultChatAgent(SelectedAgentID)) {
+                                        <span class="cos-pill cos-pill--ok">
+                                            <i class="fa-solid fa-check"></i> Default Chat Agent
+                                        </span>
+                                    }
+                                </div>
+                                @if (SelectedAgentEntity?.Description) {
+                                    <p class="cos-agent-hero__desc">{{ SelectedAgentEntity?.Description }}</p>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="cos-agent-hero__actions">
+                            @if (CanSetSelectedAsDefaultChatAgent) {
+                                <button
+                                    mjButton
+                                    variant="outline"
+                                    size="sm"
+                                    type="button"
+                                    [disabled]="IsSavingDefaultChatAgent"
+                                    (click)="SetSelectedAsDefaultChatAgent()">
+                                    <i class="fa-solid fa-message"></i> Make Default Chat Agent
+                                </button>
+                            } @else if (IsDefaultChatAgent(SelectedAgentID)) {
+                                <button
+                                    mjButton
+                                    variant="flat"
+                                    size="sm"
+                                    type="button"
+                                    [disabled]="IsSavingDefaultChatAgent"
+                                    (click)="ResetDefaultChatAgentToSage()">
+                                    Reset to Default
+                                </button>
+                            }
+
+                            @if (IsSelectedAgentOwnedDerived && !IsAgentPrimaryById(SelectedAgentID)) {
+                                <button
+                                    mjButton
+                                    variant="outline"
+                                    size="sm"
+                                    type="button"
+                                    [disabled]="IsUpdatingPrimary"
+                                    (click)="MakeSelectedAgentPrimary()">
+                                    <i class="fa-regular fa-star"></i> Make Primary
+                                </button>
+                            }
+
+                            @if (IsSelectedAgentOwnedDerived) {
+                                <button
+                                    mjButton
+                                    variant="primary"
+                                    size="sm"
+                                    type="button"
+                                    (click)="OpenEditInstanceModal()">
+                                    <i class="fa-solid fa-sliders"></i> Personalize
+                                </button>
+                            } @else if (CanDeriveSelectedSharedAgent) {
+                                <button
+                                    mjButton
+                                    variant="primary"
+                                    size="sm"
+                                    type="button"
+                                    (click)="OpenCreateInstanceModal(SelectedAgentID)">
+                                    <i class="fa-solid fa-plus"></i> Create My Own Instance
                                 </button>
                             }
                         </div>
                     </div>
 
-                    <div class="cos-mode-cards">
-                        @for (mode of CoordinationModeOptions; track mode.Value) {
-                            <div class="cos-mode-card"
-                                 [class.cos-mode-card--selected]="DraftPolicy.CoordinationMode === mode.Value"
-                                 (click)="SetCoordinationMode(mode.Value)">
-                                <div class="cos-mode-card__top">
-                                    <span class="cos-mode-card__title">{{ mode.Label }}</span>
-                                    @if (DraftPolicy.CoordinationMode === mode.Value) {
-                                        <i class="fa-solid fa-circle-check cos-mode-card__check"></i>
-                                    }
+                    <!-- Accessible 4 Sub-Tabs -->
+                    <div class="cos-subtabs" role="tablist" aria-label="Agent configuration sections">
+                        <button
+                            type="button"
+                            class="cos-subtab-btn"
+                            role="tab"
+                            id="agent-tab-activity"
+                            [attr.aria-selected]="ActiveSubTab === 'activity'"
+                            aria-controls="agent-panel-activity"
+                            (click)="SetActiveSubTab('activity')">
+                            <i class="fa-solid fa-bell-concierge"></i>
+                            Approvals &amp; Wakes
+                            @if (Metrics.PendingApprovalCount > 0) {
+                                <span class="cos-pill cos-pill--warn">{{ Metrics.PendingApprovalCount }}</span>
+                            }
+                        </button>
+                        <button
+                            type="button"
+                            class="cos-subtab-btn"
+                            role="tab"
+                            id="agent-tab-persona"
+                            [attr.aria-selected]="ActiveSubTab === 'persona'"
+                            aria-controls="agent-panel-persona"
+                            (click)="SetActiveSubTab('persona')">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            Persona &amp; Instructions
+                        </button>
+                        <button
+                            type="button"
+                            class="cos-subtab-btn"
+                            role="tab"
+                            id="agent-tab-governance"
+                            [attr.aria-selected]="ActiveSubTab === 'governance'"
+                            aria-controls="agent-panel-governance"
+                            (click)="SetActiveSubTab('governance')">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            Governance Policy
+                            @if (PolicyDirty) {
+                                <span class="cos-pill cos-pill--warn">Unsaved</span>
+                            }
+                        </button>
+                        <button
+                            type="button"
+                            class="cos-subtab-btn"
+                            role="tab"
+                            id="agent-tab-sharing"
+                            [attr.aria-selected]="ActiveSubTab === 'sharing'"
+                            aria-controls="agent-panel-sharing"
+                            (click)="SetActiveSubTab('sharing')">
+                            <i class="fa-solid fa-users"></i>
+                            Sharing
+                        </button>
+                    </div>
+
+                    @if (IsLoading) {
+                        <div class="cos-loading">
+                            <mj-loading text="Loading agent data..."></mj-loading>
+                        </div>
+                    } @else {
+                        <!-- SUB-TAB 1: APPROVALS & WAKES -->
+                        @if (ActiveSubTab === 'activity') {
+                            <div class="cos-subtab-panel" role="tabpanel" id="agent-panel-activity" aria-labelledby="agent-tab-activity">
+                                <div class="cos-overview-columns">
+                                    <!-- Pending Approvals for this agent -->
+                                    <section class="cos-panel">
+                                        <div class="cos-panel__header">
+                                            <div>
+                                                <h3 class="cos-panel__title">
+                                                    <i class="fa-solid fa-bell-concierge"></i> Pending Approvals ({{ PendingRequests.length }})
+                                                </h3>
+                                                <p class="cos-panel__subtitle">
+                                                    Approval requests initiated by {{ SelectedAgentName }}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        @if (PendingRequests.length === 0) {
+                                            <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check" Message="No pending requests for this agent." />
+                                        } @else {
+                                            <div class="cos-stack">
+                                                @for (req of PendingRequests; track req.ID) {
+                                                    <div class="cos-request-card" (click)="OpenRequestDetail(req)">
+                                                        <div class="cos-request-card__top">
+                                                            <div class="cos-request-card__badges">
+                                                                <span class="cos-priority-tag {{ GetPriorityTierClass(req.Priority) }}">
+                                                                    {{ GetPriorityTierLabel(req.Priority) }} ({{ req.Priority }})
+                                                                </span>
+                                                                @if (req.RequestType) {
+                                                                    <span class="cos-meta-badge">{{ req.RequestType }}</span>
+                                                                }
+                                                            </div>
+                                                            <span class="cos-timestamp">{{ req.RequestedAt | date:'short' }}</span>
+                                                        </div>
+                                                        <p class="cos-request-card__text">{{ req.Request }}</p>
+                                                        <div class="cos-request-card__actions">
+                                                            <button mjButton variant="primary" size="sm" type="button"
+                                                                    [disabled]="BusyRequestID === req.ID"
+                                                                    (click)="QuickRespondToRequest(req, 'Approved', $event)">
+                                                                <i class="fa-solid fa-check"></i> Approve
+                                                            </button>
+                                                            <button mjButton variant="danger" size="sm" type="button"
+                                                                    [disabled]="BusyRequestID === req.ID"
+                                                                    (click)="QuickRespondToRequest(req, 'Rejected', $event)">
+                                                                <i class="fa-solid fa-xmark"></i> Reject
+                                                            </button>
+                                                            <button mjButton variant="outline" size="sm" type="button"
+                                                                    (click)="OpenRequestDetail(req); $event.stopPropagation()">
+                                                                Inspect
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+
+                                        @if (RecentResolvedRequests.length > 0) {
+                                            <div class="cos-resolved-section">
+                                                <h4 class="cos-resolved-section__title">Recent Decisions</h4>
+                                                <div class="cos-stack">
+                                                    @for (res of RecentResolvedRequests; track res.ID) {
+                                                        <div class="cos-resolved-row" (click)="OpenRequestDetail(res)">
+                                                            <div class="cos-resolved-row__main">
+                                                                <span class="cos-status-chip cos-status-chip--{{ res.Status.toLowerCase() }}">
+                                                                    {{ res.Status }}
+                                                                </span>
+                                                                <span class="cos-resolved-row__text">{{ res.Request }}</span>
+                                                            </div>
+                                                            <span class="cos-timestamp">{{ res.RespondedAt | date:'short' }}</span>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </section>
+
+                                    <!-- Scheduled Wakes for this agent -->
+                                    <section class="cos-panel">
+                                        <div class="cos-panel__header">
+                                            <div>
+                                                <h3 class="cos-panel__title">
+                                                    <i class="fa-solid fa-clock-rotate-left"></i> Scheduled Wakes ({{ Routines.length }})
+                                                </h3>
+                                                <p class="cos-panel__subtitle">
+                                                    Routines targeting {{ SelectedAgentName }}
+                                                </p>
+                                            </div>
+                                            @if (FiredRoutineCount > 0) {
+                                                <button mjButton variant="flat" size="sm" type="button" (click)="ToggleShowFiredRoutines()">
+                                                    {{ ShowFiredRoutines ? 'Hide Fired' : ('Show Fired (' + FiredRoutineCount + ')') }}
+                                                </button>
+                                            }
+                                        </div>
+
+                                        @if (VisibleAgentRoutines.length === 0) {
+                                            <mj-empty-state Size="compact" Icon="fa-regular fa-clock" Message="No wake routines configured for this agent." />
+                                        } @else {
+                                            <div class="cos-stack">
+                                                @for (routine of VisibleAgentRoutines; track routine.ID) {
+                                                    <div class="cos-routine-card" [class.cos-routine-card--fired]="IsSpentRoutine(routine)">
+                                                        <div class="cos-routine-card__title-row">
+                                                            <h4 class="cos-routine-card__name">{{ routine.Name }}</h4>
+                                                            <span class="cos-status-chip cos-status-chip--{{ RoutineStatusLabel(routine).toLowerCase() }}">
+                                                                {{ RoutineStatusLabel(routine) }}
+                                                            </span>
+                                                        </div>
+                                                        @if (routine.Description) {
+                                                            <p class="cos-routine-card__desc">{{ routine.Description }}</p>
+                                                        }
+                                                        <div class="cos-routine-card__schedule">
+                                                            <div>
+                                                                <strong>Next wake:</strong>
+                                                                @if (routine.NextRunAt) {
+                                                                    {{ routine.NextRunAt | date:'short' }}
+                                                                } @else {
+                                                                    None scheduled
+                                                                }
+                                                            </div>
+                                                            @if (routine.CronExpression) {
+                                                                <div><strong>Schedule:</strong> <code>{{ routine.CronExpression }}</code></div>
+                                                            }
+                                                            @if (routine.LastRunAt) {
+                                                                <div><strong>Last run:</strong> {{ routine.LastRunAt | date:'short' }} ({{ routine.LastRunStatus || 'Completed' }})</div>
+                                                            }
+                                                        </div>
+                                                        <div class="cos-routine-card__actions">
+                                                            <button mjButton variant="primary" size="sm" type="button"
+                                                                    [disabled]="BusyRoutineID === routine.ID"
+                                                                    (click)="TriggerWakeNow(routine, $event)">
+                                                                <i class="fa-solid fa-bolt"></i> Wake Now
+                                                            </button>
+                                                            <button mjButton variant="outline" size="sm" type="button"
+                                                                    [disabled]="!CanOpenBriefing(routine)"
+                                                                    (click)="OpenBriefingReader(routine, $event)">
+                                                                <i class="fa-solid fa-book-open"></i> Read Briefing
+                                                            </button>
+                                                            <button mjButton variant="outline" size="sm" type="button"
+                                                                    [disabled]="BusyRoutineID === routine.ID || IsSpentRoutine(routine)"
+                                                                    (click)="ToggleRoutineStatus(routine, $event)">
+                                                                <i class="fa-solid" [class.fa-pause]="routine.Status === 'Active'" [class.fa-play]="routine.Status !== 'Active'"></i>
+                                                                {{ routine.Status === 'Active' ? 'Pause' : 'Resume' }}
+                                                            </button>
+                                                            <button mjButton variant="flat" size="sm" type="button"
+                                                                    (click)="OpenRoutineEntityRecord(routine.ID, $event)">
+                                                                Open Record
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </section>
                                 </div>
-                                <p class="cos-mode-card__desc">{{ mode.Description }}</p>
                             </div>
                         }
-                    </div>
 
-                    <div class="cos-form-grid">
-                        <label class="cos-form-field">
-                            <span class="cos-form-field__label">Custom Display Name</span>
-                            <input class="cos-input"
-                                   type="text"
-                                   [value]="DraftPolicy.DisplayNameOverride"
-                                   placeholder="e.g., Chief of Staff"
-                                   (input)="OnDisplayNameInput($event)" />
-                        </label>
-
-                        <label class="cos-form-field">
-                            <span class="cos-form-field__label">Default Data Access Mode</span>
-                            <mj-dropdown [Data]="DataAccessModeOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
-                                         [(ngModel)]="DraftPolicy.DefaultDataAccessMode" (ValueChange)="MarkPolicyDirty()">
-                            </mj-dropdown>
-                        </label>
-                    </div>
-                </section>
-
-                <!-- Section 2: Communication Channel Permissions -->
-                <section class="cos-panel">
-                    <div class="cos-panel__header">
-                        <div>
-                            <h4 class="cos-panel__title">2. Communication Channel Permissions</h4>
-                            <p class="cos-panel__subtitle">
-                                Configure what your Chief of Staff is permitted to do on each channel
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="cos-form-grid">
-                        <label class="cos-form-field">
-                            <span class="cos-form-field__label">
-                                <i class="fa-solid fa-envelope"></i> Email Channel Mode
-                            </span>
-                            <mj-dropdown [Data]="EmailChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
-                                         [(ngModel)]="DraftPolicy.EmailChannelMode" (ValueChange)="MarkPolicyDirty()">
-                            </mj-dropdown>
-                        </label>
-
-                        <label class="cos-form-field">
-                            <span class="cos-form-field__label">
-                                <i class="fa-regular fa-calendar"></i> Calendar Channel Mode
-                            </span>
-                            <mj-dropdown [Data]="CalendarChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
-                                         [(ngModel)]="DraftPolicy.CalendarChannelMode" (ValueChange)="MarkPolicyDirty()">
-                            </mj-dropdown>
-                        </label>
-
-                        <label class="cos-form-field">
-                            <span class="cos-form-field__label">
-                                <i class="fa-solid fa-phone"></i> Phone Channel Mode
-                            </span>
-                            <mj-dropdown [Data]="PhoneChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
-                                         [(ngModel)]="DraftPolicy.PhoneChannelMode" (ValueChange)="MarkPolicyDirty()">
-                            </mj-dropdown>
-                        </label>
-
-                        <label class="cos-form-field">
-                            <span class="cos-form-field__label">
-                                <i class="fa-solid fa-comments"></i> Messaging Channel Mode
-                            </span>
-                            <mj-dropdown [Data]="MessagingChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
-                                         [(ngModel)]="DraftPolicy.MessagingChannelMode" (ValueChange)="MarkPolicyDirty()">
-                            </mj-dropdown>
-                        </label>
-                    </div>
-                </section>
-
-                <!-- Section 3: Approval Guardrails & Financial Threshold -->
-                <section class="cos-panel">
-                    <div class="cos-panel__header">
-                        <div>
-                            <h4 class="cos-panel__title">3. Approval Guardrails & Standing Instructions</h4>
-                            <p class="cos-panel__subtitle">
-                                Enforce mandatory human-in-the-loop approval gates before sensitive actions execute
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="cos-toggle-list">
-                        <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForExternalComms')">
-                            <div>
-                                <div class="cos-toggle-row__title">Require Approval for External Communications</div>
-                                <div class="cos-toggle-row__desc">
-                                    Always create an approval request before sending emails or messages to external recipients.
-                                </div>
-                            </div>
-                            <button mjButton
-                                    [variant]="DraftPolicy.RequireApprovalForExternalComms ? 'primary' : 'outline'"
-                                    size="sm"
-                                    (click)="ToggleApprovalGuardrail('RequireApprovalForExternalComms'); $event.stopPropagation()">
-                                {{ DraftPolicy.RequireApprovalForExternalComms ? 'Required' : 'Not Required' }}
-                            </button>
-                        </div>
-
-                        <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForFinancials')">
-                            <div>
-                                <div class="cos-toggle-row__title">Require Approval for Financial Commitments</div>
-                                <div class="cos-toggle-row__desc">
-                                    Require explicit approval for any financial transaction above the auto-approve threshold.
-                                </div>
-                            </div>
-                            <button mjButton
-                                    [variant]="DraftPolicy.RequireApprovalForFinancials ? 'primary' : 'outline'"
-                                    size="sm"
-                                    (click)="ToggleApprovalGuardrail('RequireApprovalForFinancials'); $event.stopPropagation()">
-                                {{ DraftPolicy.RequireApprovalForFinancials ? 'Required' : 'Not Required' }}
-                            </button>
-                        </div>
-
-                        <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForDestructiveActions')">
-                            <div>
-                                <div class="cos-toggle-row__title">Require Approval for Destructive Actions</div>
-                                <div class="cos-toggle-row__desc">
-                                    Require human confirmation before deleting records, canceling events, or revoking access.
-                                </div>
-                            </div>
-                            <button mjButton
-                                    [variant]="DraftPolicy.RequireApprovalForDestructiveActions ? 'primary' : 'outline'"
-                                    size="sm"
-                                    (click)="ToggleApprovalGuardrail('RequireApprovalForDestructiveActions'); $event.stopPropagation()">
-                                {{ DraftPolicy.RequireApprovalForDestructiveActions ? 'Required' : 'Not Required' }}
-                            </button>
-                        </div>
-
-                        <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('AllowInterAgentCoordination')">
-                            <div>
-                                <div class="cos-toggle-row__title">Allow Inter-Agent Delegation & Coordination</div>
-                                <div class="cos-toggle-row__desc">
-                                    Permit your Chief of Staff to invoke specialist sub-agents and coordinate with peer agents.
-                                </div>
-                            </div>
-                            <button mjButton
-                                    [variant]="DraftPolicy.AllowInterAgentCoordination ? 'primary' : 'outline'"
-                                    size="sm"
-                                    (click)="ToggleApprovalGuardrail('AllowInterAgentCoordination'); $event.stopPropagation()">
-                                {{ DraftPolicy.AllowInterAgentCoordination ? 'Allowed' : 'Blocked' }}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="cos-form-grid cos-form-grid--spaced">
-                        <label class="cos-form-field">
-                            <span class="cos-form-field__label">Auto-Approve Financial Threshold (USD)</span>
-                            <input class="cos-input"
-                                   type="number"
-                                   min="0"
-                                   step="50"
-                                   [value]="DraftPolicy.AutoApproveAmountThreshold ?? ''"
-                                   placeholder="0.00"
-                                   (input)="OnThresholdInputEvent($event)" />
-                        </label>
-
-                        <label class="cos-form-field cos-form-field--full">
-                            <span class="cos-form-field__label">
-                                Standing Executive Instructions Override
-                                <span class="cos-char-counter"
-                                      [class.cos-char-counter--warn]="DraftInstructionsSize.ExceedsThreshold">
-                                    ({{ DraftInstructionsSize.Length | number }} / {{ InstructionsWarningThreshold | number }} chars)
-                                </span>
-                            </span>
-                            <textarea class="cos-textarea"
-                                      rows="3"
-                                      [value]="DraftPolicy.InstructionsOverride"
-                                      placeholder="Optional standing instructions injected into every Chief of Staff run (e.g., preferred briefing style, VIP contacts, scheduling windows)..."
-                                      (input)="OnInstructionsOverrideInput($event)"></textarea>
-                            @if (DraftInstructionsSize.ExceedsThreshold) {
-                                <div class="cos-inline-warning" role="status">
-                                    <i class="fa-solid fa-triangle-exclamation"></i>
-                                    <span>
-                                        Standing instructions exceed {{ InstructionsWarningThreshold | number }} characters ({{ DraftInstructionsSize.Length | number }} chars). Consider trimming or moving recurring workflows into offered rhythms or skills to keep prompt latency low.
-                                    </span>
-                                </div>
-                            }
-                        </label>
-                    </div>
-                </section>
-
-                @if (IsAdminUser) {
-                    <section class="cos-card">
-                        <div class="cos-card__header">
-                            <div>
-                                <h2 class="cos-card__title">
-                                    <i class="fa-solid fa-gauge-high"></i>
-                                    Instructions Override Size Monitor (Admin)
-                                </h2>
-                                <p class="cos-card__subtitle">
-                                    Flags user policies whose standing instructions exceed {{ InstructionsWarningThreshold | number }} characters for {{ SelectedAgentName }}.
-                                </p>
-                            </div>
-                            <mj-stat-badge
-                                [Count]="OversizedPolicyCount"
-                                [Total]="AdminPolicySizeRows.length"
-                                Label="over threshold"
-                                [Variant]="OversizedPolicyCount > 0 ? 'warning' : 'default'" />
-                        </div>
-
-                        @if (IsLoadingPolicySizeAudit) {
-                            <mj-loading text="Checking policy instruction sizes..." size="small"></mj-loading>
-                        } @else if (AdminPolicySizeRows.length === 0) {
-                            <p class="cos-empty-text">No user policies found for {{ SelectedAgentName }}.</p>
-                        } @else {
-                            <div class="cos-audit-list">
-                                @for (row of AdminPolicySizeRows; track row.PolicyID) {
-                                    <div class="cos-audit-row"
-                                         [class.cos-audit-row--warn]="row.ExceedsThreshold">
-                                        <div class="cos-audit-row__main">
-                                            <span class="cos-audit-row__user">{{ row.UserName }}</span>
-                                            <span class="cos-pill">{{ row.Status }}</span>
+                        <!-- SUB-TAB 2: PERSONA & INSTRUCTIONS -->
+                        @if (ActiveSubTab === 'persona') {
+                            <div class="cos-subtab-panel" role="tabpanel" id="agent-panel-persona" aria-labelledby="agent-tab-persona">
+                                @if (IsSelectedAgentOwnedDerived) {
+                                    <section class="cos-panel">
+                                        <div class="cos-panel__header">
+                                            <div>
+                                                <h3 class="cos-panel__title">
+                                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Persona &amp; Standing Instructions
+                                                </h3>
+                                                <p class="cos-panel__subtitle">
+                                                    Customize {{ SelectedAgentName }}'s voice, tone, speaking style, and layered instructions
+                                                </p>
+                                            </div>
+                                            <div class="cos-governance-header__actions">
+                                                <button mjButton variant="primary" size="sm" type="button"
+                                                        [disabled]="IsSavingPersona || !PersonaDirty"
+                                                        (click)="SavePersonaAndInstructions()">
+                                                    <i class="fa-solid fa-floppy-disk"></i>
+                                                    {{ IsSavingPersona ? 'Saving...' : 'Save Persona' }}
+                                                </button>
+                                                @if (PersonaDirty) {
+                                                    <button mjButton variant="outline" size="sm" type="button"
+                                                            [disabled]="IsSavingPersona"
+                                                            (click)="ResetPersonaDraft()">
+                                                        Reset
+                                                    </button>
+                                                }
+                                                <button mjButton variant="outline" size="sm" type="button"
+                                                        (click)="OpenEditInstanceModal()">
+                                                    <i class="fa-solid fa-sliders"></i> Icon, Avatar &amp; Presets
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div class="cos-audit-row__meta">
-                                            <span class="cos-audit-row__len">
-                                                {{ row.Length | number }} chars
-                                            </span>
-                                            @if (row.ExceedsThreshold) {
-                                                <span class="cos-pill cos-pill--warn">Over 4k limit</span>
+
+                                        <div class="cos-form-grid">
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">Voice Persona</span>
+                                                <mj-dropdown
+                                                    [Data]="ActivePersonas"
+                                                    TextField="Name"
+                                                    ValueField="ID"
+                                                    [ValuePrimitive]="true"
+                                                    [(ngModel)]="DraftPersonaId"
+                                                    (ValueChange)="MarkPersonaDirty()">
+                                                </mj-dropdown>
+                                            </label>
+
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">Tone</span>
+                                                <input
+                                                    class="cos-input"
+                                                    type="text"
+                                                    [value]="DraftTone"
+                                                    placeholder="e.g., Direct, witty, analytical"
+                                                    (input)="OnPersonaToneInput($event)" />
+                                            </label>
+
+                                            <label class="cos-form-field cos-form-field--full">
+                                                <span class="cos-form-field__label">Speaking Style</span>
+                                                <input
+                                                    class="cos-input"
+                                                    type="text"
+                                                    [value]="DraftSpeakingStyle"
+                                                    placeholder="e.g., Lead with bottom line; concise bullets in 1:1 chat; crisp professional external drafts"
+                                                    (input)="OnPersonaStyleInput($event)" />
+                                            </label>
+
+                                            <label class="cos-form-field cos-form-field--full">
+                                                <span class="cos-form-field__label">
+                                                    Standing Instructions (<code>AdditionalInstructions</code>)
+                                                </span>
+                                                <textarea
+                                                    class="cos-textarea"
+                                                    rows="4"
+                                                    [value]="DraftAdditionalInstructions"
+                                                    placeholder="Instructions layered on top of the inherited base template prompt..."
+                                                    (input)="OnAdditionalInstructionsInput($event)"></textarea>
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    <section class="cos-panel cos-panel--danger">
+                                        <div class="cos-panel__header">
+                                            <div>
+                                                <h4 class="cos-panel__title">Archive Instance</h4>
+                                                <p class="cos-panel__subtitle">
+                                                    Archiving sets this personal instance to Disabled and removes it from your active roster while keeping historical runs intact.
+                                                </p>
+                                            </div>
+                                            @if (!ConfirmArchiveOpen) {
+                                                <button mjButton variant="danger" size="sm" type="button" (click)="RequestArchiveSelectedAgent()">
+                                                    <i class="fa-solid fa-box-archive"></i> Archive Instance
+                                                </button>
+                                            } @else {
+                                                <div class="cos-governance-header__actions">
+                                                    <button mjButton variant="danger" size="sm" type="button"
+                                                            [disabled]="IsArchivingAgent"
+                                                            (click)="ConfirmArchiveSelectedAgent()">
+                                                        {{ IsArchivingAgent ? 'Archiving...' : 'Confirm Archive' }}
+                                                    </button>
+                                                    <button mjButton variant="outline" size="sm" type="button"
+                                                            [disabled]="IsArchivingAgent"
+                                                            (click)="CancelArchiveSelectedAgent()">
+                                                        Cancel
+                                                    </button>
+                                                </div>
                                             }
-                                            <button mjButton variant="flat" size="sm" (click)="OpenAuditPolicyRecord(row.PolicyID)">
-                                                Open
-                                            </button>
                                         </div>
-                                    </div>
+                                    </section>
+                                } @else {
+                                    <section class="cos-panel">
+                                        <div class="cos-panel__header">
+                                            <div>
+                                                <h3 class="cos-panel__title">
+                                                    <i class="fa-solid fa-globe"></i> Shared Agent Identity
+                                                </h3>
+                                                <p class="cos-panel__subtitle">
+                                                    Org-wide name, icon, voice, and base instructions are managed centrally for shared agents.
+                                                </p>
+                                            </div>
+                                            @if (CanDeriveSelectedSharedAgent) {
+                                                <button mjButton variant="primary" size="sm" type="button" (click)="OpenCreateInstanceModal(SelectedAgentID)">
+                                                    <i class="fa-solid fa-plus"></i> Create My Own Instance
+                                                </button>
+                                            }
+                                        </div>
+
+                                        <div class="cos-readonly-grid">
+                                            <div class="cos-readonly-field">
+                                                <span class="cos-form-field__label">Description</span>
+                                                <p class="cos-readonly-value">{{ SelectedAgentEntity?.Description || 'No description provided.' }}</p>
+                                            </div>
+                                            <div class="cos-readonly-field">
+                                                <span class="cos-form-field__label">Instantiation Mode</span>
+                                                <p class="cos-readonly-value">{{ SelectedAgentEntity?.InstantiationMode || 'None' }}</p>
+                                            </div>
+                                            @if (SelectedAgentInheritanceChainLabel) {
+                                                <div class="cos-readonly-field">
+                                                    <span class="cos-form-field__label">Inheritance Lineage</span>
+                                                    <p class="cos-readonly-value">{{ SelectedAgentInheritanceChainLabel }}</p>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <p class="cos-empty-text">
+                                            You can still make <strong>{{ SelectedAgentName }}</strong> your Default Chat Agent above and configure your personal <strong>Governance Policy</strong> on the next tab.
+                                        </p>
+                                    </section>
                                 }
                             </div>
                         }
-                    </section>
+
+                        <!-- SUB-TAB 3: GOVERNANCE POLICY -->
+                        @if (ActiveSubTab === 'governance') {
+                            <div class="cos-subtab-panel" role="tabpanel" id="agent-panel-governance" aria-labelledby="agent-tab-governance">
+                                <div class="cos-governance-container">
+                                    @if (SelectedAgentInheritanceChainLabel) {
+                                        <div class="cos-info-callout" role="note">
+                                            <i class="fa-solid fa-shield-halved"></i>
+                                            <div>
+                                                <strong>Ancestor Policy Ceiling Active ({{ SelectedAgentInheritanceChainLabel }})</strong>
+                                                <p>Runtime governance evaluates the strictest guardrail ceiling across every ancestor in this inheritance chain, ensuring derived instances can tighten — never bypass — parent organization rules.</p>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <div class="cos-governance-header">
+                                        <div>
+                                            <h3 class="cos-governance-header__title">
+                                                <i class="fa-solid fa-shield-halved"></i> {{ SelectedAgentName }} Governance Policy
+                                            </h3>
+                                            <p class="cos-governance-header__subtitle">
+                                                Backed by <code>MJ: AI Agent User Policies</code> — controls coordination autonomy, communication channels, and approval guardrails for {{ SelectedAgentDisplayName }}.
+                                            </p>
+                                        </div>
+                                        <div class="cos-governance-header__actions">
+                                            <button mjButton variant="primary" size="sm" type="button"
+                                                    [disabled]="IsSavingPolicy || !PolicyDirty"
+                                                    (click)="SaveGovernancePolicy()">
+                                                <i class="fa-solid fa-floppy-disk"></i>
+                                                {{ IsSavingPolicy ? 'Saving...' : 'Save Policy Changes' }}
+                                            </button>
+                                            @if (PolicyDirty) {
+                                                <button mjButton variant="outline" size="sm" type="button"
+                                                        [disabled]="IsSavingPolicy"
+                                                        (click)="ResetDraftPolicy()">
+                                                    Reset Changes
+                                                </button>
+                                            }
+                                            @if (PolicyEntity) {
+                                                <button mjButton variant="outline" size="sm" type="button" (click)="OpenPolicyEntityRecord()">
+                                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Section 1: Coordination Mode -->
+                                    <section class="cos-panel">
+                                        <div class="cos-panel__header">
+                                            <div>
+                                                <h4 class="cos-panel__title">1. Autonomy &amp; Coordination Mode</h4>
+                                                <p class="cos-panel__subtitle">
+                                                    Select how proactively {{ SelectedAgentDisplayName }} operates across your workspace
+                                                </p>
+                                            </div>
+                                            <div class="cos-status-segmented" role="group" aria-label="Agent Policy Status">
+                                                @for (st of StatusOptions; track st) {
+                                                    <button mjButton
+                                                            type="button"
+                                                            [variant]="DraftPolicy.Status === st ? 'primary' : 'outline'"
+                                                            size="sm"
+                                                            (click)="SetPolicyStatus(st)">
+                                                        {{ st }}
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        <div class="cos-mode-cards">
+                                            @for (mode of CoordinationModeOptions; track mode.Value) {
+                                                <div class="cos-mode-card"
+                                                     [class.cos-mode-card--selected]="DraftPolicy.CoordinationMode === mode.Value"
+                                                     (click)="SetCoordinationMode(mode.Value)">
+                                                    <div class="cos-mode-card__top">
+                                                        <span class="cos-mode-card__title">{{ mode.Label }}</span>
+                                                        @if (DraftPolicy.CoordinationMode === mode.Value) {
+                                                            <i class="fa-solid fa-circle-check cos-mode-card__check"></i>
+                                                        }
+                                                    </div>
+                                                    <p class="cos-mode-card__desc">{{ mode.Description }}</p>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <div class="cos-form-grid">
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">Custom Display Name Override</span>
+                                                <input class="cos-input"
+                                                       type="text"
+                                                       [value]="DraftPolicy.DisplayNameOverride"
+                                                       placeholder="Optional policy display label"
+                                                       (input)="OnDisplayNameInput($event)" />
+                                            </label>
+
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">Default Data Access Mode</span>
+                                                <mj-dropdown [Data]="DataAccessModeOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                                             [(ngModel)]="DraftPolicy.DefaultDataAccessMode" (ValueChange)="MarkPolicyDirty()">
+                                                </mj-dropdown>
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    <!-- Section 2: Communication Channel Permissions -->
+                                    <section class="cos-panel">
+                                        <div class="cos-panel__header">
+                                            <div>
+                                                <h4 class="cos-panel__title">2. Communication Channel Permissions</h4>
+                                                <p class="cos-panel__subtitle">
+                                                    Configure what {{ SelectedAgentDisplayName }} is permitted to do on each channel
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="cos-form-grid">
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">
+                                                    <i class="fa-solid fa-envelope"></i> Email Channel Mode
+                                                </span>
+                                                <mj-dropdown [Data]="EmailChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                                             [(ngModel)]="DraftPolicy.EmailChannelMode" (ValueChange)="MarkPolicyDirty()">
+                                                </mj-dropdown>
+                                            </label>
+
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">
+                                                    <i class="fa-regular fa-calendar"></i> Calendar Channel Mode
+                                                </span>
+                                                <mj-dropdown [Data]="CalendarChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                                             [(ngModel)]="DraftPolicy.CalendarChannelMode" (ValueChange)="MarkPolicyDirty()">
+                                                </mj-dropdown>
+                                            </label>
+
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">
+                                                    <i class="fa-solid fa-phone"></i> Phone Channel Mode
+                                                </span>
+                                                <mj-dropdown [Data]="PhoneChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                                             [(ngModel)]="DraftPolicy.PhoneChannelMode" (ValueChange)="MarkPolicyDirty()">
+                                                </mj-dropdown>
+                                            </label>
+
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">
+                                                    <i class="fa-solid fa-comments"></i> Messaging Channel Mode
+                                                </span>
+                                                <mj-dropdown [Data]="MessagingChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                                             [(ngModel)]="DraftPolicy.MessagingChannelMode" (ValueChange)="MarkPolicyDirty()">
+                                                </mj-dropdown>
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    <!-- Section 3: Approval Guardrails & Standing Policy Instructions -->
+                                    <section class="cos-panel">
+                                        <div class="cos-panel__header">
+                                            <div>
+                                                <h4 class="cos-panel__title">3. Approval Guardrails &amp; Standing Policy Instructions</h4>
+                                                <p class="cos-panel__subtitle">
+                                                    Enforce mandatory human-in-the-loop approval gates before sensitive actions execute
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="cos-toggle-list">
+                                            <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForExternalComms')">
+                                                <div>
+                                                    <div class="cos-toggle-row__title">Require Approval for External Communications</div>
+                                                    <div class="cos-toggle-row__desc">
+                                                        Always create an approval request before sending emails or messages to external recipients.
+                                                    </div>
+                                                </div>
+                                                <button mjButton
+                                                        type="button"
+                                                        [variant]="DraftPolicy.RequireApprovalForExternalComms ? 'primary' : 'outline'"
+                                                        size="sm"
+                                                        (click)="ToggleApprovalGuardrail('RequireApprovalForExternalComms'); $event.stopPropagation()">
+                                                    {{ DraftPolicy.RequireApprovalForExternalComms ? 'Required' : 'Not Required' }}
+                                                </button>
+                                            </div>
+
+                                            <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForFinancials')">
+                                                <div>
+                                                    <div class="cos-toggle-row__title">Require Approval for Financial Commitments</div>
+                                                    <div class="cos-toggle-row__desc">
+                                                        Require explicit approval for any financial transaction above the auto-approve threshold.
+                                                    </div>
+                                                </div>
+                                                <button mjButton
+                                                        type="button"
+                                                        [variant]="DraftPolicy.RequireApprovalForFinancials ? 'primary' : 'outline'"
+                                                        size="sm"
+                                                        (click)="ToggleApprovalGuardrail('RequireApprovalForFinancials'); $event.stopPropagation()">
+                                                    {{ DraftPolicy.RequireApprovalForFinancials ? 'Required' : 'Not Required' }}
+                                                </button>
+                                            </div>
+
+                                            <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForDestructiveActions')">
+                                                <div>
+                                                    <div class="cos-toggle-row__title">Require Approval for Destructive Actions</div>
+                                                    <div class="cos-toggle-row__desc">
+                                                        Require human confirmation before deleting records, canceling events, or revoking access.
+                                                    </div>
+                                                </div>
+                                                <button mjButton
+                                                        type="button"
+                                                        [variant]="DraftPolicy.RequireApprovalForDestructiveActions ? 'primary' : 'outline'"
+                                                        size="sm"
+                                                        (click)="ToggleApprovalGuardrail('RequireApprovalForDestructiveActions'); $event.stopPropagation()">
+                                                    {{ DraftPolicy.RequireApprovalForDestructiveActions ? 'Required' : 'Not Required' }}
+                                                </button>
+                                            </div>
+
+                                            <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('AllowInterAgentCoordination')">
+                                                <div>
+                                                    <div class="cos-toggle-row__title">Allow Inter-Agent Delegation &amp; Coordination</div>
+                                                    <div class="cos-toggle-row__desc">
+                                                        Permit this agent to invoke specialist sub-agents and coordinate with peer agents.
+                                                    </div>
+                                                </div>
+                                                <button mjButton
+                                                        type="button"
+                                                        [variant]="DraftPolicy.AllowInterAgentCoordination ? 'primary' : 'outline'"
+                                                        size="sm"
+                                                        (click)="ToggleApprovalGuardrail('AllowInterAgentCoordination'); $event.stopPropagation()">
+                                                    {{ DraftPolicy.AllowInterAgentCoordination ? 'Allowed' : 'Blocked' }}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="cos-form-grid cos-form-grid--spaced">
+                                            <label class="cos-form-field">
+                                                <span class="cos-form-field__label">Auto-Approve Financial Threshold (USD)</span>
+                                                <input class="cos-input"
+                                                       type="number"
+                                                       min="0"
+                                                       step="50"
+                                                       [value]="DraftPolicy.AutoApproveAmountThreshold ?? ''"
+                                                       placeholder="0.00"
+                                                       (input)="OnThresholdInputEvent($event)" />
+                                            </label>
+
+                                            <label class="cos-form-field cos-form-field--full">
+                                                <span class="cos-form-field__label">
+                                                    Standing Policy Instructions Override
+                                                    <span class="cos-char-counter"
+                                                          [class.cos-char-counter--warn]="DraftInstructionsSize.ExceedsThreshold">
+                                                        ({{ DraftInstructionsSize.Length | number }} / {{ InstructionsWarningThreshold | number }} chars)
+                                                    </span>
+                                                </span>
+                                                <textarea class="cos-textarea"
+                                                          rows="3"
+                                                          [value]="DraftPolicy.InstructionsOverride"
+                                                          placeholder="Optional policy instructions injected into every run (e.g., VIP contacts, escalation boundaries, scheduling windows)..."
+                                                          (input)="OnInstructionsOverrideInput($event)"></textarea>
+                                                @if (DraftInstructionsSize.ExceedsThreshold) {
+                                                    <div class="cos-inline-warning" role="status">
+                                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                                        <span>
+                                                            Standing instructions exceed {{ InstructionsWarningThreshold | number }} characters ({{ DraftInstructionsSize.Length | number }} chars). Consider trimming or moving recurring workflows into skills to keep prompt latency low.
+                                                        </span>
+                                                    </div>
+                                                }
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    @if (IsAdminUser) {
+                                        <section class="cos-panel">
+                                            <div class="cos-panel__header">
+                                                <div>
+                                                    <h4 class="cos-panel__title">
+                                                        <i class="fa-solid fa-gauge-high"></i>
+                                                        Instructions Override Size Monitor (Admin)
+                                                    </h4>
+                                                    <p class="cos-panel__subtitle">
+                                                        Flags user policies whose standing instructions exceed {{ InstructionsWarningThreshold | number }} characters for {{ SelectedAgentName }}.
+                                                    </p>
+                                                </div>
+                                                <mj-stat-badge
+                                                    [Count]="OversizedPolicyCount"
+                                                    [Total]="AdminPolicySizeRows.length"
+                                                    Label="over threshold"
+                                                    [Variant]="OversizedPolicyCount > 0 ? 'warning' : 'default'" />
+                                            </div>
+
+                                            @if (IsLoadingPolicySizeAudit) {
+                                                <mj-loading text="Checking policy instruction sizes..." size="small"></mj-loading>
+                                            } @else if (AdminPolicySizeRows.length === 0) {
+                                                <p class="cos-empty-text">No user policies found for {{ SelectedAgentName }}.</p>
+                                            } @else {
+                                                <div class="cos-audit-list">
+                                                    @for (row of AdminPolicySizeRows; track row.PolicyID) {
+                                                        <div class="cos-audit-row"
+                                                             [class.cos-audit-row--warn]="row.ExceedsThreshold">
+                                                            <div class="cos-audit-row__main">
+                                                                <span class="cos-audit-row__user">{{ row.UserName }}</span>
+                                                                <span class="cos-pill">{{ row.Status }}</span>
+                                                            </div>
+                                                            <div class="cos-audit-row__meta">
+                                                                <span class="cos-audit-row__len">
+                                                                    {{ row.Length | number }} chars
+                                                                </span>
+                                                                @if (row.ExceedsThreshold) {
+                                                                    <span class="cos-pill cos-pill--warn">Over 4k limit</span>
+                                                                }
+                                                                <button mjButton variant="flat" size="sm" type="button" (click)="OpenAuditPolicyRecord(row.PolicyID)">
+                                                                    Open
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </section>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- SUB-TAB 4: SHARING -->
+                        @if (ActiveSubTab === 'sharing') {
+                            <div class="cos-subtab-panel" role="tabpanel" id="agent-panel-sharing" aria-labelledby="agent-tab-sharing">
+                                @let vis = SelectedAgentVisibilitySummary;
+                                <section class="cos-panel">
+                                    <div class="cos-panel__header">
+                                        <div>
+                                            <h3 class="cos-panel__title">
+                                                <i class="fa-solid"
+                                                   [class.fa-lock]="vis.Variant === 'private'"
+                                                   [class.fa-users]="vis.Variant === 'shared'"
+                                                   [class.fa-globe]="vis.Variant === 'catalog'"></i>
+                                                {{ vis.Title }}
+                                            </h3>
+                                            <p class="cos-panel__subtitle">{{ vis.Description }}</p>
+                                        </div>
+                                        <span class="cos-pill"
+                                              [class.cos-pill--info]="vis.Variant === 'private'"
+                                              [class.cos-pill--ok]="vis.Variant === 'shared' || vis.Variant === 'catalog'">
+                                            2×2 RBAC
+                                        </span>
+                                    </div>
+
+                                    @if (IsLoadingPermissions) {
+                                        <mj-loading text="Loading sharing permissions..." size="small"></mj-loading>
+                                    } @else if (AgentPermissions.length === 0) {
+                                        <mj-empty-state
+                                            Size="compact"
+                                            Icon="fa-solid fa-lock"
+                                            [Message]="IsSelectedAgentOwnedDerived ? 'No explicit shares yet — this personal agent is private to you.' : 'No explicit permission rows configured on this catalog agent.'" />
+                                    } @else {
+                                        <div class="cos-audit-list">
+                                            @for (perm of AgentPermissions; track perm.ID) {
+                                                <div class="cos-audit-row">
+                                                    <div class="cos-audit-row__main">
+                                                        <i class="fa-solid"
+                                                           [class.fa-user-shield]="perm.RoleID"
+                                                           [class.fa-user]="!perm.RoleID"></i>
+                                                        <span class="cos-audit-row__user">
+                                                            {{ perm.Role || perm.User || perm.RoleID || perm.UserID }}
+                                                        </span>
+                                                        <span class="cos-meta-badge">{{ perm.RoleID ? 'Role' : 'User' }}</span>
+                                                    </div>
+                                                    <div class="cos-audit-row__meta">
+                                                        @if (perm.CanView) {
+                                                            <span class="cos-pill">View</span>
+                                                        }
+                                                        @if (perm.CanRun) {
+                                                            <span class="cos-pill cos-pill--ok">Run</span>
+                                                        }
+                                                        @if (perm.CanEdit) {
+                                                            <span class="cos-pill cos-pill--info">Edit</span>
+                                                        }
+                                                        @if (perm.CanDelete) {
+                                                            <span class="cos-pill cos-pill--warn">Delete</span>
+                                                        }
+                                                        @if (IsSelectedAgentOwnedDerived) {
+                                                            <button
+                                                                mjButton
+                                                                variant="danger"
+                                                                size="sm"
+                                                                type="button"
+                                                                [disabled]="BusyPermissionId === perm.ID"
+                                                                (click)="RemoveSharePermission(perm)">
+                                                                <i class="fa-solid fa-trash"></i> Remove
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (IsSelectedAgentOwnedDerived) {
+                                        <div class="cos-share-add-box">
+                                            <h4 class="cos-share-add-box__title">Share with a Role</h4>
+                                            <div class="cos-share-add-box__controls">
+                                                <mj-dropdown
+                                                    class="cos-share-add-box__dropdown"
+                                                    [Data]="AvailableRolesToShare"
+                                                    TextField="Name"
+                                                    ValueField="ID"
+                                                    [ValuePrimitive]="true"
+                                                    Placeholder="Choose a role..."
+                                                    [(ngModel)]="SelectedShareRoleId">
+                                                </mj-dropdown>
+                                                <label class="cos-checkbox-label">
+                                                    <input type="checkbox" [(ngModel)]="ShareGrantCanView" />
+                                                    <span>Can View</span>
+                                                </label>
+                                                <label class="cos-checkbox-label">
+                                                    <input type="checkbox" [(ngModel)]="ShareGrantCanRun" />
+                                                    <span>Can Run</span>
+                                                </label>
+                                                <button
+                                                    mjButton
+                                                    variant="primary"
+                                                    size="sm"
+                                                    type="button"
+                                                    [disabled]="IsSavingPermission || !SelectedShareRoleId || (!ShareGrantCanView && !ShareGrantCanRun)"
+                                                    (click)="AddRoleSharePermission()">
+                                                    <i class="fa-solid fa-plus"></i>
+                                                    {{ IsSavingPermission ? 'Sharing...' : 'Add Share' }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </section>
+                            </div>
+                        }
+                    }
                 }
+            </section>
+        </div>
+    </mj-page-body>
+
+    <!-- Briefing reader slide panel -->
+    <mj-slide-panel
+        Mode="slide"
+        [Title]="BriefingRoutine?.Name ?? 'Briefings'"
+        [Visible]="IsBriefingReaderOpen"
+        [Resizable]="true"
+        [WidthPx]="760"
+        (Closed)="CloseBriefingReader()">
+        @if (IsBriefingReaderOpen) {
+            <div class="cos-briefing-reader">
+                <mj-conversation-chat-area
+                    [Provider]="Provider"
+                    [EnvironmentId]="BriefingEnvironmentId"
+                    [CurrentUser]="ProviderToUse.CurrentUser"
+                    [Conversation]="BriefingConversation"
+                    [ConversationId]="BriefingConversationId"
+                    [IsNewConversation]="false"
+                    [SuppressNewConversationEmptyState]="true"
+                    [AllowMentions]="false"
+                    [OverlayMode]="false"
+                    [ShowExportButton]="false"
+                    [ShowShareButton]="false"
+                    [ShowArtifactIndicator]="false"
+                    [ShowAgentPicker]="false"
+                    [ShowAgentModePicker]="false"
+                    [ReadOnly]="true"
+                    ReadOnlyMessage="Briefings are written by the wake routine. To change what it checks or when, ask your agent in chat or use the Routines app."
+                    ApplicationScope="Application"
+                    [ApplicationId]="BriefingApplicationId">
+                </mj-conversation-chat-area>
             </div>
         }
-    </mj-page-body>
+    </mj-slide-panel>
 </mj-page-layout>
+
+@if (ShowRequestDialog && SelectedRequest) {
+    <mj-agent-request-dialog
+        [Visible]="ShowRequestDialog"
+        [Request]="SelectedRequest"
+        (Close)="OnRequestDialogClose($event)">
+    </mj-agent-request-dialog>
+}
+
+<mj-agent-instance-editor-modal
+    [Provider]="Provider"
+    [(Visible)]="ShowInstanceEditor"
+    [CurrentUser]="ProviderToUse.CurrentUser"
+    [Mode]="InstanceEditorMode"
+    [EditingAgent]="EditingInstanceAgent"
+    [InitialBaseAgentId]="InitialInstanceBaseAgentId"
+    (Saved)="OnInstanceSaved($event)"
+    (Archived)="OnInstanceArchived()"
+    (ChatToOnboard)="OnInstanceChatToOnboard($event)">
+</mj-agent-instance-editor-modal>

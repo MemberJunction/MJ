@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Prediction Retention",
+      "Description": "Daily at 02:00 UTC: gives every scoring binding without a view authorization the seeded \"View Model Predictions\" one, then deletes each binding's model predictions older than its RetentionDays (active and withdrawn bindings alike). Bindings with no RetentionDays keep all of their history.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=PredictiveStudioPredictionRetentionJobDriver",
+      "CronExpression": "0 0 2 * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "ConcurrencyMode": "Skip",
+      "Configuration": {}
+    },
+    "primaryKey": {
+      "ID": "D0E3DAD1-25AC-469D-8A0E-BE9F663A82B0"
+    }
+  }
+]

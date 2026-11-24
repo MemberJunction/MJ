@@ -13,7 +13,7 @@ import {
   StorageProviderSnapshotFileStore, TrainingDelegation, TrainingEngine,
   type AsOfAssembledMatrix, type AssembledRow, type MatrixCell, type RetrainResult, type SourceRow, type UnitTrainingAssembly,
 } from '@memberjunction/predictive-studio';
-import { HarnessSidecar, ProvenanceResolver, UnitFixtures, type GateMeasurement, type ScoredRowBinding, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
+import { HarnessSidecar, ProvenanceResolver, RunFixtures, UnitFixtures, type GateMeasurement, type ScoredRowBinding, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 
 /** The W1-signal s42 unit rows: every membership year resolves, so the manifest holds all of them. */
 const W1_MANIFEST_ROWS = 16776;
@@ -160,7 +160,7 @@ export class TrainingSnapshotGates {
     return { Seen: row.Provenance.length, Resolved: outcomes.filter(Boolean).length, Uncovered: uncovered };
   }
 
-  /** Trains the provenance pipeline, promotes its model for scoring and returns what the gate reads, or why it cannot. */
+  /** Trains the provenance pipeline, publishes its model through the gate for scoring and returns what the gate reads, or why it cannot. */
   private static async trainedForScoring(h: TruthHarness): Promise<{ readonly PipelineID: string; readonly ModelID: string; readonly Snapshot: MJMLTrainingSnapshotEntity } | GateMeasurement> {
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionW1ProvenancePipeline(h);
     await h.Train(pipeline);
@@ -168,13 +168,12 @@ export class TrainingSnapshotGates {
     if (!run.ResultingModelID) return { Passed: false, Measured: {}, Detail: `training run ${run.ID} produced no model: ${run.Notes || ''}` };
     const s = await TrainingSnapshotGates.snapshotOf(h, run);
     if (!s) return { Passed: false, Measured: {}, Detail: `run ${run.ID} has no Training Snapshot` };
-    const promoted = await h.Promote(run.ResultingModelID, 'Validated', 'G1.11: scoring-path provenance');
-    if (!promoted.Promoted) return { Passed: false, Measured: { modelStatus: promoted.Status }, Detail: `model ${run.ResultingModelID} could not be validated for scoring` };
+    await RunFixtures.PublishModel(h, run.ResultingModelID, 'G1.11 scoring-path provenance');
     return { PipelineID: pipeline.ID, ModelID: run.ResultingModelID, Snapshot: s };
   }
 
   /**
-   * G1.11 W1 → S3.2. The model is promoted to Validated before the scoring path loads it (scoring refuses Draft models).
+   * G1.11 W1 → S3.2. The model is published through the gate before the scoring path loads it (scoring refuses Draft and KeepBaseline models).
    * Every value must name its own scored row (the row's key, its stored owner key, its decision day computed by the
    * unit's rule), every sampled row must carry one provenance entry per feature, and every matrix column must be
    * covered by one.
