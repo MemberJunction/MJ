@@ -3238,11 +3238,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
     GoogleCustomSearchWebSearchProvider,
-    PerplexityWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    PerplexityWebSearchProvider,
     TavilyWebSearchProvider,
     WebSearchQueryServerOperation,
     APIRateLimiterAction,
@@ -3273,10 +3273,6 @@ const CLASS_REGISTRATIONS_6: any[] = [
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     CreateFormContributionAction,
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
@@ -3446,12 +3442,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
-    UnshareListAction,
-    UpdateListItemStatusAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    UnshareListAction,
+    UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
     ValidateEmailUniqueAction,
@@ -3487,10 +3483,6 @@ const CLASS_REGISTRATIONS_7: any[] = [
     CommsRevokeSuppressionServerOperation,
     CommsSimulateComplianceGateServerOperation,
     CommsVerifySendingDomainServerOperation,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_7: any[] = [
     CreateGuestShareLinkServerOperation,
     GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
@@ -3534,8 +3526,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1460;
-export const CLASS_REGISTRATIONS_COUNT = 1425;
+export const CLASS_REGISTRATIONS_COUNT = 1462;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

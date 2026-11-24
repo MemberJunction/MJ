@@ -2654,11 +2654,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJProjectEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
-    MJRecordChangeEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
     MJResourcePermissionEntityServer,
@@ -2678,10 +2678,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTaskDependencyEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJTaskEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
@@ -2862,12 +2858,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
     RunDecisionAction,
-    RunRecordProcessAction,
-    RunStoredQueryAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    RunRecordProcessAction,
+    RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -2886,10 +2882,6 @@ const CLASS_REGISTRATIONS_6: any[] = [
     TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     TestRuntimeActionAction,
     TextAnalyzerAction,
     TriggerAgentWakeAction,
@@ -2965,8 +2957,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1276;
-export const CLASS_REGISTRATIONS_COUNT = 1258;
+export const CLASS_REGISTRATIONS_COUNT = 1278;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
