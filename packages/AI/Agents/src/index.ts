@@ -39,6 +39,8 @@ export * from './runtime-state-fragment';
 export * from './sub-agent-consult';
 export * from './volatile-child-prompt';
 export * from './ArtifactToolManager';
+export * from './ActionLifecycleResolver';
+export * from './ActionResultSpilloverManager';
 export * from './ConversationCompactionManager';
 export * from './ConversationToolManager';
 export * from './AgentDecisionService';
