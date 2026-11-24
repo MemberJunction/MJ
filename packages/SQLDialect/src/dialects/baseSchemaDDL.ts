@@ -1,5 +1,6 @@
 import { EscapeSQLString } from '@memberjunction/global';
 import type { DataTypeMap } from '../dataTypeMap.js';
+import type { DialectLexicalRules, StringLiteralForm } from '../facets/dialectLexicalRules.js';
 import type { DialectWriter } from '../facets/dialectWriter.js';
 import type {
     DialectSchemaDDL,
@@ -10,14 +11,18 @@ import type {
     IndexOptions,
     ResolveTypeOptions,
 } from '../facets/dialectSchemaDDL.js';
+import { ANSI_LEXICAL } from './ansi.js';
 
 /**
  * Base for a platform's {@link DialectSchemaDDL}: the members with a sensible default live here,
- * the platform supplies the rest. Built over the platform's {@link DialectWriter}, which it uses
- * for quoting and literals.
+ * the platform supplies the rest. Built over the platform's {@link DialectWriter} (quoting and
+ * literals) and {@link DialectLexicalRules} (comment, string, identifier, and dollar-quote scanning).
  */
 export abstract class BaseSchemaDDL implements DialectSchemaDDL {
-    constructor(protected readonly Writer: DialectWriter) {}
+    constructor(
+        protected readonly Writer: DialectWriter,
+        protected readonly Lexical: DialectLexicalRules = ANSI_LEXICAL,
+    ) {}
 
     abstract CanonicalSchemaName(name: string): string;
     abstract BooleanParameterType(): string;
@@ -80,16 +85,6 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
         return null;
     }
 
-    /** Whether this dialect supports PostgreSQL-style `$$…$$` / `$tag$…$tag$` dollar-quoted blocks. */
-    protected get SupportsDollarQuotedStrings(): boolean {
-        return false;
-    }
-
-    /** Whether this dialect supports PostgreSQL-style `E'...'` backslash-escaped string literals. */
-    protected get SupportsEscapeStringLiterals(): boolean {
-        return false;
-    }
-
     /**
      * Strip NUL bytes, cap to {@link MaxCommentLength} UTF-16 code units (surrogate-pair safe)
      * when the dialect declares a limit, and escape single quotes for SQL string literals.
@@ -125,8 +120,8 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
 
     /**
      * Splits a SQL script on standalone batch separator lines (e.g. `GO` on SQL Server) while
-     * skipping strings, comments, and dollar-quoted blocks. Returns the non-empty script as a
-     * single batch when the dialect defines no batch separator.
+     * skipping strings, quoted identifiers, comments, and dollar-quoted blocks per {@link Lexical}.
+     * Returns the non-empty script as a single batch when the dialect defines no batch separator.
      */
     SplitBatches(sql: string): string[] {
         const separator = this.BatchSeparator().trim();
@@ -139,51 +134,51 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
 
     /**
      * Splits an oversized SQL batch into individual statements on top-level `;` + end-of-line
-     * boundaries, skipping single-quoted strings (`'...'` with `''` escapes, plus `E'...'` when
-     * enabled), line/block comments, and dollar-quoted blocks (when enabled). Trims each fragment,
-     * drops empties, and ensures every returned statement ends with `;`.
+     * boundaries, skipping string literals, quoted identifiers, line/block comments, and
+     * dollar-quoted blocks per {@link Lexical}. Trims each fragment, drops empties, and ensures
+     * every returned statement ends with `;`.
      */
     SplitStatements(batch: string): string[] {
         const statements: string[] = [];
-        let current = '';
+        let stmtStart = 0;
         let i = 0;
         while (i < batch.length) {
             const tokenEnd = this.scanProtectedTokenEnd(batch, i);
             if (tokenEnd !== null) {
-                current += batch.slice(i, tokenEnd);
                 i = tokenEnd;
                 continue;
             }
             if (batch[i] === ';') {
                 const boundaryEnd = this.findSemicolonNewlineEnd(batch, i);
                 if (boundaryEnd !== null) {
-                    const trimmed = current.trim();
+                    const trimmed = batch.slice(stmtStart, i).trim();
                     if (trimmed.length > 0) statements.push(`${trimmed};`);
-                    current = '';
+                    stmtStart = boundaryEnd;
                     i = boundaryEnd;
                     continue;
                 }
             }
-            current += batch[i];
             i++;
         }
-        const tail = current.trim();
-        if (tail.length > 0) statements.push(tail);
-        return statements.map((s) => (s.endsWith(';') ? s : s + ';'));
+        const tail = batch.slice(stmtStart).trim();
+        if (tail.length > 0) {
+            statements.push(tail.endsWith(';') ? tail : `${tail};`);
+        }
+        return statements;
     }
 
     private splitOnSeparatorLines(sql: string, separator: string): string[] {
         const batches: string[] = [];
-        let current = '';
+        let batchStart = 0;
         let i = 0;
         let atLineStart = true;
         while (i < sql.length) {
             if (atLineStart) {
                 const sepEnd = this.matchBatchSeparatorLine(sql, i, separator);
                 if (sepEnd !== null) {
-                    const trimmed = current.trim();
+                    const trimmed = sql.slice(batchStart, i).trim();
                     if (trimmed.length > 0) batches.push(trimmed);
-                    current = '';
+                    batchStart = sepEnd;
                     i = sepEnd;
                     atLineStart = true;
                     continue;
@@ -191,50 +186,54 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
             }
             const tokenEnd = this.scanProtectedTokenEnd(sql, i);
             if (tokenEnd !== null) {
-                const chunk = sql.slice(i, tokenEnd);
-                current += chunk;
-                atLineStart = chunk.endsWith('\n');
+                atLineStart = sql[tokenEnd - 1] === '\n';
                 i = tokenEnd;
                 continue;
             }
-            const ch = sql[i];
-            current += ch;
-            atLineStart = ch === '\n';
+            atLineStart = sql[i] === '\n';
             i++;
         }
-        const tail = current.trim();
+        const tail = sql.slice(batchStart).trim();
         if (tail.length > 0) batches.push(tail);
         return batches;
     }
 
     private scanProtectedTokenEnd(sql: string, i: number): number | null {
-        const ch = sql[i];
-        if (ch === '-' && sql[i + 1] === '-') {
-            return this.scanLineCommentEnd(sql, i);
-        }
-        if (ch === '/' && sql[i + 1] === '*') {
+        const lineCommentEnd = this.scanLineCommentEnd(sql, i);
+        if (lineCommentEnd !== null) return lineCommentEnd;
+        if (sql[i] === '/' && sql[i + 1] === '*') {
             return this.scanBlockCommentEnd(sql, i);
         }
-        if (ch === "'") {
-            return this.scanSingleQuotedStringEnd(sql, i);
-        }
-        if (this.SupportsDollarQuotedStrings && ch === '$') {
+        const quotedIdEnd = this.scanQuotedIdentifierEnd(sql, i);
+        if (quotedIdEnd !== null) return quotedIdEnd;
+        const stringEnd = this.scanStringLiteralEnd(sql, i);
+        if (stringEnd !== null) return stringEnd;
+        if (this.Lexical.DollarQuotedStrings !== 'none' && sql[i] === '$') {
             return this.scanDollarQuotedEnd(sql, i);
         }
         return null;
     }
 
-    private scanLineCommentEnd(sql: string, start: number): number {
-        let i = start + 2;
-        while (i < sql.length && sql[i] !== '\n') i++;
-        return i < sql.length ? i + 1 : i;
+    private scanLineCommentEnd(sql: string, start: number): number | null {
+        for (const form of this.Lexical.LineComments) {
+            if (!sql.startsWith(form.Opener, start)) continue;
+            if (form.RequiresWhitespaceAfter) {
+                const nextCode = sql.charCodeAt(start + form.Opener.length);
+                if (!Number.isNaN(nextCode) && nextCode > 0x20 && nextCode !== 0x7f) continue;
+            }
+            let i = start + form.Opener.length;
+            while (i < sql.length && sql[i] !== '\n') i++;
+            return i < sql.length ? i + 1 : i;
+        }
+        return null;
     }
 
     private scanBlockCommentEnd(sql: string, start: number): number {
+        const nested = this.Lexical.BlockComments.Nested;
         let i = start + 2;
         let depth = 1;
         while (i < sql.length && depth > 0) {
-            if (sql[i] === '/' && sql[i + 1] === '*') {
+            if (nested && sql[i] === '/' && sql[i + 1] === '*') {
                 depth++;
                 i += 2;
             } else if (sql[i] === '*' && sql[i + 1] === '/') {
@@ -247,16 +246,60 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
         return i;
     }
 
-    private scanSingleQuotedStringEnd(sql: string, quoteIndex: number): number {
-        const isEscape = this.SupportsEscapeStringLiterals && this.isEscapeStringPrefix(sql, quoteIndex);
-        let i = quoteIndex + 1;
+    private scanQuotedIdentifierEnd(sql: string, start: number): number | null {
+        const ch = sql[start];
+        for (const form of this.Lexical.IdentifierQuotes) {
+            if (ch === form.Open) {
+                return this.scanDelimitedSpan(sql, start, form.Close, form.DoubledCloseEscape, false);
+            }
+        }
+        return null;
+    }
+
+    private scanStringLiteralEnd(sql: string, quoteIndex: number): number | null {
+        const form = this.matchStringLiteralForm(sql, quoteIndex, sql[quoteIndex]);
+        if (!form) return null;
+        return this.scanDelimitedSpan(sql, quoteIndex, form.Quote, form.DoubledQuoteEscape, form.BackslashEscape);
+    }
+
+    private matchStringLiteralForm(sql: string, quoteIndex: number, quoteChar: string): StringLiteralForm | null {
+        let bestForm: StringLiteralForm | null = null;
+        let bestPrefixLen = -1;
+        for (const form of this.Lexical.StringLiterals) {
+            if (form.Quote !== quoteChar) continue;
+            for (const prefix of form.Prefixes) {
+                if (prefix.length > bestPrefixLen && this.hasPrefixBefore(sql, quoteIndex, prefix)) {
+                    bestPrefixLen = prefix.length;
+                    bestForm = form;
+                }
+            }
+        }
+        return bestForm;
+    }
+
+    private hasPrefixBefore(sql: string, quoteIndex: number, prefix: string): boolean {
+        if (prefix.length === 0) return true;
+        const start = quoteIndex - prefix.length;
+        if (start < 0) return false;
+        if (sql.slice(start, quoteIndex).toUpperCase() !== prefix.toUpperCase()) return false;
+        return start === 0 || !this.isIdentifierContinueChar(sql[start - 1]);
+    }
+
+    private scanDelimitedSpan(
+        sql: string,
+        openIndex: number,
+        closeChar: string,
+        doubledCloseEscape: boolean,
+        backslashEscape: boolean,
+    ): number {
+        let i = openIndex + 1;
         while (i < sql.length) {
-            if (isEscape && sql[i] === '\\' && i + 1 < sql.length) {
+            if (backslashEscape && sql[i] === '\\' && i + 1 < sql.length) {
                 i += 2;
                 continue;
             }
-            if (sql[i] === "'") {
-                if (sql[i + 1] === "'") {
+            if (sql[i] === closeChar) {
+                if (doubledCloseEscape && sql[i + 1] === closeChar) {
                     i += 2;
                     continue;
                 }
@@ -268,8 +311,10 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
     }
 
     private scanDollarQuotedEnd(sql: string, start: number): number | null {
+        // In PostgreSQL, `$` after an identifier character (`a$b$c`, `foo$$`) is part of that identifier, not a dollar-quote opener.
+        if (start > 0 && this.isIdentifierContinueChar(sql[start - 1])) return null;
         let j = start + 1;
-        if (j < sql.length && sql[j] !== '$') {
+        if (this.Lexical.DollarQuotedStrings === 'tagged' && j < sql.length && sql[j] !== '$') {
             if (!this.isTagStartChar(sql[j])) return null;
             j++;
             while (j < sql.length && this.isTagContinueChar(sql[j])) j++;
@@ -298,21 +343,17 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
         return sql[j] === '\n' ? j + 1 : null;
     }
 
-    private isEscapeStringPrefix(sql: string, quoteIndex: number): boolean {
-        if (quoteIndex === 0) return false;
-        const prev = sql[quoteIndex - 1];
-        if (prev !== 'E' && prev !== 'e') return false;
-        if (quoteIndex === 1) return true;
-        const before = sql[quoteIndex - 2];
-        return !this.isTagContinueChar(before) && before !== '$';
-    }
-
     private isTagStartChar(ch: string): boolean {
-        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch === '_';
+        const code = ch.charCodeAt(0);
+        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch === '_' || code >= 0x80;
     }
 
     private isTagContinueChar(ch: string): boolean {
         return this.isTagStartChar(ch) || (ch >= '0' && ch <= '9');
+    }
+
+    private isIdentifierContinueChar(ch: string): boolean {
+        return this.isTagContinueChar(ch) || ch === '$';
     }
 
     private truncateComment(value: string, maxChars: number): string {
@@ -320,6 +361,9 @@ export abstract class BaseSchemaDDL implements DialectSchemaDDL {
             return value;
         }
         const ellipsis = '...';
+        if (maxChars <= ellipsis.length) {
+            return value.slice(0, Math.max(0, maxChars));
+        }
         let cut = maxChars - ellipsis.length;
         const lastCode = value.charCodeAt(cut - 1);
         if (lastCode >= 0xD800 && lastCode <= 0xDBFF) {

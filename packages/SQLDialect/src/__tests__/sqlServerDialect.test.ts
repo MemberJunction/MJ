@@ -307,6 +307,15 @@ describe('SQLServerDialect', () => {
 
             const nulSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', 'hello\0world');
             expect(nulSql).toContain("@value = N'helloworld'");
+
+            // Apostrophes double in T-SQL source text without inflating the evaluated sql_variant UTF-16 length beyond MaxCommentLength
+            const quotedDesc = "It's ".repeat(1000); // 5,000 chars with 1,000 apostrophes
+            const quotedSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', quotedDesc);
+            const quotedMatch = quotedSql.match(/@value = N'((?:[^']|'')*)'/);
+            expect(quotedMatch).not.toBeNull();
+            const unescaped = quotedMatch![1].replace(/''/g, "'");
+            expect(unescaped.length).toBe(dialect.MaxCommentLength);
+            expect(unescaped.endsWith('...')).toBe(true);
         });
     });
 

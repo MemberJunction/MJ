@@ -123,7 +123,7 @@ describe('DDLGenerator', () => {
     it('emits COMMENT ON TABLE and COMMENT ON COLUMN for PostgreSQL (not sp_addextendedproperty)', () => {
       const sql = gen.GenerateCreateTable(makeTable({ Description: 'desc' }), 'postgresql');
       expect(sql).not.toContain('sp_addextendedproperty');
-      expect(sql).toContain(`COMMENT ON TABLE custom."TestTable" IS 'desc';`);
+      expect(sql).toContain(`COMMENT ON TABLE "custom"."TestTable" IS 'desc';`);
       expect(sql).toContain(`COMMENT ON COLUMN "custom"."TestTable"."ExternalId" IS 'External ID';`);
     });
 

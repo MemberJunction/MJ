@@ -339,8 +339,8 @@ describe('SchemaBuilder (integration)', () => {
             expect(pgOut.Errors).toHaveLength(0);
             const pgSql = pgOut.MigrationFiles[0].Content;
             expect(pgSql).not.toContain(`COMMENT ON COLUMN "hubspot"."Contact"."ContactID"`);
-            expect(pgSql).not.toContain(`COMMENT ON TABLE hubspot."Deal"`);
-            expect(pgSql).toContain(`COMMENT ON TABLE hubspot."Contact" IS '${trickyDesc}';`);
+            expect(pgSql).not.toContain(`COMMENT ON TABLE "hubspot"."Deal"`);
+            expect(pgSql).toContain(`COMMENT ON TABLE "hubspot"."Contact" IS '${trickyDesc}';`);
             // PostgreSQL keeps full >3,700-char description uncapped
             expect(pgSql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email" IS '${longDesc}';`);
             // SplitBatches + SplitStatements keep every statement intact with balanced quotes (even with `;\n`, `$$`, and `Go`)

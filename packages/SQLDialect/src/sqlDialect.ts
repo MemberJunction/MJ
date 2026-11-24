@@ -635,9 +635,10 @@ export abstract class SQLDialect extends QueryDialect implements SQLParserDialec
 
     /**
      * Splits a SQL script on standalone batch separator lines (e.g., `GO` on SQL Server) while
-     * respecting string literals, comments, and dollar-quoted blocks so a separator word inside
-     * a description or comment never splits mid-literal. On dialects with no batch separator
-     * (PostgreSQL), returns the non-empty script as a single batch.
+     * respecting string literals, quoted identifiers, comments, and dollar-quoted blocks per
+     * {@link Lexical} so a separator word inside a description, identifier, or comment never
+     * splits mid-token. On dialects with no batch separator (PostgreSQL), returns the non-empty
+     * script as a single batch.
      */
     SplitBatches(sql: string): string[] {
         return this.DDL.SplitBatches(sql);
@@ -648,11 +649,11 @@ export abstract class SQLDialect extends QueryDialect implements SQLParserDialec
      * boundaries so a caller (e.g. the RSU migration executor) can re-group
      * them into smaller chunks that each fit under a client request timeout.
      *
-     * Respects single-quoted string literals (`'...'` with `''` escapes, plus PostgreSQL
-     * `E'...'` escape strings and `$$…$$` / `$tag$…$tag$` dollar-quoted blocks) as well as
-     * `--` line comments and nested block comments so `;`+newline inside descriptions,
-     * defaults, or procedural bodies never splits mid-statement. Each returned statement ends
-     * with `;`.
+     * Respects string literals (`'...'` with `''` escapes, plus PostgreSQL `E'...'` escape
+     * strings and `$$…$$` / `$tag$…$tag$` dollar-quoted blocks), quoted identifiers (`"..."`,
+     * `[...]`), and line/block comments per {@link Lexical} so `;`+newline inside descriptions,
+     * identifiers, defaults, or procedural bodies never splits mid-statement. Each returned
+     * statement ends with `;`.
      */
     SplitStatements(batch: string): string[] {
         return this.DDL.SplitStatements(batch);

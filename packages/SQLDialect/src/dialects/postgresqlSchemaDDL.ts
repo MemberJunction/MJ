@@ -274,16 +274,6 @@ export class PostgreSQLSchemaDDL extends BaseSchemaDDL {
         return `ROLLBACK TO SAVEPOINT ${name}`;
     }
 
-    /** PostgreSQL supports `$$…$$` / `$tag$…$tag$` dollar-quoted blocks in DO blocks and functions. */
-    protected override get SupportsDollarQuotedStrings(): boolean {
-        return true;
-    }
-
-    /** PostgreSQL supports `E'...'` backslash-escaped string literals. */
-    protected override get SupportsEscapeStringLiterals(): boolean {
-        return true;
-    }
-
     ExistenceCheckSQL(objectType: string, schema: string, name: string): string {
         const normalizedType = objectType.toUpperCase();
         switch (normalizedType) {
@@ -413,7 +403,7 @@ export class PostgreSQLSchemaDDL extends BaseSchemaDDL {
 
     CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
         const escaped = this.EscapeComment(comment);
-        return `COMMENT ON COLUMN "${schema}"."${table}"."${column}" IS '${escaped}';`;
+        return `COMMENT ON COLUMN ${this.Writer.QuoteSchema(schema, table)}.${this.Writer.QuoteIdentifier(column)} IS '${escaped}';`;
     }
 
     FallbackType(): string {
@@ -462,7 +452,7 @@ export class PostgreSQLSchemaDDL extends BaseSchemaDDL {
     CommentOnObject(objectType: string, schema: string, name: string, comment: string): string {
         const escapedComment = this.EscapeComment(comment);
         const normalizedType = objectType.toUpperCase();
-        return `COMMENT ON ${normalizedType} ${schema}."${name}" IS '${escapedComment}'`;
+        return `COMMENT ON ${normalizedType} ${this.Writer.QuoteSchema(schema, name)} IS '${escapedComment}'`;
     }
 
     SchemaIntrospectionQueries(): SchemaIntrospectionSQL {

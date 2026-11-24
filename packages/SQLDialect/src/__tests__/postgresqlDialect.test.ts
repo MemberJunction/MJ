@@ -376,9 +376,18 @@ describe('PostgreSQLDialect', () => {
     });
 
     describe('CommentOnObject', () => {
-        it('should generate COMMENT ON statement', () => {
+        it('should generate COMMENT ON statement with quoted schema and table', () => {
             const sql = dialect.CommentOnObject('TABLE', '__mj', 'User', 'User accounts');
-            expect(sql).toBe("COMMENT ON TABLE __mj.\"User\" IS 'User accounts'");
+            expect(sql).toBe('COMMENT ON TABLE "__mj"."User" IS \'User accounts\'');
+        });
+
+        it('should preserve mixed-case schema names in COMMENT ON TABLE and COMMENT ON COLUMN', () => {
+            expect(dialect.CommentOnObject('TABLE', 'HubSpot', 'Contact', 'Contacts')).toBe(
+                'COMMENT ON TABLE "HubSpot"."Contact" IS \'Contacts\''
+            );
+            expect(dialect.CommentOnColumn('HubSpot', 'Contact', 'Email', 'Primary email')).toBe(
+                'COMMENT ON COLUMN "HubSpot"."Contact"."Email" IS \'Primary email\';'
+            );
         });
 
         it('should escape single quotes in comments', () => {

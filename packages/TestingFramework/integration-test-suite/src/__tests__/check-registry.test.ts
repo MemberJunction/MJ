@@ -338,7 +338,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['query-metadata-client', QueryMetadataClientChecks, 3], // QM1-QM3 a client leaves the saved-query metadata items unread, the server reports none of their rows, a saved query leaves the client current (IT177)
         ['metadata-payload-client', MetadataPayloadClientChecks, 3], // MP1-MP3 entity, field and application rows reach a client without nested child collections (IT176)
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
-        ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
+        ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 5], // ISP1-ISP5 live SQL native typing, key capping, Soft PK/FK/Organic Key auto-indexing, and ADD COLUMN descriptions (IT165)
         ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
     ];
 
@@ -475,7 +475,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-live-jobtitle': 1,
         'gemini-decisions': 8,
         'graph-runtime': 9,
-        'integration-schema-pipeline': 4,
+        'integration-schema-pipeline': 5,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'layered-base-views': 6,

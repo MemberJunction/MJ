@@ -167,7 +167,7 @@ describe('DDLGenerator', () => {
                 ],
             });
             const sql = gen.GenerateCreateTable(config, 'postgresql');
-            expect(sql).toContain(`COMMENT ON TABLE hubspot."Contact" IS 'HubSpot''s primary contact table';`);
+            expect(sql).toContain(`COMMENT ON TABLE "hubspot"."Contact" IS 'HubSpot''s primary contact table';`);
             expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email" IS 'Contact''s primary email';`);
             for (const colName of Object.keys(STANDARD_COLUMN_DESCRIPTIONS)) {
                 expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."${colName}" IS`);

@@ -2007,17 +2007,23 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /**
-   * Execute the migration SQL against the database.
-   * Delegates CLI tool selection to the DBExecProvider abstraction.
+   * Resolve `${flyway:defaultSchema}` placeholders, split a migration script into dialect batches
+   * (e.g. standalone `GO` lines on SQL Server), and chunk any oversized batch (>32 KB) into groups
+   * of 25 top-level statements so bulk RSU migrations stay under client request timeouts without
+   * splitting inside string literals, quoted identifiers, comments, or dollar-quoted blocks.
    */
-  private async executeMigration(sql: string): Promise<boolean> {
-    const defaultSchema = rsuConfig.DefaultSchema;
+  public static SplitMigrationBatches(
+    sql: string,
+    platform: DatabasePlatform,
+    defaultSchema: string = rsuConfig.DefaultSchema,
+    log?: (message: string) => void,
+  ): string[] {
     const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
     // Primary split: standalone batch separator lines (SQL Server's `GO` SSMS convention;
-    // PostgreSQL has no batch separator). Dialect-owned so `GO` inside string literals or
-    // comments never splits mid-literal.
-    const dialect = GetDialect(this.platform);
+    // PostgreSQL has no batch separator). Dialect-owned so `GO` inside string literals,
+    // quoted identifiers, or comments never splits mid-token.
+    const dialect = GetDialect(platform);
     const goBatches = dialect.SplitBatches(resolvedSQL);
 
     // Secondary chunking: bulk RSU migrations (e.g. Salesforce 1100+ tables)
@@ -2042,13 +2048,27 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         continue;
       }
       // Split on top-level statement-ending `;` + EOL while respecting string literals,
-      // comments, and PostgreSQL dollar-quoted blocks (DO $$…$$ / function bodies / `$mj_dropviews$`).
+      // quoted identifiers, comments, and PostgreSQL dollar-quoted blocks (`DO $$…$$` / `$mj_dropviews$`).
       const statements = dialect.SplitStatements(batch);
-      this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
+      log?.(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
       }
     }
+    return finalBatches;
+  }
+
+  /**
+   * Execute the migration SQL against the database.
+   * Delegates CLI tool selection to the DBExecProvider abstraction.
+   */
+  private async executeMigration(sql: string): Promise<boolean> {
+    const finalBatches = RuntimeSchemaManager.SplitMigrationBatches(
+      sql,
+      this.platform,
+      rsuConfig.DefaultSchema,
+      (msg) => this.rsuLog(msg),
+    );
 
     try {
       for (let i = 0; i < finalBatches.length; i++) {

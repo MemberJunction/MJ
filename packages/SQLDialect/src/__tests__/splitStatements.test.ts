@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { ANSI_LEXICAL } from '../dialects/ansi.js';
+import { SQLServerSchemaDDL } from '../dialects/sqlServerSchemaDDL.js';
 import { PostgreSQLDialect } from '../postgresqlDialect.js';
-import { SQLServerDialect } from '../sqlServerDialect.js';
+import { SQLServerDialect, SQLServerWriter } from '../sqlServerDialect.js';
 
 /**
  * SQLDialect.SplitStatements and SplitBatches split SQL scripts on top-level statement
@@ -102,6 +104,18 @@ describe('PostgreSQLDialect.SplitStatements (quote-, comment-, and dollar-aware)
         expect(out[0]).toContain('ALTER TABLE a ADD x INT;');
         expect(out[1]).toContain('ALTER TABLE b ADD y INT;');
     });
+
+    it('ignores apostrophes and ;+newline inside double-quoted identifiers (including doubled quotes)', () => {
+        const stmt1 = `ALTER TABLE "hubspot"."User's ""Contact""" ADD COLUMN "Note;\nText" TEXT NULL;`;
+        const stmt2 = `ALTER TABLE "hubspot"."Deal" ADD COLUMN "Amount" NUMERIC NULL;`;
+        expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
+    });
+
+    it('does not mistake $ inside unquoted identifiers (a$b$c, foo$$) for a dollar-quote opener', () => {
+        const stmt1 = `SELECT a$b$c, foo$$ FROM t;`;
+        const stmt2 = `ALTER TABLE a ADD x INT;`;
+        expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
+    });
 });
 
 describe('SQLServerDialect.SplitStatements (quote- and comment-aware)', () => {
@@ -160,16 +174,23 @@ describe('SQLServerDialect.SplitStatements (quote- and comment-aware)', () => {
         expect(out[0]).toContain('ALTER TABLE [a] ADD [x] INT;');
         expect(out[1]).toContain('ALTER TABLE [b] ADD [y] INT;');
     });
+
+    it('ignores apostrophes and ;+newline inside bracket-quoted and double-quoted identifiers', () => {
+        const stmt1 = `ALTER TABLE [hubspot].[User's ]]Table] ADD [Note;\nText] NVARCHAR(MAX) NULL;`;
+        const stmt2 = `ALTER TABLE "hubspot"."Deal's ""Row""" ADD [Amount] DECIMAL(18,2) NULL;`;
+        expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
+    });
 });
 
 describe('SQLDialect.SplitBatches', () => {
-    it('splits SQL Server scripts on standalone GO lines while preserving GO inside strings and comments', () => {
+    it('splits SQL Server scripts on standalone GO lines while preserving GO inside strings, quoted identifiers, and comments', () => {
         const ss = new SQLServerDialect();
         const batch1 =
             `CREATE SCHEMA [hubspot];`;
         const batch2 =
             `-- GO\n` +
             `/* block\nGO\ncomment */\n` +
+            `ALTER TABLE [hubspot].[User's\nGO\nTable] ADD [Notes] NVARCHAR(MAX) NULL;\n` +
             `EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Click Submit to\nGO\nto next screen';\n` +
             `GOTO done;`;
         const script = `${batch1}\n  go  \r\n${batch2}\nGO`;
@@ -178,8 +199,23 @@ describe('SQLDialect.SplitBatches', () => {
 
     it('never splits PostgreSQL scripts on standalone GO lines (no batch separator)', () => {
         const pg = new PostgreSQLDialect();
-        const sql = `COMMENT ON TABLE hubspot."Contact" IS 'Click Submit to\nGO\nto next screen';`;
+        const sql = `COMMENT ON TABLE "hubspot"."Contact" IS 'Click Submit to\nGO\nto next screen';`;
         expect(pg.SplitBatches(sql)).toEqual([sql]);
         expect(pg.SplitBatches('   \n\t  ')).toEqual([]);
+    });
+
+    it('honors DialectLexicalRules.BlockComments.Nested = false on flat-comment dialects and handles tiny MaxCommentLength safely', () => {
+        class TinyCapDDL extends SQLServerSchemaDDL {
+            override get MaxCommentLength(): number { return 2; }
+        }
+        const flatDdl = new TinyCapDDL(new SQLServerWriter(), ANSI_LEXICAL);
+        // Under ANSI_LEXICAL (Nested: false), the first `*/` closes the block comment so the `;` after it splits.
+        const sql = `/* outer /* inner */\nSELECT 1;\nSELECT 2;\n`;
+        expect(flatDdl.SplitStatements(sql)).toEqual([
+            '/* outer /* inner */\nSELECT 1;',
+            'SELECT 2;',
+        ]);
+        // MaxCommentLength <= 3 truncates cleanly without negative slice bounds.
+        expect(flatDdl.CommentOnColumn('dbo', 'T', 'C', 'abcdef')).toContain("@value = N'ab'");
     });
 });
