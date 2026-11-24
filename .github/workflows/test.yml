@@ -51,13 +51,12 @@ env:
   # The default (node_modules/.cache/turbo) lives inside a directory the pnpm setup owns and
   # would be awkward to cache independently of the store.
   TURBO_CACHE_DIR: .turbo/cache
-  # How many parallel test shards. 6 is the point of diminishing returns, not an arbitrary pick:
-  # the heaviest single package (ng-dashboards, ~305s) is an irreducible floor for whichever
-  # shard holds it, and 6 shards puts each shard's total work right at that floor (~916s of
-  # aggregate work ÷ the ~3x effective parallelism a 4-vCPU runner achieves ≈ 305s). A 7th shard
-  # buys nothing. Lower it if this repo starts queueing against the free-tier concurrent-job
-  # limit; the planner handles any value ≥ 1.
-  SHARD_COUNT: '6'
+  # How many parallel test shards. Recalibrated 2026-11-24: the aggregate suite grew from 8,537s
+  # (2026-10-28) to 15,984s (~266 min), with ng-conversations (777s) and ai-agents (766s) as the
+  # heaviest single packages. 8 shards puts each shard's aggregate work around ~33 min (~12-13 min
+  # wall time on a 4-vCPU runner), right at that single-package floor. Lower it if this repo starts
+  # queueing against concurrent-job limits; the planner handles any value ≥ 1.
+  SHARD_COUNT: '8'
 
 jobs:
   # ---------------------------------------------------------------------------------------
@@ -216,6 +215,7 @@ jobs:
             .github/workflows/ci-standards.yml
             .github/workflows/pg-migrations.yml
             .github/workflows/claude-pack.yml
+            .github/workflows/build.yml
             .github/workflows/release-test.yml
             .github/workflows/publish.yml
           PATHS
@@ -921,6 +921,13 @@ jobs:
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
+          # Fallback for "Re-run failed jobs": when build passed in attempt 1, attempt 2 runs only
+          # the failed shards and never creates `turbo-run-${run_id}-2`. Fall back to attempt 1's
+          # handoff cache (still scoped to this PR), and finally to next's build seed so a shard
+          # never compiles ~387 packages from scratch on a re-run.
+          restore-keys: |
+            turbo-run-${{ github.run_id }}-
+            turbo-v1-${{ runner.os }}-
 
       # Deliberately NOT fail-on-cache-miss. A miss is a slow shard, not a wrong one: turbo
       # rebuilds this shard's own subtree (a fraction of the repo) and the tests are just as
@@ -1038,6 +1045,9 @@ jobs:
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-run-${{ github.run_id }}-
+            turbo-v1-${{ runner.os }}-
 
       # The guard imports built dist/, so materialize it from the build job's cache. This is a
       # pure cache replay (no compilation) whenever the handoff hit.
@@ -1202,7 +1212,12 @@ jobs:
     permissions:
       actions: write
     steps:
+      # Keep the run-scoped handoff cache when test or esm-guard failed so "Re-run failed jobs"
+      # can restore `turbo-run-${run_id}-1` instead of rebuilding from scratch. When the run
+      # succeeds (or is cancelled) delete it immediately; failed entries age out via LRU or are
+      # deleted when the re-run succeeds.
       - name: Delete the run-scoped turbo cache
+        if: needs.test.result != 'failure' && needs.esm-guard.result != 'failure'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
