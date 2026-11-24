@@ -21,7 +21,7 @@ import type { NavigationRequest } from '@memberjunction/ng-conversations';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { combineLatest, Subscription } from 'rxjs';
-import { skip } from 'rxjs/operators';
+import { skip, takeUntil } from 'rxjs/operators';
 import {
     buildCuratedFormSchema,
     buildDefaultFormScaffold,
@@ -562,7 +562,7 @@ export class FormBuilderResourceComponent
             this.engineSubscription = combineLatest([
                 InteractiveFormsEngine.Instance.Forms$,
                 InteractiveFormsEngine.Instance.Overrides$,
-            ]).pipe(skip(1)).subscribe(() => {
+            ]).pipe(skip(1), takeUntil(this.destroy$)).subscribe(() => {
                 void this.loadExistingForms();
                 if (this.SelectedFormName) void this.LoadVersionsForActiveForm();
             });
@@ -577,6 +577,7 @@ export class FormBuilderResourceComponent
             // cockpit-specific state lands inside AdditionalContext via
             // `SetAgentContext()` below.
             this.appContextSubscription = this.navigationService.AppContextSnapshot$
+                .pipe(takeUntil(this.destroy$))
                 .subscribe(snapshot => {
                     this.ChatAppContext = snapshot;
                     this.cdr.markForCheck();
@@ -591,6 +592,7 @@ export class FormBuilderResourceComponent
             // requiring a manual refresh. Scoped tightly to the active
             // form's lineage to avoid cross-cockpit churn.
             this.entityEventSubscription = MJGlobal.Instance.GetEventListener(false)
+                .pipe(takeUntil(this.destroy$))
                 .subscribe(mjEvent => this.handleEntityEvent(mjEvent));
         } catch (err) {
             LogError(`FormBuilderResource.ngAfterViewInit: ${err instanceof Error ? err.message : String(err)}`);
