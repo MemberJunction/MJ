@@ -43,6 +43,7 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       [Provider]="Provider"
       [CurrentUser]="currentUser"
       [Rows]="rows"
+      [Compact]="Compact"
       [EnableAttachments]="enableAttachments"
       [MaxAttachments]="maxAttachments"
       [MaxAttachmentSizeBytes]="maxAttachmentSizeBytes"
@@ -70,6 +71,7 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       (PlanModeToggle)="planModeToggle.emit()"
       (BeforeSkillsOpened)="beforeSkillsOpened.emit($event)"
       (AfterSkillsOpened)="afterSkillsOpened.emit()">
+      <ng-content select="[composerFooter]" composerFooter></ng-content>
     </mj-message-input-box>
   `
 })
@@ -254,6 +256,8 @@ export class AiComposerComponent {
   @Input() StatusText: string | null = null;
   /** Elapsed time after the status text, kept out of the live region and dropped on narrow screens. */
   @Input() StatusElapsed: string | null = null;
+  /** Compact inline layout (single-row editor + send button side-by-side) for tight drawers/panels. */
+  @Input() Compact: boolean = false;
 
   /** @deprecated Use {@link Placeholder}. */
   @Input() set placeholder(value: string) {

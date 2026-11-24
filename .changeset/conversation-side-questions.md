@@ -1,0 +1,20 @@
+---
+"@memberjunction/ai-agents": minor
+"@memberjunction/ai-core-plus": minor
+"@memberjunction/conversations-runtime": minor
+"@memberjunction/core-entities": minor
+"@memberjunction/core-entities-server": minor
+"@memberjunction/ng-composer": minor
+"@memberjunction/ng-conversations": minor
+"@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/server": minor
+"@memberjunction/server-bootstrap": minor
+"@memberjunction/server-bootstrap-lite": minor
+---
+
+Add persistent Conversation Side Questions with read-only live agent-run context and fork scoping.
+
+- **Schema & Metadata (`Conversation.ParentBranchID`, `SIDE_QUESTION` conversation type, `IActionConfiguration.isReadOnly`)**: Adds optional `ParentBranchID` (`FK_Conversation_ParentBranchID`, `IX_Conversation_ParentBranchID`, `CK_Conversation_ParentLink`) on top of `Conversation.ParentID` so a persistent side-question child thread can scope cleanly to either the parent conversation's Main trunk (`ParentBranchID IS NULL`) or a specific fork branch. Seeds the `SIDE_QUESTION` (`3B81EB3D-92D7-4947-92CE-D250F8928861`) conversation type, adds optional `isReadOnly?: boolean` to `IActionConfiguration` (`Action.Config`), and documents `_SIDE_QUESTION_MODE` / `<mj-side-question-thread/>` / `<mj-active-runs-snapshot>` in the Loop and Flow agent-type system prompt templates.
+- **Core Entities & Server Security**: Preserves private-child isolation (`ParentID` never grants cross-user read access on `MJ: Conversations` or `MJ: Conversation Details`) while permitting any user who can read a parent conversation (`UserCanReadConversation`) to create their own private per-user `SIDE_QUESTION` thread (`UserID = caller`) scoped to Main or a parent fork branch. Keeps generic `ParentID` nesting owner-only, forbids nesting inside child conversations or mutating a saved `SIDE_QUESTION` link or `TypeID` membership, and atomically cascades deletion of child side-question threads inside `RunInEntityTransaction` on both parent conversation delete (`MJConversationEntityServer`) and fork branch delete (`MJConversationBranchEntityServer`). Adds `IsSideQuestionTypeId`, `LoadSideConversations`, `GetOrCreateSideConversation`, `LoadSideConversationDetails`, `GetSideConversationSummary`, and `ClearSideConversation` on `ConversationEngine` plus `UserMayReadConversation`.
+- **AI Execution & Live Run Snapshot**: Adds `SideQuestionExecutionContext`, `ActiveAgentRunSnapshotService` (3 batched `RunViews` round trips over in-flight and recent parent agent runs/steps/tasks, fork-path filtered, wrapping untrusted data via `WrapUntrustedExternalData`), `<mj-active-runs-snapshot>` trailing runtime-state delivery (preserving stable KV prompt prefixes, emitted once in append-only mode and omitted on sub-agent relays), `<mj-side-question-thread/>` structural transcript boundary in `RunAIAgentResolver` (provider-scoped `MJLruCache` lookup, `speakerAttribution: 'auto'` on parent history), and metadata-first read-only enforcement in `BaseAgent` (`IsActionAllowedInReadOnlyMode` reading `Action.Config_Object.isReadOnly` / `disallowWhenTainted` / `Verb` with linear name fallback; catalog withholding + client-tools refusal + circuit-breaker lockout, propagated across sub-agents and realtime delegation).
+- **Runtime & Angular UI**: Adds `SideQuestionController` on `ConversationsRuntime` (delegating turn execution to `ConversationAgentRunner`, memoizing `LoadScopeSummary`, defaulting to `DefaultAgentResolver` / Sage with per-thread persisted `DefaultAgentID`), exposes `[composerFooter]` content projection and `[Compact]` layout mode on `<mj-message-input-box>` (`@memberjunction/ng-composer` stays AI-agnostic) and `<mj-ai-composer>`, and renders the `Ask a side question…` trigger directly below the composer status row opening `<mj-side-question-panel>` (`extends BaseAngularComponent`) above the main composer with single-turn `‹ 1 / N ›` stepper navigation, shared `<mj-conversation-agent-picker>`, `Alt+/` shortcut, and `BeforeSideQuestionTurn` (`CancellableChatEventArgs`) / `AfterSideQuestionTurn` hooks.

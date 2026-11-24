@@ -65,6 +65,7 @@
     (voiceRequested)="onStartRealtime()"
     (voiceOptionsRequested)="onRealtimeOptions()"
     (planModeToggle)="TogglePlanMode()">
+    <ng-content select="[composerFooter]" composerFooter></ng-content>
   </mj-ai-composer>
 
   <!-- Voice agent/co-agent/model picker — shown when starting a call on a conversation

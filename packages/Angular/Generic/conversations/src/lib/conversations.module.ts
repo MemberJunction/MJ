@@ -108,6 +108,7 @@ import { GlobalTasksPanelComponent } from './components/global-tasks/global-task
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
 import { ForksPopoverComponent } from './components/conversation/forks-popover.component';
+import { SideQuestionPanelComponent } from './components/side-question/side-question-panel.component';
 import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
 import { RealtimeAgentPickerComponent } from './components/realtime/realtime-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
@@ -222,7 +223,8 @@ const COMPONENTS = [
   ImageViewerComponent,
   PinnedMessagesPanelComponent,
   ForksPopoverComponent,
-  ChatAgentsOverlayComponent
+  ChatAgentsOverlayComponent,
+  SideQuestionPanelComponent
 ];
 
 @NgModule({

@@ -10549,6 +10549,11 @@ export const MJAgentChannelSchema = z.object({
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    ParentBranchID: z.string().nullable().describe(`
+        * * Field Name: ParentBranchID
+        * * Display Name: Parent Branch ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)`),
 });
 
 export type MJAgentChannelEntityType = z.infer<typeof MJAgentChannelSchema>;
@@ -13230,6 +13235,11 @@ export const MJCommentSchema = z.object({
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    ParentBranchID: z.string().nullable().describe(`
+        * * Field Name: ParentBranchID
+        * * Display Name: Parent Branch ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)`),
     CommentType: z.string().nullable().describe(`
         * * Field Name: CommentType
         * * Display Name: Comment Type Name
@@ -18144,6 +18154,12 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
         * * Description: Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations.`),
+    ParentBranchID: z.string().nullable().describe(`
+        * * Field Name: ParentBranchID
+        * * Display Name: Parent Branch
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+        * * Description: Optional ConversationBranch ID on the parent conversation identifying which fork path a child side-question thread is scoped to. NULL means the parent conversation's Main trunk.`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -18195,6 +18211,10 @@ export const MJConversationSchema = z.object({
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    ParentBranch: z.string().nullable().describe(`
+        * * Field Name: ParentBranch
+        * * Display Name: Parent Branch Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -25194,6 +25214,11 @@ export const MJFieldSuggestionSchema = z.object({
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    ParentBranchID: z.string().nullable().describe(`
+        * * Field Name: ParentBranchID
+        * * Display Name: Parent Branch ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)`),
     AIPromptRun: z.string().nullable().describe(`
         * * Field Name: AIPromptRun
         * * Display Name: AI Prompt Run Details

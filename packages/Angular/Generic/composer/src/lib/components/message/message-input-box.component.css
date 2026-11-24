@@ -344,3 +344,35 @@
 .voice-options-button-icon:disabled i {
   color: var(--mj-text-disabled);
 }
+
+/* Compact inline variant ([Compact]="true") for drawers and side-question panels */
+.message-input-box-container--compact {
+  border-width: 1px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.message-input-box-container--compact .input-wrapper {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 3px 4px;
+}
+.message-input-box-container--compact mj-mention-editor {
+  flex: 1;
+  min-width: 0;
+}
+.message-input-box-container--compact .input-wrapper ::ng-deep .mention-editor {
+  min-height: 28px;
+  max-height: 88px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+.message-input-box-container--compact .composer-actions {
+  padding: 0 2px 2px 0;
+}
+.message-input-box-container--compact .send-button-icon,
+.message-input-box-container--compact .attach-button-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}

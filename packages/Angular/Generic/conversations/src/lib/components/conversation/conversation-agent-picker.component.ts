@@ -1,9 +1,9 @@
+import { ConnectedPosition } from '@angular/cdk/overlay';
 import {
     ChangeDetectionStrategy,
     ChangeDetectorRef,
     Component,
     EventEmitter,
-    HostListener,
     Input,
     OnInit,
     Output,
@@ -12,72 +12,79 @@ import {
 import { LogError } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { IsAgentAllowed, type MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
-import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
 
 /**
- * Header widget that lets a user pin a default AI agent on the active
- * conversation. The pinned agent (saved to
- * `MJConversationEntity.DefaultAgentID`) takes precedence over the
- * embedder-supplied default in `MessageInputComponent.routeMessage()` —
- * non-mention messages route to it instead of Sage.
+ * Reusable header widget that picks or pins a default AI agent for a conversation
+ * (both main threads via `MJConversationEntity.DefaultAgentID` and Side Questions
+ * before/after the child conversation row is persisted).
  *
  * Eligible agents are top-level, Active, non-Sub-Agent rows from
- * `AIEngineBase.Instance.ReadableAgents`. The widget renders as a compact button
- * showing the current pin (or "Auto" when nothing is pinned). Clicking
- * opens an inline list with a "Clear" option to remove the pin.
- *
- * The host controls visibility via `<mj-conversation-chat-area>`'s
- * `[showAgentPicker]` input (default true). Surfaces that don't want this
- * UX (e.g. agent-less embed) set it to false.
+ * `AIEngineBase.Instance.ReadableAgents` narrowed by `AllowedAgentIDs`.
  */
 @Component({
     standalone: false,
     selector: 'mj-conversation-agent-picker',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <div class="mj-cv-agent-picker" [class.mj-cv-agent-picker--open]="IsOpen">
+        <div class="mj-cv-agent-picker" [class.mj-cv-agent-picker--open]="IsOpen" [class.mj-cv-agent-picker--compact]="Compact">
             <button
                 type="button"
+                cdkOverlayOrigin
+                #pickerOrigin="cdkOverlayOrigin"
                 class="mj-cv-agent-picker__trigger"
                 [title]="ButtonTitle"
-                [disabled]="Disabled || !Conversation"
+                [disabled]="Disabled || (!Conversation && !AllowUnboundSelection)"
                 (click)="Toggle($event)">
                 @if (CurrentAgentLogoUrl) {
                     <img [src]="CurrentAgentLogoUrl" [alt]="CurrentAgentLabel" class="mj-cv-agent-picker__avatar" />
                 } @else {
-                    <i [class]="CurrentAgentIconClass"></i>
+                    <i [class]="CurrentAgentIconClass" aria-hidden="true"></i>
                 }
                 <span class="mj-cv-agent-picker__label">{{ CurrentAgentLabel }}</span>
-                <i class="fa-solid fa-caret-down mj-cv-agent-picker__caret"></i>
+                <i class="fa-solid fa-caret-down mj-cv-agent-picker__caret" aria-hidden="true"></i>
             </button>
-            @if (IsOpen) {
-                <div class="mj-cv-agent-picker__menu" (click)="$event.stopPropagation()">
-                    <div class="mj-cv-agent-picker__menu-header">Default agent for this conversation</div>
+
+            <ng-template
+                cdkConnectedOverlay
+                [cdkConnectedOverlayOrigin]="pickerOrigin"
+                [cdkConnectedOverlayOpen]="IsOpen"
+                [cdkConnectedOverlayPositions]="MenuPositions"
+                [cdkConnectedOverlayHasBackdrop]="true"
+                cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+                (backdropClick)="Close()"
+                (overlayKeydown)="OnOverlayKeydown($event)"
+                (detach)="Close()">
+                <div class="mj-cv-agent-picker__menu" role="menu" (click)="$event.stopPropagation()">
+                    <div class="mj-cv-agent-picker__menu-header">{{ MenuHeader }}</div>
                     <button
                         type="button"
+                        role="menuitemradio"
                         class="mj-cv-agent-picker__item"
-                        [class.mj-cv-agent-picker__item--selected]="!Conversation?.DefaultAgentID"
+                        [class.mj-cv-agent-picker__item--selected]="!EffectiveAgentId"
+                        [attr.aria-checked]="!EffectiveAgentId"
                         (click)="PickAgent(null)">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i>
-                        <span>Auto (use default)</span>
+                        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                        <span>{{ DefaultMenuOptionLabel }}</span>
                     </button>
                     @if (MyEligibleAgents.length > 0) {
                         <div class="mj-cv-agent-picker__section-label">My Agents</div>
                         @for (agent of MyEligibleAgents; track agent.ID) {
                             <button
                                 type="button"
+                                role="menuitemradio"
                                 class="mj-cv-agent-picker__item"
                                 [class.mj-cv-agent-picker__item--selected]="IsSelected(agent)"
+                                [attr.aria-checked]="IsSelected(agent)"
                                 [title]="agent.Description || agent.Name"
                                 (click)="PickAgent(agent)">
                                 @if (agent.LogoURL) {
                                     <img [src]="agent.LogoURL" [alt]="agent.Name" class="mj-cv-agent-picker__avatar" />
                                 } @else {
-                                    <i [class]="IconClassFor(agent)"></i>
+                                    <i [class]="IconClassFor(agent)" aria-hidden="true"></i>
                                 }
                                 <span class="mj-cv-agent-picker__item-name">{{ agent.Name }}</span>
                                 @if (BaseAgentNameFor(agent)) {
@@ -110,13 +117,10 @@ import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
                         <div class="mj-cv-agent-picker__empty">No agents available</div>
                     }
                 </div>
-            }
+            </ng-template>
         </div>
     `,
     styles: [`
-        /* Match mjButton size="sm" so the trigger lines up with neighboring
-           Export / Share buttons: min-height 32px, 6px/12px padding,
-           0.8125rem font. Same border-radius as the other chrome buttons. */
         .mj-cv-agent-picker { position: relative; display: inline-flex; align-items: center; }
         .mj-cv-agent-picker__trigger {
             display: inline-flex; align-items: center; gap: 6px;
@@ -126,22 +130,30 @@ import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
             color: var(--mj-text-primary); font-size: 0.8125rem; line-height: 1.5;
             transition: background 120ms, border-color 120ms;
         }
+        .mj-cv-agent-picker--compact .mj-cv-agent-picker__trigger {
+            gap: 5px; padding: 2px 8px; min-height: 24px; border-radius: 6px;
+            background: var(--mj-bg-surface); font-size: 11.5px; font-weight: 500; line-height: 1.3;
+        }
+        .mj-cv-agent-picker--compact .mj-cv-agent-picker__trigger i:first-child {
+            color: var(--mj-brand-primary); font-size: 11.5px;
+        }
         .mj-cv-agent-picker__trigger:hover:not(:disabled) {
             background: var(--mj-bg-surface-hover); border-color: var(--mj-border-strong);
         }
+        .mj-cv-agent-picker__trigger:focus-visible { outline: none; box-shadow: var(--mj-focus-ring); }
         .mj-cv-agent-picker__trigger:disabled { opacity: 0.5; cursor: not-allowed; }
         .mj-cv-agent-picker--open .mj-cv-agent-picker__trigger { border-color: var(--mj-border-focus); }
         .mj-cv-agent-picker__label { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mj-cv-agent-picker--compact .mj-cv-agent-picker__label { max-width: 130px; }
         .mj-cv-agent-picker__caret { font-size: 10px; opacity: 0.7; }
         .mj-cv-agent-picker__avatar {
             width: 16px; height: 16px; border-radius: var(--mj-radius-full, 999px);
             object-fit: cover; flex-shrink: 0;
         }
         .mj-cv-agent-picker__menu {
-            position: absolute; top: calc(100% + 4px); right: 0; z-index: 50;
             min-width: 240px; max-height: 340px; overflow-y: auto;
             background: var(--mj-bg-surface-elevated); border: 1px solid var(--mj-border-default);
-            border-radius: 6px; box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-text-primary) 14%, transparent);
+            border-radius: 6px; box-shadow: var(--mj-shadow-lg);
             padding: 4px 0;
         }
         .mj-cv-agent-picker__menu-header {
@@ -171,13 +183,41 @@ import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
     `]
 })
 export class ConversationAgentPickerComponent implements OnInit {
+    private static readonly STANDARD_POSITIONS: ConnectedPosition[] = [
+        { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },
+        { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+        { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -4 },
+    ];
+    private static readonly COMPACT_POSITIONS: ConnectedPosition[] = [
+        { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -6 },
+        { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
+    ];
+
     /** The conversation whose `DefaultAgentID` this widget edits. */
     @Input() Conversation: MJConversationEntity | null = null;
+
+    /** Selected agent ID when operating in unbound pre-create mode (`AllowUnboundSelection = true`). */
+    @Input() SelectedAgentId: string | null = null;
+
+    /** Allows choosing/emitting an agent even before `Conversation` has been saved. */
+    @Input() AllowUnboundSelection = false;
+
+    /** Compact pill styling and upward overlay placement (for nested panels such as Side Questions). */
+    @Input() Compact = false;
+
+    /** Label shown on the trigger when no explicit agent is selected/pinned. */
+    @Input() DefaultLabel = 'Auto';
+
+    /** Menu item label for resetting to default routing. */
+    @Input() DefaultMenuOptionLabel = 'Auto (use default)';
+
+    /** Header text inside the dropdown menu. */
+    @Input() MenuHeader = 'Default agent for this conversation';
 
     /** Required for the Save() audit context. */
     @Input() CurrentUser: UserInfo | null = null;
 
-    /** Disable the picker (e.g. read-only conversation). */
+    /** Disable the picker (e.g. read-only conversation or active turn). */
     @Input() Disabled: boolean = false;
 
     /**
@@ -193,7 +233,7 @@ export class ConversationAgentPickerComponent implements OnInit {
         return this._allowedAgentIDs;
     }
 
-    /** Emitted after a successful save with the new (or null) agent ID. */
+    /** Emitted after a selection change (or successful save) with the new (or null) agent ID. */
     @Output() AgentChanged = new EventEmitter<string | null>();
 
     public IsOpen = false;
@@ -207,9 +247,6 @@ export class ConversationAgentPickerComponent implements OnInit {
 
     public async ngOnInit(): Promise<void> {
         try {
-            // AIEngineBase is the live, cached agent catalog. Ensure it's
-            // loaded — most app shells warm it up at boot, but the picker
-            // could mount before that completes.
             await AIEngineBase.Instance.Config(false);
             this.rebuildCatalog();
         } catch (err) {
@@ -232,7 +269,17 @@ export class ConversationAgentPickerComponent implements OnInit {
     /** Narrows the catalog to the allowed agents. */
     private applyAllowedAgents(): void {
         this.EligibleAgents = this.catalogAgents.filter(a => IsAgentAllowed(a.ID, this._allowedAgentIDs));
-        this.cdr.markForCheck();
+        this.cdr?.markForCheck?.();
+    }
+
+    public get MenuPositions(): ConnectedPosition[] {
+        return this.Compact
+            ? ConversationAgentPickerComponent.COMPACT_POSITIONS
+            : ConversationAgentPickerComponent.STANDARD_POSITIONS;
+    }
+
+    public get EffectiveAgentId(): string | null {
+        return this.Conversation?.DefaultAgentID ?? this.SelectedAgentId ?? null;
     }
 
     public get MyEligibleAgents(): MJAIAgentEntityExtended[] {
@@ -244,14 +291,14 @@ export class ConversationAgentPickerComponent implements OnInit {
     }
 
     private get currentPinnedAgent(): MJAIAgentEntityExtended | undefined {
-        const id = this.Conversation?.DefaultAgentID;
+        const id = this.EffectiveAgentId;
         if (!id) return undefined;
         return this.EligibleAgents.find(a => UUIDsEqual(a.ID, id))
             ?? (AIEngineBase.Instance.ReadableAgents ?? []).find(a => UUIDsEqual(a.ID, id));
     }
 
     public get CurrentAgentLabel(): string {
-        if (!this.Conversation?.DefaultAgentID) return 'Auto';
+        if (!this.EffectiveAgentId) return this.DefaultLabel;
         return this.currentPinnedAgent?.Name ?? 'Pinned agent';
     }
 
@@ -260,19 +307,22 @@ export class ConversationAgentPickerComponent implements OnInit {
         return url ? url : null;
     }
 
-    public get CurrentAgentIconClass(): string {
-        return this.currentPinnedAgent ? this.IconClassFor(this.currentPinnedAgent) : 'fa-solid fa-robot';
-    }
-
     public BaseAgentNameFor(agent: MJAIAgentEntityExtended): string | null {
         if (!agent.BaseAgentID) return null;
         return AIEngineBase.Instance.GetAgentByID(agent.BaseAgentID)?.Name ?? null;
     }
 
+    public get CurrentAgentIconClass(): string {
+        if (!this.EffectiveAgentId) {
+            return this.Compact ? 'fa-solid fa-wand-magic-sparkles' : 'fa-solid fa-robot';
+        }
+        return this.currentPinnedAgent ? this.IconClassFor(this.currentPinnedAgent) : 'fa-solid fa-robot';
+    }
+
     public get ButtonTitle(): string {
-        return this.Conversation?.DefaultAgentID
-            ? `This conversation routes to ${this.CurrentAgentLabel}. Click to change.`
-            : 'No agent pinned — messages route via the standard rules. Click to pin an agent.';
+        return this.EffectiveAgentId
+            ? `Routing to ${this.CurrentAgentLabel}. Click to change.`
+            : 'Using default routing. Click to choose an agent.';
     }
 
     public IconClassFor(agent: MJAIAgentEntityExtended): string {
@@ -285,27 +335,52 @@ export class ConversationAgentPickerComponent implements OnInit {
     }
 
     public IsSelected(agent: MJAIAgentEntityExtended): boolean {
-        return !!this.Conversation?.DefaultAgentID
-            && UUIDsEqual(agent.ID, this.Conversation.DefaultAgentID);
+        const id = this.EffectiveAgentId;
+        return !!id && UUIDsEqual(agent.ID, id);
     }
 
     public Toggle(event: MouseEvent): void {
         event.stopPropagation();
-        if (this.Disabled || !this.Conversation) return;
+        if (this.Disabled || (!this.Conversation && !this.AllowUnboundSelection)) return;
         this.IsOpen = !this.IsOpen;
         if (this.IsOpen) {
             this.rebuildCatalog();
         }
-        this.cdr.markForCheck();
+        this.cdr?.markForCheck?.();
+    }
+
+    public Close(): void {
+        if (this.IsOpen) {
+            this.IsOpen = false;
+            this.cdr?.markForCheck?.();
+        }
+    }
+
+    public OnOverlayKeydown(event: KeyboardEvent): void {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            this.Close();
+        }
     }
 
     public async PickAgent(agent: MJAIAgentEntityExtended | null): Promise<void> {
         this.IsOpen = false;
-        const conv = this.Conversation;
-        if (!conv) return;
         const newId = agent?.ID ?? null;
-        if (conv.DefaultAgentID === newId) {
-            this.cdr.markForCheck();
+        const conv = this.Conversation;
+        if (!conv) {
+            if (!this.AllowUnboundSelection) return;
+            if (this.SelectedAgentId === newId || (this.SelectedAgentId && newId && UUIDsEqual(this.SelectedAgentId, newId))) {
+                this.cdr?.markForCheck?.();
+                return;
+            }
+            this.SelectedAgentId = newId;
+            this.AgentChanged.emit(newId);
+            this.cdr?.markForCheck?.();
+            return;
+        }
+        if (conv.DefaultAgentID === newId || (conv.DefaultAgentID && newId && UUIDsEqual(conv.DefaultAgentID, newId))) {
+            this.cdr?.markForCheck?.();
             return;
         }
         const prev = conv.DefaultAgentID;
@@ -319,21 +394,13 @@ export class ConversationAgentPickerComponent implements OnInit {
                     'error', 4500);
                 return;
             }
+            this.SelectedAgentId = newId;
             this.AgentChanged.emit(newId);
         } catch (err) {
             conv.DefaultAgentID = prev;
             LogError(`ConversationAgentPicker.PickAgent: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
-            this.cdr.markForCheck();
-        }
-    }
-
-    /** Close the menu when the user clicks outside the picker. */
-    @HostListener('document:click', ['$event'])
-    public OnDocumentClick(_event: MouseEvent): void {
-        if (this.IsOpen) {
-            this.IsOpen = false;
-            this.cdr.markForCheck();
+            this.cdr?.markForCheck?.();
         }
     }
 }

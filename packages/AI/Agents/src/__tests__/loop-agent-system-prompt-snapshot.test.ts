@@ -303,6 +303,18 @@ describe('Loop Agent Type system prompt — native-only control plane', () => {
         expect(rendered).not.toContain('payload_change_request');
     });
 
+    it('renders the Side Question runtime-state guidance when _SIDE_QUESTION_MODE is true without altering default output', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain('mj-side-question-thread');
+        expect(def).not.toContain('mj-active-runs-snapshot');
+
+        const sq = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { _SIDE_QUESTION_MODE: true });
+        expect(sq).toContain('## Runtime State');
+        expect(sq).toContain('<mj-side-question-thread/>');
+        expect(sq).toContain('<mj-active-runs-snapshot>');
+        expect(sq).toContain('read-only mode');
+    });
+
     it('renders the hybrid prompt unchanged when the agent asked for native-only but the model is not on implicit control flow', () => {
         const hybrid = { ...rich, _NATIVE_TOOL_CALLING: true, _NATIVE_CONTROL_FLOW: 'explicit' };
         const asked = renderSystemPromptWith(params(), { ...hybrid, _NATIVE_ONLY_REQUESTED: true, _NATIVE_CONTROL: { Terminal: 'text' } });

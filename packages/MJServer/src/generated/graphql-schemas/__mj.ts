@@ -25116,6 +25116,10 @@ export class MJAgentChannel_ {
     @MaxLength(36)
     ParentID?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentBranchID?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -25243,6 +25247,9 @@ export class CreateMJAgentChannelInput {
     @Field({ nullable: true })
     ParentID: string | null;
 
+    @Field({ nullable: true })
+    ParentBranchID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -25369,6 +25376,9 @@ export class UpdateMJAgentChannelInput {
 
     @Field({ nullable: true })
     ParentID?: string | null;
+
+    @Field({ nullable: true })
+    ParentBranchID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -32384,6 +32394,10 @@ export class MJComment_ {
     ParentID?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentBranchID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     CommentType?: string;
         
@@ -32490,6 +32504,9 @@ export class CreateMJCommentInput {
     @Field({ nullable: true })
     ParentID: string | null;
 
+    @Field({ nullable: true })
+    ParentBranchID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -32592,6 +32609,9 @@ export class UpdateMJCommentInput {
 
     @Field({ nullable: true })
     ParentID?: string | null;
+
+    @Field({ nullable: true })
+    ParentBranchID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -44741,6 +44761,10 @@ export class MJConversation_ {
     @MaxLength(36)
     ParentID?: string;
         
+    @Field({nullable: true, description: "Optional ConversationBranch ID on the parent conversation identifying which fork path a child side-question thread is scoped to. NULL means the parent conversation's Main trunk."}) 
+    @MaxLength(36)
+    ParentBranchID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
@@ -44792,6 +44816,10 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ParentBranch?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -44909,6 +44937,9 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     ParentID: string | null;
 
+    @Field({ nullable: true })
+    ParentBranchID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -45008,6 +45039,9 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     ParentID?: string | null;
+
+    @Field({ nullable: true })
+    ParentBranchID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -62324,6 +62358,10 @@ export class MJFieldSuggestion_ {
     ParentID?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentBranchID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(255)
     AIPromptRun?: string;
         
@@ -62445,6 +62483,9 @@ export class CreateMJFieldSuggestionInput {
     @Field({ nullable: true })
     ParentID: string | null;
 
+    @Field({ nullable: true })
+    ParentBranchID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -62562,6 +62603,9 @@ export class UpdateMJFieldSuggestionInput {
 
     @Field({ nullable: true })
     ParentID?: string | null;
+
+    @Field({ nullable: true })
+    ParentBranchID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

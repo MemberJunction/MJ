@@ -406,6 +406,10 @@ interface PromptWithholding {
     Handoff: boolean;
     /** The caller's browser and view are not: no client tools, no app context (an audience). */
     CallerContext: boolean;
+    /** Client tools are withheld (audience run OR read-only Side Question run). */
+    ClientTools: boolean;
+    /** Mutating/outbound actions are withheld from the action catalog (read-only Side Question run). */
+    ReadOnlyMode: boolean;
 }
 
 /** The run's validated scope as memory, retrieval and scoped prompt configuration take it (`BaseAgent.runScopeForContext`). */
@@ -3387,14 +3391,21 @@ export class BaseAgent {
             // conversation to page against (the same gate as all cross-turn context features).
             // A history floor holds here too: the tools page only rows from it onward.
             // On a branch, the tools page only rows on that branch's path.
-            this._conversationBranches = wrappedParams.conversationId && wrappedParams.ConversationBranchID
-                ? await ConversationEngine.LoadBranchesFresh(wrappedParams.conversationId, params.contextUser, this.ProviderToUse)
+            const convToolsConversationId = wrappedParams.SideQuestionContext?.ParentConversationID || wrappedParams.conversationId || null;
+            const convToolsBranchId = wrappedParams.SideQuestionContext
+                ? (wrappedParams.SideQuestionContext.ParentBranchID ?? null)
+                : (wrappedParams.ConversationBranchID ?? null);
+            const convToolsHistoryFrom = wrappedParams.SideQuestionContext
+                ? null
+                : (wrappedParams.ConversationHistoryFrom ?? null);
+            this._conversationBranches = convToolsConversationId && convToolsBranchId
+                ? await ConversationEngine.LoadBranchesFresh(convToolsConversationId, params.contextUser, this.ProviderToUse)
                 : [];
             this._conversationToolManager.Initialize(
-                wrappedParams.conversationId || null,
+                convToolsConversationId,
                 params.contextUser,
-                wrappedParams.ConversationHistoryFrom ?? null,
-                wrappedParams.ConversationBranchID ?? null,
+                convToolsHistoryFrom,
+                convToolsBranchId,
                 this._conversationBranches
             );
             this._conversationToolManager.SetSummaryHost(this.buildConversationSummaryHost(wrappedParams));
@@ -3410,7 +3421,7 @@ export class BaseAgent {
                 provider: this.ProviderToUse,
                 getAgentRun: () => this._agentRun,
                 agentName: params.agent?.Name ?? undefined,
-                workspaceEnabled: true,
+                workspaceEnabled: !wrappedParams.SideQuestionContext?.ReadOnlyMode,
             });
             if (inputArtifacts?.length) {
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
@@ -3935,6 +3946,9 @@ export class BaseAgent {
      * cannot carry keeps the refusal: a malformed audience, and a tenant context JSON would change.
      */
     private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
+        if (params.SideQuestionContext?.ReadOnlyMode) {
+            return 'a read-only side question';
+        }
         const constraint = this.taskGraphConstraint(params);
         if (!constraint) {
             return null;
@@ -3991,7 +4005,8 @@ export class BaseAgent {
             Boolean(params.parentRun) ||
             !params.conversationDetailId ||
             !Array.isArray(params.handoffChain) ||
-            isUnscopedGuest
+            isUnscopedGuest ||
+            Boolean(params.SideQuestionContext?.ReadOnlyMode)
         );
     }
 
@@ -4002,38 +4017,53 @@ export class BaseAgent {
      * the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
      */
     private promptWithholding(params: ExecuteAgentParams): PromptWithholding {
+        const callerContext = this.runAudienceAddsReader(params);
+        const readOnlyMode = Boolean(params.SideQuestionContext?.ReadOnlyMode);
         return {
             TaskGraphs: this.runWithholdsTaskGraphs(params),
             Handoff: this.runWithholdsHandoff(params),
-            CallerContext: this.runAudienceAddsReader(params)
+            CallerContext: callerContext,
+            ClientTools: callerContext || readOnlyMode,
+            ReadOnlyMode: readOnlyMode,
         };
     }
 
     /**
-     * The client-tools and app-context prompt sections ({@link buildClientToolPromptSection}, {@link buildAppContextSection}),
-     * both empty when the caller's context is withheld ({@link promptWithholding}): the prompt then offers no client tool
-     * and none of the caller's app context. {@link executeClientToolsStep} refuses a client-tools step emitted anyway.
+     * The client-tools and app-context prompt sections ({@link buildClientToolPromptSection}, {@link buildAppContextSection}).
+     * Under an audience (`withholdCallerContext`), both are withheld; in read-only Side Question mode (`withholdClientTools`),
+     * client tools are withheld while keeping the caller's own app context. {@link executeClientToolsStep} refuses any
+     * client-tools step emitted anyway.
      */
     private callerContextSections(
         agent: MJAIAgentEntityExtended,
         extraData: Record<string, unknown> | undefined,
-        withhold: boolean
+        withholdCallerContext: boolean,
+        withholdClientTools: boolean = withholdCallerContext
     ): { clientToolDetails: string; appContext: string } {
-        if (withhold) {
-            return { clientToolDetails: '', appContext: '' };
-        }
         return {
-            clientToolDetails: this.buildClientToolPromptSection(agent, extraData),
-            appContext: this.buildAppContextSection(extraData),
+            clientToolDetails: withholdCallerContext || withholdClientTools
+                ? ''
+                : this.buildClientToolPromptSection(agent, extraData),
+            appContext: withholdCallerContext
+                ? ''
+                : this.buildAppContextSection(extraData),
         };
     }
 
     /**
-     * The `Failed` step for a client-tools step under an audience, or null. Client tools run in the caller's browser and
-     * what they return comes back into a run whose output reaches the room; the prompt does not offer them then
-     * ({@link callerContextSections}), and this refuses a step the model emits anyway, as {@link taskGraphRefusal} does a graph.
+     * The `Failed` step for a client-tools step when client tools are withheld (under an audience or during a
+     * read-only Side Question run), or null.
      */
     private clientToolsRefusal(params: ExecuteAgentParams, previousDecision: BaseAgentNextStep): BaseAgentNextStep | null {
+        if (params.SideQuestionContext?.ReadOnlyMode) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'Client tools are not available during a read-only Side Question run.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
         if (!this.runAudienceAddsReader(params)) {
             return null;
         }
@@ -4823,7 +4853,10 @@ export class BaseAgent {
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
                 // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
                 // host-level onProgress the parent execution carries.
-                onProgress: this.combineProgressCallbacks(request.OnProgress, params.onProgress)
+                onProgress: this.combineProgressCallbacks(request.OnProgress, params.onProgress),
+                ...(params.SideQuestionContext
+                    ? { SideQuestionContext: { ...params.SideQuestionContext, ActiveRunsSnapshot: null } }
+                    : {}),
             });
 
             const artifacts = await CollectDelegatedRunArtifactsSafely({
@@ -8543,6 +8576,10 @@ export class BaseAgent {
             ApplyScopedPromptConfig(configResolver, scopedConfigPromptId, this.scopedPromptConfigScope(params), promptParams);
         }
 
+        if (params.SideQuestionContext && promptParams.data) {
+            promptParams.data._SIDE_QUESTION_MODE = true;
+        }
+
         return promptParams;
     }
 
@@ -8936,13 +8973,21 @@ export class BaseAgent {
         // at it. See resolveRuntimeStateDelivery for the two ways a template can fail that test.
         const effectiveSystemPrompt = systemPrompt ?? (promptParams.prompt as MJAIPromptEntityExtended | undefined);
         const delivery = await this.resolveRuntimeStateDelivery(effectiveSystemPrompt, params.contextUser);
+        // In append-only mode, turn 1's volatile state message stays in conversation history, so only
+        // include the static active-runs snapshot on the first prompt turn to avoid duplicating it on
+        // subsequent loop iterations.
+        const isAppendOnly = this.shouldUseAppendOnlyTrailingState(promptParams);
+        const activeRunsSnapshot =
+            isAppendOnly && this._promptTurnCount > 0
+                ? null
+                : (params.SideQuestionContext?.ActiveRunsSnapshot ?? null);
         if (delivery === 'embedded') {
             this.logStatus(
                 '⚠️ System prompt template still contains volatile blocks (database template unsynced); skipping trailing runtime-state fragment to avoid duplicate state.',
                 true,
                 params
             );
-            return null;
+            return this.buildActiveRunsSnapshotOnlyMessage(activeRunsSnapshot);
         }
         if (delivery === 'unsupported') {
             this.logStatus(
@@ -8950,7 +8995,7 @@ export class BaseAgent {
                 true,
                 params
             );
-            return null;
+            return this.buildActiveRunsSnapshotOnlyMessage(activeRunsSnapshot);
         }
 
         const includeDateTime = agentTypePromptParams?.includeDateTimeInPrompt !== false;
@@ -8965,11 +9010,24 @@ export class BaseAgent {
             Payload: payload || {},
             IncludePayload: includePayload,
             Specialization: specialization,
+            ActiveRunsSnapshot: activeRunsSnapshot,
         });
         if (!fragment) {
             return null;
         }
         this.logStatus(`📦 Volatile state → trailing message (${fragment.length} chars${specialization ? ', specialization relocated' : ''})`, true, params);
+        return { role: 'user', content: fragment, metadata: { volatileState: true, turnAdded: this._promptTurnCount } };
+    }
+
+    private buildActiveRunsSnapshotOnlyMessage(activeRunsSnapshot: string | null): AgentChatMessage | null {
+        const trimmed = activeRunsSnapshot?.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const fragment = new RuntimeStateFragmentBuilder().Build({ ActiveRunsSnapshot: trimmed });
+        if (!fragment) {
+            return null;
+        }
         return { role: 'user', content: fragment, metadata: { volatileState: true, turnAdded: this._promptTurnCount } };
     }
 
@@ -13592,6 +13650,9 @@ The context is now within limits. Please retry your request with the recovered c
      * caller has noted. The memory-writes docs are left out of the prompt for the same reasons.
      */
     private memoryWriteSkip(params: ExecuteAgentParams): MemoryWriteSkip | null {
+        if (params.SideQuestionContext?.ReadOnlyMode) {
+            return { Reason: 'read-only side question', Told: 'memory writes are disabled in read-only side questions' };
+        }
         if (params.agent.AllowMemoryWrite !== true) {
             return { Reason: 'AllowMemoryWrite=false', Told: 'this agent does not have durable memory writes enabled' };
         }
@@ -14514,6 +14575,10 @@ The context is now within limits. Please retry your request with the recovered c
                     actionDetails = this.formatActionDetails(activeActions, boundActionParams);
                 }
             }
+            if (withholding?.ReadOnlyMode) {
+                activeActions = activeActions.filter((a) => this.IsActionAllowedInReadOnlyMode(a));
+                actionDetails = this.formatActionDetails(activeActions, boundActionParams);
+            }
             // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
             // Store for later validation in validateSubAgentNextStep (see getEffectiveSubAgentsForValidation)
@@ -14571,8 +14636,14 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentDetails = this.narrowedCatalogSection('agent', uniqueActiveSubAgents, subAgentDetails, shown => this.formatSubAgentDetails(shown));
             const skillsCatalog = this.narrowedCatalogSection('skill', availableSkills, this.formatSkillsCatalog(availableSkills), shown => this.formatSkillsCatalog(shown));
 
-            // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
-            const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
+            // The client tools and the app context (per-run, from extraData) — neither under an audience,
+            // and no client tools in read-only Side Question mode (callerContextSections).
+            const { clientToolDetails, appContext } = this.callerContextSections(
+                agent,
+                extraData,
+                withholding?.CallerContext === true,
+                withholding?.ClientTools === true
+            );
 
             const subAgentConsultEnabled = uniqueActiveSubAgents.some(
                 sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
@@ -15937,6 +16008,14 @@ The context is now within limits. Please retry your request with the recovered c
             return taintBlocked;
         }
 
+        const sideQuestionBlocked = this.checkSideQuestionReadOnlyAction(params, action, actionEntity, contextUser ?? params.contextUser);
+        if (sideQuestionBlocked) {
+            if (!skipBreaker) {
+                this.lockOutAction(action, actionEntity, 'fatal');
+            }
+            return sideQuestionBlocked;
+        }
+
         // The run's audience, hydrated once per run — lazily here, since this method is also called outside
         // Execute (the pipeline executor, tests). An unusable audience refuses the call: nothing is dispatched.
         const audience = await this.audienceReadersFor(params);
@@ -16049,6 +16128,113 @@ The context is now within limits. Please retry your request with the recovered c
             Success: false,
             ResultCode: AUDIENCE_UNSUPPORTED_RESULT_CODE,
             Message: message,
+            Params: [],
+            RunParams: {
+                Action: actionEntity,
+                Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                ContextUser: contextUser,
+                Filters: [],
+            },
+        };
+    }
+
+    /**
+     * Leading action-name verbs treated as read-only fallback when an action omits both
+     * `Action.Config.isReadOnly` and `Action.Config.Verb`. Subclasses may override to tune fallback rules.
+     */
+    protected get ReadOnlyActionNamePrefixes(): readonly string[] {
+        return ['get', 'list', 'search', 'find', 'query', 'read', 'fetch', 'lookup', 'describe', 'inspect', 'calculate', 'analyze', 'count', 'check', 'view', 'show'];
+    }
+
+    /**
+     * Leading action-name verbs treated as mutating/outbound fallback when an action omits
+     * `Action.Config.isReadOnly`, `disallowWhenTainted`, and `Action.Config.Verb`.
+     */
+    protected get MutatingActionNamePrefixes(): readonly string[] {
+        return ['create', 'update', 'delete', 'upsert', 'remove', 'archive', 'send', 'post', 'modify', 'write', 'insert', 'drop', 'patch', 'put', 'merge', 'assign', 'approve', 'reject', 'cancel', 'close', 'complete', 'trigger', 'deploy', 'publish'];
+    }
+
+    /**
+     * Object nouns paired with embedded write verbs (e.g. "HubSpot Create Contact") in the name fallback.
+     */
+    protected get MutatingActionObjectNouns(): readonly string[] {
+        return ['record', 'email', 'message', 'item', 'contact', 'deal', 'task', 'notification', 'lead', 'ticket', 'company'];
+    }
+
+    /**
+     * Determines whether an action is permitted during read-only execution modes (such as Side Questions).
+     *
+     * Resolution precedence (metadata first, linear name fallback last):
+     * 1. `Action.Config_Object.isReadOnly` (`true` allows, `false` blocks).
+     * 2. `Action.Config_Object.disallowWhenTainted === true` blocks.
+     * 3. `Action.Config_Object.Verb` (integration routing metadata: read verbs allow, write verbs block).
+     * 4. Linear word-token fallback on `Action.Name` against {@link ReadOnlyActionNamePrefixes} /
+     *    {@link MutatingActionNamePrefixes}.
+     */
+    protected IsActionAllowedInReadOnlyMode(
+        actionEntity: MJActionEntityExtended,
+        _params?: ExecuteAgentParams
+    ): boolean {
+        const cfg = actionEntity.Config_Object;
+        if (cfg?.isReadOnly === true) {
+            return true;
+        }
+        if (cfg?.isReadOnly === false || cfg?.disallowWhenTainted === true) {
+            return false;
+        }
+        if (cfg?.Verb) {
+            const verb = cfg.Verb.trim().toLowerCase();
+            if (this.ReadOnlyActionNamePrefixes.includes(verb)) {
+                return true;
+            }
+            if (this.MutatingActionNamePrefixes.includes(verb)) {
+                return false;
+            }
+        }
+        return !this.isMutatingActionNameFallback(actionEntity.Name ?? '');
+    }
+
+    private isMutatingActionNameFallback(actionName: string): boolean {
+        const words = extractLowercaseWords(actionName);
+        if (words.length === 0 || this.ReadOnlyActionNamePrefixes.includes(words[0])) {
+            return false;
+        }
+        if (this.MutatingActionNamePrefixes.includes(words[0])) {
+            return true;
+        }
+        if (words[0] === 'execute' && words[1] === 'mcp') {
+            return true;
+        }
+        const embeddedWriteVerbs = ['create', 'update', 'delete', 'remove', 'send'];
+        for (let i = 0; i < words.length - 1; i++) {
+            if (embeddedWriteVerbs.includes(words[i]) && this.MutatingActionObjectNouns.includes(words[i + 1])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Blocks mutating or outbound/irreversible actions during a Side Question run (`ReadOnlyMode`).
+     * Delegates policy evaluation to {@link IsActionAllowedInReadOnlyMode}.
+     */
+    private checkSideQuestionReadOnlyAction(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser?: UserInfo
+    ): ActionResult | null {
+        if (!params.SideQuestionContext?.ReadOnlyMode) {
+            return null;
+        }
+        if (this.IsActionAllowedInReadOnlyMode(actionEntity, params)) {
+            return null;
+        }
+        const actionName = (actionEntity.Name || action.name || '').trim();
+        return {
+            Success: false,
+            ResultCode: POLICY_DENIED_RESULT_CODE,
+            Message: `Action "${actionName || action.name}" was blocked: Side Questions run in read-only mode and cannot run mutating or outbound actions.`,
             Params: [],
             RunParams: {
                 Action: actionEntity,
@@ -16563,6 +16749,9 @@ The context is now within limits. Please retry your request with the recovered c
                 SearchScopeIDs: params.SearchScopeIDs, // the host's search scopes bound the sub-agent too
                 ...this.subAgentTaint(params), // a tainted parent's sub-agent starts tainted
                 conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
+                ...(params.SideQuestionContext
+                    ? { SideQuestionContext: { ...params.SideQuestionContext, ActiveRunsSnapshot: null } }
+                    : {}),
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
                     // Re-apply post-INSERT: this callback can fire while the step's INSERT is still in flight,
@@ -17309,7 +17498,13 @@ The context is now within limits. Please retry your request with the recovered c
         // crash, or failed terminal-state write can't leave it stuck 'Running' forever. Only the
         // server-side DB provider can heartbeat via SQL; client/non-DB providers simply opt out.
         if (runProvider instanceof DatabaseProviderBase && params.contextUser) {
-            AgentRunWatchdog.Instance.Track(this._agentRun.ID, runProvider, params.contextUser, this._runAbortController ?? undefined);
+            AgentRunWatchdog.Instance.Track(
+                this._agentRun.ID,
+                runProvider,
+                params.contextUser,
+                this._runAbortController ?? undefined,
+                () => this.buildLiveWatchdogHint()
+            );
         }
         this.registerActiveRunForCooperativePause();
 
@@ -17466,6 +17661,29 @@ The context is now within limits. Please retry your request with the recovered c
             AgentRunWatchdog.Instance.Track(this._agentRun.ID, runProvider, params.contextUser, this._runAbortController ?? undefined);
         }
         this.registerActiveRunForCooperativePause();
+    }
+
+    /**
+     * Reads same-replica live progress/scratchpad summary for {@link AgentRunWatchdog}
+     * so concurrent Side Question runs can see up-to-date in-flight run context.
+     */
+    private buildLiveWatchdogHint(): string | null {
+        const parts: string[] = [];
+        if (this._promptTurnCount > 0) {
+            parts.push(`promptTurn=${this._promptTurnCount}`);
+        }
+        if (this._scratchpadManager?.HasContent()) {
+            const summary = this._scratchpadManager.GetTaskSummary();
+            if (summary) {
+                parts.push(`tasks: ${summary}`);
+            }
+            const notes = this._scratchpadManager.GetNotes();
+            if (notes) {
+                const clipped = notes.length > 220 ? `${notes.slice(0, 220)}...` : notes;
+                parts.push(`notes: ${clipped}`);
+            }
+        }
+        return parts.length > 0 ? parts.join(' | ') : null;
     }
 
     /**
@@ -25678,6 +25896,9 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         agentRun: MJAIAgentRunEntityExtended
     ): Promise<void> {
+        if (params.SideQuestionContext?.ReadOnlyMode) {
+            return;
+        }
         const agent = params?.agent;
         if (!agent || (!agent.InjectNotes && !agent.InjectExamples)) {
             return;
@@ -26451,4 +26672,26 @@ The context is now within limits. Please retry your request with the recovered c
         return Object.keys(result).length > 0 ? result : undefined;
     }
 }
+
+/**
+ * Extracts lowercase ASCII letter tokens from `text` in a single linear pass (no regex backtracking).
+ */
+function extractLowercaseWords(text: string): string[] {
+    const words: string[] = [];
+    let start = -1;
+    for (let i = 0; i <= text.length; i++) {
+        const code = i < text.length ? text.charCodeAt(i) : 0;
+        const isAlpha = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+        if (isAlpha) {
+            if (start === -1) {
+                start = i;
+            }
+        } else if (start !== -1) {
+            words.push(text.slice(start, i).toLowerCase());
+            start = -1;
+        }
+    }
+    return words;
+}
+
 

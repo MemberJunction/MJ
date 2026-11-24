@@ -45,4 +45,14 @@ export interface IActionConfiguration {
      * upstream approved the work. Absent means false.
      */
     disallowWhenTainted?: boolean;
+
+    /**
+     * Explicit read-only classification for execution modes that forbid state mutations or outbound
+     * side effects (such as Conversation Side Questions):
+     *
+     *  - `true`: action only reads/queries/computes and is allowed in read-only mode.
+     *  - `false`: action mutates durable state or produces outbound side effects and is blocked in read-only mode.
+     *  - omitted: falls back to `disallowWhenTainted`, integration `Verb`, and `BaseAgent.IsActionAllowedInReadOnlyMode`.
+     */
+    isReadOnly?: boolean;
 }

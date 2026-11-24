@@ -41,7 +41,18 @@ export class MJConversationBranchEntityExtended extends MJConversationBranchEnti
         if (!(await this.hasNoRowsOrChildBranches())) {
             return false;
         }
+        if (!(await this.BeforeBranchDelete(options))) {
+            return false;
+        }
         return super.Delete(options);
+    }
+
+    /**
+     * Extension hook invoked after permission and empty-fork checks pass and right before `super.Delete`.
+     * Server subclasses override this to clean up side entities referencing this branch (e.g. side-question threads).
+     */
+    protected async BeforeBranchDelete(_options?: EntityDeleteOptions): Promise<boolean> {
+        return true;
     }
 
     /**

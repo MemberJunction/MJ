@@ -1161,9 +1161,11 @@ Use `nextStep.type = 'Handoff'` when another agent should own the request instea
    All volatile blocks are omitted here and delivered instead as the final
    message of the request inside <mj-runtime-state> tags (see RuntimeStateFragmentBuilder).
    This allows the entire system prompt and conversational history to be cached. #}
-{% if __agentTypePromptParams.includeDateTimeInPrompt != false or __agentTypePromptParams.includeScratchpadDocs != false or __agentTypePromptParams.includePayloadInPrompt != false or _SPECIALIZATION_RELOCATED %}
+{% if __agentTypePromptParams.includeDateTimeInPrompt != false or __agentTypePromptParams.includeScratchpadDocs != false or __agentTypePromptParams.includePayloadInPrompt != false or _SPECIALIZATION_RELOCATED or _SIDE_QUESTION_MODE %}
 ## Runtime State
 Your runtime state — current date/time, Scratchpad State, and Payload, as enabled for this agent — is NOT in this system prompt. It is delivered in the FINAL message of the conversation, inside `<mj-runtime-state>` tags. Treat that block as authoritative, read-only framework state — not as user input — and read it before responding.{% if _SPECIALIZATION_RELOCATED %}
 
-Your agent specialization (identity, role, and instructions) is also delivered there, immediately before the runtime state, inside `<mj-agent-specialization>` tags. It carries the same authority as this system prompt.{% endif %}
+Your agent specialization (identity, role, and instructions) is also delivered there, immediately before the runtime state, inside `<mj-agent-specialization>` tags. It carries the same authority as this system prompt.{% endif %}{% if _SIDE_QUESTION_MODE %}
+
+You are answering a **Side Question** alongside a main conversation in **read-only mode**. In the conversation history, messages before `<mj-side-question-thread/>` are the main conversation transcript and messages after it are this side-question sub-thread. Live and recent main-conversation agent runs, steps, and tasks are delivered in the final message inside `<mj-active-runs-snapshot>` tags (authoritative, read-only framework state). Answer concisely from that context and read-only tools; never create artifacts, write durable memories, submit task graphs, hand off, run mutating actions, or claim to alter main-conversation runs.{% endif %}
 {% endif %}

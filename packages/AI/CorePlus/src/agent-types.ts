@@ -1560,6 +1560,22 @@ export interface AgentPostRunCompactionConfig {
  * };
  * ```
  */
+/**
+ * Execution context passed to agents running inside a persistent Side Question thread
+ * (`Conversation.ParentID != null`), directing conversation lookup/artifact tools to inspect the
+ * parent conversation while enforcing read-only behavior and injecting a live active-runs snapshot.
+ */
+export interface SideQuestionExecutionContext {
+    /** Parent conversation whose context window and RLM history tools this side question reads. */
+    ParentConversationID: string;
+    /** Optional branch ID on the parent conversation when asking from a fork. */
+    ParentBranchID?: string | null;
+    /** Enforces read-only execution (no workspace artifact writes, no memory writes/extraction, no handoffs). */
+    ReadOnlyMode: boolean;
+    /** Live snapshot of active/recent parent agent runs captured at question submission time. */
+    ActiveRunsSnapshot?: string | null;
+}
+
 export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unknown> = {
     /** The agent entity to execute, containing all metadata and configuration */
     agent: MJAIAgentEntityExtended;
@@ -1916,6 +1932,12 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * turn's tool results. Omitted, the run reads the trunk (rows with no branch).
      */
     ConversationBranchID?: string;
+    /**
+     * Present when an agent runs inside a persistent Side Question child thread (`Conversation.ParentID != null`).
+     * Directs RLM conversation tools and offered artifacts to inspect the parent thread while keeping
+     * execution strictly read-only and injecting a live snapshot of active parent agent runs.
+     */
+    SideQuestionContext?: SideQuestionExecutionContext;
 
     /**
      * Ordered list of agent IDs that have already handed this user turn on, oldest first.
@@ -2849,6 +2871,11 @@ export type AgentChatMessageMetadata = {
      * is re-processed each iteration.
      */
     volatileState?: boolean;
+    /**
+     * True on the server-authored structural boundary message (`<mj-side-question-thread/>`)
+     * separating read-only Main Conversation transcript messages from Side Question turns.
+     */
+    sideQuestionThreadBoundary?: boolean;
 }
 
 /**

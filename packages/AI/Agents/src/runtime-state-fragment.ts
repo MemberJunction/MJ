@@ -24,11 +24,13 @@
  */
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, ChatToolCall } from '@memberjunction/ai';
 import {
+    ACTIVE_RUNS_SNAPSHOT_TAG,
     AGENT_SPECIALIZATION_TAG,
     RUNTIME_STATE_DATETIME_HEADING,
     RUNTIME_STATE_PAYLOAD_HEADING,
     RUNTIME_STATE_SCRATCHPAD_HEADING,
     RUNTIME_STATE_TAG,
+    SIDE_QUESTION_THREAD_BOUNDARY_TAG,
 } from './constants';
 
 /** Resolved date/time strings, as the system placeholders render them. */
@@ -66,6 +68,8 @@ export interface RuntimeStateFragmentInput {
     Payload?: { Value: unknown } | null;
     /** The rendered child prompt, when the specialization is being relocated. Omitted otherwise. */
     Specialization?: string | null;
+    /** Live snapshot of active/recent main-thread agent runs for Side Question runs. */
+    ActiveRunsSnapshot?: string | null;
 }
 
 /**
@@ -76,7 +80,8 @@ export interface RuntimeStateFragmentInput {
  */
 export class RuntimeStateFragmentBuilder {
     /**
-     * Render the complete fragment: an optional specialization block, then the runtime-state block.
+     * Render the complete fragment: an optional specialization block, then the runtime-state block,
+     * followed by an optional active-runs snapshot block for Side Question runs.
      * Returns an empty string if nothing was supplied, so callers can skip appending an empty message.
      */
     public Build(input: RuntimeStateFragmentInput): string {
@@ -88,6 +93,10 @@ export class RuntimeStateFragmentBuilder {
         const state = this.RenderStateBlocks(input);
         if (state) {
             parts.push(this.wrap(RUNTIME_STATE_TAG, state));
+        }
+        const activeRuns = input.ActiveRunsSnapshot?.trim();
+        if (activeRuns) {
+            parts.push(this.wrap(ACTIVE_RUNS_SNAPSHOT_TAG, activeRuns));
         }
         return parts.join('\n\n');
     }
@@ -149,10 +158,10 @@ export class RuntimeStateFragmentBuilder {
 }
 
 /**
- * Matches the fragment's tag literals — opening or closing, any case, tolerant of stray whitespace
- * inside the angle brackets — so that text from anywhere else cannot pose as the real fragment.
+ * Matches the fragment's tag literals — opening, closing, or self-closing, any case, tolerant of stray whitespace
+ * inside the angle brackets — so that text from anywhere else cannot pose as the real fragment or boundary.
  */
-const FRAGMENT_TAG_PATTERN = new RegExp(`<\\s*(/?)\\s*(${RUNTIME_STATE_TAG}|${AGENT_SPECIALIZATION_TAG})\\s*>`, 'gi');
+const FRAGMENT_TAG_PATTERN = new RegExp(`<\\s*(/?)\\s*(${RUNTIME_STATE_TAG}|${AGENT_SPECIALIZATION_TAG}|${ACTIVE_RUNS_SNAPSHOT_TAG}|${SIDE_QUESTION_THREAD_BOUNDARY_TAG})\\s*(/?)\\s*>`, 'gi');
 
 /**
  * Escapes the fragment's tag literals in a piece of text so they cannot be mistaken for the real
@@ -168,7 +177,7 @@ export function EscapeRuntimeStateTags(text: string): string {
     if (!text.includes('<')) {
         return text;
     }
-    return text.replace(FRAGMENT_TAG_PATTERN, (_m, slash: string, tag: string) => `&lt;${slash}${tag.toLowerCase()}&gt;`);
+    return text.replace(FRAGMENT_TAG_PATTERN, (_m, openSlash: string, tag: string, closeSlash: string) => `&lt;${openSlash}${tag.toLowerCase()}${closeSlash}&gt;`);
 }
 
 /**

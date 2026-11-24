@@ -563,7 +563,7 @@ describe('ConversationEngine', () => {
 
             const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
             expect(params['ExtraFilter']).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94')"
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94') AND (TypeID IS NULL OR TypeID <> '3B81EB3D-92D7-4947-92CE-D250F8928861')"
             );
         });
     });
@@ -578,7 +578,7 @@ describe('ConversationEngine', () => {
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
 
             expect(filter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94')"
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94') AND (TypeID IS NULL OR TypeID <> '3B81EB3D-92D7-4947-92CE-D250F8928861')"
             );
         });
 
@@ -588,7 +588,7 @@ describe('ConversationEngine', () => {
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
 
             expect(filter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94')"
+                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94') AND (TypeID IS NULL OR TypeID <> '3B81EB3D-92D7-4947-92CE-D250F8928861')"
             );
         });
 
@@ -597,7 +597,7 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeApplicationScoped: true });
 
-            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94')");
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94') AND (TypeID IS NULL OR TypeID <> '3B81EB3D-92D7-4947-92CE-D250F8928861')");
         });
 
         it('includes anchored conversations only when asked to', async () => {
@@ -605,7 +605,7 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeAnchored: true });
 
-            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94')");
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94') AND (TypeID IS NULL OR TypeID <> '3B81EB3D-92D7-4947-92CE-D250F8928861')");
         });
 
         it('includes record-linked conversations only when asked to', async () => {
@@ -613,7 +613,7 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeRecordLinked: true });
 
-            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94')");
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94') AND (TypeID IS NULL OR TypeID <> '3B81EB3D-92D7-4947-92CE-D250F8928861')");
         });
 
         it('excludes AGENT_CHANNEL conversations by default and includes them only when includeAgentChannels is true', async () => {
@@ -626,7 +626,7 @@ describe('ConversationEngine', () => {
                 includeAgentChannels: true,
             });
             expect(withChannelsFilter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL"
+                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '3B81EB3D-92D7-4947-92CE-D250F8928861')"
             );
         });
 
@@ -3232,7 +3232,7 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
             expect(filter).toBe(
-                `EnvironmentID='env-1' AND (UserID='user-1' OR (ParentID IS NULL AND ProjectID IN ('proj-shared-1') AND (AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%'))) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94')`
+                `EnvironmentID='env-1' AND (UserID='user-1' OR (ParentID IS NULL AND ProjectID IN ('proj-shared-1') AND (AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%'))) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL AND (TypeID IS NULL OR TypeID <> '09E7A069-DB29-4329-BB29-4DF8CB998D94') AND (TypeID IS NULL OR TypeID <> '3B81EB3D-92D7-4947-92CE-D250F8928861')`
             );
         });
 

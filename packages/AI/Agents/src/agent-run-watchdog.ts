@@ -146,6 +146,8 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     private _trackedRuns = new Map<string, { provider: DatabaseProviderBase; contextUser: UserInfo }>();
     /** The abort controller each tracked run registered, keyed by lowercased run ID. */
     private _abortControllers = new Map<string, AbortController>();
+    /** Optional same-replica live progress/scratchpad readers, keyed by lowercased run ID. */
+    private _liveHintReaders = new Map<string, () => string | null>();
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private _sweepTimer: ReturnType<typeof setInterval> | null = null;
     private _cancellationPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -210,7 +212,13 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
      *   with {@link UserCancelAbortReason} when the row says `User Request`. Without it the run
      *   is still heart-beaten and swept, but a stop cannot reach it.
      */
-    public Track(runID: string, provider: DatabaseProviderBase, contextUser: UserInfo, abortController?: AbortController): void {
+    public Track(
+        runID: string,
+        provider: DatabaseProviderBase,
+        contextUser: UserInfo,
+        abortController?: AbortController,
+        liveHintReader?: () => string | null
+    ): void {
         if (!runID || !UUID_RE.test(runID)) {
             return;
         }
@@ -221,7 +229,33 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
         if (abortController) {
             this._abortControllers.set(key, abortController);
         }
+        if (liveHintReader) {
+            this._liveHintReaders.set(key, liveHintReader);
+        } else {
+            this._liveHintReaders.delete(key);
+        }
         this.ensureStarted();
+    }
+
+    /**
+     * Reads optional same-replica in-memory live progress (such as active step count or scratchpad
+     * summary) for a tracked run, returning null when the run is on another replica or has no reader.
+     */
+    public ReadLiveRunHint(runID: string): string | null {
+        if (!runID) {
+            return null;
+        }
+        const reader = this._liveHintReaders.get(runID.toLowerCase());
+        if (!reader) {
+            return null;
+        }
+        try {
+            const raw = reader();
+            const trimmed = raw?.trim();
+            return trimmed ? trimmed : null;
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -236,6 +270,7 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             const key = runID.toLowerCase();
             this._trackedRuns.delete(key);
             this._abortControllers.delete(key);
+            this._liveHintReaders.delete(key);
             this.stopIdleTimers();
         }
     }

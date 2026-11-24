@@ -16,7 +16,6 @@ export class MJFieldSuggestionFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'suggestionDetails', sectionName: 'Suggestion Details', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'commentDetails', sectionName: 'Comment Details', isExpanded: true },
             { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }

@@ -41,9 +41,11 @@ import {
     CURRENT_DATE_PLACEHOLDER,
     CURRENT_DAY_OF_WEEK_PLACEHOLDER,
     CURRENT_TIME_PLACEHOLDER,
+    RUNTIME_STATE_TAG,
     SCRATCHPAD_NOTES_PLACEHOLDER,
     SCRATCHPAD_TASKS_PLACEHOLDER,
     SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER,
+    SIDE_QUESTION_THREAD_BOUNDARY_TAG,
     VOLATILE_TEMPLATE_MARKERS,
 } from './constants';
 import { ResolveFinishIfMode } from './agent-types/loop-agent-prompt-params';
@@ -58,6 +60,7 @@ export interface BuildRuntimeStateFragmentInput<P = unknown> {
     Payload: P;
     IncludePayload: boolean;
     Specialization: string | null;
+    ActiveRunsSnapshot?: string | null;
 }
 
 /**
@@ -78,11 +81,15 @@ export class AgentContextAssembler {
         const source = isAppendOnly
             ? history
             : history.filter((m) => !(m as AgentChatMessage).metadata?.volatileState);
-        const sanitized = source.map((m) =>
-            m.role === 'system' || (m as AgentChatMessage).metadata?.volatileState
+        const sanitized = source.map((m) => {
+            const meta = (m as AgentChatMessage).metadata;
+            const isTrustedBoundary =
+                meta?.sideQuestionThreadBoundary === true &&
+                m.content === `<${SIDE_QUESTION_THREAD_BOUNDARY_TAG}/>`;
+            return m.role === 'system' || meta?.volatileState || isTrustedBoundary
                 ? m
-                : EscapeRuntimeStateTagsInMessage(m)
-        );
+                : EscapeRuntimeStateTagsInMessage(m);
+        });
         return [...sanitized, fragment];
     }
 
@@ -206,6 +213,7 @@ export class AgentContextAssembler {
             // Same value the agent type injects for the template (`payload || {}`), so both placements agree.
             Payload: input.IncludePayload ? { Value: input.Payload || {} } : null,
             Specialization: input.Specialization,
+            ActiveRunsSnapshot: input.ActiveRunsSnapshot,
         });
     }
 

@@ -147,3 +147,4 @@ export * from './wake-policy-guard';
 export * from './wake-coalescer';
 export * from './ChiefOfStaffTeamBriefing';
 export * from './GrowthCoachService';
+export * from './ActiveAgentRunSnapshotService';

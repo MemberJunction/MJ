@@ -49,5 +49,15 @@
     "primaryKey": {
       "ID": "17E6A105-AE51-43A2-9D56-290BC8D1D6BB"
     }
+  },
+  {
+    "fields": {
+      "Name": "Side Question",
+      "Code": "SIDE_QUESTION",
+      "Description": "Persistent side-question thread attached to a parent conversation via ParentID, with read-only context over the parent thread and active agent runs."
+    },
+    "primaryKey": {
+      "ID": "3B81EB3D-92D7-4947-92CE-D250F8928861"
+    }
   }
 ]
