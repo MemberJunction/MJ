@@ -1,5 +1,9 @@
 import { Command, Flags } from '@oclif/core';
-import { HarnessAccountPoolService } from '@memberjunction/ai-agent-harness';
+import {
+    HarnessAccountPoolService,
+    type HarnessAccountPoolOptions,
+    type HarnessVendorBinaryProbe,
+} from '@memberjunction/ai-agent-harness';
 import {
     BuildPoolOptionsFromFlag,
     FormatHarnessAccountTable,
@@ -8,6 +12,9 @@ import {
 } from '../../../lib/harness-account.js';
 
 export default class HarnessAccountList extends Command {
+    /** Injectable binary health probe hook for hermetic unit tests. */
+    public static BinaryProbe?: HarnessVendorBinaryProbe;
+
     static description =
         'List enrolled and OS-default CLI subscription account slots, auth status, active leases, cooldowns, and balancing strategy';
 
@@ -33,7 +40,12 @@ export default class HarnessAccountList extends Command {
 
     public async run(): Promise<void> {
         const { flags } = await this.parse(HarnessAccountList);
-        const poolOpts = BuildPoolOptionsFromFlag(flags['pool-dir']);
+        const basePoolOpts = BuildPoolOptionsFromFlag(flags['pool-dir']);
+        const listOpts: HarnessAccountPoolOptions = {
+            ...basePoolOpts,
+            VerifyBinaryExecutable: true,
+            ...(HarnessAccountList.BinaryProbe ? { BinaryProbe: HarnessAccountList.BinaryProbe } : {}),
+        };
         const service = HarnessAccountPoolService.Instance;
 
         let vendorFilter: string | undefined;
@@ -45,9 +57,9 @@ export default class HarnessAccountList extends Command {
             }
         }
 
-        const pool = service.LoadPool(poolOpts);
-        const slots = service.ListSlots({ vendor: vendorFilter }, poolOpts);
-        const poolDir = service.GetPoolDir(poolOpts);
+        const pool = service.LoadPool(basePoolOpts);
+        const slots = service.ListSlots({ vendor: vendorFilter }, listOpts);
+        const poolDir = service.GetPoolDir(basePoolOpts);
 
         if (flags.json) {
             const payload: HarnessAccountListJsonOutput = {
