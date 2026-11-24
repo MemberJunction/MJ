@@ -7,6 +7,7 @@ import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared'
 import { TaskGraphDebuggerComponent, type TaskGraphRunFrame } from '@memberjunction/ng-task-graph-editor';
 import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
 import { WorkflowRunLayout } from './workflow-run-layout';
+import { BuildWaterfallBars, type WaterfallStepBar } from '../workflow-blueprint.util';
 import {
     EmptyDebugState,
     ParseWorkflowRunParentBag,
@@ -16,6 +17,9 @@ import {
     type WorkflowRunInvocation,
     type WorkflowStall,
 } from './workflow-run-debug-state';
+
+const RAIL_PREF_KEY = 'mj.workflowRuns.railCollapsed.v1';
+const WATERFALL_PREF_KEY = 'mj.workflowRuns.waterfallOpen.v1';
 
 /** Below this the detail pane cannot hold a canvas AND a JSON pane side by side. */
 const STACK_INNER_BELOW_PX = 1100;
@@ -33,18 +37,30 @@ const JSON_PARSE_OPTIONS: ParseJSONOptions = { extractInlineJson: true, maxDepth
 export type WorkflowRunRow = {
     ID: string;
     Name: string;
-    Status: string;
+    Status: MJTaskEntity['Status'];
     StartedAt: Date | null;
     CompletedAt: Date | null;
     /** Human-readable elapsed/duration — coarse on purpose, this is a scan column. */
     Duration: string;
     AgentRunID: string | null;
+    /** True when a child Person step is currently In Progress and waiting for review. */
+    HasPendingPersonStep?: boolean;
 };
 
-/** The statuses a run can be filtered to. `all` is not a status; it clears the filter. */
-export type WorkflowRunStatusFilter = 'all' | 'Running' | 'Complete' | 'Failed' | 'Cancelled';
+/** The statuses a run can be filtered to. Derived from MJTaskEntity['Status'] + 'all' / 'Waiting on Person'. */
+export type WorkflowRunStatusFilter =
+    | 'all'
+    | Extract<MJTaskEntity['Status'], 'In Progress' | 'Complete' | 'Failed' | 'Cancelled'>
+    | 'Waiting on Person';
 
-const STATUS_FILTERS: readonly WorkflowRunStatusFilter[] = ['all', 'Running', 'Complete', 'Failed', 'Cancelled'];
+const STATUS_FILTERS: readonly WorkflowRunStatusFilter[] = [
+    'all',
+    'In Progress',
+    'Waiting on Person',
+    'Complete',
+    'Failed',
+    'Cancelled',
+];
 
 // The sort column type and the ordering itself live in `workflow-run-sorting`, which is pure and
 // therefore testable without standing up the component. Re-exported so existing importers of this
@@ -148,6 +164,17 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     /** Stacked rather than side-by-side when the detail pane is too narrow for both. */
     public InnerSplitDirection: 'horizontal' | 'vertical' = 'horizontal';
 
+    /** Collapsible left Run Rail when inspecting a selected run. */
+    public RunRailCollapsed = false;
+
+    /** Collapsible bottom Synchronized Execution Waterfall / Gantt drawer. */
+    public WaterfallOpen = false;
+
+    /** Inline Person approval note & busy flag for open Human steps. */
+    public ApprovalNote = '';
+    public ApprovalBusy = false;
+    public ApprovalError: string | null = null;
+
     constructor(private cdr: ChangeDetectorRef) {
         super();
     }
@@ -158,6 +185,12 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
 
     initDashboard(): void {
         this.Layout.Restore();
+        try {
+            this.RunRailCollapsed = UserInfoEngine.Instance.GetSetting(RAIL_PREF_KEY) === 'true';
+            this.WaterfallOpen = UserInfoEngine.Instance.GetSetting(WATERFALL_PREF_KEY) === 'true';
+        } catch {
+            // Engine not bootstrapped in unit tests
+        }
         this.applyViewportRules();
     }
 
@@ -193,6 +226,98 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.cdr.markForCheck();
     }
 
+    public ToggleRunRail(): void {
+        this.RunRailCollapsed = !this.RunRailCollapsed;
+        try {
+            UserInfoEngine.Instance.SetSettingDebounced(RAIL_PREF_KEY, String(this.RunRailCollapsed));
+        } catch {
+            // Ignore in unit tests
+        }
+        this.cdr.markForCheck();
+    }
+
+    public ToggleWaterfall(): void {
+        this.WaterfallOpen = !this.WaterfallOpen;
+        try {
+            UserInfoEngine.Instance.SetSettingDebounced(WATERFALL_PREF_KEY, String(this.WaterfallOpen));
+        } catch {
+            // Ignore in unit tests
+        }
+        this.cdr.markForCheck();
+    }
+
+    public StatusFilterLabel(status: WorkflowRunStatusFilter): string {
+        if (status === 'all') return 'All';
+        if (status === 'In Progress') return 'Running';
+        return status;
+    }
+
+    public get WaterfallBars(): WaterfallStepBar[] {
+        return BuildWaterfallBars(this.SelectedSteps);
+    }
+
+    public get PendingHumanStep(): WorkflowRunStep | null {
+        return (
+            this.SelectedSteps.find(
+                (s) => (s.StepType === 'Human' || this.isHumanStep(s)) && s.Status === 'In Progress',
+            ) ?? null
+        );
+    }
+
+    public OnSelectWaterfallStep(stepID: string): void {
+        const step = this.SelectedSteps.find((s) => UUIDsEqual(s.ID, stepID));
+        if (step) {
+            this.SelectedStepID = step.ID;
+            this.InspectorMode = 'step';
+            if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
+            this.cdr.markForCheck();
+        }
+    }
+
+    public async OnCompleteHumanStep(step: WorkflowRunStep, approved: boolean): Promise<void> {
+        this.ApprovalBusy = true;
+        this.ApprovalError = null;
+        this.cdr.markForCheck();
+        try {
+            const task = await this.ProviderToUse.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.ProviderToUse.CurrentUser);
+            const loaded = await task.Load(step.ID);
+            if (!loaded) {
+                this.ApprovalError = 'Could not load the person step record.';
+                return;
+            }
+            task.Status = approved ? 'Complete' : 'Failed';
+            task.CompletedAt = new Date();
+            task.OutputPayload = JSON.stringify({
+                approved,
+                decision: approved ? 'Approved' : 'Rejected',
+                note: this.ApprovalNote.trim() || undefined,
+                decidedAt: new Date().toISOString(),
+            });
+            if (!approved && this.ApprovalNote.trim()) {
+                task.ErrorMessage = this.ApprovalNote.trim();
+            }
+            const saved = await task.Save();
+            if (!saved) {
+                this.ApprovalError = task.LatestResult?.Message ?? 'Could not save your decision.';
+                return;
+            }
+            this.ApprovalNote = '';
+            if (this.SelectedRunID) {
+                await this.loadSteps(this.SelectedRunID);
+            }
+            await this.loadData();
+        } catch (e) {
+            this.ApprovalError = e instanceof Error ? e.message : String(e);
+        } finally {
+            this.ApprovalBusy = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    public OnOpenStepTaskRecord(step: WorkflowRunStep): void {
+        this.navigationService.OpenEntityRecord('MJ: Tasks', CompositeKey.FromID(step.ID));
+    }
+
     /**
      * The legend was toggled on the canvas toolbar — remember it.
      *
@@ -209,7 +334,11 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     public get VisibleRuns(): WorkflowRunRow[] {
         const wanted = this.SearchText.trim().toLowerCase();
         const filtered = this.Runs.filter((r) => {
-            if (this.StatusFilter !== 'all' && r.Status !== this.StatusFilter) return false;
+            if (this.StatusFilter === 'Waiting on Person') {
+                if (!r.HasPendingPersonStep) return false;
+            } else if (this.StatusFilter !== 'all' && r.Status !== this.StatusFilter) {
+                return false;
+            }
             return !wanted || r.Name.toLowerCase().includes(wanted);
         });
         return this.sortRuns(filtered);
@@ -253,22 +382,36 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.LoadError = null;
         this.cdr.markForCheck();
         try {
-            const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJTaskEntity>({
-                EntityName: 'MJ: Tasks',
-                // Parent rows only: one row per graph. Without this the list would show every step
-                // of every run interleaved, which is a step list, not a run list.
-                ExtraFilter: `ParentID IS NULL`,
-                OrderBy: '__mj_CreatedAt DESC',
-                MaxRows: 200,
-                ResultType: 'entity_object',
-            });
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const [result, waitingRes] = await Promise.all([
+                rv.RunView<MJTaskEntity>({
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ParentID IS NULL`,
+                    OrderBy: '__mj_CreatedAt DESC',
+                    MaxRows: 200,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                }),
+                rv.RunView<MJTaskEntity>({
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ParentID IS NOT NULL AND StepType='Human' AND Status='In Progress'`,
+                    MaxRows: 100,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                }),
+            ]);
 
             if (!result.Success) {
                 this.LoadError = result.ErrorMessage ?? 'Runs could not be loaded.';
                 this.Runs = [];
                 return;
             }
-            this.Runs = (result.Results ?? []).map((t) => this.toRow(t));
+            const waitingParents = new Set<string>(
+                (waitingRes.Success ? (waitingRes.Results ?? []) : [])
+                    .map((t) => (t.ParentID ?? '').toLowerCase())
+                    .filter((id) => id.length > 0),
+            );
+            this.Runs = (result.Results ?? []).map((t) => this.toRow(t, waitingParents));
         } catch (e) {
             this.LoadError = e instanceof Error ? e.message : String(e);
             this.Runs = [];
@@ -278,7 +421,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         }
     }
 
-    private toRow(task: MJTaskEntity): WorkflowRunRow {
+    private toRow(task: MJTaskEntity, waitingParents: ReadonlySet<string>): WorkflowRunRow {
         return {
             ID: task.ID,
             Name: task.Name ?? '(unnamed run)',
@@ -287,6 +430,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
             CompletedAt: task.CompletedAt,
             Duration: this.describeDuration(task.StartedAt, task.CompletedAt),
             AgentRunID: task.AgentRunID,
+            HasPendingPersonStep: waitingParents.has(task.ID.toLowerCase()),
         };
     }
 
@@ -980,7 +1124,8 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
             VisibleRunCount: visible.length,
             StatusFilter: this.StatusFilter,
             SearchText: this.SearchText,
-            RunningCount: this.Runs.filter((r) => r.Status === 'Running').length,
+            RunningCount: this.Runs.filter((r) => r.Status === 'In Progress').length,
+            WaitingOnPersonCount: this.Runs.filter((r) => r.HasPendingPersonStep).length,
             FailedCount: this.Runs.filter((r) => r.Status === 'Failed').length,
             SelectedRunID: this.SelectedRunID,
             SelectedRunName: this.SelectedRun?.Name ?? null,
@@ -998,8 +1143,9 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                     required: ['status'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const wanted = String(params['status'] ?? '').trim();
-                    const match = STATUS_FILTERS.find((s) => s.toLowerCase() === wanted.toLowerCase());
+                    const raw = String(params['status'] ?? '').trim();
+                    const normalized = raw.toLowerCase() === 'running' ? 'In Progress' : raw;
+                    const match = STATUS_FILTERS.find((s) => s.toLowerCase() === normalized.toLowerCase());
                     if (!match) {
                         return { Success: false, Message: `Unknown status. Use one of: ${STATUS_FILTERS.join(', ')}.` };
                     }
@@ -1038,9 +1184,9 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                         const available = this.Runs.slice(0, 25).map((r) => r.Name).join(', ');
                         return { Success: false, Message: `No run matched "${params['run']}". Available: ${available}` };
                     }
-                    this.SelectedRunID = match.ID;
-                    this.publishAgentContext();
-                    this.cdr.markForCheck();
+                    if (!UUIDsEqual(this.SelectedRunID ?? '', match.ID)) {
+                        this.OnSelectRun(match);
+                    }
                     return { Success: true, Data: { RunID: match.ID, Name: match.Name, Status: match.Status } };
                 },
             },

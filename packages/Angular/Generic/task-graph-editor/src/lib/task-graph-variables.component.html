@@ -1,25 +1,63 @@
 <div class="vars" role="tree" aria-label="Variables">
   @if (Scopes.length === 0) {
     <div class="vars-empty">Select a step to inspect its input and output.</div>
-  }
-  @for (scope of Scopes; track scope.Name) {
-    <div class="vars-scope">
-      <button type="button" class="vars-scope-head" (click)="Toggle(scope.Name)"
-              [attr.aria-expanded]="IsExpanded(scope.Name)">
-        <i class="fa-solid" [class.fa-chevron-down]="IsExpanded(scope.Name)"
-           [class.fa-chevron-right]="!IsExpanded(scope.Name)" aria-hidden="true"></i>
-        {{ scope.Name }}
+  } @else {
+    <div class="vars-tools">
+      <div class="vars-mode-toggle" role="tablist" aria-label="Variable view mode">
+        <button type="button" class="vars-mode-btn" [class.vars-mode-btn--active]="ViewMode === 'tree'"
+                (click)="SetViewMode('tree')">Tree</button>
+        <button type="button" class="vars-mode-btn" [class.vars-mode-btn--active]="ViewMode === 'diff'"
+                (click)="SetViewMode('diff')">Before ⇄ After</button>
+      </div>
+      <input type="search" class="vars-search" [value]="SearchQuery" (input)="OnSearchInput($event)"
+             placeholder="Filter keys…" aria-label="Filter variables" />
+      <button type="button" class="vars-copy-btn" (click)="CopyJson()"
+              [title]="CopiedFeedback ? 'Copied JSON!' : 'Copy Input & Output JSON'"
+              aria-label="Copy JSON">
+        <i class="fa-solid" [class.fa-check]="CopiedFeedback" [class.fa-copy]="!CopiedFeedback" aria-hidden="true"></i>
       </button>
-      @if (IsExpanded(scope.Name)) {
-        <ul class="vars-list">
-          @for (variable of scope.Variables; track variable.Name) {
-            <ng-container
-              *ngTemplateOutlet="row; context: { $implicit: variable, path: Path(scope.Name, variable.Name), depth: 0 }">
-            </ng-container>
-          }
-        </ul>
-      }
     </div>
+
+    @if (ViewMode === 'tree') {
+      @for (scope of FilteredScopes; track scope.Name) {
+        <div class="vars-scope">
+          <button type="button" class="vars-scope-head" (click)="Toggle(scope.Name)"
+                  [attr.aria-expanded]="IsExpanded(scope.Name)">
+            <i class="fa-solid" [class.fa-chevron-down]="IsExpanded(scope.Name)"
+               [class.fa-chevron-right]="!IsExpanded(scope.Name)" aria-hidden="true"></i>
+            {{ scope.Name }}
+          </button>
+          @if (IsExpanded(scope.Name)) {
+            <ul class="vars-list">
+              @for (variable of scope.Variables; track variable.Name) {
+                <ng-container
+                  *ngTemplateOutlet="row; context: { $implicit: variable, path: Path(scope.Name, variable.Name), depth: 0 }">
+                </ng-container>
+              }
+            </ul>
+          }
+        </div>
+      }
+    } @else {
+      <div class="vars-diff" aria-label="Before and after payload diff">
+        @if (FilteredDiffEntries.length === 0) {
+          <div class="vars-empty">No matching fields to compare.</div>
+        } @else {
+          <div class="vars-diff-head">
+            <span>Field</span>
+            <span>Before (Input)</span>
+            <span>After (Output)</span>
+          </div>
+          @for (entry of FilteredDiffEntries; track entry.Key) {
+            <div class="vars-diff-row" [attr.data-kind]="entry.Kind">
+              <span class="vars-diff-key" [title]="entry.Key">{{ entry.Key }}</span>
+              <span class="vars-diff-val vars-diff-before" [title]="entry.Before">{{ entry.Before }}</span>
+              <span class="vars-diff-val vars-diff-after" [title]="entry.After">{{ entry.After }}</span>
+            </div>
+          }
+        }
+      </div>
+    }
   }
 </div>
 

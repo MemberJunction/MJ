@@ -6,6 +6,7 @@ It also provides two capability layers any agent can opt into:
 
 - **Skills** — reusable capability bundles (instructions + Actions + sub-agents) an agent activates mid-run via a progressive-disclosure catalog. Availability is gated per-agent (`AIAgent.AcceptsSkills`); *self*-activation additionally requires the **double activation gate** (`AISkill.ActivationMode` × `AIAgent.SkillActivationMode`, both defaulting to `RequestedOnly` so autonomous skill expansion is always a deliberate double opt-in — users can still `/skill`-request any available skill). Every activation is recorded with **provenance of authority** on `AIAgentRunStep.Skills` (activation type, gate values, agent-stated reason), and Prompt/Actions/Sub-Agent steps carry per-step skill attribution. Skills are shareable via the dedicated skill-permissions model and portable via **SKILL.md** import/export.
 - **Plan Mode** — a per-request human-in-the-loop gate (`ExecuteAgentParams.planMode`) that makes an agent present a plan and get it approved before executing any Actions or Sub-Agents, built on the existing `MJ: AI Agent Requests` pause/resume flow.
+- **Consult & Handoff** (*owner: `@AN-BC` / `@memberjunction/ai-agents` maintainers*) — **Consult** (`ChatHandlingOption = 'Consult'`, [`src/sub-agent-consult.ts`](./src/sub-agent-consult.ts)) routes a sub-agent's `Chat` step back to its parent Loop agent for up to `MaxSubAgentConsultRounds` (default 3) before escalating to the human caller via `MJ: AI Agent Requests`, and resumes the paused child run via `resumeRunId`. **Handoff** (`step = 'Handoff'`, [`src/handoff-target.ts`](./src/handoff-target.ts)) lets a general router agent (such as Sage) transfer a conversation turn to a discoverable, permitted specialist agent (up to `MAX_HANDOFF_HOPS = 3` with cycle detection and target preset resolution). See [Sub-Agents Guide](./docs/sub-agents-guide.md), [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md), and the post-release review in [`plans/video-studio-ws3-consult-handoff-review.md`](../../../plans/video-studio-ws3-consult-handoff-review.md).
 
 **See the [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** for the full architecture, the three-layer gate, the SKILL.md format, and the plan-approval flow.
 
@@ -800,6 +801,20 @@ Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
 - **Agent Category** -- business-domain default (e.g., Marketing → Box, Finance → SharePoint)
 - **Agent** -- per-agent override
 - **Runtime** -- `ExecuteAgentParams.override.storageAccountId` for programmatic callers
+
+## Agent Instances, Unified Persona & Primary Routing
+
+Derived agents (`BaseAgentID != null`) execute directly through `BaseAgent` and `AgentRunner` with full live prototype inheritance, unified text + voice persona injection, isolated per-instance memory, and primary-instance wake routing.
+
+| Component / Function | Responsibility |
+| --- | --- |
+| `BaseAgent` / `AgentRunner` / `CreateAgentInstance` | Resolves effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, relationships, skills, presets, run limits, and user-policy ceilings across `BaseAgentID` chains. |
+| `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) | Unifies text and Realtime voice persona by injecting `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` alongside the **Audience-Aware Tone Guardrail** (personal wit in 1:1 owner chat; professional on external emails, invites, and peer channels). |
+| `AgentContextInjector.filterNotesByScoping` | Inherits org/agent-wide notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes (`UserID != null`) strictly isolated per sibling instance (*Pepper* vs *Cato*). |
+| `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` | Routes inbound utility mailbox wakes, colleague inter-agent requests, Agent Channels, and workstreams to the recipient's active `IsPrimaryInstance = true` derived instance (with oldest-active and base-template fallback). |
+| `RealtimeClientSessionService` | Inherits persona and stacked standing instructions when opening live voice/realtime sessions on derived instances. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
 
 ## Dependencies
 

@@ -1516,7 +1516,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (95 classes)
+// @memberjunction/core-entities-server (96 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1525,6 +1525,7 @@ import {
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -1686,7 +1687,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (208 classes)
+// @memberjunction/core-actions (209 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1822,6 +1823,7 @@ import {
     LoopAction,
     MCPToolAction,
     ManageAgentSuggestionsAction,
+    ManageMyAgentInstanceAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
@@ -3039,6 +3041,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -3194,11 +3197,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
-    CreateFormContributionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    CreateFormContributionAction,
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
@@ -3304,6 +3307,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     LoopAction,
     MCPToolAction,
     ManageAgentSuggestionsAction,
+    ManageMyAgentInstanceAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
@@ -3397,12 +3401,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     ArtifactComplianceAuditServerOperation,
     ArtifactEvaluateAiFormulaServerOperation,
     AzureWebPubSubBroadcastProvider,
-    CreateGuestShareLinkServerOperation,
-    GCPPubSubBroadcastProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    CreateGuestShareLinkServerOperation,
+    GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
@@ -3444,7 +3448,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1423;
+export const CLASS_REGISTRATIONS_COUNT = 1425;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
