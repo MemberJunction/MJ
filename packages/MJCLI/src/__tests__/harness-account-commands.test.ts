@@ -74,11 +74,18 @@ describe('mj harness account commands', () => {
         process.env.HOME = fakeHome;
         HarnessAccountAdd.LoginRunner = RunInteractiveCliLogin;
         HarnessAccountLogin.LoginRunner = RunInteractiveCliLogin;
+        // Keep existing CLI list tests hermetic on CI runners where vendor CLIs are not installed
+        HarnessAccountList.BinaryProbe = (_vendor, binary) => ({
+            Available: true,
+            Binary: binary,
+            Version: 'test-1.0.0',
+        });
     });
 
     afterEach(() => {
         HarnessAccountAdd.LoginRunner = RunInteractiveCliLogin;
         HarnessAccountLogin.LoginRunner = RunInteractiveCliLogin;
+        HarnessAccountList.BinaryProbe = undefined;
         vi.restoreAllMocks();
         if (origPoolDir === undefined) {
             delete process.env[HARNESS_ACCOUNT_POOL_DIR_ENV_VAR];
@@ -230,5 +237,42 @@ describe('mj harness account commands', () => {
         await runOclifCommand(HarnessAccountRemove, ['agy-team', '--purge-files', '--pool-dir', poolDir]);
         expect(service.GetSlot('agy-team', { poolDir })).toBeNull();
         expect(fs.existsSync(slotDirPath)).toBe(false);
+    });
+
+    it('reports Binary Missing in `mj harness account list` (table and --json) when credentials exist but the vendor CLI binary fails', async () => {
+        // Seed ~/.codex/auth.json while the codex binary probe fails with ENOENT
+        fs.mkdirSync(path.join(fakeHome, '.codex'), { recursive: true });
+        fs.writeFileSync(path.join(fakeHome, '.codex', 'auth.json'), '{"tokens":{}}', 'utf8');
+
+        HarnessAccountList.BinaryProbe = (vendor, binary) =>
+            vendor === 'codex'
+                ? { Available: false, Binary: binary, Error: 'spawnSync codex ENOENT' }
+                : { Available: true, Binary: binary, Version: '1.0.0' };
+
+        const tableOut = await runOclifCommand(HarnessAccountList, [
+            '--vendor',
+            'codex',
+            '--pool-dir',
+            poolDir,
+        ]);
+        const tableText = tableOut.logs.join('\n');
+        expect(tableText).toContain('os-default-codex');
+        expect(tableText).toContain('Binary Missing');
+        expect(tableText).toContain("failed '<binary> --version' for: codex");
+
+        const jsonOut = await runOclifCommand(HarnessAccountList, [
+            '--vendor',
+            'codex',
+            '--json',
+            '--pool-dir',
+            poolDir,
+        ]);
+        const parsed = JSON.parse(jsonOut.logs.join('\n')) as HarnessAccountListJsonOutput;
+        expect(parsed.Slots).toHaveLength(1);
+        expect(parsed.Slots[0].slotId).toBe('os-default-codex');
+        expect(parsed.Slots[0].authenticated).toBe(true);
+        expect(parsed.Slots[0].BinaryAvailable).toBe(false);
+        expect(parsed.Slots[0].BinaryError).toContain('ENOENT');
+        expect(parsed.Slots[0].authStatus).toBe('Binary Missing');
     });
 });
