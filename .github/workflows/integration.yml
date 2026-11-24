@@ -164,6 +164,8 @@ jobs:
     outputs:
       codegen: ${{ steps.filter.outputs.codegen }}
       cachestack: ${{ steps.filter.outputs.cachestack }}
+      migrations: ${{ steps.filter.outputs.migrations }}
+      vectors: ${{ steps.filter.outputs.vectors }}
       pg: ${{ steps.filter.outputs.pg }}
       integration: ${{ steps.tier.outputs.integration }}
       fingerprint: ${{ steps.fingerprint.outputs.fingerprint }}
@@ -198,6 +200,21 @@ jobs:
             else
               echo "cachestack=false" >> "$GITHUB_OUTPUT"
             fi
+            # Migration or metadata PRs must run codegen-drift against a cold from-scratch DB so
+            # fresh-install-only failures (e.g. literal Sequence collisions, removed metadata rows)
+            # are caught before merge instead of hidden by a prefix snapshot restore.
+            if echo "$CHANGED" | grep -qE '^(migrations/|metadata/)'; then
+              echo "migrations=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "migrations=false" >> "$GITHUB_OUTPUT"
+            fi
+            # PRs touching vector/scheduling code must re-execute Entity Vector Sync - Daily with
+            # the PR's own code instead of validating pre-baked vectors written by next.
+            if echo "$CHANGED" | grep -qE '^(packages/AI/Vectors/|packages/Scheduling/|packages/Actions/CoreActions/src/custom/ai/|metadata/scheduled-jobs/|metadata/entity-documents/|packages/TestingFramework/integration-test-suite/src/checks/binary-fields\.checks\.ts)'; then
+              echo "vectors=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "vectors=false" >> "$GITHUB_OUTPUT"
+            fi
             # The PostgreSQL lane runs on the same PRs as the SQL Server lane (see its `if`). A feature
             # PR ships the T-SQL migration only, and the build engineer converts with /pg-migrate, so
             # a PostgreSQL database may lack the newest tables: a parity gap, which is not the PR's
@@ -213,6 +230,8 @@ jobs:
             echo "codegen=true" >> "$GITHUB_OUTPUT"
             # Off the pull-request path the rig runs on its own schedule (see cross-server-invalidation).
             echo "cachestack=false" >> "$GITHUB_OUTPUT"
+            echo "migrations=false" >> "$GITHUB_OUTPUT"
+            echo "vectors=false" >> "$GITHUB_OUTPUT"
             # A release (publish.yml calling this workflow with release: true) and a dispatch (the
             # build engineer's own run) gate. The nightly blocks on a regression and warns on a parity
             # gap, as a PR does. A merge into next skips the lane: the PR that merged already ran it.
@@ -560,6 +579,24 @@ jobs:
             exit 1
           fi
 
+      # On PRs that touch vector/scheduling code, clear the pre-baked Entity Vector Sync - Daily
+      # run and persisted EntityRecordDocument rows so MJAPI executes the first-run job with the
+      # PR's own code and binary-fields.BF2/BF3 validate vectors written by the PR (not next).
+      - name: Reset baked vector-sync state on vector/scheduling PRs
+        if: github.event_name == 'pull_request' && needs.changes.outputs.vectors == 'true' && steps.db.outputs.warm == '1'
+        run: |
+          docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
+            -d test -b -I -Q "
+              DELETE FROM [__mj].[EntityRecordDocument];
+              DELETE r FROM [__mj].[ScheduledJobRun] r
+                INNER JOIN [__mj].[ScheduledJob] j ON j.[ID] = r.[ScheduledJobID]
+                WHERE j.[RunImmediatelyIfNeverRun] = 1;
+              UPDATE [__mj].[ScheduledJob]
+                SET [LastRunAt] = NULL, [NextRunAt] = NULL, [LockToken] = NULL, [LockedAt] = NULL, [LockedByInstance] = NULL
+                WHERE [RunImmediatelyIfNeverRun] = 1;
+            "
+          echo "Reset pre-baked vector-sync state so PR code executes Entity Vector Sync - Daily fresh."
+
       # ── Pre-bake first-run scheduled jobs (Entity Vector Sync - Daily) into the snapshot ──
       # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun = 1, so MJAPI runs
       # ~230-250 s of in-process embedding on its first boot against a fresh DB, blocking
@@ -567,6 +604,10 @@ jobs:
       # here on backstop snapshot builds (push/schedule on cache miss) bakes its CompletedAt row
       # and stored vectors (required by binary-fields.BF2/BF3) into the v4 snapshot so every warm
       # PR and push run skips the ~4-minute wait entirely.
+      #
+      # Determinism: all non-first-run Active cron jobs are paused before the transient MJAPI
+      # starts and restored after it exits, and we assert zero held LockToken / Running rows
+      # before BACKUP DATABASE so live cron side effects can never be baked into the snapshot.
       - name: Pre-run first-run scheduled jobs for the snapshot
         id: prebake
         if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.db.outputs.cache-hit != 'true'
@@ -576,12 +617,15 @@ jobs:
           GRAPHQL_PORT: '4000'
           MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
         run: |
-          pending_jobs() {
+          run_sql() {
             docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
-              -d test -h -1 -W -I -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] j
-                WHERE j.[Status] = 'Active' AND j.[RunImmediatelyIfNeverRun] = 1
-                  AND NOT EXISTS (SELECT 1 FROM [__mj].[ScheduledJobRun] r
-                                  WHERE r.[ScheduledJobID] = j.[ID] AND r.[CompletedAt] IS NOT NULL);" | tr -d '[:space:]'
+              -d test -h -1 -W -b -I -Q "$1"
+          }
+          pending_jobs() {
+            run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] j
+              WHERE j.[Status] = 'Active' AND j.[RunImmediatelyIfNeverRun] = 1
+                AND NOT EXISTS (SELECT 1 FROM [__mj].[ScheduledJobRun] r
+                                WHERE r.[ScheduledJobID] = j.[ID] AND r.[CompletedAt] IS NOT NULL);" | tr -d '[:space:]'
           }
           PENDING=$(pending_jobs || true)
           if [ "${PENDING}" = "0" ]; then
@@ -589,29 +633,80 @@ jobs:
             exit 0
           fi
 
+          # Pause non-first-run Active cron jobs during pre-bake so only RunImmediatelyIfNeverRun
+          # jobs can fire; record their IDs in a temp table and always restore on exit.
+          PAUSED_IDS=$(run_sql "SET NOCOUNT ON; SELECT [ID] FROM [__mj].[ScheduledJob] WHERE [Status] = 'Active' AND [RunImmediatelyIfNeverRun] = 0;" | tr -d '\r' | grep -E '^[0-9A-Fa-f-]+$' || true)
+          if [ -n "${PAUSED_IDS}" ]; then
+            run_sql "UPDATE [__mj].[ScheduledJob] SET [Status] = 'Paused' WHERE [Status] = 'Active' AND [RunImmediatelyIfNeverRun] = 0;"
+          fi
+
           MJAPI_PID=""
-          cleanup_prebake() {
+          RESTORED_PAUSED=0
+          restore_paused_jobs() {
+            if [ "${RESTORED_PAUSED}" -eq 1 ]; then return 0; fi
+            RESTORED_PAUSED=1
+            if [ -n "${PAUSED_IDS}" ]; then
+              local in_list=""
+              while IFS= read -r id; do
+                [ -z "$id" ] && continue
+                [ -n "$in_list" ] && in_list="${in_list},"
+                in_list="${in_list}'${id}'"
+              done <<< "${PAUSED_IDS}"
+              if [ -n "$in_list" ]; then
+                run_sql "UPDATE [__mj].[ScheduledJob] SET [Status] = 'Active' WHERE [ID] IN (${in_list});" || true
+              fi
+            fi
+          }
+          stop_mjapi() {
             if [ -n "${MJAPI_PID}" ] && kill -0 "${MJAPI_PID}" 2>/dev/null; then
               kill "${MJAPI_PID}" 2>/dev/null || true
               wait "${MJAPI_PID}" 2>/dev/null || true
             fi
+            MJAPI_PID=""
+          }
+          cleanup_prebake() {
+            stop_mjapi
+            restore_paused_jobs
           }
           trap cleanup_prebake EXIT
 
           (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi-prebake.log 2>&1) &
           MJAPI_PID=$!
-          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi-prebake.log 36 5 "${MJAPI_PID}"
+          if ! .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi-prebake.log 36 5 "${MJAPI_PID}"; then
+            echo "::warning::Transient pre-bake MJAPI failed to become ready; skipping v4 snapshot save."
+            echo "DB snapshot pre-bake: **FAILED** (transient MJAPI did not boot) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
+          DONE=0
           for _ in $(seq 1 84); do
             PENDING=$(pending_jobs || true)
             if [ "${PENDING}" = "0" ]; then
               echo "Pre-baked first-run scheduled jobs finished after ${SECONDS}s."
-              exit 0
+              DONE=1
+              break
             fi
             sleep 5
           done
-          echo "::warning::Pre-bake first-run scheduled jobs still pending (${PENDING}) after 420 s; skipping snapshot save."
-          exit 1
+          if [ "${DONE}" -ne 1 ]; then
+            echo "::warning::Pre-bake first-run scheduled jobs still pending (${PENDING}) after 420 s; skipping snapshot save."
+            echo "DB snapshot pre-bake: **FAILED** (timed out with ${PENDING} job(s) pending after 420 s) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          # Stop MJAPI cleanly and restore paused jobs BEFORE verifying lock-free snapshot state.
+          stop_mjapi
+          restore_paused_jobs
+          run_sql "UPDATE [__mj].[ScheduledJob] SET [NextRunAt] = NULL;"
+
+          LOCKED=$(run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] WHERE [LockToken] IS NOT NULL;" | tr -d '[:space:]')
+          RUNNING=$(run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJobRun] WHERE [Status] = 'Running';" | tr -d '[:space:]')
+          if [ "${LOCKED:-1}" != "0" ] || [ "${RUNNING:-1}" != "0" ]; then
+            echo "::warning::Pre-bake left dirty scheduler state (LockToken count=${LOCKED}, Running runs=${RUNNING}); skipping snapshot save."
+            echo "DB snapshot pre-bake: **FAILED** (dirty scheduler state: locks=${LOCKED}, running=${RUNNING}) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "Pre-bake verified clean (0 held locks, 0 running job rows)."
 
       # ── Save the snapshot ──────────────────────────────────────────────────────────────
       # BEFORE the tier runs, never after: the suite mutates the database, and a snapshot taken
@@ -639,7 +734,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: /tmp/mjdb
-          key: ${{ steps.db.outputs.key }}
+          key: ${{ steps.db.outputs.save-key }}
 
       # Encrypted entity fields (MJ: Credentials.Values and the like) need a base key in BOTH
       # processes that write them: MJAPI (IT160 over the wire) and the mj test process (IT161
@@ -1731,15 +1826,15 @@ jobs:
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
 
       # Restore the `base` DB snapshot (migrations + metadata/ ONLY — never metadata-optional/ or
-      # ScheduledJobRun rows) instead of running cold migrate + sync push (~7.7 min). On an exact
-      # hit, migrate is a no-op and sync push is skipped; on a prefix hit (e.g. a PR that edits
-      # migrations/ or metadata/), migrate applies the delta and sync push reconciles cleanly.
+      # ScheduledJobRun rows) instead of running cold migrate + sync push (~7.7 min). On PRs that
+      # touch migrations/ or metadata/, bypass restore so the drift gate still verifies a true
+      # from-scratch fresh install (catching literal Sequence collisions and deleted metadata rows).
       - name: Restore SQL Server base DB snapshot and migrate
         id: db
         uses: ./.github/actions/restore-sqlserver-db-snapshot
         with:
           variant: base
-          skip-restore: ${{ github.event_name == 'schedule' }}
+          skip-restore: ${{ github.event_name == 'schedule' || needs.changes.outputs.migrations == 'true' }}
 
       - name: Sync push (when base snapshot missed or prefix-matched)
         if: steps.db.outputs.needs-sync == 'true'
@@ -1775,7 +1870,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: /tmp/mjdb
-          key: ${{ steps.db.outputs.key }}
+          key: ${{ steps.db.outputs.save-key }}
 
       - name: Run CodeGen against the migrated DB
         id: codegen

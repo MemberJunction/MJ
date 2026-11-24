@@ -14,18 +14,26 @@ inputs:
     required: true
   skip-restore:
     description: >-
-      Set to 'true' (e.g. on nightly schedule runs) to bypass cache restore and provision cold
-      so the lineage is re-seeded cleanly each day.
+      Set to 'true' (e.g. on nightly schedule runs or migration/metadata PRs in codegen-drift) to
+      bypass cache restore and provision cold. When 'true', `save-key` carries a unique
+      `-cold-<run_id>` suffix so nightly re-seeds supersede earlier incremental push snapshots
+      instead of colliding with an immutable Actions cache key.
     required: false
     default: 'false'
 
 outputs:
   key:
-    description: Computed exact cache key for this commit's DB inputs.
+    description: Computed base cache key for this commit's DB inputs.
     value: ${{ steps.dbkey.outputs.key }}
+  save-key:
+    description: >-
+      Cache key for backstop saves: identical to `key` on incremental builds, or
+      `<key>-cold-<run_id>` when `skip-restore` is 'true' so nightly cold re-seeds are never
+      rejected as duplicate cache keys.
+    value: ${{ steps.dbkey.outputs.save_key }}
   cache-hit:
-    description: "'true' only on an exact key match (gates skipping metadata sync push)."
-    value: ${{ steps.dbcache.outputs.cache-hit }}
+    description: "'true' only on an exact key (or exact `<key>-cold-*`) match."
+    value: ${{ steps.syncflag.outputs.exact_hit }}
   warm:
     description: "'1' if a cached .bak snapshot was restored into [test], else '0'."
     value: ${{ steps.dbload.outputs.warm }}
@@ -44,36 +52,66 @@ runs:
       shell: bash
       env:
         VARIANT: ${{ inputs.variant }}
+        SKIP_RESTORE: ${{ inputs.skip-restore }}
+        RUN_ID: ${{ github.run_id }}
         # Set only on pull_request events; push, schedule and dispatch use the branch itself.
         BASE_REF: ${{ github.base_ref }}
         REF_NAME: ${{ github.ref_name }}
       run: |
         if [ "$VARIANT" = "full" ]; then
-          TREE_LIST=(migrations metadata metadata-optional packages/MJCLI/src packages/MetadataSync/src)
+          TREE_LIST=(
+            migrations
+            metadata
+            metadata-optional
+            mj.config.cjs
+            packages/MJCLI/src
+            packages/MetadataSync/src
+            packages/SQLServerDataProvider/src
+            .github/actions/restore-sqlserver-db-snapshot
+          )
           VERSION_TAG="mj-ci-db-v4"
         elif [ "$VARIANT" = "base" ]; then
-          TREE_LIST=(migrations metadata packages/MJCLI/src packages/MetadataSync/src)
+          TREE_LIST=(
+            migrations
+            metadata
+            mj.config.cjs
+            packages/MJCLI/src
+            packages/MetadataSync/src
+            packages/SQLServerDataProvider/src
+            .github/actions/restore-sqlserver-db-snapshot
+          )
           VERSION_TAG="mj-ci-db-base-v1"
         else
           echo "::error::Unknown restore-sqlserver-db-snapshot variant: '${VARIANT}' (expected 'full' or 'base')."
           exit 1
         fi
 
-        # git tree hashes, not hashFiles: these trees hold thousands of files and git already
-        # knows their hash, so this is exact and free. MJCLI and MetadataSync are in the key
-        # because they PRODUCE the database content — a change to either must miss.
+        # git tree/blob hashes, not hashFiles: these trees hold thousands of files and git already
+        # knows their hash, so this is exact and free. MJCLI, MetadataSync, SQLServerDataProvider,
+        # mj.config.cjs, this action, and the locked @memberjunction/skyway-core version are in the
+        # key because they PRODUCE the database content — a change to any of them must miss.
         TREES=''
         for TREE in "${TREE_LIST[@]}"; do
           HASH=$(git rev-parse "HEAD:${TREE}")
           echo "  ${TREE} = ${HASH}"
           TREES="${TREES}${HASH}"
         done
+        SKYWAY_LOCK=$(grep -A1 "^  '@memberjunction/skyway-core@" pnpm-lock.yaml || true)
+        echo "  skyway-core lock = $(printf '%s' "$SKYWAY_LOCK" | tr '\n' ' ')"
+        TREES="${TREES}${SKYWAY_LOCK}"
+
         LINE=$(printf '%s' "${BASE_REF:-$REF_NAME}" | tr -c 'A-Za-z0-9._-' '-')
         PREFIX="${VERSION_TAG}-${LINE}-"
         KEY="${PREFIX}$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
+        if [ "$SKIP_RESTORE" = "true" ]; then
+          SAVE_KEY="${KEY}-cold-${RUN_ID}"
+        else
+          SAVE_KEY="${KEY}"
+        fi
         echo "prefix=${PREFIX}" >> "$GITHUB_OUTPUT"
         echo "key=${KEY}" >> "$GITHUB_OUTPUT"
-        echo "Snapshot key (${VARIANT}): ${KEY}"
+        echo "save_key=${SAVE_KEY}" >> "$GITHUB_OUTPUT"
+        echo "Snapshot key (${VARIANT}): ${KEY} (save key: ${SAVE_KEY})"
 
     - name: Restore the provisioned-DB snapshot
       id: dbcache
@@ -82,10 +120,12 @@ runs:
       with:
         path: /tmp/mjdb
         key: ${{ steps.dbkey.outputs.key }}
-        # Prefix fallback to the newest snapshot of the same release line. `cache-hit` is 'true'
-        # ONLY on an exact key match, which is what gates skipping metadata sync push; a prefix
-        # match leaves it 'false', so the full metadata reconcile still runs.
-        restore-keys: ${{ steps.dbkey.outputs.prefix }}
+        # Check exact `<key>-cold-*` nightly re-seeds first (newest entry wins, superseding any
+        # incremental push snapshot for the same commit), then fall back to the newest snapshot on
+        # the same release line.
+        restore-keys: |
+          ${{ steps.dbkey.outputs.key }}-
+          ${{ steps.dbkey.outputs.prefix }}
 
     - name: Load the snapshot into SQL Server
       id: dbload
@@ -150,13 +190,23 @@ runs:
       id: syncflag
       shell: bash
       env:
-        CACHE_HIT: ${{ steps.dbcache.outputs.cache-hit }}
+        KEY: ${{ steps.dbkey.outputs.key }}
+        MATCHED: ${{ steps.dbcache.outputs.cache-matched-key }}
         WARM: ${{ steps.dbload.outputs.warm }}
         RETRIED: ${{ steps.migrate.outputs.retried }}
       run: |
-        if [ "$CACHE_HIT" = "true" ] && [ "$WARM" = "1" ] && [ "$RETRIED" != "1" ]; then
+        # Both an exact match (`$KEY`) and an exact nightly cold re-seed (`$KEY-cold-<run_id>`)
+        # represent this exact commit's inputs.
+        if [ -n "$MATCHED" ] && { [ "$MATCHED" = "$KEY" ] || [[ "$MATCHED" == "${KEY}-"* ]]; }; then
+          EXACT_HIT="true"
+        else
+          EXACT_HIT="false"
+        fi
+        echo "exact_hit=${EXACT_HIT}" >> "$GITHUB_OUTPUT"
+
+        if [ "$EXACT_HIT" = "true" ] && [ "$WARM" = "1" ] && [ "$RETRIED" != "1" ]; then
           echo "needs_sync=false" >> "$GITHUB_OUTPUT"
-          echo "Exact warm DB snapshot hit — skipping metadata sync push."
+          echo "Exact warm DB snapshot hit (${MATCHED}) — skipping metadata sync push."
         else
           echo "needs_sync=true" >> "$GITHUB_OUTPUT"
         fi
