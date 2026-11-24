@@ -3,15 +3,50 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { ResourceTypeEngine, type MJResourceTypeEntity } from '@memberjunction/core-entities';
-import { ActionEngineServer } from '@memberjunction/actions';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import type { ActionInfo } from '@memberjunction/actions-base';
-import {
-    EVALUATE_DRIFT_DRIVER_CLASS,
-    EvaluateFeatureAndPredictionDriftAction,
-} from '@memberjunction/predictive-studio';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { PredictiveShadowDriftChecks } from '../checks/predictive-shadow-drift.checks';
+import type { ChallengerSelection, IMonitoringStore, ModelPrediction, MonitoredBinding, MonitoredModel, PeriodRowWrite } from '@memberjunction/predictive-studio';
+import { PredictiveShadowDriftChecks, Psd2MirrorDriver } from '../checks/predictive-shadow-drift.checks';
+
+const CHALLENGER_ID = 'D2000000-0000-4000-8000-0000000000C2';
+const CHAMPION: MonitoredModel = {
+    ID: 'D2000000-0000-4000-8000-0000000000C1', PipelineID: 'D2000000-0000-4000-8000-0000000000A1', Version: 1, Status: 'Published', PredictionUnitID: null,
+    OutputSemantics: null, ArtifactFileID: null, ArtifactSha256: null, TrainingSnapshotID: null,
+};
+const MIRROR_BINDING: MonitoredBinding = { ID: 'D2000000-0000-4000-8000-0000000000B1', MLTrainingPipelineID: CHAMPION.PipelineID };
+
+/** The monitoring store PSD2's steps read and write, in memory: three records scored 0.3 by the champion and 0.8 by the challenger. */
+class MirrorStore implements IMonitoringStore {
+    public Selection: ChallengerSelection | null = { ModelID: CHALLENGER_ID, Sampled: () => true };
+    public readonly Challengers: { readonly BindingID: string; readonly AsOf: Date }[] = [];
+    public readonly Written: PeriodRowWrite[] = [];
+    private static rows(score: number): ModelPrediction[] {
+        return ['r1', 'r2', 'r3'].map((RecordID) => ({ RecordID, EffectiveAsOf: new Date('2026-06-10T00:00:00.000Z'), InTraining: false, Score: score, Probabilities: null }));
+    }
+    public async Challenger(binding: MonitoredBinding, asOf: Date): Promise<ChallengerSelection | null> {
+        this.Challengers.push({ BindingID: binding.ID, AsOf: asOf });
+        return this.Selection;
+    }
+    public async ModelRows(modelId: string, _bindingId: string, role: 'Champion' | 'Challenger'): Promise<ModelPrediction[]> {
+        return role === 'Champion' && modelId === CHAMPION.ID ? MirrorStore.rows(0.3) : role === 'Challenger' && modelId === CHALLENGER_ID ? MirrorStore.rows(0.8) : [];
+    }
+    public async WritePeriod(write: PeriodRowWrite): Promise<string> {
+        this.Written.push(write);
+        return 'period-row-1';
+    }
+    public async LoadModel(): Promise<null> { throw new Error('PSD2 reads no model'); }
+    public TaskOf(): never { throw new Error('PSD2 reads no task'); }
+    public async LoadUnit(): Promise<never> { throw new Error('PSD2 reads no unit'); }
+    public async BindingOf(): Promise<null> { throw new Error('PSD2 resolves no binding'); }
+    public async HoldsBindingView(): Promise<boolean> { throw new Error('PSD2 checks no view'); }
+    public async UnitRowsInPeriod(): Promise<never[]> { throw new Error('PSD2 reads no unit rows'); }
+    public async Outcomes(): Promise<never[]> { throw new Error('PSD2 reads no outcomes'); }
+    public async ReferenceScore(): Promise<null> { throw new Error('PSD2 reads no reference'); }
+    public async EarlierPeriods(): Promise<never[]> { throw new Error('PSD2 reads no history'); }
+    public async Predecessor(): Promise<null> { throw new Error('PSD2 reads no predecessor'); }
+    public async ArtifactVerified(): Promise<never> { throw new Error('PSD2 verifies no artifact'); }
+    public async DriftInputs(): Promise<never[]> { throw new Error('PSD2 reads no drift inputs'); }
+}
 
 function repoRoot(): string {
     let dir = process.cwd();
@@ -102,16 +137,17 @@ function buildInMemoryHarness() {
         return rec;
     };
 
+    const entities: ReadonlyArray<{ readonly ID: string; readonly Name: string }> = [
+        { ID: 'ent-members', Name: 'Members' },
+        { ID: 'ent-fv', Name: 'MJ: Feature Values' },
+    ];
     const provider = {
-        Entities: [
-            { ID: 'ent-members', Name: 'Members' },
-            { ID: 'ent-fv', Name: 'MJ: Feature Values' },
-        ],
+        Entities: entities,
         EntityByID(id: string) {
-            return this.Entities.find((e) => e.ID === id);
+            return entities.find((e) => e.ID === id);
         },
         EntityByName(name: string) {
-            return this.Entities.find((e) => e.Name === name);
+            return entities.find((e) => e.Name === name);
         },
         async GetEntityObject(entityName: string) {
             return makeEntity(entityName);
@@ -179,7 +215,7 @@ function buildInMemoryHarness() {
     );
 
     // The harness runs as an Owner (BootstrapIntegrationServer's resolveContextUser), not as the system user.
-    const user = new UserInfo(null, {
+    const user = new UserInfo(undefined, {
         ID: 'A6F3D2C1-4B5E-4F70-8A9B-0C1D2E3F4A5B',
         Name: 'Integration Owner',
         Email: 'integration-owner@example.com',
@@ -200,7 +236,6 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
     afterEach(() => {
         vi.restoreAllMocks();
         UserCache.Instance.SetUsers([]);
-        EvaluateFeatureAndPredictionDriftAction.SetDefaultAlertEmitter(null);
     });
 
     it('registers IT166 (without colliding with IT164 or IT165) and uses non-hand-typed v4 UUIDs (R3, R6a)', () => {
@@ -245,45 +280,44 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
         expect(member?.primaryKey.ID).not.toBe('C94F1A82-7E3B-4D6A-82C1-5B9E0F3A4D2E');
     });
 
-    it('PSD1 persists Role=Champion via MLModelInferenceProcessor + ShadowScoringCoordinator without manual RecordFeatureValues seeding in the check (R1)', async () => {
+    it("PSD1 scores a bound process through ScoringService and asserts Model rows of two runs; it writes no Pipeline row and skips, naming why, on a provider that cannot place model status by SQL (D-069)", async () => {
         const source = fs.readFileSync(CHECKS_SOURCE, 'utf8');
+        const psd1Source = source.slice(source.indexOf("Id: 'predictive-shadow-drift.PSD1'"), source.indexOf("Id: 'predictive-shadow-drift.PSD2'"));
         expect(source).not.toContain('RecordFeatureValues(');
+        expect(source).not.toMatch(/new ShadowScoringCoordinator\(|FeatureValueShadowAuditSink|MLModelChallengerScoreRunner|awaits M6\.8/);
+        expect(psd1Source).toContain('new ScoringService(');
+        expect(source).toContain("AssertEqual(runRows.length, 2, 'one MJ: ML Scoring Runs row per role')");
 
         const { ctx } = buildInMemoryHarness();
         const psd1 = PredictiveShadowDriftChecks.find((c) => c.Id === 'predictive-shadow-drift.PSD1');
         expect(psd1).toBeDefined();
-
-        await expect(psd1!.Fn(ctx)).resolves.toBeUndefined();
+        await expect(psd1!.Fn(ctx)).rejects.toMatchObject({ name: 'IntegrationCheckSkip', message: 'PSD1 needs a database provider: its fixtures place model status by SQL' });
     });
 
-    it('PSD2 verifies real ActionEngineServer registration (no fallback action object) and exercises both MinSampleSize=100 InsufficientData and MinSampleSize=10 Critical drift (R6b, R6c)', async () => {
-        const source = fs.readFileSync(CHECKS_SOURCE, 'utf8');
-        expect(source).not.toContain('6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A00');
+    it("PSD2 measures the binding's mirror with the monitoring driver's own step and stores it on the champion's period row (M6.8)", async () => {
+        const store = new MirrorStore();
+        const { ctx } = buildInMemoryHarness();
+        const period = { Start: new Date('2026-06-01T00:00:00.000Z'), End: new Date('2026-07-01T00:00:00.000Z'), Grain: 'month' as const };
+        const mirror = await new Psd2MirrorDriver({ Store: store }).MeasureAndStore(ctx, CHAMPION, MIRROR_BINDING, period);
+        expect(mirror).toEqual({ challengerModelId: CHALLENGER_ID, paired: 3, agreement: 0, meanScoreDelta: expect.closeTo(0.5, 9), failures: 0 });
+        expect(store.Challengers).toEqual([{ BindingID: MIRROR_BINDING.ID, AsOf: period.Start }]);
+        expect(store.Written).toHaveLength(1);
+        expect(store.Written[0]).toMatchObject({ ModelID: CHAMPION.ID, Period: period, Challenger: { outcome: 'none', mirror } });
+    });
 
-        const { ctx, notificationRows } = buildInMemoryHarness();
+    it('PSD2 refuses a binding that names no live challenger, writing no period row', async () => {
+        const store = new MirrorStore();
+        store.Selection = null;
+        const { ctx } = buildInMemoryHarness();
+        const period = { Start: new Date('2026-06-01T00:00:00.000Z'), End: new Date('2026-07-01T00:00:00.000Z'), Grain: 'month' as const };
+        await expect(new Psd2MirrorDriver({ Store: store }).MeasureAndStore(ctx, CHAMPION, MIRROR_BINDING, period)).rejects.toThrow('names no live challenger');
+        expect(store.Written).toEqual([]);
+    });
+
+    it('PSD2 skips, naming why, on a provider that cannot place model status by SQL', async () => {
+        const { ctx } = buildInMemoryHarness();
         const psd2 = PredictiveShadowDriftChecks.find((c) => c.Id === 'predictive-shadow-drift.PSD2');
         expect(psd2).toBeDefined();
-
-        vi.spyOn(ActionEngineServer.Instance, 'Config').mockResolvedValue(undefined);
-        vi.spyOn(ActionEngineServer.Instance, 'Actions', 'get').mockReturnValue([
-            {
-                ID: '9673E816-6985-4773-B172-E669522FC13D',
-                Name: 'Evaluate Feature and Prediction Drift',
-                DriverClass: EVALUATE_DRIFT_DRIVER_CLASS,
-                Type: 'Custom',
-                Status: 'Active',
-            } as unknown as ActionInfo,
-        ]);
-        const runActionSpy = vi
-            .spyOn(ActionEngineServer.Instance, 'RunAction')
-            .mockImplementation(async (runParams) => {
-                const action = new EvaluateFeatureAndPredictionDriftAction();
-                return await action.Run(runParams);
-            });
-
-        await expect(psd2!.Fn(ctx)).resolves.toBeUndefined();
-        expect(runActionSpy).toHaveBeenCalledTimes(3);
-        // A non-system caller is notified without NotifyUserID too; the check cleaned both alerts up.
-        expect(notificationRows).toHaveLength(0);
+        await expect(psd2!.Fn(ctx)).rejects.toMatchObject({ name: 'IntegrationCheckSkip', message: 'PSD2 needs a database provider: its fixtures place model status by SQL' });
     });
 });

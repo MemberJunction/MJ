@@ -23,7 +23,8 @@ export class MJMLTrainingSnapshotFormComponent extends BaseFormComponent {
             { sectionKey: 'schemaAndFeatures', sectionName: 'Schema and Features', isExpanded: true },
             { sectionKey: 'exclusionsAndMetrics', sectionName: 'Exclusions and Metrics', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false }
+            { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false }
         ]);
     }
 }

@@ -941,6 +941,11 @@ Pay attention to GraphQL scalar types — match the schema exactly to avoid type
 - Export shared components (like dialogs) for reuse
 - Maintain clear separation between container and presentational components
 
+## Component & Engine Cache Lifecycle (No Arbitrary Count Caps)
+
+- **Post-`await` teardown guards**: Whenever an `async` lifecycle hook or loader (`ngOnInit`, `loadData`, polling refresh) awaits an async call before starting a `setInterval`/`setTimeout`, attaching manual subscriptions, or instantiating workers/plugins/blob URLs, check `isDestroyed` (or pipe through `takeUntil(this.destroy$)`, which on `BaseResourceComponent` emits immediately even for post-destroy subscribers) right after the `await` so tabs closed mid-load never leak background work.
+- **Session-scoped caches, never arbitrary `MAX_CACHED_*` caps**: Browser engines (`BaseEngine` subclasses) are scoped to the signed-in user session, kept coherent via `BaseEntity` events, and cleared on sign-out/environment switch (`ClearCache()`). Never add arbitrary `MAX_CACHED_* = 50` eviction caps to shared engines to work around server-side callers, and document any genuine UX numeric constant (debounce ms, preview length) with an inline rationale comment (`StaticNumericLiteralCompliance.test.ts`).
+
 ## Design tokens
 
 CSS/SCSS design-token rules (no hardcoded colors, the semantic token catalog, `color-mix()`, the CI gates) live in the path-scoped rule [`.claude/rules/design-tokens.md`](../../.claude/rules/design-tokens.md), which loads automatically when you open any `.scss` or `.css` file.

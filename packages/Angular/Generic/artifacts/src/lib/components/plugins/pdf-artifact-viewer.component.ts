@@ -185,6 +185,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   private downloadUrl = '';
   private isObjectUrl = false;
   private _pdfjsLib: PdfJsLib | null = null;
+  private isDestroyed = false;
 
   /** Discrete zoom steps — 50 % to 400 %. */
   private readonly ZOOM_STEPS = [0.5, 0.67, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0];
@@ -235,6 +236,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   }
 
   ngOnDestroy(): void {
+    this.isDestroyed = true;
     this.cancelCurrentRender();
     this.pdfDoc?.destroy();
     this.pdfDoc = null;
@@ -388,6 +390,12 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
         this.isObjectUrl = true;
       }
 
+      if (this.isDestroyed) {
+        pdfDoc.destroy();
+        this.revokeObjectUrl();
+        return;
+      }
+
       this.pdfDoc = pdfDoc;
       this.TotalPages = pdfDoc.numPages;
       this.CurrentPage = 1;
@@ -396,8 +404,14 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
       // exists before renderPage() tries to draw on it.
       this.cdr.detectChanges();
       await this.setFitWidthZoom();
+      if (this.isDestroyed) {
+        return;
+      }
       await this.renderPage(1);
     } catch (err) {
+      if (this.isDestroyed) {
+        return;
+      }
       this.showError(`Could not load PDF: ${err instanceof Error ? err.message : String(err)}`);
     }
   }

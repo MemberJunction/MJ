@@ -29,4 +29,8 @@ describe('pstruth migration', () => {
       expect(migration).not.toContain(`CREATE TABLE pstruth.${dropped} (`);
     }
   });
+  it('gives T4\'s tables the previous-month column LagTarget (D4-181)', () => {
+    expect(migration).toContain('CREATE TABLE pstruth.Scn_T4 ([ID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, [EntityKey] NVARCHAR(50) NULL, [T] DATE NULL, [LagTarget] FLOAT, [Target] FLOAT NULL, [TruthScore] FLOAT NULL);');
+    for (const t of ['SeriesFrame_T4', 'SeriesTrain_T4']) expect(migration).toMatch(new RegExp(`CREATE TABLE pstruth\\.${t} \\([^;]*\\[LagTarget\\] FLOAT`));
+  });
 });

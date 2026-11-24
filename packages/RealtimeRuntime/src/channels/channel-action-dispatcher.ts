@@ -57,6 +57,8 @@ export interface ChannelDispatchHost {
     ListChannelKeys(): string[];
     /** Mounts an unopened `on-demand` channel (initialize, publish, tab). Resolves when it is live. */
     ActivateChannel(plugin: BaseRealtimeChannelClient): Promise<void>;
+    /** Optional reason why a named channel was omitted by the host on this device/viewport (case-insensitive). */
+    DescribeUnavailableChannel?(key: string): string | null;
 }
 
 /** Builds a failure outcome. */
@@ -87,9 +89,13 @@ export class ChannelActionDispatcher {
     public async Dispatch(request: RealtimeContextActionRequest): Promise<RealtimeContextActionResult> {
         const channel = this.host.FindChannel(request.Target.Channel);
         if (!channel) {
+            const unavailableReason = this.host.DescribeUnavailableChannel?.(request.Target.Channel) ?? null;
+            const message = unavailableReason
+                ? `Channel "${request.Target.Channel}" is unavailable on this device: ${unavailableReason} Let the user know why rather than saying you do not have access.`
+                : `There is no channel "${request.Target.Channel}" in this session.`;
             return failure(
                 'unknown_channel',
-                `There is no channel "${request.Target.Channel}" in this session.`,
+                message,
                 { Available: this.host.ListChannelKeys() },
             );
         }

@@ -200,7 +200,7 @@ export class AgentHandoffCardComponent {
   }
 
   public get ResolvedSource(): AgentHandoffParticipant {
-    return normalizeParticipant(this.SourceAgent, 'Sage');
+    return normalizeParticipant(this.SourceAgent, 'Assistant');
   }
 
   public get ResolvedTarget(): AgentHandoffParticipant {

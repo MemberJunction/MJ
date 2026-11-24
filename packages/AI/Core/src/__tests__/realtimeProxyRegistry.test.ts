@@ -405,3 +405,28 @@ describe('relay and proxy URLs', () => {
         expect(ResolveRealtimeProxyBaseHttpUrl({})).toBe('http://localhost:4000');
     });
 });
+
+describe('RealtimeProxyRegistry: in-process upstreams', () => {
+    const open = () => ({ Receive: () => undefined, Closed: () => undefined });
+
+    it('hands the in-process upstream factory back on consume, with an empty URL', () => {
+        const ticket = RealtimeProxyRegistry.Instance.Issue({ OpenInProcess: open, TTLSeconds: 60 });
+        const entry = RealtimeProxyRegistry.Instance.Consume(ticket.ID);
+        expect(entry?.OpenInProcess).toBe(open);
+        expect(entry?.UpstreamUrl).toBe('');
+    });
+
+    it('is single-use like a URL ticket', () => {
+        const ticket = RealtimeProxyRegistry.Instance.Issue({ OpenInProcess: open, TTLSeconds: 60 });
+        RealtimeProxyRegistry.Instance.Consume(ticket.ID);
+        expect(RealtimeProxyRegistry.Instance.Consume(ticket.ID)).toBeNull();
+    });
+
+    it('refuses a ticket with neither a URL nor an in-process upstream', () => {
+        expect(() => RealtimeProxyRegistry.Instance.Issue({ TTLSeconds: 60 })).toThrow(/exactly one/);
+    });
+
+    it('refuses a ticket with both a URL and an in-process upstream', () => {
+        expect(() => RealtimeProxyRegistry.Instance.Issue({ UpstreamUrl: 'ws://x', OpenInProcess: open, TTLSeconds: 60 })).toThrow(/exactly one/);
+    });
+});

@@ -99,11 +99,11 @@ export class VersionedRowGuard {
   }
 
   /**
-   * The first row of `entityName` matching `filter`, as a plain row (nothing is mutated). A failed read is returned as
-   * its error, so it is never reported as an absent row.
+   * The first row of `entityName` matching `filter`, as a plain row (nothing is mutated); only `fields` when given. A
+   * failed read is returned as its error, so it is never reported as an absent row.
    */
-  public static async ReadOneRow<TRow>(provider: IMetadataProvider, entityName: string, filter: string, user: UserInfo | undefined): Promise<RowRead<TRow>> {
-    const r = await RunView.FromMetadataProvider(provider).RunView<TRow>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple' }, user);
+  public static async ReadOneRow<TRow>(provider: IMetadataProvider, entityName: string, filter: string, user: UserInfo | undefined, fields?: readonly (keyof TRow & string)[]): Promise<RowRead<TRow>> {
+    const r = await RunView.FromMetadataProvider(provider).RunView<TRow>({ EntityName: entityName, ExtraFilter: filter, ...(fields ? { Fields: [...fields] } : {}), ResultType: 'simple' }, user);
     return r.Success ? { Row: r.Results[0] || null, Error: null } : { Row: null, Error: r.ErrorMessage || 'unknown error' };
   }
 

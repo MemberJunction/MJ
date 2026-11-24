@@ -45,6 +45,7 @@ import {
     ChiefOfStaffMetrics,
     ChiefOfStaffPage,
     DEFAULT_CHAT_AGENT_SETTING_KEY,
+    LEGACY_DEFAULT_CHAT_AGENT_SETTING_KEY,
     DEFAULT_MY_AGENTS_PREFERENCES,
     FormatEmailDraftForClipboard,
     GovernancePolicyDraft,
@@ -274,7 +275,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         return Boolean(agentId && this.DefaultChatAgentID && UUIDsEqual(agentId, this.DefaultChatAgentID));
     }
 
-    /** Persists (or resets when null) the user's Default Chat Agent via `UserInfoEngine` (`chat.defaultAgentId`). */
+    /** Persists (or resets when null) the user's Default Chat Agent via `UserInfoEngine` (`Conversations.DefaultAgentID`). */
     public async SetDefaultChatAgent(agentId: string | null): Promise<void> {
         if (this.IsSavingDefaultChatAgent) {
             return;
@@ -291,8 +292,16 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
                 this.showBanner('error', 'Could not update your Default Chat Agent preference.');
                 return;
             }
+            const legacyValue = UserInfoEngine.Instance.GetSetting(LEGACY_DEFAULT_CHAT_AGENT_SETTING_KEY);
+            if (legacyValue) {
+                await UserInfoEngine.Instance.SetSetting(
+                    LEGACY_DEFAULT_CHAT_AGENT_SETTING_KEY,
+                    '',
+                    this.ProviderToUse.CurrentUser,
+                );
+            }
             this.DefaultChatAgentID = agentId;
-            const label = agentId ? this.GetAgentDisplayNameById(agentId) : 'Sage (System Default)';
+            const label = agentId ? this.GetAgentDisplayNameById(agentId) : 'Organization Default';
             this.showBanner('success', `Default Chat Agent set to ${label}.`);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -363,7 +372,8 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             const raw = (
                 explicitRaw !== undefined
                     ? explicitRaw
-                    : UserInfoEngine.Instance.GetSetting(DEFAULT_CHAT_AGENT_SETTING_KEY)
+                    : (UserInfoEngine.Instance.GetSetting(DEFAULT_CHAT_AGENT_SETTING_KEY) ||
+                        UserInfoEngine.Instance.GetSetting(LEGACY_DEFAULT_CHAT_AGENT_SETTING_KEY))
             )?.trim() ?? '';
             if (!raw || !IsValidUUID(raw)) {
                 this.DefaultChatAgentID = null;
@@ -745,8 +755,15 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
                 const entityName = args.baseEntity?.EntityInfo?.Name?.trim().toLowerCase() ?? '';
                 if (entityName === 'mj: user settings') {
                     const setting = args.baseEntity as MJUserSettingEntity;
-                    if (setting.Setting === DEFAULT_CHAT_AGENT_SETTING_KEY) {
-                        this.refreshDefaultChatAgentId(args.type === 'delete' ? null : (setting.Value ?? null));
+                    if (
+                        setting.Setting === DEFAULT_CHAT_AGENT_SETTING_KEY ||
+                        setting.Setting === LEGACY_DEFAULT_CHAT_AGENT_SETTING_KEY
+                    ) {
+                        this.refreshDefaultChatAgentId(
+                            setting.Setting === DEFAULT_CHAT_AGENT_SETTING_KEY
+                                ? (args.type === 'delete' ? null : (setting.Value ?? null))
+                                : undefined
+                        );
                         this.cdr?.markForCheck();
                         return;
                     }

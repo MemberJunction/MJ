@@ -63,6 +63,7 @@ const assembled: AsOfAssembledMatrix = {
     Provenance: [{ column: 'PriorVisits', source: 'immutable-field', sourceRef: `Years:${r.EntityKey}`, sourceVersion: 'immutable-after-create', computedAt: '2026-10-27T00:00:00.000Z' }],
   })),
   ExcludedRowIDs: new Set<string>(),
+  UncoveredFieldsByRow: new Map<string, readonly string[]>(),
   UncoveredRowsExcluded: [],
   Coverage: [],
   Preprocessing: [{ op: 'impute', col: 'PriorVisits', strategy: 'median', indicator: true }],

@@ -198,4 +198,44 @@ describe('ResolveAgentRunLimits with AncestorAgents & AncestorUserPolicies', () 
         expect(result.Limits.Budgets.PerRun.MaxTokens).toBe(20000);
         expect(result.Limits.Budgets.PerRun.MaxWallClockMs).toBe(120000);
     });
+
+    it('E2 (F1): places mj.config.cjs limits at the root ceiling so user instance policy can only narrow, never raise org ceilings', () => {
+        const leafPolicy = makePolicy({
+            AgentID: 'pepper',
+            Status: 'Active',
+        });
+
+        const result = ResolveAgentRunLimits({
+            MjConfigLimits: {
+                AgentAbsoluteIterations: 4_000,
+                Budgets: {
+                    PerRun: { MaxCostUsd: 5.0, MaxWallClockMs: 180_000 },
+                    PerUserPerDay: { MaxCostUsd: 25.0 },
+                },
+            },
+            UserPolicy: leafPolicy,
+            UserPolicyLimitsOverride: {
+                // Attempts to raise cost and iterations above mj.config.cjs while narrowing wall clock
+                AgentAbsoluteIterations: 20_000,
+                Budgets: {
+                    PerRun: { MaxCostUsd: 50.0, MaxWallClockMs: 60_000 },
+                    PerUserPerDay: { MaxCostUsd: null },
+                },
+            },
+        });
+
+        expect(result.Limits.AgentAbsoluteIterations).toBe(4_000);
+        expect(result.Provenance.AgentAbsoluteIterations.SourceTier).toBe('MjConfig');
+        expect(result.Provenance.AgentAbsoluteIterations.WasClampedByPolicyCeiling).toBe(true);
+
+        expect(result.Limits.Budgets.PerRun.MaxCostUsd).toBe(5.0);
+        expect(result.Provenance['Budgets.PerRun.MaxCostUsd'].SourceTier).toBe('MjConfig');
+        expect(result.Provenance['Budgets.PerRun.MaxCostUsd'].WasClampedByPolicyCeiling).toBe(true);
+
+        expect(result.Limits.Budgets.PerUserPerDay.MaxCostUsd).toBe(25.0);
+        expect(result.Provenance['Budgets.PerUserPerDay.MaxCostUsd'].SourceTier).toBe('MjConfig');
+
+        expect(result.Limits.Budgets.PerRun.MaxWallClockMs).toBe(60_000);
+        expect(result.Provenance['Budgets.PerRun.MaxWallClockMs'].SourceTier).toBe('UserAgentPolicy');
+    });
 });

@@ -1,11 +1,11 @@
-# Agent Continuity Intent Checker
+{% set managerName = conversationManagerName | default('the conversation manager') %}# Agent Continuity Intent Checker
 
-Your job is to quickly determine if a user's latest message is intended to continue working with the previous agent, or if it represents a context shift that requires re-evaluation by Sage (the conversation manager).
+Your job is to quickly determine if a user's latest message is intended to continue working with the previous agent, or if it represents a context shift that requires re-evaluation by {{ managerName }} (the conversation manager).
 
 ## Context
 
 In our multi-agent conversation system:
-- **Sage** is the ambient conversation manager that routes tasks to specialist agents
+- **{{ managerName }}** is the ambient conversation manager that routes tasks to specialist agents
 - Users can continue iterating with an agent (refinements, adjustments)
 - Users can also shift to new tasks that may require different agents
 - We need to detect intent quickly (<500ms) to provide smooth UX
@@ -16,8 +16,8 @@ Analyze the conversation context and determine if the latest user message clearl
 
 **Answer ONE of three values**:
 - `YES` - The message clearly continues with the previous agent (refinements, iterations, related work)
-- `NO` - The message represents a new task or context shift requiring Sage evaluation
-- `UNSURE` - Ambiguous; safer to route through Sage for proper evaluation
+- `NO` - The message represents a new task or context shift requiring {{ managerName }} evaluation
+- `UNSURE` - Ambiguous; safer to route through {{ managerName }} for proper evaluation
 
 ## Decision Criteria
 
@@ -37,7 +37,7 @@ Analyze the conversation context and determine if the latest user message clearl
 ### Vote UNSURE when:
 - The message is vague or could go either way
 - It's unclear if the task is related to previous work
-- Better safe than sorry - let Sage decide
+- Better safe than sorry - let {{ managerName }} decide
 
 ## Input Format
 
@@ -164,7 +164,7 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "UNSURE",
-  "reasoning": "Message is vague and could either be expanding the current research or starting a new competitive analysis. Safer to let Sage evaluate the full context.",
+  "reasoning": "Message is vague and could either be expanding the current research or starting a new competitive analysis. Safer to let {{ managerName }} evaluate the full context.",
   "modifyingArtifact": false,
   "targetArtifactVersionId": null
 }
@@ -280,7 +280,7 @@ Return a JSON object with this exact structure:
 ## Important Notes
 
 - **Speed is critical** - Make quick, confident decisions based on clear signals
-- **When in doubt, choose UNSURE** - It's better to let Sage re-evaluate than to route incorrectly
+- **When in doubt, choose UNSURE** - It's better to let {{ managerName }} re-evaluate than to route incorrectly
 - **Focus on task continuity** - Is this the same work, or a new type of work?
 - **Consider agent capabilities** - Does the previous agent have the skills for this request?
 - **Look for completion signals** - Words like "thanks", "good", "now" often indicate context shifts
