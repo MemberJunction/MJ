@@ -7,6 +7,7 @@ import {
     ResolveGuestArtifactSnapshotForSession,
     ResolveGuestShareProviderFallback,
 } from '../operations/ArtifactGuestShareServerOperations.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()
@@ -163,6 +164,7 @@ export class PublicGuestShareResolver extends ResolverBase {
         return ResolveGuestArtifactSnapshotForSession(context?.userPayload, provider, context?.ClientIp);
     }
 
+    @RefuseScopeLimitedPrincipals()
     @Query(() => ListArtifactGuestShareLinksResult)
     async ListArtifactGuestShareLinks(
         @Arg('artifactId', () => String) artifactId: string,
