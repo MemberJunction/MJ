@@ -1346,7 +1346,7 @@ import {
     SubmitHumanRubricAction,
 } from '@memberjunction/rubrics';
 
-// @memberjunction/search-engine (17 classes)
+// @memberjunction/search-engine (18 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
@@ -1359,6 +1359,7 @@ import {
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
+    ScopeDimensionResolver,
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
@@ -2981,6 +2982,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
+    ScopeDimensionResolver,
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
@@ -3050,11 +3052,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ModifyEntityAction,
     ValidateEntitySchemaAction,
     RecordProcessCancelRunServerOperation,
-    RecordProcessGetRunStatusServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
@@ -3254,11 +3256,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ComputerUseAction,
     ComputerUseTestDriver,
     DecisionFeaturePipelineDriver,
-    FeaturePipelineGoldenSetDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    FeaturePipelineGoldenSetDriver,
     LLMFeaturePipelineDriver,
     StewardFeaturePipelineVersionAction,
     IntegrationTestDriver,
@@ -3458,11 +3460,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     SearchAction,
     SearchEntityAction,
     SearchQueryCatalogAction,
-    SearchStorageFilesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    SearchStorageFilesAction,
     SendDocumentForSignatureAction,
     SendInterAgentRequestAction,
     SendSingleMessageAction,
@@ -3560,7 +3562,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1479;
+export const CLASS_REGISTRATIONS_COUNT = 1480;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
