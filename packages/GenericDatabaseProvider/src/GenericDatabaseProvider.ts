@@ -268,7 +268,7 @@ interface QueryColumnFilter {
  */
 /**
  * Thrown when a nested savepoint fails because the ambient physical transaction
- * was already rolled back by the server (mssql ENOTBEGUN/EABORT, pg 25P01).
+ * was already rolled back or aborted by the server (mssql ENOTBEGUN/EABORT, pg 25P01/25P02).
  * Opening a second physical TX would commit inner work after the outer writes
  * were gone. Callers must fail the outer unit — `Save()` returns false.
  */
@@ -10903,7 +10903,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         for (let i = 0; i < 5 && current; i++) {
             if (current && typeof current === 'object' && 'code' in current) {
                 const code = String((current as { code: unknown }).code);
-                if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01') {
+                // PostgreSQL: 25P02 in_failed_sql_transaction ("current transaction is aborted") is the code
+                // an aborted transaction answers with; 25P01 no_active_sql_transaction means it is gone.
+                if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01' || code === '25P02') {
                     return true;
                 }
             }

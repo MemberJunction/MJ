@@ -245,6 +245,20 @@ export function RedactEncryptedConflictValues<TValue>(
 }
 
 /**
+ * The stored value as {@link ClientOldValueToFieldValue} would read it, so the two sides of the
+ * "did the database change since the caller loaded it" comparison agree. A boolean column that
+ * holds NULL reads as `false` on the client side; without the same rule here, any edit to a record
+ * whose nullable boolean is NULL (PostgreSQL stores NULL where SQL Server's default stores 0) is
+ * reported as a concurrent modification of that field.
+ */
+export function StoredValueForComparison<T>(field: EntityFieldInfo | undefined, stored: T): T | boolean {
+    if (field?.TSType === EntityFieldTSType.Boolean && (stored === null || stored === undefined)) {
+        return false;
+    }
+    return stored;
+}
+
+/**
  * Detects field-level concurrency conflicts between a caller's baseline (`baselineValues`),
  * intended new values (`newValues`), and the authoritative database row (`storedValues`).
  *
@@ -277,7 +291,7 @@ export function DetectFieldConcurrencyConflicts<TBaseline, TNew, TStored>(
                 : f && f.CodeName in storedValues
                   ? storedValues[f.CodeName]
                   : storedValues[key];
-        const different = AreEntityFieldValuesDifferent(f, baselineValues[key], dbVal, true, key);
+        const different = AreEntityFieldValuesDifferent(f, baselineValues[key], StoredValueForComparison(f, dbVal), true, key);
         if (different && f && !f.ReadOnly) {
             const entry: ConflictDiagnosticEntry<AnyVal> = {
                 FieldName: key,
@@ -342,7 +356,7 @@ export function DetectFieldConcurrencyConflicts<TBaseline, TNew, TStored>(
             continue;
         }
         const f = FindEntityFieldByCodeNameOrName(entityInfo, cd.FieldName);
-        if (AreEntityFieldValuesDifferent(f, cd.ClientNewValue, dd.DBValue, true)) {
+        if (AreEntityFieldValuesDifferent(f, cd.ClientNewValue, StoredValueForComparison(f, dd.DBValue), true)) {
             rawOverlap.push({
                 FieldName: cd.FieldName,
                 ClientOldValue: cd.ClientOldValue,
