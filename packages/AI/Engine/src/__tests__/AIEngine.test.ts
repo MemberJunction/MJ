@@ -124,7 +124,7 @@ vi.mock('@memberjunction/core', async () => ({
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
-    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector } = await importOriginal<typeof import('@memberjunction/global')>();
+    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector, UUIDSet } = await importOriginal<typeof import('@memberjunction/global')>();
     // Minimal in-memory LRU stand-in — the real MJLruCache is in @memberjunction/global
     // but the mock above replaces the entire module export, so we re-implement just
     // the surface AIEngine uses.
@@ -200,6 +200,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         // nothing, and a hand-rolled copy would drift from the contract MJGlobal's own
         // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
         // singletons this mock replaces are created lazily, so none are instantiated.
+        UUIDSet,
         ToEpochMs,
         // Real binary-vector codecs — the stored-vector tests encode with one and
         // ReadStoredVector (real, below) decodes with the other.

@@ -8,9 +8,12 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { CompositeKey, IMetadataProvider, LogError, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
 import {
     GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION,
+    GraphEdgeEndpointAllows,
+    type GraphEdgeEndpointRule,
+    NormalizeGraphEdgeTypeName,
     MJActionEntity,
     MJEntityAlternateBaseViewEntity,
     MJGraphAuthorityTierEntity,
@@ -18,19 +21,25 @@ import {
     MJGraphConceptTypeEntity,
     MJGraphEdgeEntity,
     MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJQueryEntity,
 } from '@memberjunction/core-entities';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     ExistingGraphConceptSeed,
+    FindAuthorityTier,
     GraphAuthorityTier,
     GraphAuthorityTierDescriptor,
     GraphConceptType,
     GraphConceptTypeDescriptor,
+    GraphTypeDescriptor,
+    GroundingModeFromGraphTypeValue,
     ResolvedGraphOverlayConfig,
     SchemaGroundingTarget,
     SynthesizedGraphConcept,
     SynthesizedGraphEdge,
+    TaxonomyModeFromGraphTypeValue,
 } from '@memberjunction/content-pipeline-base';
 import { WhereEqual } from '../Filters.js';
 import type { GraphStageUpsertStatus, IGraphOverlayStore } from './GraphStage.js';
@@ -43,7 +52,19 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
     private conceptTypesCache: GraphConceptTypeDescriptor[] | null = null;
     private authorityTiersCache: GraphAuthorityTierDescriptor[] | null = null;
     private edgeTypesByNameCache = new Map<string, string>();
+    private edgeTypeEndpoints: GraphEdgeEndpointRule[] = [];
+    private edgeTypesLoaded = false;
     private conceptIDByNameCache = new Map<string, string>();
+    private rejectedEdgeCount = 0;
+
+    /**
+     * Synthesized edges this store refused to write because they break the edge-type contract: an
+     * edge type with no `MJ: Graph Edge Types` row, an endpoint entity not in metadata, or an endpoint
+     * entity the type's `MJ: Graph Edge Type Endpoints` rows do not allow. Each refusal is also logged.
+     */
+    public get RejectedEdgeCount(): number {
+        return this.rejectedEdgeCount;
+    }
 
     public async LoadExistingConcepts(
         graphID: string,
@@ -72,9 +93,7 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         for (const row of result.Results ?? []) {
             this.conceptIDByNameCache.set(`${graphID.toLowerCase()}::${row.Name.trim().toLowerCase()}`, row.ID);
             const parsedSynonyms = row.Synonyms ? (SafeJSONParse<string[]>(row.Synonyms) ?? []) : [];
-            const tierName = row.AuthorityTierID
-                ? (tierNameByID.get(row.AuthorityTierID.toLowerCase()) ?? row.AuthorityTier ?? 'Reference')
-                : 'Reference';
+            const tierName = (row.AuthorityTierID ? tierNameByID.get(row.AuthorityTierID.toLowerCase()) : undefined) ?? row.AuthorityTier ?? undefined;
             seeds.push({
                 ConceptID: row.ID,
                 Name: row.Name,
@@ -89,6 +108,48 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             });
         }
         return seeds;
+    }
+
+    /**
+     * The `MJ: Graph Types` row of the graph, with its overlay defaults. Returns `null` when the graph
+     * or its type cannot be read. Two plain reads rather than one subquery, so the filter stays
+     * dialect-neutral.
+     */
+    public async LoadGraphType(
+        graphID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<GraphTypeDescriptor | null> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const graphResult = await rv.RunView<MJGraphEntity>(
+            { EntityName: 'MJ: Graphs', Fields: ['ID', 'GraphTypeID'], ExtraFilter: WhereEqual({ ID: graphID }), ResultType: 'simple', MaxRows: 1 },
+            contextUser,
+        );
+        const graphTypeID = graphResult.Success ? graphResult.Results?.[0]?.GraphTypeID : undefined;
+        if (!graphTypeID) {
+            LogError(`EntityGraphOverlayStore.LoadGraphType: graph '${graphID}' could not be read: ${graphResult.ErrorMessage ?? 'not found'}`);
+            return null;
+        }
+        const typeResult = await rv.RunView<MJGraphTypeEntity>(
+            { EntityName: 'MJ: Graph Types', ExtraFilter: WhereEqual({ ID: graphTypeID }), ResultType: 'simple', MaxRows: 1 },
+            contextUser,
+        );
+        const row = typeResult.Success ? typeResult.Results?.[0] : undefined;
+        if (!row) {
+            LogError(`EntityGraphOverlayStore.LoadGraphType: graph type '${graphTypeID}' could not be read: ${typeResult.ErrorMessage ?? 'not found'}`);
+            return null;
+        }
+        return {
+            ID: row.ID,
+            Name: row.Name,
+            Description: row.Description,
+            IsCanon: row.IsCanon,
+            Rank: row.Rank,
+            IconClass: row.IconClass,
+            DefaultAuthorityTierID: row.DefaultAuthorityTierID,
+            DefaultConceptTaxonomyMode: TaxonomyModeFromGraphTypeValue(row.DefaultConceptTaxonomyMode),
+            DefaultGroundingMode: GroundingModeFromGraphTypeValue(row.DefaultGroundingMode),
+        };
     }
 
     public async LoadConceptTypes(
@@ -245,12 +306,28 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
 
         if (concept.ExistingConceptID) {
             loadedExisting = await entity.InnerLoad(CompositeKey.FromID(concept.ExistingConceptID)); // first-pk-ok: single PK ID
+            if (!loadedExisting) {
+                throw new Error(
+                    `Could not load existing MJ: Graph Concepts record '${concept.ExistingConceptID}' in graph '${graphID}'.`,
+                );
+            }
+        }
+
+        if (loadedExisting && (entity.Status === 'Approved' || entity.Status === 'Deprecated')) {
+            // Preserve human-governed Approved and Deprecated concepts in place: pipeline re-runs may link
+            // new edges to an existing Approved concept ID, but must never overwrite its definition or status
+            // without a Graph: Approve Edges steward.
+            this.conceptIDByNameCache.set(`${graphID.toLowerCase()}::${entity.Name.trim().toLowerCase()}`, entity.ID);
+            return entity.ID;
         }
 
         if (!loadedExisting) {
             entity.NewRecord();
             entity.GraphID = graphID;
             entity.Status = status;
+            // Synthesized from document chunks: the provenance access policy keeps it behind its
+            // sources even after they are retracted (an authored concept stays 'Declared').
+            entity.Origin = 'Inferred';
         }
 
         const conceptTypeID = await this.resolveConceptTypeID(concept, contextUser, provider);
@@ -275,7 +352,7 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             }
         }
 
-        const saved = await entity.Save();
+        const saved = await this.saveEntityUnderPipelinePolicy(entity, 'MJ: Graph Concepts', contextUser);
         if (!saved) {
             throw new Error(
                 `Failed to save MJ: Graph Concepts '${concept.Name}': ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
@@ -298,15 +375,12 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         let savedCount = 0;
 
         for (const edge of edges) {
-            const edgeTypeID = this.resolveEdgeTypeID(edge.EdgeTypeName);
-            if (!edgeTypeID) {
+            const contract = this.checkEdgeContract(edge, provider);
+            if (typeof contract === 'string') {
+                this.rejectEdge(edge, contract);
                 continue;
             }
-            const sourceEnt = provider.Entities.find((e) => e.Name === edge.SourceEntityName);
-            const targetEnt = provider.Entities.find((e) => e.Name === edge.TargetEntityName);
-            if (!sourceEnt || !targetEnt) {
-                continue;
-            }
+            const { EdgeTypeID: edgeTypeID, SourceEntityID: sourceEntityID, TargetEntityID: targetEntityID } = contract;
 
             const sourceRecordID = this.resolveEndpointRecordID(graphID, conceptID, edge.SourceRecordID);
             const targetRecordID = this.resolveEndpointRecordID(graphID, conceptID, edge.TargetRecordID);
@@ -318,9 +392,9 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             edgeEntity.NewRecord();
             edgeEntity.GraphID = graphID;
             edgeEntity.EdgeTypeID = edgeTypeID;
-            edgeEntity.SourceEntityID = sourceEnt.ID;
+            edgeEntity.SourceEntityID = sourceEntityID;
             edgeEntity.SourceRecordID = sourceRecordID;
-            edgeEntity.TargetEntityID = targetEnt.ID;
+            edgeEntity.TargetEntityID = targetEntityID;
             edgeEntity.TargetRecordID = targetRecordID;
             edgeEntity.Weight = edge.Weight;
             edgeEntity.Confidence = edge.Confidence;
@@ -329,7 +403,7 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             edgeEntity.Description = edge.Description;
             edgeEntity.Attributes = edge.Attributes ? JSON.stringify(edge.Attributes) : null;
 
-            if (await this.saveEdgeUnderPipelinePolicy(edgeEntity, contextUser)) {
+            if (await this.saveEntityUnderPipelinePolicy(edgeEntity, 'MJ: Graph Edges', contextUser)) {
                 savedCount++;
             } else {
                 LogError(
@@ -342,22 +416,64 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
     }
 
     /**
-     * Saves an edge this stage synthesized inside the {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION}
-     * server operation scope, bound to the run's user. The edge's `Approved` status comes from the
-     * content source's `GraphOverlay` policy, not from that user (the scheduler's user, an on-demand
-     * runner or an uploader), so `MJGraphEdgeEntityServer` accepts a new `Inferred` + `Approved` edge in
-     * this scope without `Graph: Approve Edges`. The scope covers only this save: no API caller can
-     * enter it, and it approves nothing but a newly created `Inferred` edge.
+     * Checks a synthesized edge against the edge-type contract before anything is written (Canon Rule 2):
+     * its type must resolve to an `MJ: Graph Edge Types` row, both endpoint entities must exist, and each
+     * endpoint entity must be allowed by the type's `MJ: Graph Edge Type Endpoints` rows. Returns the
+     * resolved IDs, or the reason the edge breaks the contract. `MJGraphEdgeEntityServer` checks the same
+     * rows on save; checking here keeps a malformed proposal out of the review queue and out of the log
+     * of failed saves.
      */
-    private saveEdgeUnderPipelinePolicy(edgeEntity: MJGraphEdgeEntity, contextUser: UserInfo): Promise<boolean> {
+    private checkEdgeContract(
+        edge: SynthesizedGraphEdge,
+        provider: IMetadataProvider,
+    ): { EdgeTypeID: string; SourceEntityID: string; TargetEntityID: string } | string {
+        const edgeTypeID = this.resolveEdgeTypeID(edge.EdgeTypeName);
+        if (!edgeTypeID) {
+            return `edge type '${edge.EdgeTypeName}' has no MJ: Graph Edge Types row`;
+        }
+        const sourceEntity = provider.EntityByName(edge.SourceEntityName);
+        const targetEntity = provider.EntityByName(edge.TargetEntityName);
+        if (!sourceEntity || !targetEntity) {
+            return `endpoint entity '${!sourceEntity ? edge.SourceEntityName : edge.TargetEntityName}' is not in metadata`;
+        }
+        if (!GraphEdgeEndpointAllows(this.edgeTypeEndpoints, edgeTypeID, 'Source', sourceEntity.ID)) {
+            return `'${edge.SourceEntityName}' is not an allowed Source for '${edge.EdgeTypeName}'`;
+        }
+        if (!GraphEdgeEndpointAllows(this.edgeTypeEndpoints, edgeTypeID, 'Target', targetEntity.ID)) {
+            return `'${edge.TargetEntityName}' is not an allowed Target for '${edge.EdgeTypeName}'`;
+        }
+        return { EdgeTypeID: edgeTypeID, SourceEntityID: sourceEntity.ID, TargetEntityID: targetEntity.ID };
+    }
+
+    /** Counts and logs an edge refused by {@link checkEdgeContract}; nothing is written for it. */
+    private rejectEdge(edge: SynthesizedGraphEdge, reason: string): void {
+        this.rejectedEdgeCount++;
+        LogStatus(
+            `EntityGraphOverlayStore: not writing '${edge.EdgeTypeName}' edge ` +
+                `${edge.SourceEntityName} '${edge.SourceRecordID}' -> ${edge.TargetEntityName} '${edge.TargetRecordID}': ${reason}.`,
+        );
+    }
+
+    /**
+     * Saves a newly synthesized graph concept or edge inside {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION},
+     * bound to the run's user and the single target entity (`'MJ: Graph Concepts'` or `'MJ: Graph Edges'`).
+     * The row's `Approved` status comes from the content source's `GraphOverlay` policy rather than the
+     * triggering user's own `Graph: Approve Edges` grant. Client CRUD boundaries mask this scope, and
+     * entity-server validation rejects anything except newly created policy-approved rows.
+     */
+    private saveEntityUnderPipelinePolicy(
+        entity: MJGraphConceptEntity | MJGraphEdgeEntity,
+        entityName: 'MJ: Graph Concepts' | 'MJ: Graph Edges',
+        contextUser: UserInfo,
+    ): Promise<boolean> {
         return ServerOperationScopeManager.Instance.RunWithAuthority(
             {
                 operationKey: GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION,
                 source: 'ServerEngine',
-                allowedEntities: ['MJ: Graph Edges'],
+                allowedEntities: [entityName],
                 userId: contextUser.ID,
             },
-            () => edgeEntity.Save(),
+            () => entity.Save(),
         );
     }
 
@@ -386,13 +502,11 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         if (concept.AuthorityTierID) {
             return concept.AuthorityTierID;
         }
-        const tiers = await this.LoadAuthorityTiers(contextUser, provider);
-        const norm = concept.AuthorityTier.trim().toLowerCase().replace(/\s+/g, '');
-        const matched = tiers.find((t) => t.Name.trim().toLowerCase().replace(/\s+/g, '') === norm);
-        if (matched) {
-            return matched.ID;
+        if (!concept.AuthorityTier) {
+            return null; // unranked
         }
-        return tiers.find((t) => t.Name.trim().toLowerCase() === 'reference')?.ID ?? null;
+        const tiers = await this.LoadAuthorityTiers(contextUser, provider);
+        return FindAuthorityTier(concept.AuthorityTier, tiers)?.ID ?? null;
     }
 
     private async ensureEdgeTypesLoaded(
@@ -400,32 +514,39 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
-        if (this.edgeTypesByNameCache.size > 0) {
+        if (this.edgeTypesLoaded) {
             return;
         }
         const rv = RunView.FromMetadataProvider(provider);
-        const res = await rv.RunView<MJGraphEdgeTypeEntity>(
-            {
-                EntityName: 'MJ: Graph Edge Types',
-                ResultType: 'simple',
-            },
+        const [types, endpoints] = await rv.RunViews(
+            [
+                { EntityName: 'MJ: Graph Edge Types', Fields: ['ID', 'Name', 'GraphID'], ResultType: 'simple' },
+                { EntityName: 'MJ: Graph Edge Type Endpoints', Fields: ['EdgeTypeID', 'Side', 'EntityID'], ResultType: 'simple' },
+            ],
             contextUser,
         );
-        if (!res.Success) {
-            LogError(`EntityGraphOverlayStore.ensureEdgeTypesLoaded failed: ${res.ErrorMessage}`);
+        if (!types?.Success) {
+            // With no edge types every edge is refused as unknown; log it and try again on the next call.
+            LogError(`EntityGraphOverlayStore.ensureEdgeTypesLoaded failed: ${types?.ErrorMessage || 'no result'}`);
             return;
         }
-        for (const row of res.Results ?? []) {
+        for (const row of (types.Results ?? []) as Array<Pick<MJGraphEdgeTypeEntity, 'ID' | 'Name' | 'GraphID'>>) {
             if (!row.GraphID || UUIDsEqual(row.GraphID, graphID)) {
-                const normName = row.Name.trim().toLowerCase().replace(/\s+/g, '');
-                this.edgeTypesByNameCache.set(normName, row.ID);
+                this.edgeTypesByNameCache.set(NormalizeGraphEdgeTypeName(row.Name), row.ID);
             }
         }
+        if (!endpoints?.Success) {
+            // Edges are then checked by type only here; MJGraphEdgeEntityServer still refuses one that
+            // breaks its endpoint rows when it is saved. Try the endpoint rows again on the next call.
+            LogError(`EntityGraphOverlayStore.ensureEdgeTypesLoaded could not read MJ: Graph Edge Type Endpoints: ${endpoints?.ErrorMessage || 'no result'}`);
+            return;
+        }
+        this.edgeTypeEndpoints = (endpoints.Results ?? []) as GraphEdgeEndpointRule[];
+        this.edgeTypesLoaded = true;
     }
 
     private resolveEdgeTypeID(edgeTypeName: string): string | null {
-        const norm = edgeTypeName.trim().toLowerCase().replace(/\s+/g, '');
-        return this.edgeTypesByNameCache.get(norm) ?? null;
+        return this.edgeTypesByNameCache.get(NormalizeGraphEdgeTypeName(edgeTypeName)) ?? null;
     }
 
     private resolveEndpointRecordID(graphID: string, currentConceptID: string, rawID: string): string | null {

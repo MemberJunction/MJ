@@ -6578,6 +6578,20 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     }
 
     /**
+    * * Field Name: DefaultAgentConfigurationID
+    * * Display Name: Default Agent Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake.
+    */
+    get DefaultAgentConfigurationID(): string | null {
+        return this.Get('DefaultAgentConfigurationID');
+    }
+    set DefaultAgentConfigurationID(value: string | null) {
+        this.Set('DefaultAgentConfigurationID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -6593,6 +6607,15 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     */
     get Skill(): string | null {
         return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: DefaultAgentConfiguration
+    * * Display Name: Default Agent Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DefaultAgentConfiguration(): string | null {
+        return this.Get('DefaultAgentConfiguration');
     }
 }
 
@@ -12530,7 +12553,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: CoordinationMode
     * * Display Name: Coordination Mode
     * * SQL Data Type: nvarchar(20)
-    * * Default Value: Observer
+    * * Default Value: Autonomous
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -12589,7 +12612,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: PhoneChannelMode
     * * Display Name: Phone Channel Mode
     * * SQL Data Type: nvarchar(20)
-    * * Default Value: InboundOnly
+    * * Default Value: Disabled
     * * Value List Type: List
     * * Possible Values 
     *   * Disabled
@@ -12627,7 +12650,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: CalendarChannelMode
     * * Display Name: Calendar Channel Mode
     * * SQL Data Type: nvarchar(30)
-    * * Default Value: ReadOnly
+    * * Default Value: ProposeWithApproval
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -12919,6 +12942,31 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
         Source: 'cache',
   });
 
+
+  /**
+   * Retrieves all descendant records in the BaseAgentID hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetBaseAgentIDDescendants<T extends BaseEntity = this>(maxDepth?: number): Promise<T[]> {
+    return this.GetDescendants<T>({ parentFieldName: 'BaseAgentID', maxDepth });
+  }
+
+  /**
+   * Retrieves all ancestor records in the BaseAgentID hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetBaseAgentIDAncestors<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetAncestors<T>('BaseAgentID');
+  }
+
+  /**
+   * Retrieves all direct child records in the BaseAgentID hierarchy of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetBaseAgentIDChildren<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetChildren<T>('BaseAgentID');
+  }
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -13193,8 +13241,8 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * * Field Name: LogoURL
     * * Display Name: Logo URL
-    * * SQL Data Type: nvarchar(255)
-    * * Description: URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: URL to an image file, presigned asset URL, or base64 data URI (e.g., data:image/png;base64,...) for the agent logo or custom instance avatar. Takes precedence over IconClass in UI display.
     */
     get LogoURL(): string | null {
         return this.Get('LogoURL');
@@ -14337,6 +14385,86 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: Isolation
+    * * Display Name: Isolation
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: InProcess
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Container
+    *   * InProcess
+    *   * Process
+    *   * Worker
+    * * Description: Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation).
+    */
+    get Isolation(): 'Container' | 'InProcess' | 'Process' | 'Worker' {
+        return this.Get('Isolation');
+    }
+    set Isolation(value: 'Container' | 'InProcess' | 'Process' | 'Worker') {
+        this.Set('Isolation', value);
+    }
+
+    /**
+    * * Field Name: BaseAgentID
+    * * Display Name: Base Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Optional prototype/base agent ID for multi-level capability inheritance (instance-of), distinct from ParentID (structural sub-agent composition). Derived agents inherit prompts, actions, sub-agents, skills, configurations, modalities, and rhythm templates live from their BaseAgentID chain (up to MaxDepth 5).
+    */
+    get BaseAgentID(): string | null {
+        return this.Get('BaseAgentID');
+    }
+    set BaseAgentID(value: string | null) {
+        this.Set('BaseAgentID', value);
+    }
+
+    /**
+    * * Field Name: InstantiationMode
+    * * Display Name: Instantiation Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * Optional
+    *   * Required
+    * * Description: Controls whether users can create tailored derived instances from this agent via BaseAgentID: None (direct-use only; default for catalog agents, sub-agents, and personal leaf instances), Optional (directly runnable and instantiable as a template), or Required (template/onboarding factory only; excluded from direct ad-hoc delegation).
+    */
+    get InstantiationMode(): 'None' | 'Optional' | 'Required' {
+        return this.Get('InstantiationMode');
+    }
+    set InstantiationMode(value: 'None' | 'Optional' | 'Required') {
+        this.Set('InstantiationMode', value);
+    }
+
+    /**
+    * * Field Name: AdditionalInstructions
+    * * Display Name: Additional Instructions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional standing instructions appended to this agent's prompt context and stacked down the BaseAgentID inheritance chain from root template to personal leaf instance.
+    */
+    get AdditionalInstructions(): string | null {
+        return this.Get('AdditionalInstructions');
+    }
+    set AdditionalInstructions(value: string | null) {
+        this.Set('AdditionalInstructions', value);
+    }
+
+    /**
+    * * Field Name: IsPrimaryInstance
+    * * Display Name: Is Primary Instance
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, marks this derived agent as the owner's primary instance among multiple instances sharing the same RootBaseAgentID for deterministic routing (e.g., inbound mailbox wakes, inter-agent requests, default dashboard selection).
+    */
+    get IsPrimaryInstance(): boolean {
+        return this.Get('IsPrimaryInstance');
+    }
+    set IsPrimaryInstance(value: boolean) {
+        this.Set('IsPrimaryInstance', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -14445,6 +14573,15 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: BaseAgent
+    * * Display Name: Base Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get BaseAgent(): string | null {
+        return this.Get('BaseAgent');
+    }
+
+    /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
@@ -14487,6 +14624,51 @@ if this limit is exceeded.
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+
+    /**
+    * * Field Name: RootBaseAgentID
+    * * Display Name: Root Base Agent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootBaseAgentID(): string | null {
+        return this.Get('RootBaseAgentID');
+    }
+
+    /**
+    * * Field Name: BaseAgentIDDepth
+    * * Display Name: Base Agent ID Depth
+    * * SQL Data Type: int
+    */
+    get BaseAgentIDDepth(): number | null {
+        return this.Get('BaseAgentIDDepth');
+    }
+
+    /**
+    * * Field Name: BaseAgentIDPath
+    * * Display Name: Base Agent ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get BaseAgentIDPath(): string | null {
+        return this.Get('BaseAgentIDPath');
+    }
+
+    /**
+    * * Field Name: BaseAgentIDIsLeaf
+    * * Display Name: Base Agent ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get BaseAgentIDIsLeaf(): boolean | null {
+        return this.Get('BaseAgentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: BaseAgentIDChildCount
+    * * Display Name: Base Agent ID Child Count
+    * * SQL Data Type: int
+    */
+    get BaseAgentIDChildCount(): number | null {
+        return this.Get('BaseAgentIDChildCount');
     }
 }
 
@@ -33169,6 +33351,20 @@ export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
     set TypeID(value: string) {
         this.Set('TypeID', value);
     }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
 }
 
 
@@ -40487,6 +40683,20 @@ export class MJCommentEntity extends BaseEntity<MJCommentEntityType> {
     }
     set TypeID(value: string) {
         this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
     }
 
     /**
@@ -49154,9 +49364,35 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * (`@RegisterClass(BasePipelineStage, 'Graph')`). When enabled on a Content Source that
      * is linked to a `GraphID` (either a Canon graph or a shared/per-source Knowledge graph),
      * the pipeline clusters ingested chunks into higher-level `MJ: Graph Concepts` and emits
-     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
+     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `BroaderThan`, `Contradicts`, etc.).
      */
     GraphOverlay?: MJContentSourceEntity_IContentSourceGraphOverlayConfig;
+    /**
+     * Optional artifact indexing for a push-only (`Upload`) source. When set, the Content Pipeline's
+     * `ArtifactGraphIndexer` pushes the latest version of every artifact of these types into this
+     * source as it is saved, one Content Item per artifact, linked to the `MJ: Artifacts` record
+     * so graph access follows the artifact's own permissions. Combine with `GraphOverlay` to put
+     * the documents into a graph.
+     */
+    Artifacts?: MJContentSourceEntity_IContentSourceArtifactsConfiguration;
+}
+
+/**
+ * Which artifacts a push-only source indexes, and how eagerly.
+ */
+export interface MJContentSourceEntity_IContentSourceArtifactsConfiguration {
+    /** `MJ: Artifact Types` names whose versions are indexed, e.g. `["Markdown Document"]`. Matched case-insensitively. */
+    ArtifactTypes?: string[];
+    /**
+     * Quiet period after the last save of an artifact before it is indexed, in milliseconds.
+     * Collaborative editing saves often; indexing waits for the edits to settle. Default 10000.
+     */
+    DebounceMs?: number;
+    /**
+     * When false, the source is skipped by the indexer while keeping what it already indexed.
+     * Default true.
+     */
+    Enabled?: boolean;
 }
 
 /**
@@ -53880,6 +54116,20 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: Optional parent Conversation ID for structural hierarchy (such as private side conversations anchored to a parent conversation). Strictly structural and never grants implicit read or write access to parent, child, or sibling conversations.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -53985,6 +54235,60 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get Type(): string | null {
         return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent ID Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Parent ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Parent ID Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -72986,6 +73290,20 @@ export class MJFieldSuggestionEntity extends BaseEntity<MJFieldSuggestionEntityT
     }
 
     /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
     * * Field Name: AIPromptRun
     * * Display Name: AI Prompt Run Details
     * * SQL Data Type: nvarchar(255)
@@ -75148,6 +75466,24 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     }
 
     /**
+    * * Field Name: Origin
+    * * Display Name: Origin
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+    * * Description: How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph.
+    */
+    get Origin(): 'Declared' | 'Inferred' {
+        return this.Get('Origin');
+    }
+    set Origin(value: 'Declared' | 'Inferred') {
+        this.Set('Origin', value);
+    }
+
+    /**
     * * Field Name: Graph
     * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
@@ -76061,6 +76397,67 @@ export class MJGraphTypeEntity extends BaseEntity<MJGraphTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DefaultAuthorityTierID
+    * * Display Name: Default Authority Tier ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+    * * Description: Authority tier given to content sources that feed graphs of this type and name no tier of their own. NULL leaves such sources unranked, below every configured tier.
+    */
+    get DefaultAuthorityTierID(): string | null {
+        return this.Get('DefaultAuthorityTierID');
+    }
+    set DefaultAuthorityTierID(value: string | null) {
+        this.Set('DefaultAuthorityTierID', value);
+    }
+
+    /**
+    * * Field Name: DefaultConceptTaxonomyMode
+    * * Display Name: Default Concept Taxonomy Mode
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Auto Grow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto Grow
+    *   * Constrained
+    *   * Propose Only
+    * * Description: Concept taxonomy mode used when a content source feeding a graph of this type names none: Constrained links only to existing concepts, Propose Only creates new concepts and edges as Proposed for steward review, Auto Grow creates them as Approved.
+    */
+    get DefaultConceptTaxonomyMode(): 'Auto Grow' | 'Constrained' | 'Propose Only' {
+        return this.Get('DefaultConceptTaxonomyMode');
+    }
+    set DefaultConceptTaxonomyMode(value: 'Auto Grow' | 'Constrained' | 'Propose Only') {
+        this.Set('DefaultConceptTaxonomyMode', value);
+    }
+
+    /**
+    * * Field Name: DefaultGroundingMode
+    * * Display Name: Default Grounding Mode
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full Canon
+    *   * None
+    *   * Schema and Queries
+    * * Description: Grounding depth used when a content source feeding a graph of this type names none: None extracts document concepts only, Schema and Queries also links concepts to entities, alternate base views and queries, Full Canon additionally links actions, skills and workflows.
+    */
+    get DefaultGroundingMode(): 'Full Canon' | 'None' | 'Schema and Queries' {
+        return this.Get('DefaultGroundingMode');
+    }
+    set DefaultGroundingMode(value: 'Full Canon' | 'None' | 'Schema and Queries') {
+        this.Set('DefaultGroundingMode', value);
+    }
+
+    /**
+    * * Field Name: DefaultAuthorityTier
+    * * Display Name: Default Authority Tier
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DefaultAuthorityTier(): string | null {
+        return this.Get('DefaultAuthorityTier');
     }
 }
 
@@ -117424,6 +117821,20 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     }
 
     /**
+    * * Field Name: AgentConfigurationID
+    * * Display Name: Agent Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional AI Configuration (model tier such as Fast, Standard, or High Power) used when executing this routine's Agent target. Seeded from the originating rhythm template's DefaultAgentConfigurationID on creation and changeable by the user or agent.
+    */
+    get AgentConfigurationID(): string | null {
+        return this.Get('AgentConfigurationID');
+    }
+    set AgentConfigurationID(value: string | null) {
+        this.Set('AgentConfigurationID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -117457,6 +117868,15 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: AgentConfiguration
+    * * Display Name: Agent Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AgentConfiguration(): string | null {
+        return this.Get('AgentConfiguration');
     }
 }
 

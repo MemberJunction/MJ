@@ -20,9 +20,22 @@ import { LogError, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJTaskEntity } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, TASK_SECURITY_ENVELOPE_VERSION } from '@memberjunction/ai-core-plus';
-import type { ActionChange, AgentExecutionProgressCallback, ExecuteAgentParams, TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
+import {
+    CreateWorkflowBudget,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    TASK_SECURITY_ENVELOPE_VERSION,
+} from '@memberjunction/ai-core-plus';
+import type {
+    ActionChange,
+    AgentExecutionProgressCallback,
+    AgentTreeBudget,
+    ExecuteAgentParams,
+    TaskSecurityEnvelope,
+    WorkflowBudgetBreachDiagnostic,
+} from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
+import { PickUsageMetric, SumUsageTokenPair } from './taskGraphUsageMetrics.js';
 
 /**
  * Runs a task-graph agent node. The agent run starts under the node's security envelope exactly as
@@ -82,6 +95,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             const envelopeParams = await TaskGraphEnvelopeRunParams(env ?? CLEAN_NODE_ENVELOPE, actingUser);
 
             const runner = new AgentRunner(params.Provider);
+            const workflowBudgetParams = this.buildWorkflowBudgetRunParams(params);
             const result = await runner.RunAgent({
                 agent,
                 provider: params.Provider,
@@ -106,6 +120,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
                 // running Agent step shows "what it is doing right now" on the workflow canvas.
                 onProgress: this.bridgeProgress(params),
+                ...workflowBudgetParams,
                 ...envelopeParams,
             });
 
@@ -145,13 +160,34 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 }
             }
 
+            const agentRun = result?.agentRun;
+            const costUsd = PickUsageMetric([
+                agentRun?.TotalCostRollup,
+                agentRun?.TotalCost,
+            ]);
+            const tokensUsed = PickUsageMetric([
+                agentRun?.TotalTokensUsedRollup,
+                agentRun?.TotalTokensUsed,
+                SumUsageTokenPair(agentRun?.TotalPromptTokensUsedRollup, agentRun?.TotalCompletionTokensUsedRollup),
+                SumUsageTokenPair(agentRun?.TotalPromptTokensUsed, agentRun?.TotalCompletionTokensUsed),
+            ]);
+
+            const normalizedLimitExceeded = this.normalizeLimitExceededDiagnostic(
+                result?.limitExceeded,
+                params,
+                costUsd
+            );
+
             return {
                 Success: success,
                 Output: this.extractOutput(result),
-                ErrorMessage: success ? undefined : (result?.agentRun?.ErrorMessage ?? 'Agent execution failed'),
-                AgentRunID: result?.agentRun?.ID,
+                ErrorMessage: success ? undefined : (agentRun?.ErrorMessage ?? 'Agent execution failed'),
+                AgentRunID: agentRun?.ID,
                 // The run reports what it ingested, including the taint it was seeded with.
                 IsOutputTainted: (result?.taintedSources?.length ?? 0) > 0 || env?.IsRunTainted === true,
+                ...(costUsd !== undefined ? { CostUsd: costUsd } : {}),
+                ...(tokensUsed !== undefined ? { TokensUsed: tokensUsed } : {}),
+                ...(normalizedLimitExceeded ? { LimitExceeded: normalizedLimitExceeded } : {}),
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -160,6 +196,61 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
         }
     }
 
+
+    private buildWorkflowBudgetRunParams(params: TaskAgentRunParams): {
+        treeBudget?: AgentTreeBudget;
+        workflowMaxCostUsd?: number;
+        workflowMaxDurationMs?: number;
+        workflowStartedAtMs?: number;
+    } {
+        const wf = params.WorkflowBudget;
+        if (!wf) {
+            return {};
+        }
+        const wholeWorkflowMaxCostUsd = wf.WorkflowMaxCostUsd ?? wf.RemainingCostUsd;
+        const priorCostUsd = Math.max(0, wf.CumulativeCostUsd ?? 0);
+        const childTreeBudget = CreateWorkflowBudget({
+            WorkflowMaxCostUsd: wholeWorkflowMaxCostUsd,
+            WorkflowMaxDurationMs: wf.WorkflowMaxDurationMs,
+            WorkflowStartedAtMs: wf.WorkflowStartedAtMs,
+            InitialCumulativeCostUsd: priorCostUsd,
+        });
+        return {
+            treeBudget: childTreeBudget,
+            ...(wholeWorkflowMaxCostUsd !== undefined ? { workflowMaxCostUsd: wholeWorkflowMaxCostUsd } : {}),
+            ...(wf.WorkflowMaxDurationMs !== undefined ? { workflowMaxDurationMs: wf.WorkflowMaxDurationMs } : {}),
+            ...(wf.WorkflowStartedAtMs !== undefined ? { workflowStartedAtMs: wf.WorkflowStartedAtMs } : {}),
+        };
+    }
+
+    private normalizeLimitExceededDiagnostic(
+        diagnostic: WorkflowBudgetBreachDiagnostic | undefined,
+        params: TaskAgentRunParams,
+        childCostUsd: number | undefined
+    ): WorkflowBudgetBreachDiagnostic | undefined {
+        if (!diagnostic) {
+            return undefined;
+        }
+        const wf = params.WorkflowBudget;
+        if (!wf || diagnostic.Dimension !== 'CostUsd' || wf.WorkflowMaxCostUsd === undefined) {
+            return diagnostic;
+        }
+        // If a downstream mock or custom runner ignored the seeded treeBudget and reported RemainingCostUsd as Limit,
+        // normalize Limit to the whole-workflow cap and CumulativeCostUsd to PriorCost + ChildCost.
+        if (diagnostic.Limit === wf.WorkflowMaxCostUsd) {
+            return diagnostic;
+        }
+        const priorCost = Math.max(0, wf.CumulativeCostUsd ?? 0);
+        const childSpend = Math.max(0, childCostUsd ?? diagnostic.CumulativeCostUsd);
+        const totalCumulative = priorCost + childSpend;
+        return {
+            ...diagnostic,
+            Limit: wf.WorkflowMaxCostUsd,
+            CumulativeCostUsd: totalCumulative,
+            CurrentValue: totalCumulative,
+            Reason: `Workflow USD cost budget exceeded ($${totalCumulative.toFixed(4)}/$${wf.WorkflowMaxCostUsd.toFixed(4)}; elapsed ${diagnostic.ElapsedWallClockMs}ms)`,
+        };
+    }
 
     /**
      * Who the agent runs as. The dispatcher already decided (`ContextUser`), and when the graph carries
@@ -409,12 +500,19 @@ export async function TaskGraphEnvelopeRunParams(
     actingUser: UserInfo,
 ): Promise<Partial<ExecuteAgentParams>> {
     const scope = env.RunScope;
-    const readers = env.Audience?.ReaderUserIDs ?? [];
+    let audienceParam: ExecuteAgentParams['Audience'] | undefined;
+    if (env.Audience) {
+        if ('Mode' in env.Audience && env.Audience.Mode === 'ScopeCommonReach') {
+            audienceParam = { Mode: 'ScopeCommonReach' };
+        } else if ('ReaderUserIDs' in env.Audience && env.Audience.ReaderUserIDs.length > 0) {
+            audienceParam = { Mode: 'Intersection', UserIDs: [...env.Audience.ReaderUserIDs] };
+        }
+    }
     const removals = env.IsRunTainted ? await taintedActionRemovals(actingUser) : [];
     return {
         SecurityEnvelope: env,
         ...(env.BoundActionParams ? { boundActionParams: structuredClone(env.BoundActionParams) } : {}),
-        ...(readers.length > 0 ? { Audience: { Mode: 'Intersection', UserIDs: [...readers] } } : {}),
+        ...(audienceParam ? { Audience: audienceParam } : {}),
         ...(scope?.PrimaryScopeEntityName ? { PrimaryScopeEntityName: scope.PrimaryScopeEntityName } : {}),
         ...(scope?.PrimaryScopeRecordID ? { PrimaryScopeRecordID: scope.PrimaryScopeRecordID } : {}),
         ...(scope?.SecondaryScopes ? { SecondaryScopes: structuredClone(scope.SecondaryScopes) } : {}),

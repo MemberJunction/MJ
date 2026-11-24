@@ -143,6 +143,8 @@ jobs:
             .github/scripts/migration-validator-seeds-baseline.json
             # The dynamic-import gate runs in the Source guards job; an edit to it alone must run it and its suite.
             .github/scripts/check-dynamic-imports.mjs
+            # The RunawayGuard limits-literals guard runs in Source guards; an edit to it alone must run it too.
+            .github/scripts/sweep-limits-literals.mjs
             # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
             # vitest suite lives in __tests__ — so an edit to the guard script alone must run it too.
             .github/scripts/check-exact-pins.mjs
@@ -201,6 +203,8 @@ jobs:
             .github/scripts/check-turbo-cache-env.mjs
             # The turbo root-data inputs guard runs in the guards job; its suite lives in __tests__ above.
             .github/scripts/check-turbo-root-inputs.mjs
+            # Video Studio real-render workflow: an edit to it must run the workflow guard suites.
+            .github/workflows/video-studio-render.yml
             # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
             # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
             # Its suite lives in __tests__ above, but without these entries a PR editing only one of
@@ -428,6 +432,10 @@ jobs:
       - name: Bootstrap DOM coverage ratchet
         if: ${{ !cancelled() }}
         run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
+
+      - name: RunawayGuard limits-literals guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/sweep-limits-literals.mjs --check-standards
 
       # Dynamic-replace guard (#3171): `.replace(search, replacement)` expands
       # $$, $&, $` and $' when `replacement` is a STRING, so any '$' in runtime

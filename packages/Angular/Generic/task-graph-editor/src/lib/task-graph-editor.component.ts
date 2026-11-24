@@ -60,7 +60,7 @@ import {
     RemoveTask,
     SpecToConnections,
     SpecToNodes,
-    TASK_GRAPH_NODE_TYPES,
+    TASK_GRAPH_RENDER_TYPES,
     UpdateTask,
     WouldCreateCycle,
     type TaskGraphDebugOverlay,
@@ -177,6 +177,12 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     @Input() public ShowLegend: boolean = true;
     @Input() public ShowStatusBar: boolean = true;
     @Input() public AutoLayoutDirection: FlowLayoutDirection = 'vertical';
+    /** Expand inline X-Ray telemetry panels on step nodes. */
+    @Input() public XRayEnabled: boolean = false;
+    /** Enable clicking left-gutter breakpoint dots directly on step nodes. */
+    @Input() public AllowBreakpointClick: boolean = false;
+    /** Optional per-user pan/zoom persistence key forwarded to `<mj-flow-editor>`. */
+    @Input() public ViewportKey: string | null = null;
 
     /**
      * Whether the properties panel rides alongside the canvas.
@@ -249,12 +255,16 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     @Output() public ConnectionSelected = new EventEmitter<FlowConnection | null>();
     @Output() public BeforeContextMenu = new EventEmitter<FlowBeforeContextMenuEventArgs>();
     @Output() public AfterContextMenuAction = new EventEmitter<FlowAfterContextMenuActionEventArgs>();
+    @Output() public NodeBreakpointClicked = new EventEmitter<FlowNode>();
+    @Output() public NodeRunStepClicked = new EventEmitter<FlowNode>();
+    @Output() public LayoutDirectionChanged = new EventEmitter<FlowLayoutDirection>();
 
     // ── Rendered state ───────────────────────────────────────────────────────
 
     public Nodes: FlowNode[] = [];
     public Connections: FlowConnection[] = [];
-    public NodeTypes: FlowNodeTypeConfig[] = [...TASK_GRAPH_NODE_TYPES];
+    /** Full 8-step-kind render registry (palette filters `Draggable !== false` to authorable kinds). */
+    public NodeTypes: FlowNodeTypeConfig[] = [...TASK_GRAPH_RENDER_TYPES];
     public SelectedTask: TaskGraphSpecNode | null = null;
     public ValidationErrors: readonly TaskGraphValidationError[] = [];
     public IsValid: boolean = true;
@@ -569,7 +579,7 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
         if (this.pendingLayout !== null) clearTimeout(this.pendingLayout);
         this.pendingLayout = setTimeout(() => {
             this.pendingLayout = null;
-            this.canvas?.ZoomToFit();
+            this.canvas?.FitOrRestoreViewport();
         });
     }
 

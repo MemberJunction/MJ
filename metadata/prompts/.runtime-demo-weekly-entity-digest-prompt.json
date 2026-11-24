@@ -13,31 +13,23 @@
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
           "Priority": 4
         },
         "primaryKey": {
           "ID": "17880CDB-23C6-480F-ADAC-F0D33C535151"
-        },
-        "sync": {
-          "lastModified": "2026-04-23T13:10:27.057Z",
-          "checksum": "50a7674c2a9589af0416f62b7eda7a736ab932ea483d77b3fa2b7993a7527afe"
         }
       },
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
           "Priority": 3
         },
         "primaryKey": {
           "ID": "2EEC5B2E-521B-491F-8A0D-BD3665B783DE"
-        },
-        "sync": {
-          "lastModified": "2026-04-23T13:10:27.072Z",
-          "checksum": "334a774b8652b293bbb3c34ead3602de3dbb2b9968f14157c4f727b1de064d53"
         }
       },
       {
@@ -74,9 +66,5 @@
   },
   "primaryKey": {
     "ID": "D635FA71-7FED-464C-8343-0AD182FE7478"
-  },
-  "sync": {
-    "lastModified": "2026-04-23T13:10:27.012Z",
-    "checksum": "2e929ed4310829a1a8bb8df0a5cc2bd98e12286ad7a188b21736230b610fc576"
   }
 }

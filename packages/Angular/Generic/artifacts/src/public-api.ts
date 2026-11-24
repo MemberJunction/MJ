@@ -21,6 +21,9 @@ export * from './lib/services/live-sheet-client-tool.helper';
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
 
+// Related-documents widget (semantic graph links, backlinks, shared concepts)
+export * from './lib/components/artifact-related-panel.component';
+
 // Base component
 export * from './lib/components/base-artifact-viewer.component';
 

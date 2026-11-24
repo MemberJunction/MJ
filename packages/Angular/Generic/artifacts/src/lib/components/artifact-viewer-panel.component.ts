@@ -27,6 +27,8 @@ import {
   MJConversationDetailEntity,
   MJConversationEntity,
   ParseArtifactVersionConfiguration,
+  GraphEngine,
+  RelationGraphNames,
   ResolveArtifactTypeThumbnailPolicy,
   RevokeGuestShareLinkOperation,
   UpsertGuestShareLinkInConfig,
@@ -40,6 +42,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
+import { type ArtifactRelatedSelection } from './artifact-related-panel.component';
 import {
   ArtifactExportOption,
   ArtifactNavigationAnchor,
@@ -455,6 +458,11 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   @Output() maximizeToggled = this.MaximizeToggled; // Emits when user clicks maximize/restore button
   @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  /**
+   * The person picked a related artifact in the Related tab. When nothing subscribes, the viewer
+   * switches to that artifact in place.
+   */
+  @Output() OpenArtifactRequested = new EventEmitter<string>();
 
   /**
    * @deprecated Use {@link OpenEntityRecord}.
@@ -779,6 +787,11 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       tabs.push('Links');
     }
 
+    // Related tab: shown when some active graph projects document links or shared concepts
+    if (!removalsLower.includes('related') && this.HasRelationGraphs) {
+      tabs.push('Related');
+    }
+
     return tabs;
   }
 
@@ -889,6 +902,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   async ngOnInit() {
     this.initialized = true;
+    void this.detectRelationGraphs();
     // Subscribe to refresh trigger for dynamic version changes
     if (this.RefreshTrigger) {
       this.RefreshTrigger.pipe(takeUntil(this.destroy$)).subscribe(async (data) => {
@@ -1207,7 +1221,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
 
       if (!loaded) {
-        this.error = 'Failed to load artifact';
+        this.error = 'Access denied or artifact unavailable: you do not have permission to view this artifact.';
         return;
       }
 
@@ -2905,6 +2919,44 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.OpenEntityRecord.emit(event);
   }
 
+  /** True once the graph engine reports a graph that projects document relations. */
+  public HasRelationGraphs = false;
+
+  /** A related artifact was picked in the Related tab. */
+  OnRelatedArtifactOpen(artifactId: string): void {
+    if (this.OpenArtifactRequested.observed) {
+      this.OpenArtifactRequested.emit(artifactId);
+    } else {
+      this.artifactId = artifactId;
+    }
+  }
+
+  /** A related record that is not an artifact was picked in the Related tab. */
+  OnRelatedRecordOpen(selection: ArtifactRelatedSelection): void {
+    const entity = this.ProviderToUse.EntityByName(selection.EntityName);
+    if (!entity) {
+      LogError(`Artifact viewer: related record entity "${selection.EntityName}" is not in metadata`);
+      return;
+    }
+    this.OpenEntityRecord.emit({ entityName: selection.EntityName, compositeKey: CompositeKey.FromURLSegment(entity, selection.RecordID) });
+  }
+
+  /** Load the graph engine in the background and show the Related tab when a relation graph exists. */
+  private async detectRelationGraphs(): Promise<void> {
+    try {
+      const provider = this.ProviderToUse;
+      const engine = GraphEngine.GetProviderInstance<GraphEngine>(provider, GraphEngine) as GraphEngine;
+      await engine.Config(false, provider.CurrentUser, provider);
+      const has = RelationGraphNames(engine).length > 0;
+      if (has !== this.HasRelationGraphs) {
+        this.HasRelationGraphs = has;
+        this.cdr.markForCheck();
+      }
+    } catch (error) {
+      LogError(`Artifact viewer: could not check for relation graphs: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   /** @deprecated Use {@link OnOpenEntityRecord}. */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     return this.OnOpenEntityRecord(event);
@@ -3007,7 +3059,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       'Code': 'fa-solid fa-code',
       'JSON': 'fa-solid fa-file-code',
       'Details': 'fa-solid fa-info-circle',
-      'Links': 'fa-solid fa-link'
+      'Links': 'fa-solid fa-link',
+      'Related': 'fa-solid fa-diagram-project'
     };
 
     if (baseIcons[tabName]) {

@@ -151,3 +151,11 @@ Open Apps extend the Chief of Staff strictly through **typed domain actions** bo
 - **BizApps Tasks** (`bizapps-tasks`) ships `Chief of Staff Tasks & To-dos`, `Work reports`, and `Chief of Staff Meetings & Transcripts`, plus offered rhythm templates (`tasks-daily-triage`, `tasks-weekly-review`, `daily-15five`).
 - **BizApps Planning** (`bizapps-planning`) ships `Strategic Plan & OKRs` (bundling `Align Strategic Planning Coach` as a sub-agent under the Chief of Staff's policy ceiling), `Huddles`, and `Planning Administration`, plus offered planning rhythm templates.
 
+### Personal Agent Instances & Prototype Inheritance
+
+`Chief of Staff` ships with `InstantiationMode = 'Required'` (and `Research Agent` / `Query Builder` ship with `InstantiationMode = 'Optional'`). Instead of sharing one unpersonalized global Chief of Staff row, each user instantiates one or more personal derived instances (`BaseAgentID → Chief of Staff`, e.g., **Pepper** as primary executive partner and **Cato** as a secondary Socratic advisor) via the **My Agents** left rail, the **Personalize** modal, or conversational onboarding (`Manage My Agent Instance`).
+
+Derived instances inherit prompts, actions, sub-agents, Open App skills, and rhythm templates **live** from their `BaseAgentID` ancestor chain while keeping private per-instance memories (`AIAgentNote`), independent `AIAgentUserPolicy` governance (clamped by ancestor ceilings), custom icons/avatars, and unified text + Realtime voice personas (`AIAgentPersona.StyleOverride`).
+
+See the full architecture, 2×2 RBAC matrix, SQL RLS rules, and server guard specification in **[Agent Permissions & Inheritance Guide](./AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md)**.
+

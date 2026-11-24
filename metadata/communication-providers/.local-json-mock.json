@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "Name": "Local JSON Mock",
+      "Description": "Local filesystem JSON mock email and calendar communication provider for development, smoke testing, and automated CI when MJ_MOCK_COMM_DIR is set. Disabled by default so it never overrides production providers.",
+      "Status": "Disabled",
+      "SupportsSending": true,
+      "SupportsReceiving": true,
+      "SupportsScheduledSending": false,
+      "SupportsForwarding": true,
+      "SupportsReplying": true,
+      "SupportsDrafts": true,
+      "SupportsCalendar": true,
+      "SupportsFreeBusy": true,
+      "EnterpriseScopeMode": "TenantWide",
+      "AllowedEmailDomains": null,
+      "AllowUserDelegatedOAuth": false
+    },
+    "primaryKey": {
+      "ID": "693125EC-88F8-4594-B0C7-D0120A09688D"
+    },
+    "sync": {
+      "lastModified": "2026-11-23T15:38:47.266Z",
+      "checksum": "846d9b87ff6c53072a46a3addd08469945ee2c0f790dff8bdd5d98b1e97b1db5"
+    }
+  }
+]

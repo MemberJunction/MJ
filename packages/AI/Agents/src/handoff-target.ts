@@ -1,5 +1,5 @@
-import { LogError, UserInfo } from '@memberjunction/core';
-import { MAX_HANDOFF_HOPS, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, LogError, UserInfo } from '@memberjunction/core';
+import { GetMaxHandoffHops, MAX_HANDOFF_HOPS, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { NormalizeUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import {
@@ -75,7 +75,7 @@ export type ResolveHandoffTargetResult<T extends DecisionDiscoveryAgent = MJAIAg
       };
 
 /** Maximum number of candidate agent names returned on refusal. */
-export const MAX_HANDOFF_CANDIDATES = 20;
+export const MAX_HANDOFF_CANDIDATES = CODE_FALLBACK_LIMITS.Tuning.MaxHandoffCandidates;
 
 /**
  * Resolves and validates a handoff target agent in deterministic order:
@@ -152,7 +152,7 @@ export async function ResolveHandoffTarget<T extends DecisionDiscoveryAgent = MJ
             continue;
         }
 
-        if (input.HandoffChain.length + 1 > MAX_HANDOFF_HOPS) {
+        if (input.HandoffChain.length + 1 > GetMaxHandoffHops()) {
             firstViewableFailure ??= { reason: 'HopLimit', label: targetLabel };
             continue;
         }
@@ -196,11 +196,12 @@ async function computeHandoffCandidates<T extends DecisionDiscoveryAgent>(
         const discoverable = DecisionDiscoveryCatalog(runnable, input.SourceAgentID);
         const hostAllowed = KeepHostAllowedAgents(discoverable, input.HostAllowedIDs);
         const chainSet = new Set(input.HandoffChain.map(id => NormalizeUUID(id)));
+        const maxCandidates = LimitsConfigResolver.Resolve().Limits.Tuning.MaxHandoffCandidates;
         return hostAllowed
             .filter(a => !chainSet.has(NormalizeUUID(a.ID)))
             .map(a => ({ ID: a.ID, Name: a.Name ?? '' }))
             .sort((a, b) => a.Name.localeCompare(b.Name))
-            .slice(0, MAX_HANDOFF_CANDIDATES);
+            .slice(0, maxCandidates);
     } catch (error) {
         LogError(
             `ResolveHandoffTarget: Failed to compute handoff candidates for agent ${input.SourceAgentID}: ${error instanceof Error ? error.message : String(error)}`
@@ -249,7 +250,7 @@ export function HandoffRefusalReasonText(reason: HandoffRefusalReason, targetLab
         case 'AlreadyInThisTurn':
             return `${targetLabel} has already participated in this turn and cannot be handed back to in the same turn.`;
         case 'HopLimit':
-            return `The maximum handoff limit (${MAX_HANDOFF_HOPS} hops) for this turn has been reached; cannot hand off to ${targetLabel}.`;
+            return `The maximum handoff limit (${GetMaxHandoffHops()} hops) for this turn has been reached; cannot hand off to ${targetLabel}.`;
     }
 }
 

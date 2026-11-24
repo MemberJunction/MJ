@@ -29,12 +29,12 @@ describe('TaskGraphDebugToolbarComponent (DOM)', () => {
         fixture.componentRef.setInput('Paused', true);
         fixture.detectChanges();
         expect(host().querySelector('[aria-label="Continue"]')).toBeTruthy();
-        expect(host().querySelector('[aria-label="Step over"]')).toBeTruthy();
-        expect(host().querySelector('[aria-label="Step into"]')).toBeTruthy();
+        expect(host().querySelector('[aria-label="Step next"]')).toBeTruthy();
+        expect(host().querySelector('[aria-label="Step wave"]')).toBeTruthy();
         expect(host().querySelector('[aria-label="Pause"]')).toBeNull();
         expect(host().textContent).toContain('Paused');
-        expect(host().textContent).toContain('Over');
-        expect(host().textContent).toContain('Into');
+        expect(host().textContent).toContain('Step Next');
+        expect(host().textContent).toContain('Step Wave');
     });
 
     it('shows Finished and hides Play/Step when the run has settled', () => {
@@ -43,7 +43,7 @@ describe('TaskGraphDebugToolbarComponent (DOM)', () => {
         fixture.detectChanges();
         expect(host().textContent).toContain('Finished');
         expect(host().querySelector('[aria-label="Continue"]')).toBeNull();
-        expect(host().querySelector('[aria-label="Step over"]')).toBeNull();
+        expect(host().querySelector('[aria-label="Step next"]')).toBeNull();
     });
 
     it('emits intent only — Continue clicks do not call a transport', () => {
@@ -62,8 +62,8 @@ describe('TaskGraphDebugToolbarComponent (DOM)', () => {
         fixture.componentInstance.Step.subscribe(() => events.push('step'));
         fixture.componentInstance.StepWave.subscribe(() => events.push('wave'));
         fixture.componentInstance.Cancel.subscribe(() => events.push('cancel'));
-        host().querySelector<HTMLButtonElement>('[aria-label="Step over"]')?.click();
-        host().querySelector<HTMLButtonElement>('[aria-label="Step into"]')?.click();
+        host().querySelector<HTMLButtonElement>('[aria-label="Step next"]')?.click();
+        host().querySelector<HTMLButtonElement>('[aria-label="Step wave"]')?.click();
         host().querySelector<HTMLButtonElement>('[aria-label="Stop"]')?.click();
         expect(events).toEqual(['step', 'wave', 'cancel']);
     });

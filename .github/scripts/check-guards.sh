@@ -58,6 +58,10 @@ node .github/scripts/check-explorer-prebundle-exclude.mjs || status=1
 # replay-script references resolve. Pure file reads.
 node .github/scripts/check-regression-suite.mjs || status=1
 
+# RunawayGuard numeric literal guard: ensures no unapproved RunawayGuard literal exists outside
+# packages/MJCore/src/generic/limitsConfig.ts (LimitsConfigResolver). Pure AST scan.
+node .github/scripts/sweep-limits-literals.mjs --check-standards || status=1
+
 if [ "$status" -ne 0 ]; then
   echo ""
   echo "check:guards failed. The rules behind each scanner:"

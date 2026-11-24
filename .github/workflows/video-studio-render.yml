@@ -1,0 +1,208 @@
+name: Video Studio real-render tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - next
+      - 'lts/**'
+    # No workflow-level `paths:` filter, so the status check always reports on every PR
+    # (whether non-required during burn-in or required later in next-protect).
+  schedule:
+    - cron: '30 7 * * *'
+
+concurrency:
+  group: video-studio-render-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect Video Studio render changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Check changed paths
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags origin "$PR_BASE_REF"
+          CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+          if echo "$CHANGED" | grep -qE '^packages/AI/VideoStudio/|^\.github/workflows/video-studio-render\.yml$'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if echo "$CHANGED" | grep -qx 'pnpm-lock.yaml'; then
+            if git diff "origin/$PR_BASE_REF...HEAD" -- pnpm-lock.yaml | grep -qE '(@hyperframes/|hyperframes)'; then
+              echo "relevant=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "relevant=false" >> "$GITHUB_OUTPUT"
+
+  render-tests:
+    name: Render a real video (RenderWorker + Docker)
+    needs: changes
+    # Fail closed: if change detection failed, run the real suite rather than skipping.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DO_NOT_TRACK: '1'
+      HYPERFRAMES_NO_TELEMETRY: '1'
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Install system ffmpeg and Chromium libraries
+        run: |
+          sudo apt-get update
+          PKGS="ffmpeg fonts-dejavu-core fonts-liberation fonts-noto-color-emoji fonts-noto-core"
+          for pkg in \
+            libasound2 \
+            libatk-bridge2.0-0 \
+            libatk1.0-0 \
+            libcairo2 \
+            libcups2 \
+            libdbus-1-3 \
+            libdrm2 \
+            libexpat1 \
+            libgbm1 \
+            libglib2.0-0 \
+            libnspr4 \
+            libnss3 \
+            libpango-1.0-0 \
+            libx11-6 \
+            libx11-xcb1 \
+            libxcb1 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxext6 \
+            libxfixes3 \
+            libxkbcommon0 \
+            libxrandr2 \
+            libxshmfence1; do
+            if apt-cache policy "${pkg}t64" 2>/dev/null | grep -q 'Candidate: [0-9]'; then
+              PKGS="$PKGS ${pkg}t64"
+            else
+              PKGS="$PKGS $pkg"
+            fi
+          done
+          # shellcheck disable=SC2086
+          sudo apt-get install -y --no-install-recommends $PKGS
+
+      - name: Set up workspace
+        uses: ./.github/actions/mj-setup
+
+      - name: Build Video Studio packages and dependencies
+        run: |
+          npx turbo run build --log-order=stream --filter=@memberjunction/video-studio... --filter=@memberjunction/video-studio-render-worker...
+
+      - name: Install pinned Chromium headless shell for RenderWorker
+        run: |
+          pnpm --filter @memberjunction/video-studio-render-worker run browser:install
+
+      - name: Build RenderWorker Docker image and verify container health check (WS1-2)
+        run: |
+          docker build \
+            -f packages/AI/VideoStudio/RenderWorker/Dockerfile \
+            -t mj-video-render-worker:local \
+            .
+          HEALTH_TOKEN="ci-health-check-token"
+          docker run -d --name vs-render-health -p 18080:8080 -e "VIDEO_STUDIO_RENDER_TOKEN=$HEALTH_TOKEN" mj-video-render-worker:local
+          HEALTH_OK=0
+          for _ in $(seq 1 30); do
+            if HEALTH_JSON="$(curl -fsS -H "Authorization: Bearer $HEALTH_TOKEN" http://127.0.0.1:18080/health 2>/dev/null)"; then
+              echo "Worker /health response: $HEALTH_JSON"
+              node -e '
+                const h = JSON.parse(process.argv[1]);
+                if (!h.Healthy || !h.ChromiumVersion || !h.FfmpegVersion || !h.HyperFramesVersion) {
+                  console.error("Invalid health payload:", h);
+                  process.exit(1);
+                }
+                console.log(`Verified RenderWorker container health: Chromium=${h.ChromiumVersion}, ffmpeg=${h.FfmpegVersion}, HyperFrames=${h.HyperFramesVersion}`);
+              ' "$HEALTH_JSON"
+              HEALTH_OK=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$HEALTH_OK" != "1" ]; then
+            docker logs vs-render-health || true
+          fi
+          docker rm -f vs-render-health >/dev/null 2>&1 || true
+          if [ "$HEALTH_OK" != "1" ]; then
+            echo "::error::RenderWorker container failed /health verification"
+            exit 1
+          fi
+
+      - name: Run RenderWorker real-render suites (WS1-3)
+        env:
+          VIDEO_STUDIO_RENDER_TESTS: '1'
+          VIDEO_STUDIO_RENDER_TESTS_REQUIRED: '1'
+        run: |
+          pnpm --filter @memberjunction/video-studio-render-worker exec vitest run \
+            src/__tests__/hyperframes.render.test.ts \
+            src/__tests__/checks.render.test.ts \
+            src/__tests__/chart-kit.render.test.ts \
+            --reporter=default --reporter=json --outputFile=/tmp/render-worker-vitest.json
+          node -e '
+            const fs = require("node:fs");
+            const report = JSON.parse(fs.readFileSync("/tmp/render-worker-vitest.json", "utf8"));
+            const passed = report.numPassedTests ?? 0;
+            const failed = report.numFailedTests ?? 0;
+            const skipped = (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0);
+            console.log(`RenderWorker real-render tests executed: ${passed} passed, ${failed} failed, ${skipped} skipped`);
+            if (failed > 0 || skipped > 0 || passed === 0) {
+              console.error(`::error::Expected all RenderWorker real-render tests to execute and pass (passed=${passed}, failed=${failed}, skipped=${skipped})`);
+              process.exit(1);
+            }
+          '
+
+      - name: Run Engine LocalWorker and Docker real-render suites (WS1-3)
+        env:
+          VIDEO_STUDIO_RENDER_TESTS: '1'
+          VIDEO_STUDIO_RENDER_TESTS_REQUIRED: '1'
+          VIDEO_STUDIO_DOCKER_TESTS: '1'
+          VIDEO_STUDIO_DOCKER_TESTS_REQUIRED: '1'
+        run: |
+          pnpm --filter @memberjunction/video-studio exec vitest run \
+            src/__tests__/local-worker-render-driver.test.ts \
+            src/__tests__/docker-render-driver.test.ts \
+            --reporter=default --reporter=json --outputFile=/tmp/engine-vitest.json
+          node -e '
+            const fs = require("node:fs");
+            const report = JSON.parse(fs.readFileSync("/tmp/engine-vitest.json", "utf8"));
+            const passed = report.numPassedTests ?? 0;
+            const failed = report.numFailedTests ?? 0;
+            const skipped = (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0);
+            console.log(`Engine real-render driver tests executed: ${passed} passed, ${failed} failed, ${skipped} skipped`);
+            if (failed > 0 || skipped > 0 || passed === 0) {
+              console.error(`::error::Expected all Engine real-render driver tests to execute and pass (passed=${passed}, failed=${failed}, skipped=${skipped})`);
+              process.exit(1);
+            }
+          '

@@ -71,6 +71,8 @@ export * from './custom/data/run-adhoc-query.action';
 export * from './custom/data/get-entity-details.action';
 export * from './custom/data/get-entity-list.action';
 export * from './custom/data/get-graph-context.action';
+export * from './custom/data/find-graph-path.action';
+export * from './custom/data/propose-canon-domains.action';
 export * from './custom/data/run-stored-query.action';
 export * from './custom/data/search-query-catalog.action';
 export * from './custom/data/search-entity.action';
@@ -148,6 +150,7 @@ export * from './custom/ai/communication-oauth-service';
 export * from './custom/ai/chief-of-staff-core-reads.action';
 export * from './custom/ai/chief-of-staff-rhythms-suggestions.action';
 export * from './custom/ai/agent-channel.action';
+export * from './custom/ai/manage-my-agent-instance.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -182,6 +185,7 @@ export * from './custom/github';
 
 export * from './custom/search/search.action';
 export * from './custom/search/scoped-search.action';
+export * from './custom/search/search-query.util';
 
 // Governed Artifact Actions
 export * from './custom/artifacts';
