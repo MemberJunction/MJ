@@ -930,34 +930,32 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     }
 
     // Step 3: Check dependency compatibility
-    if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
-      const depResult = await ResolveDependencyChain(manifest, context, appSource, options.DependenciesFromHead);
-      if (!depResult.Success) {
+    const depResult = await ResolveDependencyChain(manifest, context, appSource, options.DependenciesFromHead);
+    if (!depResult.Success) {
+      return BuildFailureResult(
+        'Upgrade',
+        options.AppName,
+        targetVersion,
+        'Schema',
+        startTime,
+        depResult.ErrorMessage ?? 'Dependency check failed for upgrade',
+      );
+    }
+    // Install any new dependencies required by the upgraded version
+    if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
+      const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
+        AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+        Verbose: options.Verbose,
+      });
+      if (!installResult.Success) {
         return BuildFailureResult(
           'Upgrade',
           options.AppName,
           targetVersion,
           'Schema',
           startTime,
-          depResult.ErrorMessage ?? 'Dependency check failed for upgrade',
+          installResult.ErrorMessage ?? 'Failed to install new dependencies for upgrade',
         );
-      }
-      // Install any new dependencies required by the upgraded version
-      if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
-          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
-          Verbose: options.Verbose,
-        });
-        if (!installResult.Success) {
-          return BuildFailureResult(
-            'Upgrade',
-            options.AppName,
-            targetVersion,
-            'Schema',
-            startTime,
-            installResult.ErrorMessage ?? 'Failed to install new dependencies for upgrade',
-          );
-        }
       }
     }
 
@@ -1724,7 +1722,9 @@ interface InternalResult {
  * default branches (a local app: its folder) first.
  */
 async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext, appSource: OpenAppSource, fromHead: DependenciesFromHead = []): Promise<InternalResult> {
-  if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
+  // The names in `fromHead` are checked below, also for an app that has no dependencies to resolve.
+  const namesToCheck = fromHead === 'all' ? [] : fromHead;
+  if (Object.keys(manifest.dependencies ?? {}).length === 0 && namesToCheck.length === 0) {
     return { Success: true };
   }
   const localDependencyError = DescribeUntrustedLocalDependency(manifest.name, appSource.Locator, manifest.dependencies);
@@ -1760,7 +1760,7 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     };
   }
 
-  const unknown = fromHead === 'all' ? [] : fromHead.filter((name) => !installedMap[name]);
+  const unknown = namesToCheck.filter((name) => !installedMap[name]);
   if (unknown.length > 0) {
     return { Success: false, ErrorMessage: `Cannot read dependencies from the default branch of ${unknown.map((name) => `'${name}'`).join(', ')}: not another app that is installed (Active or Disabled)` };
   }
