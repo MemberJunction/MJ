@@ -12,8 +12,9 @@
 | **Phase 2** | **Core Deliverability Primitive & Compliance Gate (Layer 1)** (`EvaluateEligibility`, `Send`, open-pixel injection, 8 rule drivers, `comms.dispatch` $\rightarrow$ `comms.send`) | Phase 1 |
 | **Phase 3** | **Providers, Webhooks, Open Pixel & Unsubscribe** (`SendGridProvider`, `/webhooks/sendgrid/:credentialId`, durable `/unsubscribe`, `/open/:token.gif`, `comms.activity`) | Phase 1, Phase 2 types |
 | **Phase 4** | **Metadata Seed, Preference Center & Admin UI** (`/metadata` JSON, `bizapps-common` PR #356 cleanup, `MJServer` Preference Center, `MJExplorer` Admin UI) | Phases 1–3 |
-| **Phase 5** | **Templated Rendering & Delivery Wrapper (Layer 2 — Future)** (`ITemplatedCommunicationService.RenderAndSend` over Phase 2) | Phase 2 (+ Phase 6 for scale) |
-| **Phase 6** | **WorkQueue Enhancements** (`ScheduledAt` / not-before on `PublishRequest`, per-key rate limiting, AWS load testing) | Enhances Phases 2, 3, 5 |
+| **Phase 5** | **Templated Rendering & Delivery Wrapper (Layer 2)** (`ITemplatedCommunicationService.RenderAndSend` over Phase 2) | Phase 2 |
+| **Phase 6** | **Sending Domain & DNS Authentication** (SPF / DKIM / DMARC through the provider, `CreateSendingDomain` / `VerifySendingDomain` operations, admin tab) | Phases 1–4 |
+| *Out of scope* | *WorkQueue enhancements (`ScheduledAt` on `PublishRequest`, per-key rate limiting). Deferred sends use `CommunicationLog.ScheduledAt` and the engine's sweep instead.* | - |
 
 ---
 

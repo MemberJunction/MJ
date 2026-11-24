@@ -64,7 +64,7 @@
             "Parameters": {
               "maxHours": 240
             },
-            "Notes": "15 U.S.C. 7704(a)(4): opt-out requests must be honored within 10 business days (240 hours).",
+            "Notes": "15 U.S.C. 7704(a)(4): opt-out requests must be honored within 10 business days. 240 hours is 10 calendar days, which is stricter than the statute; raise it if you want the full business-day allowance.",
             "Status": "Active"
           },
           "primaryKey": {
@@ -454,7 +454,7 @@
             "Parameters": {
               "maxHours": 240
             },
-            "Notes": "CASL s. 11(3): unsubscribe requests must be given effect without delay and in any event within 10 business days (240 hours).",
+            "Notes": "CASL s. 11(3): unsubscribe requests must be given effect without delay and in any event within 10 business days. 240 hours is 10 calendar days, which is stricter than the statute; raise it if you want the full business-day allowance.",
             "Status": "Active"
           },
           "primaryKey": {

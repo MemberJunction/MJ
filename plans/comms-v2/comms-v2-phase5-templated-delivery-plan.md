@@ -1,8 +1,9 @@
 # MJ Comms V2 — Phase 5: Templated Rendering & Delivery Wrapper (Layer 2)
 
+**Status:** Implemented. Where this plan and the code differ, the code and [`guides/COMMUNICATIONS_V2_GUIDE.md`](../../guides/COMMUNICATIONS_V2_GUIDE.md) are authoritative.  
 **Phase:** 5 of 6 (`packages/Communication/entity-comm-server`, `engine`, `MJServer`)  
 **Depends On:** **Phase 2** (`EvaluateEligibility()` $\rightarrow$ `Send()` deliverability primitive)  
-**Optional Scale Enhancement:** **Phase 6** (WorkQueue rate limiting / `ScheduledAt` if deferred blasts use WorkQueue)
+**Optional Scale Enhancement:** WorkQueue rate limiting / `ScheduledAt` (out of scope for this work)
 
 ---
 

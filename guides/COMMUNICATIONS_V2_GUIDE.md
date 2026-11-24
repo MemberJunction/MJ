@@ -77,7 +77,7 @@ source of truth for fields and value lists.
 | `MJ: Communication Principal Preferences` | One principal's state for one preference (`Opted In`, `Opted Out`, `Pending`) and the evidence of consent. |
 | `MJ: Communication Suppressions` | A reason not to send: scoped to an endpoint and/or a principal, optionally to a sender, a preference and a channel. |
 | `MJ: Communication Suppression Policies` | An automated rule that creates suppressions from activity, with a `DriverClass` and `Parameters`. |
-| `MJ: Communication Consent Audit Logs` | Append-only history of every suppression and preference change. Updates and deletes are disabled on the entity. |
+| `MJ: Communication Consent Audit Logs` | Append-only history of every suppression and preference change. Updates and deletes are disabled on the entity by the metadata in `metadata/entities/`, which reaches an installed database with the release `Metadata_Sync` migration; until that seed runs, the schema migration alone leaves the entity's API update and delete enabled. Deleting an entity with `spDeleteEntityWithCoreDependencies` removes the audit rows of the preferences and principal-only suppressions it deletes (section 7). |
 | `MJ: Communication Activities` | One delivery or engagement event. |
 | `MJ: Communication Provider Events` | Provider event IDs already processed (the deduplication ledger). |
 | `MJ: Jurisdictions`, `MJ: Jurisdiction Members` | Countries, subdivisions and groups (`EU`, `EEA`), and which jurisdictions belong to which group. |
@@ -243,7 +243,7 @@ Parameter keys are accepted in camelCase or PascalCase.
 | `ConsentEvidence` | `requireSource`, `requireTimestamp`, `requireConsentText`: boolean | `true` wins per field | Blocks non-transactional sends when the named evidence is missing from the principal preference. |
 | `ConsentExpiry` | `maxDays`: number; `impliedOnly`: boolean | Shortest `maxDays`; `impliedOnly` only if every regime sets it | Blocks when the preference's `ExpiresAt` has passed or `ConsentAt + maxDays` has passed. |
 | `UnsubscribeMechanism` | `oneClickHeader`, `footerLink`: `required` \| `optional` \| `none` | `required` > `optional` > `none` | Sets the one-click header and footer link obligations. Never blocks. A `Marketing` email keeps the header whatever the rule says. |
-| `UnsubscribeHonorWindow` | `maxHours`: number | Shortest | Recorded in the audit snapshot only. |
+| `UnsubscribeHonorWindow` | `maxHours`: number | Shortest | Recorded in the audit snapshot only. The CAN-SPAM and CASL seeds use 240 hours (10 calendar days), stricter than the statutes' 10 business days. |
 | `SenderIdentification` | `requirePostalAddress`, `requireSenderName`: boolean | `true` wins | Blocks non-transactional sends from a sender missing the address or name; sets the postal address obligation. |
 | `QuietHours` | `windows`: `[{ startHour, endHour }]` (local hours 0-23, may wrap midnight) | Union of windows | Defers non-transactional sends to the next hour outside every window. The time zone is the principal's, else the recipient jurisdiction's, else the sender's `Configuration.timezone`, else UTC. |
 | `TrackingConsent` | `openPixel`, `clickTracking`: `allowed` \| `consent-required` \| `prohibited` (or `requireConsentForOpenPixel` / `requireConsentForClickTracking`: boolean) | `prohibited` > `consent-required` > `allowed` | Sets `AllowOpenPixel` and `AllowClickTracking`. Never blocks. |
@@ -368,6 +368,12 @@ The seeded `SoftBounceThresholdPolicy` creates a `Policy` suppression that expir
 endpoint `Erased`, removes its address while keeping the hash, clears the address on its logs and the IP
 address, user agent and raw payload on its activity rows. Suppressions are kept, so an erased address stays
 suppressed if it is ever supplied again. The consent audit log is not changed.
+
+**Removing an entity.** When CodeGen removes an entity with `spDeleteEntityWithCoreDependencies`, the
+principals, endpoint links and principal preferences of its records are deleted, and so are principal-only
+suppressions, with the consent audit rows that reference them. A suppression that also names an endpoint (a
+hard bounce or complaint recorded against a principal) is kept with its principal link cleared, so the address
+stays blocked, and its audit rows are kept.
 
 ---
 

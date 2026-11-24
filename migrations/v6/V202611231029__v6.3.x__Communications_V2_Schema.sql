@@ -403,7 +403,13 @@ ALTER TABLE ${flyway:defaultSchema}.CommunicationLog ADD
     UnsubscribeToken UNIQUEIDENTIFIER NULL,
     TrackingToken UNIQUEIDENTIFIER NULL,
     CorrelationData NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    ComplianceDecision NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+    ComplianceDecision NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    CONSTRAINT FK_CommunicationLog_Entity FOREIGN KEY (EntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID),
+    CONSTRAINT FK_CommunicationLog_Endpoint FOREIGN KEY (CommunicationEndpointID) REFERENCES ${flyway:defaultSchema}.CommunicationEndpoint(ID),
+    CONSTRAINT FK_CommunicationLog_Sender FOREIGN KEY (CommunicationSenderID) REFERENCES ${flyway:defaultSchema}.CommunicationSender(ID),
+    CONSTRAINT FK_CommunicationLog_Preference FOREIGN KEY (CommunicationPreferenceID) REFERENCES ${flyway:defaultSchema}.CommunicationPreference(ID),
+    CONSTRAINT CK_CommunicationLog_MessageClass CHECK (MessageClass IS NULL OR MessageClass IN ('Transactional', 'Operational', 'Marketing')),
+    CONSTRAINT CK_CommunicationLog_PrincipalPair CHECK ((EntityID IS NULL AND RecordID IS NULL) OR (EntityID IS NOT NULL AND RecordID IS NOT NULL));
 GO
 
 -- Non-enumerable capability token for one-click unsubscribe and preference center URLs.
@@ -416,15 +422,6 @@ GO
 CREATE UNIQUE NONCLUSTERED INDEX UX_CommunicationLog_TrackingToken
     ON ${flyway:defaultSchema}.CommunicationLog (TrackingToken)
     WHERE TrackingToken IS NOT NULL;
-GO
-
-ALTER TABLE ${flyway:defaultSchema}.CommunicationLog ADD
-    CONSTRAINT FK_CommunicationLog_Entity FOREIGN KEY (EntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID),
-    CONSTRAINT FK_CommunicationLog_Endpoint FOREIGN KEY (CommunicationEndpointID) REFERENCES ${flyway:defaultSchema}.CommunicationEndpoint(ID),
-    CONSTRAINT FK_CommunicationLog_Sender FOREIGN KEY (CommunicationSenderID) REFERENCES ${flyway:defaultSchema}.CommunicationSender(ID),
-    CONSTRAINT FK_CommunicationLog_Preference FOREIGN KEY (CommunicationPreferenceID) REFERENCES ${flyway:defaultSchema}.CommunicationPreference(ID),
-    CONSTRAINT CK_CommunicationLog_MessageClass CHECK (MessageClass IS NULL OR MessageClass IN ('Transactional', 'Operational', 'Marketing')),
-    CONSTRAINT CK_CommunicationLog_PrincipalPair CHECK ((EntityID IS NULL AND RecordID IS NULL) OR (EntityID IS NOT NULL AND RecordID IS NOT NULL));
 GO
 
 -- Webhook correlation fallback when custom args are missing.
@@ -877,9 +874,12 @@ GO
 -- CodeGen calls this procedure to remove an entity whose base table has been dropped. Six new
 -- columns reference Entity.ID; each needs a decision, recorded in
 -- packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json:
---   * CommunicationPrincipal, CommunicationEndpointPrincipal, CommunicationPrincipalPreference
---     and CommunicationSuppression rows are deleted (they describe records of the entity),
---     together with the consent audit rows that reference a deleted preference or suppression.
+--   * CommunicationPrincipal, CommunicationEndpointPrincipal and CommunicationPrincipalPreference
+--     rows are deleted (they describe records of the entity), and so are principal-only
+--     CommunicationSuppression rows, together with the consent audit rows that reference a
+--     deleted preference or suppression.
+--   * A CommunicationSuppression that also names an endpoint keeps its row and loses the entity
+--     link, so a hard bounce or complaint keeps blocking the address.
 --   * CommunicationLog and CommunicationSenderType keep their rows and lose the entity link.
 -- This is the full procedure from V202611120915 with those statements added.
 -- =============================================================================
@@ -1041,7 +1041,10 @@ BEGIN TRY
     INSERT INTO @CommsPreferenceIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[CommunicationPrincipalPreference] WHERE [EntityID] = @EntityID;
 
     DECLARE @CommsSuppressionIDs TABLE (ID uniqueidentifier PRIMARY KEY);
-    INSERT INTO @CommsSuppressionIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[CommunicationSuppression] WHERE [EntityID] = @EntityID;
+    -- Only principal-only suppressions go with the entity. A suppression that also names an endpoint
+    -- (a hard bounce or spam complaint recorded against a principal) keeps blocking that address.
+    INSERT INTO @CommsSuppressionIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[CommunicationSuppression]
+        WHERE [EntityID] = @EntityID AND [CommunicationEndpointID] IS NULL;
 
     DECLARE @OrganicKeyIDs TABLE (ID uniqueidentifier PRIMARY KEY);
     INSERT INTO @OrganicKeyIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[EntityOrganicKey] WHERE [EntityID] = @EntityID;
@@ -1188,14 +1191,18 @@ BEGIN TRY
     DELETE FROM [${flyway:defaultSchema}].[EntityCommunicationField] WHERE [EntityCommunicationMessageTypeID] IN (SELECT ID FROM @MessageTypeIDs);
     DELETE FROM [${flyway:defaultSchema}].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
 
-    -- Communications V2. Preferences and suppressions record a choice made by a record of this
-    -- entity, so they go with it, and so do the consent audit rows that point at them (an audit
-    -- row must reference exactly one of the two: CK_CommunicationConsentAuditLog_OneSubject).
+    -- Communications V2. Preferences and principal-only suppressions record a choice made by a
+    -- record of this entity, so they go with it, and so do the consent audit rows that point at
+    -- them (an audit row must reference exactly one of the two: CK_CommunicationConsentAuditLog_OneSubject).
+    -- A suppression that also names an endpoint is kept, with its principal link cleared, so the
+    -- address stays blocked; its consent audit rows are kept with it.
     DELETE FROM [${flyway:defaultSchema}].[CommunicationConsentAuditLog]
         WHERE [CommunicationPrincipalPreferenceID] IN (SELECT ID FROM @CommsPreferenceIDs)
            OR [CommunicationSuppressionID] IN (SELECT ID FROM @CommsSuppressionIDs);
     DELETE FROM [${flyway:defaultSchema}].[CommunicationPrincipalPreference] WHERE [EntityID] = @EntityID;
-    DELETE FROM [${flyway:defaultSchema}].[CommunicationSuppression] WHERE [EntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[CommunicationSuppression] SET [EntityID] = NULL, [RecordID] = NULL
+        WHERE [EntityID] = @EntityID AND [CommunicationEndpointID] IS NOT NULL;
+    DELETE FROM [${flyway:defaultSchema}].[CommunicationSuppression] WHERE [EntityID] = @EntityID AND [CommunicationEndpointID] IS NULL;
     DELETE FROM [${flyway:defaultSchema}].[CommunicationEndpointPrincipal] WHERE [EntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[CommunicationPrincipal] WHERE [EntityID] = @EntityID;
 

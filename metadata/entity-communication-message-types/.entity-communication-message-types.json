@@ -22,10 +22,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Communication Message Types.EntityID=@lookup:MJ: Entities.Name=MJ: Users&BaseMessageTypeID=@lookup:MJ: Communication Base Message Types.Type=Email?create&IsActive=true"
-    },
-    "sync": {
-      "lastModified": "2026-11-24T04:35:27.382Z",
-      "checksum": "316327993b741a52d275ab439356bb3e0e4620810d42f1052e2173eaae5617cc"
     }
   }
 ]

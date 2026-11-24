@@ -147,7 +147,7 @@
       "column": "EntityID",
       "nullable": true,
       "action": "delete",
-      "reason": "Deleted, not cleared: a principal-scoped suppression records that a record of the entity opted out, and clearing the pair would violate CK_CommunicationSuppression_Target for principal-only rows."
+      "reason": "Principal-only rows are deleted: they record that a record of the entity opted out, and clearing the pair would violate CK_CommunicationSuppression_Target. Rows that also name an endpoint (a hard bounce or complaint against a principal) are kept with EntityID and RecordID cleared, so the address stays blocked, and their consent audit rows are kept too."
     },
     {
       "table": "CompanyIntegrationEntityMap",

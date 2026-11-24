@@ -1,18 +1,19 @@
 # MJ Comms V2 — Phase 3: Providers, Webhooks, Open Pixel & Unsubscribe
 
+**Status:** Implemented. Where this plan and the code differ, the code and [`guides/COMMUNICATIONS_V2_GUIDE.md`](../../guides/COMMUNICATIONS_V2_GUIDE.md) are authoritative.  
 **Phase:** 3 of 6 (`packages/Communication/base-types`, `sendgrid`, `engine`, and `MJServer`)  
 **Depends On:** **Phase 1** (Schema + CodeGen) & **Phase 2** (`NormalizedActivityEvent`, `MessageResult.ProviderMessageID`, `BaseCommunicationSuppressionPolicy`, `BaseCommunicationPrincipal.OnActivity`)  
-**WorkQueue Note:** Uses existing `packages/WorkQueue` (`comms.activity` topic) immediately—no dependency on Phase 6's `ScheduledAt` or rate limiting.
+**WorkQueue Note:** Uses existing `packages/WorkQueue` (`comms.activity` topic) immediately—no dependency on WorkQueue `ScheduledAt` or rate limiting (out of scope).
 
 ---
 
 ## 1. Key Design Decisions Locked In
 
-1. **Per-Account / Subuser Webhook Routing (`W3-2`):** SendGrid webhooks are configured per SendGrid API account/subuser (`MJ: Credential`), not per `CommunicationSender`. The webhook route keys on **`:credentialId`** (`/api/comms/webhooks/sendgrid/:credentialId`) so `MJServer` loads the exact verification key before validating the payload.
+1. **Per-Account / Subuser Webhook Routing (`W3-2`):** SendGrid webhooks are configured per SendGrid API account/subuser (`MJ: Credential`), not per `CommunicationSender`. The webhook route keys on **`:credentialId`** (`/comms/webhooks/sendgrid/:credentialId`) so `MJServer` loads the exact verification key before validating the payload.
 2. **Batch Queueing, Not Per-Event Flooding (`W3-3` / `W3-4`):** The webhook handler verifies the ECDSA signature + 10-minute replay window on raw bytes, publishes **one `comms.activity` WorkQueue message per webhook POST batch**, and returns `202 Accepted` immediately. The worker unpacks the batch, deduplicates on `(ProviderID, ProviderEventID)` for >24h, and compares `OccurredAt` before resetting `SoftBounceCount`.
 3. **`mj_log_id` Only in `custom_args` (`W3-6`):** Only `mj_log_id` is sent to SendGrid; `CorrelationData` is joined back from `CommunicationLog` inside the `comms.activity` worker, keeping PII out of 3rd-party providers.
-4. **Guaranteed One-Click Unsubscribe (`W3-8` / `W3-9`):** `POST /api/comms/unsubscribe` validates `CommunicationLog.UnsubscribeToken` (non-enumerable random UUIDv4), **awaits durable persistence** onto `WorkQueue` (`comms.activity`), and returns `200 OK` immediately. Human-facing fallback/confirmation UI is handled in **Phase 4 (Preference Center)**.
-5. **First-Party Open-Tracking Pixel:** `GET /api/comms/open/:token.gif` serves a 43-byte 1×1 transparent GIF (`no-store`) and publishes an `Opened` event to `comms.activity` with `IsMachineEvent` detection.
+4. **Guaranteed One-Click Unsubscribe (`W3-8` / `W3-9`):** `POST /comms/unsubscribe` validates `CommunicationLog.UnsubscribeToken` (non-enumerable random UUIDv4), **awaits durable persistence** onto `WorkQueue` (`comms.activity`), and returns `200 OK` immediately. Human-facing fallback/confirmation UI is handled in **Phase 4 (Preference Center)**.
+5. **First-Party Open-Tracking Pixel:** `GET /comms/open/:token.gif` serves a 43-byte 1×1 transparent GIF (`no-store`) and publishes an `Opened` event to `comms.activity` with `IsMachineEvent` detection.
 6. **System-Level Soft Bounce Policy & SendGrid Sync (`W3-5` / `W3-7`):** `SoftBounceThresholdPolicy` defaults to `5` consecutive soft bounces with a `30`-day `ExpiresAt`. `Dropped` (suppression) events act as sync signals, and revoking a suppression in MJ clears the matching SendGrid suppression via API.
 
 ---
@@ -49,18 +50,18 @@ In [`src/SendGridProvider.ts`](../../packages/Communication/providers/sendgrid/s
 
 ### Step 3: `MJServer` Public Routes (`packages/MJServer`)
 Mounted in `MountPublicCoreRoutes()` ([`src/coreRoutes.ts`](../../packages/MJServer/src/coreRoutes.ts)) **ahead of JSON body-parser middleware** for raw-body signature verification:
-1. **`POST /api/comms/webhooks/sendgrid/:credentialId`** (and default route without `:credentialId`):
+1. **`POST /comms/webhooks/sendgrid/:credentialId`** (and default route without `:credentialId`):
    * Capture exact raw body bytes + headers into `WebhookNotificationInput`.
    * Load verification key from the specified `MJ: Credential` (`credentialId`), call `SendGridProvider.ParseNotification(input)`.
    * Return `401` on invalid signature or expired timestamp (>10 min).
    * Publish **one `comms.activity` WorkQueue message per webhook POST batch** and return `202 Accepted`.
-2. **`POST` & `GET /api/comms/unsubscribe` (`W3-8` / `W3-9`):**
+2. **`POST` & `GET /comms/unsubscribe` (`W3-8` / `W3-9`):**
    * Validate `token` against `CommunicationLog.UnsubscribeToken` (random UUIDv4).
    * **`POST` (RFC 8058 One-Click):** Await `WorkQueue.Publish('comms.activity', { UnsubscribeToken, EventType: 'Unsubscribed', Source: 'One-Click Header (Mailbox Provider)', IPAddress, UserAgent, OccurredAt })` and return `200 OK` immediately.
    * **`GET` (Footer Link):** Redirect to `CommunicationSender.PreferenceCenterURL?token=<UnsubscribeToken>` (or Phase 4's default Preference Center endpoint).
-3. **`GET /api/comms/open/:token.gif` (First-Party Open Pixel):**
+3. **`GET /comms/open/:token.gif` (First-Party Open Pixel):**
    * Validates `TrackingToken` (separate from `UnsubscribeToken`), immediately returns `200 OK` with a 43-byte 1×1 transparent GIF (`Content-Type: image/gif`, `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache`), and publishes `Opened` to `comms.activity` with `{ TrackingToken, OccurredAt, IPAddress, UserAgent }`.
-4. **`GET /api/comms/click/:token` (First-Party Link Tracking):**
+4. **`GET /comms/click/:token` (First-Party Link Tracking):**
    * Validates `TrackingToken` and verifies `sig` (`HMAC-SHA256` over `TrackingToken + '|' + u`) to prevent open-redirect abuse.
    * Publishes `Clicked` (`{ TrackingToken, TargetURL: u, OccurredAt, IPAddress, UserAgent }`) to `WorkQueue` (`comms.activity`) and immediately returns `302 Found` (`Location: u`, `Cache-Control: no-store`).
 
@@ -90,5 +91,5 @@ Mounted in `MountPublicCoreRoutes()` ([`src/coreRoutes.ts`](../../packages/MJSer
 
 ### Step 5: Unit & Integration Tests (Vitest)
 * **SendGrid Outbound & Webhook Tests:** Verbatim `List-Unsubscribe` headers (no `X-` prefix), `mj_log_id`-only `customArgs`, `x-message-id` capture, raw-body ECDSA verification + 10-min replay rejection, and native `bounce_classification` mapping.
-* **Open Pixel, Link Tracking & Unsubscribe Durability Tests:** `GET /api/comms/open/:token.gif` returning 43-byte GIF + `no-store` + `IsMachineEvent` detection; `GET /api/comms/click/:token` verifying HMAC (rejecting tampered `u=`), publishing `Clicked` with `TargetURL` + `TrackingToken` correlation, and returning `302`; `POST /api/comms/unsubscribe` awaiting `WorkQueue.Publish` before `200 OK` and testing all three `W3-9` write rules.
+* **Open Pixel, Link Tracking & Unsubscribe Durability Tests:** `GET /comms/open/:token.gif` returning 43-byte GIF + `no-store` + `IsMachineEvent` detection; `GET /comms/click/:token` verifying HMAC (rejecting tampered `u=`), publishing `Clicked` with `TargetURL` + `TrackingToken` correlation, and returning `302`; `POST /comms/unsubscribe` awaiting `WorkQueue.Publish` before `200 OK` and testing all three `W3-9` write rules.
 * **Out-of-Order & Expiring Soft-Bounce Tests:** Late `Delivered` event does not reset a newer `SoftBounceCount`; 5th soft bounce creates a 30-day expiring suppression.

@@ -1,5 +1,6 @@
 # MJ Comms V2 — Phase 2: Core Deliverability Primitive & Compliance Gate
 
+**Status:** Implemented. Where this plan and the code differ, the code and [`guides/COMMUNICATIONS_V2_GUIDE.md`](../../guides/COMMUNICATIONS_V2_GUIDE.md) are authoritative.  
 **Phase:** 2 of 6 (`packages/Communication/base-types` & `@memberjunction/communication-engine`)  
 **Prerequisite:** **Phase 1** ([V202611231029__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611231029__v6.3.x__Communications_V2_Schema.sql) + `mj codegen`)
 
@@ -25,7 +26,7 @@ Comms V2 explicitly separates **deliverability** from **template rendering**:
 | **Phase 1 (Schema + CodeGen)** *(Hard Prereq)* | `V202611231029__v6.3.x__Communications_V2_Schema.sql` + `mj codegen` | Must run first so `@memberjunction/core-entities` exports strongly-typed entities and `CHECK`-derived unions. |
 | **Phase 3 (Providers & Endpoints)** | `SendGridProvider` headers/`mj_log_id`, webhook & open-pixel routes | Phase 2 defines `MessageResult.ProviderMessageID`, `NormalizedActivityEvent`, and `BaseCommunicationProvider` guardrails; verified via `DryRun: true` and mock providers. |
 | **Phase 4 (Metadata Seed)** | Starter `Jurisdiction`s, `RuleType`s, `CAN-SPAM`/`GDPR`, `MJ: Users`, default `Company` sender | Phase 2 unit tests use in-memory metadata fixtures; engine degrades gracefully when regime tables are empty. |
-| **Phase 6 (WorkQueue Enhancements)** | `PublishRequest.ScheduledAt` (for `QuietHours` deferral / `SendAt`) + per-key rate limiting | Phase 2 publishes immediate `comms.dispatch` / `comms.send` jobs now and records `CommunicationLog.ScheduledAt` for Phase 6. |
+| **WorkQueue enhancements (out of scope)** | `PublishRequest.ScheduledAt` + per-key rate limiting | Not built. Phase 2 publishes immediate `comms.dispatch` jobs and records `CommunicationLog.ScheduledAt`; the engine's sweep sends deferred logs when they come due. |
 
 ---
 
@@ -96,8 +97,8 @@ Implement and `@RegisterClass(BaseComplianceRule, ...)` the 9 starter rule drive
 4. **Post-`PostProcess` Protected Injection, Body Validation, Open Pixel & Link Rewriting (`W2-4`)**:
    * Run `PreProcess` $\rightarrow$ `ComplianceGate` $\rightarrow$ `PostProcess` hooks **first**.
    * Validate caller-rendered `Body` / `HTMLBody` against body-level `ComplianceObligations` (detecting missing required `PostalAddress` or unsubscribe link/placeholder at send time).
-   * **Send-time Link Rewriting (never in rendering or `PreviewOnly`/`DryRun`):** When `Envelope.TrackClicks` and `TrackingConsent` permit, rewrite `<a href="http(s)://...">` in `HTMLBody` (excluding `mailto:`, `tel:`, `#`, `List-Unsubscribe`, `ConfirmationToken`, and `data-mj-no-track`) to `<publicUrl>/api/comms/click/<TrackingToken>?u=<encodedUrl>&sig=<hmac>` so every click resolves who clicked (`CommunicationLog` $\rightarrow$ `Endpoint`, `Principal`, `CorrelationData`) and what URL was clicked.
-   * **Inject protected elements last:** `From` / sender identity, `List-Unsubscribe` + `List-Unsubscribe-Post` (using `CommunicationLog.UnsubscribeToken`), `mj_log_id`, and **1×1 open-tracking pixel** (`<img src=".../api/comms/open/<TrackingToken>.gif" ...>`) into `HTMLBody` when `Envelope.TrackOpens` and `TrackingConsent` permit.
+   * **Send-time Link Rewriting (never in rendering or `PreviewOnly`/`DryRun`):** When `Envelope.TrackClicks` and `TrackingConsent` permit, rewrite `<a href="http(s)://...">` in `HTMLBody` (excluding `mailto:`, `tel:`, `#`, `List-Unsubscribe`, `ConfirmationToken`, and `data-mj-no-track`) to `<publicUrl>/comms/click/<TrackingToken>?u=<encodedUrl>&sig=<hmac>` so every click resolves who clicked (`CommunicationLog` $\rightarrow$ `Endpoint`, `Principal`, `CorrelationData`) and what URL was clicked.
+   * **Inject protected elements last:** `From` / sender identity, `List-Unsubscribe` + `List-Unsubscribe-Post` (using `CommunicationLog.UnsubscribeToken`), `mj_log_id`, and **1×1 open-tracking pixel** (`<img src=".../comms/open/<TrackingToken>.gif" ...>`) into `HTMLBody` when `Envelope.TrackOpens` and `TrackingConsent` permit.
    * Compute final SHA-256 hash assertion over all protected elements before dispatch.
 5. **Idempotent `comms.send` Handler (`W2-6`)**:
    * Marks `CommunicationLog.Status = 'Sending'` before calling the provider; skips any log with `ProviderMessageID` already set.

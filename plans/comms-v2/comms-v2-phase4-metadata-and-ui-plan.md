@@ -1,7 +1,8 @@
 # MJ Comms V2 — Phase 4: Metadata Seed, Preference Center & Admin UI
 
+**Status:** Implemented. Where this plan and the code differ, the code and [`guides/COMMUNICATIONS_V2_GUIDE.md`](../../guides/COMMUNICATIONS_V2_GUIDE.md) are authoritative.  
 **Phase:** 4 of 6 (`metadata/`, `packages/Angular/Generic/communications`, `MJServer`, `packages/Angular/Explorer/dashboards/`)  
-**Depends On:** **Phase 1** (Schema + CodeGen), **Phase 2** (Core Deliverability & Compliance Gate), **Phase 3** (`/api/comms/unsubscribe` + `UnsubscribeToken`)
+**Depends On:** **Phase 1** (Schema + CodeGen), **Phase 2** (Core Deliverability & Compliance Gate), **Phase 3** (`/comms/unsubscribe` + `UnsubscribeToken`)
 
 ---
 
@@ -34,7 +35,7 @@ Following the checkout-element blueprint used by the `bizapps-orders` Open App (
   * Reads `token`, `api-root`, and `csp-nonce` from host element attributes.
   * Renders brand styling from `CommunicationSender.TemplateContext` (`BrandName`, `LogoURL`, `PrimaryColor`, `FooterText`).
   * Displays `IsUserVisible = 1` `CommunicationPreference` rows grouped by `Category`, current status (`Opted In`, `Opted Out`, `Pending`), and *"Unsubscribe from all"*.
-  * Submits updates to `POST /api/comms/preferences/:token`.
+  * Submits updates to `POST /comms/preferences/:token`.
 
 ---
 
@@ -42,14 +43,14 @@ Following the checkout-element blueprint used by the `bizapps-orders` Open App (
 
 Mounted in `MountPublicCoreRoutes()` ([`coreRoutes.ts`](../../packages/MJServer/src/coreRoutes.ts)), following `checkout-host-page.ts` in the `bizapps-orders` Open App:
 * **Security Headers:** Per-response `cspNonce`, `default-src 'none'`, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
-* **`GET /api/comms/preferences/:token`:**
+* **`GET /comms/preferences/:token`:**
   * `Accept: text/html` $\rightarrow$ serves the CSP-nonce HTML shell hosting `<mj-comms-preference-center token="..." api-root="..." csp-nonce="...">` (with a minimal vanilla HTML confirm-button fallback if the element bundle is not configured, covering `W3-8`).
   * `Accept: application/json` $\rightarrow$ validates `CommunicationLog.UnsubscribeToken` (random UUIDv4) and returns *only* the masked recipient address, `Sender.TemplateContext` branding, and `IsUserVisible = 1` preferences + current states.
-* **`POST /api/comms/preferences/:token`:**
+* **`POST /comms/preferences/:token`:**
   * Applies preference toggles or `"UnsubscribeAll": true`, updates `CommunicationPrincipalPreference` / `CommunicationSuppression`, and appends `CommunicationConsentAuditLog` (`ConsentSource = 'Preference Center'`, `IPAddress`, `UserAgent`).
-* **`GET /api/comms/confirm/:token` (Double Opt-In Confirmation):**
+* **`GET /comms/confirm/:token` (Double Opt-In Confirmation):**
   * Transitions `'Pending'` $\rightarrow$ `'Opted In'`, sets `ConfirmedAt`, appends `CommunicationConsentAuditLog`, and renders confirmation.
-* **Phase 3 `/api/comms/unsubscribe` `GET` Target:** Redirects to `CommunicationSender.PreferenceCenterURL?token=...` if configured, otherwise `/api/comms/preferences/:token`.
+* **Phase 3 `/comms/unsubscribe` `GET` Target:** Redirects to `CommunicationSender.PreferenceCenterURL?token=...` if configured, otherwise `/comms/preferences/:token`.
 
 ---
 

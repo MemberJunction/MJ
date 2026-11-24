@@ -1,7 +1,8 @@
 # MJ Comms V2 — Phase 6: Sending Domain & DNS Authentication (SPF / DKIM / DMARC)
 
-**Phase:** 6 of 7 (`migrations/v6/`, `packages/Communication/base-types`, `sendgrid`, `engine`, `packages/Angular/Explorer/dashboards/`)  
-*(WorkQueue Enhancements shift to **Phase 7**.)*  
+**Status:** Implemented. Where this plan and the code differ, the code and [`guides/COMMUNICATIONS_V2_GUIDE.md`](../../guides/COMMUNICATIONS_V2_GUIDE.md) are authoritative.  
+**Phase:** 6 of 6 (`migrations/v6/`, `packages/Communication/base-types`, `sendgrid`, `engine`, `packages/Angular/Explorer/dashboards/`)  
+*(WorkQueue enhancements are out of scope for this work.)*  
 **Depends On:** **Phase 1** (Schema + CodeGen), **Phase 2** (`CommunicationEngine`), **Phase 3** (`SendGridProvider`), **Phase 4** (`MJExplorer` Communications Admin Dashboard)
 
 ---
