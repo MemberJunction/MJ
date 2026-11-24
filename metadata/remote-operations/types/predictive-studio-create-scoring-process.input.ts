@@ -22,21 +22,25 @@ export interface PredictiveStudioCreateScoringProcessInput {
     };
     /**
      * Optional. The target-entity column to write the prediction into (e.g.
-     * `RenewalScore`). **When supplied → write-back mode**: each run writes the
-     * prediction into that column AND a `MJ: ML Model Scoring Bindings` lineage row
-     * (`Mode='OnDemand'`) is created. **When omitted → generic output, no binding**:
-     * predictions are recorded in the process run history (`MJ: Process Run Details`)
-     * only, with no write-back column and no scoring binding.
+     * `RenewalScore`). **When supplied → write-back mode**: the binding names that column
+     * and each run copies the newest score into it. **When omitted → generic output**: each
+     * run writes the binding's Feature Values only. Either way a `MJ: ML Model Scoring
+     * Bindings` row (`Mode='OnDemand'`) is created for the model's training pipeline; it
+     * names the column only in write-back mode.
      */
     outputField?: string;
     /**
-     * Which prediction value the write-back lands in `outputField` — the numeric
-     * `'score'` (probability / regression value — the default) or the predicted
-     * `'class'` label (classification). Ignored in generic mode (no `outputField`).
+     * Which prediction value the binding copies into `outputField` — the numeric
+     * `'score'` (the adverse probability of a classification, a regression's value — the
+     * default) or the predicted `'class'` label. Ignored in generic mode (no `outputField`).
      */
     valueKind?: 'score' | 'class';
     /** Primary-key field on the target entity the model joins on (defaults to `ID`). */
     primaryKeyField?: string;
     /** Optional Record Process name; a descriptive default is generated when omitted. */
     name?: string;
+    /** Optional. The binding's feature name on the target entity; defaults to the model's training pipeline name. */
+    featureName?: string;
+    /** Optional. The `MJ: Authorizations` id a user must hold to see the predictions; defaults to "View Model Predictions". */
+    viewAuthorizationId?: string;
 }

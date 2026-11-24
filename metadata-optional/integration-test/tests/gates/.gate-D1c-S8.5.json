@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "D1c -> S8.5",
+    "Description": "Gate G6.9 (owner PR 4, phase 6, dataset D1c, criterion S8.5): after the period-3 shift the fired trigger's challenger is compared with the incumbent on the incumbent's own holdout rows (100%) and replaces it through the lifecycle gate, 1 of 1.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G6.9\", \"owner:PR4\", \"phase:6\", \"dataset:D1c\", \"criterion:S8.5\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 3600000,
+    "ExpectedOutcomes": {
+      "summary": "The challenger is paired on the incumbent's rows and Published; the incumbent Archived."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-d1c-s8-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "5884317A-ED1B-4695-85F0-4CDA94EDCAAD"
+  }
+}

@@ -118,6 +118,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJGraphEdgesSourceEntityID', sectionName: 'Graph Edges (Source Entity ID)', isExpanded: false },
             { sectionKey: 'mJGraphEdgesTargetEntityID', sectionName: 'Graph Edges (Target Entity ID)', isExpanded: false },
             { sectionKey: 'mJArtifacts', sectionName: 'Artifacts', isExpanded: false },
+            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }

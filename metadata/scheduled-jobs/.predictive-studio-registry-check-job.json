@@ -1,0 +1,37 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Registry Check",
+      "Description": "Hourly: remediates every Predictive Studio model registry finding (\u00a75.7 R7) through the lifecycle gate and records each finding and its action in the run's Details.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=PredictiveStudioRegistryCheckJobDriver",
+      "CronExpression": "0 0 * * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "Configuration": {
+        "Invariant": {
+          "Kind": "single-published-per-pipeline",
+          "Query": "Predictive Studio: Pipelines With More Than One Published Model",
+          "Schedule": {
+            "CronExpression": "0 0 * * * *",
+            "Timezone": "UTC"
+          },
+          "Action": "remediate"
+        },
+        "ArtifactHealth": {
+          "Enabled": true
+        },
+        "AuditComparison": {
+          "Enabled": true
+        },
+        "StaleScoringRunHours": 6,
+        "Migration": {
+          "BatchSize": 50,
+          "RetrainPerRun": 3
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "EF494676-030B-4EBE-8514-A6B1495AE5BA"
+    }
+  }
+]

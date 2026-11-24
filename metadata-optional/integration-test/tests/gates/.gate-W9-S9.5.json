@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W9 -> S9.5",
+    "Description": "Gate G3.9 (owner PR 4, phase 3, dataset W9, criterion S9.5): on W9-multiclass s42, the probability displayed for the named class equals the artifact's predict_proba column for that class on 20 of 20 sampled rows. The check trains and publishes the C3 multiclass model (Attended, Cancelled, NoShow), scores 20 rows sampled with seed 42 through Score Record Set without a binding, and sends the same rows' raw features with the model's stored artifact straight to the truth sidecar: the displayed probability of each row's named class must equal the artifact's probability vector at that class's position in the artifact's own classOrder, within 1e-9.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G3.9\", \"owner:PR4\", \"phase:3\", \"dataset:W9\", \"criterion:S9.5\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "20 of 20 sampled rows show the artifact's predict_proba column for the named class."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w9-s9-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "86EA6F6F-75E1-4A1C-9D31-6FD81D2C012B"
+  }
+}

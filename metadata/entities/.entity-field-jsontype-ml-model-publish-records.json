@@ -1,0 +1,74 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on the Initiator, GateDecision, Evidence and Refusal columns of MJ: ML Model Publish Records so",
+      "CodeGen emits typed InitiatorObject / GateDecisionObject / EvidenceObject / RefusalObject accessors on",
+      "MJMLModelPublishRecordEntity returning MJMLModelPublishRecordEntity_Actor, _GateDecision, _EvidenceSnapshot and",
+      "_TransitionRefusal. Every type in the shared JSONType-interfaces/IMLModelPublishRecordJsonTypes.ts mirrors its @memberjunction/predictive-studio-core type field for field",
+      "(PR 4 Task M1.5). The EntityField rows must exist before these @lookups resolve on push.",
+      "All fields bind the one combined file, so CodeGen emits its declarations once (CollectJSONTypeBlock dedupes by text)."
+    ],
+    "fields": {
+      "Name": "MJ: ML Model Publish Records"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "Actor",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLModelPublishRecordJsonTypes.ts"
+          },
+          "_comments": [
+            "Initiator field — who started the publish, rollback, adoption or refusal"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Model Publish Records&Name=Initiator"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "GateDecision",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLModelPublishRecordJsonTypes.ts"
+          },
+          "_comments": [
+            "GateDecision field — the gate decision the record applied or refused"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Model Publish Records&Name=GateDecision"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "EvidenceSnapshot",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLModelPublishRecordJsonTypes.ts"
+          },
+          "_comments": [
+            "Evidence field — what the approver or the automated gate was shown"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Model Publish Records&Name=Evidence"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "TransitionRefusal",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLModelPublishRecordJsonTypes.ts"
+          },
+          "_comments": [
+            "Refusal field — why a lifecycle transition was refused"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Model Publish Records&Name=Refusal"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: ML Model Publish Records"
+    }
+  }
+]
