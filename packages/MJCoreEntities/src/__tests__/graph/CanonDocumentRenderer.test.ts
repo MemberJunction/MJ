@@ -10,8 +10,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { CanonGraphEngine } from '../../engines/CanonGraphEngine';
-import { GraphEngine } from '../../graph/GraphEngine';
-import { LoadGraphEdgeProviders } from '../../graph';
+import { GraphEngine, NeutralGraphNodeLabel } from '../../graph/GraphEngine';
+import {
+    BaseGraphEdgeAccessPolicy,
+    BaseGraphNodeAccessPolicy,
+    GraphAccessPolicyRegistry,
+    LoadGraphEdgeProviders,
+    type GraphAccessPolicyContext,
+    type GraphEdgeView,
+    type GraphNodeAccessDecision,
+    type GraphPolicyNode,
+} from '../../graph';
 import { QueryEngine } from '../../engines/QueryEngine';
 import type { MJQueryEntityExtended } from '../../custom/MJQueryEntityExtended';
 import {
@@ -236,5 +245,94 @@ describe('CanonGraphEngine.RenderCanonDocument', () => {
         expect(sharedDoc).not.toContain('Executive Bonus Pool');
         expect(sharedDoc).not.toContain('Unpaid Invoices');
         expect(sharedDoc).not.toContain('Executive Revenue');
+    });
+
+    it('honors GraphAccessPolicy Redacted concept decisions, edge access policies, and edge Description FLS', async () => {
+        const intern = MakeUser('u-intern', ['Intern']);
+        const baseConcept = CanonMetadataRows()['MJ: Graph Concepts'][0];
+        await setup(
+            {
+                'MJ: Graph Concepts': [
+                    {
+                        ...baseConcept,
+                        ID: CONCEPT_PROPOSED_ID,
+                        Name: 'Secret Draft Metric',
+                        ConceptType: 'Metric',
+                        Description: 'Quotes private board memo',
+                        Specification: 'SELECT SecretColumn FROM PrivateBoardTable',
+                        Synonyms: '["BoardSecret"]',
+                        Status: 'Proposed',
+                    },
+                ],
+                'MJ: Graph Edges': [
+                    {
+                        ...StoredEdge(IDS.GraphCanon, EDGE_TYPE_PREFERRED_OVER, 'Preferred Over', NODE.Abv(IDS.InvoicesOpenAbv), NODE.Entity(IDS.Invoices), 1.0),
+                        Description: 'Internal audit rationale',
+                    },
+                    StoredEdge(IDS.GraphCanon, EDGE_TYPE_SAME_AS, 'Same As', NODE.Concept(IDS.ConceptOpenAr), NODE.Concept(IDS.ConceptRevenue), 1.0),
+                ],
+            },
+            {
+                'MJ: Graph Edges': {
+                    ReadRoles: 'all',
+                    DeniedReadFieldsByRole: { Intern: ['Description'] },
+                },
+            },
+            analyst,
+        );
+
+        class RedactProposedPolicy extends BaseGraphNodeAccessPolicy {
+            public async FilterNodes(
+                nodes: readonly GraphPolicyNode[],
+                _ctx: GraphAccessPolicyContext,
+            ): Promise<Map<string, GraphNodeAccessDecision>> {
+                const decisions = new Map<string, GraphNodeAccessDecision>();
+                for (const n of nodes) {
+                    decisions.set(n.Key, n.Ref.RecordID === CONCEPT_PROPOSED_ID ? 'Redacted' : 'Visible');
+                }
+                return decisions;
+            }
+        }
+
+        class HideSameAsEdgePolicy extends BaseGraphEdgeAccessPolicy {
+            public async FilterEdges(
+                _edges: readonly GraphEdgeView[],
+                _ctx: GraphAccessPolicyContext,
+            ): Promise<Set<string>> {
+                return new Set<string>();
+            }
+        }
+
+        const nodeSpy = vi.spyOn(GraphAccessPolicyRegistry, 'GetNodePolicy').mockImplementation((entityName: string) =>
+            entityName === 'MJ: Graph Concepts' ? new RedactProposedPolicy() : null,
+        );
+        const edgeSpy = vi.spyOn(GraphAccessPolicyRegistry, 'GetEdgePolicy').mockImplementation((edgeTypeName: string) =>
+            edgeTypeName === 'Same As' ? new HideSameAsEdgePolicy() : null,
+        );
+
+        try {
+            const doc = await CanonGraphEngine.Instance.RenderCanonDocument(analyst, {
+                IncludeProposed: true,
+                AudienceReaders: [intern],
+                Provider: provider as unknown as IMetadataProvider,
+            });
+
+            // Redacted concept keeps neutral label and strips Name, Description, Specification, Synonyms, AuthorityTier
+            expect(doc).toContain(NeutralGraphNodeLabel('MJ: Graph Concepts', CONCEPT_PROPOSED_ID));
+            expect(doc).not.toContain('Secret Draft Metric');
+            expect(doc).not.toContain('Quotes private board memo');
+            expect(doc).not.toContain('PrivateBoardTable');
+            expect(doc).not.toContain('BoardSecret');
+
+            // Edge Description FLS hides description when denied to AudienceReaders
+            expect(doc).toContain('**Invoices.vwInvoicesOpen** is PREFERRED OVER **Invoices**');
+            expect(doc).not.toContain('Internal audit rationale');
+
+            // BaseGraphEdgeAccessPolicy hides Same As edge
+            expect(doc).not.toContain('is SAME AS');
+        } finally {
+            nodeSpy.mockRestore();
+            edgeSpy.mockRestore();
+        }
     });
 });

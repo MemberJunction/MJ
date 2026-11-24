@@ -1,5 +1,5 @@
-import { EntityInfo, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
 import { QueryEngine } from '../engines/QueryEngine';
 import {
     IsGraphDataProvider,
@@ -14,6 +14,7 @@ import {
     GraphEngine,
     IsFieldReadableByAll,
     IsGraphConceptStatusVisible,
+    NeutralGraphNodeLabel,
 } from './GraphEngine';
 
 const ENTITY_GRAPH_CONCEPTS = 'MJ: Graph Concepts';
@@ -108,6 +109,7 @@ interface StoredEdgeRow {
     TargetEntity?: string;
     TargetRecordID: string;
     Description: string | null;
+    Origin?: string;
     Status: string;
     Weight: number;
 }
@@ -124,6 +126,11 @@ interface RenderScope {
     EntityNamesLower: Set<string>;
     AbvIDs: UUIDSet;
     QueryIDs: UUIDSet;
+}
+
+interface MetadataOwnerIndex {
+    FieldEntityNameByID: UUIDMap<string>;
+    AbvEntityNameByID: UUIDMap<string>;
 }
 
 /**
@@ -158,6 +165,7 @@ export async function RenderCanonDocumentMarkdown(
     const conceptTypeFilterSet = options.ConceptTypes?.length
         ? new Set(options.ConceptTypes.map((t) => t.trim().toLowerCase()).filter(Boolean))
         : null;
+    const ownerIndex = buildMetadataOwnerIndex(provider);
 
     let subgraph: GraphSubgraph | null = options.Subgraph ?? null;
     if (!subgraph && options.Question?.trim()) {
@@ -169,7 +177,7 @@ export async function RenderCanonDocumentMarkdown(
     let scope: RenderScope | null = null;
 
     if (subgraph) {
-        scope = buildScopeFromSubgraph(subgraph, provider);
+        scope = buildScopeFromSubgraph(subgraph, provider, ownerIndex);
         resolvedEdges = resolveEdgesFromSubgraph(subgraph);
         const conceptIDs = Array.from(scope.ConceptIDs);
         visibleConcepts = await readVisibleConcepts(
@@ -189,9 +197,11 @@ export async function RenderCanonDocumentMarkdown(
             provider,
         );
         resolvedEdges = await resolveStoredEdgesForPrincipals(
+            graph.Name,
             storedRows,
             includeProposed,
             user,
+            principals,
             options.AudienceReaders,
             provider,
         );
@@ -210,7 +220,7 @@ export async function RenderCanonDocumentMarkdown(
         `# Organizational Canon & Domain Knowledge (${graph.Name})`,
     ];
 
-    const precedenceSection = renderPrecedenceSection(resolvedEdges, entityFilterSet, provider);
+    const precedenceSection = renderPrecedenceSection(resolvedEdges, entityFilterSet, provider, ownerIndex);
     if (precedenceSection) {
         sections.push(precedenceSection);
     }
@@ -223,6 +233,7 @@ export async function RenderCanonDocumentMarkdown(
         includeSpecs,
         principals,
         provider,
+        ownerIndex,
     );
     if (conceptsSection) {
         sections.push(conceptsSection);
@@ -256,7 +267,7 @@ export async function RenderCanonDocumentMarkdown(
     return document;
 }
 
-// ─── Data Loading (Caller + Audience RLS) ────────────────────────────────────
+// ─── Data Loading (Caller + Audience RLS, FLS, & Graph Access Policies) ──────
 
 async function readGraphStoredEdgesAsPrincipals(
     graphID: string,
@@ -264,6 +275,10 @@ async function readGraphStoredEdgesAsPrincipals(
     principals: readonly UserInfo[],
     provider: GraphDataProvider,
 ): Promise<StoredEdgeRow[]> {
+    const edgeEntity = provider.EntityByName(ENTITY_GRAPH_EDGES);
+    if (edgeEntity && !principals.every((p) => CanUserReadEntity(edgeEntity, p))) {
+        return [];
+    }
     const statuses = includeProposed ? `'Approved', 'Proposed'` : `'Approved'`;
     const params = {
         EntityName: ENTITY_GRAPH_EDGES,
@@ -279,6 +294,7 @@ async function readGraphStoredEdgesAsPrincipals(
             'TargetEntity',
             'TargetRecordID',
             'Description',
+            'Origin',
             'Status',
             'Weight',
         ],
@@ -299,9 +315,11 @@ async function readGraphStoredEdgesAsPrincipals(
 }
 
 async function resolveStoredEdgesForPrincipals(
+    graphName: string,
     rows: readonly StoredEdgeRow[],
     includeProposed: boolean,
     user: UserInfo,
+    principals: readonly UserInfo[],
     audienceReaders: readonly UserInfo[] | undefined,
     provider: GraphDataProvider,
 ): Promise<ResolvedEdge[]> {
@@ -309,7 +327,9 @@ async function resolveStoredEdgesForPrincipals(
         return [];
     }
     const engine = GraphEngine.Instance;
-    const edgeTypesByID = new UUIDMap(engine.EdgeTypes.map((et) => [et.ID, et.Name]));
+    const edgeEntity = provider.EntityByName(ENTITY_GRAPH_EDGES);
+    const canReadEdgeDesc = !edgeEntity || IsFieldReadableByAll(edgeEntity, 'Description', principals);
+    const edgeTypesByID = new UUIDMap(engine.EdgeTypes.map((et) => [et.ID, et]));
     const refs: GraphNodeRef[] = [];
     const seenKeys = new Set<string>();
 
@@ -327,37 +347,58 @@ async function resolveStoredEdgesForPrincipals(
         return ref;
     };
 
-    const prepared: Array<{ row: StoredEdgeRow; src: GraphNodeRef; tgt: GraphNodeRef; typeName: string }> = [];
+    const edgeViews: GraphEdgeView[] = [];
     for (const row of rows) {
         const src = collectRef(row.SourceEntityID, row.SourceEntity, row.SourceRecordID);
         const tgt = collectRef(row.TargetEntityID, row.TargetEntity, row.TargetRecordID);
         if (!src || !tgt) {
             continue;
         }
-        const typeName = (edgeTypesByID.Get(row.EdgeTypeID) ?? row.EdgeType ?? '').trim();
+        const et = edgeTypesByID.Get(row.EdgeTypeID);
+        const typeName = (et?.Name ?? row.EdgeType ?? '').trim();
         if (!typeName) {
             continue;
         }
-        prepared.push({ row, src, tgt, typeName });
+        edgeViews.push({
+            ID: row.ID,
+            GraphName: graphName,
+            TypeName: typeName,
+            InverseTypeName: et?.InverseName ?? null,
+            IsDirected: et?.IsDirected !== false,
+            Source: src,
+            Target: tgt,
+            Weight: typeof row.Weight === 'number' ? row.Weight : 1,
+            Description: canReadEdgeDesc ? (row.Description ?? null) : null,
+            Attributes: null,
+            Origin: row.Origin === 'Inferred' ? 'Inferred' : 'Declared',
+            Status: row.Status === 'Proposed' ? 'Proposed' : 'Approved',
+            Confidence: null,
+        });
     }
 
-    const visibleNodes = await engine.FilterNodesForUser(refs, user, audienceReaders, {
-        IncludeProposed: includeProposed,
-        Provider: provider,
-    });
+    const [visibleNodes, policyAllowedEdges] = await Promise.all([
+        engine.FilterNodesForUser(refs, user, audienceReaders, {
+            IncludeProposed: includeProposed,
+            Provider: provider,
+        }),
+        engine.FilterEdgesForUser(edgeViews, user, audienceReaders, {
+            IncludeProposed: includeProposed,
+            Provider: provider,
+        }),
+    ]);
 
     const resolved: ResolvedEdge[] = [];
-    for (const item of prepared) {
-        const srcView = visibleNodes.get(engine.GetNodeKey(item.src));
-        const tgtView = visibleNodes.get(engine.GetNodeKey(item.tgt));
+    for (const edge of policyAllowedEdges) {
+        const srcView = visibleNodes.get(engine.GetNodeKey(edge.Source));
+        const tgtView = visibleNodes.get(engine.GetNodeKey(edge.Target));
         if (!srcView || !tgtView) {
             continue;
         }
         resolved.push({
-            TypeName: item.typeName,
+            TypeName: edge.TypeName,
             Source: srcView,
             Target: tgtView,
-            Description: item.row.Description ?? null,
+            Description: edge.Description,
         });
     }
     return resolved;
@@ -395,6 +436,11 @@ async function readVisibleConcepts(
     if (conceptIDs !== null && conceptIDs.length === 0) {
         return [];
     }
+    const conceptEntity = provider.EntityByName(ENTITY_GRAPH_CONCEPTS);
+    if (conceptEntity && !principals.every((p) => CanUserReadEntity(conceptEntity, p))) {
+        return [];
+    }
+    const canReadName = !conceptEntity || IsFieldReadableByAll(conceptEntity, 'Name', principals);
     const statuses = includeProposed ? `'Approved', 'Proposed'` : `'Approved'`;
     const idClause =
         conceptIDs !== null
@@ -432,14 +478,53 @@ async function readVisibleConcepts(
         IncludeProposed: includeProposed,
         Provider: provider,
     });
-    return candidates
-        .filter((c) => visible.has(GraphEngine.Instance.GetNodeKey({ EntityName: ENTITY_GRAPH_CONCEPTS, RecordID: c.ID })))
-        .sort((a, b) => a.Name.localeCompare(b.Name) || compareText(a.ID, b.ID));
+
+    const sanitized: ConceptRow[] = [];
+    for (const c of candidates) {
+        const key = GraphEngine.Instance.GetNodeKey({ EntityName: ENTITY_GRAPH_CONCEPTS, RecordID: c.ID });
+        const view = visible.get(key);
+        if (!view) {
+            continue;
+        }
+        const neutralLabel = NeutralGraphNodeLabel(ENTITY_GRAPH_CONCEPTS, c.ID);
+        const isRedacted = !canReadName || (view.Label === neutralLabel && c.Name !== neutralLabel);
+        if (isRedacted) {
+            sanitized.push({
+                ...c,
+                Name: view.Label,
+                Description: null,
+                Specification: null,
+                Synonyms: null,
+                AuthorityTier: null,
+            });
+        } else {
+            sanitized.push(c);
+        }
+    }
+    return sanitized.sort((a, b) => a.Name.localeCompare(b.Name) || compareText(a.ID, b.ID));
 }
 
-// ─── Scope Resolution ────────────────────────────────────────────────────────
+// ─── Scope & Metadata Indexing ───────────────────────────────────────────────
 
-function buildScopeFromSubgraph(subgraph: GraphSubgraph, provider: IMetadataProvider): RenderScope {
+function buildMetadataOwnerIndex(provider: IMetadataProvider): MetadataOwnerIndex {
+    const fieldMap = new UUIDMap<string>();
+    const abvMap = new UUIDMap<string>();
+    for (const ent of provider.Entities) {
+        for (const f of ent.Fields) {
+            fieldMap.Set(f.ID, ent.Name);
+        }
+        for (const abv of ent.AlternateBaseViews ?? []) {
+            abvMap.Set(abv.ID, ent.Name);
+        }
+    }
+    return { FieldEntityNameByID: fieldMap, AbvEntityNameByID: abvMap };
+}
+
+function buildScopeFromSubgraph(
+    subgraph: GraphSubgraph,
+    provider: IMetadataProvider,
+    ownerIndex: MetadataOwnerIndex,
+): RenderScope {
     const scope: RenderScope = {
         ConceptIDs: new UUIDSet(),
         EntityNamesLower: new Set<string>(),
@@ -447,7 +532,7 @@ function buildScopeFromSubgraph(subgraph: GraphSubgraph, provider: IMetadataProv
         QueryIDs: new UUIDSet(),
     };
     for (const node of subgraph.Nodes) {
-        addNodeToScope(node.EntityName, node.RecordID, scope, provider);
+        addNodeToScope(node.EntityName, node.RecordID, scope, provider, ownerIndex);
     }
     return scope;
 }
@@ -457,6 +542,7 @@ function addNodeToScope(
     recordID: string,
     scope: RenderScope,
     provider: IMetadataProvider,
+    ownerIndex: MetadataOwnerIndex,
 ): void {
     const lower = entityName.trim().toLowerCase();
     if (lower === ENTITY_GRAPH_CONCEPTS.toLowerCase()) {
@@ -471,21 +557,17 @@ function addNodeToScope(
         return;
     }
     if (lower === ENTITY_ENTITY_FIELDS.toLowerCase()) {
-        for (const ent of provider.Entities) {
-            if (ent.Fields.some((f) => UUIDsEqual(f.ID, recordID))) {
-                scope.EntityNamesLower.add(ent.Name.trim().toLowerCase());
-                return;
-            }
+        const owner = ownerIndex.FieldEntityNameByID.Get(recordID);
+        if (owner) {
+            scope.EntityNamesLower.add(owner.trim().toLowerCase());
         }
         return;
     }
     if (lower === ENTITY_ALTERNATE_BASE_VIEWS.toLowerCase()) {
         scope.AbvIDs.Add(recordID);
-        for (const ent of provider.Entities) {
-            if ((ent.AlternateBaseViews ?? []).some((v) => UUIDsEqual(v.ID, recordID))) {
-                scope.EntityNamesLower.add(ent.Name.trim().toLowerCase());
-                return;
-            }
+        const owner = ownerIndex.AbvEntityNameByID.Get(recordID);
+        if (owner) {
+            scope.EntityNamesLower.add(owner.trim().toLowerCase());
         }
         return;
     }
@@ -500,6 +582,7 @@ function renderPrecedenceSection(
     edges: readonly ResolvedEdge[],
     entityFilterSet: ReadonlySet<string> | null,
     provider: IMetadataProvider,
+    ownerIndex: MetadataOwnerIndex,
 ): string | null {
     const matching = edges
         .filter((e) => PRECEDENCE_EDGE_TYPES.has(e.TypeName))
@@ -507,8 +590,8 @@ function renderPrecedenceSection(
             if (!entityFilterSet) {
                 return true;
             }
-            const srcOwner = owningEntityName(e.Source, provider);
-            const tgtOwner = owningEntityName(e.Target, provider);
+            const srcOwner = owningEntityName(e.Source, provider, ownerIndex);
+            const tgtOwner = owningEntityName(e.Target, provider, ownerIndex);
             return (
                 (srcOwner !== null && entityFilterSet.has(srcOwner.toLowerCase())) ||
                 (tgtOwner !== null && entityFilterSet.has(tgtOwner.toLowerCase()))
@@ -549,6 +632,43 @@ function formatPrecedenceVerb(edgeType: string): string {
     }
 }
 
+interface ConceptEdgeIndex {
+    ArtifactEdgesByConceptID: UUIDMap<ResolvedEdge[]>;
+    RelatedItemsByConceptID: UUIDMap<Array<{ SortKey: string; Text: string }>>;
+}
+
+function indexConceptEdges(edges: readonly ResolvedEdge[]): ConceptEdgeIndex {
+    const artifactMap = new UUIDMap<ResolvedEdge[]>();
+    const relatedMap = new UUIDMap<Array<{ SortKey: string; Text: string }>>();
+    const conceptEntityLower = ENTITY_GRAPH_CONCEPTS.toLowerCase();
+
+    for (const e of edges) {
+        const srcIsConcept = e.Source.EntityName.trim().toLowerCase() === conceptEntityLower;
+        const tgtIsConcept = e.Target.EntityName.trim().toLowerCase() === conceptEntityLower;
+
+        // Per MJ #6842: Defines, Measures, Describes, Implements are artifact → concept
+        if (ARTIFACT_TO_CONCEPT_EDGE_TYPES.has(e.TypeName) && tgtIsConcept) {
+            const list = artifactMap.Get(e.Target.RecordID) ?? [];
+            list.push(e);
+            artifactMap.Set(e.Target.RecordID, list);
+        }
+
+        if (CONCEPT_RELATION_EDGE_TYPES.has(e.TypeName) && srcIsConcept && tgtIsConcept) {
+            const sortKey = `${e.TypeName}\0${e.Source.Label}\0${e.Target.Label}`;
+            const outList = relatedMap.Get(e.Source.RecordID) ?? [];
+            outList.push({ SortKey: sortKey, Text: `${e.TypeName} → ${e.Target.Label}` });
+            relatedMap.Set(e.Source.RecordID, outList);
+
+            if (e.Source.Key !== e.Target.Key) {
+                const inList = relatedMap.Get(e.Target.RecordID) ?? [];
+                inList.push({ SortKey: sortKey, Text: `${e.Source.Label} → ${e.TypeName}` });
+                relatedMap.Set(e.Target.RecordID, inList);
+            }
+        }
+    }
+    return { ArtifactEdgesByConceptID: artifactMap, RelatedItemsByConceptID: relatedMap };
+}
+
 function renderConceptsSection(
     concepts: readonly ConceptRow[],
     edges: readonly ResolvedEdge[],
@@ -557,12 +677,14 @@ function renderConceptsSection(
     includeSpecifications: boolean,
     principals: readonly UserInfo[],
     provider: IMetadataProvider,
+    ownerIndex: MetadataOwnerIndex,
 ): string | null {
     const conceptEntity = provider.EntityByName(ENTITY_GRAPH_CONCEPTS);
     const canReadDesc = !conceptEntity || IsFieldReadableByAll(conceptEntity, 'Description', principals);
     const canReadSpec = !conceptEntity || IsFieldReadableByAll(conceptEntity, 'Specification', principals);
     const canReadSynonyms = !conceptEntity || IsFieldReadableByAll(conceptEntity, 'Synonyms', principals);
     const canReadAuthority = !conceptEntity || IsFieldReadableByAll(conceptEntity, 'AuthorityTier', principals);
+    const edgeIndex = indexConceptEdges(edges);
 
     const blocks: string[] = [];
     for (const concept of concepts) {
@@ -570,20 +692,13 @@ function renderConceptsSection(
             continue;
         }
 
-        // Per MJ #6842: Defines, Measures, Describes, Implements are artifact → concept
-        // (source is the artifact, target is this concept).
-        const artifactEdges = edges
-            .filter(
-                (e) =>
-                    ARTIFACT_TO_CONCEPT_EDGE_TYPES.has(e.TypeName) &&
-                    e.Target.EntityName.trim().toLowerCase() === ENTITY_GRAPH_CONCEPTS.toLowerCase() &&
-                    UUIDsEqual(e.Target.RecordID, concept.ID),
-            )
-            .sort((a, b) => a.TypeName.localeCompare(b.TypeName) || a.Source.Label.localeCompare(b.Source.Label));
+        const artifactEdges = [...(edgeIndex.ArtifactEdgesByConceptID.Get(concept.ID) ?? [])].sort(
+            (a, b) => a.TypeName.localeCompare(b.TypeName) || a.Source.Label.localeCompare(b.Source.Label),
+        );
 
         if (entityFilterSet) {
             const touchesEntity = artifactEdges.some((e) => {
-                const owner = owningEntityName(e.Source, provider);
+                const owner = owningEntityName(e.Source, provider, ownerIndex);
                 return owner !== null && entityFilterSet.has(owner.toLowerCase());
             });
             if (!touchesEntity) {
@@ -591,15 +706,9 @@ function renderConceptsSection(
             }
         }
 
-        const relatedConceptEdges = edges
-            .filter(
-                (e) =>
-                    CONCEPT_RELATION_EDGE_TYPES.has(e.TypeName) &&
-                    e.Source.EntityName.trim().toLowerCase() === ENTITY_GRAPH_CONCEPTS.toLowerCase() &&
-                    e.Target.EntityName.trim().toLowerCase() === ENTITY_GRAPH_CONCEPTS.toLowerCase() &&
-                    (UUIDsEqual(e.Source.RecordID, concept.ID) || UUIDsEqual(e.Target.RecordID, concept.ID)),
-            )
-            .sort((a, b) => a.TypeName.localeCompare(b.TypeName) || a.Source.Label.localeCompare(b.Source.Label));
+        const relatedItems = [...(edgeIndex.RelatedItemsByConceptID.Get(concept.ID) ?? [])].sort((a, b) =>
+            compareText(a.SortKey, b.SortKey),
+        );
 
         const authorityLabel = canReadAuthority && concept.AuthorityTier ? ` — Authority: ${concept.AuthorityTier}` : '';
         const statusBadge = concept.Status === 'Proposed' ? ' [Proposed]' : '';
@@ -621,13 +730,8 @@ function renderConceptsSection(
             const formatted = artifactEdges.map((e) => `${e.Source.Label} (${e.TypeName})`);
             entry.push(`- **Grounded By:** ${formatted.join('; ')}`);
         }
-        if (relatedConceptEdges.length > 0) {
-            const formatted = relatedConceptEdges.map((e) =>
-                UUIDsEqual(e.Source.RecordID, concept.ID)
-                    ? `${e.TypeName} → ${e.Target.Label}`
-                    : `${e.Source.Label} → ${e.TypeName}`,
-            );
-            entry.push(`- **Related Concepts:** ${formatted.join('; ')}`);
+        if (relatedItems.length > 0) {
+            entry.push(`- **Related Concepts:** ${relatedItems.map((i) => i.Text).join('; ')}`);
         }
         blocks.push(entry.join('\n'));
     }
@@ -636,6 +740,27 @@ function renderConceptsSection(
         return null;
     }
     return `## 2. Domain Concepts & Definitions\n\n${blocks.join('\n\n')}`;
+}
+
+function indexArtifactConceptRoles(
+    edges: readonly ResolvedEdge[],
+    sourceEntityLower: string,
+    allowedTypes: ReadonlySet<string>,
+): UUIDMap<string[]> {
+    const bySourceID = new UUIDMap<string[]>();
+    const conceptEntityLower = ENTITY_GRAPH_CONCEPTS.toLowerCase();
+    for (const e of edges) {
+        if (
+            allowedTypes.has(e.TypeName) &&
+            e.Source.EntityName.trim().toLowerCase() === sourceEntityLower &&
+            e.Target.EntityName.trim().toLowerCase() === conceptEntityLower
+        ) {
+            const list = bySourceID.Get(e.Source.RecordID) ?? [];
+            list.push(`${e.TypeName}: ${e.Target.Label}`);
+            bySourceID.Set(e.Source.RecordID, list);
+        }
+    }
+    return bySourceID;
 }
 
 function renderAlternateBaseViewsSection(
@@ -648,6 +773,13 @@ function renderAlternateBaseViewsSection(
     const entities = [...provider.Entities]
         .filter((e) => principals.every((p) => CanUserReadEntity(e, p)))
         .sort((a, b) => a.Name.localeCompare(b.Name));
+
+    // Per MJ #6842: ABV --Defines/Measures--> Concept
+    const rolesByAbvID = indexArtifactConceptRoles(
+        edges,
+        ENTITY_ALTERNATE_BASE_VIEWS.toLowerCase(),
+        new Set(['Defines', 'Measures']),
+    );
 
     const lines: string[] = ['## 3. Canonical Alternate Base Views'];
     for (const entity of entities) {
@@ -666,18 +798,7 @@ function renderAlternateBaseViewsSection(
             ) {
                 continue;
             }
-            // Per MJ #6842: ABV --Defines/Measures--> Concept
-            const linkedConcepts = edges
-                .filter(
-                    (e) =>
-                        (e.TypeName === 'Defines' || e.TypeName === 'Measures') &&
-                        e.Source.EntityName.trim().toLowerCase() === ENTITY_ALTERNATE_BASE_VIEWS.toLowerCase() &&
-                        UUIDsEqual(e.Source.RecordID, abv.ID) &&
-                        e.Target.EntityName.trim().toLowerCase() === ENTITY_GRAPH_CONCEPTS.toLowerCase(),
-                )
-                .map((e) => `${e.TypeName}: ${e.Target.Label}`)
-                .sort();
-
+            const linkedConcepts = [...(rolesByAbvID.Get(abv.ID) ?? [])].sort();
             const viewName = abv.ViewName || abv.Name;
             const viewRef = entity.SchemaName
                 ? `\`[${entity.SchemaName}].[${viewName}]\``
@@ -704,8 +825,27 @@ function renderGovernedQueriesSection(
         return pathA.localeCompare(pathB) || compareText(a.ID, b.ID);
     });
     const queriesByID = new UUIDMap(queries.map((q) => [q.ID, q]));
-    const queryEntities = QueryEngine.Instance.QueryEntities ?? [];
-    const dependencies = QueryEngine.Instance.QueryDependencies ?? [];
+
+    const queryEntitiesByQueryID = new UUIDMap<typeof QueryEngine.Instance.QueryEntities>();
+    for (const qe of QueryEngine.Instance.QueryEntities ?? []) {
+        const list = queryEntitiesByQueryID.Get(qe.QueryID) ?? [];
+        list.push(qe);
+        queryEntitiesByQueryID.Set(qe.QueryID, list);
+    }
+
+    const depsByQueryID = new UUIDMap<typeof QueryEngine.Instance.QueryDependencies>();
+    for (const dep of QueryEngine.Instance.QueryDependencies ?? []) {
+        const list = depsByQueryID.Get(dep.QueryID) ?? [];
+        list.push(dep);
+        depsByQueryID.Set(dep.QueryID, list);
+    }
+
+    // Per MJ #6842: Query --Measures/Defines--> Concept
+    const rolesByQueryID = indexArtifactConceptRoles(
+        edges,
+        ENTITY_QUERIES.toLowerCase(),
+        new Set(['Measures', 'Defines']),
+    );
 
     const lines: string[] = ['## 4. Governed Ground-Truth Queries'];
     for (const query of queries) {
@@ -716,7 +856,7 @@ function renderGovernedQueriesSection(
             continue;
         }
 
-        const qEntities = queryEntities.filter((qe) => UUIDsEqual(qe.QueryID, query.ID));
+        const qEntities = queryEntitiesByQueryID.Get(query.ID) ?? [];
         if (
             entityFilterSet &&
             !qEntities.some((qe) => entityFilterSet.has((qe.Entity ?? '').trim().toLowerCase()))
@@ -731,24 +871,12 @@ function renderGovernedQueriesSection(
             continue;
         }
 
-        // Per MJ #6842: Query --Measures/Defines--> Concept
-        const measuredConcepts = edges
-            .filter(
-                (e) =>
-                    (e.TypeName === 'Measures' || e.TypeName === 'Defines') &&
-                    e.Source.EntityName.trim().toLowerCase() === ENTITY_QUERIES.toLowerCase() &&
-                    UUIDsEqual(e.Source.RecordID, query.ID) &&
-                    e.Target.EntityName.trim().toLowerCase() === ENTITY_GRAPH_CONCEPTS.toLowerCase(),
-            )
-            .map((e) => `${e.TypeName}: ${e.Target.Label}`)
-            .sort();
-
+        const measuredConcepts = [...(rolesByQueryID.Get(query.ID) ?? [])].sort();
         const readTargets = qEntities
             .map((qe) => (qe.AlternateBaseView ? `${qe.Entity}.${qe.AlternateBaseView}` : qe.Entity || qe.EntityID))
             .filter(Boolean)
             .sort();
-        const composedTargets = dependencies
-            .filter((d) => UUIDsEqual(d.QueryID, query.ID))
+        const composedTargets = (depsByQueryID.Get(query.ID) ?? [])
             .map((d) => queriesByID.Get(d.DependsOnQueryID)?.Name ?? d.DependsOnQuery ?? d.ReferencePath)
             .filter(Boolean)
             .sort();
@@ -772,26 +900,20 @@ function renderGovernedQueriesSection(
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function owningEntityName(node: GraphNodeView, provider: IMetadataProvider): string | null {
+function owningEntityName(
+    node: GraphNodeView,
+    provider: IMetadataProvider,
+    ownerIndex: MetadataOwnerIndex,
+): string | null {
     const lower = node.EntityName.trim().toLowerCase();
     if (lower === ENTITY_ENTITIES.toLowerCase()) {
         return provider.EntityByID(node.RecordID)?.Name ?? node.Label;
     }
     if (lower === ENTITY_ENTITY_FIELDS.toLowerCase()) {
-        for (const ent of provider.Entities) {
-            if (ent.Fields.some((f) => UUIDsEqual(f.ID, node.RecordID))) {
-                return ent.Name;
-            }
-        }
-        return null;
+        return ownerIndex.FieldEntityNameByID.Get(node.RecordID) ?? null;
     }
     if (lower === ENTITY_ALTERNATE_BASE_VIEWS.toLowerCase()) {
-        for (const ent of provider.Entities) {
-            if ((ent.AlternateBaseViews ?? []).some((v) => UUIDsEqual(v.ID, node.RecordID))) {
-                return ent.Name;
-            }
-        }
-        return null;
+        return ownerIndex.AbvEntityNameByID.Get(node.RecordID) ?? null;
     }
     return null;
 }
