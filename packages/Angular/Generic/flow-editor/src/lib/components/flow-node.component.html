@@ -10,6 +10,21 @@
   </div>
 }
 
+<!-- Optional Breakpoint Gutter (single-run solid red vs remembered hollow ring) -->
+@if (AllowBreakpointClick || Node.Breakpoint) {
+  <button
+    type="button"
+    class="mj-flow-node-bp-gutter"
+    [class.mj-flow-node-bp-gutter--single]="Node.Breakpoint === 'single'"
+    [class.mj-flow-node-bp-gutter--remembered]="Node.Breakpoint === 'remembered'"
+    [disabled]="!AllowBreakpointClick"
+    [title]="Node.Breakpoint === 'remembered' ? 'Remembered breakpoint (click to toggle)' : (Node.Breakpoint === 'single' ? 'Breakpoint armed (click to toggle)' : 'Click to toggle breakpoint')"
+    [attr.aria-label]="'Toggle breakpoint on ' + Node.Label"
+    (click)="OnBreakpointClick($event)"
+    (mousedown)="$event.stopPropagation()">
+  </button>
+}
+
 <!-- Node Body -->
 <div class="mj-flow-node-body"
   [class.mj-flow-node-body--start]="Node.IsStartNode"
@@ -22,7 +37,8 @@
   [class.mj-flow-node-body--awaiting]="isAwaitingUser"
   [class.mj-flow-node-body--warning]="Node.Status === 'warning'"
   [class.mj-flow-node-body--error]="Node.Status === 'error'"
-  [class.mj-flow-node-body--success]="Node.Status === 'success'">
+  [class.mj-flow-node-body--success]="Node.Status === 'success'"
+  [class.mj-flow-node-body--blast]="Node.BlastRadius === true">
 
   <!-- Color accent bar -->
   <div class="mj-flow-node-accent" [style.backgroundColor]="headerColor"></div>
@@ -30,13 +46,19 @@
   <!-- Header -->
   <div class="mj-flow-node-header">
     <div class="mj-flow-node-header-left">
-      @if (logoURL) {
-        <img class="mj-flow-node-logo" [src]="logoURL" [alt]="Node.Label" />
-      }
-      @if (!logoURL) {
-        <i class="fa-solid mj-flow-node-icon" [ngClass]="nodeIcon" [style.color]="headerColor"></i>
-      }
-      <span class="mj-flow-node-label">{{ Node.Label }}</span>
+      <div class="mj-flow-node-icon-squircle" [style.backgroundColor]="'color-mix(in srgb, ' + headerColor + ' 14%, transparent)'">
+        @if (logoURL) {
+          <img class="mj-flow-node-logo" [src]="logoURL" [alt]="Node.Label" />
+        } @else {
+          <i class="fa-solid mj-flow-node-icon" [ngClass]="nodeIcon" [style.color]="headerColor"></i>
+        }
+      </div>
+      <div class="mj-flow-node-title-stack">
+        <span class="mj-flow-node-label" [title]="Node.Label">{{ Node.Label }}</span>
+        <span class="mj-flow-node-type-badge">
+          {{ TypeConfig?.Label || Node.Type }}
+        </span>
+      </div>
     </div>
     <div class="mj-flow-node-header-right">
       @if (Node.IsStartNode) {
@@ -47,27 +69,21 @@
           class="fa-solid mj-flow-node-status"
           [ngClass]="statusIcon"
           [class]="'mj-flow-node-status--' + statusClass"
-        [title]="Node.StatusMessage || ''"></i>
+          [title]="Node.StatusMessage || ''"></i>
       }
     </div>
   </div>
 
   <!-- Subtitle / Configured Item (hidden for loop nodes — they use the body card instead) -->
   @if (Node.Subtitle && !isLoopNode) {
-    <div class="mj-flow-node-subtitle">
+    <div class="mj-flow-node-subtitle" [title]="Node.Subtitle">
       {{ Node.Subtitle }}
     </div>
   }
 
-  <!-- Type badge -->
-  <div class="mj-flow-node-type-badge" [style.color]="headerColor">
-    {{ TypeConfig?.Label || Node.Type }}
-  </div>
-
-  <!-- ═══ Loop Body Card — shown only for ForEach/While nodes ═══ -->
+  <!-- ═══ Loop Enclosure Card — shown for ForEach/While/ForEachTask/WhileTask ═══ -->
   @if (isLoopNode) {
     <div class="mj-flow-loop-section">
-      <!-- Iteration summary line -->
       @if (loopIterationSummary) {
         <div class="mj-flow-loop-iteration">
           <i class="fa-solid fa-repeat mj-flow-loop-iteration-icon"></i>
@@ -77,9 +93,8 @@
           }
         </div>
       }
-      <!-- Body type inner card -->
       <div class="mj-flow-loop-body"
-        [class.mj-flow-loop-body--empty]="!loopBodyType">
+        [class.mj-flow-loop-body--empty]="!loopBodyType && !Node.Subtitle">
         @if (loopBodyType) {
           <div class="mj-flow-loop-body-inner">
             <div class="mj-flow-loop-body-header">
@@ -90,22 +105,23 @@
               <div class="mj-flow-loop-body-name" [title]="loopBodyName">
                 {{ loopBodyName }}
               </div>
-            }
-            @if (!loopBodyName) {
+            } @else {
               <div class="mj-flow-loop-body-name mj-flow-loop-body-name--empty">
                 Not configured
               </div>
             }
           </div>
-        }
-        @if (!loopBodyType) {
+        } @else if (Node.Subtitle) {
+          <div class="mj-flow-loop-body-inner">
+            <div class="mj-flow-loop-body-name" [title]="Node.Subtitle">{{ Node.Subtitle }}</div>
+          </div>
+        } @else {
           <div class="mj-flow-loop-body-empty">
             <i class="fa-solid fa-circle-question"></i>
             <span>No body type selected</span>
           </div>
         }
       </div>
-      <!-- Item variable badge -->
       @if (loopItemVariable) {
         <div class="mj-flow-loop-variable">
           <i class="fa-solid fa-tag"></i>
@@ -115,6 +131,7 @@
     </div>
   }
 
+  <!-- Live Runner Status / NodeProgress Bar -->
   @if (isAwaitingUser) {
     <div class="mj-flow-node-awaiting-banner">
       <i class="fa-solid fa-pause" aria-hidden="true"></i>
@@ -123,8 +140,20 @@
   } @else if (isExecuting) {
     <div class="mj-flow-node-running-banner">
       <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-      <span>Running</span>
+      <span>{{ Node.ProgressMessage || 'Running' }}</span>
+      @if (Node.ProgressPercent != null) {
+        <span class="mj-flow-node-progress-pct">{{ Node.ProgressPercent }}%</span>
+      }
     </div>
+    @if (HasLiveProgress) {
+      <div class="mj-flow-node-progress-track">
+        <div
+          class="mj-flow-node-progress-fill"
+          [class.mj-flow-node-progress-fill--indeterminate]="Node.ProgressPercent == null"
+          [style.width.%]="Node.ProgressPercent ?? 40">
+        </div>
+      </div>
+    }
   } @else if (isQueued) {
     <div class="mj-flow-node-queued-banner">
       <i class="fa-solid fa-hourglass-start" aria-hidden="true"></i>
@@ -134,9 +163,7 @@
 
   <!-- Warning banner (shown inline when step is misconfigured) -->
   @if (Node.Status === 'warning' && Node.StatusMessage) {
-    <div
-      class="mj-flow-node-warning-banner"
-      [title]="Node.StatusMessage">
+    <div class="mj-flow-node-warning-banner" [title]="Node.StatusMessage">
       <i class="fa-solid fa-triangle-exclamation"></i>
       <span>{{ Node.StatusMessage }}</span>
     </div>
@@ -145,7 +172,7 @@
   <!-- Badges row -->
   @if (Node.Badges && Node.Badges.length > 0) {
     <div class="mj-flow-node-badges">
-      @for (badge of Node.Badges; track badge) {
+      @for (badge of Node.Badges; track badge.Label + badge.Value) {
         <span
           class="mj-flow-node-badge"
           [style.borderColor]="badge.Color || headerColor"
@@ -158,17 +185,109 @@
       }
     </div>
   }
+
+  <!-- X-Ray Expandable Telemetry Slot -->
+  @if (ShowXRayPanel) {
+    <div class="mj-flow-node-xray">
+      @if (Node.Confidence; as conf) {
+        <div class="mj-flow-node-xray-conf">
+          <div class="mj-flow-node-xray-row">
+            <span class="mj-flow-node-xray-key">{{ conf.Label || 'Confidence' }}</span>
+            <span class="mj-flow-node-xray-val">{{ conf.Score }}%@if (conf.Threshold != null) { (min {{ conf.Threshold }}%) }</span>
+          </div>
+          <div class="mj-flow-node-conf-track">
+            <div class="mj-flow-node-conf-fill" [style.width.%]="conf.Score"></div>
+            @if (conf.Threshold != null) {
+              <div class="mj-flow-node-conf-thresh" [style.left.%]="conf.Threshold"></div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (Node.TaintState || Node.SagaCompensationLabel) {
+        <div class="mj-flow-node-xray-pills">
+          @if (Node.TaintState === 'tainted') {
+            <span class="mj-flow-node-xray-pill mj-flow-node-xray-pill--warn">
+              <i class="fa-solid fa-shield-halved" aria-hidden="true"></i> External Data Flag
+            </span>
+          } @else if (Node.TaintState === 'verified') {
+            <span class="mj-flow-node-xray-pill mj-flow-node-xray-pill--ok">
+              <i class="fa-solid fa-user-shield" aria-hidden="true"></i> Person Verified
+            </span>
+          }
+          @if (Node.SagaCompensationLabel) {
+            <span class="mj-flow-node-xray-pill mj-flow-node-xray-pill--saga">
+              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> {{ Node.SagaCompensationLabel }}
+            </span>
+          }
+        </div>
+      }
+
+      @if (Node.XRayItems && Node.XRayItems.length > 0) {
+        <div class="mj-flow-node-xray-kv">
+          @for (item of Node.XRayItems; track item.Key) {
+            <div class="mj-flow-node-xray-row">
+              <span class="mj-flow-node-xray-key">{{ item.Key }}</span>
+              <span class="mj-flow-node-xray-val" [class.mj-flow-node-xray-val--changed]="item.Changed" [title]="item.Value">{{ item.Value }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      @if (Node.CanStepSingle) {
+        <button
+          type="button"
+          class="mj-flow-node-run-step-btn"
+          (click)="OnRunStepClick($event)"
+          (mousedown)="$event.stopPropagation()"
+          title="Execute only this step via Step(taskID)">
+          <i class="fa-solid fa-play" aria-hidden="true"></i> Run This Step
+        </button>
+      }
+    </div>
+  }
 </div>
 
-<!-- Output Port -->
-@if (outputPort) {
+<!-- Output Ports (supports single or multiple labeled branch outputs) -->
+@if (OutputPorts.length === 1) {
+  @let port = OutputPorts[0];
   <div
     class="mj-flow-node-port mj-flow-node-port--output"
-    [class]="'mj-flow-node-port--' + outputPort.Side"
+    [class]="'mj-flow-node-port--' + port.Side"
     fNodeOutput
-    [fOutputId]="outputPort.ID"
-    [fOutputDisabled]="outputPort.Disabled"
-    [fOutputMultiple]="outputPort.Multiple"
+    [fOutputId]="port.ID"
+    [fOutputDisabled]="port.Disabled"
+    [fOutputMultiple]="port.Multiple"
     [isSelfConnectable]="false">
+  </div>
+  @if (!ReadOnly && !port.Disabled) {
+    <button
+      type="button"
+      class="mj-flow-node-quick-add"
+      [class]="'mj-flow-node-quick-add--' + port.Side"
+      title="Quick-add connected step"
+      aria-label="Quick-add step after this step"
+      (click)="OnQuickAddClick($event)"
+      (mousedown)="$event.stopPropagation()">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i>
+    </button>
+  }
+} @else if (OutputPorts.length > 1) {
+  <div class="mj-flow-node-multi-outputs" [class]="'mj-flow-node-multi-outputs--' + OutputPorts[0].Side">
+    @for (port of OutputPorts; track port.ID) {
+      <div class="mj-flow-node-multi-output-slot">
+        @if (port.Label) {
+          <span class="mj-flow-node-port-label">{{ port.Label }}</span>
+        }
+        <div
+          class="mj-flow-node-port mj-flow-node-port--output mj-flow-node-port--inline"
+          fNodeOutput
+          [fOutputId]="port.ID"
+          [fOutputDisabled]="port.Disabled"
+          [fOutputMultiple]="port.Multiple"
+          [isSelfConnectable]="false">
+        </div>
+      </div>
+    }
   </div>
 }

@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
 }
 
 .tgdbg {
@@ -10,7 +11,9 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   gap: var(--mj-space-2);
+  overflow: hidden;
 }
 
 .tgdbg-chrome {
@@ -24,4 +27,8 @@
 .tgdbg-body {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }

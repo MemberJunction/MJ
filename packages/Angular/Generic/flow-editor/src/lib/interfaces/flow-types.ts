@@ -45,6 +45,28 @@ export interface FlowNodeBadge {
   Color?: string;
 }
 
+/** One key/value preview row rendered when X-Ray mode is active on a node. */
+export interface FlowNodeXRayItem {
+  Key: string;
+  Value: string;
+  Changed?: boolean;
+}
+
+/** AI Decision confidence telemetry shown inside X-Ray mode. */
+export interface FlowNodeConfidence {
+  /** 0–100 percentage score */
+  Score: number;
+  /** Optional 0–100 minimum confidence threshold */
+  Threshold?: number;
+  Label?: string;
+}
+
+/** Breakpoint state rendered on the node's left gutter. */
+export type FlowNodeBreakpointKind = 'single' | 'remembered';
+
+/** Security taint / person-verification indicator for a node. */
+export type FlowNodeTaintState = 'tainted' | 'verified';
+
 /** Visual status of a node */
 /**
  * How a node presents its state.
@@ -73,6 +95,24 @@ export interface FlowNode {
   Selected?: boolean;
   Locked?: boolean;
   IsStartNode?: boolean;
+  /** Breakpoint armed on this step (solid red for single-run, hollow ring for remembered). */
+  Breakpoint?: FlowNodeBreakpointKind | null;
+  /** Live runner progress message (from `NodeProgress` frames). */
+  ProgressMessage?: string;
+  /** Live runner progress percentage 0–100 (undefined = indeterminate when ProgressMessage is set). */
+  ProgressPercent?: number;
+  /** Inline X-Ray key/value telemetry rows. */
+  XRayItems?: FlowNodeXRayItem[];
+  /** AI Decision confidence telemetry. */
+  Confidence?: FlowNodeConfidence;
+  /** External-data taint or human-verified shield state. */
+  TaintState?: FlowNodeTaintState | null;
+  /** Saga rollback / compensation label (e.g. "Undo: Void Draft"). */
+  SagaCompensationLabel?: string;
+  /** True when highlighted as part of a failure blast-radius preview (`ComputeTasksToBlock`). */
+  BlastRadius?: boolean;
+  /** True when the operator can invoke targeted `Step(taskID)` directly on this step. */
+  CanStepSingle?: boolean;
   /** Opaque data payload — consumers store domain-specific data here */
   Data?: Record<string, unknown>;
 }
@@ -105,6 +145,10 @@ export interface FlowConnection {
   StrokeWidth?: number;
   Animated?: boolean;
   Selected?: boolean;
+  /** True for untaken/skipped paths rendered ghosted rather than deleted. */
+  Untaken?: boolean;
+  /** Operator-forced path verdict (kept visually unmistakable with amber dotted stroke). */
+  ForcedVerdict?: 'true' | 'false' | null;
   /** Opaque data payload — consumers store domain-specific data here */
   Data?: Record<string, unknown>;
 }

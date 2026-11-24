@@ -26,31 +26,24 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 5
           },
           "primaryKey": {
             "ID": "19AB0665-5362-43B1-B44B-411BB7E2A070"
-          },
-          "sync": {
-            "lastModified": "2026-04-11T04:11:11.555Z",
-            "checksum": "c72bdf9826654a0dc6ef3c5a7b0b7d70b0e08820e1b171dff2718fb43f49de65"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 4
+            "Priority": 4,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "1A11B0F7-E3D3-415B-B452-446F26A7B71A"
-          },
-          "sync": {
-            "lastModified": "2026-05-29T19:49:20.782Z",
-            "checksum": "1cc714ce453ddb29598e22ca8b95f06ea99afa85b37a178e4394652939025c48"
           }
         },
         {
@@ -86,41 +79,30 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 5.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1
           },
           "primaryKey": {
             "ID": "CFE9A5DE-D19C-4644-BFD7-3F824FC14878"
-          },
-          "sync": {
-            "lastModified": "2026-02-13T20:49:10.950Z",
-            "checksum": "888a1042e910c9f502887d46024d39d3169c4c6d58ac51dc058896b8bdfc4909"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 3
+            "Priority": 3,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "000B0735-484D-4E5C-9B12-C6969F324D9B"
-          },
-          "sync": {
-            "lastModified": "2026-05-29T19:49:20.796Z",
-            "checksum": "0a856cd46a0e7e2c1891c0678b536005faa4ed96a1c28db4ee43361a4996b43f"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "1F4C8B38-8419-40E2-A96F-3A6DC1243D42"
-    },
-    "sync": {
-      "lastModified": "2026-10-28T00:36:02.284Z",
-      "checksum": "8123d51da9e81928fce9153bbb198ee21dda53252bffbe900aba8492eccc0bf0"
     }
   }
 ]

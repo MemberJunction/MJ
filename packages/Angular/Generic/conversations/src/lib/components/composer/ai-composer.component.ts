@@ -113,6 +113,8 @@ export class AiComposerComponent {
 
   private _allowedAgentIDs: readonly string[] | null = null;
   private _mentionPeople: readonly MentionPerson[] | null = null;
+  private _defaultChatAgentID: string | null = null;
+  private _inThreadAgentIDs: readonly string[] | null = null;
 
   /**
    * The agents the '@' list may offer. Null (the default) offers every agent the user can run;
@@ -140,15 +142,53 @@ export class AiComposerComponent {
     return this._mentionPeople;
   }
 
+  /**
+   * Current user's preferred Default Chat Agent ID, passed into Smart `@Mention` ranking
+   * to boost & badge the default responder.
+   */
+  @Input()
+  set DefaultChatAgentID(value: string | null) {
+    this._defaultChatAgentID = value ?? null;
+    this.applyMentionScope();
+  }
+  get DefaultChatAgentID(): string | null {
+    return this._defaultChatAgentID;
+  }
+
+  /**
+   * Agent IDs participating in the active conversation thread, passed into Smart `@Mention`
+   * ranking to boost & badge active thread responders.
+   */
+  @Input()
+  set InThreadAgentIDs(value: readonly string[] | null) {
+    this._inThreadAgentIDs = value ?? null;
+    this.applyMentionScope();
+  }
+  get InThreadAgentIDs(): readonly string[] | null {
+    return this._inThreadAgentIDs;
+  }
+
   constructor() {
     this.rebuildTriggerProviders();
   }
 
   /** Hands this composer's '@' scope to its own agent-mention provider (never the shared engine). */
   private applyMentionScope(): void {
-    this.agentMentionProvider.Scope = this._allowedAgentIDs == null && this._mentionPeople == null
-      ? null
-      : { AllowedAgentIDs: this._allowedAgentIDs, People: this._mentionPeople };
+    const hasAny =
+      this._allowedAgentIDs != null ||
+      this._mentionPeople != null ||
+      this._defaultChatAgentID != null ||
+      (this._inThreadAgentIDs != null && this._inThreadAgentIDs.length > 0);
+    this.agentMentionProvider.Scope = hasAny
+      ? {
+          AllowedAgentIDs: this._allowedAgentIDs,
+          People: this._mentionPeople,
+          DefaultChatAgentID: this._defaultChatAgentID,
+          ...(this._inThreadAgentIDs && this._inThreadAgentIDs.length > 0
+            ? { InThreadAgentIDs: this._inThreadAgentIDs }
+            : {}),
+        }
+      : null;
   }
 
   /** Enables the '@' trigger (agent + user mentions). */

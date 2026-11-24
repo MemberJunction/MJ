@@ -1,5 +1,3 @@
-import { spawnSync } from 'node:child_process';
-import * as fssync from 'node:fs';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as path from 'node:path';
@@ -25,34 +23,12 @@ import {
 } from '../index.js';
 import { CreateMinimalRenderRequest } from './fixtures/minimal-bundle.js';
 import { DescribeRenderDriverContract } from './render-driver-contract.js';
+import { CheckCanRunRealRenderTests } from './render-test-gate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STUB_WORKER_PATH = path.join(__dirname, 'fixtures', 'stub-worker.mjs');
 
-function checkCanRunRealRenderTests(): boolean {
-    if (process.env.VIDEO_STUDIO_RENDER_TESTS !== '1') {
-        console.info(
-            '[local-worker-render-driver.test] Skipping real-worker contract suite: set VIDEO_STUDIO_RENDER_TESTS=1 to enable.',
-        );
-        return false;
-    }
-    const ffmpegRes = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' });
-    if (ffmpegRes.status !== 0) {
-        console.info(
-            '[local-worker-render-driver.test] Skipping real-worker contract suite: ffmpeg binary not found on PATH.',
-        );
-        return false;
-    }
-    if (process.env.CHROME_PATH && !fssync.existsSync(process.env.CHROME_PATH)) {
-        console.info(
-            `[local-worker-render-driver.test] Skipping real-worker contract suite: Chrome binary not found at CHROME_PATH (${process.env.CHROME_PATH}).`,
-        );
-        return false;
-    }
-    return true;
-}
-
-const RUN_REAL_RENDER_TESTS = checkCanRunRealRenderTests();
+const RUN_REAL_RENDER_TESTS = CheckCanRunRealRenderTests('local-worker-render-driver.test');
 
 const DEFAULT_DOCKER_SETTINGS = {
     Image: DEFAULT_DOCKER_RENDER_IMAGE,
