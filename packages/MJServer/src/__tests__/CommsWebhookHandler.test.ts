@@ -18,7 +18,8 @@ import {
     type CommsWebhookHandlerOptions,
     type PreferenceCenterData,
 } from '../rest/CommsWebhookHandler.js';
-import { ComputeTrackingSignature } from '@memberjunction/communication-engine';
+import { ComputeOpenPixelSignature, ComputeTrackingSignature } from '@memberjunction/communication-engine';
+import { CommsTrackingEventBuffer } from '../rest/CommsTrackingEventBuffer.js';
 
 async function withServer(
     options: CommsWebhookHandlerOptions,
@@ -27,7 +28,9 @@ async function withServer(
     const app = express();
     // These tests stand in for a host with its own storage, so they supply its token check too:
     // overriding PublishActivity alone no longer turns token verification off.
-    app.use('/comms', CreateCommsWebhookHandler({ VerifyToken: async () => true, ...options }));
+    // A batch size of one publishes each open and click hit as it arrives, so a test can assert on
+    // it as soon as the response is back. Batching itself is covered in CommsTrackingEventBuffer.test.ts.
+    app.use('/comms', CreateCommsWebhookHandler({ VerifyToken: async () => true, TrackingBuffer: { MaxBatchSize: 1 }, ...options }));
     const server = app.listen(0, '127.0.0.1');
     try {
         await new Promise<void>((resolve) => server.once('listening', () => resolve()));
@@ -303,20 +306,29 @@ describe('CommsWebhookHandler', () => {
         );
     });
 
-    it('skips publishing when VerifyToken returns false or token is not a UUIDv4', async () => {
+    it('checks unsubscribe tokens and unsigned open pixels with VerifyToken, and never a signed click', async () => {
         const validUuid = '44444444-5555-4666-8777-888888888888';
         const secret = 'verify-token-secret-32-characters!';
         const sig = SignClickTrackingUrl(secret, validUuid, 'https://example.com');
+        const verified: string[] = [];
 
         await withServer(
             {
                 HmacSecret: secret,
                 PublishActivity: async (p) => { published.push(p); },
-                VerifyToken: async () => false,
+                VerifyToken: async (kind) => {
+                    verified.push(kind);
+                    return false;
+                },
             },
             async (baseUrl) => {
                 const openRes = await fetch(`${baseUrl}/open/${validUuid}.gif`);
                 expect(openRes.status).toBe(200);
+
+                const unsubRes = await fetch(`${baseUrl}/unsubscribe/${validUuid}`, { method: 'POST' });
+                expect(unsubRes.status).toBe(404);
+                expect(unsubRes.headers.get('cache-control')).toBe('no-store');
+                expect(published).toHaveLength(0);
 
                 const clickRes = await fetch(
                     `${baseUrl}/click/${validUuid}?u=${encodeURIComponent('https://example.com')}&sig=${sig}`,
@@ -324,13 +336,81 @@ describe('CommsWebhookHandler', () => {
                 );
                 expect(clickRes.status).toBe(302);
 
-                const unsubRes = await fetch(`${baseUrl}/unsubscribe/${validUuid}`, { method: 'POST' });
-                expect(unsubRes.status).toBe(404);
-                expect(unsubRes.headers.get('cache-control')).toBe('no-store');
-
-                expect(published).toHaveLength(0);
+                // The click's signature is its whole capability: it is published without a lookup.
+                expect(verified).toEqual(['tracking', 'unsubscribe']);
+                expect(published.map((p) => p.EventType)).toEqual(['Clicked']);
             },
         );
+    });
+
+    it('records a signed open without calling VerifyToken, and ignores one whose signature is wrong', async () => {
+        const validUuid = '44444444-5555-4666-8777-888888888888';
+        const otherUuid = '55555555-5555-4666-8777-888888888888';
+        const secret = 'verify-token-secret-32-characters!';
+        const sig = ComputeOpenPixelSignature(validUuid, secret);
+
+        await withServer(
+            {
+                HmacSecret: secret,
+                PublishActivity: async (p) => { published.push(p); },
+                VerifyToken: async () => {
+                    throw new Error('a signed pixel must not be looked up');
+                },
+            },
+            async (baseUrl) => {
+                const signed = await fetch(`${baseUrl}/open/${validUuid}.gif?sig=${sig}`);
+                const swapped = await fetch(`${baseUrl}/open/${otherUuid}.gif?sig=${sig}`);
+                const garbage = await fetch(`${baseUrl}/open/${validUuid}.gif?sig=nope`);
+                const repeated = await fetch(`${baseUrl}/open/${validUuid}.gif?sig=${sig}&sig=${sig}`);
+
+                expect([signed.status, swapped.status, garbage.status, repeated.status]).toEqual([200, 200, 200, 200]);
+                expect(published).toEqual([
+                    expect.objectContaining({ Source: 'open-pixel', EventType: 'Opened', TrackingToken: validUuid }),
+                ]);
+            },
+        );
+    });
+
+    it('ignores a signed open when no HMAC secret is configured', async () => {
+        const validUuid = '44444444-5555-4666-8777-888888888888';
+        const sig = ComputeOpenPixelSignature(validUuid, 'some-other-instance-secret-32-chars');
+        const previous = process.env.MJ_COMMS_HMAC_SECRET;
+        delete process.env.MJ_COMMS_HMAC_SECRET;
+
+        try {
+            await withServer({ PublishActivity: async (p) => { published.push(p); } }, async (baseUrl) => {
+                expect((await fetch(`${baseUrl}/open/${validUuid}.gif?sig=${sig}`)).status).toBe(200);
+                expect(published).toHaveLength(0);
+            });
+        } finally {
+            if (previous !== undefined) process.env.MJ_COMMS_HMAC_SECRET = previous;
+        }
+    });
+
+    it('holds open and click hits in the buffer and publishes them together, after the responses', async () => {
+        const validUuid = '44444444-5555-4666-8777-888888888888';
+        const secret = 'verify-token-secret-32-characters!';
+        const target = 'https://example.com/landing';
+        const batches: CommsActivityWorkPayload[][] = [];
+        const buffer = new CommsTrackingEventBuffer<CommsActivityWorkPayload>(async (items) => {
+            batches.push([...items]);
+        });
+
+        await withServer({ HmacSecret: secret, TrackingEventBuffer: buffer }, async (baseUrl) => {
+            const open = await fetch(`${baseUrl}/open/${validUuid}.gif?sig=${ComputeOpenPixelSignature(validUuid, secret)}`);
+            const click = await fetch(
+                `${baseUrl}/click/${validUuid}?u=${encodeURIComponent(target)}&sig=${SignClickTrackingUrl(secret, validUuid, target)}`,
+                { redirect: 'manual' },
+            );
+
+            expect([open.status, click.status]).toEqual([200, 302]);
+            expect(batches).toEqual([]);
+            expect(buffer.PendingCount).toBe(2);
+
+            await buffer.Flush();
+            expect(batches).toHaveLength(1);
+            expect(batches[0].map((p) => p.EventType)).toEqual(['Opened', 'Clicked']);
+        });
     });
 
     it('sets Cache-Control: no-store on token-bearing JSON endpoints', async () => {

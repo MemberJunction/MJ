@@ -112,6 +112,7 @@ import {
   type PreferenceCenterData,
   type SavePreferenceChoicesResult,
 } from '../rest/CommsWebhookHandler.js';
+import { ComputeOpenPixelSignature } from '@memberjunction/communication-engine';
 
 // ─── In-memory database ──────────────────────────────────────────────────────
 
@@ -389,7 +390,8 @@ function seedSentMessage(log: Partial<LogRow> = {}): void {
 
 async function withServer(options: CommsWebhookHandlerOptions, fn: (baseUrl: string) => Promise<void>): Promise<void> {
   const app = express();
-  app.use('/comms', CreateCommsWebhookHandler(options));
+  // A batch size of one publishes each open and click hit as it arrives (see CommsTrackingEventBuffer.test.ts for batching).
+  app.use('/comms', CreateCommsWebhookHandler({ TrackingBuffer: { MaxBatchSize: 1 }, ...options }));
   const server = app.listen(0, '127.0.0.1');
   try {
     await new Promise<void>((resolve) => server.once('listening', () => resolve()));
@@ -864,7 +866,7 @@ describe('default token verification and publish on the tracking and unsubscribe
     });
   });
 
-  it('still checks tokens against the logs when a host supplies its own PublishActivity', async () => {
+  it('still checks unsubscribe tokens and unsigned open pixels against the logs when a host supplies its own PublishActivity', async () => {
     const hostPublished: CommsActivityWorkPayload[] = [];
     await withServer({ HmacSecret: HMAC_SECRET, PublishActivity: async (p) => { hostPublished.push(p); } }, async (baseUrl) => {
       const unknownUnsub = await fetch(`${baseUrl}/unsubscribe/${UNKNOWN_TOKEN}`, { method: 'POST' });
@@ -963,7 +965,7 @@ describe('default token verification and publish on the tracking and unsubscribe
     });
   });
 
-  it('GET /open/:token.gif publishes an Opened event only for a tracking token found on a log', async () => {
+  it('GET /open/:token.gif with no signature publishes an Opened event only for a tracking token found on a log', async () => {
     await withDefaults(async (baseUrl) => {
       const known = await fetch(`${baseUrl}/open/${TRACK_TOKEN}.gif`);
       const unknown = await fetch(`${baseUrl}/open/${UNKNOWN_TOKEN}.gif`);
@@ -1006,22 +1008,49 @@ describe('default token verification and publish on the tracking and unsubscribe
     });
   });
 
-  it('GET /click/:token publishes a Clicked event for a known token and redirects', async () => {
-    const target = 'https://example.com/landing';
-    const sig = SignClickTrackingUrl(HMAC_SECRET, TRACK_TOKEN, target);
+  it('GET /open/:token.gif with a valid signature publishes an Opened event and reads nothing from the database', async () => {
+    const sig = ComputeOpenPixelSignature(UNKNOWN_TOKEN, HMAC_SECRET);
 
     await withDefaults(async (baseUrl) => {
-      const res = await fetch(`${baseUrl}/click/${TRACK_TOKEN}?u=${encodeURIComponent(target)}&sig=${sig}`, { redirect: 'manual' });
+      const res = await fetch(`${baseUrl}/open/${UNKNOWN_TOKEN}.gif?sig=${sig}`);
+
+      expect(res.status).toBe(200);
+      // The token is on no log. The route does not know that and does not ask: the worker decides.
+      expect(published()).toEqual([expect.objectContaining({ Source: 'open-pixel', EventType: 'Opened', TrackingToken: UNKNOWN_TOKEN })]);
+      expect(views.CallsFor('MJ: Communication Logs')).toEqual([]);
+    });
+  });
+
+  it('GET /open/:token.gif with a wrong signature serves the pixel, publishes nothing, and does not fall back to a lookup', async () => {
+    const sigForOtherToken = ComputeOpenPixelSignature(UNKNOWN_TOKEN, HMAC_SECRET);
+
+    await withDefaults(async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/open/${TRACK_TOKEN}.gif?sig=${sigForOtherToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/gif');
+      expect(published()).toEqual([]);
+      expect(views.CallsFor('MJ: Communication Logs')).toEqual([]);
+    });
+  });
+
+  it('GET /click/:token publishes a Clicked event, redirects, and reads nothing from the database', async () => {
+    const target = 'https://example.com/landing';
+    const sig = SignClickTrackingUrl(HMAC_SECRET, UNKNOWN_TOKEN, target);
+
+    await withDefaults(async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/click/${UNKNOWN_TOKEN}?u=${encodeURIComponent(target)}&sig=${sig}`, { redirect: 'manual' });
 
       expect(res.status).toBe(302);
-      expect(published()).toEqual([expect.objectContaining({ Source: 'click-redirect', EventType: 'Clicked', TrackingToken: TRACK_TOKEN, TargetURL: target })]);
+      // The token is on no log; the signature alone makes the click publishable.
+      expect(published()).toEqual([expect.objectContaining({ Source: 'click-redirect', EventType: 'Clicked', TrackingToken: UNKNOWN_TOKEN, TargetURL: target })]);
+      expect(views.CallsFor('MJ: Communication Logs')).toEqual([]);
     });
   });
 
   it.each([
-    ['the token is on no log', UNKNOWN_TOKEN, () => undefined],
     [
-      'the token lookup fails',
+      'the database cannot be read',
       TRACK_TOKEN,
       () => {
         views.Fail('MJ: Communication Logs');

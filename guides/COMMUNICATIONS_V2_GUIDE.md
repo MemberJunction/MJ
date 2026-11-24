@@ -186,8 +186,8 @@ Given the gate's obligations, the dispatcher:
   allowed, the envelope did not set `TrackClicks: false`, and an HMAC secret is configured (the unsubscribe and
   preference-center links are never rewritten, and neither is a link whose tracked form would be longer than
   2,000 characters);
-- adds a 1x1 image pointing at `/comms/open/<token>.gif` when open tracking is allowed and the envelope did not
-  set `TrackOpens: false`;
+- adds a 1x1 image pointing at `/comms/open/<token>.gif?sig=...` when open tracking is allowed and the envelope
+  did not set `TrackOpens: false` (the signature is left off when no HMAC secret is configured);
 - tells the provider to turn its own open and click tracking off (`Message.DisableProviderTracking`) and passes
   the log ID for webhook correlation (`Message.CorrelationLogID`).
 
@@ -414,8 +414,8 @@ reserved root that server extensions cannot claim.
 | Route | Capability | What it does |
 |---|---|---|
 | `POST /comms/webhooks/sendgrid/:credentialId`<br/>`POST /comms/webhooks/sendgrid` | SendGrid ECDSA signature over the raw body, within a 10-minute replay window | Publishes the batch to `comms.activity`. `202` on success, `401` on a missing key or bad signature, `503` when the queue rejects it. |
-| `GET /comms/open/:token.gif` | `TrackingToken` (UUID v4) of an existing log | Publishes an `Opened` event. Always answers with a 1x1 GIF. |
-| `GET /comms/click/:token?u=<url>&sig=<hmac>` | HMAC-SHA256 over `token:url` | Publishes a `Clicked` event and redirects to `u`. `400` when the signature does not verify, so the route cannot be used as an open redirect. |
+| `GET /comms/open/:token.gif?sig=<hmac>` | HMAC-SHA256 over `token:open`. With no `sig`, the `TrackingToken` of an existing log | Records an `Opened` event. Always answers with a 1x1 GIF, whatever the signature. |
+| `GET /comms/click/:token?u=<url>&sig=<hmac>` | HMAC-SHA256 over `token:url` | Records a `Clicked` event and redirects to `u`. `400` when the signature does not verify, so the route cannot be used as an open redirect. |
 | `POST /comms/unsubscribe/:token`<br/>`POST /comms/unsubscribe` | `UnsubscribeToken` (UUID v4) of an existing log | RFC 8058 one-click target. Publishes an `Unsubscribed` event. |
 | `GET /comms/unsubscribe/:token` | `UnsubscribeToken` | Redirects to the sender's `PreferenceCenterURL` with `?token=`, or to `/comms/preferences/:token`. |
 | `GET /comms/preferences/:token` | `UnsubscribeToken` | The preference center page, or its data as JSON when the request asks for `application/json`. |
@@ -429,6 +429,32 @@ without it, from `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID`. Use the credentia
 SendGrid account posts to the same MJAPI.
 
 Preference pages are served with a per-response CSP nonce, `frame-ancestors 'none'` and `Cache-Control: no-store`.
+
+### Open and click hits do no database work on the request
+
+A mail scanner can follow every link in a message, so these two routes are the busiest in the package. They
+are built to answer without touching the database:
+
+1. The route checks the signature. That is the whole capability: a request that passes is a link or pixel this
+   system issued for that tracking token. Nothing is looked up.
+2. The hit goes into an in-memory buffer and the route answers.
+3. The buffer publishes what it holds to `comms.activity` in one call, one second later or as soon as 500 hits
+   are waiting.
+4. The `comms.activity` worker matches the tracking token to a message. A hit whose token matches no message
+   (the message was deleted, for example) is dropped there: it is not recorded and not retried.
+
+Two consequences to know about:
+
+- **Hits can be lost.** A hit still in the buffer when the process dies is gone, and a batch the queue refuses
+  is dropped, not retried. A graceful shutdown publishes what is held. Open and click counts are statistics;
+  unsubscribes and provider webhooks never go through the buffer and are published before the route answers.
+- **An open pixel with no signature is still looked up.** Mail sent before pixels were signed, or with no HMAC
+  secret configured, carries a bare `/comms/open/<token>.gif`. Nothing but a read of `MJ: Communication Logs`
+  can tell that from a guessed token, so that one request still costs a read.
+
+The buffer is `CommsTrackingEventBuffer` in `@memberjunction/server`. A host that mounts
+`CreateCommsWebhookHandler` itself can tune it with `TrackingBuffer` (`FlushIntervalMs`, `MaxBatchSize`,
+`MaxBufferedEvents`) or pass its own as `TrackingEventBuffer`.
 
 ### Preference center
 
@@ -515,7 +541,7 @@ recipient. `UseV2` defaults to `false`.
 | Migration `V202611231029__v6.3.x__Communications_V2_Schema.sql` applied, CodeGen run, `mj sync push` run | Tables, generated entities, and the metadata in section 5 | The engine fails to load its metadata. |
 | A public URL: `MJAPI_PUBLIC_URL` (and `MJAPI_BASE_PATH` when a proxy forwards a prefix) | Unsubscribe, open and click links in emails are built from `ApiRoute('/comms', { absolute: true })` | Links point at the internal host and port and do not work for recipients. |
 | `/comms/*` reachable from the internet, without authentication | Recipients' mail clients and the provider call it | Unsubscribes, tracking and webhooks fail. |
-| `MJ_COMMS_HMAC_SECRET`, identical on every MJAPI instance | Signs and verifies click links | Links are not rewritten; `/comms/click` answers `400`. |
+| `MJ_COMMS_HMAC_SECRET`, identical on every MJAPI instance | Signs and verifies click links and open pixels | Links are not rewritten and `/comms/click` answers `400`; open pixels are unsigned and each open costs a database read. |
 | The provider's webhook verification key | Authenticates delivery events | `/comms/webhooks/sendgrid` answers `401`; bounces and complaints never reach MJ. |
 | Work queue enabled (`workQueue.enabled`, on by default) and at least one MJAPI instance whose server role runs background workers (`all` or `worker`) | `comms.dispatch`, `comms.render` and `comms.activity` are consumed by the work-queue host | With `workQueue.enabled: false`, sends of any size run inline in the calling process. The public routes still publish to `comms.activity`; with no instance consuming it, bounces, complaints, unsubscribes, opens and clicks wait in the queue and no suppression is created. A rejected publish answers `503` for webhooks and unsubscribes; opens and clicks are dropped. |
 | A default sender with `FromEmail` set | The envelope's sender supplies the from address | `Send()` fails with `Sender not found`, or sends with an empty from address. |
@@ -565,7 +591,7 @@ Each message is written to a JSON file per mailbox in that folder.
 
 | Variable | Read by | Required | Default | Purpose and notes |
 |---|---|---|---|---|
-| `MJ_COMMS_HMAC_SECRET` | MJAPI (`ConfigureCommsV2WorkQueue`, `/comms/click`), `V2SendService` | For click tracking | none | Secret for the HMAC-SHA256 signature on click-tracking links. **Secret**: use a long random value (`openssl rand -hex 32`), keep it out of source control, and set the same value on every instance. Unset: links are left unrewritten and `/comms/click` rejects every request. Changing it invalidates the click links in mail already sent (they answer `400`); unsubscribe links are unaffected. |
+| `MJ_COMMS_HMAC_SECRET` | MJAPI (`ConfigureCommsV2WorkQueue`, `/comms/click`), `V2SendService` | For click tracking | none | Secret for the HMAC-SHA256 signature on click-tracking links and open pixels. **Secret**: use a long random value (`openssl rand -hex 32`), keep it out of source control, and set the same value on every instance. Unset: links are left unrewritten, `/comms/click` rejects every request, and open pixels are unsigned. Changing it invalidates the click links in mail already sent (they answer `400`) and stops opens of that mail being recorded (the pixel is still served); unsubscribe links are unaffected. |
 | `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` | MJAPI (`POST /comms/webhooks/sendgrid`) | For the webhook URL without a credential ID | none | SendGrid Event Webhook **public** verification key (PEM, or the base64 key SendGrid shows). Not a secret, but it must match the signing key SendGrid uses. Unset: that route answers `401`. Not used by `/comms/webhooks/sendgrid/:credentialId`, which reads the key from the credential. |
 | `MJ_COMMS_PREFERENCE_ELEMENT_SRC` | MJAPI (`GET /comms/preferences/:token`) | No | none | URL of the `<mj-comms-preference-center>` bundle to load in the preference page, for example a CDN copy. Unset: MJAPI serves the bundle from the installed `@memberjunction/ng-communications` package at `/comms/preferences-element.js`, and falls back to the built-in page when that bundle is not built. The script is loaded with the page's CSP nonce; only point this at a URL you control. |
 | `MJ_COMMS_V1_COMPLIANCE_GATE` | `CommunicationEngine.SendSingleMessage` | No | off | Set to `true` to check every V1 send against endpoint status and active suppressions (section 10). Unset: V1 sends are not checked unless the message sets `CheckComplianceGate`. |
@@ -1025,6 +1051,9 @@ batch.
 
 Check these against the code before relying on the opposite; they describe the implementation as it stands.
 
+- **Open and click hits can be lost.** They wait up to a second in memory before they are published (section
+  8), so a process crash loses that second, and a batch the queue refuses is dropped. The buffer's settings are
+  options of `CreateCommsWebhookHandler`, not `mj.config.cjs` keys.
 - **One provider for delivery events.** The public webhook route and the `comms.activity` handler support
   SendGrid only (13.5). Open, click and unsubscribe events from MJ's own routes are attributed to the provider
   that sent the message, taken from its log.

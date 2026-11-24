@@ -1226,6 +1226,34 @@ describe('CommsActivityWorker', () => {
     expect(savedCorrelation).toEqual({ campaignId: 'camp-fp' });
   });
 
+  it.each(['Opened', 'Clicked'] as const)(
+    'drops a first-party %s hit whose tracking token matches no log, without recording it or reporting an error',
+    async (eventType) => {
+      // The tracking routes accept a hit on its signature and leave the lookup to the worker, so a
+      // hit for a message that no longer exists reaches it. An error here would make the queue
+      // retry the hit for good.
+      const result = await worker.ProcessActivityBatch(
+        [
+          {
+            CommunicationProviderID: '',
+            ProviderEventID: `hit-unmatched-${eventType}`,
+            NormalizedAddress: '',
+            TrackingToken: 'tok-no-such-message',
+            TargetURL: eventType === 'Clicked' ? 'https://example.com/landing' : undefined,
+            EventType: eventType,
+            OccurredAt: new Date('2026-03-05T12:00:00Z'),
+            IsMachineEvent: false,
+          },
+        ],
+        mockUser,
+      );
+
+      expect(result).toEqual({ ProcessedCount: 0, DuplicateCount: 0, ErrorCount: 0, UnmatchedCount: 1 });
+      expect(store['MJ: Communication Activities']).toHaveLength(0);
+      expect(store['MJ: Communication Provider Events']).toHaveLength(0);
+    },
+  );
+
   it('REGRESSION: takes the provider of an open, click or unsubscribe hit from its log, and rejects a redelivery', async () => {
     // MJ's own tracking routes do not know which provider sent the message, so the hit arrives
     // with an idempotency key and no provider. It used to be stamped with the provider named

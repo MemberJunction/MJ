@@ -2751,6 +2751,8 @@ export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapsho
 export type { StartupSummarySnapshot } from './logging/StartupLogger.js';
 export { CreateCommsWebhookHandler } from './rest/CommsWebhookHandler.js';
 export type { CommsActivityWorkPayload, CommsWebhookHandlerOptions } from './rest/CommsWebhookHandler.js';
+export { CommsTrackingEventBuffer } from './rest/CommsTrackingEventBuffer.js';
+export type { CommsTrackingEventBufferOptions } from './rest/CommsTrackingEventBuffer.js';
 
 export * from './generic/RedisClusterPubSubEngine.js';
 export { WrapSharedCacheWithL1 } from './sharedCache.js';

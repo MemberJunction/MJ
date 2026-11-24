@@ -121,7 +121,7 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS` | How often the agent-run watchdog sweeps for orphaned runs, once this process has run an agent (ms); `0` = startup sweep only | `300000` |
 | `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` | `MJ: AI Models` name every process embeds locally with — see [Changing the local embedding model](#changing-the-local-embedding-model) | highest-PowerRank active local model |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
-| `MJ_COMMS_HMAC_SECRET` | Secret that signs and verifies Communications V2 click-tracking links. Long random value, identical on every instance. Unset: links are not rewritten and `/comms/click` rejects every request — see [Communications V2](#communications-v2) | (optional) |
+| `MJ_COMMS_HMAC_SECRET` | Secret that signs and verifies Communications V2 click-tracking links and open pixels. Long random value, identical on every instance. Unset: links are not rewritten, `/comms/click` rejects every request, and open pixels are unsigned — see [Communications V2](#communications-v2) | (optional) |
 | `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` | SendGrid Event Webhook public verification key for `POST /comms/webhooks/sendgrid`. Unset: that route answers `401` | (optional) |
 | `MJ_COMMS_PREFERENCE_ELEMENT_SRC` | URL of the `<mj-comms-preference-center>` element bundle used by `GET /comms/preferences/:token` | bundle from `@memberjunction/ng-communications`, else the built-in page |
 
@@ -768,8 +768,8 @@ each verifies its own capability.
 | Route | Capability | Behavior |
 |-------|------------|----------|
 | `POST /comms/webhooks/sendgrid[/:credentialId]` | SendGrid ECDSA signature over the raw body, 10-minute replay window | Publishes the batch to `comms.activity`; `202`, or `401` / `400` / `503` |
-| `GET /comms/open/:token.gif` | Tracking token of an existing log | Publishes `Opened`; always returns a 1x1 GIF |
-| `GET /comms/click/:token?u=&sig=` | HMAC-SHA256 of `token:u` under `MJ_COMMS_HMAC_SECRET` | Publishes `Clicked`; `302` to `u`, or `400` when the signature fails |
+| `GET /comms/open/:token.gif?sig=` | HMAC-SHA256 of `token:open` under `MJ_COMMS_HMAC_SECRET`; with no `sig`, the tracking token of an existing log | Records `Opened` through the in-memory buffer; always returns a 1x1 GIF |
+| `GET /comms/click/:token?u=&sig=` | HMAC-SHA256 of `token:u` under `MJ_COMMS_HMAC_SECRET` | Records `Clicked` through the in-memory buffer; `302` to `u`, or `400` when the signature fails |
 | `POST /comms/unsubscribe[/:token]` | Unsubscribe token of an existing log | RFC 8058 one-click target; publishes `Unsubscribed` |
 | `GET /comms/unsubscribe[/:token]` | Unsubscribe token | `302` to the sender's `PreferenceCenterURL`, else to `/comms/preferences/:token` |
 | `GET /comms/preferences/:token` | Unsubscribe token | Preference center page; JSON when `Accept: application/json` |
@@ -777,9 +777,19 @@ each verifies its own capability.
 | `GET` / `POST /comms/confirm/:token` | Confirmation token of a principal preference | `GET` renders a confirm button; `POST` confirms the double opt-in |
 | `GET /comms/preferences-element.js` | none | The preference center element bundle, or `404` |
 
-Tokens are UUID v4 values stored on `MJ: Communication Logs`. Requests whose token matches no log are rejected
-(unsubscribe) or ignored (open, click) before anything is queued. That check runs even when a host supplies its
-own `PublishActivity`; only `VerifyToken` replaces it. HTML pages are served with a per-response CSP nonce,
+Tokens are UUID v4 values stored on `MJ: Communication Logs`. An unsubscribe request whose token matches no log
+is rejected before anything is queued. That check runs even when a host supplies its own `PublishActivity`; only
+`VerifyToken` replaces it.
+
+Open and click hits are different: they are accepted on their signature alone, with no database read, held in
+an in-memory buffer (`CommsTrackingEventBuffer`) and published to `comms.activity` in batches, one second later
+or when 500 are waiting. The `comms.activity` worker drops a hit whose token matches no log. A hit still in the
+buffer when the process dies is lost, and a batch the queue refuses is dropped; a graceful shutdown publishes
+what is held. An open pixel with no `sig` (mail sent before pixels were signed, or with no secret configured) is
+still checked against the logs first. `CreateCommsWebhookHandler` takes `TrackingBuffer` (`FlushIntervalMs`,
+`MaxBatchSize`, `MaxBufferedEvents`) to tune the buffer, or `TrackingEventBuffer` to supply one.
+
+HTML pages are served with a per-response CSP nonce,
 `frame-ancestors 'none'` and `Referrer-Policy: no-referrer`, and every `/comms` response except the element
 bundle carries `Cache-Control: no-store`, error responses included.
 
@@ -862,7 +872,7 @@ Every operation requires the caller to be an Owner or to hold the `Communication
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `MJ_COMMS_HMAC_SECRET` (env) | none | Signs click-tracking links and verifies `/comms/click`. A secret: generate with `openssl rand -hex 32`, set the same value on every instance, never commit it. Unset, click tracking is off. Rotating it breaks the click links in mail already sent. |
+| `MJ_COMMS_HMAC_SECRET` (env) | none | Signs click-tracking links and open pixels, and verifies `/comms/click` and `/comms/open`. A secret: generate with `openssl rand -hex 32`, set the same value on every instance, never commit it. Unset, click tracking is off and open pixels are unsigned. Rotating it breaks the click links in mail already sent and stops opens of that mail being recorded. |
 | `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` (env) | none | Public key that verifies SendGrid Event Webhook posts to `/comms/webhooks/sendgrid`. Unset, the route answers `401`. With `/comms/webhooks/sendgrid/:credentialId` the key comes from that `MJ: Credentials` row's `webhookVerificationKey` value instead. |
 | `MJ_COMMS_PREFERENCE_ELEMENT_SRC` (env) | none | URL of the preference center element bundle. Unset, MJServer serves the bundle from the installed `@memberjunction/ng-communications` at `/comms/preferences-element.js`, or the built-in page when the bundle is not built. |
 | `MJAPI_PUBLIC_URL`, `MJAPI_BASE_PATH` (env) | host and port | Base of every link in an outgoing message. |
