@@ -6776,6 +6776,9 @@ importers:
       '@memberjunction/actions-base':
         specifier: 6.3.0-edge.1
         version: link:../../../Actions/Base
+      '@memberjunction/ai-core-plus':
+        specifier: 6.3.0-edge.1
+        version: link:../../../AI/CorePlus
       '@memberjunction/ai-diagrams':
         specifier: 6.3.0-edge.1
         version: link:../../../AI/Diagrams
@@ -6806,6 +6809,9 @@ importers:
       '@memberjunction/ng-code-editor':
         specifier: 6.3.0-edge.1
         version: link:../code-editor
+      '@memberjunction/ng-composer':
+        specifier: 6.3.0-edge.1
+        version: link:../composer
       '@memberjunction/ng-export-service':
         specifier: 6.3.0-edge.1
         version: link:../export-service
@@ -11529,9 +11535,6 @@ importers:
       '@memberjunction/document-parsing':
         specifier: 6.3.0-edge.1
         version: link:../../DocumentParsing
-      '@memberjunction/generic-database-provider':
-        specifier: 6.3.0-edge.1
-        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../MJGlobal
@@ -12930,6 +12933,9 @@ importers:
       '@inquirer/prompts':
         specifier: ^8.2.0
         version: 8.2.0(@types/node@24.10.11)
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.3.0-edge.1
+        version: link:../AI/AgentHarness
       '@memberjunction/ai-cli':
         specifier: 6.3.0-edge.1
         version: link:../AI/AICLI

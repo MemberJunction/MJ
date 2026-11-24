@@ -458,6 +458,11 @@ export interface LocalCliLoginDetectionResult {
 export interface DetectLocalCliLoginOptions {
     homeDir?: string;
     env?: NodeJS.ProcessEnv;
+    /**
+     * When true and a vendor-specific override directory (`CLAUDE_CONFIG_DIR` or `CODEX_HOME`) is
+     * present in `env`, checks ONLY that isolated directory and does not fall back to `homeDir`.
+     */
+    strictSlotIsolation?: boolean;
 }
 
 /**
@@ -473,6 +478,7 @@ export function DetectLocalCliLoginSession(
     }
 
     const env = options?.env ?? process.env;
+    const strictIsolation = options?.strictSlotIsolation === true;
     const resolvedHome =
         nonEmptyEnvValue(options?.homeDir) ??
         nonEmptyEnvValue(env.HOME) ??
@@ -493,19 +499,35 @@ export function DetectLocalCliLoginSession(
             candidates.push(path.join(resolvedHome, '.config', 'antigravity'));
             break;
         case 'ClaudeCodeCliAdapter': {
+            const oauthToken = nonEmptyEnvValue(env.CLAUDE_CODE_OAUTH_TOKEN);
+            if (oauthToken) {
+                return { hasLocalLogin: true, indicatorPath: 'env:CLAUDE_CODE_OAUTH_TOKEN' };
+            }
             const claudeConfigDir = nonEmptyEnvValue(env.CLAUDE_CONFIG_DIR);
             if (claudeConfigDir) {
-                candidates.push(path.join(claudeConfigDir, '.credentials.json'));
+                candidates.push(
+                    path.join(claudeConfigDir, '.credentials.json'),
+                    path.join(claudeConfigDir, '.claude.json'),
+                );
             }
-            candidates.push(
-                path.join(resolvedHome, '.claude', '.credentials.json'),
-                path.join(resolvedHome, '.claude.json'),
-            );
+            if (!claudeConfigDir || !strictIsolation) {
+                candidates.push(
+                    path.join(resolvedHome, '.claude', '.credentials.json'),
+                    path.join(resolvedHome, '.claude.json'),
+                );
+            }
             break;
         }
-        case 'CodexAdapter':
-            candidates.push(path.join(resolvedHome, '.codex', 'auth.json'));
+        case 'CodexAdapter': {
+            const codexHome = nonEmptyEnvValue(env.CODEX_HOME);
+            if (codexHome) {
+                candidates.push(path.join(codexHome, 'auth.json'));
+            }
+            if (!codexHome || !strictIsolation) {
+                candidates.push(path.join(resolvedHome, '.codex', 'auth.json'));
+            }
             break;
+        }
         case 'GeminiCliAdapter':
             candidates.push(
                 path.join(resolvedHome, '.gemini', 'oauth_creds.json'),
@@ -903,6 +925,9 @@ const NON_SECRET_ENV_KEYS: ReadonlySet<string> = new Set([
     'LANG',
     'TERM',
     'XDG_CONFIG_HOME',
+    'CLAUDE_CONFIG_DIR',
+    'CODEX_HOME',
+    'MJ_HARNESS_REAL_HOME',
     'GH_PROMPT_DISABLED',
     'GIT_TERMINAL_PROMPT',
     'GIT_AUTHOR_NAME',
