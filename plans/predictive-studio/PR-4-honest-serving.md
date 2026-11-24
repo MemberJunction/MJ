@@ -13848,6 +13848,10 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   can carry `MJMLModelEntity` (`core-entities`, `core-entities-server`, `predictive-studio*`; MJ forbids cross-package
   re-exports) → R0 6/6, test red first. Shard 4's TaskGraph "scales near-linearly" and IT PB18 are timing gates outside
   PS.
+- **Merge of next `1c0235a488`:** next took IT186 → the prediction-serving bundle is IT187; next's
+  `V202611231000` regenerates `spDeleteAIPrompt` (same cascades, new AI Agent columns) → the tail's copy replaced with
+  it, the migration retimed to `V202611231001`; manifests regenerated; bundle count 286. The test record's Name
+  (IT187) is committed with the rename in the next commit.
 
 ## 12. Refresh log (append-only)
 
