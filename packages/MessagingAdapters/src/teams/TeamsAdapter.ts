@@ -302,7 +302,9 @@ export class TeamsAdapter extends BaseMessagingAdapter {
      * accounts take effect immediately (UserCache is still queried fresh per message).
      */
     private userEmailCache = new Map<string, { email: string; timestamp: number }>();
+    /** 5-minute TTL: avoids Bot Framework roster throttling on active chats while picking up UPN/email changes promptly. */
     private static readonly USER_EMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+    /** Memory-safety ceiling for the in-process roster cache (matches CONV_REF_MAX_SIZE); oldest entry is evicted FIFO when exceeded. */
     private static readonly USER_EMAIL_CACHE_MAX_SIZE = 10_000;
 
     /**
