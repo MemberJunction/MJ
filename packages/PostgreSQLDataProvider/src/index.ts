@@ -10,7 +10,7 @@ export {
 } from './pgSsl.js';
 export {
     PgAuthMode, PgCredentialRequest, BasePgCredentialProvider, CachingPgCredentialProvider, StaticPasswordProvider,
-    PgCredentialProviders, ResolvePgAuthMode, BuildPgPasswordSource
+    PgCredentialProviders, ResolvePgAuthMode, BuildPgPasswordSource, AssertPgTokenTransport
 } from './pgCredentials.js';
 export {
     AZURE_POSTGRES_TOKEN_SCOPE, RDS_IAM_TOKEN_LIFETIME_MS, AzureTokenCredential, RdsTokenSigner,

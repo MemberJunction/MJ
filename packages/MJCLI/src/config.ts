@@ -6,7 +6,7 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
-import { BuildPgPasswordSource, BuildPgSslConfig, PgSslVerifiesServer, ResolvePgAuthMode, type PgSslConfig } from '@memberjunction/postgresql-dataprovider';
+import { BuildPgPasswordSource, BuildPgSslConfig, ResolvePgAuthMode, type PgSslConfig } from '@memberjunction/postgresql-dataprovider';
 import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS } from './lib/migration-timeout';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
@@ -456,16 +456,13 @@ async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayCo
  */
 export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Promise<{ SSL?: Record<string, unknown>; Password?: string }> {
   const ssl: PgSslConfig = BuildPgSslConfig(mjConfig.dbHost);
-  const authMode = ResolvePgAuthMode();
-  if (authMode !== 'password' && !PgSslVerifiesServer(ssl)) {
-    throw new Error(`PG_AUTH_MODE is "${authMode}", but PG_SSL_MODE does not verify the server; refusing to send the token. Use verify-ca or verify-full.`);
-  }
-  const source = BuildPgPasswordSource(authMode, {
+  // BuildPgPasswordSource refuses a token login whose TLS does not verify the server.
+  const source = BuildPgPasswordSource(ResolvePgAuthMode(), {
     Host: mjConfig.dbHost,
     Port: mjConfig.dbPort ?? 5432,
     User: mjConfig.codeGenLogin ?? '',
     Database: mjConfig.dbDatabase,
-  });
+  }, ssl);
   // Skyway types its SSL option as a plain record and treats `true` as "TLS, unverified", so pass
   // the object as a record and leave the option out for plain TCP.
   const sslRecord: Record<string, unknown> | undefined = typeof ssl === 'object' && ssl !== null ? Object.fromEntries(Object.entries(ssl)) : undefined;

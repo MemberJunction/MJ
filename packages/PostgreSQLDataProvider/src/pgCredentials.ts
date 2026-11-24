@@ -1,4 +1,5 @@
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
+import { PgSslVerifiesServer, type PgSslConfig } from './pgSsl.js';
 
 /**
  * How a PostgreSQL login proves who it is:
@@ -30,7 +31,11 @@ export abstract class BasePgCredentialProvider {
     /** Returns the password (or token) for a new connection. */
     public abstract GetPassword(request: PgCredentialRequest): Promise<string>;
 
-    /** Whether this mode requires TLS. Token modes always do: a token must never cross plain TCP. */
+    /**
+     * Whether this mode's secret may only travel over TLS that verifies the server. Token modes
+     * always do: a token must never cross plain TCP or an unverified connection.
+     * {@link BuildPgPasswordSource} enforces it.
+     */
     public get RequiresTls(): boolean {
         return true;
     }
@@ -139,13 +144,40 @@ export function ResolvePgAuthMode(configured?: string, env: NodeJS.ProcessEnv = 
 }
 
 /**
- * Returns the password source for a login: `undefined` for `password` mode (use the configured
- * password), else a function node-postgres calls for each new connection.
+ * Throws unless a token login's connection verifies the server. A token mode sends a bearer token
+ * as the password, so it may only travel over TLS that checks the server certificate
+ * (`verify-ca` or `verify-full`): plain TCP exposes it on the wire, and `require` hands it to
+ * whoever answers. `password` mode is not checked here; its TLS is the deployment's choice.
+ *
+ * {@link BuildPgPasswordSource} and `PGConnectionManager` call this, so every PostgreSQL connection
+ * path that carries a token is held to it; callers do not repeat the check.
  */
-export function BuildPgPasswordSource(mode: PgAuthMode, request: PgCredentialRequest): (() => Promise<string>) | undefined {
+export function AssertPgTokenTransport(mode: PgAuthMode, ssl: PgSslConfig): void {
+    if (mode === 'password' || PgSslVerifiesServer(ssl)) {
+        return;
+    }
+    throw new Error(
+        `PG_AUTH_MODE is "${mode}", which sends a token as the password, but PostgreSQL TLS does not verify the server. ` +
+        `Refusing to send the token. Set PG_SSL_MODE (or the ssl setting) to verify-ca or verify-full.`
+    );
+}
+
+/**
+ * Returns the password source for a login: `undefined` for `password` mode (use the configured
+ * password), else a function node-postgres calls for each new physical connection, so a token is
+ * fetched (or taken from the provider's cache) every time a connection opens.
+ *
+ * `ssl` is the TLS the connection will use. A provider whose {@link BasePgCredentialProvider.RequiresTls}
+ * is true (every token provider) refuses one that does not verify the server; see
+ * {@link AssertPgTokenTransport}.
+ */
+export function BuildPgPasswordSource(mode: PgAuthMode, request: PgCredentialRequest, ssl: PgSslConfig): (() => Promise<string>) | undefined {
     if (mode === 'password') {
         return undefined;
     }
     const provider = PgCredentialProviders.Instance.Get(mode);
+    if (provider.RequiresTls) {
+        AssertPgTokenTransport(mode, ssl);
+    }
     return () => provider.GetPassword(request);
 }

@@ -104,20 +104,22 @@ async function openMssql(params: DbConnectionParams): Promise<QueryRunner> {
 async function openPostgres(params: DbConnectionParams): Promise<QueryRunner> {
   const pg = await import('pg');
   const Client = pg.Client ?? (pg as unknown as { default: { Client: typeof pg.Client } }).default.Client;
-  // The shared PG_SSL_* / PG_AUTH_MODE rules every MJ PostgreSQL client follows.
+  // The shared PG_SSL_* / PG_AUTH_MODE rules every MJ PostgreSQL client follows. A token login is
+  // refused unless `ssl` verifies the server.
+  const ssl = BuildPgSslConfig(params.Host);
   const passwordSource = BuildPgPasswordSource(ResolvePgAuthMode(), {
     Host: params.Host,
     Port: params.port ?? 5432,
     User: params.User,
     Database: params.Database,
-  });
+  }, ssl);
   const client = new Client({
     host: params.Host,
     port: params.port ?? 5432,
     user: params.User,
     password: passwordSource ?? params.Password,
     database: params.Database,
-    ssl: BuildPgSslConfig(params.Host),
+    ssl,
   });
   await client.connect();
 

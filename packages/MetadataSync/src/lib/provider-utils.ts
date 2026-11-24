@@ -125,7 +125,7 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
     Port: port,
     User: config.dbUsername,
     Database: config.dbDatabase,
-  });
+  }, ssl);
   const pgPool = new pg.Pool({
     host: config.dbHost,
     port,

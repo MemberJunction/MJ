@@ -50,13 +50,14 @@ function buildPgConfig(): PGConnectionConfig {
   // remote one. (The old default was always-off, which sent CodeGen's credentials in clear to a remote
   // server.) Set PG_SSL_MODE=disable to connect to a remote server without TLS.
   const ssl = pool?.ssl ?? BuildPgSslConfig(configInfo.dbHost);
-  // Token logins (PG_AUTH_MODE=azure-entra / aws-rds-iam) fetch a fresh token per connection.
+  // Token logins (PG_AUTH_MODE=azure-entra / aws-rds-iam) fetch a fresh token per connection, and
+  // are refused unless `ssl` verifies the server.
   const passwordSource = BuildPgPasswordSource(ResolvePgAuthMode(), {
     Host: configInfo.dbHost,
     Port: configInfo.dbPort,
     User: configInfo.codeGenLogin,
     Database: configInfo.dbDatabase,
-  });
+  }, ssl);
 
   // statement_timeout via libpq startup option — applied server-side from
   // connection #1, including the verify-SELECT-1 connection.

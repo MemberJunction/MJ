@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BasePgCredentialProvider,
+    AssertPgTokenTransport,
     BuildPgPasswordSource,
     CachingPgCredentialProvider,
     PgCredentialProviders,
@@ -76,18 +77,50 @@ describe('ResolvePgAuthMode', () => {
     });
 });
 
+/** TLS as BuildPgSslConfig returns it for verify-full, require and disable. */
+const verifyFull = { rejectUnauthorized: true };
+const requireOnly = { rejectUnauthorized: false };
+const plainTcp = false;
+
 describe('BuildPgPasswordSource', () => {
     it('returns undefined for password mode, so the configured password is used', () => {
-        expect(BuildPgPasswordSource('password', request)).toBeUndefined();
+        expect(BuildPgPasswordSource('password', request, verifyFull)).toBeUndefined();
+    });
+
+    it('leaves password mode alone over plain TCP: its TLS is the deployment\'s choice', () => {
+        expect(BuildPgPasswordSource('password', request, plainTcp)).toBeUndefined();
     });
 
     it('resolves a registered provider and calls it for each connection', async () => {
         expect(RegisteredTestProvider).toBeDefined();
-        const source = BuildPgPasswordSource('test-token-mode', request);
+        const source = BuildPgPasswordSource('test-token-mode', request, verifyFull);
         expect(await source?.()).toBe('registered-token');
+    });
+
+    it('refuses a token login over plain TCP', () => {
+        expect(() => BuildPgPasswordSource('test-token-mode', request, plainTcp)).toThrow(/Refusing to send the token/);
+    });
+
+    it('refuses a token login over TLS that does not verify the server (require)', () => {
+        expect(() => BuildPgPasswordSource('test-token-mode', request, requireOnly)).toThrow(/Refusing to send the token/);
     });
 
     it('fails clearly when no provider is registered for the mode', () => {
         expect(() => PgCredentialProviders.Instance.Get('no-such-mode')).toThrow(/no PostgreSQL credential provider is registered/);
+    });
+});
+
+describe('AssertPgTokenTransport', () => {
+    it('accepts verifying TLS for a token mode', () => {
+        expect(() => AssertPgTokenTransport('azure-entra', verifyFull)).not.toThrow();
+    });
+
+    it('rejects plain TCP and unverified TLS for a token mode', () => {
+        expect(() => AssertPgTokenTransport('azure-entra', plainTcp)).toThrow(/Refusing to send the token/);
+        expect(() => AssertPgTokenTransport('aws-rds-iam', requireOnly)).toThrow(/Refusing to send the token/);
+    });
+
+    it('does not check password mode', () => {
+        expect(() => AssertPgTokenTransport('password', plainTcp)).not.toThrow();
     });
 });

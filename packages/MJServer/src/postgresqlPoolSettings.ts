@@ -30,7 +30,6 @@
 import {
     BuildPgPasswordSource,
     BuildPgSslConfig,
-    PgSslVerifiesServer,
     ResolvePgAuthMode,
     type PGConnectionConfig,
     type PgSslConfig,
@@ -88,8 +87,8 @@ export function PgSslSettingsFrom(settings: DatabaseSettingsInfo): PgSslSettings
 
 /**
  * The TLS and login half of a pool's config: `ssl` from the `PG_SSL_*` settings, and a password
- * source when the auth mode issues tokens. A token login over plain TCP is refused, since the token
- * would cross the network in clear.
+ * source when the auth mode issues tokens. BuildPgPasswordSource refuses a token login whose TLS does
+ * not verify the server.
  */
 export function BuildPostgreSQLSecurity(
     endpoint: PostgreSQLEndpoint,
@@ -98,18 +97,13 @@ export function BuildPostgreSQLSecurity(
 ): Pick<PGConnectionConfig, 'SSL' | 'PasswordSource'> {
     const ssl: PgSslConfig = BuildPgSslConfig(endpoint.Host, PgSslSettingsFrom(settings), env);
     const authMode = ResolvePgAuthMode(settings.postgres?.authMode, env);
-    if (authMode !== 'password' && !PgSslVerifiesServer(ssl)) {
-        throw new Error(
-            `PG_AUTH_MODE is "${authMode}", which sends a token as the password, but PostgreSQL TLS is not verifying the server ` +
-            `(PG_SSL_MODE must be verify-ca or verify-full). Refusing to send the token.`
-        );
-    }
+    // BuildPgPasswordSource refuses a token login whose TLS does not verify the server.
     const passwordSource = BuildPgPasswordSource(authMode, {
         Host: endpoint.Host,
         Port: endpoint.Port,
         User: endpoint.User,
         Database: endpoint.Database,
-    });
+    }, ssl);
     return passwordSource ? { SSL: ssl, PasswordSource: passwordSource } : { SSL: ssl };
 }
 
