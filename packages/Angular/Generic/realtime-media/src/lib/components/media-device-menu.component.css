@@ -1,9 +1,11 @@
 .menu {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 14px;
   min-width: 260px;
+  max-width: calc(100vw - 32px);
   background: var(--mj-bg-surface-elevated);
   border: 1px solid var(--mj-border-default);
   border-radius: 10px;
@@ -27,11 +29,25 @@
 }
 
 .menu__field select {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 7px 9px;
   border-radius: 8px;
   border: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface);
   color: var(--mj-text-primary);
+}
+
+@media (max-width: 640px) {
+  .menu {
+    min-width: 0;
+    width: min(280px, calc(100vw - 96px));
+  }
+  .menu__field select {
+    font-size: 16px;
+  }
 }
 
 .menu__field select:focus-visible {
