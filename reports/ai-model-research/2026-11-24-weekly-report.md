@@ -16,12 +16,27 @@
 > `@memberjunction/core`. This run followed the repo copy on all of these, as last week's did. Only a
 > human can fix the stored prompt, in the Routines UI. See Flagged item 9.
 
+> **⚠ Revised after publication: the three new models were removed from this PR.** The previous day's
+> run opened [#6854](https://github.com/MemberJunction/MJ/pull/6854) (*AI Model Research Report —
+> 2026-11-23*), which is still open and already adds **GPT-6.2 Astra, GPT-6.2 Sol and Qwen4-Max**. Its
+> records are at least as well sourced as this run's: for example, it gives Qwen4-Max a 991,808 input
+> limit where this run used the 1M context size. If both PRs merged, `next` would have two records
+> under each model name with different `primaryKey`s, and every `@lookup` on those names would become
+> ambiguous. **This PR now changes only the Claude Opus 4.5 records**, which #6854 does not touch. The
+> sections below on those three models are kept as an independent cross-check of #6854's figures, and
+> they agree on every price and ID. **Nothing in this PR depends on which of the two PRs merges first.**
+>
+> *Why this run did not see #6854:* Step 1 of the routine reads `next` and the reports on `next`, and
+> #6854 has not merged yet. **Suggestion for the routine:** before adding a model, also check open PRs
+> titled "AI Model Research Report".
+
 ---
 
 ## Executive Summary
 
 **OpenAI shipped GPT-6.2 Astra and GPT-6.2 Sol on 2026-11-17, and Alibaba made Qwen4-Max generally
-available on 2026-11-16.** All three are now in the inventory. Astra is a 20% price cut from GPT-6
+available on 2026-11-16.** All three are added by the open PR #6854, not by this one (see the banner
+above). Astra is a 20% price cut from GPT-6
 Astra ($8/$40 instead of $10/$50). Sol keeps GPT-6.1 Sol's $2/$10 price. Qwen4-Max is about 25%
 cheaper per token than Qwen 3.8 Max, at $1.50/$4.50.
 
@@ -81,7 +96,7 @@ week's Flagged item 4 (Gemini 4 Hydrogen) is resolved by the Hydrogen record.
 
 ## New Models Available
 
-### 1. GPT-6.2 Astra — **added**
+### 1. GPT-6.2 Astra — **added by #6854; withdrawn from this PR**
 
 | Field | Value |
 |---|---|
@@ -105,7 +120,7 @@ Routes:
 - **Amazon Bedrock: not added.** The Bedrock model card exists, but no source available to this
   session gives the exact ID for Astra (Flagged item 2).
 
-### 2. GPT-6.2 Sol — **added**
+### 2. GPT-6.2 Sol — **added by #6854; withdrawn from this PR**
 
 | Field | Value |
 |---|---|
@@ -119,7 +134,7 @@ Ranked `PowerRank` 27, `SpeedRank` 8 and `CostRank` 5, one rank above GPT-6.1 So
 points to GPT-6.1 Sol. The routes are the same as Astra's: OpenAI is priced, Azure and OpenRouter are
 unpriced, and Bedrock is deferred.
 
-### 3. Qwen4 Max — **added**
+### 3. Qwen4 Max — **added by #6854; withdrawn from this PR**
 
 | Field | Value |
 |---|---|
@@ -222,13 +237,13 @@ None. Every vendor referenced this week (`OpenAI`, `Azure`, `OpenRouter`, `Aliba
 
 ## Recommended Actions
 
-### Applied this run: 3 models, 11 vendor rows, 3 cost rows, 1 deprecation started, 1 corrupted comment fixed, 0 deletions
+### Applied this run: 1 deprecation started (1 vendor row, 1 cost row), 1 corrupted comment fixed, 0 deletions
 
-1. **[Applied]** **GPT-6.2 Astra added.** `gpt-6.2-astra`, 922K/128K, OpenAI (priced at $8/$40), Azure
+1. **[Withdrawn — duplicate of open PR #6854]** **GPT-6.2 Astra.** Figures below match #6854: `gpt-6.2-astra`, 922K/128K, OpenAI (priced at $8/$40), Azure
    and OpenRouter routes.
-2. **[Applied]** **GPT-6.2 Sol added.** `gpt-6.2-sol`, 922K/128K, OpenAI (priced at $2/$10), Azure and
+2. **[Withdrawn — duplicate of open PR #6854]** **GPT-6.2 Sol.** Figures below match #6854: `gpt-6.2-sol`, 922K/128K, OpenAI (priced at $2/$10), Azure and
    OpenRouter routes.
-3. **[Applied]** **Qwen4 Max added.** `qwen4-max`, 1M/131K, Alibaba Cloud (priced at $1.50/$4.50) and
+3. **[Withdrawn — duplicate of open PR #6854]** **Qwen4 Max.** Figures below match #6854, except that #6854 has the better-sourced 991,808 input limit: `qwen4-max`, 1M/131K, Alibaba Cloud (priced at $1.50/$4.50) and
    OpenRouter routes.
 4. **[Applied]** **Claude Opus 4.5 deprecation recorded.** Anthropic route set to `Deprecated`; cost
    row closes at 2027-01-22. Source: Anthropic's own page.
@@ -304,29 +319,25 @@ are ranked against their nearest neighbours (decision 5).
 
 ## Verification performed on this branch
 
-- **§0.3 pre-flight check: run, printed `OK`.** Both metadata files parse. Every vendor and cost
-  `Status` is in its own entity's allowed set. No `Expired` row lacks `EndedAt`, and no `EndedAt` is
-  at or before its `StartedAt`. The only vendor-status change is `Active` → `Deprecated`. **No cost
-  row anywhere uses `Inactive`.**
-- **`primaryKey` checks: passed.** All 1,324 records and nested children have a well-formed uppercase
-  UUID, with no duplicates within an entity. The 17 new IDs come from `crypto.randomUUID()`, because
-  `uuidgen` is not installed. Each new ID appears in exactly one file under `metadata/`. No new record
-  has a `sync` block.
-- **`@lookup:` targets: checked mechanically.** Every `MJ: AI Vendors` and `MJ: AI Models` lookup in
-  the file resolves. The three new `PriorVersionID` values point to GPT-6 Astra, GPT-6.1 Sol and Qwen
-  3.8 Max, which all already exist.
-- **§0.6 `SupportsNativeToolCalling` check: both assertions re-implemented against the edited file
-  and both pass. The unit test itself was not run**, because `packages/AI/Core` has no `node_modules`
-  in this environment. All 195 LLM records state the flag. No `Active` row on a driver that cannot
-  send tools resolves to `true`; the new Azure and Alibaba rows have vendor-level `false` overrides.
-  The PR's Integration Tier and unit-test workflows are the real gate.
+These checks were re-run after the three duplicate models were removed. The diff against `next` is
+now **4 insertions and 3 deletions**, all in the Claude 4.5 Opus record.
+
+- **§0.3 pre-flight check: run, printed `OK`.** The only vendor-status change is `Active` →
+  `Deprecated`, which is valid for `CK_AIModelVendor_Status`. The only cost-row change adds an
+  `EndedAt` that falls after its `StartedAt`, and `Status` stays `Active`. **No cost row anywhere uses
+  `Inactive`.**
+- **`primaryKey`: no new records**, so no new IDs. Every existing key is unchanged.
+- **§0.6 `SupportsNativeToolCalling` check: unaffected.** No LLM record or driver class changed.
 - **Cost-row selection: checked against the real predicate** (`Status === 'Active'`, `StartedAt <=
-  now`, `!EndedAt || EndedAt > now`). Exactly one OpenAI/Alibaba row is selected for each new model.
-  For Claude 4.5 Opus, Anthropic's $5/$25 is selected until 2027-01-21 and nothing from 2027-01-22,
-  while Bedrock stays selected.
-- **Diff shape: confirmed additive.** The file was re-serialized in the canonical 2-space format, so
-  there is no incidental reformatting. The only removed or replaced lines are the Opus 4.5 route
-  status, its cost-row `Comments`, and one trailing-comma line shift.
+  now`, `!EndedAt || EndedAt > now`). For Claude 4.5 Opus, Anthropic's $5/$25 is selected up to and
+  including 2027-01-21, and nothing is selected from 2027-01-22. Bedrock's $5/$25 stays selected
+  throughout.
+- **Overlap with #6854: checked.** #6854 does not modify the Claude 4.5 Opus record, so the two PRs
+  touch different records. Both append to or edit `.ai-models.json`, so whichever merges second may
+  need a merge of `next`, but there is no conflicting content.
+- **CI history:** the first Integration Tier run on this PR's original head failed only the PB18
+  performance-timing gate (1.62x baseline). A single re-run with no change passed. The metadata push
+  passed both times.
 - **`mj sync validate`: not run**, because it needs a database.
 
 ---
