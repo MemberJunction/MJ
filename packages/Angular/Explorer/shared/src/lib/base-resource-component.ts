@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
-import { Subject, Subscription } from "rxjs";
+import { ReplaySubject, Subject, Subscription } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
 import { BaseEntity, LogError } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
@@ -13,6 +13,14 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     /** Stable key of the most recently delivered query params, used to de-duplicate
      *  delivery across the reactive (initial/deep-link) and popstate paths. */
     private _lastDeliveredParamsKey: string | null = null;
+    /**
+     * Emits once, then completes, when the component is destroyed. Pipe every subscription through
+     * `takeUntil(this.destroy$)`.
+     *
+     * After destroy this is replaced by a notifier that has already fired (see {@link ngOnDestroy}),
+     * so a `takeUntil(this.destroy$)` attached late — by an async `ngOnInit` that was still awaiting
+     * its data when the tab closed — completes at once instead of living for the whole session.
+     */
     protected destroy$ = new Subject<void>();
     protected navigationService = inject(NavigationService);
     /**
@@ -166,6 +174,25 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         }
         this.destroy$.next();
         this.destroy$.complete();
+        this.destroy$ = BaseResourceComponent.createFiredDestroyNotifier();
+    }
+
+    /**
+     * A destroy notifier that has already emitted and completed, and replays that emission to every
+     * later subscriber.
+     *
+     * `takeUntil` stops only when its notifier EMITS; a notifier that merely completed is ignored. A
+     * plain `Subject` that was `next()`ed and `complete()`d before the `takeUntil` subscribed only
+     * hands the late subscriber the completion, so the subscription never ends and pins the dead
+     * component from whatever it subscribed to (a root service, the MJGlobal event bus, an engine).
+     * Swapping this in after destroy closes that gap for every subclass, including those that
+     * redeclare `destroy$` with their own `Subject`.
+     */
+    private static createFiredDestroyNotifier(): Subject<void> {
+        const fired = new ReplaySubject<void>(1);
+        fired.next();
+        fired.complete();
+        return fired;
     }
 
     /**

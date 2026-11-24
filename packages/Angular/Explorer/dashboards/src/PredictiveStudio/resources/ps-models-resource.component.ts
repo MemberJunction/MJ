@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { JsonParse } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { PSPanelKey } from '../predictive-studio.types';
@@ -73,7 +74,7 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
               <section class="ps-content" [class.fill]="ActiveSection === 'registry' || ActiveSection === 'production'" [attr.data-testid]="'ps-panel-' + ActiveSection">
                 @switch (ActiveSection) {
                   @case ('registry') { <ps-registry [engine]="engine" [provider]="ProviderToUse" [CurrentUser]="ProviderToUse.CurrentUser" [InitialModelId]="initialModelId"></ps-registry> }
-                  @case ('production') { <ps-production [engine]="engine"></ps-production> }
+                  @case ('production') { <ps-production [Engine]="engine"></ps-production> }
                 }
               </section>
             </as-split-area>
@@ -132,7 +133,11 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   public ActiveSection: PSPanelKey = 'registry';
 
-  public readonly sections: readonly PSSection[] = MODELS_SECTIONS;
+  /** The Models app's sections (the registry and production), in nav order. */
+  public readonly Sections: readonly PSSection[] = MODELS_SECTIONS;
+  /** Whether the tab's query params reached {@link OnQueryParamsChanged} (then the saved ones are not re-applied). */
+  private queryParamsDelivered = false;
+
   public initialModelId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   public IsNavCollapsed = false;
 
@@ -142,10 +147,15 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   override ngOnInit(): void {
     super.ngOnInit();
-    const qp = this.GetQueryParams();
-    const initial = qp['section'] as PSPanelKey | undefined;
-    if (initial && HasSection(this.sections, initial)) this.ActiveSection = initial;
-    if (qp['modelId']) this.initialModelId = qp['modelId'];
+    // The base subscription replays the tab's current params through OnQueryParamsChanged while it subscribes; a
+    // workspace-restored tab's Data still holds the params it was saved with, so they apply only when nothing was
+    // delivered (a deep link to another model must win over the saved one, OF4-50).
+    if (!this.queryParamsDelivered) {
+      const qp = this.GetQueryParams();
+      const initial = qp['section'] as PSPanelKey | undefined;
+      if (initial && HasSection(this.Sections, initial)) this.ActiveSection = initial;
+      if (qp['modelId']) this.initialModelId = qp['modelId'];
+    }
     this.loadLayoutPrefs();
   }
 
@@ -163,20 +173,17 @@ export class PSModelsResourceComponent extends PSResourceBase {
     }
   }
 
+  /** Restores the saved nav layout; an absent, malformed or non-object setting leaves the defaults. */
   private loadLayoutPrefs(): void {
-    const raw = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.models.layout');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed.navSizePct === 'number' && parsed.navSizePct >= 10 && parsed.navSizePct <= 35) {
-          this.NavSizePct = parsed.navSizePct;
-          this.ContentSizePct = 100 - parsed.navSizePct;
-        }
-        if (typeof parsed.isNavCollapsed === 'boolean') {
-          this.IsNavCollapsed = parsed.isNavCollapsed;
-        }
-      } catch {}
+    const parsed = JsonParse.ParseJsonText(UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.models.layout'), 'mj.predictiveStudio.models.layout');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return;
+    const navSizePct = JsonParse.JsonNumber(parsed.Value, 'navSizePct');
+    if (navSizePct !== null && navSizePct >= 10 && navSizePct <= 35) {
+      this.NavSizePct = navSizePct;
+      this.ContentSizePct = 100 - navSizePct;
     }
+    const isNavCollapsed = JsonParse.JsonBoolean(parsed.Value, 'isNavCollapsed');
+    if (isNavCollapsed !== null) this.IsNavCollapsed = isNavCollapsed;
   }
 
   private saveLayoutPrefs(): void {
@@ -189,8 +196,9 @@ export class PSModelsResourceComponent extends PSResourceBase {
   }
 
   protected override async OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): Promise<void> {
+    this.queryParamsDelivered = true;
     const next = params['section'] as PSPanelKey | undefined;
-    if (next && next !== this.ActiveSection && HasSection(this.sections, next)) {
+    if (next && next !== this.ActiveSection && HasSection(this.Sections, next)) {
       this.ActiveSection = next;
     }
     if (params['modelId']) {
@@ -208,7 +216,7 @@ export class PSModelsResourceComponent extends PSResourceBase {
     return BuildModelsAgentContext({
       ActiveSection: this.ActiveSection,
       ActiveSectionLabel: this.ActiveLabel,
-      SectionLabels: this.sections.map((s) => s.label),
+      SectionLabels: this.Sections.map((s) => s.label),
       TotalModelCount: models.length,
       PublishedModelCount: this.engine.PublishedModels.length,
       DraftModelCount: models.filter((m) => m.Status === 'Draft').length,
@@ -230,7 +238,7 @@ export class PSModelsResourceComponent extends PSResourceBase {
         Handler: async (params: Record<string, unknown>) => {
           const check = validateStringParam(params['section'], 'section');
           if (!check.ok) return check.result;
-          const candidates = this.sections.map((s) => ({ ID: s.key, Name: s.label }));
+          const candidates = this.Sections.map((s) => ({ ID: s.key, Name: s.label }));
           const match = ResolvePSRecord(check.value, candidates);
           if (!match) return { Success: false, ErrorMessage: BuildPSNotFoundError(check.value, candidates, 'section') };
           this.SelectSection(match.ID as PSPanelKey);
@@ -240,11 +248,11 @@ export class PSModelsResourceComponent extends PSResourceBase {
     ]);
   }
 
-  public get Groups(): string[] { return SectionGroups(this.sections); }
+  public get Groups(): string[] { return SectionGroups(this.Sections); }
 
-  public ItemsForGroup(group: string): PSSection[] { return SectionsInGroup(this.sections, group); }
+  public ItemsForGroup(group: string): PSSection[] { return SectionsInGroup(this.Sections, group); }
 
-  public get ActiveLabel(): string { return SectionLabel(this.sections, this.ActiveSection); }
+  public get ActiveLabel(): string { return SectionLabel(this.Sections, this.ActiveSection); }
 
   /** Section-specific subtitle for the interior header. */
   public get ActiveSubtitle(): string {

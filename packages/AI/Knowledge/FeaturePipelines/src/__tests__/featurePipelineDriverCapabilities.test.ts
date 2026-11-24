@@ -11,6 +11,11 @@ import {
 } from '../spec/feature-pipeline-driver-capabilities.js';
 import type { DataFeatureOutput, DataFeatureSpec } from '../spec/data-feature-spec.js';
 
+/** A complete spec around the parts a capability check reads (its Outputs and CaptureReasoning). */
+function SpecWith(parts: Pick<DataFeatureSpec, 'Outputs'> & Partial<DataFeatureSpec>): DataFeatureSpec {
+  return { Name: 'Spec', Description: '', Context: { Fields: [] }, PromptID: 'prompt-1', Caching: { Cacheable: false }, ...parts };
+}
+
 describe('LLM_FEATURE_PIPELINE_CAPABILITIES', () => {
   it('names every constraint type', () => {
     expect([...LLM_FEATURE_PIPELINE_CAPABILITIES.ConstraintTypes].sort()).toEqual(
@@ -126,111 +131,120 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
   });
 
   it('rejects specs with CaptureReasoning: true for Decision', () => {
-    const spec: DataFeatureSpec = {
+    const spec = SpecWith({
       CaptureReasoning: true,
       Outputs: [validDecisionOutput],
-    };
+    });
     const errors = ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES);
     expect(errors).toContain('This pipeline type does not produce reasoning; turn off CaptureReasoning or use an LLM pipeline.');
   });
 
   it('rejects unconstrained outputs when RequiresConstraint is true', () => {
-    const spec: DataFeatureSpec = {
+    const spec = SpecWith({
       Outputs: [unconstrainedOutput],
-    };
+    });
     const errors = ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES);
     expect(errors).toContain("Output 'RawData' has no constraint; this pipeline type requires one of: boolean, enum, numeric.");
   });
 
   it('validates numeric outputs have between 2 and 10 levels when RequiresNumericLevels is true', () => {
-    const specNoLevels: DataFeatureSpec = {
+    const specNoLevels = SpecWith({
       Outputs: [
         {
           Name: 'ScoreOut',
+          Ref: '$.ScoreOut',
           Target: { Mode: 'field', EntityFieldName: 'Score' },
-          Constraint: { Type: 'numeric', Min: 0, Max: 100 },
+          Constraint: { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'fail' },
         },
       ],
-    };
+    });
     const errorsNoLevels = ValidateOutputsAgainstCapabilities(specNoLevels, DECISION_FEATURE_PIPELINE_CAPABILITIES);
     expect(errorsNoLevels).toContain("Numeric output 'ScoreOut' requires between 2 and 10 Level descriptions.");
 
-    const specTooManyLevels: DataFeatureSpec = {
+    const specTooManyLevels = SpecWith({
       Outputs: [
         {
           Name: 'ScoreOut',
+          Ref: '$.ScoreOut',
           Target: { Mode: 'field', EntityFieldName: 'Score' },
           Constraint: {
             Type: 'numeric',
             Levels: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11'],
+            OnViolation: 'fail',
           },
         },
       ],
-    };
+    });
     const errorsTooMany = ValidateOutputsAgainstCapabilities(specTooManyLevels, DECISION_FEATURE_PIPELINE_CAPABILITIES);
     expect(errorsTooMany).toContain("Numeric output 'ScoreOut' requires between 2 and 10 Level descriptions.");
   });
 
   it('validates enum outputs have <= 255 values, not empty, and all have descriptions', () => {
-    const specEmpty: DataFeatureSpec = {
+    const specEmpty = SpecWith({
       Outputs: [
         {
           Name: 'StatusOut',
+          Ref: '$.StatusOut',
           Target: { Mode: 'field', EntityFieldName: 'Status' },
-          Constraint: { Type: 'enum', Values: [] },
+          Constraint: { Type: 'enum', Values: [], OnViolation: 'fail' },
         },
       ],
-    };
+    });
     const errorsEmpty = ValidateOutputsAgainstCapabilities(specEmpty, DECISION_FEATURE_PIPELINE_CAPABILITIES);
     expect(errorsEmpty).toContain(
       "Enum output 'StatusOut' has no values defined; list them in Values, or set FromFieldMetadata on a field that has a value list."
     );
 
-    const specMissingDesc: DataFeatureSpec = {
+    const specMissingDesc = SpecWith({
       Outputs: [
         {
           Name: 'StatusOut',
+          Ref: '$.StatusOut',
           Target: { Mode: 'field', EntityFieldName: 'Status' },
           Constraint: {
             Type: 'enum',
             Values: ['Active', 'Pending', 'Inactive'],
             ValueDescriptions: { Active: 'Currently active customer' },
+            OnViolation: 'fail',
           },
         },
       ],
-    };
+    });
     const errorsMissing = ValidateOutputsAgainstCapabilities(specMissingDesc, DECISION_FEATURE_PIPELINE_CAPABILITIES);
     expect(errorsMissing).toContain(
       "Enum output 'StatusOut' values missing descriptions: Pending, Inactive. This pipeline type requires a description for every value."
     );
 
-    const specTooManyValues: DataFeatureSpec = {
+    const specTooManyValues = SpecWith({
       Outputs: [
         {
           Name: 'HugeEnum',
+          Ref: '$.HugeEnum',
           Target: { Mode: 'field', EntityFieldName: 'Huge' },
           Constraint: {
             Type: 'enum',
             Values: Array.from({ length: 256 }, (_, i) => `val_${i}`),
             ValueDescriptions: Object.fromEntries(Array.from({ length: 256 }, (_, i) => [`val_${i}`, `desc_${i}`])),
+            OnViolation: 'fail',
           },
         },
       ],
-    };
+    });
     const errorsTooMany = ValidateOutputsAgainstCapabilities(specTooManyValues, DECISION_FEATURE_PIPELINE_CAPABILITIES);
     expect(errorsTooMany).toContain("Enum output 'HugeEnum' has 256 values; this pipeline type supports at most 255.");
   });
 
   it('populates missing enum values and descriptions from fieldValues lookup for field targets', () => {
-    const spec: DataFeatureSpec = {
+    const spec = SpecWith({
       Outputs: [
         {
           Name: 'StatusOut',
+          Ref: '$.StatusOut',
           Target: { Mode: 'field', EntityFieldName: 'Status' },
-          Constraint: { Type: 'enum' },
+          Constraint: { Type: 'enum', OnViolation: 'fail' },
         },
       ],
-    };
+    });
 
     const mockLookup = (fieldName: string) => {
       if (fieldName.toLowerCase() === 'status') {
@@ -247,35 +261,37 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
   });
 
   it('passes a fully valid Decision pipeline spec', () => {
-    const spec: DataFeatureSpec = {
+    const spec = SpecWith({
       Outputs: [
         validDecisionOutput,
         {
           Name: 'IsHighValue',
+          Ref: '$.IsHighValue',
           Target: { Mode: 'field', EntityFieldName: 'IsHighValue' },
-          Constraint: { Type: 'boolean' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
         },
         {
           Name: 'Tier',
+          Ref: '$.Tier',
           Target: { Mode: 'field', EntityFieldName: 'Tier' },
           Constraint: {
             Type: 'enum',
             Values: ['Bronze', 'Silver'],
             ValueDescriptions: { Bronze: 'Bronze level', Silver: 'Silver level' },
+            OnViolation: 'fail',
           },
         },
       ],
-    };
+    });
     const errors = ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES);
     expect(errors).toEqual([]);
   });
 
   it('validates entire spec outputs against LLM capabilities with no restrictions', () => {
-    const spec: DataFeatureSpec = {
+    const spec = SpecWith({
       Name: 'TestSpec',
-      TargetEntity: 'Accounts',
       Outputs: [validDecisionOutput, childTargetOutput, freetextOutput, unconstrainedOutput],
-    };
+    });
 
     const llmMessages = ValidateOutputsAgainstCapabilities(spec, LLM_FEATURE_PIPELINE_CAPABILITIES);
     expect(llmMessages).toEqual([]);

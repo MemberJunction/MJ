@@ -52,7 +52,7 @@ import {
   CompositeKey,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import '@memberjunction/core-entities';
 import {
   MJMLTrainingPipelineEntity,
@@ -303,10 +303,9 @@ async function scheduleScoring(md: IMetadataProvider, user: UserInfo, modelId: s
   const rp = scheduled.recordProcess;
   state.RecordProcessID = rp.ID;
   console.log(`  Record Process ${rp.ID} ('${rp.Name}')`);
-  check(scheduled.binding !== null, 'the scheduled write-back saved its scoring binding');
-  if (scheduled.binding) console.log(`  Scoring Binding ${scheduled.binding.ID} (Mode='${scheduled.binding.Mode}')`);
+  console.log(`  Scoring Binding ${scheduled.binding.ID} (Mode='${scheduled.binding.Mode}')`);
   await verifyRecordProcess(user, rp.ID, modelId);
-  return { RecordProcessID: rp.ID, BindingID: scheduled.binding ? scheduled.binding.ID : null };
+  return { RecordProcessID: rp.ID, BindingID: scheduled.binding.ID };
 }
 
 /** Step 4: the scheduled Record Process row as saved (re-read, BypassCache). */
@@ -355,16 +354,21 @@ async function verifyOwnedScheduledJob(user: UserInfo, recordProcessId: string):
 
 /**
  * Step 5b: the ML Model Scoring Binding (the lineage row). The model-prediction form panel and the "Models in
- * Production" dashboard read these rows; assert EXACTLY ONE exists for the model, tying it to this RP + target
+ * Production" dashboard read these rows; assert EXACTLY ONE exists for the model's pipeline, tying it to this RP + target
  * entity/column at Mode='Scheduled'.
  */
 async function verifyScoringBinding(md: IMetadataProvider, user: UserInfo, modelId: string, scheduled: ScheduledScoring): Promise<void> {
   banner('5b. VERIFY ML MODEL SCORING BINDING (the lineage row)');
+  const model = await new RunView().RunView<{ PipelineID: string }>(
+    { EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(modelId)}'`, Fields: ['PipelineID'], ResultType: 'simple', BypassCache: true }, user,
+  );
+  const pipelineId = model.Results?.[0]?.PipelineID || '';
+  check(pipelineId.length > 0, `the model's training pipeline was read (${pipelineId})`);
   const bindings = await new RunView().RunView<MJMLModelScoringBindingEntity>(
-    { EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `MLModelID='${modelId}'`, ResultType: 'entity_object', BypassCache: true }, user,
+    { EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `MLTrainingPipelineID='${EscapeSQLString(pipelineId)}'`, ResultType: 'entity_object', BypassCache: true }, user,
   );
   const bindingRows = bindings.Results ?? [];
-  check(bindingRows.length === 1, `exactly ONE scoring binding exists for the model (found ${bindingRows.length})`);
+  check(bindingRows.length === 1, `exactly ONE scoring binding exists for the model's pipeline (found ${bindingRows.length})`);
   const binding = bindingRows[0];
   if (!binding) return;
   check(UUIDsEqual(binding.ID, scheduled.BindingID ?? ''), `binding id matches the helper's returned binding (${scheduled.BindingID})`);
@@ -372,6 +376,7 @@ async function verifyScoringBinding(md: IMetadataProvider, user: UserInfo, model
   check(UUIDsEqual(binding.TargetEntityID, entityId(md, 'Memberships')), `binding TargetEntityID === Memberships entity id`);
   check(binding.TargetColumn === OUTPUT_FIELD, `binding TargetColumn === '${OUTPUT_FIELD}' (got '${binding.TargetColumn}')`);
   check(binding.Mode === 'Scheduled', `binding Mode === 'Scheduled' (got '${binding.Mode}')`);
+  check(binding.Status === 'Active', `binding Status === 'Active' (got '${binding.Status}')`);
 }
 
 /**

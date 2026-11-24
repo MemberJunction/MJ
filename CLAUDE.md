@@ -134,7 +134,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | Rule | Loads for | Covers |
 |---|---|---|
 | [`data-access.md`](.claude/rules/data-access.md) | `**/*.ts` | `RunView`/`RunViews` (`AlternateBaseView`), `ResultType`/`Fields`, `BaseEntity` Save/Delete error handling, entity metadata lookup (`EntityByName`), per-provider `Metadata` scoping, caching + `BaseEngine`/`BaseEngineRegistry`, keyset pagination, `UserInfoEngine` preferences |
-| [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, naming conventions, functional decomposition, OOD |
+| [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, no arbitrary caps / unexplained static numeric literals, naming conventions, functional decomposition, OOD |
 | [`design-tokens.md`](.claude/rules/design-tokens.md) | `**/*.scss`, `**/*.css` | No hardcoded colors, semantic token catalog, hex→token mappings, `color-mix()`, CI gates |
 | [`field-security.md`](.claude/rules/field-security.md) | `packages/{Actions,AI,MJServer,Angular,MJCore,…}/**` | Field-level security when handing entity data onward — principal rule, `contextUser` identity, user-keyed caches |
 | [`testing.md`](.claude/rules/testing.md) | `**/*.test.ts`, `**/__tests__/**` | Vitest conventions, test structure, scaffold script, fixing test drift, CI integration |
