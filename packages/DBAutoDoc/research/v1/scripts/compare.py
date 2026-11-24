@@ -28,7 +28,7 @@ def main():
     parser.add_argument(
         "--gt-dir",
         default=os.environ.get("DBAUTODOC_GT_DIR", "/workspace/benchmark/ground-truth"),
-        help="Directory containing pks.json, fks.json, and descriptions.json",
+        help="Directory containing pks.json and fks.json",
     )
     args = parser.parse_args()
     state_path = args.state_path
@@ -41,7 +41,6 @@ def main():
 
     gt_pks = load_json(os.path.join(args.gt_dir, "pks.json"))
     gt_fks = load_json(os.path.join(args.gt_dir, "fks.json"))
-    _gt_descs = load_json(os.path.join(args.gt_dir, "descriptions.json"))
     state = load_json(state_path)
 
     # ======== 1. PRIMARY KEY DETECTION ========
@@ -57,17 +56,21 @@ def main():
         gt_pk_map[key] = pk
 
     disc = state.get("phases", {}).get("keyDetection", {}).get("discovered", {})
-    ad_pk_map = {}
+    best_pk_by_table = {}
     for pk in disc.get("primaryKeys", []):
         # Skip rejected PKs — pruning has determined these are not real PKs
         if pk.get("status") == "rejected":
             continue
-        cols = tuple(sorted(c.lower() for c in pk["columnNames"]))
         schema_name = pk.get("schemaName", "dbo").lower()
-        key = (schema_name, pk["tableName"].lower(), cols)
-        # Keep highest confidence
-        if key not in ad_pk_map or pk.get("confidence", 0) > ad_pk_map[key].get("confidence", 0):
-            ad_pk_map[key] = pk
+        table_key = (schema_name, pk["tableName"].lower())
+        rank = (1 if pk.get("status") == "confirmed" else 0, pk.get("confidence", 0))
+        if table_key not in best_pk_by_table or rank > best_pk_by_table[table_key][0]:
+            best_pk_by_table[table_key] = (rank, pk)
+
+    ad_pk_map = {}
+    for (schema_name, table_name), (_, pk) in best_pk_by_table.items():
+        cols = tuple(sorted(c.lower() for c in pk["columnNames"]))
+        ad_pk_map[(schema_name, table_name, cols)] = pk
 
     pk_tp = set(gt_pk_map.keys()) & set(ad_pk_map.keys())
     pk_fn = set(gt_pk_map.keys()) - set(ad_pk_map.keys())
@@ -233,10 +236,10 @@ def main():
     print("{:<30} {:>10} {:>9.0%}".format("Table Descriptions", "", table_cov))
     print("{:<30} {:>10} {:>9.0%}".format("Column Descriptions", "", col_cov))
 
-    weighted = 0.35 * pk_f1 + 0.30 * fk_f1 + 0.20 * table_cov + 0.15 * col_cov
+    weighted = 0.35 * fk_f1 + 0.30 * pk_f1 + 0.20 * table_cov + 0.15 * col_cov
     unweighted = (pk_f1 + fk_f1 + table_cov + col_cov) / 4
     grade = "A+" if weighted >= 0.95 else "A" if weighted >= 0.9 else "B" if weighted >= 0.75 else "C" if weighted >= 0.6 else "D" if weighted >= 0.4 else "F"
-    print("\nOverall Score: {:.1%} (Grade: {}) [weights 0.35 PK / 0.30 FK / 0.20 TblDesc / 0.15 ColDesc]".format(weighted, grade))
+    print("\nOverall Score: {:.1%} (Grade: {}) [weights 0.35 FK / 0.30 PK / 0.20 TblDesc / 0.15 ColDesc]".format(weighted, grade))
     print("Unweighted Mean: {:.1%}".format(unweighted))
     print("Target: PK F1 >= 95%, FK F1 >= 90%")
 

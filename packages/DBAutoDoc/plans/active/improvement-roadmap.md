@@ -324,16 +324,21 @@ contamination-controlled benchmarks, and the downstream text-to-SQL benchmark.
 
 ### Files open PRs still change (Phase 0 split)
 
-`core/AnalysisEngine.ts` (#6505, #6636), `discovery/DiscoveryEngine.ts` (#6636),
-`discovery/ColumnStatsCache.ts` (#6505), `prompts/table-analysis.md` (#6505), `types/state.ts`
-(#6505, #6636), `prompts/PromptEngine.ts` (#6240).
+`core/AnalysisEngine.ts` (#6505, #6636), `discovery/ApplyPrimaryKeys.ts` (#6636),
+`discovery/ColumnStatsCache.ts` (#6505), `generators/AdditionalSchemaInfoGenerator.ts` (#6505),
+`prompts/table-analysis.md` (#6505), `types/state.ts` (#6505, #6636), `prompts/PromptEngine.ts`
+(#6240).
 
-To avoid merge conflicts with those open PRs, Phase 0 is split into two waves:
+To keep conflicts with those open PRs minimal, Phase 0 is split into two waves:
 
-- **Phase 0 Wave 1 (zero overlap — landed):** `generators/AdditionalSchemaInfoGenerator.ts` (0.2
-  generator gating + 0.12 placeholder description), `generators/SQLGenerator.ts` (0.10 escaping),
-  `generators/SampleQueryGenerator.ts` (0.11 dialect-aware `LIMIT 10`), and
-  `research/v1/scripts/compare.py` (0.5 published weights, CLI paths, schema-qualified FK keys).
+- **Phase 0 Wave 1 (disjoint hunks — landed):** `generators/AdditionalSchemaInfoGenerator.ts`
+  (disjoint from `#6505`'s enum-folding hunks) + `discovery/ApplyPrimaryKeys.ts` (exporting
+  `PickBestPKCandidate`, disjoint from `#6636`'s declared-key hunks) for 0.2 generator gating +
+  0.12 placeholder descriptions; `generators/SQLGenerator.ts` (0.10 SQL Server extended-property
+  escaping; driver escaping remains in Wave 2); `generators/SampleQueryGenerator.ts` (0.11
+  dialect-aware `databaseType` and validation row limits for SQL Server, PostgreSQL, MySQL, and
+  Oracle); and `research/v1/scripts/compare.py` (0.5 published `0.35 FK / 0.30 PK / 0.20 TblDesc /
+  0.15 ColDesc` weights, CLI paths, schema-qualified FK keys, single-winner PK selection).
 - **Phase 0 Wave 2 (after `#6636`, `#6505`, `#6240` land):** `AnalysisEngine.ts`, drivers,
   `Database.ts`, `ConvergenceDetector.ts` (with `AnalysisEngine`), and `PromptEngine.ts`.
 
