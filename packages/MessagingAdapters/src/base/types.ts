@@ -109,6 +109,18 @@ export interface MessagingAdapterSettings {
     MaxThreadMessages?: number;
 
     /**
+     * Idle timeout in milliseconds before a rolling conversation (DM, Teams group chat,
+     * or Teams meeting) automatically starts a fresh MJ Conversation.
+     *
+     * Measured from the most recent message activity (sliding window), so an active
+     * conversation never rolls over mid-session.
+     *
+     * Defaults to `7200000` (2 hours) for rolling conversations; explicit channel threads
+     * keep the 24-hour TTL unless this setting is configured to a shorter duration.
+     */
+    ConversationIdleTimeoutMs?: number;
+
+    /**
      * Per-IP rate limit on the HTTP webhook routes (Slack events, interactivity and slash
      * commands share one budget). On by default with a generous budget; set `Enabled: false`
      * when a gateway in front of MJAPI already limits these routes. Ignored in Socket Mode.

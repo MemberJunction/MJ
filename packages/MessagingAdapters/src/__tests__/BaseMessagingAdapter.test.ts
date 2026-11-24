@@ -297,6 +297,15 @@ class SingleBotTestAdapter extends TestAdapter {
     protected respondsToUnaddressedThreadReplies(): boolean { return true; }
 }
 
+/** A TestAdapter modeled on Teams: loads history from MJ: Conversation Details and rolls over DMs/group chats. */
+class DBHistoryTestAdapter extends SingleBotTestAdapter {
+    protected override UsesMJConversationHistory(): boolean { return true; }
+    protected override IsRollingConversation(message: IncomingMessage): boolean {
+        const convType = (message.RawEvent?.['conversationType'] as string | undefined);
+        return convType ? convType !== 'channel' : true;
+    }
+}
+
 // ─── Test helpers ────────────────────────────────────────────────────────────
 
 const defaultSettings: MessagingAdapterSettings = {
@@ -2085,6 +2094,276 @@ describe('BaseMessagingAdapter', () => {
             }));
             expect(adapter.FinalMessages).toHaveLength(0);
             expect(adapter.TypeIndicatorShown).toBe(false);
+        });
+    });
+
+    describe('Teams multi-turn DB history, /new command, and idle rollover', () => {
+        const alice = { ID: 'u1', Email: 'alice@example.com', Name: 'Alice', IsActive: true, UserRoles: [{ RoleID: 'role-member' }] } as unknown as UserInfo;
+        const bob = { ID: 'u2', Email: 'bob@example.com', Name: 'Bob', IsActive: true, UserRoles: [{ RoleID: 'role-admin' }] } as unknown as UserInfo;
+
+        it('loads prior turns chronologically from MJ: Conversation Details as contextUser and preserves agent affinity', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const observedMessages: Array<Array<{ role: string; content: string }>> = [];
+            const observedAgents: string[] = [];
+            const observedConvoIds: Array<string | undefined> = [];
+            const detailRunViewCalls: Array<{ params: Record<string, unknown>; user: UserInfo }> = [];
+
+            let initCall = 0;
+            vi.mocked(RunView).mockImplementation(() => ({
+                RunView: vi.fn().mockImplementation((params: Record<string, unknown>, user: UserInfo) => {
+                    if (params.EntityName === 'MJ: Conversation Details') {
+                        detailRunViewCalls.push({ params, user });
+                        // Returned newest-first (OrderBy: __mj_CreatedAt DESC)
+                        return {
+                            Success: true,
+                            Results: [
+                                { ID: 'd2', Role: 'AI', Message: 'Q3 revenue was $4.2M.', AgentID: 'research-id' },
+                                { ID: 'd1', Role: 'User', Message: '@Research Bot check Q3 revenue', AgentID: null },
+                            ],
+                        };
+                    }
+                    initCall++;
+                    if (initCall === 1) {
+                        return { Success: true, Results: [defaultTestAgents[0]] };
+                    }
+                    return { Success: true, Results: defaultTestAgents.map(a => ({ ...a })) };
+                }),
+            }) as unknown as RunView);
+
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(
+                    async (params: { agent: { Name: string }; conversationMessages: Array<{ role: string; content: string }> }, opts: { conversationId?: string }) => {
+                        observedAgents.push(params.agent.Name);
+                        observedMessages.push([...params.conversationMessages]);
+                        observedConvoIds.push(opts.conversationId);
+                        return {
+                            agentResult: { success: true, agentRun: { Message: 'Done.', Steps: [] } },
+                            conversationId: opts.conversationId ?? 'teams-convo-1',
+                            userMessageDetailId: 'u-det',
+                            agentResponseDetailId: 'a-det',
+                            artifactInfo: undefined,
+                        };
+                    }
+                ),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const dbAdapter = new DBHistoryTestAdapter(defaultSettings);
+            await dbAdapter.Initialize();
+
+            // Turn 1: mention Research Bot
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 't-1',
+                ThreadID: 'conv-dm-1',
+                IsDirectMessage: true,
+                SenderEmail: 'alice@example.com',
+                Text: '@Research Bot check Q3 revenue',
+                MentionedAgentNames: ['Research Bot'],
+            }));
+
+            // Turn 2: follow-up with NO @mention and empty platform threadHistory
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 't-2',
+                ThreadID: 'conv-dm-1',
+                IsDirectMessage: true,
+                SenderEmail: 'alice@example.com',
+                Text: 'Now break it down by region',
+                MentionedAgentNames: [],
+            }));
+
+            expect(observedConvoIds).toEqual([undefined, 'teams-convo-1']);
+            expect(observedAgents).toEqual(['Research Bot', 'Research Bot']);
+            expect(observedMessages[1]).toEqual([
+                { role: 'user', content: '@Research Bot check Q3 revenue' },
+                { role: 'assistant', content: 'Q3 revenue was $4.2M.' },
+                { role: 'user', content: 'Now break it down by region' },
+            ]);
+            // Must query MJ: Conversation Details as the calling user (Alice), never fallback
+            expect(detailRunViewCalls).toHaveLength(1);
+            expect(detailRunViewCalls[0].user.Email).toBe('alice@example.com');
+            expect(String(detailRunViewCalls[0].params.ExtraFilter)).toContain("ConversationID='teams-convo-1'");
+        });
+
+        it('enforces permissions on remembered DB conversation agent when an unauthorized user replies', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const runSpy = vi.fn().mockResolvedValue({
+                agentResult: { success: true, agentRun: { Message: 'Admin report.', Steps: [] } },
+                conversationId: 'group-convo-1',
+                userMessageDetailId: 'u-det',
+                agentResponseDetailId: 'a-det',
+                artifactInfo: undefined,
+            });
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: runSpy,
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            // Restrict Research Bot to Bob's admin role only
+            aiEngineState.permissions = [
+                { AgentID: 'research-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+
+            let initCall = 0;
+            vi.mocked(RunView).mockImplementation(() => ({
+                RunView: vi.fn().mockImplementation((params: Record<string, unknown>) => {
+                    if (params.EntityName === 'MJ: Conversation Details') {
+                        return { Success: true, Results: [] };
+                    }
+                    initCall++;
+                    if (initCall === 1) return { Success: true, Results: [defaultTestAgents[0]] };
+                    return { Success: true, Results: defaultTestAgents.map(a => ({ ...a })) };
+                }),
+            }) as unknown as RunView);
+
+            const dbAdapter = new DBHistoryTestAdapter(defaultSettings);
+            await dbAdapter.Initialize();
+
+            // Bob starts group chat with Research Bot
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'g-1',
+                ThreadID: 'group-chat-1',
+                IsBotMention: true,
+                SenderEmail: bob.Email,
+                Text: '@Research Bot pull sensitive metrics',
+                MentionedAgentNames: ['Research Bot'],
+            }));
+            expect(runSpy).toHaveBeenCalledTimes(1);
+
+            // Alice (lacks CanView/CanRun on Research Bot) follows up without @mention -> refused without leaking name
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'g-2',
+                ThreadID: 'group-chat-1',
+                IsBotMention: true,
+                SenderEmail: alice.Email,
+                Text: 'show me more',
+                MentionedAgentNames: [],
+            }));
+            expect(runSpy).toHaveBeenCalledTimes(1);
+            const lastMsg = dbAdapter.FinalMessages[dbAdapter.FinalMessages.length - 1];
+            expect(lastMsg.PlainText).toContain("don't have permission");
+            expect(lastMsg.PlainText).not.toContain('Research Bot');
+        });
+
+        it('handles bare /new and /new <prompt> by resetting the MJ Conversation and clearing prior history', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const observedConvoIds: Array<string | undefined> = [];
+            const observedMessages: Array<Array<{ role: string; content: string }>> = [];
+            const observedAgents: string[] = [];
+            let createdCount = 0;
+
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(
+                    async (params: { agent: { Name: string }; conversationMessages: Array<{ role: string; content: string }> }, opts: { conversationId?: string }) => {
+                        observedConvoIds.push(opts.conversationId);
+                        observedMessages.push([...params.conversationMessages]);
+                        observedAgents.push(params.agent.Name);
+                        return {
+                            agentResult: { success: true, agentRun: { Message: 'Reply.', Steps: [] } },
+                            conversationId: opts.conversationId ?? `convo-${++createdCount}`,
+                            userMessageDetailId: 'u-det',
+                            agentResponseDetailId: 'a-det',
+                            artifactInfo: undefined,
+                        };
+                    }
+                ),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const dbAdapter = new DBHistoryTestAdapter(defaultSettings);
+            await dbAdapter.Initialize();
+
+            // Turn 1: creates convo-1 with Research Bot
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'm-1',
+                ThreadID: 'dm-reset',
+                IsDirectMessage: true,
+                Text: '@Research Bot first topic',
+                MentionedAgentNames: ['Research Bot'],
+            }));
+            expect(observedConvoIds).toEqual([undefined]);
+
+            // Turn 2: bare /new resets without invoking AgentRunner
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'm-2',
+                ThreadID: 'dm-reset',
+                IsDirectMessage: true,
+                Text: '<@BOT123> /new',
+            }));
+            expect(observedConvoIds).toHaveLength(1);
+            expect(dbAdapter.FinalMessages.some(m => m.PlainText.includes('Started a fresh conversation'))).toBe(true);
+
+            // Turn 3: next message starts convo-2 and resets back to Default Agent
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'm-3',
+                ThreadID: 'dm-reset',
+                IsDirectMessage: true,
+                Text: 'fresh question',
+            }));
+            expect(observedConvoIds).toEqual([undefined, undefined]);
+            expect(observedAgents).toEqual(['Research Bot', 'Default Agent']);
+
+            // Turn 4: `/new <prompt>` immediately resets convo-2 and runs prompt in convo-3
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'm-4',
+                ThreadID: 'dm-reset',
+                IsDirectMessage: true,
+                Text: '/new @Sage start third topic',
+            }));
+            expect(observedConvoIds).toEqual([undefined, undefined, undefined]);
+            expect(observedAgents).toEqual(['Research Bot', 'Default Agent', 'Sage']);
+            expect(observedMessages[2]).toEqual([{ role: 'user', content: '@Sage start third topic' }]);
+        });
+
+        it('rolls over rolling conversations after ConversationIdleTimeoutMs of inactivity while sliding on active turns', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2026-11-24T12:00:00.000Z'));
+
+                const { AgentRunner } = await import('@memberjunction/ai-agents');
+                const observedConvoIds: Array<string | undefined> = [];
+                let createdCount = 0;
+
+                vi.mocked(AgentRunner).mockImplementation(() => ({
+                    RunAgentInConversation: vi.fn().mockImplementation(
+                        async (_params: Record<string, unknown>, opts: { conversationId?: string }) => {
+                            observedConvoIds.push(opts.conversationId);
+                            return {
+                                agentResult: { success: true, agentRun: { Message: 'Ok.', Steps: [] } },
+                                conversationId: opts.conversationId ?? `idle-convo-${++createdCount}`,
+                                userMessageDetailId: 'u-det',
+                                agentResponseDetailId: 'a-det',
+                                artifactInfo: undefined,
+                            };
+                        }
+                    ),
+                    FollowHandoffs: vi.fn().mockResolvedValue([]),
+                }) as ReturnType<typeof vi.fn>);
+
+                const idleAdapter = new DBHistoryTestAdapter({
+                    ...defaultSettings,
+                    ConversationIdleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+                });
+                await idleAdapter.Initialize();
+
+                // T=0: creates idle-convo-1
+                await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-1', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 1' }));
+
+                // T=20m (< 30m): reuses idle-convo-1 and slides lastActivityAt to T=20m
+                vi.advanceTimersByTime(20 * 60 * 1000);
+                await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-2', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 2' }));
+
+                // T=40m (20m since T=20m, still < 30m): still reuses idle-convo-1!
+                vi.advanceTimersByTime(20 * 60 * 1000);
+                await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-3', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 3' }));
+
+                // T=71m (31m since T=40m, > 30m): rolls over to a brand-new conversation (undefined -> idle-convo-2)
+                vi.advanceTimersByTime(31 * 60 * 1000);
+                await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-4', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 4' }));
+
+                expect(observedConvoIds).toEqual([undefined, 'idle-convo-1', 'idle-convo-1', undefined]);
+            } finally {
+                vi.useRealTimers();
+            }
         });
     });
 });

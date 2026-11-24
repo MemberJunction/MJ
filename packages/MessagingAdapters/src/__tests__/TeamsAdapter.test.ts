@@ -594,7 +594,7 @@ describe('TeamsAdapter', () => {
     });
 
     describe('fetchThreadHistory', () => {
-        it('should return empty array (not yet implemented)', async () => {
+        it('should return empty array (history is loaded from MJ: Conversation Details)', async () => {
             const adapter = await createInitializedAdapter();
             const fetchHistory = (adapter as unknown as {
                 fetchThreadHistory(channelId: string, threadId: string): Promise<IncomingMessage[]>
@@ -602,6 +602,25 @@ describe('TeamsAdapter', () => {
 
             const result = await fetchHistory('channel-1', 'thread-1');
             expect(result).toEqual([]);
+        });
+
+        it('should opt into MJ: Conversation Details history and classify personal/groupChat as rolling conversations', async () => {
+            const adapter = await createInitializedAdapter();
+            const hooks = adapter as unknown as {
+                UsesMJConversationHistory(): boolean;
+                IsRollingConversation(msg: IncomingMessage): boolean;
+            };
+
+            expect(hooks.UsesMJConversationHistory()).toBe(true);
+            expect(hooks.IsRollingConversation(adapter.MapTeamsActivity(createMockTurnContext({
+                conversation: { id: 'dm-1', conversationType: 'personal' },
+            }) as never))).toBe(true);
+            expect(hooks.IsRollingConversation(adapter.MapTeamsActivity(createMockTurnContext({
+                conversation: { id: 'grp-1', conversationType: 'groupChat' },
+            }) as never))).toBe(true);
+            expect(hooks.IsRollingConversation(adapter.MapTeamsActivity(createMockTurnContext({
+                conversation: { id: 'ch-1;messageid=123', conversationType: 'channel' },
+            }) as never))).toBe(false);
         });
     });
 

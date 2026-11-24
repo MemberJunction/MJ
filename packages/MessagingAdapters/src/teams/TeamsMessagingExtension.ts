@@ -90,6 +90,9 @@ export class TeamsMessagingExtension extends BaseServerExtension {
     async Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult> {
         try {
             const settings = config.Settings as unknown as MessagingAdapterSettings;
+            if (!settings.ExplorerBaseURL && process.env.MJ_EXPLORER_BASE_URL) {
+                settings.ExplorerBaseURL = process.env.MJ_EXPLORER_BASE_URL;
+            }
 
             const appId = settings.MicrosoftAppId ?? process.env.MICROSOFT_APP_ID ?? '';
             const appPassword = settings.MicrosoftAppPassword ?? process.env.MICROSOFT_APP_PASSWORD ?? '';

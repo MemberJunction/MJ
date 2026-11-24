@@ -52,6 +52,29 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     }
 
     /**
+     * Load multi-turn Teams history from MJ's own `MJ: Conversation Details` instead of
+     * calling Microsoft Graph `ChannelMessage.Read.All`.
+     */
+    protected override UsesMJConversationHistory(): boolean {
+        return true;
+    }
+
+    /**
+     * Teams DMs (`personal`), group chats (`groupChat`), and meeting chats share one
+     * `activity.conversation.id` indefinitely, so they roll over on idle (`ConversationIdleTimeoutMs`,
+     * default 2 hours). Channel threads (`channel`) carry a per-thread conversation ID and keep the
+     * 24-hour thread TTL.
+     */
+    protected override IsRollingConversation(message: IncomingMessage): boolean {
+        const activity = (message.RawEvent as Record<string, unknown> | undefined)?.['activity'] as Partial<Activity> | undefined;
+        const convType = activity?.conversation?.conversationType;
+        if (convType === 'channel') {
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Stored conversation references for proactive messaging.
      * Maps conversation ID to the reference needed to send proactive messages.
      * Entries are evicted after 24 hours to prevent unbounded growth.
@@ -134,20 +157,14 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     /**
      * Fetch thread history from Teams.
      *
-     * NOTE: Not yet implemented. Requires Microsoft Graph API access with
-     * `ChannelMessage.Read.All` permission. Currently returns empty array,
-     * meaning conversations are single-turn.
-     *
-     * Future implementation would use:
-     * `GET /teams/{id}/channels/{id}/messages/{id}/replies`
+     * Returns `[]` — Teams multi-turn history is loaded from MJ's own
+     * `MJ: Conversation Details` via `UsesMJConversationHistory()`, avoiding the
+     * Microsoft Graph `ChannelMessage.Read.All` permission requirement.
      */
     protected async fetchThreadHistory(
         _channelId: string,
         _threadId: string
     ): Promise<IncomingMessage[]> {
-        // TODO: Implement via Microsoft Graph API
-        // GET /teams/{team-id}/channels/{channel-id}/messages/{message-id}/replies
-        // Requires Graph API client and ChannelMessage.Read.All permission
         return [];
     }
 

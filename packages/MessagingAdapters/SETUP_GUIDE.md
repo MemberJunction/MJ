@@ -459,6 +459,9 @@ module.exports = {
 | `AppToken` | `string` | — | Slack App-Level Token for Socket Mode (`xapp-...`) |
 | `ConnectionMode` | `'http' \| 'socket'` | `'http'` | Slack connection mode |
 | `MaxThreadMessages` | `number` | `50` | Max thread messages fetched for conversation context |
+| `ConversationIdleTimeoutMs` | `number` | `7200000` (2h) | Sliding idle timeout (ms) before rolling chats (DMs, Teams group chats, meetings) start a fresh MJ Conversation |
+| `AllowFallbackUser` | `boolean` | `false` | When `true`, unmapped senders fall back to `ContextUserEmail` instead of being refused |
+| `AllowedAgentIDs` | `string[]` | — | Optional allow-list of MJ Agent IDs this adapter instance may route to |
 | `ShowTypingIndicator` | `boolean` | `true` | Show typing/thinking indicator while processing |
 | `DisableDelegation` | `boolean` | `false` | Turn off delegation detection. Set it on a bot pinned to ONE agent: delegation is detected from the reply text, so an agent describing its own routing role ("I can route you to ... Betty") otherwise triggers a real handoff |
 | `StreamingUpdateIntervalMs` | `number` | `1000` | Min interval between streaming message updates (ms) |
@@ -608,7 +611,7 @@ Or use **Slack Socket Mode** to avoid ngrok entirely (see Part 1b above).
 
 ## Known Limitations
 
-- **Teams thread history**: Not yet implemented (requires Microsoft Graph API with `ChannelMessage.Read.All`). Teams conversations are currently single-turn; each message is independent.
+- **Teams thread history across restarts**: Teams multi-turn history is loaded from MJ's own `MJ: Conversation Details` (no Graph `ChannelMessage.Read.All` required), keyed by the in-memory thread-to-conversation map. Restarting MJAPI starts a fresh conversation on the next Teams turn; users can also type `/new` (or `/new <prompt>`) anytime to start fresh.
 - **Full response text store**: The "View Full" button in Slack stores content in memory with a 30-minute TTL. Content is lost on server restart.
 - **Conversation references**: Teams conversation references for proactive messaging are stored in memory (lost on restart).
 - **Max delegation hops**: Agent delegation chains are limited to 3 hops to prevent infinite loops.
