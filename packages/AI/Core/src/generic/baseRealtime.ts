@@ -1144,6 +1144,13 @@ export interface ClientRealtimeSessionConfig {
     SessionConfig: JSONObject;
 
     /**
+     * The session's prompt, tools and provider config stay on the MJAPI instance that minted it: the browser is given
+     * none of them (a driver whose agent runs inside MJAPI). They are then not saved on the session row either, which its
+     * owner can read, so only that instance can refresh the session's credential.
+     */
+    ServerHeldConfig?: boolean;
+
+    /**
      * The driver's decision at mint about the live avatar the session asked for: granted, or audio only and why. Unlike
      * {@link SessionConfig} it is not part of the driver pact, so the server can merge it with its own reasons and hand
      * it to the call. Absent when the session asked for no avatar, and from drivers that render none.
