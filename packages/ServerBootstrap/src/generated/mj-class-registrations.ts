@@ -1352,7 +1352,7 @@ import {
     SubmitHumanRubricAction,
 } from '@memberjunction/rubrics';
 
-// @memberjunction/search-engine (17 classes)
+// @memberjunction/search-engine (18 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
@@ -1365,6 +1365,7 @@ import {
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
+    ScopeDimensionResolver,
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
@@ -2989,6 +2990,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
+    ScopeDimensionResolver,
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
@@ -3056,11 +3058,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DescribeEntityAction,
     ListMyEntitiesAction,
     ModifyEntityAction,
-    ValidateEntitySchemaAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ValidateEntitySchemaAction,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -3260,11 +3262,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PromptEvalDriver,
     RubricCalibrationTestDriver,
     ComputerUseAction,
-    ComputerUseTestDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ComputerUseTestDriver,
     DecisionFeaturePipelineDriver,
     FeaturePipelineGoldenSetDriver,
     LLMFeaturePipelineDriver,
@@ -3464,11 +3466,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
-    SearchEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
@@ -3568,7 +3570,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1481;
+export const CLASS_REGISTRATIONS_COUNT = 1482;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
