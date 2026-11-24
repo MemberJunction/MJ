@@ -33,7 +33,7 @@ emitOverlayCss('acme', theme);  // CSS scoped to [data-theme-overlay="acme"]
 | `vibrancy` | global saturation multiplier for brand ramps | `1` |
 | `radius` | base corner radius in px → `--mj-radius-md` | `8` |
 | `depth` | brand-shadow intensity 0..1 (G3) | `1` |
-| `fontFamily` / `fontFamilyMono` | type stacks (G1) | MJ Inter / JetBrains Mono |
+| `fontFamily` / `fontFamilyDisplay` / `fontFamilyMono` | type stacks (G1) | MJ Montserrat / `fontFamily` / JetBrains Mono |
 | `vizPalette` | explicit categorical chart palette override (G4) | derived from brand hue |
 
 ## How derivation works

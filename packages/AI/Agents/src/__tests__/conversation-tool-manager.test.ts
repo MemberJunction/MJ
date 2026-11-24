@@ -9,7 +9,14 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockCache: { Details: Array<Record<string, unknown>> } = { Details: [] };
+const { mockCache, loadConversationDetailsSpy, loadWindowRowsFreshSpy } = vi.hoisted(() => {
+    const cache: { Details: Array<Record<string, unknown>> } = { Details: [] };
+    return {
+        mockCache: cache,
+        loadConversationDetailsSpy: vi.fn().mockImplementation(async () => cache),
+        loadWindowRowsFreshSpy: vi.fn().mockImplementation(async () => cache.Details),
+    };
+});
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
@@ -17,8 +24,9 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         ...actual,
         ConversationEngine: {
             Instance: {
-                LoadConversationDetails: vi.fn().mockImplementation(async () => mockCache),
+                LoadConversationDetails: loadConversationDetailsSpy,
             },
+            LoadWindowRowsFresh: loadWindowRowsFreshSpy,
             FilterRowsToBranchPath: actual.ConversationEngine.FilterRowsToBranchPath,
         },
     };
@@ -36,6 +44,8 @@ describe('ConversationToolManager', () => {
     let manager: ConversationToolManager;
 
     beforeEach(() => {
+        loadConversationDetailsSpy.mockClear();
+        loadWindowRowsFreshSpy.mockClear();
         manager = new ConversationToolManager();
         manager.Initialize('conv-1', user);
         mockCache.Details = [
@@ -388,6 +398,24 @@ describe('ConversationToolManager', () => {
             const exact = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 2 } });
             expect(exact.result.success).toBe(false);
             expect(exact.result.errorMessage).toContain('No message found at sequence 2');
+        });
+    });
+
+    describe('per-run lifecycle & server cache isolation', () => {
+        it('memoizes fresh window rows per run, releases on Clear(), and never populates ConversationEngine._detailCache', async () => {
+            const first = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 1 } });
+            const second = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 2 } });
+            expect(first.result.success).toBe(true);
+            expect(second.result.success).toBe(true);
+            expect(loadWindowRowsFreshSpy).toHaveBeenCalledTimes(1);
+            expect(loadConversationDetailsSpy).not.toHaveBeenCalled();
+
+            // Clear() at run teardown drops the per-run memoized rows; next run loads fresh
+            manager.Clear();
+            manager.Initialize('conv-1', user);
+            await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 1 } });
+            expect(loadWindowRowsFreshSpy).toHaveBeenCalledTimes(2);
+            expect(loadConversationDetailsSpy).not.toHaveBeenCalled();
         });
     });
 });

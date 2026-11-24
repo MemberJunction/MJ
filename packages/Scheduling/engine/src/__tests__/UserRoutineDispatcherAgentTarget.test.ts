@@ -15,9 +15,11 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     RegisterClass: () => (target: unknown) => target,
 }));
 
-const { runInConversation, agentLoad } = vi.hoisted(() => ({
+const { runInConversation, agentLoad, resolveWakeConfig, resolvePrimaryInstance } = vi.hoisted(() => ({
     runInConversation: vi.fn(),
     agentLoad: vi.fn(async () => true),
+    resolveWakeConfig: vi.fn<() => Promise<string | undefined>>(async () => undefined),
+    resolvePrimaryInstance: vi.fn(async (targetId: string) => ({ ID: targetId, Name: 'Chief of Staff' })),
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => ({
@@ -29,11 +31,24 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
         GetEntityObject = vi.fn(async () => ({ ID: 'AGENT-1', Name: 'Chief of Staff', Load: agentLoad }));
     },
 }));
-vi.mock('@memberjunction/ai-agents', () => ({
+vi.mock('@memberjunction/ai-agents', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-agents')>()),
     AgentRunner: class { RunAgentInConversation = runInConversation; RunAgent = vi.fn(); },
+    AgentWakeTriggerService: {
+        Instance: {
+            ResolvePrimaryUserAgentInstance: resolvePrimaryInstance,
+        },
+    },
+    ResolveWakeAgentConfigurationID: resolveWakeConfig,
 }));
-vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),
+    AIPromptRunner: class {},
+}));
+vi.mock('@memberjunction/actions', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions')>()),
+    ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } },
+}));
 
 import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
 
@@ -63,6 +78,11 @@ function driver(): Driver {
 
 beforeEach(() => {
     runInConversation.mockReset();
+    agentLoad.mockClear();
+    resolveWakeConfig.mockReset();
+    resolveWakeConfig.mockResolvedValue(undefined);
+    resolvePrimaryInstance.mockReset();
+    resolvePrimaryInstance.mockImplementation(async (targetId: string) => ({ ID: targetId, Name: 'Chief of Staff' }));
     runInConversation.mockResolvedValue({
         agentResult: {
             success: true,
@@ -105,5 +125,32 @@ describe('UserRoutineDispatcherDriver — an Agent target run', () => {
 
         const options = runInConversation.mock.calls[0][1] as { createArtifacts?: boolean };
         expect(options.createArtifacts).toBeUndefined();
+    });
+
+    it('passes resolved configurationId from ResolveWakeAgentConfigurationID into agent execution', async () => {
+        resolveWakeConfig.mockResolvedValueOnce('B6B9D780-52B2-431B-93AB-AC83FEF78553');
+        await driver().executeAgentTarget(
+            routine({ AgentConfigurationID: 'B6B9D780-52B2-431B-93AB-AC83FEF78553' }),
+            { ID: 'OWNER' }
+        );
+
+        const baseParams = runInConversation.mock.calls[0][0] as { configurationId?: string };
+        expect(baseParams.configurationId).toBe('B6B9D780-52B2-431B-93AB-AC83FEF78553');
+    });
+
+    it('omits configurationId when ResolveWakeAgentConfigurationID returns undefined', async () => {
+        resolveWakeConfig.mockResolvedValueOnce(undefined);
+        await driver().executeAgentTarget(routine(), { ID: 'OWNER' });
+
+        const baseParams = runInConversation.mock.calls[0][0] as { configurationId?: string };
+        expect('configurationId' in baseParams).toBe(false);
+    });
+
+    it('E1: resolves a template TargetID to the user primary derived instance before loading and running the agent', async () => {
+        resolvePrimaryInstance.mockResolvedValueOnce({ ID: 'PEPPER-PRIMARY-ID', Name: 'Pepper' });
+        await driver().executeAgentTarget(routine({ TargetID: 'COS-TEMPLATE-ID', UserID: 'ALICE-1' }), { ID: 'ALICE-1' });
+
+        expect(resolvePrimaryInstance).toHaveBeenCalledWith('COS-TEMPLATE-ID', 'ALICE-1', { ID: 'ALICE-1' });
+        expect(agentLoad).toHaveBeenCalledWith('PEPPER-PRIMARY-ID');
     });
 });

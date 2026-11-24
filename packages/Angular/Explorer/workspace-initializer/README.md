@@ -149,7 +149,7 @@ cd packages/Angular/Explorer/workspace-initializer && npm run build
 
 - [`@memberjunction/ng-explorer-app`](../explorer-app) - Application shell that consumes this service
 - [`@memberjunction/ng-explorer-core`](../explorer-core) - Shell and validation services
-- [`@memberjunction/ng-auth-services`](../auth-services) - Authentication abstraction
+- [`@memberjunction/ng-auth-services`](../../Generic/auth-services) - Authentication abstraction
 
 ## License
 

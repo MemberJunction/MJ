@@ -48,9 +48,20 @@ import type {
     FlowAfterContextMenuActionEventArgs,
     FlowBeforeContextMenuEventArgs,
     FlowConnection,
+    FlowLayoutDirection,
+    FlowNode,
     FlowToolbarAlign,
     FlowToolbarVisibility,
 } from '@memberjunction/ng-flow-editor';
+import {
+    BuildTaskGraphDiagnostic,
+    ExtractGraphTelemetry,
+    type ExtractedGraphTelemetry,
+    type TaskGraphDiagnosticNotice,
+} from './task-graph-diagnostics';
+
+/** Adaptive layout density for embedding `<mj-task-graph-run-view>` / `<mj-task-graph-debugger>` across hosts. */
+export type TaskGraphDensity = 'auto' | 'console' | 'embedded';
 
 /** What the host learns when someone clicks a step. */
 export type TaskGraphRunNodeSelectedEvent = {
@@ -249,6 +260,68 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Input() public ShowVariables: boolean = true;
     /** The parent bag's `data` / `context` roots, for the Invocation scope. */
     @Input() public Invocation: { data?: unknown; context?: unknown } | null = null;
+    /** Expand inline X-Ray telemetry panels on step nodes. */
+    @Input()
+    public set XRayEnabled(value: boolean) {
+        if (this.xrayEnabled === value) return;
+        this.xrayEnabled = value;
+        this.rebuildOverlay();
+        this.cdr.markForCheck();
+    }
+    public get XRayEnabled(): boolean {
+        return this.xrayEnabled;
+    }
+    /** Downstream step IDs highlighted in crimson as part of What-If failure blast-radius preview. */
+    @Input()
+    public set BlastRadiusTaskIDs(value: readonly string[]) {
+        this.blastRadiusTaskIDs = value ?? [];
+        this.rebuildOverlay();
+        this.cdr.markForCheck();
+    }
+    public get BlastRadiusTaskIDs(): readonly string[] {
+        return this.blastRadiusTaskIDs;
+    }
+    /** Preserve untaken/skipped paths as muted ghosted dashed lines (default true). */
+    @Input()
+    public set ShowUntakenPaths(value: boolean) {
+        if (this.showUntakenPaths === value) return;
+        this.showUntakenPaths = value;
+        this.rebuildOverlay();
+        this.cdr.markForCheck();
+    }
+    public get ShowUntakenPaths(): boolean {
+        return this.showUntakenPaths;
+    }
+    /** Active layout orientation (`horizontal` matches LR run layout so ports sit left/right). */
+    @Input()
+    public set LayoutDirection(value: FlowLayoutDirection) {
+        if (this.layoutDirection === value) return;
+        this.layoutDirection = value;
+        this.rebuildOverlay();
+        this.cdr.markForCheck();
+    }
+    public get LayoutDirection(): FlowLayoutDirection {
+        return this.layoutDirection;
+    }
+    /** Adaptive embed density: `'console'` (full canvas), `'embedded'` (compact 360px vertical stack), or `'auto'`. */
+    @Input() public Density: TaskGraphDensity = 'auto';
+    /** Optional explicit diagnostic notice supplied by the host; auto-derived from live frames/rows when omitted. */
+    @Input() public DiagnosticNotice: TaskGraphDiagnosticNotice | null = null;
+    /** Show plain-English Diagnostic Co-Pilot banner when an actionable pause/hold/failure occurs. */
+    @Input() public ShowDiagnosticBanner: boolean = true;
+    /** Show docked interactive Replay Scrubber for settled runs with timestamps. */
+    @Input() public ShowReplayScrubber: boolean = false;
+    /** Allow targeted single-step execution (`Step(taskID)`) button inside X-Ray cards & Co-Pilot. */
+    @Input()
+    public set CanStepSingle(value: boolean) {
+        if (this.canStepSingle === value) return;
+        this.canStepSingle = value;
+        this.rebuildOverlay();
+        this.cdr.markForCheck();
+    }
+    public get CanStepSingle(): boolean {
+        return this.canStepSingle;
+    }
 
     @Output() public NodeSelected = new EventEmitter<TaskGraphRunNodeSelectedEvent>();
     /** The legend was toggled from the toolbar, so a host can remember the choice. */
@@ -263,7 +336,14 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
      * Step IDs the person keeps as breakpoints for future runs of this workflow (#3798). Shown in the step's
      * context menu; empty (and the menu item hidden) unless a host remembers breakpoints.
      */
-    @Input() public RememberedStepIDs: readonly string[] = [];
+    @Input()
+    public set RememberedStepIDs(value: readonly string[]) {
+        this.rememberedStepIDs = value ?? [];
+        this.rebuildOverlay();
+    }
+    public get RememberedStepIDs(): readonly string[] {
+        return this.rememberedStepIDs;
+    }
     /** Whether the host offers "remember for future runs" at all. */
     @Input() public AllowRememberBreakpoints: boolean = false;
     /** Intent only — the host stores the remembered set. */
@@ -273,6 +353,14 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         EdgeID: string;
         Verdict: 'true' | 'false' | null;
     }>();
+    /** Intent only — operator asked to run one specific pending step (`Step(taskID)`). */
+    @Output() public RunStepRequested = new EventEmitter<string>();
+    /** Intent only — operator asked to retry a failed step from the Co-Pilot banner. */
+    @Output() public RetryStepRequested = new EventEmitter<string>();
+    /** Intent only — operator asked to toggle failure blast-radius preview from the Co-Pilot banner. */
+    @Output() public BlastRadiusRequested = new EventEmitter<string>();
+    /** Intent only — operator asked to expand an embedded 360px run view into full screen. */
+    @Output() public ExpandRequested = new EventEmitter<void>();
 
     /** What each running step says it is doing, from `NodeProgress` frames. Keyed by task row id. */
     public LiveActivity = new Map<string, { Message: string; Percent?: number }>();
@@ -283,9 +371,28 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     public Overlay: TaskGraphDebugOverlay = { showConditions: true };
 
     private breakpoints: readonly string[] = [];
+    private rememberedStepIDs: readonly string[] = [];
     private pausedAtTaskID: string | null = null;
     private graphPaused = false;
     private edgeOverrides: Readonly<Record<string, 'true' | 'false'>> = {};
+    private xrayEnabled = false;
+    private blastRadiusTaskIDs: readonly string[] = [];
+    private showUntakenPaths = true;
+    private layoutDirection: FlowLayoutDirection = 'horizontal';
+    private canStepSingle = false;
+    private latestFrame: TaskGraphRunFrame | null = null;
+    private telemetry: ExtractedGraphTelemetry = {
+        XRayItems: {},
+        DecisionConfidence: {},
+        TaintedTaskIDs: [],
+        VerifiedTaskIDs: [],
+        SagaCompensationLabels: {},
+    };
+    private diagnosticDismissed = false;
+    /** Interactive replay scrubber state (0–100, null = live/present). */
+    public ReplayPercent: number | null = null;
+    public ReplayPlaying = false;
+    private replayPlayTimer: ReturnType<typeof setInterval> | null = null;
     /** `Settled` is once-per-parent — a finished poll must not re-fire the host. */
     private settledEmitted = false;
 
@@ -352,10 +459,144 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     public ngOnDestroy(): void {
         this.destroyed = true;
         this.stopPolling();
+        this.stopReplayTimer();
         if (this.frameReloadTimer) {
             clearTimeout(this.frameReloadTimer);
             this.frameReloadTimer = null;
         }
+    }
+
+    /** Effective density mode ('embedded' renders a compact vertical card stack for 320–420px hosts). */
+    public get IsEmbeddedMode(): boolean {
+        return this.Density === 'embedded';
+    }
+
+    /** Active plain-English Co-Pilot notice, either explicit from host or auto-derived from live state. */
+    public get ActiveDiagnostic(): TaskGraphDiagnosticNotice | null {
+        if (!this.ShowDiagnosticBanner || this.diagnosticDismissed) return null;
+        if (this.DiagnosticNotice) return this.DiagnosticNotice;
+        return BuildTaskGraphDiagnostic({
+            LatestFrame: this.latestFrame,
+            PausedAtTaskID: this.pausedAtTaskID,
+            GraphPaused: this.graphPaused,
+            IsSettled: this.IsSettled,
+            Tasks: this.Tasks,
+        });
+    }
+
+    public OnDismissDiagnostic(): void {
+        this.diagnosticDismissed = true;
+        this.cdr.markForCheck();
+    }
+
+    /** Earliest and latest timestamps across loaded tasks for interactive Replay scrubbing. */
+    public get ReplayBounds(): { StartMs: number; EndMs: number } | null {
+        let minStart = Number.POSITIVE_INFINITY;
+        let maxEnd = 0;
+        for (const t of this.taskByID.values()) {
+            const s = t.StartedAt ? new Date(t.StartedAt).getTime() : null;
+            const e = t.CompletedAt ? new Date(t.CompletedAt).getTime() : null;
+            if (s != null && Number.isFinite(s)) minStart = Math.min(minStart, s);
+            if (e != null && Number.isFinite(e)) maxEnd = Math.max(maxEnd, e);
+        }
+        if (!Number.isFinite(minStart) || maxEnd <= minStart) return null;
+        return { StartMs: minStart, EndMs: maxEnd };
+    }
+
+    public get CanShowReplayScrubber(): boolean {
+        return this.ShowReplayScrubber && this.IsSettled && this.ReplayBounds != null;
+    }
+
+    public get ReplayTimeReadout(): string {
+        const bounds = this.ReplayBounds;
+        if (!bounds) return '';
+        const spanSec = Math.max(0.1, (bounds.EndMs - bounds.StartMs) / 1000);
+        const pct = this.ReplayPercent ?? 100;
+        const currSec = (spanSec * (pct / 100)).toFixed(1);
+        return `${currSec}s / ${spanSec.toFixed(1)}s`;
+    }
+
+    public OnReplaySliderInput(event: Event): void {
+        const target = event.target;
+        const raw = target instanceof HTMLInputElement ? Number(target.value) : 100;
+        this.SetReplayPercent(raw);
+    }
+
+    public SetReplayPercent(percent: number | null): void {
+        const bounds = this.ReplayBounds;
+        if (percent == null || !bounds) {
+            this.ReplayPercent = null;
+            this.replayAt = null;
+        } else {
+            const clamped = Math.max(0, Math.min(100, percent));
+            this.ReplayPercent = clamped;
+            this.replayAt = clamped >= 100
+                ? null
+                : new Date(bounds.StartMs + (bounds.EndMs - bounds.StartMs) * (clamped / 100));
+        }
+        this.applyReplay();
+    }
+
+    public OnToggleReplayPlayback(): void {
+        if (this.ReplayPlaying) {
+            this.stopReplayTimer();
+            this.cdr.markForCheck();
+            return;
+        }
+        if ((this.ReplayPercent ?? 100) >= 100) {
+            this.SetReplayPercent(0);
+        }
+        this.ReplayPlaying = true;
+        this.replayPlayTimer = setInterval(() => {
+            const next = Math.min(100, (this.ReplayPercent ?? 0) + 5);
+            this.SetReplayPercent(next);
+            if (next >= 100) {
+                this.stopReplayTimer();
+                this.cdr.markForCheck();
+            }
+        }, 200);
+        this.cdr.markForCheck();
+    }
+
+    private stopReplayTimer(): void {
+        this.ReplayPlaying = false;
+        if (this.replayPlayTimer) {
+            clearInterval(this.replayPlayTimer);
+            this.replayPlayTimer = null;
+        }
+    }
+
+    /** Direct node-gutter breakpoint click from canvas. */
+    public OnCanvasNodeBreakpointClicked(node: FlowNode): void {
+        if (!this.AllowBreakpointEditing) return;
+        this.BreakpointToggled.emit({
+            TaskID: node.ID,
+            Enabled: !this.hasBreakpoint(node.ID),
+        });
+    }
+
+    /** Direct X-Ray `Run This Step` click from canvas. */
+    public OnCanvasNodeRunStepClicked(node: FlowNode): void {
+        this.RunStepRequested.emit(node.ID);
+    }
+
+    /** Layout orientation flip (`LR ⇄ TB`) from canvas toolbar. */
+    public OnCanvasLayoutDirectionChanged(direction: FlowLayoutDirection): void {
+        this.layoutDirection = direction;
+        this.rebuildOverlay();
+        this.cdr.markForCheck();
+    }
+
+    /** Select a step from the compact embedded vertical card list. */
+    public OnEmbeddedStepSelected(task: MJTaskEntity): void {
+        this.SelectedTaskID = task.ID;
+        this.NodeSelected.emit({ TaskID: task.ID, Task: task });
+        this.cdr.markForCheck();
+    }
+
+    /** Live progress helper for embedded step cards. */
+    public StepLiveProgress(taskID: string): { Message: string; Percent?: number } | null {
+        return this.LiveActivity.get(taskID) ?? null;
     }
 
     /** Steps in a terminal state, for the host's summary line. Uses the same map the canvas paints. */
@@ -549,14 +790,35 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     }
 
     private rebuildOverlay(): void {
+        const rememberedTaskIDs: string[] = [];
+        if (this.rememberedStepIDs?.length > 0 && this.taskByID) {
+            for (const [taskID] of this.taskByID) {
+                const stepID = this.StepIDOf(taskID);
+                if (stepID && this.rememberedStepIDs.includes(stepID)) {
+                    rememberedTaskIDs.push(taskID);
+                }
+            }
+        }
+        const telemetry = this.telemetry;
         this.Overlay = {
-            breakpoints: this.breakpoints,
+            breakpoints: this.breakpoints ?? [],
+            rememberedTaskIDs,
             // A finished graph is not "paused here" — the durable bag can still name the last
             // breakpoint after every step is terminal.
             pausedAtTaskID: this.IsSettled ? null : this.pausedAtTaskID,
             paused: !this.IsSettled && this.graphPaused,
-            edgeOverrides: this.edgeOverrides,
+            edgeOverrides: this.edgeOverrides ?? {},
             showConditions: true,
+            showUntakenPaths: this.showUntakenPaths ?? true,
+            layoutDirection: this.layoutDirection ?? 'horizontal',
+            liveActivity: this.LiveActivity ? new Map(this.LiveActivity) : undefined,
+            blastRadiusTaskIDs: this.blastRadiusTaskIDs ?? [],
+            taintedTaskIDs: telemetry?.TaintedTaskIDs ?? [],
+            verifiedTaskIDs: telemetry?.VerifiedTaskIDs ?? [],
+            sagaCompensationLabels: telemetry?.SagaCompensationLabels ?? {},
+            decisionConfidence: telemetry?.DecisionConfidence ?? {},
+            xrayItems: telemetry?.XRayItems ?? {},
+            canStepSingle: Boolean(this.canStepSingle) && !this.IsSettled,
         };
     }
 
@@ -635,6 +897,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     /** Rows → spec + runtime + geometry. */
     private project(taskRows: MJTaskEntity[], depRows: MJTaskDependencyEntity[]): void {
         this.taskByID = new Map(taskRows.map((t) => [t.ID, t]));
+        this.telemetry = ExtractGraphTelemetry(taskRows);
         if (taskRows.length === 0) {
             this.SelectedTaskID = null;
         } else if (!this.SelectedTaskID || !this.taskByID.has(this.SelectedTaskID)) {
@@ -718,6 +981,10 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
      * rules, free to drift.
      */
     private foldFrame(frame: TaskGraphRunFrame): void {
+        this.latestFrame = frame;
+        if (frame.kind === 'GateDecision' || frame.kind === 'ClaimChanged' || frame.kind === 'BreakpointHit') {
+            this.diagnosticDismissed = false;
+        }
         switch (frame.kind) {
             case 'TaskStarted':
             case 'TaskCompleted':
@@ -735,6 +1002,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
             case 'NodeProgress':
                 if (frame.taskId && frame.progressMessage) {
                     this.LiveActivity.set(frame.taskId, { Message: frame.progressMessage, Percent: frame.progressPercent });
+                    this.rebuildOverlay();
                     this.cdr.markForCheck();
                 }
                 break;

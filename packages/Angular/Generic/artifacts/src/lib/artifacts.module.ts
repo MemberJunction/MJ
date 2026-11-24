@@ -6,6 +6,7 @@ import { AgGridModule } from 'ag-grid-angular';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { ComposerModule } from '@memberjunction/ng-composer';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -65,6 +66,7 @@ import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewe
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
 import { ArtifactVersionHistoryComponent } from './components/artifact-version-history.component';
 import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
+import { ArtifactRelatedPanelComponent } from './components/artifact-related-panel.component';
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
 import { ArtifactAgentPresenceBarComponent } from './components/presence/artifact-agent-presence-bar.component';
 import { ArtifactAgentRegionIndicatorComponent } from './components/presence/artifact-agent-region-indicator.component';
@@ -135,10 +137,12 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     VideoProductionArtifactPreviewComponent,
   ],
   imports: [
+    ArtifactRelatedPanelComponent,
     CommonModule,
     FormsModule,
     MarkdownModule,
     CodeEditorModule,
+    ComposerModule,
     MJReactModule,
     MJNotificationsModule,
     QueryViewerModule,
@@ -171,6 +175,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     ArtifactCommandPaletteComponent,
   ],
   exports: [
+    ArtifactRelatedPanelComponent,
     // Export artifact type plugin viewer
     ArtifactTypePluginViewerComponent,
 

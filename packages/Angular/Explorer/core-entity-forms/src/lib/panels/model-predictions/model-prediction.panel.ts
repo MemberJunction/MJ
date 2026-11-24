@@ -1,90 +1,38 @@
 import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { RegisterClassEx } from '@memberjunction/global';
+import { RegisterClassEx, UUIDMap, UUIDSet } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
-import { CompositeKey, LogError, Metadata, RunView } from '@memberjunction/core';
-import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
+import { LogError, RunView, type IMetadataProvider, type RunViewResult } from '@memberjunction/core';
+import { PredictionPanelQueries } from '@memberjunction/predictive-studio-core';
+import { FeatureValuesPanelModel, type FeatureValueCard, type FeatureValueRow } from '../feature-values/feature-values.logic';
 import {
-    ImportanceDisplay,
-    OutcomeBand,
-    resolveOutcomeConfig,
-    resolveOutcomeStyle,
-    resolveScoreBand,
-} from '@memberjunction/predictive-studio-core';
-import {
-    ModelHistorySummary,
-    PredictionBand,
-    PredictionDriver,
-    PredictionDrivers,
-    PredictionHistoryItem,
-    BandFor,
-    FilterHistoryByModel,
-    FormatLastScored,
-    FormatValue,
-    GaugePct,
-    GetDistinctModelsFromHistory,
-    ParseHistoryItem,
-    ResolveLabel,
-    ToNumber,
-    ValueKind,
+    ModelPredictionLogic,
+    type PanelBindingRow,
+    type PanelOutputBindingRow,
+    type PanelRunRow,
+    type PanelValueRow,
+    type PredictionCard,
 } from './model-prediction.logic';
 
-/**
- * A fully-resolved, entity-agnostic prediction card view-model. One per active
- * scoring binding on the current record's entity.
- */
-export interface PredictionCard {
-    /** Binding ID — used as the @for track key. */
-    BindingId: string;
-    /** Model ID — used to cross-link with prediction history. */
-    modelId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** Human label for the prediction (model target → bound column → fallback). */
-    Label: string;
-    /** True when the model is a 0–1 probability we can render as a gauge. */
-    IsProbability: boolean;
-    /** True for regression models showing a raw numeric value. */
-    IsNumeric: boolean;
-    /** True for classification models showing a class label. */
-    IsClass: boolean;
-    /** Pre-formatted primary value string ("72%", "1,240.5", "Renewing", "—"). */
-    DisplayValue: string;
-    /** 0–100 fill for the probability gauge (only meaningful when isProbability). */
-    GaugePct: number;
-    /** Neutral band for the gauge segment styling (only meaningful when isProbability). */
-    Band: PredictionBand | null;
-    /** Resolved semantic status band from outcomeConfig */
-    StatusBand: OutcomeBand | null;
-    /** Human-readable status label (e.g. "Low Risk", "High") */
-    StatusLabel: string | null;
-    /** Semantic badge color: 'green' | 'amber' | 'red' | 'blue' | 'gray' */
-    BadgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray';
-    /** FontAwesome icon class (e.g. 'fa-circle-check', 'fa-triangle-exclamation') */
-    BadgeIcon: string | null;
-    /** Top feature-importance drivers, or empty when unavailable. */
-    Drivers: PredictionDriver[];
-    /** True when the model has importances that are hidden because of their kind (split / impurity counts). */
-    DriversHidden: boolean;
-    /** Provenance: "Pipeline Name v3". */
-    Provenance: string;
-    /** "Last scored" timestamp string, or null when unavailable. */
-    LastScored: string | null;
+/** The lineage of the shown values: the scoring models' `record-panel` output bindings and the scoring runs. */
+interface PanelLineage {
+    OutputBindings: PanelOutputBindingRow[];
+    Runs: PanelRunRow[];
 }
 
 /**
- * Model Prediction panel — an **entity-agnostic** form panel that surfaces any
- * predictions a trained ML model has written onto the current record via a
- * `MJ: ML Model Scoring Bindings` row.
+ * Model Prediction panel — an **entity-agnostic** form panel that shows the predictions stored as Feature Values on
+ * the current record (§5.8.5).
  *
- * It registers against the `'*'` wildcard entity, so it mounts on EVERY entity
- * form — but renders **nothing** unless the record's entity has at least one
- * active scoring binding. The 99% of forms with no model see an invisible,
- * one-RunView-cheap panel.
+ * It registers against the `'*'` wildcard entity, so it mounts on every entity form, and shows: one card per `Active`
+ * scoring binding of the record's entity whose view authorization the user holds and that has a value for the record
+ * (the value, class and probability, drivers, a history sparkline and the lineage — model version, scoring run, as-of
+ * date and the in-training flag); and a "Derived values" section listing the record's pipeline features. It renders
+ * nothing when there is neither. The row-level security filter on `MJ: Feature Values` and `MJ: Latest Feature Values`
+ * is the guarantee that a user without a binding's authorization reads none of its values; the panel's own check keeps
+ * it from rendering a card the filter would leave empty.
  *
- * Driven entirely by metadata (bindings + models); there is no entity-specific,
- * domain-specific, or "renewal/risk"-specific logic anywhere. Members/renewal
- * is only ever a test example.
- *
- * Self-mounts via the `after-fields` slot. Reusable as a plain component too
- * (composition) by binding `[Record]` + `[FormComponent]`.
+ * Self-mounts via the `after-fields` slot. Reusable as a plain component too (composition) by binding `[Record]` +
+ * `[FormComponent]`.
  */
 @RegisterClassEx(BaseFormPanel, {
     key: 'model-predictions:model-prediction',
@@ -102,376 +50,144 @@ export interface PredictionCard {
     styleUrls: ['./model-prediction.panel.css'],
 })
 export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
-    private cdr = inject(ChangeDetectorRef);
+    private readonly cdr = inject(ChangeDetectorRef);
 
-    /** The resolved cards to render. Empty → panel renders nothing. */
+    /** One card per authorized binding with a value for the record. */
     public Cards: PredictionCard[] = [];
 
-    /** The note shown in place of a model's hidden drivers. */
-    public readonly DriversHiddenNote = ImportanceDisplay.HiddenNote;
-    /** True once the binding lookup has completed (success or empty). */
+    /** The record's pipeline features, latest value each. */
+    public DerivedValues: FeatureValueCard[] = [];
+
+    /** True once the reads have completed (success or not). */
     public Loaded = false;
-    /** Resolved models by ID for lineage and history decoration. */
-    public ModelsById: Map<string, MJMLModelEntity> = new Map();
 
-    /** @deprecated Use {@link ModelsById}. */
-    public get modelsById(): Map<string, MJMLModelEntity> {
-        return this.ModelsById;
-    }
-    /** @deprecated Use {@link ModelsById}. */
-    public set modelsById(value: Map<string, MJMLModelEntity>) {
-        this.ModelsById = value;
-    }
-    /** Historical prediction runs for this record across models. */
-    public HistoryItems: PredictionHistoryItem[] = [];
-    /** Loading flag for historical predictions lookup. */
-    public LoadingHistory = false;
-    /** Whether the prediction history section is expanded in the template. */
-    public ShowHistorySection = false;
-    /** Selected model ID for history filtering (null = all models). */
-    public SelectedModelId: string | null = null;
-    /** Expanded history item ID for in-place inspection of payload & drivers. */
-    public ExpandedHistoryItemId: string | null = null;
-    /** Entity-ID we last loaded cards for, to avoid redundant lookups. */
-    private loadedForEntityId: string | null = null;
+    /** Why the last read failed, shown in place of the cards; null after a successful read. */
+    public LoadError: string | null = null;
 
+    /** Reads the record's predictions once the panel mounts. */
     public async ngOnInit(): Promise<void> {
-        await this.loadCards();
+        await this.load();
     }
 
-    /** True when there is at least one card or history item to show — gates the whole template. */
-    public get HasPredictions(): boolean {
-        return this.Cards.length > 0 || this.HistoryItems.length > 0;
+    /** Reloads after the host form refreshed its record. */
+    public override OnRecordRefreshed(): void {
+        void this.load();
     }
 
-    /** Filtered history items based on currently selected model. */
-    public get FilteredHistory(): PredictionHistoryItem[] {
-        return FilterHistoryByModel(this.HistoryItems, this.SelectedModelId);
+    /** True when there is a card, a derived value or a read failure to show — gates the whole template. */
+    public get HasContent(): boolean {
+        return this.Cards.length > 0 || this.DerivedValues.length > 0 || this.LoadError !== null;
     }
 
-    /** Distinct models in prediction history with counts. */
-    public get ModelSummaries(): ModelHistorySummary[] {
-        return GetDistinctModelsFromHistory(this.HistoryItems);
+    /** A derived value's confidence as a percentage, or null. */
+    public ConfidencePct(card: FeatureValueCard): string | null {
+        return card.Confidence === null ? null : `${ModelPredictionLogic.GaugePct(card.Confidence)}%`;
     }
 
     /**
-     * Look up active scoring bindings for THIS record's entity and build a card
-     * per binding. Idempotent + cheap: a single RunView (cached by the server),
-     * skipped entirely when we've already loaded for this entity.
+     * Reads the record's predictions: the panel batch (`PredictionPanelQueries.For`, the one G5.6 replays), then — only when an
+     * authorized binding has a value — the lineage batch (`PredictionPanelQueries.Lineage`). A failed read
+     * is logged and shown as an error state naming the reason, never as an empty panel.
      */
-    private async loadCards(): Promise<void> {
-        const entityId = this.Record?.EntityInfo?.ID ?? null;
-        if (!entityId) {
-            this.Loaded = true;
+    private async load(): Promise<void> {
+        const provider = this.FormComponent?.ProviderToUse;
+        const entityId = this.Record?.EntityInfo?.ID;
+        // The same encoding scoring and the pipelines write into RecordID: the bare value for a single key, F1|v1||F2|v2 for a composite one.
+        const recordId = this.Record?.PrimaryKey?.ToCompactURLSegment() || '';
+        if (!provider || !entityId || !recordId || !this.Record?.IsSaved) {
+            this.finish([], []);
             return;
         }
-        if (entityId === this.loadedForEntityId) {
-            return; // already resolved for this entity
-        }
-        this.loadedForEntityId = entityId;
-
         try {
-            const bindings = await this.loadBindingsForEntity(entityId);
-            if (bindings.length === 0) {
-                this.Cards = [];
-            } else {
-                const models = await this.loadModelsForBindings(bindings);
-                this.ModelsById = models;
-                this.Cards = this.buildCards(bindings, models);
-            }
-            // Preload history in the background for this record
-            void this.LoadHistory();
+            const results = await RunView.FromMetadataProvider(provider).RunViews(PredictionPanelQueries.For(entityId, recordId, []), provider.CurrentUser);
+            // RunViews answers in request order: each result is typed by its PredictionPanelQueries.Index position.
+            const { Bindings, Latest, History, Derived } = PredictionPanelQueries.Index;
+            const bindingRes = ModelPredictionPanel.succeeded<PanelBindingRow>(results[Bindings], 'the scoring bindings');
+            const latestRes = ModelPredictionPanel.succeeded<PanelValueRow>(results[Latest], 'the latest predictions');
+            const historyRes = ModelPredictionPanel.succeeded<PanelValueRow>(results[History], 'the prediction history');
+            const derivedRes = ModelPredictionPanel.succeeded<FeatureValueRow>(results[Derived], 'the derived values');
+            const derived = FeatureValuesPanelModel.Latest(derivedRes.Results);
+            const bindings = ModelPredictionLogic.AuthorizedBindings(bindingRes.Results, provider.CurrentUser, provider.Authorizations);
+            const held = new UUIDSet(bindings.map((b) => b.ID));
+            const isHeld = (v: PanelValueRow): boolean => v.MLModelScoringBindingID !== null && held.Has(v.MLModelScoringBindingID);
+            const latest = latestRes.Results.filter(isHeld);
+            const history = historyRes.Results.filter(isHeld);
+            const lineage = await this.loadLineage(provider, latest);
+            this.finish(this.buildCards(bindings, latest, history, lineage), derived);
         } catch (e) {
-            LogError(`[ModelPredictionPanel] Failed to load predictions: ${e instanceof Error ? e.message : String(e)}`);
-            this.Cards = [];
-        } finally {
-            this.Loaded = true;
-            this.cdr.markForCheck();
+            const reason = e instanceof Error ? e.message : String(e);
+            LogError(`[ModelPredictionPanel] Failed to load predictions: ${reason}`);
+            this.finish([], [], `Could not load the predictions: ${reason}`);
         }
     }
 
-    /**
-     * Load historical prediction runs for this specific record across all models.
-     */
-    public async LoadHistory(): Promise<void> {
-        const entityId = this.Record?.EntityInfo?.ID ?? null;
-        const pkVal = this.Record?.FirstPrimaryKey?.Value; // first-pk-ok: Target entity single PK value for RecordID filter
-        const recordId = pkVal != null ? String(pkVal) : '';
-        if (!entityId || !recordId) {
-            this.HistoryItems = [];
-            this.cdr.markForCheck();
-            return;
-        }
-
-        this.LoadingHistory = true;
-        this.cdr.markForCheck();
-        try {
-            const rv = this.runView();
-            const result = await rv.RunView<MJProcessRunDetailEntity>(
-                {
-                    EntityName: 'MJ: Process Run Details',
-                    ExtraFilter: `EntityID='${entityId}' AND RecordID='${recordId}'`,
-                    OrderBy: 'CompletedAt DESC',
-                    MaxRows: 50,
-                    ResultType: 'entity_object',
-                },
-                this.contextUser(),
-            );
-
-            if (!result.Success) {
-                LogError(`[ModelPredictionPanel] Failed to load prediction history: ${result.ErrorMessage}`);
-                this.HistoryItems = [];
-                return;
-            }
-
-            const rawDetails = result.Results ?? [];
-            if (rawDetails.length === 0) {
-                this.HistoryItems = [];
-                return;
-            }
-
-            // Ensure any models referenced in historical payloads are loaded
-            await this.ensureModelsLoadedForHistory(rawDetails);
-
-            this.HistoryItems = rawDetails.map(d => ParseHistoryItem({
-                ID: d.ID,
-                ProcessRunID: d.ProcessRunID,
-                Status: d.Status,
-                CompletedAt: d.CompletedAt,
-                ResultPayload: d.ResultPayload,
-                ErrorMessage: d.ErrorMessage,
-            }, this.ModelsById));
-        } catch (e) {
-            LogError(`[ModelPredictionPanel] Error loading prediction history: ${e instanceof Error ? e.message : String(e)}`);
-            this.HistoryItems = [];
-        } finally {
-            this.LoadingHistory = false;
-            this.cdr.markForCheck();
-        }
+    /** The scoring models' `record-panel` output bindings and the scoring runs of the shown values, in one batch. */
+    private async loadLineage(provider: IMetadataProvider, latest: readonly PanelValueRow[]): Promise<PanelLineage> {
+        const modelIds = ModelPredictionPanel.distinctIDs(latest.map((v) => v.MLModelID));
+        const runIds = ModelPredictionPanel.distinctIDs(latest.map((v) => v.MLScoringRunID));
+        if (modelIds.length === 0 && runIds.length === 0) return { OutputBindings: [], Runs: [] };
+        const results = await RunView.FromMetadataProvider(provider).RunViews(PredictionPanelQueries.Lineage(modelIds, runIds), provider.CurrentUser);
+        // RunViews answers in request order: each result is typed by its PredictionPanelQueries.LineageIndex position.
+        const { OutputBindings, Runs } = PredictionPanelQueries.LineageIndex;
+        const outputRes = ModelPredictionPanel.succeeded<PanelOutputBindingRow>(results[OutputBindings], 'the output bindings');
+        const runRes = ModelPredictionPanel.succeeded<PanelRunRow>(results[Runs], 'the scoring runs');
+        return { OutputBindings: outputRes.Results, Runs: runRes.Results };
     }
 
-    /**
-     * Select a model ID filter for history (null = all models).
-     */
-    public SelectModelFilter(modelId: string | null): void {
-        this.SelectedModelId = modelId;
-        this.cdr.markForCheck();
-    }
-
-    /**
-     * Toggle the prediction history section.
-     */
-    public ToggleHistorySection(): void {
-        this.ShowHistorySection = !this.ShowHistorySection;
-        this.cdr.markForCheck();
-        if (this.ShowHistorySection && this.HistoryItems.length === 0 && !this.LoadingHistory) {
-            void this.LoadHistory();
-        }
-    }
-
-    /**
-     * Focus prediction history on a specific model from a card action.
-     */
-    public OpenHistoryForModel(modelId: string, event?: MouseEvent): void {
-        event?.stopPropagation();
-        this.ShowHistorySection = true;
-        this.SelectedModelId = modelId;
-        this.cdr.markForCheck();
-        if (this.HistoryItems.length === 0 && !this.LoadingHistory) {
-            void this.LoadHistory();
-        }
-    }
-
-    /**
-     * Toggle inline inspection drawer for a prediction history row.
-     */
-    public ToggleHistoryDetails(item: PredictionHistoryItem, event?: MouseEvent): void {
-        event?.stopPropagation();
-        this.ExpandedHistoryItemId = this.ExpandedHistoryItemId === item.id ? null : item.id;
-        this.cdr.markForCheck();
-    }
-
-    /**
-     * Drill down into the underlying MJ: Process Run Details record in Explorer.
-     */
-    public DrilldownToPredictionRecord(item: PredictionHistoryItem, event?: MouseEvent): void {
-        event?.stopPropagation();
-        if (this.FormComponent?.OnFormNavigate) {
-            this.FormComponent.OnFormNavigate({
-                Kind: 'record',
-                EntityName: 'MJ: Process Run Details',
-                PrimaryKey: CompositeKey.FromID(item.id),
-                OpenInNewTab: event ? (event.ctrlKey || event.metaKey) : true,
-            });
-        }
-    }
-
-    /** Active scoring bindings whose target entity is the current record's entity. */
-    private async loadBindingsForEntity(entityId: string): Promise<MJMLModelScoringBindingEntity[]> {
-        const rv = this.runView();
-        const result = await rv.RunView<MJMLModelScoringBindingEntity>(
-            {
-                EntityName: 'MJ: ML Model Scoring Bindings',
-                ExtraFilter: `TargetEntityID='${entityId}' AND TargetColumn IS NOT NULL`,
-                OrderBy: '__mj_CreatedAt ASC',
-                ResultType: 'entity_object',
-            },
-            this.contextUser(),
-        );
-        if (!result.Success) {
-            LogError(`[ModelPredictionPanel] Binding lookup failed: ${result.ErrorMessage}`);
-            return [];
-        }
-        return result.Results ?? [];
-    }
-
-    /** Load the distinct models referenced by the bindings, keyed by model ID. */
-    private async loadModelsForBindings(
-        bindings: MJMLModelScoringBindingEntity[],
-    ): Promise<Map<string, MJMLModelEntity>> {
-        const modelIds = [...new Set(bindings.map(b => b.MLModelID).filter((id): id is string => !!id))];
-        const byId = new Map<string, MJMLModelEntity>();
-        if (modelIds.length === 0) {
-            return byId;
-        }
-        const inList = modelIds.map(id => `'${id}'`).join(',');
-        const rv = this.runView();
-        const result = await rv.RunView<MJMLModelEntity>(
-            {
-                EntityName: 'MJ: ML Models',
-                ExtraFilter: `ID IN (${inList})`,
-                ResultType: 'entity_object',
-            },
-            this.contextUser(),
-        );
-        if (!result.Success) {
-            LogError(`[ModelPredictionPanel] Model lookup failed: ${result.ErrorMessage}`);
-            return byId;
-        }
-        for (const model of result.Results ?? []) {
-            byId.set(model.ID, model);
-        }
-        return byId;
-    }
-
-    /** Ensure models found in process run detail payloads are loaded for metadata decoration. */
-    private async ensureModelsLoadedForHistory(details: MJProcessRunDetailEntity[]): Promise<void> {
-        const missingModelIds: string[] = [];
-        for (const d of details) {
-            if (!d.ResultPayload) continue;
-            try {
-                const parsed: unknown = JSON.parse(d.ResultPayload);
-                if (parsed && typeof parsed === 'object') {
-                    const rec = parsed as Record<string, unknown>;
-                    const out = (rec['output'] && typeof rec['output'] === 'object' ? rec['output'] : rec) as Record<string, unknown>;
-                    const mid = typeof out['modelId'] === 'string' ? out['modelId'] : null;
-                    if (mid && !this.ModelsById.has(mid) && !missingModelIds.includes(mid)) {
-                        missingModelIds.push(mid);
-                    }
-                }
-            } catch {
-                // Ignore parse errors
-            }
-        }
-
-        if (missingModelIds.length === 0) return;
-
-        const inList = missingModelIds.map(id => `'${id}'`).join(',');
-        const rv = this.runView();
-        const result = await rv.RunView<MJMLModelEntity>(
-            {
-                EntityName: 'MJ: ML Models',
-                ExtraFilter: `ID IN (${inList})`,
-                ResultType: 'entity_object',
-            },
-            this.contextUser(),
-        );
-        if (result.Success && result.Results) {
-            for (const model of result.Results) {
-                this.ModelsById.set(model.ID, model);
-            }
-        }
-    }
-
-    /** Map each binding (+ its model) to a display card. Skips bindings whose model is missing. */
+    /** One card per authorized binding that has a value for the record, in the bindings' order. */
     private buildCards(
-        bindings: MJMLModelScoringBindingEntity[],
-        models: Map<string, MJMLModelEntity>,
+        bindings: readonly PanelBindingRow[],
+        latest: readonly PanelValueRow[],
+        history: readonly PanelValueRow[],
+        lineage: PanelLineage,
     ): PredictionCard[] {
+        const latestByBinding = new UUIDMap<PanelValueRow>();
+        for (const v of latest) if (v.MLModelScoringBindingID !== null) latestByBinding.Set(v.MLModelScoringBindingID, v);
+        const outputByModel = new UUIDMap<PanelOutputBindingRow>();
+        for (const o of lineage.OutputBindings) outputByModel.Set(o.ModelID, o);
+        const runById = new UUIDMap<PanelRunRow>();
+        for (const r of lineage.Runs) runById.Set(r.ID, r);
+        const historyByBinding = new UUIDMap<PanelValueRow[]>();
+        for (const h of history) {
+            if (h.MLModelScoringBindingID === null) continue;
+            const rows = historyByBinding.Get(h.MLModelScoringBindingID) || [];
+            rows.push(h);
+            historyByBinding.Set(h.MLModelScoringBindingID, rows);
+        }
         const cards: PredictionCard[] = [];
-        for (const binding of bindings) {
-            const model = binding.MLModelID ? models.get(binding.MLModelID) : undefined;
-            if (!model) {
-                continue;
-            }
-            cards.push(this.buildCard(binding, model));
+        for (const b of bindings) {
+            const value = latestByBinding.Get(b.ID) || null;
+            const card = ModelPredictionLogic.BuildCard(
+                b,
+                value,
+                historyByBinding.Get(b.ID) || [],
+                value?.MLModelID ? outputByModel.Get(value.MLModelID) || null : null,
+                value?.MLScoringRunID ? runById.Get(value.MLScoringRunID) || null : null,
+            );
+            if (card) cards.push(card);
         }
         return cards;
     }
 
-    /** Build one card from a binding + model + the record's bound-column value. */
-    private buildCard(binding: MJMLModelScoringBindingEntity, model: MJMLModelEntity): PredictionCard {
-        // The column name is data-driven (from the binding), so reading it
-        // dynamically via Get() is the legitimate use of the dynamic accessor.
-        const rawValue = binding.TargetColumn ? this.Record.Get(binding.TargetColumn) : null;
-        const numeric = ToNumber(rawValue);
-        const kind = ValueKind(model.ProblemType, numeric);
-
-        const outcomeConfig = resolveOutcomeConfig({
-            Lineage: model.Lineage,
-            TargetVariable: model.TargetVariable,
-            ProblemType: model.ProblemType,
-        });
-
-        let statusBand: OutcomeBand | null = null;
-        let badgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray' = 'gray';
-        let badgeIcon: string | null = null;
-        let statusLabel: string | null = null;
-
-        if (numeric != null) {
-            statusBand = resolveScoreBand(numeric, outcomeConfig);
-            if (statusBand) {
-                badgeColor = statusBand.BadgeColor;
-                badgeIcon = statusBand.Icon ?? null;
-                statusLabel = statusBand.Label;
-            }
-        } else if (kind === 'class' && typeof rawValue === 'string') {
-            const style = resolveOutcomeStyle(rawValue, outcomeConfig);
-            badgeColor = style.BadgeColor;
-            badgeIcon = style.Icon ?? null;
-            statusLabel = style.DisplayLabel ?? rawValue;
-        }
-
-        return {
-            BindingId: binding.ID,
-            modelId: model.ID,
-            Label: ResolveLabel(model.TargetVariable, binding.TargetColumn),
-            IsProbability: kind === 'probability',
-            IsNumeric: kind === 'numeric',
-            IsClass: kind === 'class',
-            DisplayValue: FormatValue(rawValue, numeric, kind),
-            GaugePct: kind === 'probability' && numeric != null ? GaugePct(numeric) : 0,
-            Band: kind === 'probability' && numeric != null ? BandFor(numeric) : null,
-            StatusBand: statusBand,
-            StatusLabel: statusLabel,
-            BadgeColor: badgeColor,
-            BadgeIcon: badgeIcon,
-            Drivers: PredictionDrivers.DriversForModel(model.Lineage, model.FeatureImportance),
-            DriversHidden: PredictionDrivers.DriversHidden(model.Lineage, model.FeatureImportance),
-            Provenance: `${model.Pipeline} v${model.Version}`,
-            LastScored: FormatLastScored(binding.LastScoredAt),
-        };
+    private finish(cards: PredictionCard[], derived: FeatureValueCard[], loadError: string | null = null): void {
+        this.Cards = cards;
+        this.DerivedValues = derived;
+        this.LoadError = loadError;
+        this.Loaded = true;
+        this.cdr.markForCheck();
     }
 
-    /** RunView scoped to the form's provider when available (multi-provider safe). */
-    private runView(): RunView {
-        const provider = this.FormComponent?.ProviderToUse;
-        return provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    /** The distinct non-null IDs as stored (compared case-insensitively; the stored spelling is what a filter quotes). */
+    private static distinctIDs(ids: readonly (string | null)[]): string[] {
+        const byId = new UUIDMap<string>();
+        for (const id of ids) if (id !== null && !byId.Has(id)) byId.Set(id, id);
+        return [...byId.Values()];
     }
 
-    /** Context user for server-side scoping — the form provider's current user. */
-    private contextUser() {
-        return this.FormComponent?.ProviderToUse?.CurrentUser ?? new Metadata().CurrentUser;
+    /** `result` when it succeeded; throws naming `what` when it failed or is missing. */
+    private static succeeded<T>(result: RunViewResult<T> | undefined, what: string): RunViewResult<T> {
+        if (!result?.Success) throw new Error(`reading ${what} failed: ${result?.ErrorMessage || 'the view returned no result'}`);
+        return result;
     }
 }
 

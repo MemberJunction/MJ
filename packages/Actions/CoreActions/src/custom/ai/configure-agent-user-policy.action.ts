@@ -7,7 +7,7 @@ import {
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
     MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule,
 } from '@memberjunction/core-entities';
-import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, ApplyDefaultAgentUserPolicyValues } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**
@@ -158,6 +158,9 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
 
             policy.AgentID = agent.ID;
             policy.UserID = contextUser.ID;
+            if (!existing) {
+                ApplyDefaultAgentUserPolicyValues(policy);
+            }
 
             this.applyPersonalizationAndStatus(policy, params);
             this.applyChannelModes(policy, params);

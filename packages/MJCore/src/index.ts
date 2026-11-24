@@ -9,6 +9,7 @@ export * from "./generic/baseEngine";
 export * from "./generic/sharedLoad";
 export * from "./generic/wellKnownUserSource";
 export * from "./views/runView";
+export * from "./views/decisionReadGuard";
 export * from "./views/viewProperties";
 export * from "./generic/runQuery";
 export * from "./generic/queryResultEnricher";
@@ -93,6 +94,7 @@ export * from "./generic/queryTemplateContext";
 export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
 export * from "./generic/JSONType-interfaces/IEntitySubtypeSelectorConfig";
 export * from "./generic/JSONType-interfaces/IQueryConfiguration";
+export * from "./generic/limitsConfig";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter

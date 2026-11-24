@@ -58,41 +58,55 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 5.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 3
           },
           "primaryKey": {
             "ID": "AACBC24B-A2D4-4A15-8E69-53C18BF2B573"
-          },
-          "sync": {
-            "lastModified": "2026-11-01T22:53:37.006Z",
-            "checksum": "681b374ee1553a33bd3eaec4ccf26074c9ecdc0aaf252d7f6efb2a0424addee5"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 10
+            "Priority": 10,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "397A4001-32D5-4F08-A39E-F9373E571FBC"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9,
+            "Status": "Active",
+            "EffortLevel": 20
           },
-          "sync": {
-            "lastModified": "2026-11-01T22:53:37.018Z",
-            "checksum": "f73dcd14aeb277725c2bf0b147d266c30a90951d1f35572303cd1cf8aba4ca73"
+          "primaryKey": {
+            "ID": "C2DB03C8-1F99-48CF-BFEE-350AEBDDCA0A"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Luna",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "829B7FF7-EF54-416C-80A3-9FFA6DC28F5F"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "85DB131C-F827-4DCA-A505-CEBE755F34ED"
-    },
-    "sync": {
-      "lastModified": "2026-11-01T22:53:36.933Z",
-      "checksum": "31a4271db2dfaae7cf9f50a36518b08bdd4e86b1fb341c7382191159c71302e0"
     }
   }
 ]

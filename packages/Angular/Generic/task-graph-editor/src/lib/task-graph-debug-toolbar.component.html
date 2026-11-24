@@ -9,34 +9,36 @@
       <i class="fa-solid fa-pause" aria-hidden="true"></i>
       Paused
     </span>
-    <button type="button" class="dbg-btn dbg-btn-go" [disabled]="Busy || !Enabled"
+    <button type="button" class="dbg-btn dbg-btn-labeled dbg-btn-go" [disabled]="Busy || !Enabled"
             (click)="Resume.emit()" title="Continue (F5) — run until the next breakpoint or the end"
             aria-label="Continue">
       <i class="fa-solid fa-play" aria-hidden="true"></i>
+      <span class="dbg-btn-text">Continue</span>
     </button>
     <button type="button" class="dbg-btn dbg-btn-labeled" [disabled]="Busy || !Enabled"
             (click)="Step.emit()"
-            title="Step Over (F10) — run the next ready step, then pause again"
-            aria-label="Step over">
-      <i class="fa-solid fa-share dbg-icon-over" aria-hidden="true"></i>
-      <span class="dbg-btn-text">Over</span>
+            title="Step Next (F10) — run the next ready step, then pause again"
+            aria-label="Step next">
+      <i class="fa-solid fa-forward-step" aria-hidden="true"></i>
+      <span class="dbg-btn-text">Step Next</span>
     </button>
     <button type="button" class="dbg-btn dbg-btn-labeled" [disabled]="Busy || !Enabled"
             (click)="StepWave.emit()"
-            title="Step Into (F11) — run every step that is ready right now, then pause. On a fork, all ready branches run."
-            aria-label="Step into">
-      <i class="fa-solid fa-turn-down" aria-hidden="true"></i>
-      <span class="dbg-btn-text">Into</span>
+            title="Step Wave (F11) — run every step ready in the current parallel wave, then pause"
+            aria-label="Step wave">
+      <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+      <span class="dbg-btn-text">Step Wave</span>
     </button>
   } @else {
     <span class="dbg-pill dbg-pill-run" title="The dispatcher is claiming and running steps">
       <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
       Running
     </span>
-    <button type="button" class="dbg-btn" [disabled]="Busy || !Enabled"
+    <button type="button" class="dbg-btn dbg-btn-labeled" [disabled]="Busy || !Enabled"
             (click)="Pause.emit()" title="Pause (F5) — nothing new starts; steps already running will finish"
             aria-label="Pause">
       <i class="fa-solid fa-pause" aria-hidden="true"></i>
+      <span class="dbg-btn-text">Pause</span>
     </button>
   }
   <span class="dbg-sep" aria-hidden="true"></span>
@@ -45,4 +47,46 @@
           aria-label="Stop">
     <i class="fa-solid fa-stop" aria-hidden="true"></i>
   </button>
+
+  @if (ShowXRayToggle || ShowBlastRadiusToggle || EnginePulseText || BreakpointCount > 0) {
+    <span class="dbg-sep" aria-hidden="true"></span>
+  }
+
+  @if (ShowXRayToggle) {
+    <button type="button" class="dbg-btn dbg-btn-labeled"
+            [class.dbg-btn-active]="XRayEnabled"
+            (click)="XRayToggled.emit(!XRayEnabled)"
+            [attr.aria-pressed]="XRayEnabled"
+            title="Toggle X-Ray Mode (X) — show live I/O previews, confidence bars, and safety shields on steps"
+            aria-label="Toggle X-Ray mode">
+      <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+      <span class="dbg-btn-text">X-Ray</span>
+    </button>
+  }
+
+  @if (ShowBlastRadiusToggle) {
+    <button type="button" class="dbg-btn dbg-btn-labeled"
+            [class.dbg-btn-danger-active]="BlastRadiusEnabled"
+            (click)="BlastRadiusToggled.emit(!BlastRadiusEnabled)"
+            [attr.aria-pressed]="BlastRadiusEnabled"
+            title="Highlight downstream steps that would be blocked if the selected step fails"
+            aria-label="Highlight blocked steps">
+      <i class="fa-solid fa-radiation" aria-hidden="true"></i>
+      <span class="dbg-btn-text">Impact</span>
+    </button>
+  }
+
+  @if (BreakpointCount > 0) {
+    <span class="dbg-badge dbg-badge-bp" title="Armed breakpoints">
+      <i class="fa-solid fa-circle" aria-hidden="true"></i>
+      {{ BreakpointCount }}
+    </span>
+  }
+
+  @if (EnginePulseText) {
+    <span class="dbg-badge dbg-badge-pulse" title="Live dispatcher heartbeat">
+      <i class="fa-solid fa-heart-pulse" aria-hidden="true"></i>
+      {{ EnginePulseText }}
+    </span>
+  }
 </div>

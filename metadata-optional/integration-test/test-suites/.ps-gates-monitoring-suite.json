@@ -1,0 +1,126 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Monitoring",
+      "Description": "The monitoring gates (PR 4 M6): G6.1 (closed-window predictions joined to outcomes), G6.2 (per-period RMSE with bounds), G6.3/G6.4/G6.5 (retrain triggers fire on realised performance only), G6.7 (tracked positive rate from labels), G6.9/G6.10/G6.11 (challengers paired on the incumbent's rows, published only on evidence) and G6.12 (parity catches a 1e-6 skew). Each member's MaxExecutionTimeMS is set from its measured run. Needs MJAPI (STORAGE_LOCAL_ROOT set, PREDICTIVE_STUDIO_SIDECAR_URL at the truth sidecar), the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Monitoring\"",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=D1c -> S8.1",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1BAC54CA-FEF7-4C92-BEED-2264BF3539C5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=D1r -> S8.2",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9E005DFE-7EC3-467B-BA8A-34B8CDF2394B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=D1c -> S8.4",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CDA16BBC-62C1-4ABD-9824-E06607A7D21E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=T4 -> S8.4",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "583B5966-5719-4981-8B3A-A808166673C2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W6 -> S8.4",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EAFFC033-625D-4EC2-B9C1-DB78D625FD3E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=D1c -> S8.2",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BA1AF291-34C3-480B-AE81-521AA9C29D37"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=D1c -> S8.5",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C93629E9-5428-4EEF-B17D-345D06A380BA"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=D1r -> S8.5",
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0CA0F8F5-7390-48E0-81CF-80DB121DD69D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=T4 -> S8.5",
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "00CC2B44-B9A8-4338-97EB-DB22133BE832"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R1 -> S7.6",
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "64F4BAAF-6D1C-4B57-ABAD-ED2ECF7DBABB"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6C547FD2-F9D6-4FEF-9857-D28795E7F84B"
+    }
+  }
+]

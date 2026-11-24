@@ -65,6 +65,8 @@ await s.Start(): Promise<void>;                       // spawn (managed) or veri
 await s.Stop(): Promise<void>;                        // SIGTERM the child (no-op in remote mode)
 await s.RunTrainer(req: TrainerRequest): Promise<TrainerResult>;  // POST /trainer; transport timeout = req.timeoutSeconds + 60 s
 await s.Predict(req: PredictRequest): Promise<PredictResponse>;
+await s.MonitorDrift(req: MonitorDriftRequest): Promise<MonitorDriftResponse>;          // POST /monitor/drift: one look of monitor procedure M
+await s.MonitorCalibrate(req: MonitorCalibrateRequest): Promise<MonitorCalibrateResponse>; // POST /monitor/calibrate: q(L) by bisection
 await s.Health(): Promise<SidecarHealthResponse>;
 
 s.IsRunning: boolean;   // remote always true; managed needs a live child
@@ -72,7 +74,7 @@ s.IsRemote:  boolean;
 s.Port:      number | null;   // ephemeral port in managed mode, null in remote
 ```
 
-`PredictRequest` / `PredictResponse` / `TrainerRequest` / `TrainerResult` are imported
+`PredictRequest` / `PredictResponse` / `TrainerRequest` / `TrainerResult` and the `Monitor*` shapes are imported
 from `@memberjunction/predictive-studio-core` — import them from there, not from this
 package. (`RunTrainer` throws `TrainerResultMalformedError` when a 2xx answer is not a `TrainerResult`; the retired `/train` route and `MLSidecar.Train` no longer exist.)
 

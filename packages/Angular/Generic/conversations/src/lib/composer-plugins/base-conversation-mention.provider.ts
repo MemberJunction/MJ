@@ -45,6 +45,24 @@ export abstract class BaseConversationMentionProvider extends ComposerTriggerPro
     const engine = MentionAutocompleteService.Instance;
     // No-op when already initialized; covers hosts that never called Initialize()
     await engine.initialize(request.ContextUser, request.Provider ?? undefined);
-    return engine.GetSuggestions(request.Query, true, this.TriggerChar, this.TargetAgentId, this.Scope).slice(0, request.MaxResults);
+    const mergedScope: MentionSuggestionScope | null =
+      this.Scope || request.PopulationFilter || request.SearchField
+        ? {
+            ...(this.Scope ?? {}),
+            ...(request.PopulationFilter ? { PopulationFilter: request.PopulationFilter } : {}),
+            ...(request.SearchField ? { SearchField: request.SearchField } : {}),
+          }
+        : null;
+    return engine
+      .GetSuggestions(request.Query, true, this.TriggerChar, this.TargetAgentId, mergedScope)
+      .slice(0, request.MaxResults);
+  }
+
+  public override OnSuggestionSelected(suggestion: MentionSuggestion, contextUser: UserInfo | null): void {
+    MentionAutocompleteService.Instance.RecordMentionUse(
+      suggestion.id,
+      suggestion.type,
+      contextUser ?? undefined
+    );
   }
 }

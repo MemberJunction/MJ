@@ -2,6 +2,7 @@ import { BaseAgent } from './base-agent';
 import { RegisterClass, CleanAndParseJSON, IsPlainObject } from '@memberjunction/global';
 import { UserInfo, RunView, RunQuery, LogError, LogStatus, LogStatusEx, IMetadataProvider } from '@memberjunction/core';
 import {
+    ApplicationSettingEngine,
     MJConversationDetailEntity,
     MJAIAgentNoteEntity,
     MJAIAgentExampleEntity,
@@ -776,6 +777,18 @@ export class MemoryManagerAgent extends BaseAgent {
         const allAgents = AIEngine.Instance.Agents;
         const filteredAgents = allAgents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
 
+        // Resolve the configured default conversation manager agent (if any) without hardcoding an agent name
+        let defaultAgent: MJAIAgentEntityExtended | undefined;
+        try {
+            await ApplicationSettingEngine.Instance.Config(false, contextUser);
+            const configuredDefaultId = ApplicationSettingEngine.Instance.GetSetting('Conversations.DefaultAgentID')?.trim();
+            if (configuredDefaultId) {
+                defaultAgent = allAgents.find(a => UUIDsEqual(a.ID, configuredDefaultId));
+            }
+        } catch {
+            // Non-fatal: debug diagnostics only
+        }
+
         // Debug logging only in verbose mode
         if (this._verbose) {
             LogStatus(`Memory Manager: AIEngine has ${allAgents.length} total agents cached`);
@@ -783,16 +796,13 @@ export class MemoryManagerAgent extends BaseAgent {
                 const agentNames = filteredAgents.map(a => `${a.Name} (InjectNotes=${a.InjectNotes}, InjectExamples=${a.InjectExamples})`).join(', ');
                 LogStatus(`Memory Manager: Agents with memory enabled: ${agentNames}`);
             }
-            const sage = allAgents.find(a => a.Name === 'Sage');
-            if (sage) {
-                LogStatus(`Memory Manager: Sage agent - ID=${sage.ID}, InjectNotes=${sage.InjectNotes}, InjectExamples=${sage.InjectExamples}, Status=${sage.Status}`);
+            if (defaultAgent) {
+                LogStatus(`Memory Manager: Default agent (${defaultAgent.Name}) - ID=${defaultAgent.ID}, InjectNotes=${defaultAgent.InjectNotes}, InjectExamples=${defaultAgent.InjectExamples}, Status=${defaultAgent.Status}`);
             }
         }
 
-        // Warning: Always log if Sage is missing
-        const sage = allAgents.find(a => a.Name === 'Sage');
-        if (!sage) {
-            LogStatus(`Memory Manager: WARNING - Sage agent not found in AIEngine cache!`);
+        if (filteredAgents.length === 0) {
+            LogStatus(`Memory Manager: WARNING - No active agents with InjectNotes or InjectExamples enabled were found in AIEngine cache!`);
         }
 
         return filteredAgents;

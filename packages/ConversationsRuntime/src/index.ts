@@ -15,7 +15,15 @@ export { ConversationsRuntime } from './ConversationsRuntime';
 export { MentionParser, type Mention, type MentionParseResult } from './mentions/MentionParser';
 export { MentionAutocomplete } from './mentions/MentionAutocomplete';
 export { IntersectAcceptedSkills } from './mentions/SkillNarrowing';
-export type { MentionPerson, MentionSuggestion, MentionSuggestionPreset, MentionSuggestionScope } from './mentions/MentionSuggestion';
+export type {
+    MentionGroupKey,
+    MentionPerson,
+    MentionPopulationFilter,
+    MentionSearchField,
+    MentionSuggestion,
+    MentionSuggestionPreset,
+    MentionSuggestionScope,
+} from './mentions/MentionSuggestion';
 export {
     BuildConversationTimeline,
     CollectRealtimeSessionIDs,
@@ -45,6 +53,8 @@ export {
 export {
     DefaultAgentResolver,
     type DefaultAgentResolveOptions,
+    type DefaultAgentResolutionResult,
+    type DefaultAgentResolutionSource,
 } from './default-agent/DefaultAgentResolver';
 export {
     SessionsObserver,

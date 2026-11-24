@@ -312,6 +312,8 @@ class FlowHarness {
             }
             throw new Error(`FlowHarness: unexpected GetEntityObject('${entityName}')`);
         },
+        RunView: async () => ({ Success: true, Results: [] }),
+        RunViews: async () => [],
     };
 
     public get run(): FakeRun {

@@ -10,6 +10,7 @@ import {
     type GraphEdgeView,
     type GraphNodeRef,
     type GraphProviderContext,
+    GRAPH_DEFAULT_EDGE_TYPE,
 } from '../BaseGraphEdgeProvider';
 
 /**
@@ -88,7 +89,7 @@ export class QueryEdgeProvider extends BaseGraphEdgeProvider<QueryEdgeProviderCo
 
         const wantOut = request.Direction === 'Out' || request.Direction === 'Both';
         const wantIn = request.Direction === 'In' || request.Direction === 'Both';
-        const defaultEdgeType = config.DefaultEdgeType?.trim() || config.EdgeTypeName?.trim() || 'Related To';
+        const defaultEdgeType = config.DefaultEdgeType?.trim() || config.EdgeTypeName?.trim() || GRAPH_DEFAULT_EDGE_TYPE;
         const defaultWeight = typeof config.DefaultWeight === 'number' ? config.DefaultWeight : 0.75;
         const isDirected = config.IsDirected !== false;
 

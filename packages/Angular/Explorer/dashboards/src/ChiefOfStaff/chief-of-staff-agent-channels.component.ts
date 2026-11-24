@@ -5,7 +5,7 @@ import {
     MJAgentChannelParticipantEntity,
     MJConversationDetailEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
     ChiefOfStaffPage,
@@ -49,12 +49,48 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
         'Paused For Human',
         'Resolved',
     ];
+    /** Optional agent filter pill selection (`null` = All agents). */
+    public AgentFilterID: string | null = null;
 
     public IsLoadingChannels = false;
     public IsLoadingMessages = false;
     public IsPostingReply = false;
     public ReplyDraft = '';
     public ChannelErrorMessage: string | null = null;
+    public ChannelStatusMessage: string | null = null;
+    /** On mobile/tablet (<= 900px), toggles between the full-width Thread List and the Thread Detail pane. */
+    public MobileShowingDetail = false;
+
+    /** User's personal agents that appear as participants in any loaded channel (or owned instances). */
+    public get AgentFilterOptions(): ReadonlyArray<{ ID: string; Name: string }> {
+        const seen = new Map<string, string>();
+        for (const agent of this.MyOwnedAgents) {
+            seen.set(agent.ID.toLowerCase(), agent.Name);
+        }
+        for (const list of this.ParticipantsByChannel.values()) {
+            for (const p of list) {
+                if (p.AgentID && !seen.has(p.AgentID.toLowerCase())) {
+                    seen.set(p.AgentID.toLowerCase(), p.Agent || this.GetAgentDisplayNameById(p.AgentID));
+                }
+            }
+        }
+        return Array.from(seen.entries())
+            .map(([id, name]) => ({ ID: id, Name: name }))
+            .sort((a, b) => a.Name.localeCompare(b.Name));
+    }
+
+    public IsAgentFilterSelected(agentId: string | null): boolean {
+        if (agentId === null) {
+            return this.AgentFilterID === null;
+        }
+        return Boolean(this.AgentFilterID && UUIDsEqual(this.AgentFilterID, agentId));
+    }
+
+    public SetAgentFilter(agentId: string | null): void {
+        this.AgentFilterID = agentId;
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+    }
 
     public get FilteredChannels(): MJAgentChannelEntity[] {
         const search = this.SearchText.trim().toLowerCase();
@@ -62,11 +98,22 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
             if (this.StatusFilter !== 'All' && c.ChannelStatus !== this.StatusFilter) {
                 return false;
             }
+            const participants = this.ParticipantsByChannel.get(c.ID) ?? [];
+            if (this.AgentFilterID) {
+                const participantAgentIds = new UUIDSet();
+                for (const p of participants) {
+                    if (p.AgentID) {
+                        participantAgentIds.Add(p.AgentID);
+                    }
+                }
+                if (!participantAgentIds.Has(this.AgentFilterID)) {
+                    return false;
+                }
+            }
             if (!search) {
                 return true;
             }
             const topicMatch = c.Topic.toLowerCase().includes(search);
-            const participants = this.ParticipantsByChannel.get(c.ID) ?? [];
             const participantMatch = participants.some(
                 (p) =>
                     (p.User ?? '').toLowerCase().includes(search) ||
@@ -144,7 +191,7 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
                     this.SelectedMessages = [];
                 }
             } else if (this.Channels.length > 0) {
-                await this.SelectChannel(this.Channels[0]);
+                await this.SelectChannel(this.Channels[0], false);
             }
         } catch (error) {
             this.ChannelErrorMessage =
@@ -156,12 +203,26 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
         }
     }
 
-    public async SelectChannel(channel: MJAgentChannelEntity): Promise<void> {
+    public async SelectChannel(channel: MJAgentChannelEntity, openMobileDetail: boolean = true): Promise<void> {
         this.SelectedChannel = channel;
         this.ReplyDraft = '';
+        this.ChannelStatusMessage = null;
+        if (openMobileDetail) {
+            this.MobileShowingDetail = true;
+        }
         this.cdr.markForCheck();
         await this.LoadMessagesForChannel(channel.ID);
         this.publishAgentContext();
+    }
+
+    public ShowMobileThreadList(): void {
+        this.MobileShowingDetail = false;
+        this.cdr.markForCheck();
+    }
+
+    public DismissChannelStatusMessage(): void {
+        this.ChannelStatusMessage = null;
+        this.cdr.markForCheck();
     }
 
     public async LoadMessagesForChannel(channelId: string): Promise<void> {
@@ -208,8 +269,10 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
         if (!channel || !messageText || this.IsPostingReply) {
             return;
         }
+        const wasPaused = channel.ChannelStatus === 'Paused For Human';
         this.IsPostingReply = true;
         this.ChannelErrorMessage = null;
+        this.ChannelStatusMessage = null;
         this.cdr.markForCheck();
 
         try {
@@ -233,9 +296,15 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
 
             this.ReplyDraft = '';
             await this.LoadChannels();
+            const successMsg = wasPaused
+                ? 'Reply posted. Channel resumed to Open and participant agents have been notified.'
+                : 'Reply posted and participant agents have been notified.';
+            this.ChannelStatusMessage = successMsg;
+            this.showBanner('success', successMsg);
         } catch (error) {
-            this.ChannelErrorMessage =
-                error instanceof Error ? error.message : 'Failed to post reply.';
+            const errMsg = error instanceof Error ? error.message : 'Failed to post reply.';
+            this.ChannelErrorMessage = errMsg;
+            this.showBanner('error', errMsg);
         } finally {
             this.IsPostingReply = false;
             this.cdr.markForCheck();
@@ -249,6 +318,7 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
         }
         this.IsPostingReply = true;
         this.ChannelErrorMessage = null;
+        this.ChannelStatusMessage = null;
         this.cdr.markForCheck();
 
         try {
@@ -261,9 +331,13 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
                 );
             }
             await this.LoadChannels();
+            const resolvedMsg = 'Agent Channel marked as Resolved.';
+            this.ChannelStatusMessage = resolvedMsg;
+            this.showBanner('success', resolvedMsg);
         } catch (error) {
-            this.ChannelErrorMessage =
-                error instanceof Error ? error.message : 'Failed to resolve Agent Channel.';
+            const errMsg = error instanceof Error ? error.message : 'Failed to resolve Agent Channel.';
+            this.ChannelErrorMessage = errMsg;
+            this.showBanner('error', errMsg);
         } finally {
             this.IsPostingReply = false;
             this.cdr.markForCheck();

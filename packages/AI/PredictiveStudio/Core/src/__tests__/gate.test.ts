@@ -208,7 +208,7 @@ describe('GateRules.DescribeGate — the reason in words, one case per code', ()
   it('auc-interval-contains-chance', () => {
     expect(reasonFor(beatsIv, binaryGuards({ Lapsed: 30, Renewed: 70 }, { lower: 0.48, upper: 0.66 }), 'log-loss')).toEqual({
       code: 'auc-interval-contains-chance',
-      text: "The model's AUC interval on the test set, [0.4800, 0.6600], contains 0.5 (a coin flip), so it does not ship.",
+      text: "The model's AUC interval on the test set, [0.4800, 0.6600], contains the coin-flip level, so it does not ship.",
     });
   });
   it('auc-interval-missing', () => {

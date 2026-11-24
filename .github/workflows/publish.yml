@@ -419,6 +419,24 @@ jobs:
     # The release gate is the slowest run in the repo and the one that most wants a warm cache.
     secrets: inherit
 
+  # The deterministic integration tier on the exact commit being published. PRs run it per change,
+  # but a release commit on main is a merge nothing has integration-tested as a whole, and the
+  # PostgreSQL lane is deliberately not a per-PR gate: feature PRs ship T-SQL migrations only, and
+  # the build engineer converts them for the release. So the release is where both lanes must pass.
+  release-integration:
+    name: Validate release commit (integration tier)
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.seed_package == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
+    uses: ./.github/workflows/integration.yml
+    with:
+      release: true
+    # The called jobs need these; a reusable workflow's jobs can never exceed the caller's
+    # permissions, and GitHub checks them even for jobs that end up skipped.
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    secrets: inherit
+
   build-and-publish:
     name: Build and publish new versions of NPM packages
     # Edge path only. Redundant with `needs` (both gates carry the same `if`),
@@ -427,8 +445,8 @@ jobs:
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.seed_package == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     # Hard preconditions: without `needs`, publish raced its own quality gates —
     # packages published to npm even when the fresh-DB migration apply failed, and
-    # no test of any kind ran against the release commit. Publish requires both green.
-    needs: [test-migrations, release-validation]
+    # no test of any kind ran against the release commit. Publish requires all three green.
+    needs: [test-migrations, release-validation, release-integration]
     # 30 minutes was not enough and the failure mode is DESTRUCTIVE, not a clean retry.
     # v6.1.0-edge.1 ran 30m16s and GitHub killed it mid-`changeset publish`, leaving the
     # fixed-version group split across two versions on npm (~100 packages at the new version,

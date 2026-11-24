@@ -504,7 +504,8 @@ The URL is therefore always authoritative on first load. Persisted workspace sta
 `BaseResourceComponent` uses `ngOnInit` and `ngOnDestroy` for framework infrastructure:
 
 - `ngOnInit()` calls `setupQueryParamSubscription()`, which subscribes to `NavigationService.QueryParamChanged$` filtered by tab ID.
-- `ngOnDestroy()` completes the `destroy$` Subject, which unsubscribes all `takeUntil(this.destroy$)` streams.
+- `ngOnDestroy()` completes the `destroy$` Subject, which unsubscribes all `takeUntil(this.destroy$)` streams. It then replaces `destroy$` with a notifier that has already fired, so a `takeUntil(this.destroy$)` attached *after* destroy — by an `async ngOnInit` that was still awaiting its data when the tab closed — ends immediately instead of pinning the dead component for the session. (`takeUntil` ignores a notifier that merely completed; it needs an emission.)
+- That late-subscription guard only covers `takeUntil(this.destroy$)`. A `setInterval`, an `addEventListener`, or a subscription you store in a field and unsubscribe by hand gets no such help: if you create one after an `await`, check a destroyed flag first.
 
 If a subclass overrides these without calling `super`, the query param subscription is never created, back/forward navigation silently does nothing, and subscriptions leak.
 

@@ -15,7 +15,7 @@
       </span>
       @if (ShowReturnToSage) {
         <button type="button" class="linkish" (click)="ReturnToSage()">
-          Return to {{ ConverationManagerAgent?.Name || 'Sage' }}
+          Return to {{ ConverationManagerAgent?.Name || 'Assistant' }}
         </button>
       }
     </div>
@@ -36,6 +36,8 @@
     [TargetAgentId]="pickerTargetAgentId"
     [AllowedAgentIDs]="AllowedAgentIDs"
     [MentionPeople]="MentionPeople"
+    [DefaultChatAgentID]="DefaultAgentId"
+    [InThreadAgentIDs]="InThreadAgentIDs"
     [enableAttachments]="enableAttachments"
     [maxAttachments]="maxAttachments"
     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"

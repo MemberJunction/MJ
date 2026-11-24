@@ -13,10 +13,18 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     ContentCleaningOptions,
     ContentCleaningResult,
+    ContentPage,
+    ContentSegment,
+    LooksLikeCaptionText,
+    MediaReference,
+    PAGED_CONTENT_SEGMENTER_KEY,
     ResolveContentCleaner,
     ResolveSegmenter,
     SegmentationOptions,
+    SegmentationParams,
     SuggestCleanerKey,
+    TRANSCRIPT_SEGMENTER_KEY,
+    TranscriptCue,
 } from '@memberjunction/ai-segmentation';
 import {
     BasePipelineStage,
@@ -39,6 +47,9 @@ export const SEGMENT_STAGE = 'Segment';
 /** The extractor that stores an item's markup as it was served. Its items are cleaned as HTML by default. */
 const HTML_EXTRACTOR_KEY = 'Html';
 
+/** Maximum length of `MJContentItemChunkEntity.SegmentTitle` (`nvarchar(500)`). */
+const MAX_SEGMENT_TITLE_LENGTH = 500;
+
 /** What Segment resolved for one record. */
 interface ResolvedSegmentation {
     SegmenterKey: string | null;
@@ -49,7 +60,7 @@ interface ResolvedSegmentation {
     CleaningOptions: ContentCleaningOptions;
 }
 
-/** Cleans a record's text, then splits it into chunks. */
+/** Cleans a record's text and splits text or multimodal cues/pages into chunks. */
 @RegisterClass(BasePipelineStage, SEGMENT_STAGE)
 export class SegmentStage extends BasePipelineStage {
     public readonly Name = SEGMENT_STAGE;
@@ -58,9 +69,17 @@ export class SegmentStage extends BasePipelineStage {
 
     public override get Declaration(): StageDeclaration {
         return {
-            Reads: ['Text', 'Modality', 'Decorator'],
+            Reads: ['Text', 'Modality', 'Decorator', 'FileType'],
             Writes: [],
-            ReadsExtensions: ['Pipeline.contentSourceID', 'Pipeline.segmenterKeyOverride', 'Pipeline.extractorKey'],
+            ReadsExtensions: [
+                'Pipeline.contentSourceID',
+                'Pipeline.segmenterKeyOverride',
+                'Pipeline.extractorKey',
+                'Pipeline.cues',
+                'Pipeline.pages',
+                'Pipeline.media',
+                'Pipeline.mimeType',
+            ],
             WritesExtensions: [`${SEGMENT_STAGE}.cleanerKey`, `${SEGMENT_STAGE}.segmenterKey`, `${SEGMENT_STAGE}.segmentCount`],
         };
     }
@@ -69,27 +88,49 @@ export class SegmentStage extends BasePipelineStage {
         if (context.Signal.aborted) {
             return Outcome.Retry('cancelled before segmentation started');
         }
-        const stored = record.Get('Text');
-        if (typeof stored !== 'string' || stored.trim().length === 0) {
+        const rawText = record.Get('Text');
+        const storedText = typeof rawText === 'string' && rawText.trim().length > 0 ? rawText : undefined;
+        const cues = record.GetExtension<TranscriptCue[]>('Pipeline', 'cues');
+        const pages = record.GetExtension<ContentPage[]>('Pipeline', 'pages');
+        const media = record.GetExtension<MediaReference>('Pipeline', 'media');
+        const hasCues = Array.isArray(cues) && cues.length > 0;
+        const hasPages = Array.isArray(pages) && pages.length > 0;
+
+        if (!storedText && !hasCues && !hasPages) {
             return Outcome.Skipped('no text to segment');
         }
 
         const resolved = await this.resolveSegmentation(record, context);
-        const cleaned = this.clean(record, stored, resolved, context);
-        const text = cleaned.Content;
-        if (text.trim().length === 0) {
+        const mimeType = this.resolveMimeType(record, media);
+        const isHtmlExtractor = record.GetExtension<string>('Pipeline', 'extractorKey') === HTML_EXTRACTOR_KEY;
+        const cleaned = storedText ? this.clean(record, storedText, resolved, context, mimeType, isHtmlExtractor) : null;
+        const text = cleaned ? (cleaned.Content.trim().length > 0 ? cleaned.Content : undefined) : undefined;
+        if (cleaned && !text && !hasCues && !hasPages) {
             return Outcome.Skipped(`no text left to segment after cleaning with '${cleaned.CleanerKey}'`);
         }
-        // An unresolvable key degrades to a default, so the key that actually ran is what gets recorded.
-        const segmenter = ResolveSegmenter(resolved.SegmenterKey ?? undefined);
+
+        const segParams: SegmentationParams = {
+            ...(text !== undefined ? { Text: text } : {}),
+            ...(hasCues ? { Cues: cues } : {}),
+            ...(hasPages ? { Pages: pages } : {}),
+            ...(media ? { Media: media } : {}),
+            MimeType: mimeType,
+            ContextUser: context.ContextUser,
+            Options: resolved.Options,
+        };
+        const isCaptionMime = mimeType === 'text/vtt' || mimeType === 'application/x-subrip';
+        const isCaptionSource = !isHtmlExtractor && (isCaptionMime || (text !== undefined && LooksLikeCaptionText(text)));
+        const multimodalFallbackKey = (hasCues || isCaptionSource)
+            ? TRANSCRIPT_SEGMENTER_KEY
+            : hasPages
+                ? PAGED_CONTENT_SEGMENTER_KEY
+                : undefined;
+        // An unresolvable or unconfigured key keeps FixedWindow for plain prose while auto-routing cues, pages, and captions.
+        const segmenter = ResolveSegmenter(resolved.SegmenterKey ?? undefined, multimodalFallbackKey);
 
         let result;
         try {
-            result = await segmenter.Segment({
-                Text: text,
-                ContextUser: context.ContextUser,
-                Options: resolved.Options,
-            });
+            result = await segmenter.Segment(segParams);
         } catch (error) {
             throw new TransientStageError(
                 `Segmenting with '${segmenter.Key}' failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -108,22 +149,36 @@ export class SegmentStage extends BasePipelineStage {
         for (const segment of result.Segments) {
             record.AddChild(this.toChunk(record, segment, decorator, resolved.Confidence));
         }
-        record.SetExtension(SEGMENT_STAGE, 'cleanerKey', cleaned.CleanerKey);
+        if (cleaned) {
+            record.SetExtension(SEGMENT_STAGE, 'cleanerKey', cleaned.CleanerKey);
+        }
         record.SetExtension(SEGMENT_STAGE, 'segmenterKey', result.SegmenterKey);
         record.SetExtension(SEGMENT_STAGE, 'segmentCount', result.Segments.length);
-        context.ReportProgress(`cleaned with ${cleaned.CleanerKey}, segmented into ${result.Segments.length} chunk(s) with ${result.SegmenterKey}`);
-        return Outcome.Complete(`${result.Segments.length} chunk(s) via ${cleaned.CleanerKey} then ${result.SegmenterKey}`);
+        if (cleaned) {
+            context.ReportProgress(`cleaned with ${cleaned.CleanerKey}, segmented into ${result.Segments.length} chunk(s) with ${result.SegmenterKey}`);
+            return Outcome.Complete(`${result.Segments.length} chunk(s) via ${cleaned.CleanerKey} then ${result.SegmenterKey}`);
+        }
+        context.ReportProgress(`segmented into ${result.Segments.length} chunk(s) with ${result.SegmenterKey}`);
+        return Outcome.Complete(`${result.Segments.length} chunk(s) via ${result.SegmenterKey}`);
     }
 
     /**
      * Clean the stored text with the configured cleaner, or, with none configured, the one that suits what
      * the text is: HTML for an item the Html extractor read (its text is the page's markup), plain text
-     * otherwise. A cleaner never throws for content it cannot handle: it hands back the text uncleaned,
-     * which is logged rather than failing the item.
+     * otherwise (including timed caption transcripts, whose `<v Speaker>` tags must not be stripped as HTML).
      */
-    private clean(record: WorkingRecord, text: string, resolved: ResolvedSegmentation, context: StageContext): ContentCleaningResult {
-        const isHtml = record.GetExtension<string>('Pipeline', 'extractorKey') === HTML_EXTRACTOR_KEY;
-        const mimeType = isHtml ? 'text/html' : 'text/plain';
+    private clean(
+        record: WorkingRecord,
+        text: string,
+        resolved: ResolvedSegmentation,
+        context: StageContext,
+        mimeTypeHint?: string,
+        isHtmlExtractor: boolean = record.GetExtension<string>('Pipeline', 'extractorKey') === HTML_EXTRACTOR_KEY,
+    ): ContentCleaningResult {
+        const isCaptionMime = mimeTypeHint === 'text/vtt' || mimeTypeHint === 'application/x-subrip';
+        const isCaption = !isHtmlExtractor && (isCaptionMime || LooksLikeCaptionText(text));
+        const isHtml = isHtmlExtractor || (!isCaption && mimeTypeHint === 'text/html');
+        const mimeType = isHtml ? 'text/html' : isCaption ? (mimeTypeHint ?? 'text/vtt') : 'text/plain';
         // An unresolvable key degrades to the plain-text cleaner, and the result names the key that actually ran.
         const cleaner = ResolveContentCleaner(resolved.CleanerKey ?? SuggestCleanerKey(mimeType));
         const result = cleaner.Clean({ Content: text, MimeType: mimeType, Options: resolved.CleaningOptions });
@@ -138,24 +193,116 @@ export class SegmentStage extends BasePipelineStage {
 
     /**
      * One segment as a chunk record. The parent's decorator goes in the chunk's own `Decorator`
-     * field, not its text, so the text stays a faithful slice of the parent's cleaned text.
+     * field, not its text, so the text stays a faithful slice of the parent's cleaned text. Multimodal
+     * and structural provenance columns ride in `Pipeline.columns` to {@link WorkingRecordCommitter}.
      */
     private toChunk(
         parent: WorkingRecord,
-        segment: { Sequence: number; Text?: string; Modality: string },
+        segment: ContentSegment,
         decorator: unknown,
         confidence: ResolvedConfidenceScale,
     ): WorkingRecord {
         const url = `${parent.Identity.EphemeralID}#segment-${segment.Sequence}`;
         const chunk = new WorkingRecord(new WorkingRecordIdentity('Content Item Chunk', url));
-        // No well-known field holds Sequence, so it rides to the committer as a per-child column.
-        chunk.SetExtension('Pipeline', 'columns', { Sequence: segment.Sequence });
+        const columns = this.buildChunkColumns(segment);
+        chunk.SetExtension('Pipeline', 'columns', columns);
+        this.applyChunkExtensions(chunk, segment);
         chunk.Propose('Text', segment.Text ?? '', confidence.SegmentText, SEGMENT_STAGE);
         chunk.Propose('Modality', segment.Modality, confidence.SegmentText, SEGMENT_STAGE);
         if (typeof decorator === 'string' && decorator.length > 0) {
             chunk.Propose('Decorator', decorator, parent.GetConfidence('Decorator'), `${SEGMENT_STAGE}.InheritedFromParent`);
         }
         return chunk;
+    }
+
+    /** Build the non-well-known `MJContentItemChunkEntity` columns emitted by segmentation. */
+    private buildChunkColumns(segment: ContentSegment): Record<string, unknown> {
+        const columns: Record<string, unknown> = {
+            Sequence: segment.Sequence,
+        };
+        if (segment.SegmenterKey) {
+            columns.SegmenterKey = segment.SegmenterKey;
+        }
+        if (segment.StartMs != null) {
+            columns.StartMs = segment.StartMs;
+        }
+        if (segment.EndMs != null) {
+            columns.EndMs = segment.EndMs;
+        }
+        if (segment.StartOffset != null) {
+            columns.StartOffset = segment.StartOffset;
+        }
+        if (segment.EndOffset != null) {
+            columns.EndOffset = segment.EndOffset;
+        }
+        if (segment.PageNumber != null) {
+            columns.PageNumber = segment.PageNumber;
+        }
+        if (segment.Title != null && segment.Title.trim().length > 0) {
+            columns.SegmentTitle = segment.Title.trim().slice(0, MAX_SEGMENT_TITLE_LENGTH);
+        }
+        if ((segment.Modality === 'audio' || segment.Modality === 'video') && segment.Text) {
+            columns.Transcript = segment.Text;
+        }
+        return columns;
+    }
+
+    /** Mirror chunk provenance into `Pipeline.*` extensions so chained in-memory stages match hydration. */
+    private applyChunkExtensions(chunk: WorkingRecord, segment: ContentSegment): void {
+        chunk.SetExtension('Pipeline', 'sequence', segment.Sequence);
+        if (segment.SegmenterKey) {
+            chunk.SetExtension('Pipeline', 'segmenterKey', segment.SegmenterKey);
+        }
+        if (segment.StartMs != null) {
+            chunk.SetExtension('Pipeline', 'startMs', segment.StartMs);
+        }
+        if (segment.EndMs != null) {
+            chunk.SetExtension('Pipeline', 'endMs', segment.EndMs);
+        }
+        if (segment.StartOffset != null) {
+            chunk.SetExtension('Pipeline', 'startOffset', segment.StartOffset);
+        }
+        if (segment.EndOffset != null) {
+            chunk.SetExtension('Pipeline', 'endOffset', segment.EndOffset);
+        }
+        if (segment.PageNumber != null) {
+            chunk.SetExtension('Pipeline', 'pageNumber', segment.PageNumber);
+        }
+        if (segment.Title != null && segment.Title.trim().length > 0) {
+            chunk.SetExtension('Pipeline', 'segmentTitle', segment.Title.trim().slice(0, MAX_SEGMENT_TITLE_LENGTH));
+        }
+        if ((segment.Modality === 'audio' || segment.Modality === 'video') && segment.Text) {
+            chunk.SetExtension('Pipeline', 'transcript', segment.Text);
+        }
+        if (segment.ParentSequence != null) {
+            chunk.SetExtension('Pipeline', 'parentSequence', segment.ParentSequence);
+        }
+    }
+
+    /** Resolve a media/document MIME hint from explicit extensions, `Media`, `Modality`, or `FileType`. */
+    private resolveMimeType(record: WorkingRecord, media?: MediaReference): string | undefined {
+        const explicit = record.GetExtension<string>('Pipeline', 'mimeType') ?? media?.MimeType;
+        if (explicit && explicit.trim().length > 0) {
+            return explicit.trim();
+        }
+        const modality = record.Get('Modality');
+        if (modality === 'video') {
+            return 'video/*';
+        }
+        if (modality === 'audio') {
+            return 'audio/*';
+        }
+        const fileType = typeof record.Get('FileType') === 'string' ? (record.Get('FileType') as string).toLowerCase() : '';
+        if (fileType === 'vtt') {
+            return 'text/vtt';
+        }
+        if (fileType === 'srt') {
+            return 'application/x-subrip';
+        }
+        if (fileType === 'html' || fileType === 'htm' || fileType === 'xhtml') {
+            return 'text/html';
+        }
+        return undefined;
     }
 
     /**

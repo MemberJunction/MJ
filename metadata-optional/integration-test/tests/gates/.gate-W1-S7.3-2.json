@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S7.3 #2",
+    "Description": "Gate G5.2 (owner PR 4, phase 5, dataset W1, criterion S7.3): /predict with a renamed feature for a W1-signal s42 model returns 400 naming the feature, and a model with no stored schema is refused, 2 of 2 (T16(b)). The check calls the running truth sidecar's /predict straight: the published W1-signal s42 model's stored v2 artifact with five W1 rows whose EventsAttended column is renamed must be a 400 naming EventsAttended (the unrenamed rows score, 200), and a legacy (v1) envelope built by truthsuite.judges.legacy_envelope sent without a feature schema must be a 400 'no stored feature schema' (with its schema it scores, 200). A v2 artifact stores its own feature columns, so it is never refused for a missing request schema (D4-154).",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G5.2\", \"owner:PR4\", \"phase:5\", \"dataset:W1\", \"criterion:S7.3\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "Both /predict refusals hold: the renamed feature is named and the legacy model without a stored schema is refused, 2 of 2."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s7-3-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "163330F4-0569-455D-9CB3-FFC1067F1804"
+  }
+}

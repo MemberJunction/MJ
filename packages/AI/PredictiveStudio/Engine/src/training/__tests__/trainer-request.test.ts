@@ -15,7 +15,7 @@ async function inputOver(files: InMemorySnapshotFileStore, p: EvaluationProtocol
   const matrix = await files.Put('k/matrix.jsonl', 'm', new TextEncoder().encode('{"format":"ps-snapshot-matrix/v1"}\n'));
   const manifest = await files.Put('k/manifest.jsonl', 'n', new TextEncoder().encode('{"rowId":"r1"}\n'));
   return {
-    TrainingRunID: 'RUN-1', Files: files, Protocol: p, Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 },
+    TrainingRunID: 'RUN-1', Files: files, Incumbent: null, Protocol: p, Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 },
     Snapshot: {
       ID: 'SNAP-1', ContentHash: 'c'.repeat(64), FeatureSchemaHash: 'f'.repeat(64),
       MatrixFileID: matrix.FileID, MatrixSha256: matrix.Sha256, RowManifestFileID: manifest.FileID, RowManifestSha256: manifest.Sha256,

@@ -1,8 +1,8 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseCliHarnessAdapter, HarnessCliRawEvent } from './BaseCliHarnessAdapter.js';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
-import { NormalizeAntigravityEnvironment } from '../HarnessCredentialResolver.js';
-import { HarnessCapabilities, HarnessPermissionPolicy, HarnessTurnEvent } from '../types.js';
+import { NormalizeAntigravityEnvironment, StripHarnessApiKeyEnvironment } from '../HarnessCredentialResolver.js';
+import { HarnessCapabilities, HarnessPermissionPolicy, HarnessSessionConfig, HarnessTurnEvent } from '../types.js';
 import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
 export type AntigravityReasoningEffort = 'low' | 'medium' | 'high';
@@ -48,6 +48,14 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
             SupportsCloudExecution: false,
             SupportsAsyncWakeHandoff: false,
         };
+    }
+
+    /** @inheritdoc */
+    public override async StartSession(config: HarnessSessionConfig): Promise<void> {
+        this.didResume = false;
+        this.pendingTerminal = null;
+        this.reportedModel = undefined;
+        await super.StartSession(config);
     }
 
     /** @inheritdoc */
@@ -105,12 +113,17 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
 
     /**
      * Injects normalized `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `ANTIGRAVITY_API_KEY` environment
-     * conventions before delegating to the sandbox executor.
+     * conventions in `api-key` mode, or strips all API keys in `cli-login` mode so `agy` authenticates
+     * strictly via the user's logged-in subscription plan.
      */
     protected override startTurnProcess(input: string, isFirstTurn: boolean): HarnessProcess {
         const config = this.config!;
         const normalizedEnv: Record<string, string> = { ...config.Environment };
-        NormalizeAntigravityEnvironment(normalizedEnv);
+        if (config.AuthMode === 'cli-login') {
+            StripHarnessApiKeyEnvironment(normalizedEnv);
+        } else {
+            NormalizeAntigravityEnvironment(normalizedEnv);
+        }
 
         return config.Executor.Run({
             Command: this.ExecutablePath,

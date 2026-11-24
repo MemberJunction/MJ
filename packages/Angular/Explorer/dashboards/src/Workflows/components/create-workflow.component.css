@@ -1,136 +1,237 @@
 :host {
   display: block;
+  height: 100%;
+  min-height: 0;
 }
 
-.create-workflow {
-  padding: var(--mj-space-5) var(--mj-space-6);
-  max-width: 980px;
+.create-workflow-split {
+  display: grid;
+  grid-template-columns: minmax(420px, 520px) minmax(0, 1fr);
+  gap: var(--mj-space-5);
+  height: 100%;
+  min-height: 540px;
+  padding: var(--mj-space-4) var(--mj-space-5);
+  box-sizing: border-box;
 }
 
-/* ── the three doors ───────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .create-workflow-split {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .cw-right {
+    min-height: 360px;
+  }
+}
 
+.cw-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: var(--mj-space-1);
+}
+
+/* ── The three doors ───────────────────────────────────────────────────────── */
 .cw-tiles {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--mj-space-3);
+  gap: var(--mj-space-2);
   margin-bottom: var(--mj-space-4);
 }
 
-/* Collapses to one column well before the 1100px minimap/palette threshold (⑤): three tiles side
-   by side stop being scannable long before the canvas aids stop being worth their width. */
-@media (max-width: 860px) {
+@media (max-width: 640px) {
   .cw-tiles {
     grid-template-columns: 1fr;
   }
 }
 
 .cw-tile {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   text-align: left;
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-lg);
-  padding: var(--mj-space-4);
-  background: var(--mj-bg-surface);
+  padding: var(--mj-space-3);
+  background: var(--mj-bg-surface-card);
   cursor: pointer;
   font: inherit;
   color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .cw-tile:hover {
   border-color: var(--mj-border-strong);
+  background: var(--mj-bg-surface-hover);
 }
 
 .cw-tile:focus-visible {
-  outline: 2px solid var(--mj-color-primary);
+  outline: 2px solid var(--mj-focus-ring-color);
   outline-offset: 2px;
 }
 
 .cw-tile-selected {
-  border-color: var(--mj-color-primary);
-  box-shadow: 0 0 0 3px var(--mj-color-primary-subtle);
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .cw-tile-icon {
-  font-size: var(--mj-font-size-xl);
-  color: var(--mj-color-primary);
+  font-size: var(--mj-text-lg);
+  color: var(--mj-brand-primary);
   margin-bottom: var(--mj-space-2);
   display: block;
 }
 
 .cw-tile-title {
   display: block;
-  font-size: var(--mj-font-size-md);
-  font-weight: var(--mj-font-weight-semibold);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
   margin-bottom: var(--mj-space-1);
   color: var(--mj-text-primary);
 }
 
 .cw-tile-blurb {
-  font-size: var(--mj-font-size-sm);
+  margin: 0;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-secondary);
-  line-height: var(--mj-line-height-relaxed);
+  line-height: 1.4;
 }
 
 .cw-tile-meta {
   display: block;
-  margin-top: var(--mj-space-2);
-  font-size: var(--mj-font-size-xs);
-  color: var(--mj-text-tertiary);
+  margin-top: auto;
+  padding-top: var(--mj-space-2);
+  font-size: 11px;
+  color: var(--mj-text-muted);
 }
 
-/* ── fields ────────────────────────────────────────────────────────────────── */
+/* ── Starter recipes ───────────────────────────────────────────────────────── */
+.cw-recipes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  margin-bottom: var(--mj-space-3);
+}
 
+.cw-recipes-label {
+  font-size: 11px;
+  font-weight: var(--mj-font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mj-text-muted);
+}
+
+.cw-recipe-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cw-recipe-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--mj-radius-pill);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.cw-recipe-chip:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────────── */
 .cw-field {
-  margin: var(--mj-space-4) 0;
+  margin-bottom: var(--mj-space-3);
 }
 
 .cw-field label {
   display: block;
-  font-size: var(--mj-font-size-sm);
-  font-weight: var(--mj-font-weight-semibold);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-secondary);
   margin-bottom: var(--mj-space-1);
 }
 
 .cw-label-hint {
-  font-weight: var(--mj-font-weight-normal);
-  color: var(--mj-text-tertiary);
+  font-weight: var(--mj-font-normal);
+  color: var(--mj-text-muted);
 }
 
 .cw-field input,
-.cw-field textarea {
+.cw-field textarea,
+.cw-refine-input {
   width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--mj-border-strong);
   border-radius: var(--mj-radius-md);
   padding: var(--mj-space-2) var(--mj-space-3);
   font: inherit;
+  font-size: var(--mj-text-sm);
   background: var(--mj-bg-surface);
   color: var(--mj-text-primary);
 }
 
 .cw-field input:focus-visible,
-.cw-field textarea:focus-visible {
-  outline: 2px solid var(--mj-color-primary);
-  outline-offset: -1px;
+.cw-field textarea:focus-visible,
+.cw-refine-input:focus-visible {
+  outline: none;
+  border-color: var(--mj-focus-ring-color);
+  box-shadow: var(--mj-focus-ring);
 }
 
-/* ── promotable runs ───────────────────────────────────────────────────────── */
+.cw-draft-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  margin-bottom: var(--mj-space-3);
+}
 
+.cw-draft-hint {
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+.cw-refine-row {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin-bottom: var(--mj-space-3);
+}
+
+.cw-refine-input {
+  flex: 1 1 auto;
+  font-size: var(--mj-text-xs);
+  padding: 6px 10px;
+}
+
+/* ── Promotable runs ───────────────────────────────────────────────────────── */
 .cw-runs {
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);
-  overflow: hidden;
-  margin-top: var(--mj-space-3);
+  overflow-y: auto;
+  max-height: 260px;
+  margin-bottom: var(--mj-space-3);
+  background: var(--mj-bg-surface);
 }
 
 .cw-run {
   display: flex;
   align-items: center;
   gap: var(--mj-space-3);
-  padding: var(--mj-space-3) var(--mj-space-4);
-  border-bottom: 1px solid var(--mj-border-default);
-  font-size: var(--mj-font-size-sm);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border-bottom: 1px solid var(--mj-border-subtle);
+  font-size: var(--mj-text-sm);
   cursor: pointer;
 }
 
@@ -138,86 +239,115 @@
   border-bottom: none;
 }
 
+.cw-run:hover:not(.cw-run-unavailable) {
+  background: var(--mj-bg-surface-hover);
+}
+
 .cw-run:focus-visible {
-  outline: 2px solid var(--mj-color-primary);
+  outline: 2px solid var(--mj-focus-ring-color);
   outline-offset: -2px;
 }
 
 .cw-run-selected {
-  background: var(--mj-color-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
-/* Not merely dimmed — the row is also removed from the tab order and guarded in the handler, so a
-   run that could still change shape cannot be promoted by any route. */
 .cw-run-unavailable {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
+.cw-run-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .cw-run-name {
-  font-weight: var(--mj-font-weight-semibold);
-  flex: 1;
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cw-run-sub {
-  color: var(--mj-text-tertiary);
-  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-xs);
+}
+
+.cw-run-waiting {
+  color: var(--mj-status-warning);
+  font-weight: var(--mj-font-semibold);
 }
 
 .cw-run-status {
-  font-size: var(--mj-font-size-xs);
-  font-weight: var(--mj-font-weight-semibold);
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-pill);
+  font-size: 11px;
+  font-weight: var(--mj-font-semibold);
+  background: var(--mj-bg-surface-sunken);
   color: var(--mj-text-secondary);
 }
 
-/* ── notes + actions ───────────────────────────────────────────────────────── */
-
-.cw-note {
-  font-size: var(--mj-font-size-sm);
-  color: var(--mj-text-tertiary);
-  line-height: var(--mj-line-height-relaxed);
-  margin-top: var(--mj-space-3);
+.cw-run-status[data-status="Complete"] {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success);
 }
 
-/* Primary left, secondary right — the MJ dialog-footer convention. */
+.cw-run-status[data-status="Failed"] {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
+}
+
+/* ── Notes + actions ───────────────────────────────────────────────────────── */
+.cw-note {
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  line-height: 1.45;
+  margin: var(--mj-space-2) 0 0;
+}
+
 .cw-actions {
   display: flex;
   gap: var(--mj-space-2);
-  margin-top: var(--mj-space-5);
+  margin-top: var(--mj-space-4);
+  padding-top: var(--mj-space-3);
+  border-top: 1px solid var(--mj-border-subtle);
 }
 
-/* ── drafting ──────────────────────────────────────────────────────────────── */
-
+/* ── Drafting banner ───────────────────────────────────────────────────────── */
 .cw-drafting {
   display: flex;
   align-items: flex-start;
   gap: var(--mj-space-3);
-  padding: var(--mj-space-3) var(--mj-space-4);
-  border: 1px solid var(--mj-color-primary);
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-brand-primary);
   border-radius: var(--mj-radius-md);
-  background: var(--mj-color-primary-subtle);
+  background: var(--mj-status-info-bg);
   margin-bottom: var(--mj-space-3);
 }
 
 .cw-drafting b {
   display: block;
-  font-size: var(--mj-font-size-sm);
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-primary);
 }
 
 .cw-drafting small {
   display: block;
-  margin-top: var(--mj-space-1);
-  font-size: var(--mj-font-size-xs);
+  margin-top: 2px;
+  font-size: 11px;
   color: var(--mj-text-secondary);
-  line-height: var(--mj-line-height-relaxed);
+  line-height: 1.4;
 }
 
-/* A slow, calm pulse — this is a wait to sit through, not an alarm. */
 .cw-drafting-icon {
-  color: var(--mj-color-primary);
-  font-size: var(--mj-font-size-lg);
+  color: var(--mj-brand-primary);
+  font-size: var(--mj-text-base);
   animation: cw-pulse 1.8s ease-in-out infinite;
   flex: none;
   margin-top: 2px;
@@ -228,7 +358,116 @@
   50%      { opacity: 1;    transform: scale(1.06); }
 }
 
-/* Respects a user who asked the OS for less motion. */
 @media (prefers-reduced-motion: reduce) {
   .cw-drafting-icon { animation: none; opacity: 1; }
+}
+
+/* ── Right Pane: Live Spatial Preview ──────────────────────────────────────── */
+.cw-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  background: var(--mj-bg-surface-card);
+  overflow: hidden;
+}
+
+.cw-preview-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-elevated);
+}
+
+.cw-preview-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.cw-preview-title i {
+  color: var(--mj-brand-primary);
+}
+
+.cw-preview-count {
+  padding: 1px 8px;
+  border-radius: var(--mj-radius-pill);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  font-weight: var(--mj-font-medium);
+}
+
+.cw-preview-pill {
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-pill);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-muted);
+  font-size: 11px;
+  font-weight: var(--mj-font-medium);
+}
+
+.cw-preview-canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  background: var(--mj-bg-surface);
+}
+
+.cw-preview-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--mj-space-6);
+  gap: var(--mj-space-2);
+  color: var(--mj-text-secondary);
+}
+
+.cw-preview-empty-icon {
+  font-size: 28px;
+  color: var(--mj-text-muted);
+  margin-bottom: var(--mj-space-1);
+}
+
+.cw-preview-empty b {
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-primary);
+}
+
+.cw-preview-empty p {
+  margin: 0;
+  max-width: 340px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  line-height: 1.5;
+}
+
+.cw-preview-rationale {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-elevated);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+  line-height: 1.45;
+}
+
+.cw-preview-rationale i {
+  color: var(--mj-brand-primary);
+  margin-top: 2px;
 }

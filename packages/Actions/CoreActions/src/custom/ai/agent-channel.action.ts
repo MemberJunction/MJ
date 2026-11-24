@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, type MJLimitsOverride, RunView, UserInfo } from '@memberjunction/core';
 import {
     BUILT_IN_CONVERSATION_TYPE_IDS,
     CONVERSATION_TYPE_CODES,
@@ -16,6 +16,7 @@ import {
 import {
     AgentUserPolicyEngine,
     MJAIAgentEntityExtended,
+    ResolveAgentRunLimits,
     TypedActionPolicyGuard,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -23,6 +24,21 @@ import { AgentWakeTriggerService } from '@memberjunction/ai-agents';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
+const MY_AGENTS_APPLICATION_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E70';
+
+function resolveMyAgentsApplicationId(md: IMetadataProvider): string | null {
+    const apps = (md as { Applications?: ReadonlyArray<{ ID: string; Name?: string }> }).Applications;
+    if (!Array.isArray(apps)) {
+        return MY_AGENTS_APPLICATION_ID;
+    }
+    const found =
+        apps.find((a) => UUIDsEqual(a.ID, MY_AGENTS_APPLICATION_ID)) ??
+        apps.find((a) => {
+            const name = a.Name?.trim().toLowerCase();
+            return name === 'my agents' || name === 'chief of staff';
+        });
+    return found?.ID ?? null;
+}
 
 function readStringParam(params: RunActionParams, name: string): string | undefined {
     const found = params.Params.find((p) => p.Name.trim().toLowerCase() === name.toLowerCase());
@@ -43,6 +59,18 @@ function readNumberParam(params: RunActionParams, name: string, fallback: number
         return fallback;
     }
     return Math.min(max, Math.max(min, Math.trunc(parsed)));
+}
+
+function readOptionalPositiveIntParam(params: RunActionParams, name: string): number | undefined {
+    const raw = readStringParam(params, name);
+    if (!raw) {
+        return undefined;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+        return undefined;
+    }
+    return Math.max(1, Math.trunc(parsed));
 }
 
 function readBooleanParam(params: RunActionParams, name: string, fallback: boolean): boolean {
@@ -105,7 +133,18 @@ function resolveAgent(params: RunActionParams, idParam: string, nameParam: strin
         return AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextId)) ?? null;
     }
     const explicitName = readStringParam(params, nameParam) ?? DEFAULT_AGENT_NAME;
+    const callerUserId = params.ContextUser?.ID ?? null;
+    const matches = AIEngine.Instance.Agents.filter(
+        (a) => a.Name.trim().toLowerCase() === explicitName.toLowerCase() && (a.Status == null || a.Status === 'Active')
+    );
+    if (callerUserId && matches.length > 1) {
+        const ownedMatch = matches.find((a) => a.OwnerUserID && UUIDsEqual(a.OwnerUserID, callerUserId));
+        if (ownedMatch) {
+            return ownedMatch;
+        }
+    }
     return (
+        matches[0] ??
         AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === explicitName.toLowerCase()) ??
         null
     );
@@ -173,12 +212,16 @@ export class OpenAgentChannelAction extends BaseAction {
                     ...readStringArrayParam(params, 'TargetUserID'),
                 ])
             ).filter((id) => !UUIDsEqual(id, contextUser.ID));
+            const explicitTargetAgentRef = Boolean(
+                readStringParam(params, 'TargetAgentID') || readStringParam(params, 'TargetAgentName')
+            );
 
-            if (!topic || !initialMessage || targetUserIds.length === 0) {
+            if (!topic || !initialMessage || (targetUserIds.length === 0 && !explicitTargetAgentRef)) {
                 return {
                     Success: false,
                     ResultCode: 'VALIDATION_ERROR',
-                    Message: 'Topic, InitialMessage, and at least one colleague TargetUserID/TargetUserIDs are required.',
+                    Message:
+                        'Topic, InitialMessage, and either colleague TargetUserID/TargetUserIDs or a sibling TargetAgentID/TargetAgentName are required.',
                     Params: params.Params,
                 };
             }
@@ -209,7 +252,56 @@ export class OpenAgentChannelAction extends BaseAction {
                     Params: params.Params,
                 };
             }
-            const targetAgent = resolveAgent(params, 'TargetAgentID', 'TargetAgentName') ?? senderAgent;
+            const resolvedTargetAgent = explicitTargetAgentRef
+                ? resolveAgent(params, 'TargetAgentID', 'TargetAgentName')
+                : senderAgent;
+            if (!resolvedTargetAgent) {
+                const requestedRef =
+                    readStringParam(params, 'TargetAgentName') ??
+                    readStringParam(params, 'TargetAgentID') ??
+                    'unknown';
+                return {
+                    Success: false,
+                    ResultCode: 'AGENT_NOT_FOUND',
+                    Message: `Target agent "${requestedRef}" was not found.`,
+                    Params: params.Params,
+                };
+            }
+            const targetAgent = resolvedTargetAgent;
+
+            if (targetUserIds.length === 0 && UUIDsEqual(targetAgent.ID, senderAgent.ID)) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: `Agent "${senderAgent.Name}" cannot open an Agent Channel with itself without another colleague participant.`,
+                    Params: params.Params,
+                };
+            }
+
+            // Same-user sibling channel (e.g., Pepper <-> Cato owned by or accessible to contextUser)
+            const sameUserPeerUserId =
+                targetUserIds.length === 0
+                    ? targetAgent.OwnerUserID && !UUIDsEqual(targetAgent.OwnerUserID, contextUser.ID)
+                        ? targetAgent.OwnerUserID
+                        : contextUser.ID
+                    : null;
+            if (
+                sameUserPeerUserId &&
+                UUIDsEqual(sameUserPeerUserId, contextUser.ID) &&
+                !AIEngine.Instance.CanUserViewAgent(targetAgent.ID, contextUser)
+            ) {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: `You do not have permission to include agent "${targetAgent.Name}" in an Agent Channel.`,
+                    Params: params.Params,
+                };
+            }
+            const effectiveCrossUserIds =
+                sameUserPeerUserId && !UUIDsEqual(sameUserPeerUserId, contextUser.ID)
+                    ? [sameUserPeerUserId]
+                    : targetUserIds;
+            const hasCrossUserTargets = effectiveCrossUserIds.length > 0;
 
             const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
             const senderPolicyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
@@ -245,7 +337,7 @@ export class OpenAgentChannelAction extends BaseAction {
                         Params: params.Params,
                     };
                 }
-                if (senderPolicy.CoordinationMode === 'Observer') {
+                if (hasCrossUserTargets && senderPolicy.CoordinationMode === 'Observer') {
                     return {
                         Success: false,
                         ResultCode: 'POLICY_DENIED',
@@ -254,7 +346,7 @@ export class OpenAgentChannelAction extends BaseAction {
                     };
                 }
                 const isAgentCall = Boolean(extractContextAgentId(params.Context));
-                if (isAgentCall && senderPolicy.CoordinationMode === 'Coordinator') {
+                if (hasCrossUserTargets && isAgentCall && senderPolicy.CoordinationMode === 'Coordinator') {
                     const approvalId = readStringParam(params, 'ConfirmedApprovalRequestID');
                     const approved = approvalId
                         ? await verifyApprovedRequest(approvalId, contextUser.ID, contextUser, md)
@@ -274,29 +366,53 @@ export class OpenAgentChannelAction extends BaseAction {
             const systemUser = UserCache.Instance.GetSystemUser() ?? contextUser;
             const rv = RunView.FromMetadataProvider(md);
 
-            // Validate every target user is active
-            const targetUsersRes = await rv.RunView<MJUserEntity>(
-                {
-                    EntityName: 'MJ: Users',
-                    ExtraFilter: `IsActive=1 AND ID IN (${targetUserIds
-                        .map((id) => `'${EscapeSQLString(id)}'`)
-                        .join(',')})`,
-                    ResultType: 'entity_object',
-                },
-                systemUser
-            );
-            const activeTargets = targetUsersRes.Success ? targetUsersRes.Results : [];
-            if (activeTargets.length !== targetUserIds.length) {
-                return {
-                    Success: false,
-                    ResultCode: 'VALIDATION_ERROR',
-                    Message: 'One or more TargetUserIDs do not match an active MJ user.',
-                    Params: params.Params,
-                };
+            // Validate every cross-user target is active
+            let activeTargets: MJUserEntity[] = [];
+            if (effectiveCrossUserIds.length > 0) {
+                const targetUsersRes = await rv.RunView<MJUserEntity>(
+                    {
+                        EntityName: 'MJ: Users',
+                        ExtraFilter: `IsActive=1 AND ID IN (${effectiveCrossUserIds
+                            .map((id) => `'${EscapeSQLString(id)}'`)
+                            .join(',')})`,
+                        ResultType: 'entity_object',
+                    },
+                    systemUser
+                );
+                activeTargets = targetUsersRes.Success ? targetUsersRes.Results : [];
+                if (activeTargets.length !== effectiveCrossUserIds.length) {
+                    return {
+                        Success: false,
+                        ResultCode: 'VALIDATION_ERROR',
+                        Message: 'One or more TargetUserIDs do not match an active MJ user.',
+                        Params: params.Params,
+                    };
+                }
             }
 
-            const maxTurns = readNumberParam(params, 'MaxConsecutiveAgentTurns', 10, 1, 50);
-            const maxHourlyWakes = readNumberParam(params, 'MaxHourlyWakes', 6, 1, 30);
+            const requestedMaxTurns = readOptionalPositiveIntParam(params, 'MaxConsecutiveAgentTurns');
+            const requestedMaxHourlyWakes = readOptionalPositiveIntParam(params, 'MaxHourlyWakes');
+            const channelRunOverride: MJLimitsOverride = {};
+            if (requestedMaxTurns !== undefined) {
+                channelRunOverride.AgentChannelConsecutiveTurns = requestedMaxTurns;
+            }
+            if (requestedMaxHourlyWakes !== undefined) {
+                channelRunOverride.AgentChannelWakesPerHour = requestedMaxHourlyWakes;
+            }
+            const limitsResolution = ResolveAgentRunLimits({
+                Agent: senderAgent,
+                UserPolicy: senderPolicy,
+                RunOverride: Object.keys(channelRunOverride).length > 0 ? channelRunOverride : null,
+                ContextUser: contextUser,
+                Provider: md,
+                Options: {
+                    EnforceUserPolicyAsCeiling: Boolean(senderPolicy),
+                    EnforceConfiguredCeilings: true,
+                    AllowAuthorizedCeilingOverride: true,
+                },
+            });
+            const maxTurns = limitsResolution.Limits.AgentChannelConsecutiveTurns;
+            const maxHourlyWakes = limitsResolution.Limits.AgentChannelWakesPerHour;
             const replyByRaw = readStringParam(params, 'ReplyByISO');
             const replyByDate = replyByRaw ? new Date(replyByRaw) : null;
             if (replyByDate && Number.isNaN(replyByDate.getTime())) {
@@ -312,11 +428,18 @@ export class OpenAgentChannelAction extends BaseAction {
                 ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.AGENT_CHANNEL) ??
                 BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL;
 
+            const myAgentsAppId = resolveMyAgentsApplicationId(md);
             const channel = await md.GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', systemUser);
             channel.NewRecord();
             channel.Name = topic.slice(0, 255);
             channel.UserID = contextUser.ID;
             channel.TypeID = agentChannelTypeId;
+            if (myAgentsAppId) {
+                channel.ApplicationScope = 'Application';
+                channel.ApplicationID = myAgentsAppId;
+            } else {
+                channel.ApplicationScope = 'Global';
+            }
             channel.Topic = topic;
             channel.ChannelStatus = 'Open';
             channel.ReplyBy = replyByDate;
@@ -335,14 +458,35 @@ export class OpenAgentChannelAction extends BaseAction {
                 };
             }
 
-            // Create participant records (initiator + all peers)
+            // Create participant records (initiator + all peers).
+            // Preserve explicit derived instances (e.g., Cato); only redirect root templates (e.g., Chief of Staff) to the peer's primary instance.
+            const resolvePeerAgentId = (baseTarget: MJAIAgentEntityExtended, userId: string): string => {
+                if (baseTarget.BaseAgentID) {
+                    return baseTarget.ID;
+                }
+                if (typeof AIEngine.Instance.ResolvePrimaryUserAgentInstance === 'function') {
+                    const resolved = AIEngine.Instance.ResolvePrimaryUserAgentInstance(baseTarget.ID, userId);
+                    if (resolved) {
+                        return resolved.ID;
+                    }
+                }
+                return baseTarget.ID;
+            };
             const participantSpecs: Array<{ userId: string; agentId: string; role: MJAgentChannelParticipantEntity['Role'] }> = [
                 { userId: contextUser.ID, agentId: senderAgent.ID, role: 'Initiator' },
-                ...activeTargets.map((u) => ({
-                    userId: u.ID,
-                    agentId: targetAgent.ID,
-                    role: 'Participant' as const,
-                })),
+                ...(activeTargets.length > 0
+                    ? activeTargets.map((u) => ({
+                          userId: u.ID,
+                          agentId: resolvePeerAgentId(targetAgent, u.ID),
+                          role: 'Participant' as const,
+                      }))
+                    : [
+                          {
+                              userId: contextUser.ID,
+                              agentId: targetAgent.ID,
+                              role: 'Participant' as const,
+                          },
+                      ]),
             ];
 
             for (const spec of participantSpecs) {
@@ -547,7 +691,40 @@ export class ReplyInAgentChannelAction extends BaseAction {
                 };
             }
 
-            let wakeOutcome = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            if (resolveChannel) {
+                channel.ChannelStatus = 'Resolved';
+                channel.ResolvedAt = new Date();
+                const resolvedSaved = await channel.Save();
+                if (!resolvedSaved) {
+                    return {
+                        Success: false,
+                        ResultCode: 'SAVE_FAILED',
+                        Message:
+                            channel.LatestResult?.CompleteMessage ||
+                            'Failed to mark Agent Channel as Resolved.',
+                        Params: params.Params,
+                    };
+                }
+
+                const resolvedPayload = {
+                    ChannelID: channel.ID,
+                    ConversationDetailID: detail.ID,
+                    ChannelStatus: 'Resolved' as const,
+                    PausedByGuard: false,
+                    PauseReason: null,
+                    WakeResults: [] as Awaited<
+                        ReturnType<AgentWakeTriggerService['TriggerWakeOnAgentChannelMessage']>
+                    >['results'],
+                };
+                return {
+                    Success: true,
+                    ResultCode: 'SUCCESS',
+                    Message: JSON.stringify(resolvedPayload),
+                    Params: setOutputParam(params, 'ConversationDetailID', detail.ID),
+                };
+            }
+
+            const wakeOutcome = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
                 channelID: channel.ID,
                 conversationDetailID: detail.ID,
                 senderUserID: contextUser.ID,
@@ -556,17 +733,6 @@ export class ReplyInAgentChannelAction extends BaseAction {
                 contextUser,
                 metadataProvider: md,
             });
-
-            if (resolveChannel) {
-                await channel.Load(channel.ID);
-                channel.ChannelStatus = 'Resolved';
-                channel.ResolvedAt = new Date();
-                await channel.Save();
-                wakeOutcome = {
-                    ...wakeOutcome,
-                    channelStatus: 'Resolved',
-                };
-            }
 
             const payload = {
                 ChannelID: channel.ID,

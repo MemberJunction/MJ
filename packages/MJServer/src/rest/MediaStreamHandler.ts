@@ -27,6 +27,7 @@ import { GetSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
 import { UploadTokenManager } from './UploadTokenManager.js';
 import { ParseRange, ParseRangeHeaderLoose } from './mediaRange.js';
+import { ContentDispositionFor } from './mediaContentDisposition.js';
 import { CreateRouteRateLimiter } from './routeRateLimit.js';
 import type { RouteRateLimitSettings } from '../routeRateLimitConfigUnits.js';
 
@@ -65,6 +66,7 @@ export function CreateMediaStreamRouter(options?: MediaStreamRouterOptions): Rou
   router.post(
     '/upload-stage',
     ...uploadLimiter,
+    rejectUnauthenticatedUploadsBeforeBody,
     express.raw({ type: () => true, limit: '100mb' }),
     async (req: Request, res: Response) => {
       await handleUploadStageRequest(req, res);
@@ -83,6 +85,28 @@ export function CreateMediaStreamRouter(options?: MediaStreamRouterOptions): Rou
 /** @deprecated Use {@link CreateMediaStreamRouter}. */
 export function createMediaStreamRouter(): Router {
   return CreateMediaStreamRouter();
+}
+
+/** Reads the signed upload token from the Authorization header (Bearer or bare). */
+function extractUploadToken(req: Request): string {
+  const authHeader = req.headers.authorization || '';
+  return authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim();
+}
+
+/**
+ * Verifies the signed upload token BEFORE `express.raw` buffers the body. Without this gate an
+ * unauthenticated POST gets its full payload (up to 100 MB) read into process memory before the
+ * 401 — a cheap memory-pressure lever. The handler re-verifies after parsing; this middleware
+ * only decides whether the body is worth reading at all.
+ */
+function rejectUnauthenticatedUploadsBeforeBody(req: Request, res: Response, next: express.NextFunction): void {
+  const token = extractUploadToken(req);
+  if (!token || !MediaAccessKeyManager.Instance.VerifyUpload(token).Valid) {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(401).json({ Success: false, ErrorMessage: 'Authorization header with a valid Bearer upload token required.' });
+    return;
+  }
+  next();
 }
 
 /**
@@ -178,6 +202,8 @@ async function handleMediaRequest(req: Request, res: Response): Promise<void> {
 
   // Never let CDNs or shared caches retain authorized media bytes.
   res.setHeader('Cache-Control', 'private, no-store');
+  // The capability token travels in the query string; never leak it via the Referer header.
+  res.setHeader('Referrer-Policy', 'no-referrer');
 
   try {
     const source = await resolveFileBytesSource(fileId);
@@ -293,9 +319,10 @@ async function serveViaStream(res: Response, source: FileBytesSource, rangeHeade
 
   const result = await source.driver.GetObjectStream({ fullPath: source.providerKey, Range: streamRange });
 
+  const streamContentType = result.ContentType ?? source.contentType;
   res.setHeader('Accept-Ranges', 'bytes');
-  res.setHeader('Content-Type', result.ContentType ?? source.contentType);
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('Content-Type', streamContentType);
+  res.setHeader('Content-Disposition', ContentDispositionFor(streamContentType, source.fileName));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   if (result.ContentLength != null) {
     res.setHeader('Content-Length', String(result.ContentLength));
@@ -329,7 +356,7 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', source.contentType);
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('Content-Disposition', ContentDispositionFor(source.contentType, source.fileName));
   res.setHeader('X-Content-Type-Options', 'nosniff');
 
   if (!rangeHeader) {

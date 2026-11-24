@@ -1063,53 +1063,21 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
         expect(promptFinalizations.every((f) => f.success === false)).toBe(true);
     });
 
-    it('restores dotted filenames (index.html) from payloadChangeRequest when PayloadManager drops dotted keys from newPayload', async () => {
-        const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
-        const validSpec = makeSpec(['16:9']);
-        const authoredSource = structuredClone(validSpec.Output!.Source!);
-
-        // Simulate PayloadManager.applyAgentChangeRequest dropping dotted 'index.html' key on newPayload
-        const corruptedSpec = makeSpec(['16:9']);
-        corruptedSpec.Output!.Source!['16:9']!.Files = {} as Record<string, string>;
-
-        const outcome = await agent.validateSuccessNextStep(
-            { contextUser: MOCK_USER } as ExecuteAgentParams,
-            {
-                step: 'Success',
-                terminate: true,
-                newPayload: corruptedSpec,
-                payloadChangeRequest: {
-                    updateElements: {
-                        Output: {
-                            Source: authoredSource,
-                        },
-                    },
-                },
-            } as unknown as BaseAgentNextStep<VideoGenerationSpec>,
-            corruptedSpec,
-            {} as MJAIAgentRunEntityExtended,
-            {} as MJAIAgentRunStepEntityExtended,
-        );
-
-        expect(outcome.step).toBe('Success');
-        expect(outcome.newPayload?.Output?.Source?.['16:9']?.Files?.['index.html']).toBe(
-            authoredSource['16:9']!.Files['index.html'],
-        );
-    });
-
-    it('restores format keys stripped by real JSONValidator.CleanValidationSyntax on payloadChangeRequest and newPayload', async () => {
+    it('preserves dotted filenames (index.html) and aspect-ratio keys (16:9) through real JSONValidator.CleanValidationSyntax and PayloadManager.ApplyAgentChangeRequest without workarounds', async () => {
+        const { PayloadManager } = await import('@memberjunction/ai-agents');
         const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
         const validSpec = makeSpec(['16:9']);
         const authoredHtml = validSpec.Output!.Source!['16:9']!.Files['index.html'];
 
-        // Run the raw change request through the real JSONValidator.CleanValidationSyntax
-        // (which strips ':9' from '16:9' -> '16')
+        const baseSpec = makeSpec(['16:9']);
+        baseSpec.Output!.Source = {};
+
         const rawChangeRequest = {
             newElements: {
                 Output: {
                     Source: {
                         '16:9': {
-                            Format: '16:9',
+                            Format: '16:9' as const,
                             EntryFile: 'index.html',
                             AssetKeys: [],
                             Files: {
@@ -1123,31 +1091,23 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
         const cleanedChangeRequest = new JSONValidator().CleanValidationSyntax<typeof rawChangeRequest>(
             rawChangeRequest,
         );
-        expect(Object.keys(cleanedChangeRequest.newElements.Output.Source)).toEqual(['16']);
+        expect(Object.keys(cleanedChangeRequest.newElements.Output.Source)).toEqual(['16:9']);
 
-        // Simulate newPayload after BaseAgent.validateSuccessNextStep ran ApplyAgentChangeRequest
-        // on the cleaned change request (stripped format key '16' and corrupted dotted 'index.html' -> { index: {} })
-        const corruptedSpec = makeSpec(['16:9']);
-        corruptedSpec.Output!.Source = {
-            '16': {
-                Format: '16:9',
-                EntryFile: 'index.html',
-                AssetKeys: [],
-                Files: {
-                    index: {},
-                },
-            },
-        } as unknown as NonNullable<VideoGenerationSpec['Output']>['Source'];
+        const applied = new PayloadManager().ApplyAgentChangeRequest<VideoGenerationSpec>(
+            baseSpec,
+            cleanedChangeRequest,
+            { allowedPaths: ['Output.Source.*', 'StateList.*'] },
+        );
 
         const outcome = await agent.validateSuccessNextStep(
             { contextUser: MOCK_USER } as ExecuteAgentParams,
             {
                 step: 'Success',
                 terminate: true,
-                newPayload: corruptedSpec,
+                newPayload: applied.result,
                 payloadChangeRequest: cleanedChangeRequest,
             } as unknown as BaseAgentNextStep<VideoGenerationSpec>,
-            corruptedSpec,
+            applied.result,
             {} as MJAIAgentRunEntityExtended,
             {} as MJAIAgentRunStepEntityExtended,
         );

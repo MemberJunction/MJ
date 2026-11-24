@@ -106,6 +106,15 @@ on:
   schedule:
     - cron: '0 6 * * *'
     - cron: '30 6 * * 0'
+  # The release gate: publish.yml calls this workflow on the commit it is about to publish, and
+  # build-and-publish waits for it. `release: true` runs only the deterministic lanes; the nightly
+  # rigs, the drift gate and the live-model lanes keep their own schedules.
+  workflow_call:
+    inputs:
+      release:
+        description: 'Called by publish.yml as the release gate: run only the deterministic integration lanes.'
+        type: boolean
+        default: false
 
 # Cancel superseded PR runs for the same ref. EXCEPTION: push (merge to next) events get a
 # per-commit group and are NEVER cancelled — every merge's backstop must run to completion
@@ -118,14 +127,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  # A called run takes the caller's workflow name and event, so the release gate gets a group of
+  # its own (never publish.yml's) and is never cancelled by a newer run.
+  group: ${{ inputs.release && format('integration-release-{0}', github.sha) || format('{0}-{1}', github.workflow, github.ref) }}${{ !inputs.release && github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' && !inputs.release }}
 
 # The package graph the deterministic lane builds (and therefore all it can execute). One
 # definition, read by the build steps and by the `changes` job's tier selection — the selection
 # is only sound while it describes exactly what the lane builds.
 env:
   INTEGRATION_BUILD_FILTERS: --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+  # Where turbo keeps its local cache, and the directory the "Restore the turbo build seed from
+  # next" steps restore into. This is turbo's default; it is pinned, as in test.yml, so the
+  # restore and the build cannot come to disagree about it.
+  TURBO_CACHE_DIR: .turbo/cache
 
 jobs:
   changes:
@@ -262,6 +277,52 @@ jobs:
       - name: Resolve against the committed lockfile
         run: pnpm install --frozen-lockfile --lockfile-only
 
+  # Predictive Studio sidecar's pytest suite (D-077's Python deferral closed, D4-69). The sidecar's
+  # setup:python / test:python scripts import only node: modules, so no pnpm install is needed: pnpm
+  # only runs the package scripts. setup:python builds .venv on CPython 3.11 from the pinned
+  # src/python/requirements.txt; test:python exits 1 on a failing test and on a missing venv (it
+  # never skips). Same trigger rule as integration-sqlserver: the weekly live-model cron skips it.
+  ps-sidecar-pytest:
+    name: Predictive Studio sidecar (pytest)
+    needs: [preflight]
+    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * *'
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      # The parity tests (tests/tools/gate_parity.py, tests/test_snapshot.py) run the built Core through node, from
+      # Sidecar/node_modules/@memberjunction/predictive-studio-core/dist, so the sidecar's workspace dependencies are
+      # installed and Core is built with its own workspace dependencies first.
+      - name: Install the sidecar's workspace dependencies
+        run: pnpm install --frozen-lockfile --filter "@memberjunction/predictive-studio-sidecar..."
+
+      - name: Build Predictive Studio Core and its dependencies
+        run: pnpm --filter "@memberjunction/predictive-studio-core..." run build
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+
+      - name: Create the sidecar venv
+        working-directory: packages/AI/PredictiveStudio/Sidecar
+        run: pnpm run setup:python   # probes python3.11 first (scripts/python-probe.mjs:12)
+
+      - name: Run the sidecar pytest suite
+        working-directory: packages/AI/PredictiveStudio/Sidecar
+        run: pnpm run test:python
+
   integration-sqlserver:
     name: Integration (SQL Server, deterministic)
     needs: [changes, preflight]
@@ -294,13 +355,14 @@ jobs:
       # quality, so it pins the smallest local model. Read by MJAPI and the `mj` CLI alike, so both
       # embed with, and judge stored vectors against, the same model.
       MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -373,6 +435,34 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # ── next's turbo build seed (PR runs only) ─────────────────────────────────────────
+      # A PR run receives no remote-cache credentials (see this job's env block), so without
+      # this step the build below compiles every task from source: 0 of 237 cached, 6.5-9.5
+      # minutes, against 235 of 235 in about 10 seconds while PR runs still had the remote
+      # cache (measured 2026-11-23). The Unit Tests backstop saves its `.turbo/cache` on every
+      # merge to next (test.yml, "Save turbo build cache"), and that build runs every task this
+      # workflow builds under the same hashes: 237 of 237 for this job and 177 of 177 for the
+      # drift gate on 3f239f5dd3. A task the PR changed, or that depends on one, still misses
+      # and compiles.
+      #
+      # Restore-only, the split test.yml's own Build job uses: the entry is written by
+      # push/schedule runs on next alone, and an Actions cache lets a PR read next's entries
+      # but never another PR's. Entries are content-hashed, so a PR into a release line can
+      # read next's seed too; whatever does not match is a miss.
+      #
+      # Push, schedule, dispatch and release-gate runs keep the remote cache and skip this.
+      # Every job here that builds with turbo carries the step, including the lanes no PR
+      # reaches today, so a lane that later gains a PR trigger is already covered.
+      # integration-turbo-seed.test.mjs holds that, and the key prefix, to test.yml's save key.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       # Build the graph the aggregator imports: testing-integration (+ its deps, which cover
       # core/core-entities/sqlserver-dataprovider/graphql-dataprovider/predictive-studio/
@@ -965,7 +1055,7 @@ jobs:
   integration-live-model:
     name: Integration (Live Model, weekly)
     needs: [preflight]
-    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_model == 'true')
+    if: ${{ !inputs.release && ((github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_model == 'true')) }}
     timeout-minutes: 90
     runs-on: ubuntu-latest
     env:
@@ -976,13 +1066,14 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Check live-model prerequisites
         id: prereq
@@ -1069,6 +1160,16 @@ jobs:
         if: steps.prereq.outputs.READY == 'true'
         run: pnpm install --frozen-lockfile
 
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
       - name: Build integration graph + CLI + MJAPI
         if: steps.prereq.outputs.READY == 'true'
         run: |
@@ -1146,7 +1247,7 @@ jobs:
     name: Cross-server invalidation rig (nightly + cache-stack PRs)
     needs: [preflight, changes]
     # workflow_dispatch also runs it so the rig can be re-run on demand without waiting for the cron.
-    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.cachestack == 'true')
+    if: ${{ !inputs.release && ((github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.cachestack == 'true')) }}
     timeout-minutes: 45
     runs-on: ubuntu-latest
     env:
@@ -1162,13 +1263,14 @@ jobs:
       # Redis + key prefix to assert what the servers broadcast. Defined here so the two cannot drift.
       REDIS_URL: redis://localhost:6379
       REDIS_KEY_PREFIX: mj
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     services:
       redis:
         image: redis:7
@@ -1239,6 +1341,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build integration graph + CLI + MJAPI
         run: |
@@ -1327,10 +1439,11 @@ jobs:
   codegen-drift:
     name: CodeGen drift gate
     needs: [changes, preflight]
-    if: |
+    if: >-
+      ${{ !inputs.release && (
       (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') ||
       github.event_name == 'workflow_dispatch' ||
-      needs.changes.outputs.codegen == 'true'
+      needs.changes.outputs.codegen == 'true') }}
     timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
@@ -1345,13 +1458,14 @@ jobs:
       MJ_CODEGEN_NO_AI: '1'
       # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
       MJ_CODEGEN_SKIP_COMMANDS: '1'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -1417,6 +1531,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build CLI + CodeGen graph
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
@@ -1518,7 +1642,7 @@ jobs:
   schema-mutating-rig:
     name: Schema-mutating rig (nightly)
     needs: [preflight]
-    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
+    if: ${{ !inputs.release && ((github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch') }}
     timeout-minutes: 90
     runs-on: ubuntu-latest
     env:
@@ -1534,10 +1658,10 @@ jobs:
       MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Rationale and setup
       # instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -1575,6 +1699,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
       - name: Build CLI + CodeGen + test framework
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib --filter=@memberjunction/testing-integration
 
@@ -1588,7 +1722,7 @@ jobs:
   codegen-drift-ai:
     name: CodeGen drift gate (weekly AI-assisted)
     needs: [preflight]
-    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && inputs.run_live_model)
+    if: ${{ !inputs.release && ((github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && inputs.run_live_model)) }}
     timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
@@ -1599,10 +1733,10 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
       INTEGRATION_LIVE_MODEL_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
       # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
       MJ_CODEGEN_SKIP_COMMANDS: '1'
@@ -1671,6 +1805,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build CLI + CodeGen graph
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
@@ -1770,7 +1914,7 @@ jobs:
   backstop-alarm:
     name: Backstop alarm
     needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, schema-mutating-rig, codegen-drift-ai]
-    if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
+    if: always() && !inputs.release && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

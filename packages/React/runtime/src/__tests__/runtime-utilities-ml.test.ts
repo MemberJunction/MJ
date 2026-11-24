@@ -140,17 +140,21 @@ describe('RuntimeUtilities — SimpleMLTools', () => {
     expect(models).toEqual([]);
   });
 
-  it('score normalizes record keys, requests ephemeral predictions, and maps the result', async () => {
+  it('score normalizes record keys, scores with no binding (nothing written), and maps the completed run', async () => {
     mockScoreExecute.mockResolvedValue({
       Success: true,
       Output: {
-        scored: 2,
-        failed: 0,
-        skipped: 1,
-        wroteBack: false,
+        status: 'completed',
+        scoringRunId: 'run-1',
+        modelId: 'M1',
+        modelVersion: 1,
+        artifactSha256: 'a'.repeat(64),
+        total: 2,
+        written: 0,
+        dryRun: false,
         predictions: [
-          { recordId: 'R1', score: 0.8, class: 'Yes' },
-          { recordId: 'R2', score: 0.2, class: 'No' }
+          { recordId: 'R1', score: 0.8, class: 'Yes', inTraining: false },
+          { recordId: 'R2', score: 0.2, class: 'No', inTraining: false }
         ]
       }
     });
@@ -162,13 +166,13 @@ describe('RuntimeUtilities — SimpleMLTools', () => {
     const [input, ctx] = mockScoreExecute.mock.calls[0];
     expect(input.modelId).toBe('M1');
     expect(input.scope).toEqual({ records: ['R1', 'R2'] }); // Other-keyed object dropped (no ID)
-    expect(input.writeBack).toBeUndefined(); // ephemeral
+    expect(input.bindingId).toBeUndefined(); // no binding: nothing is written
     expect(ctx.provider).toBe(mockProviderInstance);
 
     expect(result).toEqual({
       scoredCount: 2,
       failedCount: 0,
-      skippedCount: 1,
+      skippedCount: 0,
       predictions: [
         { recordId: 'R1', score: 0.8, class: 'Yes' },
         { recordId: 'R2', score: 0.2, class: 'No' }

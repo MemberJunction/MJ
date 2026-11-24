@@ -15,8 +15,8 @@ import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 interface GqlArtifactPermissionsResult {
-  ResolveArtifactUserPermissions?: { CanEdit?: boolean; CanShare?: boolean };
-  ResolveArtifactPermissions?: { CanEdit?: boolean; CanShare?: boolean };
+  ResolveArtifactUserPermissions?: { CanRead?: boolean; CanEdit?: boolean; CanShare?: boolean };
+  ResolveArtifactPermissions?: { CanRead?: boolean; CanEdit?: boolean; CanShare?: boolean };
 }
 
 interface GqlCapableProvider {
@@ -41,7 +41,14 @@ function isGqlCapableProvider(provider: IMetadataProvider | null | undefined): p
   selector: 'mj-artifact-resource',
   template: `
     <div class="artifact-container">
-      @if (currentUser && artifactId) {
+      @if (AccessDeniedMessage) {
+        <div class="artifact-access-denied" data-testid="artifact-access-denied">
+          <mj-empty-state
+            Icon="fa-solid fa-lock"
+            Title="Access Denied"
+            [Message]="AccessDeniedMessage" />
+        </div>
+      } @else if (currentUser && artifactId && IsPermissionResolved && CanRead) {
         <mj-artifact-viewer-panel
           [artifactId]="artifactId"
           [currentUser]="currentUser"
@@ -64,6 +71,15 @@ function isGqlCapableProvider(provider: IMetadataProvider | null | undefined): p
       width: 100%;
       height: 100%;
       overflow: hidden;
+    }
+
+    .artifact-access-denied {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface);
     }
   `],
   encapsulation: ViewEncapsulation.None
@@ -121,12 +137,17 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
       this._artifactId = next;
       this.CanEdit = false;
       this.CanShare = false;
+      this.CanRead = false;
+      this.IsPermissionResolved = false;
+      this.AccessDeniedMessage = null;
       if (this.CurrentUser && this._artifactId) {
         void this.ResolveArtifactPermissions();
       }
     }
   }
 
+  public CanRead = false;
+  public IsPermissionResolved = false;
   public CanEdit = false;
   /** @deprecated Use {@link CanEdit}. */
   public get canEdit(): boolean {
@@ -138,6 +159,8 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
   }
 
   public CanShare = false;
+  /** Non-null when the current user lacks read permission (e.g., revoked deep link). */
+  public AccessDeniedMessage: string | null = null;
   /** @deprecated Use {@link CanShare}. */
   public get canShare(): boolean {
     return this.CanShare;
@@ -216,24 +239,44 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
     const user = this.CurrentUser;
     this.CanEdit = false;
     this.CanShare = false;
+    this.CanRead = false;
+    this.IsPermissionResolved = false;
 
     if (!targetArtifactId || !user) {
       this.cdr?.markForCheck();
       return;
     }
 
-    const reqId = ++this.permissionRequestSeq;
+    const reqId = (this.permissionRequestSeq ?? 0) + 1;
+    this.permissionRequestSeq = reqId;
+    this.AccessDeniedMessage = null;
     try {
       const perms = await this.fetchPermissionsFromServerOrFallback(targetArtifactId, user);
       if (reqId !== this.permissionRequestSeq || this._artifactId !== targetArtifactId) {
         return;
       }
+      if (perms.CanRead !== true) {
+        this.CanRead = false;
+        this.CanEdit = false;
+        this.CanShare = false;
+        this.IsPermissionResolved = true;
+        this.AccessDeniedMessage =
+          'You do not have permission to view this artifact. Access may have been revoked by the owner.';
+        return;
+      }
+      this.AccessDeniedMessage = null;
+      this.CanRead = true;
+      this.IsPermissionResolved = true;
       this.CanEdit = perms.CanEdit === true;
       this.CanShare = perms.CanShare === true;
     } catch {
       if (reqId === this.permissionRequestSeq) {
+        this.CanRead = false;
         this.CanEdit = false;
         this.CanShare = false;
+        this.IsPermissionResolved = true;
+        this.AccessDeniedMessage =
+          'Unable to verify your permission to view this artifact.';
       }
     } finally {
       if (reqId === this.permissionRequestSeq) {
@@ -245,7 +288,7 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
   private async fetchPermissionsFromServerOrFallback(
     targetArtifactId: string,
     user: UserInfo,
-  ): Promise<{ CanEdit?: boolean; CanShare?: boolean }> {
+  ): Promise<{ CanRead?: boolean; CanEdit?: boolean; CanShare?: boolean }> {
     const provider = this.ProviderToUse;
     if (isGqlCapableProvider(provider)) {
       try {
@@ -265,7 +308,7 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
         const gqlResult = await provider.ExecuteGQL(query, { artifactId: targetArtifactId });
         const resolved =
           gqlResult?.ResolveArtifactUserPermissions ?? gqlResult?.ResolveArtifactPermissions;
-        if (resolved && typeof resolved.CanEdit === 'boolean') {
+        if (resolved && (typeof resolved.CanRead === 'boolean' || typeof resolved.CanEdit === 'boolean')) {
           return resolved;
         }
       } catch (err) {

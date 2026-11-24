@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { InMemoryLocalStorageProvider, UserInfo } from '@memberjunction/core';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { IntegrationCheckRegistry, InstrumentedLocalStorageProvider } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 // Side effect: evaluates EVERY checks module so the auto-derived guard at the bottom of this
 // file sees the complete registry (the explicit imports below cover only the hand-pinned
@@ -23,6 +25,7 @@ import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { PredictiveShadowDriftChecks } from '../checks/predictive-shadow-drift.checks';
+import { PsPredictionServingChecks } from '../checks/ps-prediction-serving.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
@@ -130,12 +133,26 @@ import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
 import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
 import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
 import { DocsSlidesSheetsLibraryChecks, DocsSlidesSheetsLibraryClientChecks } from '../checks/docs-slides-sheets-library.checks';
+import { DocsSemanticGraphChecks } from '../checks/docs-semantic-graph.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
 import { GeminiDecisionsChecks } from '../checks/gemini-decisions.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
+
+/**
+ * A real, unconnected check context: an unconfigured client provider (no global singleton), a user on it and an
+ * in-memory instrumented cache. Enough for a lifecycle that reads nothing from it.
+ */
+function lifecycleContext(): IntegrationCheckContext {
+    const provider = new GraphQLDataProvider(true);
+    return {
+        User: new UserInfo(provider, { ID: '00000000-0000-4000-8000-000000000161', Name: 'lifecycle test user' }),
+        Provider: provider,
+        Storage: new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider()),
+    };
+}
 
 describe('IntegrationCheckRegistry', () => {
     it('registers and retrieves a check by Id', () => {
@@ -170,7 +187,7 @@ describe('IntegrationCheckRegistry', () => {
         });
         const lc = reg.GetLifecycle('lifecycletest');
         expect(lc).toBeDefined();
-        const ctx = {} as unknown as IntegrationCheckContext; // unused by this lifecycle
+        const ctx = lifecycleContext(); // unused by this lifecycle
         await lc!.Setup(ctx);
         await lc!.Teardown(ctx);
         expect(calls).toEqual(['setup', 'teardown']);
@@ -200,7 +217,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['api-keys', ApiKeysChecks, 3],
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
-        ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 shadow scoring Role=Challenger isolation and PredictiveStudioEvaluateDriftAction over MJ: Feature Values (IT166)
+        ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 the live challenger's Model rows and its divergence on the monitoring period row (IT166, M6.8)
+        ['ps-prediction-serving', PsPredictionServingChecks, 8], // Z1-Z8 predictions served as Feature Values with zero schema change, gated by the binding's view authorization (IT187)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
@@ -216,7 +234,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
-        ['chief-of-staff', ChiefOfStaffChecks, 12], // COS1-COS12 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels (IT157)
+        ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
         ['chief-of-staff-world', ChiefOfStaffWorldChecks, 3], // COSW1-COSW3 idempotent persistent Chief of Staff world seed: Jordan & Elena personas, active Coordinator policies, routines, suggestions, notes, Agent Channel (IT183)
         ['chief-of-staff-live', ChiefOfStaffLiveChecks, 4], // COSL1-COSL4 live-model heuristic verification of shipped Chief of Staff via AgentRunner: typed actions, DraftOnly refusal, Agent Channel reply, zero raw SQL/CRUD (IT184)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
@@ -308,10 +326,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
-        ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
+        ['graph-runtime', GraphRuntimeChecks, 9], // GR1-GR9 MJ Canon traversal, per-caller query visibility, edge & concept approval gates on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures, FindPath + Find Graph Path, Propose Canon Domains dry run, and live concept gate lifecycle (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
         ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 14], // DSLC1-DSLC14 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, B4 default-off guest share refusal, and R1/R2 count_only + stored queries (IT171)
+        ['docs-semantic-graph', DocsSemanticGraphChecks, 6], // DSG1-DSG6 MJ Docs in the semantic graph: seeded source and graph, artifact indexing, durable record links, artifact-ACL agreement, shared concepts and redaction, evidence retraction (IT185)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
@@ -378,6 +397,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-execution-primitives-live': 4,
         'agent-external-harness': 7,
         'agent-handoff': 6,
+        'agent-instances-and-inheritance': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 14,
         'agent-memory-guards': 5,
@@ -409,7 +429,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'calendar-event-links': 2,
-        'chief-of-staff': 12,
+        'chief-of-staff': 14,
         'chief-of-staff-live': 4,
         'chief-of-staff-world': 3,
         'ciphertext-cache': 7,
@@ -429,6 +449,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'diagnostics': 4,
         'docs-slides-sheets-library': 10,
         'docs-slides-sheets-library-client': 14,
+        'docs-semantic-graph': 6,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -453,7 +474,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-5': 3,
         'fp-live-jobtitle': 1,
         'gemini-decisions': 8,
-        'graph-runtime': 6,
+        'graph-runtime': 9,
         'integration-schema-pipeline': 4,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
@@ -489,8 +510,13 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c1-s2-6': 1,
         'ps-gate-c1-s3-1': 1,
         'ps-gate-c1-s4-2': 1,
+        'ps-gate-c1-s4-2-2': 1,
         'ps-gate-c1-s6-1': 1,
         'ps-gate-c1-s6-4': 1,
+        'ps-gate-c1-s7-4': 1,
+        'ps-gate-c1-s7-4-2': 1,
+        'ps-gate-c1-s9-1': 1,
+        'ps-gate-c1-s9-2': 1,
         'ps-gate-c2-s1-2': 1,
         'ps-gate-c2-s2-5': 1,
         'ps-gate-c2-s4-1': 1,
@@ -498,11 +524,23 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c2-s6-2': 1,
         'ps-gate-c2-s6-2-2': 1,
         'ps-gate-c3-s4-1': 1,
+        'ps-gate-c3-s9-5': 1,
         'ps-gate-c4-s2-4': 1,
         'ps-gate-d1c-s6-4': 1,
+        'ps-gate-d1c-s8-1': 1,
+        'ps-gate-d1c-s8-2': 1,
+        'ps-gate-d1c-s8-4': 1,
+        'ps-gate-d1c-s8-5': 1,
+        'ps-gate-d1r-s8-2': 1,
+        'ps-gate-d1r-s8-5': 1,
+        'ps-gate-d2-s8-3': 1,
         'ps-gate-n1c-s6-5': 1,
         'ps-gate-n1r-s6-5': 1,
         'ps-gate-r1-s6-6': 1,
+        'ps-gate-r1-s7-1': 1,
+        'ps-gate-r1-s7-3': 1,
+        'ps-gate-r1-s7-4': 1,
+        'ps-gate-r1-s7-6': 1,
         'ps-gate-r2-real-s4-4': 1,
         'ps-gate-r2p-s4-3': 1,
         'ps-gate-r3-s1-4': 1,
@@ -516,6 +554,10 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-t3-s-t-1': 1,
         'ps-gate-t4-s-t-3': 1,
         'ps-gate-t4-s6-5': 1,
+        'ps-gate-t4-s8-3': 1,
+        'ps-gate-t4-s8-4': 1,
+        'ps-gate-t4-s8-5': 1,
+        'ps-gate-w1-c1-2': 1,
         'ps-gate-w1-s1-4': 1,
         'ps-gate-w1-s3-2': 1,
         'ps-gate-w1-s5-1': 1,
@@ -525,9 +567,13 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w1-s5-4-3': 1,
         'ps-gate-w1-s5-5': 1,
         'ps-gate-w1-s6-3': 1,
+        'ps-gate-w1-s7-1': 1,
         'ps-gate-w1-s7-3': 1,
+        'ps-gate-w1-s7-3-2': 1,
         'ps-gate-w1-s7-5': 1,
         'ps-gate-w1-s7-5-2': 1,
+        'ps-gate-w1-s7-5-3': 1,
+        'ps-gate-w1-s9-2': 1,
         'ps-gate-w1-s9-3': 1,
         'ps-gate-w1-s9-4': 1,
         'ps-gate-w1-s9-5': 1,
@@ -535,18 +581,23 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w2-s5-2': 1,
         'ps-gate-w2-s5-3': 1,
         'ps-gate-w2-s6-5': 1,
+        'ps-gate-w2-s6-5-2': 1,
         'ps-gate-w3-c1-1': 1,
         'ps-gate-w3-s2-4': 1,
+        'ps-gate-w3-s7-2': 1,
         'ps-gate-w4-s2-1': 1,
         'ps-gate-w4-s2-1-2': 1,
         'ps-gate-w5-s2-2': 1,
         'ps-gate-w6-s6-1': 1,
+        'ps-gate-w6-s8-4': 1,
         'ps-gate-w7-s4-2': 1,
         'ps-gate-w7-s4-2-2': 1,
         'ps-gate-w7-s6-2': 1,
         'ps-gate-w8-s3-4': 1,
         'ps-gate-w8-s9-4': 1,
         'ps-gate-w9-s6-3': 1,
+        'ps-gate-w9-s9-5': 1,
+        'ps-prediction-serving': 8,
         'ps-truth-datasets': 68,
         'query-api-lifecycle': 12,
         'query-approvals': 5,
@@ -645,7 +696,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(254);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(286);
     });
 });
 
@@ -684,6 +735,13 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     // Checks skipped in the deterministic lane unless RUN_MUTATION_TESTS=1 arms the nightly mutation rig.
     const EXPECTED_MUTATION_GATED: string[] = [
         'actions-pipeline.AP2',
+        'agent-instances-and-inheritance.AII1',
+        'agent-instances-and-inheritance.AII2',
+        'agent-instances-and-inheritance.AII3',
+        'agent-instances-and-inheritance.AII4',
+        'agent-instances-and-inheritance.AII5',
+        'agent-instances-and-inheritance.AII6',
+        'agent-instances-and-inheritance.AII7',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
         'archive-paging.ARP1',
@@ -769,6 +827,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-delete-client.CD1',
         'conversation-delete-client.CD2',
         'conversation-delete-client.CD3',
+        'docs-semantic-graph.DSG2',
+        'docs-semantic-graph.DSG3',
+        'docs-semantic-graph.DSG4',
+        'docs-semantic-graph.DSG5',
+        'docs-semantic-graph.DSG6',
         'docs-slides-sheets-library.DSL3',
         'docs-slides-sheets-library.DSL8',
         'encrypted-read-client.ER1',
@@ -865,6 +928,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fp-gate-c2-5.G3',
         'graph-runtime.GR5',
         'graph-runtime.GR6',
+        'graph-runtime.GR9',
         'jsontype-live-sync-client.JL1',
         'jsontype-live-sync-client.JL2',
         'jsontype-live-sync-client.JL3',
@@ -916,9 +980,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c1-s2-3.G1.6',
         'ps-gate-c1-s2-6.G2.25',
         'ps-gate-c1-s3-1.G1.12',
+        'ps-gate-c1-s4-2-2.G3.5',
         'ps-gate-c1-s4-2.G2.7',
         'ps-gate-c1-s6-1.G2.6',
         'ps-gate-c1-s6-4.G2.36',
+        'ps-gate-c1-s7-4-2.G5.6',
+        'ps-gate-c1-s7-4.G5.4',
+        'ps-gate-c1-s9-1.G3.6',
+        'ps-gate-c1-s9-2.G3.7',
         'ps-gate-c2-s1-2.G2.21',
         'ps-gate-c2-s2-5.G2.23',
         'ps-gate-c2-s4-1.G2.19',
@@ -926,11 +995,23 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c2-s6-2-2.G2.35',
         'ps-gate-c2-s6-2.G2.34',
         'ps-gate-c3-s4-1.G2.18',
+        'ps-gate-c3-s9-5.G3.10',
         'ps-gate-c4-s2-4.G2.9',
         'ps-gate-d1c-s6-4.G2.37',
+        'ps-gate-d1c-s8-1.G6.1',
+        'ps-gate-d1c-s8-2.G6.7',
+        'ps-gate-d1c-s8-4.G6.3',
+        'ps-gate-d1c-s8-5.G6.9',
+        'ps-gate-d1r-s8-2.G6.2',
+        'ps-gate-d1r-s8-5.G6.10',
+        'ps-gate-d2-s8-3.G6.8',
         'ps-gate-n1c-s6-5.G2.1',
         'ps-gate-n1r-s6-5.G2.2',
         'ps-gate-r1-s6-6.G2.17',
+        'ps-gate-r1-s7-1.G3.2',
+        'ps-gate-r1-s7-3.G5.1',
+        'ps-gate-r1-s7-4.G5.3',
+        'ps-gate-r1-s7-6.G6.12',
         'ps-gate-r2-real-s4-4.G2.28',
         'ps-gate-r2p-s4-3.G2.16',
         'ps-gate-r3-s1-4.G1.8',
@@ -944,6 +1025,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-t3-s-t-1.G1.5',
         'ps-gate-t4-s-t-3.G2.11',
         'ps-gate-t4-s6-5.G0.11',
+        'ps-gate-t4-s8-3.G6.6',
+        'ps-gate-t4-s8-4.G6.4',
+        'ps-gate-t4-s8-5.G6.11',
+        'ps-gate-w1-c1-2.G3.11',
         'ps-gate-w1-s1-4.G1.7',
         'ps-gate-w1-s3-2.G1.11',
         'ps-gate-w1-s5-1.G2.29',
@@ -953,28 +1038,36 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-w1-s5-4.G0.10',
         'ps-gate-w1-s5-5.G1.10',
         'ps-gate-w1-s6-3.G2.39',
+        'ps-gate-w1-s7-1.G3.1',
+        'ps-gate-w1-s7-3-2.G5.2',
         'ps-gate-w1-s7-3.G0.7',
         'ps-gate-w1-s7-5-2.G1.9',
+        'ps-gate-w1-s7-5-3.G5.5',
         'ps-gate-w1-s7-5.G0.1',
+        'ps-gate-w1-s9-2.G3.8',
         'ps-gate-w1-s9-3.G0.6',
         'ps-gate-w1-s9-4.G0.4',
         'ps-gate-w1-s9-5.G0.5',
         'ps-gate-w2-c1-1.G0.2',
         'ps-gate-w2-s5-2.G2.4',
         'ps-gate-w2-s5-3.G0.9',
+        'ps-gate-w2-s6-5-2.G3.4',
         'ps-gate-w2-s6-5.G2.3',
         'ps-gate-w3-c1-1.G0.3',
         'ps-gate-w3-s2-4.G2.10',
+        'ps-gate-w3-s7-2.G3.3',
         'ps-gate-w4-s2-1-2.G1.4',
         'ps-gate-w4-s2-1.G0.8',
         'ps-gate-w5-s2-2.G1.3',
         'ps-gate-w6-s6-1.G2.41',
+        'ps-gate-w6-s8-4.G6.5',
         'ps-gate-w7-s4-2-2.G2.5',
         'ps-gate-w7-s4-2.G0.12',
         'ps-gate-w7-s6-2.G2.33',
         'ps-gate-w8-s3-4.G2.27',
         'ps-gate-w8-s9-4.G2.40',
         'ps-gate-w9-s6-3.G2.38',
+        'ps-gate-w9-s9-5.G3.9',
         'ps-truth-datasets.C2-s2201',
         'ps-truth-datasets.C4-s2202',
         'ps-truth-datasets.D1c-s2210',
