@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-auth-services",
   "version": "6.3.0-edge.1",
-  "description": "MemberJunction Explorer: Authentication Services",
+  "description": "MemberJunction: Generic Angular Authentication Services",
   "main": "./dist/public-api.js",
   "types": "./dist/public-api.d.ts",
   "typings": "./dist/public-api.d.ts",
@@ -90,5 +90,5 @@
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
-  "mjUILayer": "surface"
+  "mjUILayer": "widgets"
 }
