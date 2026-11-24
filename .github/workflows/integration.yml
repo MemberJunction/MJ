@@ -1136,21 +1136,21 @@ jobs:
         run: node packages/MJCLI/bin/run.js migrate
 
       # The entities the database has, against those the metadata names. In `regressions` mode a gap
-      # is a warning and the pushes read a copy without the records that need a missing entity; in
-      # `gate` mode it fails here. Either way the pushes read /tmp/pg-metadata.
+      # is a warning and the records that need a missing entity are removed from this (throwaway)
+      # checkout before the pushes; in `gate` mode it fails here.
       - name: Find a parity gap and prune the metadata that needs it
         id: parity
         run: |
           psql -v ON_ERROR_STOP=1 -tA -c 'SELECT "Name" FROM __mj."Entity"' > /tmp/pg-entities.txt
-          node .github/scripts/prune-pg-parity-gap.mjs --mode=${{ needs.changes.outputs.pg }} \
-            --present=/tmp/pg-entities.txt --out=/tmp/pg-metadata --entities-out=/tmp/pg-gap-entities.txt \
+          node .github/scripts/prune-pg-parity-gap.mjs --mode=${{ needs.changes.outputs.pg }} --in-place \
+            --present=/tmp/pg-entities.txt --entities-out=/tmp/pg-gap-entities.txt \
             metadata metadata-optional/integration-test
 
       - name: Sync push — reconcile committed metadata
-        run: node packages/MJCLI/bin/run.js sync push --dir=/tmp/pg-metadata/metadata --ci
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
 
       - name: Sync push — seed the optional integration metadata + RLS fixtures
-        run: node packages/MJCLI/bin/run.js sync push --dir=/tmp/pg-metadata/metadata-optional/integration-test --ci
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
 
       - name: Verify RLS integration fixtures were seeded
         run: |

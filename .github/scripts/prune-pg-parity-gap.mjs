@@ -27,14 +27,17 @@
  * Writes to $GITHUB_OUTPUT: `gap=true|false`, and the missing entities, one per line, to
  * --entities-out (the known-failures check reads it to attribute failures to the gap).
  *
+ * The prune EDITS THE ROOTS IN PLACE (`--in-place` is required to say so). It is meant for a CI
+ * checkout that is thrown away after the job. Pruning a copy elsewhere does not work: prompt
+ * templates `{@include}` files by paths that climb out of the metadata root (../../packages/...).
+ *
  * Usage:
- *   node .github/scripts/prune-pg-parity-gap.mjs --mode=<regressions|gate> \
+ *   node .github/scripts/prune-pg-parity-gap.mjs --mode=<regressions|gate> --in-place \
  *     --present=<file of entity names in the database, one per line> \
- *     --out=<dir for the pruned copies> --entities-out=<file> <metadata root>...
- * Each root is copied to <out>/<root>, pruned or not, so the push always reads from <out>.
+ *     --entities-out=<file> <metadata root>...
  */
-import { readFileSync, writeFileSync, existsSync, appendFileSync, readdirSync, statSync, mkdirSync, cpSync, rmSync } from 'node:fs';
-import { join, dirname, relative, resolve } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, appendFileSync, readdirSync, statSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SYNC_CONFIG = '.mj-sync.json';
@@ -197,26 +200,19 @@ export function planPrune(metadata, missingEntities) {
     return { RemovedDirs: removedDirs, RemovedRecords: removedRecords, Removed: removed };
 }
 
-/** Copies each root to <out>/<root> and applies the plan to the copy. */
-export function writePrunedCopy(roots, out, plan) {
-    const base = process.cwd();
-    const target = (path) => join(out, relative(base, resolve(path)));
-    for (const root of roots) {
-        rmSync(target(root), { recursive: true, force: true });
-        mkdirSync(dirname(target(root)), { recursive: true });
-        cpSync(root, target(root), { recursive: true });
-    }
-    for (const dir of plan.RemovedDirs) rmSync(target(dir), { recursive: true, force: true });
+/** Applies the plan to the files themselves: removes directories, then records from the files left. */
+export function applyPrune(plan) {
+    for (const dir of plan.RemovedDirs) rmSync(dir, { recursive: true, force: true });
     for (const [path, indexes] of plan.RemovedRecords) {
-        if (plan.RemovedDirs.some((d) => path.startsWith(`${d}/`))) continue;
+        if (!existsSync(path)) continue; // its directory went above
         const parsed = JSON.parse(readFileSync(path, 'utf8'));
         if (!Array.isArray(parsed)) {
-            rmSync(target(path), { force: true });
+            rmSync(path, { force: true });
             continue;
         }
         const kept = parsed.filter((_, i) => !indexes.has(i));
-        if (kept.length === 0) rmSync(target(path), { force: true });
-        else writeFileSync(target(path), `${JSON.stringify(kept, null, 2)}\n`);
+        if (kept.length === 0) rmSync(path, { force: true });
+        else writeFileSync(path, `${JSON.stringify(kept, null, 2)}\n`);
     }
 }
 
@@ -227,15 +223,15 @@ function readArg(argv, name) {
 function main(argv) {
     const mode = readArg(argv, 'mode');
     const presentPath = readArg(argv, 'present');
-    const out = readArg(argv, 'out');
+    const inPlace = argv.includes('--in-place');
     const entitiesOut = readArg(argv, 'entities-out');
     const roots = argv.filter((a) => !a.startsWith('--'));
     if (mode !== 'regressions' && mode !== 'gate') {
         console.error(`prune-pg-parity-gap: --mode must be "regressions" or "gate" (got "${mode ?? ''}").`);
         return 2;
     }
-    if (!presentPath || !out || !entitiesOut || roots.length === 0) {
-        console.error('Usage: prune-pg-parity-gap.mjs --mode=<regressions|gate> --present=<file> --out=<dir> --entities-out=<file> <root>...');
+    if (!inPlace || !presentPath || !entitiesOut || roots.length === 0) {
+        console.error('Usage: prune-pg-parity-gap.mjs --mode=<regressions|gate> --in-place --present=<file> --entities-out=<file> <root>...');
         return 2;
     }
     if (!existsSync(presentPath)) {
@@ -253,7 +249,6 @@ function main(argv) {
     const gap = missing.length > 0;
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `gap=${gap}\n`);
     if (!gap) {
-        writePrunedCopy(roots, out, { RemovedDirs: [], RemovedRecords: new Map(), Removed: [] });
         console.log('No parity gap: every entity the metadata names exists on PostgreSQL. Pushing it unchanged.');
         return 0;
     }
@@ -262,7 +257,7 @@ function main(argv) {
         return 1;
     }
     const plan = planPrune(metadata, missing);
-    writePrunedCopy(roots, out, plan);
+    applyPrune(plan);
     const message = `Parity gap: missing on PostgreSQL: ${missing.join(', ')}. Their PostgreSQL migrations arrive with the next /pg-migrate build. The suite still runs; ${plan.Removed.length} record(s) that need them were left out of the push.`;
     console.log(`::warning title=PostgreSQL parity gap::${message}`);
     for (const line of plan.Removed) console.log(`  - ${line}`);

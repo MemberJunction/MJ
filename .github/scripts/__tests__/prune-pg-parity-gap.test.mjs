@@ -126,52 +126,60 @@ describe('the CLI', () => {
     const run = (cwd, args) =>
         spawnSync(process.execPath, [SCRIPT, ...args], { cwd, encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: join(cwd, 'out.txt'), GITHUB_STEP_SUMMARY: '' } });
 
-    it('in regressions mode, writes a pruned copy, the gap entities and gap=true, and exits 0', () => {
+    it('in regressions mode, prunes in place, writes the gap entities and gap=true, and exits 0', () => {
         const cwd = fixture();
         writeFileSync(join(cwd, 'present.txt'), PRESENT.join('\n'));
         writeFileSync(join(cwd, 'out.txt'), '');
-        const result = run(cwd, ['--mode=regressions', '--present=present.txt', '--out=pruned', '--entities-out=gap.txt', 'metadata']);
+        const result = run(cwd, ['--mode=regressions', '--present=present.txt', '--in-place', '--entities-out=gap.txt', 'metadata']);
         expect(result.status).toBe(0);
         expect(result.stdout).toMatch(/::warning title=PostgreSQL parity gap::/);
         expect(readFileSync(join(cwd, 'out.txt'), 'utf8')).toBe('gap=true\n');
         expect(readFileSync(join(cwd, 'gap.txt'), 'utf8')).toBe(`${MISSING}\n`);
-        expect(existsSync(join(cwd, 'pruned/metadata/rhythm-templates'))).toBe(false);
-        const perms = JSON.parse(readFileSync(join(cwd, 'pruned/metadata/entity-permissions/.perms.json'), 'utf8'));
+        expect(existsSync(join(cwd, 'metadata/rhythm-templates'))).toBe(false);
+        const perms = JSON.parse(readFileSync(join(cwd, 'metadata/entity-permissions/.perms.json'), 'utf8'));
         expect(perms).toHaveLength(1);
-        const agents = JSON.parse(readFileSync(join(cwd, 'pruned/metadata/agents/.agents.json'), 'utf8'));
+        const agents = JSON.parse(readFileSync(join(cwd, 'metadata/agents/.agents.json'), 'utf8'));
         expect(agents.map((a) => a.fields.Name)).toEqual(['Helper']);
-        // The source tree is untouched.
-        expect(JSON.parse(readFileSync(join(cwd, 'metadata/entity-permissions/.perms.json'), 'utf8'))).toHaveLength(2);
+        const actions = JSON.parse(readFileSync(join(cwd, 'metadata/actions/.actions.json'), 'utf8'));
+        expect(actions.map((a) => a.fields.Name)).toEqual(['List Rhythms']);
     });
 
-    it('in gate mode, fails on a gap', () => {
+    it('refuses to run without --in-place, since it edits the roots', () => {
+        const cwd = fixture();
+        writeFileSync(join(cwd, 'present.txt'), PRESENT.join('\n'));
+        expect(run(cwd, ['--mode=regressions', '--present=present.txt', '--entities-out=gap.txt', 'metadata']).status).toBe(2);
+        expect(existsSync(join(cwd, 'metadata/rhythm-templates'))).toBe(true);
+    });
+
+    it('in gate mode, fails on a gap and changes nothing', () => {
         const cwd = fixture();
         writeFileSync(join(cwd, 'present.txt'), PRESENT.join('\n'));
         writeFileSync(join(cwd, 'out.txt'), '');
-        const result = run(cwd, ['--mode=gate', '--present=present.txt', '--out=pruned', '--entities-out=gap.txt', 'metadata']);
+        const result = run(cwd, ['--mode=gate', '--present=present.txt', '--in-place', '--entities-out=gap.txt', 'metadata']);
         expect(result.status).toBe(1);
         expect(result.stdout).toMatch(/::error title=PostgreSQL parity gap::/);
+        expect(existsSync(join(cwd, 'metadata/rhythm-templates'))).toBe(true);
     });
 
-    it('with no gap, copies the metadata unchanged and writes gap=false', () => {
+    it('with no gap, leaves the metadata unchanged and writes gap=false', () => {
         const cwd = fixture();
         writeFileSync(join(cwd, 'present.txt'), [...PRESENT, MISSING].join('\n'));
         writeFileSync(join(cwd, 'out.txt'), '');
-        const result = run(cwd, ['--mode=gate', '--present=present.txt', '--out=pruned', '--entities-out=gap.txt', 'metadata']);
+        const result = run(cwd, ['--mode=gate', '--present=present.txt', '--in-place', '--entities-out=gap.txt', 'metadata']);
         expect(result.status).toBe(0);
         expect(readFileSync(join(cwd, 'out.txt'), 'utf8')).toBe('gap=false\n');
         expect(readFileSync(join(cwd, 'gap.txt'), 'utf8')).toBe('');
-        expect(existsSync(join(cwd, 'pruned/metadata/rhythm-templates/.templates.json'))).toBe(true);
+        expect(existsSync(join(cwd, 'metadata/rhythm-templates/.templates.json'))).toBe(true);
     });
 
     it('refuses an empty entity list rather than pruning everything', () => {
         const cwd = fixture();
         writeFileSync(join(cwd, 'present.txt'), '');
-        expect(run(cwd, ['--mode=regressions', '--present=present.txt', '--out=pruned', '--entities-out=gap.txt', 'metadata']).status).toBe(1);
+        expect(run(cwd, ['--mode=regressions', '--present=present.txt', '--in-place', '--entities-out=gap.txt', 'metadata']).status).toBe(1);
     });
 
     it('refuses an unknown mode', () => {
         const cwd = fixture();
-        expect(run(cwd, ['--mode=report', '--present=present.txt', '--out=pruned', '--entities-out=gap.txt', 'metadata']).status).toBe(2);
+        expect(run(cwd, ['--mode=report', '--present=present.txt', '--in-place', '--entities-out=gap.txt', 'metadata']).status).toBe(2);
     });
 });
