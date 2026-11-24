@@ -331,9 +331,10 @@ export abstract class BaseModelRunner {
   private readonly _pendingFailoverFields = new WeakMap<MJAIPromptRunEntityExtended, (run: MJAIPromptRunEntityExtended) => void>();
 
   /**
-   * Tracks `MJAIPromptRunEntityExtended` instances created on this runner by normalized UUID so a child
-   * prompt run (`params.parentPromptRunId`) whose parent's INSERT is still in flight can chain its INSERT
-   * via `_promptRunQueue.InsertAfter(childRun, parentRun)` and never violate `FK_AIPromptRun_ParentID`.
+   * Tracks `MJAIPromptRunEntityExtended` instances created on this runner by normalized UUID while
+   * their initial INSERT is in flight so a child prompt run (`params.parentPromptRunId`) can chain
+   * its INSERT via `_promptRunQueue.InsertAfter(childRun, parentRun)` (`FK_AIPromptRun_ParentID`).
+   * Each entry removes itself deterministically as soon as `_promptRunQueue.Settled(promptRun)` resolves.
    */
   private readonly _trackedPromptRunsById = new Map<string, MJAIPromptRunEntityExtended>();
 
@@ -1510,6 +1511,11 @@ export abstract class BaseModelRunner {
     await this.FlushPendingSaves();
   }
 
+  /** Number of prompt runs currently held for parent/child INSERT chaining. Exposed for diagnostics and tests. */
+  public get TrackedPromptRunCount(): number {
+    return this._trackedPromptRunsById.size;
+  }
+
   /**
    * Creates the `MJ: AI Prompt Runs` record for one model call, fills the fields every runner shares,
    * lets the subclass add its own request fields, then queues the INSERT (fire-and-forget).
@@ -1641,8 +1647,9 @@ export abstract class BaseModelRunner {
 
       applyRequestFields?.(promptRun);
 
-      if (promptRun.ID) {
-        this._trackedPromptRunsById.set(NormalizeUUID(promptRun.ID), promptRun);
+      const trackedKey = promptRun.ID ? NormalizeUUID(promptRun.ID) : null;
+      if (trackedKey) {
+        this._trackedPromptRunsById.set(trackedKey, promptRun);
       }
 
       // Persist the initial 'Running' record fire-and-forget. The ID was already assigned by
@@ -1659,6 +1666,16 @@ export abstract class BaseModelRunner {
         this._promptRunQueue.InsertAfter(promptRun, parentRun);
       } else {
         this._promptRunQueue.Insert(promptRun);
+      }
+      if (trackedKey) {
+        // Deterministically remove the run from the parent-chaining map as soon as its INSERT settles
+        // (succeeded or failed), so long-lived runners never accumulate entries and concurrent in-flight
+        // parent runs are never evicted under an arbitrary count cap.
+        void this._promptRunQueue.Settled(promptRun).finally(() => {
+          if (this._trackedPromptRunsById.get(trackedKey) === promptRun) {
+            this._trackedPromptRunsById.delete(trackedKey);
+          }
+        });
       }
 
       // Invoke callback if provided. The ID is available without awaiting the save (client-generated

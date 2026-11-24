@@ -12,6 +12,7 @@ import {
     type GraphTraversalOptions,
 } from '../graph/BaseGraphEdgeProvider';
 import { CanUserReadEntity, ClampGraphDepth, ClampGraphMaxNodes, GraphEngine, IsCanonGraph, IsFieldReadableByAll, IsGraphConceptStatusVisible } from '../graph/GraphEngine';
+import { RenderCanonDocumentMarkdown, type CanonDocumentOptions } from '../graph/CanonDocumentRenderer';
 import { ProposeEntityDomains, type DomainProposal, type ProposeEntityDomainsOptions } from '../graph/DomainClustering';
 import type {
     GraphExpandedEdge,
@@ -464,6 +465,60 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             ConceptType: detail.ConceptType,
             Subgraph: subgraph,
         };
+    }
+
+    /**
+     * Collapse a governed Canon graph (or a question / pre-expanded subgraph slice of it) into a
+     * flat, deterministic Markdown domain-knowledge document suitable for DBAutoDoc, Skip Brain,
+     * QueryGen, and agent prompts.
+     *
+     * Every concept, edge, entity, alternate base view, and query is checked as `user` and every
+     * principal in `options.AudienceReaders` (row-level and field-level security apply). Artifact
+     * edges (`Defines`, `Measures`, `Describes`, `Implements`) follow the canonical
+     * artifact → concept direction.
+     */
+    public async RenderCanonDocument(
+        user: UserInfo,
+        options: CanonDocumentOptions = {},
+    ): Promise<string> {
+        if (!user) {
+            return '';
+        }
+        await this.EnsureConfigured(user, options.Provider);
+        const graphName = options.GraphName?.trim() || this.ResolvePrimaryCanonGraphName();
+        return RenderCanonDocumentMarkdown(
+            graphName,
+            user,
+            options,
+            async (question, resolvedGraphName) => {
+                const matched = await this.FindConcepts(question, user, {
+                    GraphNames: [resolvedGraphName],
+                    AudienceReaders: options.AudienceReaders,
+                    IncludeProposed: options.IncludeProposed,
+                    provider: options.Provider,
+                });
+                if (matched.length === 0) {
+                    return { Nodes: [], Edges: [] };
+                }
+                const seeds: GraphNodeRef[] = matched.slice(0, MAX_CONCEPT_SEEDS).map((c) => ({
+                    EntityName: c.EntityName,
+                    EntityID: c.EntityID,
+                    RecordID: c.RecordID,
+                }));
+                return GraphEngine.Instance.Subgraph(
+                    resolvedGraphName,
+                    seeds,
+                    {
+                        Depth: 2,
+                        MaxNodes: 50,
+                        IncludeProposed: options.IncludeProposed,
+                        AudienceReaders: options.AudienceReaders,
+                    },
+                    user,
+                    options.Provider,
+                );
+            },
+        );
     }
 
     /**
