@@ -17,7 +17,7 @@
  */
 
 import { GetDialect, type DatabasePlatform } from '@memberjunction/sql-dialect';
-import { IsAzureSqlHost } from './migration-runner.js';
+import { AssertPasswordSourceTransport, IsAzureSqlHost } from './migration-runner.js';
 
 export interface RefreshDatabaseConfig {
     Host: string;
@@ -28,6 +28,10 @@ export interface RefreshDatabaseConfig {
     Encrypt?: boolean;
     TrustServerCertificate?: boolean;
     RequestTimeout?: number;
+    /** PostgreSQL TLS options in node-postgres' `ssl` shape; omitted means plain TCP. */
+    SSL?: Record<string, unknown>;
+    /** PostgreSQL token logins only: gives the password when the connection opens. Used instead of `Password`. */
+    PasswordSource?: () => Promise<string>;
 }
 
 const ALWAYS_EXCLUDE_FROM_FIELD_PROCS = ['sys', 'staging'];
@@ -219,14 +223,17 @@ interface RefreshRunner {
 
 async function openRefreshConnection(platform: DatabasePlatform, database: RefreshDatabaseConfig): Promise<RefreshRunner> {
     if (platform === 'postgresql') {
+        AssertPasswordSourceTransport(database);
         const pgMod = await import('pg');
         const pg = (pgMod as { Client?: typeof pgMod.Client }).Client ? pgMod : (pgMod as unknown as { default: typeof pgMod }).default;
         const client = new pg.Client({
             host: database.Host,
             port: database.Port,
             user: database.User,
-            password: database.Password,
+            password: database.PasswordSource ?? database.Password,
             database: database.Database,
+            // Explicit, so an unset value means plain TCP instead of falling back to PGSSLMODE.
+            ssl: database.SSL ?? false,
         });
         await client.connect();
         return {
