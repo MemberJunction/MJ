@@ -10,6 +10,8 @@
  * @module @memberjunction/ai-agents
  */
 
+import type { ActiveRunTaint } from '../ArtifactToolManager';
+
 /** A JSON value — the medium that flows between pipeline stages. */
 export type PipeValue = null | boolean | number | string | PipeValue[] | { [key: string]: PipeValue };
 
@@ -111,4 +113,6 @@ export interface PipelineExecutionResult {
     contextBytesSaved: number;
     /** Self-correction hint when the pipeline succeeded but a stage zeroed out a non-empty array. */
     diagnostic?: string;
+    /** Highest-severity external-data taint observed across invoked capability stages during this pipeline run. */
+    Taint?: ActiveRunTaint;
 }
