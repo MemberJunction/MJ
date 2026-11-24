@@ -9,9 +9,6 @@ import { PromptEngine } from '../prompts/PromptEngine.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { DatabaseConfig, TokenPricingConfig } from '../types/config.js';
 import { IterationTracker } from '../state/IterationTracker.js';
-
-/** Database platform supported by sample query generation and validation. */
-export type SampleQueryProvider = NonNullable<DatabaseConfig['provider']>;
 import {
   SampleQuery,
   SampleQueryGenerationResult,
@@ -29,6 +26,20 @@ import {
 } from '../types/sample-queries.js';
 import { SchemaDefinition, TableDefinition, DatabaseDocumentation } from '../types/state.js';
 import { StateManager } from '../state/StateManager.js';
+
+/** Database platform supported by sample query generation and validation. */
+export type SampleQueryProvider = NonNullable<DatabaseConfig['provider']>;
+
+const SUPPORTED_PROVIDER_LABELS: Readonly<Record<SampleQueryProvider, string>> = {
+  sqlserver: 'SQL Server',
+  postgresql: 'PostgreSQL',
+  mysql: 'MySQL',
+  oracle: 'Oracle',
+};
+
+function isSampleQueryProvider(value: string): value is SampleQueryProvider {
+  return Object.prototype.hasOwnProperty.call(SUPPORTED_PROVIDER_LABELS, value);
+}
 
 interface QueryGenerationPromptResponse {
   queries: Array<{
@@ -197,6 +208,8 @@ export class SampleQueryGenerator {
     };
 
     try {
+      // Fail fast on unsupported providers before iterating schemas/tables.
+      this.resolveProvider();
       for (const schema of schemas) {
         LogStatus(`[SampleQueryGenerator] Generating queries for schema: ${schema.name}`);
 
@@ -615,16 +628,7 @@ export class SampleQueryGenerator {
    * injected into sample-query prompts. Exhaustive over {@link SampleQueryProvider}.
    */
   public static FormatDatabaseType(provider: SampleQueryProvider): string {
-    switch (provider) {
-      case 'postgresql':
-        return 'PostgreSQL';
-      case 'mysql':
-        return 'MySQL';
-      case 'oracle':
-        return 'Oracle';
-      case 'sqlserver':
-        return 'SQL Server';
-    }
+    return SUPPORTED_PROVIDER_LABELS[provider];
   }
 
   /**
@@ -636,12 +640,10 @@ export class SampleQueryGenerator {
     sqlQuery: string,
     provider: SampleQueryProvider = 'sqlserver'
   ): string {
-    let validationQuery = sqlQuery;
-    const matches = [...sqlQuery.matchAll(/@(\w+)/g)];
-    for (const match of matches) {
-      const sampleValue = SampleQueryGenerator.getSampleParameterValue(match[1]);
-      validationQuery = validationQuery.replace(match[0], sampleValue);
-    }
+    const validationQuery = substituteSampleParameters(
+      sqlQuery,
+      SampleQueryGenerator.getSampleParameterValue
+    );
 
     const topLevelMask = maskNonTopLevelSQL(validationQuery);
     if (hasTopLevelRowLimit(validationQuery, topLevelMask)) {
@@ -660,11 +662,14 @@ export class SampleQueryGenerator {
   }
 
   private resolveProvider(): SampleQueryProvider {
-    const raw = this.driver.GetProviderName().toLowerCase();
-    if (raw === 'postgresql' || raw === 'mysql' || raw === 'oracle' || raw === 'sqlserver') {
+    const raw = this.driver.GetProviderName().trim().toLowerCase();
+    if (isSampleQueryProvider(raw)) {
       return raw;
     }
-    return 'sqlserver';
+    const supported = Object.keys(SUPPORTED_PROVIDER_LABELS).join(', ');
+    throw new Error(
+      `Unsupported database provider "${this.driver.GetProviderName()}" for sample query generation. Supported providers: ${supported}`
+    );
   }
 
   private getDatabaseType(): string {
@@ -1224,6 +1229,11 @@ export class SampleQueryGenerator {
   }
 }
 
+interface NonCodeToken {
+  End: number;
+  Kind: 'lineComment' | 'blockComment' | 'delimited';
+}
+
 function skipDelimitedToken(sql: string, start: number, close: string): number {
   let i = start + 1;
   while (i < sql.length) {
@@ -1247,6 +1257,69 @@ function skipBlockComment(sql: string, start: number): number {
   return i < sql.length ? i + 2 : i;
 }
 
+function readNonCodeToken(sql: string, start: number): NonCodeToken | null {
+  const ch = sql[start];
+  const next = sql[start + 1];
+
+  if (ch === '-' && next === '-') {
+    let end = start + 2;
+    while (end < sql.length && sql[end] !== '\n') {
+      end++;
+    }
+    return { End: end, Kind: 'lineComment' };
+  }
+  if (ch === '/' && next === '*') {
+    return { End: skipBlockComment(sql, start), Kind: 'blockComment' };
+  }
+  if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
+    return { End: skipDelimitedToken(sql, start, ch === '[' ? ']' : ch), Kind: 'delimited' };
+  }
+  return null;
+}
+
+function isParamChar(ch: string | undefined): boolean {
+  return ch !== undefined && /\w/.test(ch);
+}
+
+/**
+ * Replaces `@param` placeholders in SQL code with sample values in a single linear O(n) pass,
+ * skipping string literals, quoted identifiers, comments, and SQL Server `@@` system variables.
+ */
+function substituteSampleParameters(
+  sql: string,
+  resolveValue: (paramName: string) => string
+): string {
+  const out: string[] = [];
+  let i = 0;
+
+  while (i < sql.length) {
+    const token = readNonCodeToken(sql, i);
+    if (token) {
+      out.push(sql.slice(i, token.End));
+      i = token.End;
+      continue;
+    }
+    if (sql[i] === '@' && sql[i + 1] === '@') {
+      let end = i + 2;
+      while (isParamChar(sql[end])) end++;
+      out.push(sql.slice(i, end));
+      i = end;
+      continue;
+    }
+    if (sql[i] === '@' && isParamChar(sql[i + 1])) {
+      let end = i + 2;
+      while (isParamChar(sql[end])) end++;
+      out.push(resolveValue(sql.slice(i + 1, end)));
+      i = end;
+      continue;
+    }
+    out.push(sql[i]);
+    i++;
+  }
+
+  return out.join('');
+}
+
 /**
  * Replaces characters inside SQL strings, quoted identifiers, comments, and parenthesized
  * subexpressions with spaces while preserving original indices, so top-level keyword scans
@@ -1258,33 +1331,16 @@ function maskNonTopLevelSQL(sql: string): string {
   let i = 0;
 
   while (i < sql.length) {
-    const ch = sql[i];
-    const next = sql[i + 1];
-
-    if (ch === '-' && next === '-') {
-      while (i < sql.length && sql[i] !== '\n') {
-        out.push(' ');
-        i++;
-      }
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      const end = skipBlockComment(sql, i);
-      for (let k = i; k < end; k++) {
+    const token = readNonCodeToken(sql, i);
+    if (token) {
+      for (let k = i; k < token.End; k++) {
         out.push(sql[k] === '\n' ? '\n' : ' ');
       }
-      i = end;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
-      const end = skipDelimitedToken(sql, i, ch === '[' ? ']' : ch);
-      for (let k = i; k < end; k++) {
-        out.push(' ');
-      }
-      i = end;
+      i = token.End;
       continue;
     }
 
+    const ch = sql[i];
     if (ch === '(') {
       depth++;
       out.push(' ');
@@ -1337,38 +1393,24 @@ function injectSqlServerTopLimit(sql: string, topLevelMask: string, limit: numbe
 
 function appendTrailingRowLimit(sql: string, clause: string): string {
   const trimmedRight = sql.trimEnd();
-  const hadSemicolon = trimmedRight.endsWith(';');
+  const hadSemicolon = trimmedRight.endsWith(';') && !endsWithLineComment(trimmedRight);
   const withoutSemicolon = hadSemicolon ? trimmedRight.replace(/\s*;+$/, '') : trimmedRight;
   const separator = endsWithLineComment(withoutSemicolon) ? '\n' : ' ';
   return `${withoutSemicolon}${separator}${clause}${hadSemicolon ? ';' : ''}`;
 }
 
 function endsWithLineComment(sql: string): boolean {
-  let inLineComment = false;
   let i = 0;
-
   while (i < sql.length) {
-    const ch = sql[i];
-    if (inLineComment) {
-      if (ch === '\n') inLineComment = false;
-      i++;
-      continue;
-    }
-    if (ch === '-' && sql[i + 1] === '-') {
-      inLineComment = true;
-      i += 2;
-      continue;
-    }
-    if (ch === '/' && sql[i + 1] === '*') {
-      i = skipBlockComment(sql, i);
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
-      i = skipDelimitedToken(sql, i, ch === '[' ? ']' : ch);
+    const token = readNonCodeToken(sql, i);
+    if (token) {
+      if (token.Kind === 'lineComment' && token.End === sql.length) {
+        return true;
+      }
+      i = token.End;
       continue;
     }
     i++;
   }
-
-  return inLineComment;
+  return false;
 }

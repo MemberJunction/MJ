@@ -1542,5 +1542,167 @@ describe('AdditionalSchemaInfoGenerator', () => {
       expect(parsed.dbo[0].ForeignKeys).toHaveLength(2);
       expect(parsed.dbo[0].ForeignKeys.map((f: { SchemaName: string }) => f.SchemaName)).toEqual(['crm', 'billing']);
     });
+
+    it('never emits a discovered PK under DiscoveredOnly when the table has a declared catalog PK', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'DeclaredID', dataType: 'int', isPrimaryKey: true, description: 'Catalog PK' }),
+          createColumn({ name: 'AltCode', dataType: 'varchar', isPrimaryKey: true }),
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([makePK(['AltCode'], 92, 'confirmed')]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state, { DiscoveredOnly: true }));
+      expect(parsed.dbo).toBeUndefined();
+    });
+
+    it('preserves a declared composite catalog PK backed by a catalog PK index even if discovery proposed and rejected one of its columns', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'OrderID', dataType: 'int', isPrimaryKey: true, description: 'Order identifier' }),
+          createColumn({ name: 'LineNum', dataType: 'int', isPrimaryKey: true, description: 'Line number' }),
+          createColumn({ name: 'StaleCol', dataType: 'int', isPrimaryKey: true }),
+        ],
+        indexes: [
+          {
+            SchemaName: 'dbo',
+            TableName: 'Orders',
+            IndexName: 'PK_Orders',
+            Columns: ['OrderID', 'LineNum'],
+            IncludeColumns: [],
+            IsUnique: true,
+            IsPrimaryKey: true,
+            Method: 'CLUSTERED',
+            HasExpressions: false,
+          },
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([
+            makePK(['OrderID'], 80, 'rejected'),
+            makePK(['StaleCol'], 95, 'confirmed'),
+          ]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].PrimaryKey).toEqual([
+        { FieldName: 'OrderID', Description: 'Order identifier' },
+        { FieldName: 'LineNum', Description: 'Line number' },
+      ]);
+      expect(JSON.parse(generator.Generate(state, { DiscoveredOnly: true })).dbo).toBeUndefined();
+    });
+
+    it('respects post-#6636 primaryKeySource markers so unmarked catalog PKs survive overlapping candidates', () => {
+      const discoveredCol = Object.assign(
+        createColumn({ name: 'AltCode', dataType: 'varchar', isPrimaryKey: true }),
+        { primaryKeySource: 'discovery' }
+      );
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'OrderID', dataType: 'int', isPrimaryKey: true, description: 'Catalog PK' }),
+          discoveredCol,
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([
+            makePK(['OrderID'], 75, 'rejected'),
+            makePK(['AltCode'], 90, 'confirmed'),
+          ]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].PrimaryKey).toEqual([
+        { FieldName: 'OrderID', Description: 'Catalog PK' },
+      ]);
+    });
+
+    it('keeps a valid cross-schema FK when dropNonUniqueCompositePairs drops an identically named table in another schema', () => {
+      const crmAccounts = createTable({
+        name: 'Accounts',
+        columns: [
+          createColumn({ name: 'ID', dataType: 'int', isPrimaryKey: true }),
+          createColumn({ name: 'TenantID', dataType: 'int', isPrimaryKey: true }),
+        ],
+      });
+      const billingAccounts = createTable({
+        name: 'Accounts',
+        columns: [
+          createColumn({ name: 'ID', dataType: 'int', isPrimaryKey: true }),
+        ],
+      });
+      const orders = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'AccountID', dataType: 'int' }),
+          createColumn({ name: 'TenantID', dataType: 'int' }),
+        ],
+        dependsOn: [
+          { schema: 'crm', table: 'Accounts', column: 'AccountID', referencedColumn: 'ID', constraintName: 'FK_Orders_CrmAccounts' },
+          { schema: 'crm', table: 'Accounts', column: 'TenantID', referencedColumn: 'TenantID', constraintName: 'FK_Orders_CrmAccounts' },
+          { schema: 'billing', table: 'Accounts', column: 'AccountID', referencedColumn: 'ID', constraintName: 'FK_Orders_BillingAccounts' },
+        ],
+      });
+      const state = createTestState({
+        schemas: [
+          createSchema('crm', [crmAccounts]),
+          createSchema('billing', [billingAccounts]),
+          createSchema('dbo', [orders]),
+        ],
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].ForeignKeys).toEqual([
+        {
+          FieldName: 'AccountID',
+          SchemaName: 'billing',
+          RelatedTable: 'Accounts',
+          RelatedField: 'ID',
+        },
+      ]);
+    });
+
+    it('prefers the confirmed or highest-confidence candidate when duplicate discovered FKs target the same edge, matching schema/table case-insensitively', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'CustomerID', dataType: 'int', description: 'Customer reference' }),
+        ],
+      });
+      const lowCandidate = makeFK('CustomerID', 'Customers', 'ID', 'candidate', 70);
+      lowCandidate.schemaName = 'DBO';
+      lowCandidate.sourceTable = 'orders';
+      const highConfirmed = makeFK('CustomerID', 'Customers', 'ID', 'confirmed', 96);
+      highConfirmed.schemaName = 'DBO';
+      highConfirmed.sourceTable = 'orders';
+
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([], [lowCandidate, highConfirmed]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].ForeignKeys).toHaveLength(1);
+      expect(parsed.dbo[0].ForeignKeys[0].Description).toContain('confidence: 96%');
+    });
   });
 });

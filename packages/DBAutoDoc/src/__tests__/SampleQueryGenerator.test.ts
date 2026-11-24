@@ -1,5 +1,142 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { SampleQueryGenerator } from '../generators/SampleQueryGenerator.js';
+import { PostgreSQLDriver } from '../drivers/PostgreSQLDriver.js';
+import { MySQLDriver } from '../drivers/MySQLDriver.js';
+import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
+import { PromptEngine } from '../prompts/PromptEngine.js';
+import { StateManager } from '../state/StateManager.js';
+import type { DatabaseDocumentation, SchemaDefinition, TableDefinition } from '../types/state.js';
+import type { SampleQueryGenerationConfig } from '../types/sample-queries.js';
+
+function createMinimalSchema(): SchemaDefinition {
+  const table: TableDefinition = {
+    name: 'users',
+    rowCount: 100,
+    columns: [
+      {
+        name: 'id',
+        dataType: 'int',
+        isNullable: false,
+        isPrimaryKey: true,
+        isForeignKey: false,
+        descriptionIterations: [],
+      },
+      {
+        name: 'status',
+        dataType: 'varchar',
+        isNullable: false,
+        isPrimaryKey: false,
+        isForeignKey: false,
+        descriptionIterations: [],
+      },
+    ],
+    dependsOn: [],
+    dependents: [],
+    descriptionIterations: [],
+  };
+  return { name: 'public', tables: [table], descriptionIterations: [] };
+}
+
+function createMinimalState(schema: SchemaDefinition): DatabaseDocumentation {
+  return {
+    version: '1.0',
+    summary: {
+      createdAt: '2026-01-01',
+      lastModified: '2026-01-01',
+      totalIterations: 1,
+      totalPromptsRun: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalTokens: 0,
+      estimatedCost: 0,
+      totalSchemas: 1,
+      totalTables: schema.tables.length,
+      totalColumns: schema.tables[0].columns.length,
+    },
+    database: { name: 'testdb', server: 'localhost', analyzedAt: '2026-01-01' },
+    seedContext: {},
+    schemas: [schema],
+    phases: { descriptionGeneration: [] },
+  };
+}
+
+function createDriver(provider: 'postgresql' | 'mysql'): BaseAutoDocDriver {
+  const conn = {
+    provider,
+    host: 'localhost',
+    database: 'testdb',
+    user: 'tester',
+    password: 'secret',
+  };
+  return provider === 'postgresql' ? new PostgreSQLDriver(conn) : new MySQLDriver(conn);
+}
+
+function createGeneratorHarness(driver: BaseAutoDocDriver) {
+  const schema = createMinimalSchema();
+  const state = createMinimalState(schema);
+
+  const promptEngine = new PromptEngine({ provider: 'gemini', model: 'test-model', apiKey: 'test-key' }, '');
+  const executePrompt = vi.spyOn(promptEngine, 'executePrompt').mockImplementation(async (promptName: string) => {
+    if (promptName === 'query-planning') {
+      return {
+        success: true,
+        tokensUsed: 10,
+        result: {
+          queries: [
+            {
+              id: 'q1',
+              name: 'Active Users',
+              description: 'List active users',
+              businessPurpose: 'User monitoring',
+              queryType: 'operational',
+              queryPattern: 'filtering',
+              complexity: 'simple',
+              primaryEntities: [{ schema: 'public', table: 'users' }],
+              relatedEntities: [],
+              RelatedQueryIds: [],
+              confidence: 0.9,
+            },
+          ],
+        },
+      };
+    }
+    return {
+      success: true,
+      tokensUsed: 10,
+      result: {
+        sqlQuery: 'SELECT id FROM public.users WHERE status = @status;',
+        parameters: [],
+        sampleResultColumns: [],
+        filteringRules: [],
+        aggregationRules: [],
+        joinRules: [],
+      },
+    };
+  });
+
+  const executeQuery = vi.spyOn(driver, 'executeQuery').mockResolvedValue({
+    success: true,
+    data: [{ id: 1 }],
+  });
+  const stateManager = new StateManager('/tmp/sample-query-generator-test.json');
+  vi.spyOn(stateManager, 'load').mockResolvedValue(state);
+  vi.spyOn(stateManager, 'save').mockResolvedValue(undefined);
+
+  const config: SampleQueryGenerationConfig = {
+    enabled: true,
+    queriesPerTable: 1,
+    maxExecutionTime: 5000,
+    includeMultiQueryPatterns: false,
+    validateAlignment: false,
+    tokenBudget: 0,
+    maxTables: 1,
+    enableQueryFix: false,
+    enableQueryRefinement: false,
+  };
+
+  const generator = new SampleQueryGenerator(config, promptEngine, driver, 'test-model', stateManager);
+  return { generator, schema, executePrompt, executeQuery };
+}
 
 describe('SampleQueryGenerator', () => {
   describe('FormatDatabaseType', () => {
@@ -104,6 +241,80 @@ describe('SampleQueryGenerator', () => {
       );
       expect(oracleSql).not.toMatch(/\bTOP 10\b/i);
       expect(oracleSql).toBe("SELECT id FROM hr.employees WHERE start_date >= '2024-01-01' FETCH FIRST 10 ROWS ONLY");
+    });
+
+    it('substitutes prefix-overlapping @params without collision and leaves strings, comments, and @@globals intact', () => {
+      const sql = SampleQueryGenerator.PrepareValidationQuery(
+        "SELECT @@ROWCOUNT, id FROM dbo.Users WHERE status_name = @statusName AND status = @status AND email = 'user@example.com' -- @author",
+        'postgresql'
+      );
+      expect(sql).toBe(
+        "SELECT @@ROWCOUNT, id FROM dbo.Users WHERE status_name = 'Active' AND status = 'Active' AND email = 'user@example.com' -- @author\nLIMIT 10"
+      );
+    });
+
+    it('handles trailing newlines and semicolons inside trailing line comments cleanly', () => {
+      expect(
+        SampleQueryGenerator.PrepareValidationQuery(
+          'SELECT id FROM users -- fetch active rows\n   ',
+          'postgresql'
+        )
+      ).toBe('SELECT id FROM users -- fetch active rows\nLIMIT 10');
+
+      expect(
+        SampleQueryGenerator.PrepareValidationQuery(
+          'SELECT id FROM users -- note: keep semicolon;',
+          'postgresql'
+        )
+      ).toBe('SELECT id FROM users -- note: keep semicolon;\nLIMIT 10');
+    });
+  });
+
+  describe('instance provider wiring', () => {
+    it('passes the driver dialect to prompts and validates PostgreSQL queries with LIMIT 10', async () => {
+      const { generator, schema, executePrompt, executeQuery } = createGeneratorHarness(createDriver('postgresql'));
+
+      const result = await generator.GenerateQueries([schema]);
+
+      expect(result.Success).toBe(true);
+      expect(executePrompt).toHaveBeenCalledWith(
+        'query-planning',
+        expect.objectContaining({ databaseType: 'PostgreSQL' }),
+        expect.anything()
+      );
+      expect(executePrompt).toHaveBeenCalledWith(
+        'single-query-generation',
+        expect.objectContaining({ databaseType: 'PostgreSQL' }),
+        expect.anything()
+      );
+      expect(executeQuery).toHaveBeenCalledWith("SELECT id FROM public.users WHERE status = 'Active' LIMIT 10;");
+    });
+
+    it('passes MySQL dialect to prompts and validates MySQL queries with LIMIT 10', async () => {
+      const { generator, schema, executePrompt, executeQuery } = createGeneratorHarness(createDriver('mysql'));
+
+      const result = await generator.GenerateQueries([schema]);
+
+      expect(result.Success).toBe(true);
+      expect(executePrompt).toHaveBeenCalledWith(
+        'query-planning',
+        expect.objectContaining({ databaseType: 'MySQL' }),
+        expect.anything()
+      );
+      expect(executeQuery).toHaveBeenCalledWith("SELECT id FROM public.users WHERE status = 'Active' LIMIT 10;");
+    });
+
+    it('fails fast with a clear error instead of falling back to SQL Server for an unsupported provider', async () => {
+      const driver = createDriver('postgresql');
+      vi.spyOn(driver, 'GetProviderName').mockReturnValue('sqlite');
+      const { generator, schema, executePrompt, executeQuery } = createGeneratorHarness(driver);
+
+      const result = await generator.GenerateQueries([schema]);
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('Unsupported database provider "sqlite"');
+      expect(executePrompt).not.toHaveBeenCalled();
+      expect(executeQuery).not.toHaveBeenCalled();
     });
   });
 });

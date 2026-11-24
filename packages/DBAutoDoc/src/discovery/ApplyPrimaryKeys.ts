@@ -76,6 +76,7 @@ export function PickBestPKCandidate(eligible: PKCandidate[]): PKCandidate | unde
   }, undefined);
 }
 
+// Keep internal alias so ApplyBestPrimaryKeys above stays disjoint from open PR #6636.
 function pickBest(eligible: PKCandidate[]): PKCandidate | undefined {
   return PickBestPKCandidate(eligible);
 }

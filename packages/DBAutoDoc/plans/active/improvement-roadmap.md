@@ -1,6 +1,6 @@
 # DBAutoDoc improvement roadmap
 
-*Written 2026-11-12; updated 2026-11-23 (Phase 0 Wave 1 landed; §12 refreshed; connector flywheel linked).*
+*Written 2026-11-12; updated 2026-11-24 (Phase 0 Wave 1 in flight in #6871; §12 refreshed; connector flywheel linked).*
 
 This plan collects three inputs:
 
@@ -41,17 +41,17 @@ fixing them is also the cheapest accuracy work available. Some are partly fixed 
 | # | Bug | Evidence | Fix |
 |---|---|---|---|
 | 0.1 | **Binary and LOB values are sampled into prompts uncapped.** AdventureWorks `Production.ProductPhoto` and `Document` produced prompts of 754K–1M+ tokens and failed analysis. The paper (§7.2.3) attributes GPT-5.4-mini's extra FK misses to its context window; the blob prompts are the more direct cause. | `src/drivers/SQLServerDriver.ts:445-461` (no type filter); `prompts/PromptEngine.ts:92-98` (`jsoninline` has no length cap); `research/v1/results/adventureworks/gemini/analysis-report.md:32` | Never sample binary/LOB/xml/spatial types; cap each rendered value (for example 64 chars) and each column's sample block; record the type as "not sampled". |
-| 0.2 | **Pruned keys still reach outputs.** Discovery sets `isPrimaryKey`/`isForeignKey` on columns for every candidate above the minimum; pruning only sets `status='rejected'` and never clears the flags; generators emit the flags ungated. `collectDiscoveredPKs` unions the columns of several candidates into one "primary key". | `src/discovery/DiscoveryEngine.ts:1118-1160`; `src/core/AnalysisEngine.ts:462-470`; `src/generators/AdditionalSchemaInfoGenerator.ts:422-433, 446-466, 552-576`; visible in `research/v1/results/lousydb/additionalSchemaInfo.json` | One winning PK per table; clear column flags on rejection; generators read candidate status, not column flags. M. Likely a large share of the LousyDB FK gap. |
+| 0.2 | **Pruned keys still reach outputs.** Discovery sets `isPrimaryKey`/`isForeignKey` on columns for every candidate above the minimum; pruning only sets `status='rejected'` and never clears the flags; generators emit the flags ungated. `collectDiscoveredPKs` unions the columns of several candidates into one "primary key". | `src/discovery/DiscoveryEngine.ts:1118-1160`; `src/core/AnalysisEngine.ts:462-470`; `src/generators/AdditionalSchemaInfoGenerator.ts:422-433, 446-466, 552-576`; visible in `research/v1/results/lousydb/additionalSchemaInfo.json` | One winning PK per table; clear column flags on rejection; generators read candidate status, not column flags. M. Likely a large share of the LousyDB FK gap. *(Wave 1 `#6871` covers `AdditionalSchemaInfoGenerator` gating + single-winner PK selection; source-side FK flag clearing and other generators wait for Wave 2.)* |
 | 0.3 | **LLM-proposed FKs are checked for containment but not target uniqueness**, so sibling columns sharing a parent (`whs_id` in three tables) pass at ~100%. FKDetector pattern 2 skips the PK-eligibility gate for members of composite PKs. | `AnalysisEngine.ts:1540-1720`; `src/discovery/FKDetector.ts:235-257` | Require the target to be a PK or unique column, or a full composite key. |
 | 0.4 | **Holistic pruning failure is destructive.** If the holistic call fails, every pass-1 removal is applied; the holistic prompt is not chunked. | `AnalysisEngine.ts:465-472`; `prompts/fk-pruning-holistic.md` | On failure keep the keys; batch the holistic pass (see 5.8). Match decisions on stable keys, not list indexes (`AnalysisEngine.ts:459-461`). |
-| 0.5 | **The evaluation script does not compute the published score.** `compare.py` averages four metrics equally; the paper weights them 0.35/0.30/0.20/0.15. Ground-truth paths are hard-coded to `/workspace/...`; schema is dropped from FK keys; a block reads a field `state.ts` does not have. | `research/v1/scripts/compare.py:11-19, 99-117, 193` | Superseded by the eval command in Phase 1; until then fix the weights and keep schema in keys. |
+| 0.5 | **The evaluation script does not compute the published score.** `compare.py` averages four metrics equally; the paper weights them 0.35/0.30/0.20/0.15. Ground-truth paths are hard-coded to `/workspace/...`; schema is dropped from FK keys; a block reads a field `state.ts` does not have. | `research/v1/scripts/compare.py:11-19, 99-117, 193` | Superseded by the eval command in Phase 1; until then fix the weights and keep schema in keys. *(Fixed in Wave 1 `#6871`.)* |
 | 0.6 | **Hitting the iteration cap reports "converged".** Every benchmark run used `maxIterations=2` and reports convergence. | `src/core/ConvergenceDetector.ts:30` | Separate `stopReason` (`converged` / `iteration-cap` / `budget` / `error`). |
 | 0.7 | **Probe errors read as negative evidence.** Value-overlap errors return 0% (silently failing gate 6); composite-uniqueness errors return "not unique"; statistics errors become zeros. | `SQLServerDriver.ts:829-875, 975-1020, 660-669` | Use the tri-state `DriverProbeOutcome` that `ProbeJoinContainment` already uses; record "unknown" and skip the gate rather than failing it. |
 | 0.8 | **LLM FK confirmation is keyed on source column only**, so a confirmation for a different target overwrites the reference and inconsistent state follows; rejected FKs are re-pushed every iteration. | `AnalysisEngine.ts:1644-1648` | Key on (source, target); never resurrect a rejected candidate without new evidence. |
 | 0.9 | **Unknown `provider` silently becomes SQL Server.** | `src/database/Database.ts:18-22` | Hard error listing supported providers. |
-| 0.10 | **Identifiers are not escaped** (delimiters not doubled; filter literals and generated SQL interpolate names). | `SQLServerDriver.ts:511-513`, `PostgreSQLDriver.ts:511-513`, `MySQLDriver.ts:504-506`, `BaseAutoDocDriver.ts:349-385`, `generators/SQLGenerator.ts:147,153,262-264` | Double the delimiter; use `EscapeSQLString` for literals. |
-| 0.11 | **Sample-query validation injects `TOP 10` on PostgreSQL and MySQL.** | `src/generators/SampleQueryGenerator.ts:1060-1080` | Dialect-aware limit. |
-| 0.12 | Smaller defects: failed LLM calls report 0 tokens (`PromptEngine.ts:202-207`); LLM-discovered FKs hard-code `discoveredInIteration: 1` (`AnalysisEngine.ts:1476,1702`); `isNumericType` matches `int` inside `interval`/`point` (`BaseAutoDocDriver.ts:316-322`); dead `start` script in `package.json`; dead stub behind the only TODO (`AnalysisEngine.ts:1358-1380`); placeholder text ("AI-discovered primary key (confidence: 100%)") becomes a column description (`AdditionalSchemaInfoGenerator.ts:570`). | as listed | Fix each. |
+| 0.10 | **Identifiers are not escaped** (delimiters not doubled; filter literals and generated SQL interpolate names). | `SQLServerDriver.ts:511-513`, `PostgreSQLDriver.ts:511-513`, `MySQLDriver.ts:504-506`, `BaseAutoDocDriver.ts:349-385`, `generators/SQLGenerator.ts:147,153,262-264` | Double the delimiter; use `EscapeSQLString` for literals. *(Wave 1 `#6871` covers `SQLGenerator.ts` SQL Server extended properties; drivers remain for Wave 2.)* |
+| 0.11 | **Sample-query validation injects `TOP 10` on PostgreSQL and MySQL.** | `src/generators/SampleQueryGenerator.ts:1060-1080` | Dialect-aware limit. *(Fixed in Wave 1 `#6871`.)* |
+| 0.12 | Smaller defects: failed LLM calls report 0 tokens (`PromptEngine.ts:202-207`); LLM-discovered FKs hard-code `discoveredInIteration: 1` (`AnalysisEngine.ts:1476,1702`); `isNumericType` matches `int` inside `interval`/`point` (`BaseAutoDocDriver.ts:316-322`); dead `start` script in `package.json`; dead stub behind the only TODO (`AnalysisEngine.ts:1358-1380`); placeholder text ("AI-discovered primary key (confidence: 100%)") becomes a column description (`AdditionalSchemaInfoGenerator.ts:570`). | as listed | Fix each. *(Wave 1 `#6871` fixes placeholder PK descriptions in `AdditionalSchemaInfoGenerator.ts`; remaining items wait for Wave 2.)* |
 
 ---
 
@@ -305,7 +305,7 @@ MemberJunction/MJ). This plan is meant to sit alongside that work, not restate i
 | Work | What it covers | Effect on this plan |
 |---|---|---|
 | **#5223** (issue): evidence-driven relationship discovery | The existing key-discovery roadmap: per-candidate verification SQL with target uniqueness, fan-out and type checks; `verify`/`prune` commands; sandboxed read-only exploration SQL; documentation ingestion; LLM-proposed naming conventions judged against data; ID-format fingerprints; convention packs per source system; self-references; one parent per column; calibrated confidence; a coverage report; a precision/recall harness. | **Phase 2 builds on #5223 rather than parallel to it.** Items 2.3, 2.7 and 2.11 and Phase 1.1 are the same ideas; implement them under #5223. Genuinely new here: query history (2.9), view/procedure mining (2.10), the name normaliser (2.1), identity evidence (2.2). |
-| **#6004** (issue): **#6498** (MERGED 2026-11-13) + **#6636** (open follow-up, split from #6327) | One PK per table (`ApplyBestPrimaryKeys.ts`); `#6636` adds `primaryKeySource: 'discovery'` so discovered PKs never combine with a declared PK. | Covers the PK half of 0.2 (`#6498` merged; `#6636` finishes declared-PK protection). Generator gating (`AdditionalSchemaInfoGenerator.ts`) is covered in Phase 0 Wave 1; FK-flag clearing in `AnalysisEngine.ts` remains for Wave 2. |
+| **#6004** (issue): **#6498** (MERGED 2026-11-13) + **#6636** (open follow-up, split from #6327) | One PK per table (`ApplyPrimaryKeys.ts`); `#6636` adds `primaryKeySource: 'discovery'` so discovered PKs never combine with a declared PK. | Covers the PK half of 0.2 (`#6498` merged; `#6636` finishes declared-PK protection). Generator gating (`AdditionalSchemaInfoGenerator.ts`) is covered in Phase 0 Wave 1 (`#6871`); FK-flag clearing in `AnalysisEngine.ts` remains for Wave 2. |
 | **#6498** (MERGED 2026-11-13) | Composite FK components need a unique target; `IsUnique` means unique alone (CodeGen side of #4534). | Covers the composite half of 0.3. The single-column LLM-FK uniqueness check remains (Wave 2). |
 | **#6499** (MERGED 2026-11-18) | Discovery reuses sampling statistics via `ColumnStatsCache`; date columns described distinctly. | Covers 3.1. |
 | **#6505** (open PR) | Data-quality phase: ~20 checks from sampling and catalog, orphan anti-joins, `data-quality.md/json`, findings fed into prompts; fixes stats merge, empty tables reported as 1 row, SQL Server composite FK order; planted-defect bench. | Overlaps 0.7, 8.5 and Phase 9. Its bench is a model for Phase 1. Sequence Phase 2 after it. |
@@ -331,7 +331,7 @@ contamination-controlled benchmarks, and the downstream text-to-SQL benchmark.
 
 To keep conflicts with those open PRs minimal, Phase 0 is split into two waves:
 
-- **Phase 0 Wave 1 (disjoint hunks — landed):** `generators/AdditionalSchemaInfoGenerator.ts`
+- **Phase 0 Wave 1 (disjoint hunks — `#6871`):** `generators/AdditionalSchemaInfoGenerator.ts`
   (disjoint from `#6505`'s enum-folding hunks) + `discovery/ApplyPrimaryKeys.ts` (exporting
   `PickBestPKCandidate`, disjoint from `#6636`'s declared-key hunks) for 0.2 generator gating +
   0.12 placeholder descriptions; `generators/SQLGenerator.ts` (0.10 SQL Server extended-property
@@ -381,9 +381,9 @@ every other proposer. It does not keep a second store of definitions. In practic
 
 0. Land or close the remaining open PRs in §12 (`#6636`, `#6505`, `#6240`; `#6498`, `#6499`, `#6575`,
    and `#6583` are already merged, and `#6675` Decision 7 is settled), and settle the `#5722` trust model.
-1. Phase 0 Wave 1 (generators + `compare.py`), then Phase 0 Wave 2 (what the open PRs leave), then
-   Phase 1 items 1–3 and 6–7 so the next benchmark numbers are trustworthy. In parallel, land the
-   `Integrations` metadata plumbing fixes (per
+1. Finish Phase 0 Wave 1 (`#6871`: generators + `compare.py`) and Phase 0 Wave 2 (what the open PRs
+   leave), then Phase 1 items 1–3 and 6–7 so the next benchmark numbers are trustworthy. In
+   parallel, land the `Integrations` metadata plumbing fixes (per
    [connector-ground-truth-flywheel.md](connector-ground-truth-flywheel.md)).
 2. Pull **Phase 7.1** forward (`GroundTruthConfig` PK/FK locking + certification state) and pilot
    the 4-step connector ground-truth flywheel on Salesforce, HubSpot, and YourMembership.

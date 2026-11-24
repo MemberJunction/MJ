@@ -1,6 +1,6 @@
 # Connector Metadata Ground-Truth Flywheel
 
-*Plan only. Written 2026-11-16 as a companion to [`improvement-roadmap.md`](improvement-roadmap.md).*
+*Plan only. Written 2026-11-16 (updated 2026-11-24 to align with `MJ #6704` and `Integrations #521`) as a companion to [`improvement-roadmap.md`](improvement-roadmap.md).*
 
 ## 1. Problem Statement & Motivation
 
@@ -34,25 +34,24 @@ fails to reach tenant databases and metadata catalogs:
    On `MJ: Integration Object Fields`, the real FK column in the `__mj` database is
    `RelatedIntegrationObjectID` (plus `RelatedIntegrationObjectFieldName`). `IsForeignKey` is a
    framework-ideal authoring field that `BaseEntity.SetLocal` drops on push. Five connectors
-   authored unambiguous scalar FK targets inside `Configuration.ReferencedType` without wiring
-   `RelatedIntegrationObjectID` (`4,982` scalar FKs total):
-   - **Salesforce:** `4,914` scalar FK fields carry `IsForeignKey: true` and
-     `Configuration.ReferencedType`, with `0` setting `RelatedIntegrationObjectID`.
-   - **Fonteva:** `63` scalar FK fields carry `IsForeignKey: true` and
-     `Configuration.ReferencedType`, with `0` setting `RelatedIntegrationObjectID`.
+   authored `4,982` raw scalar FK hints inside `Configuration.ReferencedType` without wiring
+   `RelatedIntegrationObjectID`, of which **`1,570` are active, DAG-safe scalar FKs** eligible for
+   wiring (implemented in `MemberJunction/Integrations#521`):
+   - **Salesforce:** `1,509` DAG-safe scalar FKs (out of `4,914` raw `ReferencedType` entries;
+     `0` previously wired).
+   - **Fonteva:** `56` DAG-safe scalar FKs (out of `63` raw entries; `0` previously wired).
    - **OpenWater:** `3` scalar FK fields (`DeletedSession.deletedByUserId`,
-     `Evaluation.judgeUserId`, `FundTransaction.approvedByUserId`) carry `ReferencedType: User`
-     without `RelatedIntegrationObjectID`.
-   - **Impexium:** `1` scalar FK field (`CustomFieldValues.individualId`) carries
-     `ReferencedType: Individuals` without `RelatedIntegrationObjectID`.
-   - **HigherLogicThriveCommunity:** `1` scalar FK field (`IdeaVoters.IdeationKey`) carries
-     `ReferencedType: Ideas` without `RelatedIntegrationObjectID`.
-   - (*Additional non-wired entries left soft intentionally:* `YourMembership` carries `46`
-     `RelatedIntegrationObjectFieldName` hints without a target object name; `type=json` / unbounded
-     nested object fields in `PathLMS`/`SFMC`/`Spektrix`/`Zendesk` and explicit
-     `softFKReason`/`FKDemotedReason`/cycle-breaking back-edges in `Spektrix`/`Zendesk`/`Stripe` are
-     deliberately kept soft to preserve SQL Server `IDX_AUTO_MJ_FKEY` indexability and parent-door
-     DAGs.)
+     `Evaluation.judgeUserId`, `FundTransaction.approvedByUserId`) referencing `User`.
+   - **Impexium:** `1` scalar FK field (`CustomFieldValues.individualId`) referencing `Individuals`.
+   - **HigherLogicThriveCommunity:** `1` scalar FK field (`IdeaVoters.IdeationKey`) referencing
+     `Ideas`.
+   - (*Intentionally excluded / kept soft:* system audit columns such as `CreatedById`/
+     `LastModifiedById`, self-references, cycle-forming back-edges, disabled objects/fields,
+     `YourMembership`'s `46` `RelatedIntegrationObjectFieldName` hints without a target object name,
+     `type=json` / unbounded nested object fields in `PathLMS`/`SFMC`/`Spektrix`/`Zendesk`, and
+     explicit `softFKReason`/`FKDemotedReason`/`FKForm === 'soft'` entries in
+     `Spektrix`/`Zendesk`/`Stripe` are deliberately kept soft to preserve SQL Server
+     `IDX_AUTO_MJ_FKEY` indexability and acyclic `IntegrationEngine` topological layering.)
    Because `IntegrationDiscoveryResolver.buildSourceSchemaFromPersistedRows` resolves persisted FKs
    from `RelatedIntegrationObjectID`, all static FKs for these connectors are silently dropped unless
    live discovery or naming heuristics re-infer them.
@@ -66,10 +65,11 @@ fails to reach tenant databases and metadata catalogs:
    CRM objects (`id`, `properties`, `createdAt`, `updatedAt`, `archived`, `archivedAt`, `url`,
    `hs_object_id`) rather than standard built-in CRM properties (`hubspotDefined=true`). Standard
    fields are therefore discovered at runtime or promoted from `__mj_integration_CustomOverflow` via
-   `ALTER TABLE ADD COLUMN`. However, `@memberjunction/integration-schema-builder`'s
-   `DDLGenerator.GenerateAlterTableAddColumn` (used by `SchemaEvolution` and `CustomColumnPromoter`)
-   previously emitted no `MS_Description` or `COMMENT ON COLUMN`, and `GenerateCreateTable` omitted
-   PostgreSQL `COMMENT ON` statements.
+   `ALTER TABLE ADD COLUMN`. However, `DDLGenerator.GenerateAlterTableAddColumn` in both
+   `@memberjunction/schema-engine` and `@memberjunction/integration-schema-builder` previously
+   emitted no `MS_Description` or `COMMENT ON COLUMN`, and `integration-schema-builder` had
+   hand-rolled platform branching instead of delegating comment DDL and quote-aware batch/statement
+   splitting to `@memberjunction/sql-dialect` (addressed in `MJ #6704`).
 4. **`DBAutoDoc`'s `GroundTruthConfig` only locks descriptions today:**
    `GroundTruthConfig` (`packages/DBAutoDoc/src/types/config.ts`) accepts table/column descriptions
    and notes, not verified primary keys or foreign keys.
@@ -77,12 +77,12 @@ fails to reach tenant databases and metadata catalogs:
 ### B. Content Coverage Tiers Across the 55 Application Connectors
 
 - **Primary Keys (`IsPrimaryKey`):** Strong coverage across active objects (enforced by CI gates).
-- **Foreign Keys (`RelatedIntegrationObjectID`):** 21+ SaaS connectors currently have **zero**
-  wired `RelatedIntegrationObjectID` links (including Salesforce `0/4,914`, MemberSuite `0/196`
-  objects, Sage Intacct `0/163` objects, Fonteva `0/28` objects, YourMembership `0/228` objects,
-  Aptify, NimbleAMS, Wicket). Strongest wired examples today: Dynamics Dataverse (`3,849`),
-  QuickBooks (`163`), HubSpot (`133`), HigherLogicVanilla (`110`), Rhythm (`108`), Business Central
-  (`106`), Cvent (`104`).
+- **Foreign Keys (`RelatedIntegrationObjectID`):** Before `Integrations #521`, 21+ SaaS connectors
+  had **zero** wired `RelatedIntegrationObjectID` links (including Salesforce `0/1,509` DAG-safe
+  declared FKs, MemberSuite `0/196` objects, Sage Intacct `0/163` objects, Fonteva `0/28` objects,
+  YourMembership `0/228` objects, Aptify, NimbleAMS, Wicket). Strongest wired examples before
+  `#521`: Dynamics Dataverse (`3,849`), QuickBooks (`163`), HubSpot (`133`), HigherLogicVanilla
+  (`110`), Rhythm (`108`), Business Central (`106`), Cvent (`104`).
 - **Descriptions:**
   1. **Rich API-sourced:** Dynamics Dataverse (`17,896`), Salesforce (`31,465`, though standard audit
      fields repeat generic `"System field (read-only)"`), Sage Intacct (`3,823/3,825`), Cvent (`2,193`),
@@ -99,7 +99,7 @@ fails to reach tenant databases and metadata catalogs:
 
 ```
   Vendor API Docs (OpenAPI / WSDL / Official Ref)
-         │  [1. Opus / Argon studies Tier-1 docs]
+         │  [1. LLM research pass studies Tier-1 docs]
          ▼
   MemberJunction/Integrations (Source = 'Declared', IsCustom = false)
          │  [2. Seed & upgrade migrations → __mj.IntegrationObject / Field]
@@ -121,20 +121,27 @@ fails to reach tenant databases and metadata catalogs:
 ## 4. Phased Implementation Plan
 
 ### Stage A — Plumbing & Immediate Correctness Fixes
-1. **`@memberjunction/integration-schema-builder` (`MJ` repo):**
-   - Emit idempotent `MS_Description` (SQL Server) and `COMMENT ON COLUMN` (PostgreSQL) in
-     `DDLGenerator.GenerateAlterTableAddColumn`, plus `COMMENT ON TABLE/COLUMN` in
-     `GenerateCreateTable` for PostgreSQL and descriptions on backfilled standard columns in
-     `SchemaEvolution.ensureStandardColumns`.
-2. **`MemberJunction/Integrations` (`Integrations` repo):**
-   - Run a deterministic script (`scripts/wire-declared-foreign-keys.mjs`) that wires unambiguous
-     scalar, non-demoted `Configuration.ReferencedType` FK declarations (`4,982` fields across
-     `Salesforce`, `Fonteva`, `OpenWater`, `Impexium`, and `HigherLogicThriveCommunity`) to real
-     `RelatedIntegrationObjectID` `@lookup` references + `RelatedIntegrationObjectFieldName` while
-     preserving SQL Server indexability (`json`/unbounded excluded) and explicit cycle-breaking soft
-     FKs, emitting Flyway delta migrations (`.sql` + `.pg.sql`) per connector.
-   - Retire the 14 unused `metadata/additionalSchemaInfo.json` files and stop `add-connector-metadata.mjs`
-     from regenerating them.
+1. **`@memberjunction/sql-dialect`, `@memberjunction/schema-engine`, and `@memberjunction/integration-schema-builder` (`MJ` repo, `#6704`):**
+   - Harden `SQLDialect` with quote- and comment-aware `SplitStatements` and `SplitBatches`,
+     SQL Server `MaxCommentLength` (`3700` UTF-16 code units, staying under
+     `sp_addextendedproperty`'s 7,500-byte `sql_variant` limit), and NUL-byte stripping in
+     `CommentOnObject` / `CommentOnColumn`.
+   - Emit idempotent column descriptions (`CommentOnColumnIfAbsent`) in
+     `DDLGenerator.GenerateAlterTableAddColumn` across both `@memberjunction/schema-engine` and
+     `@memberjunction/integration-schema-builder`, delegate all `integration-schema-builder`
+     description DDL to `SQLDialect`, and share frozen `STANDARD_COLUMN_DESCRIPTIONS` across
+     `DDLGenerator`, `SchemaBuilder`, and `SchemaEvolution`.
+2. **`MemberJunction/Integrations` (`Integrations` repo, `#521`):**
+   - Wire the **`1,570` active, DAG-safe declared scalar FKs** (`Salesforce: 1,509`, `Fonteva: 56`,
+     `OpenWater: 3`, `Impexium: 1`, `HigherLogicThriveCommunity: 1`) from
+     `Configuration.ReferencedType` to real `RelatedIntegrationObjectID` `@lookup` references +
+     `RelatedIntegrationObjectFieldName`, emitting paired idempotent Flyway delta migrations
+     (`.sql` + `.pg.sql`) while keeping audit columns, self-references, cycle-forming back-edges,
+     non-scalar/unbounded fields, and explicit soft FKs excluded.
+   - Add a permanent CI lint gate (`scripts/lint-declared-foreign-keys.mjs`, `npm run lint:declared-fks`)
+     to prevent newly stranded DAG-safe FKs or new `IntegrationEngine` sync-DAG cycles.
+   - Retire the 14 unused `metadata/additionalSchemaInfo.json` files and stop
+     `scripts/add-connector-metadata.mjs` from regenerating them.
 
 ### Stage B — Standalone Ground-Truth Key Locking in `DBAutoDoc` (Phase 7.1 Pulled Forward)
 - Extend `DBAutoDoc`'s `GroundTruthConfig` (keeping `DBAutoDoc` completely independent of MJ) with
@@ -156,11 +163,12 @@ fails to reach tenant databases and metadata catalogs:
     `CustomFieldMarkerPattern` in `Integration.Configuration` (e.g., Salesforce `*__c`, HubSpot
     `hubspotDefined=false` or `p_<portalId>_*`).
 
-### Stage D — Pilot Connectors (4-Step Argon / Opus Loop)
+### Stage D — Pilot Connectors (4-Step Verification Loop)
 Validate the full 4-step loop (1. study API docs → 2. declare standard metadata → 3. run
 `DBAutoDoc` on synced demo DB with ground truth locked → 4. push verified standard descriptions/PKs/FKs
 and delta migrations back to `Integrations`) on three distinct connector shapes before scaling fleet-wide:
-1. **`CRM/Salesforce`** — Wire the 4,914 declared FKs and enrich generic `"System field"` descriptions.
+1. **`CRM/Salesforce`** — Build on the `1,509` wired DAG-safe FKs (`Integrations #521`) and enrich
+   generic `"System field"` descriptions.
 2. **`CRM/HubSpot`** — Seed standard CRM built-in properties (`hubspotDefined=true`) and association
    FKs beyond the 8 `SimplePublicObject` wrapper columns.
 3. **`AMS/YourMembership`** — Populate the `0/5,159` missing field descriptions and wire FKs from
