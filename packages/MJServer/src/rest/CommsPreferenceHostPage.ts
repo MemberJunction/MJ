@@ -239,6 +239,24 @@ const PAGE_CSS = `
     --pc-border: #334155;
   }
 }
+/* The preference-center element is styled with MJ design tokens. This page is served on its own,
+   with no MJ theme loaded, so it supplies those tokens from its own palette. Without them the
+   element's colours all fall back to the text colour: a dark button with a dark label. */
+:root {
+  --mj-brand-primary: var(--pc-primary);
+  --mj-text-primary: var(--pc-text);
+  --mj-text-secondary: var(--pc-muted);
+  --mj-text-muted: var(--pc-muted);
+  --mj-text-inverse: var(--pc-primary-text);
+  --mj-bg-surface: var(--pc-surface);
+  --mj-bg-surface-card: var(--pc-surface);
+  --mj-border-default: var(--pc-border);
+  --mj-border-subtle: var(--pc-border);
+  --mj-status-error: var(--pc-danger);
+  --mj-status-error-text: var(--pc-danger);
+  --mj-status-success: var(--pc-ok);
+  --mj-status-success-text: var(--pc-ok);
+}
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; min-height: 100%; }
 body {

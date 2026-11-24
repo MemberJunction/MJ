@@ -9,6 +9,7 @@
  * - HTML/attribute escaping and CSP security headers
  */
 import type { AddressInfo } from 'node:net';
+import { readFileSync } from 'node:fs';
 import express from 'express';
 import { describe, it, expect, vi } from 'vitest';
 // The handler serves the Angular Element bundle only when `@memberjunction/ng-communications` has
@@ -79,6 +80,28 @@ describe('CommsPreferenceHostPage', () => {
         expect(headers['X-Frame-Options']).toBe('DENY');
         expect(headers['X-Content-Type-Options']).toBe('nosniff');
         expect(headers['Cache-Control']).toBe('no-store');
+    });
+
+    it('REGRESSION: supplies every design token the preference element is styled with', () => {
+        // The element reads MJ design tokens; this page is served with no MJ theme. A token the page
+        // does not define falls back to the text colour, which made the save button a dark box with
+        // an unreadable label.
+        const elementCss = readFileSync(
+            new URL('../../../Angular/Generic/communications/src/lib/comms-preference-center.component.css', import.meta.url),
+            'utf8',
+        );
+        const page = RenderCommsPreferenceHostPage({
+            Token: VALID_TOKEN,
+            ApiRoot: '/comms',
+            CspNonce: 'nonce-1',
+            ElementSrc: '/comms/element/main.js',
+        });
+        // Set by the element itself, or used only for banners that keep a readable fallback.
+        const notNeeded = /^--mj-(comms-|status-warning|status-success-bg|status-success-border)/;
+        const used = [...new Set(elementCss.match(/--mj-[a-z-]+/g) ?? [])].filter((t) => !notNeeded.test(t));
+
+        expect(used).toContain('--mj-text-inverse');
+        expect(used.filter((token) => !page.includes(`${token}:`))).toEqual([]);
     });
 
     it('renders Angular Element host when ElementSrc is set and vanilla fallback otherwise', () => {
