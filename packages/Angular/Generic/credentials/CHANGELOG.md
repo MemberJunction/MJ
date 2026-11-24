@@ -1,5 +1,19 @@
 # @memberjunction/ng-credentials
 
+## 6.1.8
+
+### Patch Changes
+
+- Updated dependencies [179ca30]
+- Updated dependencies [9b68fcb]
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ng-base-types@6.1.8
+  - @memberjunction/ng-notifications@6.1.8
+  - @memberjunction/ng-shared-generic@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/ng-ui-components@6.1.8
+  - @memberjunction/global@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/core
 
+## 6.1.8
+
+### Patch Changes
+
+- 179ca30: Backport: API-key scope, application and key-binding rows are re-read from the database every `scopeCacheTTLMs` (default 60 s), so a scope removed or an application deactivated by another process stops granting within one TTL instead of at restart. The refresh rebuilds the engine's lookup maps. A `BaseEngine` expiry tick now reads the database instead of the server cache, a failed tick re-arms the timer instead of ending the refresh, a failed first load still starts it, setting the interval to 0 stops it, and expiry timers no longer keep a Node process alive.
+- 9b68fcb: The local cache's size estimate now serializes at most 10 sample rows, so saving or deleting one row of a large cached entity no longer serializes a tenth of the cached rows.
+  - @memberjunction/global@6.1.8
+  - @memberjunction/sql-dialect@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

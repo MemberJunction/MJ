@@ -1,5 +1,87 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.1.8
+
+### Patch Changes
+
+- Updated dependencies [179ca30]
+- Updated dependencies [9b68fcb]
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ai-agent-harness@6.1.8
+  - @memberjunction/ai-agent-manager@6.1.8
+  - @memberjunction/ai-agents@6.1.8
+  - @memberjunction/ai-engine-base@6.1.8
+  - @memberjunction/ai-core-plus@6.1.8
+  - @memberjunction/ai-form-builder@6.1.8
+  - @memberjunction/tag-engine-base@6.1.8
+  - @memberjunction/predictive-studio@6.1.8
+  - @memberjunction/ai-prompts@6.1.8
+  - @memberjunction/ai-recommendations-rex@6.1.8
+  - @memberjunction/ai-reranker@6.1.8
+  - @memberjunction/ai-vector-dupe@6.1.8
+  - @memberjunction/ai-vectors-memory@6.1.8
+  - @memberjunction/ai-vectors-pinecone@6.1.8
+  - @memberjunction/ai-vectors-qdrant@6.1.8
+  - @memberjunction/ai-vectors-sqlserver@6.1.8
+  - @memberjunction/ai-vectors-pgvector@6.1.8
+  - @memberjunction/actions-apollo@6.1.8
+  - @memberjunction/actions-base@6.1.8
+  - @memberjunction/actions-bizapps-accounting@6.1.8
+  - @memberjunction/actions-bizapps-crm@6.1.8
+  - @memberjunction/actions-bizapps-formbuilders@6.1.8
+  - @memberjunction/actions-bizapps-lms@6.1.8
+  - @memberjunction/actions-bizapps-social@6.1.8
+  - @memberjunction/core-actions@6.1.8
+  - @memberjunction/actions@6.1.8
+  - @memberjunction/communication-types@6.1.8
+  - @memberjunction/content-autotagging@6.1.8
+  - @memberjunction/doc-utils@6.1.8
+  - @memberjunction/encryption@6.1.8
+  - @memberjunction/generic-database-provider@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/core-entities-server@6.1.8
+  - @memberjunction/data-context-server@6.1.8
+  - @memberjunction/queue@6.1.8
+  - @memberjunction/storage@6.1.8
+  - @memberjunction/react-linter@6.1.8
+  - @memberjunction/record-comparison@6.1.8
+  - @memberjunction/record-set-processor@6.1.8
+  - @memberjunction/scheduling-actions@6.1.8
+  - @memberjunction/scheduling-engine-base@6.1.8
+  - @memberjunction/scheduling-engine@6.1.8
+  - @memberjunction/search-engine@6.1.8
+  - @memberjunction/task-graph@6.1.8
+  - @memberjunction/templates@6.1.8
+  - @memberjunction/testing-engine@6.1.8
+  - @memberjunction/geo-core@6.1.8
+  - @memberjunction/ai-provider-bundle@6.1.8
+  - @memberjunction/ai-anthropic@6.1.8
+  - @memberjunction/ai-assemblyai@6.1.8
+  - @memberjunction/ai-azure@6.1.8
+  - @memberjunction/ai-bedrock@6.1.8
+  - @memberjunction/ai-betty-bot@6.1.8
+  - @memberjunction/ai-blackforestlabs@6.1.8
+  - @memberjunction/ai-cerebras@6.1.8
+  - @memberjunction/ai-cohere@6.1.8
+  - @memberjunction/ai-elevenlabs@6.1.8
+  - @memberjunction/ai-fireworks@6.1.8
+  - @memberjunction/ai-gemini@6.1.8
+  - @memberjunction/ai-groq@6.1.8
+  - @memberjunction/ai-heygen@6.1.8
+  - @memberjunction/ai-inception@6.1.8
+  - @memberjunction/ai-inworld@6.1.8
+  - @memberjunction/ai-lmstudio@6.1.8
+  - @memberjunction/ai-llamacpp@6.1.8
+  - @memberjunction/ai-local-embeddings@6.1.8
+  - @memberjunction/ai-minimax@6.1.8
+  - @memberjunction/ai-mistral@6.1.8
+  - @memberjunction/ai-ollama@6.1.8
+  - @memberjunction/ai-openai@6.1.8
+  - @memberjunction/ai-openrouter@6.1.8
+  - @memberjunction/ai-vertex@6.1.8
+  - @memberjunction/ai-zhipu@6.1.8
+  - @memberjunction/ai-xai@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

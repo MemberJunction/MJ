@@ -1,5 +1,22 @@
 # @memberjunction/messaging-adapters
 
+## 6.1.8
+
+### Patch Changes
+
+- Updated dependencies [179ca30]
+- Updated dependencies [9b68fcb]
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ai-agents@6.1.8
+  - @memberjunction/ai-core-plus@6.1.8
+  - @memberjunction/generic-database-provider@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/sqlserver-dataprovider@6.1.8
+  - @memberjunction/server-extensions-core@6.1.8
+  - @memberjunction/task-graph@6.1.8
+  - @memberjunction/ai@6.1.8
+  - @memberjunction/global@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

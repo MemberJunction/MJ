@@ -1,5 +1,11 @@
 # @memberjunction/predictive-studio-sidecar
 
+## 6.1.8
+
+### Patch Changes
+
+- @memberjunction/predictive-studio-core@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

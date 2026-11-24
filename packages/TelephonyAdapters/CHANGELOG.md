@@ -1,5 +1,24 @@
 # @memberjunction/telephony-adapters
 
+## 6.1.8
+
+### Patch Changes
+
+- Updated dependencies [179ca30]
+- Updated dependencies [9b68fcb]
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ai-agents@6.1.8
+  - @memberjunction/ai-bridge-base@6.1.8
+  - @memberjunction/ai-bridge-ringcentral@6.1.8
+  - @memberjunction/ai-bridge-teams@6.1.8
+  - @memberjunction/ai-bridge-twilio@6.1.8
+  - @memberjunction/ai-bridge-vonage@6.1.8
+  - @memberjunction/ai-bridge-server@6.1.8
+  - @memberjunction/generic-database-provider@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/server-extensions-core@6.1.8
+  - @memberjunction/global@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

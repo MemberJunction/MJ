@@ -1,5 +1,12 @@
 # @memberjunction/ai-assemblyai
 
+## 6.1.8
+
+### Patch Changes
+
+- @memberjunction/ai@6.1.8
+- @memberjunction/global@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

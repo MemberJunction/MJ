@@ -1,5 +1,62 @@
 # @memberjunction/integration-test-suite
 
+## 6.1.8
+
+### Patch Changes
+
+- 179ca30: Backport: API-key scope, application and key-binding rows are re-read from the database every `scopeCacheTTLMs` (default 60 s), so a scope removed or an application deactivated by another process stops granting within one TTL instead of at restart. The refresh rebuilds the engine's lookup maps. A `BaseEngine` expiry tick now reads the database instead of the server cache, a failed tick re-arms the timer instead of ending the refresh, a failed first load still starts it, setting the interval to 0 stops it, and expiry timers no longer keep a Node process alive.
+- Updated dependencies [179ca30]
+- Updated dependencies [9b68fcb]
+  - @memberjunction/api-keys@6.1.8
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ai-agent-harness@6.1.8
+  - @memberjunction/ai-agents@6.1.8
+  - @memberjunction/ai-engine-base@6.1.8
+  - @memberjunction/ai-core-plus@6.1.8
+  - @memberjunction/aiengine@6.1.8
+  - @memberjunction/predictive-studio@6.1.8
+  - @memberjunction/ai-prompts@6.1.8
+  - @memberjunction/ai-bridge-base@6.1.8
+  - @memberjunction/ai-bridge-server@6.1.8
+  - @memberjunction/actions-base@6.1.8
+  - @memberjunction/actions@6.1.8
+  - @memberjunction/auth-providers@6.1.8
+  - @memberjunction/codegen-lib@6.1.8
+  - @memberjunction/communication-types@6.1.8
+  - @memberjunction/communication-engine@6.1.8
+  - @memberjunction/notifications@6.1.8
+  - @memberjunction/communication-ms-graph@6.1.8
+  - @memberjunction/communication-expo-push@6.1.8
+  - @memberjunction/communication-gmail@6.1.8
+  - @memberjunction/communication-sendgrid@6.1.8
+  - @memberjunction/communication-twilio@6.1.8
+  - @memberjunction/content-autotagging@6.1.8
+  - @memberjunction/conversations-runtime@6.1.8
+  - @memberjunction/generic-database-provider@6.1.8
+  - @memberjunction/graphql-dataprovider@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/queue@6.1.8
+  - @memberjunction/storage@6.1.8
+  - @memberjunction/metadata-sync@6.1.8
+  - @memberjunction/open-app-engine@6.1.8
+  - @memberjunction/query-processor@6.1.8
+  - @memberjunction/record-set-processor-base@6.1.8
+  - @memberjunction/record-set-processor@6.1.8
+  - @memberjunction/redis-provider@6.1.8
+  - @memberjunction/sqlserver-dataprovider@6.1.8
+  - @memberjunction/scheduling-engine@6.1.8
+  - @memberjunction/search-engine@6.1.8
+  - @memberjunction/server-bootstrap-lite@6.1.8
+  - @memberjunction/task-graph@6.1.8
+  - @memberjunction/templates-base-types@6.1.8
+  - @memberjunction/templates@6.1.8
+  - @memberjunction/testing-engine@6.1.8
+  - @memberjunction/testing-integration@6.1.8
+  - @memberjunction/ai@6.1.8
+  - @memberjunction/predictive-studio-core@6.1.8
+  - @memberjunction/global@6.1.8
+  - @memberjunction/unit-testing@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

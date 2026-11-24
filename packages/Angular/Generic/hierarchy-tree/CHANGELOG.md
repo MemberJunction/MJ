@@ -1,5 +1,19 @@
 # @memberjunction/ng-hierarchy-tree
 
+## 6.1.8
+
+### Patch Changes
+
+- Updated dependencies [179ca30]
+- Updated dependencies [8a15e9b]
+- Updated dependencies [9b68fcb]
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ng-base-forms@6.1.8
+  - @memberjunction/ng-base-types@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/ng-ui-components@6.1.8
+  - @memberjunction/global@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @memberjunction/ng-livekit-room
 
+## 6.1.8
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@6.1.8
+- @memberjunction/ng-ui-components@6.1.8
+- @memberjunction/livekit-room-core@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

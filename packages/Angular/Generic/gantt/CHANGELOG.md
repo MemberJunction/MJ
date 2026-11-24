@@ -1,5 +1,11 @@
 # @memberjunction/ng-gantt
 
+## 6.1.8
+
+### Patch Changes
+
+- @memberjunction/global@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

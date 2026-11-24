@@ -1,5 +1,39 @@
 # @memberjunction/core-entities-server
 
+## 6.1.8
+
+### Patch Changes
+
+- Updated dependencies [179ca30]
+- Updated dependencies [9b68fcb]
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ai-engine-base@6.1.8
+  - @memberjunction/ai-core-plus@6.1.8
+  - @memberjunction/aiengine@6.1.8
+  - @memberjunction/tag-engine@6.1.8
+  - @memberjunction/ai-prompts@6.1.8
+  - @memberjunction/ai-vectordb@6.1.8
+  - @memberjunction/ai-vector-dupe@6.1.8
+  - @memberjunction/ai-vectors-memory@6.1.8
+  - @memberjunction/actions-base@6.1.8
+  - @memberjunction/communication-types@6.1.8
+  - @memberjunction/communication-engine@6.1.8
+  - @memberjunction/doc-utils@6.1.8
+  - @memberjunction/generic-database-provider@6.1.8
+  - @memberjunction/integration-engine@6.1.8
+  - @memberjunction/integration-pk-classifier@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/sqlserver-dataprovider@6.1.8
+  - @memberjunction/scheduling-engine@6.1.8
+  - @memberjunction/templates@6.1.8
+  - @memberjunction/ai-provider-bundle@6.1.8
+  - @memberjunction/ai@6.1.8
+  - @memberjunction/predictive-studio-core@6.1.8
+  - @memberjunction/global@6.1.8
+  - @memberjunction/sql-converter@6.1.8
+  - @memberjunction/sql-dialect@6.1.8
+  - @memberjunction/sql-parser@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

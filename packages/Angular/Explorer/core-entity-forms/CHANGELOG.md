@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.1.8
+
+### Patch Changes
+
+- Updated dependencies [179ca30]
+- Updated dependencies [8a15e9b]
+- Updated dependencies [9b68fcb]
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ng-base-forms@6.1.8
+  - @memberjunction/ai-engine-base@6.1.8
+  - @memberjunction/ai-core-plus@6.1.8
+  - @memberjunction/actions-base@6.1.8
+  - @memberjunction/ng-base-application@6.1.8
+  - @memberjunction/ng-link-directives@6.1.8
+  - @memberjunction/ng-shared@6.1.8
+  - @memberjunction/ng-testing@6.1.8
+  - @memberjunction/ng-action-gallery@6.1.8
+  - @memberjunction/ng-actions@6.1.8
+  - @memberjunction/ng-agents@6.1.8
+  - @memberjunction/ng-ai-test-harness@6.1.8
+  - @memberjunction/ng-base-types@6.1.8
+  - @memberjunction/ng-code-editor@6.1.8
+  - @memberjunction/ng-deep-diff@6.1.8
+  - @memberjunction/ng-entity-relationship-diagram@6.1.8
+  - @memberjunction/ng-entity-viewer@6.1.8
+  - @memberjunction/ng-flow-editor@6.1.8
+  - @memberjunction/ng-hierarchy-tree@6.1.8
+  - @memberjunction/ng-join-grid@6.1.8
+  - @memberjunction/ng-list-management@6.1.8
+  - @memberjunction/ng-notifications@6.1.8
+  - @memberjunction/ng-record-process-studio@6.1.8
+  - @memberjunction/ng-resource-permissions@6.1.8
+  - @memberjunction/ng-search@6.1.8
+  - @memberjunction/ng-shared-generic@6.1.8
+  - @memberjunction/ng-task-graph-editor@6.1.8
+  - @memberjunction/ng-timeline@6.1.8
+  - @memberjunction/ng-trees@6.1.8
+  - @memberjunction/ng-versions@6.1.8
+  - @memberjunction/graphql-dataprovider@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/templates-base-types@6.1.8
+  - @memberjunction/ng-tabstrip@6.1.8
+  - @memberjunction/ng-markdown@6.1.8
+  - @memberjunction/ng-ui-components@6.1.8
+  - @memberjunction/ai@6.1.8
+  - @memberjunction/global@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes

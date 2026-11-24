@@ -1,5 +1,38 @@
 # @memberjunction/ng-bootstrap
 
+## 6.1.8
+
+### Patch Changes
+
+- Updated dependencies [179ca30]
+- Updated dependencies [8a15e9b]
+- Updated dependencies [9b68fcb]
+- Updated dependencies [5190a6a]
+  - @memberjunction/core@6.1.8
+  - @memberjunction/ng-explorer-core@6.1.8
+  - @memberjunction/ng-artifacts@6.1.8
+  - @memberjunction/ng-dashboards@6.1.8
+  - @memberjunction/ai-engine-base@6.1.8
+  - @memberjunction/ai-core-plus@6.1.8
+  - @memberjunction/tag-engine-base@6.1.8
+  - @memberjunction/ai-vectors-memory@6.1.8
+  - @memberjunction/actions-base@6.1.8
+  - @memberjunction/ng-auth-services@6.1.8
+  - @memberjunction/ng-core-entity-forms@6.1.8
+  - @memberjunction/ng-explorer-settings@6.1.8
+  - @memberjunction/ng-shared@6.1.8
+  - @memberjunction/ng-clustering@6.1.8
+  - @memberjunction/ng-conversations@6.1.8
+  - @memberjunction/ng-dashboard-viewer@6.1.8
+  - @memberjunction/ng-entity-action-ux@6.1.8
+  - @memberjunction/ng-entity-viewer@6.1.8
+  - @memberjunction/ng-file-storage@6.1.8
+  - @memberjunction/communication-types@6.1.8
+  - @memberjunction/entity-communications-base@6.1.8
+  - @memberjunction/graphql-dataprovider@6.1.8
+  - @memberjunction/core-entities@6.1.8
+  - @memberjunction/ai-realtime-client@6.1.8
+
 ## 6.1.7
 
 ### Patch Changes
