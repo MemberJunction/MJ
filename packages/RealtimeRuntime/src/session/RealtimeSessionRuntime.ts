@@ -40,6 +40,7 @@ import {
   type LocalMediaFailure,
   type LocalMediaState,
   LoadAssemblyAIRealtimeClient,
+  LoadAssemblyAIVoiceRealtimeClient,
   LoadElevenLabsRealtimeClient,
   LoadElevenRealtimeClient,
   LoadGeminiEnterpriseRealtimeClient,
@@ -204,6 +205,7 @@ LoadGeminiRealtimeClient();
 LoadGeminiEnterpriseRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
+LoadAssemblyAIVoiceRealtimeClient();
 LoadxAIRealtimeClient();
 LoadElevenRealtimeClient();
 LoadHuggingFaceRealtimeClient();
