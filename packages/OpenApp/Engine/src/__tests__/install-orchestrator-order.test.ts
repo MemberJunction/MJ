@@ -1942,6 +1942,54 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
             expect(installSequence).toEqual([]);
         });
 
+        describe('an app without dependencies', () => {
+            const leaf = manifestJSON('app-leaf', {});
+            const leafRow = installedRow('app-leaf', leaf, '0.9.0');
+
+            beforeEach(() => {
+                vi.mocked(ListInstalledApps).mockResolvedValue([leafRow, installedRow('app-tasks', tasksAtInstalledVersion)]);
+                serveRefs({ [repoUrl('app-leaf')]: leaf, [`${repoUrl('app-leaf')}@1.0.0`]: leaf });
+            });
+
+            it('install: refuses a name that is not installed, and changes nothing', async () => {
+                const result = await InstallApp({ Source: repoUrl('app-leaf'), DependenciesFromHead: ['app-tasks', 'app-typo'] }, ctx);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain("'app-typo'");
+                expect(result.ErrorMessage).not.toContain("'app-tasks'");
+                expect(installSequence).toEqual([]);
+            });
+
+            it.each([
+                ['a name that is not installed', 'app-typo'],
+                ['its own name', 'app-leaf'],
+            ])('upgrade: refuses %s, and changes nothing', async (_name, name) => {
+                vi.mocked(FindInstalledApp).mockResolvedValue(leafRow);
+
+                const result = await UpgradeApp({ AppName: 'app-leaf', Version: '1.0.0', DependenciesFromHead: [name] }, ctx);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain(`'${name}'`);
+                expect(vi.mocked(SetAppStatus)).not.toHaveBeenCalled();
+                expect(vi.mocked(AddAppPackages)).not.toHaveBeenCalled();
+            });
+
+            it.each([['all', 'all' as const], ['the name of an installed app', ['app-tasks']]])('installs with %s, and reads no default branch', async (_name, value) => {
+                const result = await InstallApp({ Source: repoUrl('app-leaf'), DependenciesFromHead: value }, ctx);
+
+                expect(result.ErrorMessage).toBeUndefined();
+                expect(installSequence).toEqual(['app-leaf']);
+                expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+            });
+
+            it('does not list the installed apps without the flag', async () => {
+                const result = await InstallApp({ Source: repoUrl('app-leaf') }, ctx);
+
+                expect(result.ErrorMessage).toBeUndefined();
+                expect(vi.mocked(ListInstalledApps)).not.toHaveBeenCalled();
+            });
+        });
+
         it('says that the default branch is read, not the installed version, when the record is unreadable', async () => {
             vi.mocked(ListInstalledApps).mockResolvedValue([
                 installedRow('app-tasks', '{not json'), installedRow('app-common', manifestJSON('app-common', {})),
