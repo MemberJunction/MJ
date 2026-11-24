@@ -15,13 +15,55 @@ const mocks = vi.hoisted(() => {
     const sendActivity = vi.fn().mockResolvedValue({ id: 'activity-id-1' });
     const updateActivity = vi.fn().mockResolvedValue({});
     const getConversationReference = vi.fn().mockReturnValue({ conversation: { id: 'conv-1' } });
-    return { sendActivity, updateActivity, getConversationReference };
+    const getMember = vi.fn().mockResolvedValue({ email: 'bot@company.com', userPrincipalName: 'bot@company.com' });
+    return { sendActivity, updateActivity, getConversationReference, getMember };
+});
+
+const aiEngineState = vi.hoisted(() => ({
+    agents: [{ ID: 'agent-guid-123', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null }] as Array<Record<string, unknown>>,
+    permissions: [] as Array<Record<string, unknown>>,
+}));
+
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => {
+    const orig = await importOriginal<typeof import('@memberjunction/ai-engine-base')>();
+    const mockInstance = {
+        Config: vi.fn().mockResolvedValue(undefined),
+        get Agents() { return aiEngineState.agents; },
+        get AgentPermissions() { return aiEngineState.permissions; },
+    };
+    return {
+        ...orig,
+        AIAgentPermissionHelper: {
+            IsDirectlyDiscoverable: orig.AIAgentPermissionHelper.IsDirectlyDiscoverable.bind(orig.AIAgentPermissionHelper),
+            ComputeEffectivePermissionsSync: orig.AIAgentPermissionHelper.ComputeEffectivePermissionsSync.bind(orig.AIAgentPermissionHelper),
+            GetEffectivePermissions: vi.fn(async (agentId: string, user: unknown) => {
+                const agent = aiEngineState.agents.find(
+                    a => String(a['ID'] ?? '').toLowerCase() === agentId.toLowerCase()
+                );
+                if (!agent) {
+                    return { canView: false, canRun: false, canEdit: false, canDelete: false, isOwner: false };
+                }
+                return orig.AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+                    agent as never,
+                    aiEngineState.agents as never,
+                    aiEngineState.permissions as never,
+                    user as never
+                );
+            }),
+        },
+        AIEngineBase: {
+            get Instance() { return mockInstance; },
+        },
+    };
 });
 
 vi.mock('botbuilder', () => {
     return {
         TurnContext: {
             getConversationReference: mocks.getConversationReference
+        },
+        TeamsInfo: {
+            getMember: mocks.getMember
         },
         ActivityTypes: {
             Typing: 'typing',
@@ -95,6 +137,8 @@ async function createInitializedAdapter(
     settings?: Partial<MessagingAdapterSettings>,
     agents: Array<{ ID: string; Name: string }> = [{ ID: 'agent-guid-123', Name: 'Default Agent' }]
 ): Promise<TeamsAdapter> {
+    aiEngineState.agents = agents.map(a => ({ ...a, Status: 'Active', InvocationMode: 'Top-Level', ParentID: null }));
+    aiEngineState.permissions = [];
     const { RunView } = await import('@memberjunction/core');
     vi.mocked(RunView).mockImplementation(() => ({
         RunView: vi.fn().mockResolvedValue({
@@ -115,6 +159,7 @@ describe('TeamsAdapter', () => {
         mocks.sendActivity.mockReset().mockResolvedValue({ id: 'activity-id-1' });
         mocks.updateActivity.mockReset().mockResolvedValue({});
         mocks.getConversationReference.mockReset().mockReturnValue({ conversation: { id: 'conv-1' } });
+        mocks.getMember.mockReset().mockResolvedValue({ email: 'bot@company.com', userPrincipalName: 'bot@company.com' });
     });
 
     describe('MapTeamsActivity', () => {
@@ -561,13 +606,61 @@ describe('TeamsAdapter', () => {
     });
 
     describe('lookupUserEmail', () => {
-        it('should return null (Graph API not yet implemented)', async () => {
+        it('should resolve email via TeamsInfo.getMember on msteams channel and cache it', async () => {
+            mocks.getMember.mockResolvedValueOnce({ email: 'alice@example.com', userPrincipalName: 'alice@corp.onmicrosoft.com' });
             const adapter = await createInitializedAdapter();
+            const turnContext = createMockTurnContext({ channelId: 'msteams' });
+            const msg = adapter.MapTeamsActivity(turnContext as never);
             const lookup = (adapter as unknown as {
-                lookupUserEmail(userId: string): Promise<string | null>
+                lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
             }).lookupUserEmail.bind(adapter);
 
-            const result = await lookup('user-teams-1');
+            const first = await lookup('user-teams-1', msg);
+            const second = await lookup('user-teams-1', msg);
+
+            expect(first).toBe('alice@example.com');
+            expect(second).toBe('alice@example.com');
+            expect(mocks.getMember).toHaveBeenCalledTimes(1);
+            expect(mocks.getMember).toHaveBeenCalledWith(turnContext, 'user-teams-1');
+        });
+
+        it('should fall back to userPrincipalName when member.email is absent', async () => {
+            mocks.getMember.mockResolvedValueOnce({ userPrincipalName: 'upn@example.com' });
+            const adapter = await createInitializedAdapter();
+            const turnContext = createMockTurnContext({ channelId: 'msteams' });
+            const msg = adapter.MapTeamsActivity(turnContext as never);
+            const lookup = (adapter as unknown as {
+                lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
+            }).lookupUserEmail.bind(adapter);
+
+            const result = await lookup('user-upn-1', msg);
+            expect(result).toBe('upn@example.com');
+        });
+
+        it('should return null without calling TeamsInfo.getMember on non-Teams channels or without turnContext', async () => {
+            const adapter = await createInitializedAdapter();
+            const lookup = (adapter as unknown as {
+                lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
+            }).lookupUserEmail.bind(adapter);
+
+            expect(await lookup('user-teams-1')).toBeNull();
+
+            const webchatCtx = createMockTurnContext({ channelId: 'webchat' });
+            const webchatMsg = adapter.MapTeamsActivity(webchatCtx as never);
+            expect(await lookup('user-teams-2', webchatMsg)).toBeNull();
+            expect(mocks.getMember).not.toHaveBeenCalled();
+        });
+
+        it('should return null when TeamsInfo.getMember throws', async () => {
+            mocks.getMember.mockRejectedValueOnce(new Error('Bot Framework roster error'));
+            const adapter = await createInitializedAdapter();
+            const turnContext = createMockTurnContext({ channelId: 'msteams' });
+            const msg = adapter.MapTeamsActivity(turnContext as never);
+            const lookup = (adapter as unknown as {
+                lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
+            }).lookupUserEmail.bind(adapter);
+
+            const result = await lookup('user-err-1', msg);
             expect(result).toBeNull();
         });
     });

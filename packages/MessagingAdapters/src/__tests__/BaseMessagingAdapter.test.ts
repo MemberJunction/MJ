@@ -10,10 +10,63 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { BaseMessagingAdapter, ResolveAgentResult } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 
 // ─── Mock external modules ──────────────────────────────────────────────────
+
+// Keep the real AIAgentPermissionHelper (2x2 RBAC, ancestor CanRun, IsDirectlyDiscoverable)
+// and back AIEngineBase.Instance with an in-memory catalog so tests exercise real permission math.
+const aiEngineState = vi.hoisted(() => ({
+    agents: [] as Array<Record<string, unknown>>,
+    permissions: [] as Array<Record<string, unknown>>,
+    configCalls: [] as Array<{ forceRefresh?: boolean; user?: unknown }>,
+}));
+
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => {
+    const orig = await importOriginal<typeof import('@memberjunction/ai-engine-base')>();
+    const mockInstance = {
+        Config: vi.fn(async (forceRefresh?: boolean, user?: unknown) => {
+            aiEngineState.configCalls.push({ forceRefresh, user });
+        }),
+        get Agents() { return aiEngineState.agents; },
+        get AgentPermissions() { return aiEngineState.permissions; },
+    };
+    const MockPermissionHelper = {
+        IsDirectlyDiscoverable: orig.AIAgentPermissionHelper.IsDirectlyDiscoverable.bind(orig.AIAgentPermissionHelper),
+        ComputeEffectivePermissionsSync: orig.AIAgentPermissionHelper.ComputeEffectivePermissionsSync.bind(orig.AIAgentPermissionHelper),
+        GetEffectivePermissions: vi.fn(async (agentId: string, user: UserInfo) => {
+            const agent = aiEngineState.agents.find(
+                a => String(a['ID'] ?? '').toLowerCase() === agentId.toLowerCase()
+            );
+            if (!agent) {
+                return { canView: false, canRun: false, canEdit: false, canDelete: false, isOwner: false };
+            }
+            return orig.AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+                agent as never,
+                aiEngineState.agents as never,
+                aiEngineState.permissions as never,
+                user
+            );
+        }),
+        HasPermission: vi.fn(async (agentId: string, user: UserInfo, perm: 'view' | 'run' | 'edit' | 'delete') => {
+            const eff = await MockPermissionHelper.GetEffectivePermissions(agentId, user);
+            if (perm === 'view') return eff.canView;
+            if (perm === 'run') return eff.canRun;
+            if (perm === 'edit') return eff.canEdit;
+            if (perm === 'delete') return eff.canDelete;
+            return false;
+        }),
+    };
+    return {
+        ...orig,
+        AIAgentPermissionHelper: MockPermissionHelper,
+        AIEngineBase: {
+            get Instance() { return mockInstance; },
+        },
+    };
+});
 
 vi.mock('@memberjunction/generic-database-provider', () => {
     // A FAITHFUL model of the real UserCache, footgun included. The real class extends
@@ -195,13 +248,17 @@ class TestAdapter extends BaseMessagingAdapter {
         return this.shouldRespond(msg);
     }
 
-    public testResolveContextUser(msg: IncomingMessage): Promise<UserInfo> {
+    public testResolveContextUser(msg: IncomingMessage): Promise<UserInfo | null> {
         return this.resolveContextUser(msg);
     }
 
-    public async testResolveAgent(msg: IncomingMessage, threadHistory: IncomingMessage[] = []): Promise<{ agent: unknown; multiAgentNote: string | null }> {
-        // Use fallbackContextUser for testing; Initialize() must be called first
-        return this.resolveAgent(msg, this.fallbackContextUser!, threadHistory);
+    public async testResolveAgent(
+        msg: IncomingMessage,
+        threadHistory: IncomingMessage[] = [],
+        user?: UserInfo
+    ): Promise<ResolveAgentResult> {
+        // Use specified user or fallbackContextUser for testing; Initialize() must be called first
+        return this.resolveAgent(msg, user ?? this.fallbackContextUser!, threadHistory);
     }
 
     public testBuildConversationMessages(history: IncomingMessage[], current: IncomingMessage) {
@@ -257,6 +314,7 @@ function createMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessag
         Text: 'Hello agent',
         SenderID: 'user-1',
         SenderName: 'Test User',
+        SenderEmail: 'alice@example.com',
         ChannelID: 'channel-1',
         ThreadID: null,
         IsDirectMessage: false,
@@ -272,14 +330,28 @@ function createMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessag
 describe('BaseMessagingAdapter', () => {
     let adapter: TestAdapter;
 
+    const defaultTestAgents = [
+        { ID: 'agent-guid-123', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+        { ID: 'sage-id', Name: 'Sage', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+        { ID: 'research-id', Name: 'Research Bot', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+        { ID: 'marketing-id', Name: 'Marketing Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+        { ID: 'codesmith-id', Name: 'Codesmith', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+    ];
+
     beforeEach(() => {
         // Re-warm the shared cache each test the way server bootstrap does — the mock models the
         // real singleton, so a stray construction in one test would otherwise starve the rest.
         (UserCache.Instance as unknown as { _users: unknown[] })._users = [
-            { ID: 'u1', Email: 'alice@example.com', Name: 'Alice' },
-            { ID: 'u2', Email: 'bob@example.com', Name: 'Bob' },
-            { ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' },
+            { ID: 'u1', Email: 'alice@example.com', Name: 'Alice', IsActive: true, UserRoles: [{ RoleID: 'role-member' }] },
+            { ID: 'u2', Email: 'bob@example.com', Name: 'Bob', IsActive: true, UserRoles: [{ RoleID: 'role-admin' }] },
+            { ID: 'u3', Email: 'inactive@example.com', Name: 'Inactive User', IsActive: false, UserRoles: [{ RoleID: 'role-member' }] },
+            { ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account', IsActive: true, UserRoles: [{ RoleID: 'role-admin' }] },
         ];
+        aiEngineState.agents = defaultTestAgents.map(a => ({ ...a }));
+        aiEngineState.permissions = [];
+        aiEngineState.configCalls = [];
+        vi.mocked(AIEngineBase.Instance.Config).mockClear();
+
         adapter = new TestAdapter(defaultSettings);
         // Mock RunView for agent lookup: first call = loadDefaultAgent, second = loadAvailableAgents
         const callCount = { n: 0 };
@@ -288,18 +360,12 @@ describe('BaseMessagingAdapter', () => {
                 callCount.n++;
                 if (callCount.n === 1) {
                     // loadDefaultAgent
-                    return { Success: true, Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }] };
+                    return { Success: true, Results: [defaultTestAgents[0]] };
                 }
                 // loadAvailableAgents
                 return {
                     Success: true,
-                    Results: [
-                        { ID: 'agent-guid-123', Name: 'Default Agent' },
-                        { ID: 'sage-id', Name: 'Sage' },
-                        { ID: 'research-id', Name: 'Research Bot' },
-                        { ID: 'marketing-id', Name: 'Marketing Agent' },
-                        { ID: 'codesmith-id', Name: 'Codesmith' }
-                    ]
+                    Results: defaultTestAgents.map(a => ({ ...a })),
                 };
             })
         };
@@ -341,32 +407,72 @@ describe('BaseMessagingAdapter', () => {
         it('should resolve user by SenderEmail', async () => {
             const msg = createMessage({ SenderEmail: 'alice@example.com' });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('alice@example.com');
+            expect(user?.Email).toBe('alice@example.com');
         });
 
         it('should look up email via platform API when SenderEmail is not set', async () => {
             adapter.MockLookupEmails.set('user-bob', 'bob@example.com');
             const msg = createMessage({ SenderID: 'user-bob', SenderEmail: undefined });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('bob@example.com');
+            expect(user?.Email).toBe('bob@example.com');
         });
 
-        it('should fall back to service account when email lookup fails', async () => {
+        it('should return null (fail closed) by default when email lookup fails', async () => {
             const msg = createMessage({ SenderID: 'unknown-user', SenderEmail: undefined });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('bot@company.com');
+            expect(user).toBeNull();
         });
 
-        it('should fall back to service account when email not in MJ UserCache', async () => {
+        it('should return null (fail closed) by default when email not in MJ UserCache', async () => {
             const msg = createMessage({ SenderEmail: 'nonexistent@nowhere.com' });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('bot@company.com');
+            expect(user).toBeNull();
+        });
+
+        it('should return null (fail closed) when matched MJ user is inactive', async () => {
+            const msg = createMessage({ SenderEmail: 'inactive@example.com' });
+            const user = await adapter.testResolveContextUser(msg);
+            expect(user).toBeNull();
+        });
+
+        it('should fall back to service account when AllowFallbackUser is explicitly true', async () => {
+            const openAdapter = new TestAdapter({ ...defaultSettings, AllowFallbackUser: true });
+            await openAdapter.Initialize();
+            const unknownEmailUser = await openAdapter.testResolveContextUser(
+                createMessage({ SenderEmail: 'guest@external.org' })
+            );
+            const missingEmailUser = await openAdapter.testResolveContextUser(
+                createMessage({ SenderID: 'unknown-user', SenderEmail: undefined })
+            );
+            expect(unknownEmailUser?.Email).toBe('bot@company.com');
+            expect(missingEmailUser?.Email).toBe('bot@company.com');
         });
 
         it('should be case-insensitive for email matching', async () => {
             const msg = createMessage({ SenderEmail: 'ALICE@EXAMPLE.COM' });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('alice@example.com');
+            expect(user?.Email).toBe('alice@example.com');
+        });
+
+        it('should refuse unmapped senders in HandleMessage without running any agent or showing typing', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const runSpy = vi.fn();
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: runSpy,
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({
+                IsDirectMessage: true,
+                SenderID: 'external-guest-1',
+                SenderEmail: 'guest@external.org',
+            });
+            await adapter.HandleMessage(msg);
+
+            expect(runSpy).not.toHaveBeenCalled();
+            expect(adapter.TypeIndicatorShown).toBe(false);
+            expect(adapter.FinalMessages).toHaveLength(1);
+            expect(adapter.FinalMessages[0].PlainText).toContain('MemberJunction user');
         });
     });
 
@@ -661,20 +767,20 @@ describe('BaseMessagingAdapter', () => {
         // (and the resolveContextUser suite) fail if either call site regresses to `new`.
         it('Initialize resolves the fallback user from a warmed cache and leaves it intact', async () => {
             await adapter.Initialize();
-            expect(UserCache.Instance.Users.length).toBe(3);
+            expect(UserCache.Instance.Users.length).toBe(4);
         });
 
         it('sender resolution does not empty the shared cache', async () => {
             await adapter.Initialize();
             const user = await adapter.testResolveContextUser(createMessage({ SenderEmail: 'alice@example.com' }));
-            expect(user.Email).toBe('alice@example.com');
-            expect(UserCache.Instance.Users.length).toBe(3);
+            expect(user?.Email).toBe('alice@example.com');
+            expect(UserCache.Instance.Users.length).toBe(4);
         });
 
         it('the mock itself reproduces the footgun (keeps these tests able to fail)', () => {
             // If someone "simplifies" the mock back to a static list, this fails — and with it
             // goes the suite's ability to catch a regression to `new UserCache()`.
-            expect(UserCache.Instance.Users.length).toBe(3);
+            expect(UserCache.Instance.Users.length).toBe(4);
             const constructed = new (UserCache as unknown as new () => { Users: unknown[] })();
             expect(constructed.Users.length).toBe(0);          // construction wiped the shared instance
             expect(UserCache.Instance.Users.length).toBe(0);   // ...which IS the shared instance
@@ -1651,6 +1757,334 @@ describe('BaseMessagingAdapter', () => {
                 'convo-created-1',
                 'convo-created-1',
             ]);
+        });
+    });
+
+    describe('agent permission, discoverability, and AllowedAgentIDs enforcement (#6717)', () => {
+        const alice = { ID: 'u1', Email: 'alice@example.com', Name: 'Alice', IsActive: true, UserRoles: [{ RoleID: 'role-member' }] } as unknown as UserInfo;
+        const bob = { ID: 'u2', Email: 'bob@example.com', Name: 'Bob', IsActive: true, UserRoles: [{ RoleID: 'role-admin' }] } as unknown as UserInfo;
+
+        function seedCatalog(
+            agents: Array<Record<string, unknown>>,
+            permissions: Array<Record<string, unknown>> = [],
+            defaultAgentRow?: Record<string, unknown>
+        ): void {
+            aiEngineState.agents = agents;
+            aiEngineState.permissions = permissions;
+            const callCount = { n: 0 };
+            vi.mocked(RunView).mockImplementation(() => ({
+                RunView: vi.fn().mockImplementation(() => {
+                    callCount.n++;
+                    if (callCount.n === 1) {
+                        return { Success: true, Results: [defaultAgentRow ?? agents[0]] };
+                    }
+                    return { Success: true, Results: agents };
+                }),
+            }) as unknown as RunView);
+        }
+
+        it('warms AIEngineBase as the service account during Initialize', async () => {
+            await adapter.Initialize();
+            expect(aiEngineState.configCalls.length).toBeGreaterThanOrEqual(1);
+            expect((aiEngineState.configCalls[0].user as { Email?: string })?.Email).toBe('bot@company.com');
+        });
+
+        it('excludes sub-agents, child agents, and Required prototype templates from AvailableAgentNames and refuses direct mentions', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'sub-id', Name: 'Internal Sub', Status: 'Active', InvocationMode: 'Sub-Agent', ParentID: null },
+                { ID: 'child-id', Name: 'Child Helper', Status: 'Active', InvocationMode: 'Top-Level', ParentID: 'default-id' },
+                { ID: 'proto-id', Name: 'Template Proto', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, InstantiationMode: 'Required' },
+            ];
+            seedCatalog(catalog);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            expect(secAdapter.AvailableAgentNames).toEqual(['Default Agent']);
+
+            const subRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Internal Sub run', MentionedAgentNames: ['Internal Sub'] }),
+                [],
+                alice
+            );
+            expect(subRes.agent).toBeNull();
+            expect(subRes.refusalMessage).toContain('cannot be invoked directly');
+
+            const childRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Child Helper run', MentionedAgentNames: ['Child Helper'] }),
+                [],
+                alice
+            );
+            expect(childRes.agent).toBeNull();
+            expect(childRes.refusalMessage).toContain('cannot be invoked directly');
+
+            const protoRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Template Proto run', MentionedAgentNames: ['Template Proto'] }),
+                [],
+                alice
+            );
+            expect(protoRes.agent).toBeNull();
+            expect(protoRes.refusalMessage).toContain('cannot be invoked directly');
+        });
+
+        it('throws at Initialize when DefaultAgentName is a Sub-Agent or outside AllowedAgentIDs', async () => {
+            const subDefault = { ID: 'sub-id', Name: 'Sub Default', Status: 'Active', InvocationMode: 'Sub-Agent', ParentID: null };
+            seedCatalog([subDefault], [], subDefault);
+            const badSubAdapter = new TestAdapter({ ...defaultSettings, DefaultAgentName: 'Sub Default' });
+            await expect(badSubAdapter.Initialize()).rejects.toThrow(/not directly discoverable/i);
+
+            const topDefault = { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null };
+            seedCatalog([topDefault], [], topDefault);
+            const badAllowAdapter = new TestAdapter({ ...defaultSettings, AllowedAgentIDs: ['other-id'] });
+            await expect(badAllowAdapter.Initialize()).rejects.toThrow(/not in AllowedAgentIDs/i);
+        });
+
+        it('enforces AllowedAgentIDs across AvailableAgentNames, @mention, ExecuteAgentParams.data, and fallback delegation', async () => {
+            const { AgentRunner, ResolveHandoffTarget } = await import('@memberjunction/ai-agents');
+            vi.mocked(ResolveHandoffTarget).mockClear();
+
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, Description: 'Default' },
+                { ID: 'sage-id', Name: 'Sage', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, Description: 'Sage' },
+                { ID: 'billing-id', Name: 'Billing Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, Description: 'Billing' },
+            ];
+            seedCatalog(catalog);
+
+            const scopedAdapter = new TestAdapter({
+                ...defaultSettings,
+                AllowedAgentIDs: ['DEFAULT-ID', 'SAGE-ID'], // mixed case to prove UUID-insensitive matching
+            });
+            await scopedAdapter.Initialize();
+
+            expect(scopedAdapter.AvailableAgentNames).toEqual(['Default Agent', 'Sage']);
+
+            // Explicit mention of disallowed agent is refused
+            const blocked = await scopedAdapter.testResolveAgent(
+                createMessage({ Text: '@Billing Agent invoice', MentionedAgentNames: ['Billing Agent'] }),
+                [],
+                alice
+            );
+            expect(blocked.agent).toBeNull();
+            expect(blocked.refusalMessage).toContain('not available in this app');
+
+            // Allowed agent succeeds and propagates ALL_AVAILABLE_AGENTS + HostAllowedIDs
+            let capturedParams: Record<string, unknown> | undefined;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation((params: Record<string, unknown>) => {
+                    capturedParams = params;
+                    return Promise.resolve(wrapInConversationResult({
+                        success: true,
+                        payload: { invokeAgent: 'Billing Agent' },
+                        agentRun: { Message: 'Handing off to Billing Agent.', Steps: [] },
+                    }));
+                }),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            await scopedAdapter.HandleMessage(createMessage({ IsDirectMessage: true, SenderEmail: 'alice@example.com' }));
+
+            expect((capturedParams?.data as { ALL_AVAILABLE_AGENTS?: Array<{ ID: string }> })?.ALL_AVAILABLE_AGENTS?.map(a => a.ID)).toEqual([
+                'default-id',
+                'sage-id',
+            ]);
+            expect(ResolveHandoffTarget).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    AgentName: 'Billing Agent',
+                    HostAllowedIDs: ['DEFAULT-ID', 'SAGE-ID'],
+                })
+            );
+        });
+
+        it('refuses @mention when user has CanView but lacks CanRun without falling back to default', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const runSpy = vi.fn();
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: runSpy,
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'payroll-id', Name: 'Payroll Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'payroll-id', RoleID: 'role-member', CanView: true, CanRun: false, CanEdit: false, CanDelete: false },
+                { AgentID: 'payroll-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Alice (member: CanView=true, CanRun=false) is refused
+            await secAdapter.HandleMessage(createMessage({
+                IsDirectMessage: true,
+                SenderEmail: 'alice@example.com',
+                Text: '@Payroll Agent run payroll',
+                MentionedAgentNames: ['Payroll Agent'],
+            }));
+            expect(runSpy).not.toHaveBeenCalled();
+            expect(secAdapter.TypeIndicatorShown).toBe(false);
+            expect(secAdapter.FinalMessages[0].PlainText).toContain("don't have permission to run");
+            expect(secAdapter.FinalMessages[0].PlainText).toContain('Payroll Agent');
+
+            // Bob (admin: CanRun=true) succeeds
+            const bobRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Payroll Agent run payroll', MentionedAgentNames: ['Payroll Agent'] }),
+                [],
+                bob
+            );
+            expect(bobRes.agent?.Name).toBe('Payroll Agent');
+        });
+
+        it('hides agents user cannot view from NotFound help notes and ignores implicit prose matches', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'public-id', Name: 'Public Helper', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'secret-id', Name: 'Secret Audit', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                // Only admin can view/run Secret Audit
+                { AgentID: 'secret-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Explicit @Secret Audit by Alice: indistinguishable from NotFound, and Secret Audit is omitted from available list
+            const explicitRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Secret Audit report', MentionedAgentNames: ['Secret Audit'] }),
+                [],
+                alice
+            );
+            expect(explicitRes.agent?.Name).toBe('Default Agent');
+            expect(explicitRes.multiAgentNote).toContain("couldn't find");
+            expect(explicitRes.multiAgentNote).toContain('Public Helper');
+            expect(explicitRes.multiAgentNote).not.toContain('Available agents: Default Agent, Public Helper, Secret Audit');
+
+            // Implicit prose match (no '@') by Alice: silently ignored without a "couldn't find" side-channel note
+            const proseRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: 'we need a secret audit done', MentionedAgentNames: ['Secret Audit'] }),
+                [],
+                alice
+            );
+            expect(proseRes.agent?.Name).toBe('Default Agent');
+            expect(proseRes.multiAgentNote).toBeNull();
+        });
+
+        it('enforces permissions on thread affinity when another user replies to an admin thread', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'finance-id', Name: 'Finance Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'finance-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            const threadHistory: IncomingMessage[] = [
+                createMessage({
+                    MessageID: 't1',
+                    SenderID: 'bob-platform-id',
+                    SenderEmail: 'bob@example.com',
+                    Text: '@Finance Agent pull Q4 numbers',
+                    MentionedAgentNames: ['Finance Agent'],
+                }),
+                createMessage({
+                    MessageID: 't2',
+                    SenderID: 'BOT123',
+                    Text: 'Here are the Q4 numbers.',
+                }),
+            ];
+
+            // Bob (admin) continues thread with Finance Agent
+            const bobReply = await secAdapter.testResolveAgent(
+                createMessage({ ThreadID: 't1', Text: 'break down by region', MentionedAgentNames: [] }),
+                threadHistory,
+                bob
+            );
+            expect(bobReply.agent?.Name).toBe('Finance Agent');
+
+            // Alice (cannot view/run Finance Agent) is refused without naming Finance Agent
+            const aliceReply = await secAdapter.testResolveAgent(
+                createMessage({ ThreadID: 't1', Text: 'show me too', MentionedAgentNames: [] }),
+                threadHistory,
+                alice
+            );
+            expect(aliceReply.agent).toBeNull();
+            expect(aliceReply.refusalMessage).toContain("don't have permission");
+            expect(aliceReply.refusalMessage).not.toContain('Finance Agent');
+        });
+
+        it('refuses when user lacks CanRun on the default agent itself', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'default-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            const aliceRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: 'hello', MentionedAgentNames: [] }),
+                [],
+                alice
+            );
+            expect(aliceRes.agent).toBeNull();
+            expect(aliceRes.refusalMessage).toContain("don't have permission");
+        });
+
+        it('enforces derived-agent privacy (2x2 RBAC: derived with 0 ACL rows is owner-only)', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null },
+                { ID: 'derived-id', Name: 'Bob Personal Bot', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: 'default-id', OwnerUserID: 'u2' },
+            ];
+            seedCatalog(catalog, []);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Bob (OwnerUserID === 'u2') can run his personal derived agent
+            const bobRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Bob Personal Bot hi', MentionedAgentNames: ['Bob Personal Bot'] }),
+                [],
+                bob
+            );
+            expect(bobRes.agent?.Name).toBe('Bob Personal Bot');
+
+            // Alice cannot view or run Bob's private derived agent
+            const aliceRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Bob Personal Bot hi', MentionedAgentNames: ['Bob Personal Bot'] }),
+                [],
+                alice
+            );
+            expect(aliceRes.agent?.Name).toBe('Default Agent');
+            expect(aliceRes.multiAgentNote).toContain("couldn't find");
+        });
+
+        it('stays silent when multi-bot thread gate declines an unmapped sender in another bot thread', async () => {
+            await adapter.Initialize();
+            adapter.MockThreadHistory = [
+                createMessage({ MessageID: 't1', SenderID: 'user-1', Text: 'starting a thread' }),
+                createMessage({ MessageID: 't2', SenderID: 'BOT999', Text: 'other bot reply', RawEvent: { bot_id: 'B999' } }),
+            ];
+            await adapter.HandleMessage(createMessage({
+                MessageID: 'm9',
+                ThreadID: 't1',
+                SenderID: 'external-guest',
+                SenderEmail: 'guest@external.org',
+                Text: 'follow-up',
+            }));
+            expect(adapter.FinalMessages).toHaveLength(0);
+            expect(adapter.TypeIndicatorShown).toBe(false);
         });
     });
 });

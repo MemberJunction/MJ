@@ -59,6 +59,21 @@ vi.mock('@memberjunction/generic-database-provider', () => {
     return { UserCache: MockUserCache };
 });
 
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => {
+    const orig = await importOriginal<typeof import('@memberjunction/ai-engine-base')>();
+    const mockInstance = {
+        Config: vi.fn().mockResolvedValue(undefined),
+        Agents: [{ ID: 'agent-guid-123', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null }],
+        AgentPermissions: [],
+    };
+    return {
+        ...orig,
+        AIEngineBase: {
+            get Instance() { return mockInstance; },
+        },
+    };
+});
+
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: vi.fn().mockImplementation(() => ({
         RunAgent: vi.fn().mockResolvedValue({ success: true, payload: 'ok', agentRun: { Steps: [] } })

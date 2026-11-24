@@ -9,9 +9,10 @@
  * - Stripping bot `<at>` mentions from message text
  */
 
-import { TurnContext, ActivityTypes, Activity, ConversationReference } from 'botbuilder';
+import { TurnContext, ActivityTypes, Activity, ConversationReference, TeamsInfo } from 'botbuilder';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { SanitizeForLog } from '@memberjunction/global';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { MarkdownToAdaptiveCard } from './teams-formatter.js';
@@ -279,17 +280,79 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     }
 
     /**
-     * Look up the email for a Teams user.
-     * In Teams, the email is often available directly on the activity's `from` property.
+     * Short-lived cache of Teams user ID → email resolved via `TeamsInfo.getMember`.
+     * Avoids a Bot Framework roster round-trip on every message while letting new MJ
+     * accounts take effect immediately (UserCache is still queried fresh per message).
+     */
+    private userEmailCache = new Map<string, { email: string; timestamp: number }>();
+    private static readonly USER_EMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+    private static readonly USER_EMAIL_CACHE_MAX_SIZE = 10_000;
+
+    /**
+     * Look up the email for a Teams user via `TeamsInfo.getMember`.
      *
-     * @param platformUserId - Teams user ID.
+     * Teams activities often omit `activity.from.email` and carry only `{ id, name, aadObjectId }`.
+     * Calling `TeamsInfo.getMember(turnContext, userId)` resolves `email` / `userPrincipalName`
+     * using the bot's existing Bot Framework token (no Microsoft Graph API permission required).
+     * Non-Teams channels (Web Chat, Emulator) return `null` cleanly.
+     *
+     * @param platformUserId - Teams user ID (`activity.from.id`).
+     * @param message - Incoming message whose `RawEvent.turnContext` provides the active turn.
      * @returns Email address, or `null` if not available.
      */
-    protected async lookupUserEmail(platformUserId: string): Promise<string | null> {
-        // Teams provides email in the activity `from` field for most message types
-        // The caller already extracted SenderEmail from the activity
-        // For additional lookups, Graph API would be needed
-        return null;
+    protected async lookupUserEmail(platformUserId: string, message?: IncomingMessage): Promise<string | null> {
+        if (!platformUserId) {
+            return null;
+        }
+
+        const cached = this.getCachedUserEmail(platformUserId);
+        if (cached) {
+            return cached;
+        }
+
+        const turnContext = (message?.RawEvent as Record<string, unknown> | undefined)?.['turnContext'] as TurnContext | undefined;
+        if (!turnContext || turnContext.activity?.channelId !== 'msteams') {
+            return null;
+        }
+
+        try {
+            const member = await TeamsInfo.getMember(turnContext, platformUserId);
+            const email = member?.email?.trim() || member?.userPrincipalName?.trim() || null;
+            if (email) {
+                this.storeCachedUserEmail(platformUserId, email);
+            }
+            return email;
+        } catch (error) {
+            LogStatus(`Teams user email lookup via TeamsInfo.getMember failed for '${SanitizeForLog(platformUserId)}'`);
+            LogError('TeamsInfo.getMember failed:', undefined, error);
+            return null;
+        }
+    }
+
+    private getCachedUserEmail(userId: string): string | null {
+        const entry = this.userEmailCache.get(userId);
+        if (!entry) return null;
+        if (Date.now() - entry.timestamp > TeamsAdapter.USER_EMAIL_CACHE_TTL_MS) {
+            this.userEmailCache.delete(userId);
+            return null;
+        }
+        return entry.email;
+    }
+
+    private storeCachedUserEmail(userId: string, email: string): void {
+        const now = Date.now();
+        this.userEmailCache.set(userId, { email, timestamp: now });
+        for (const [key, entry] of this.userEmailCache) {
+            if (now - entry.timestamp > TeamsAdapter.USER_EMAIL_CACHE_TTL_MS) {
+                this.userEmailCache.delete(key);
+            }
+        }
+        if (this.userEmailCache.size > TeamsAdapter.USER_EMAIL_CACHE_MAX_SIZE) {
+            const oldest = [...this.userEmailCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+            for (const [key] of oldest.slice(0, oldest.length - TeamsAdapter.USER_EMAIL_CACHE_MAX_SIZE)) {
+                this.userEmailCache.delete(key);
+            }
+        }
     }
 
     /**

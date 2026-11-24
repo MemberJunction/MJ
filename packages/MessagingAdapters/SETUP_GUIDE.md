@@ -509,15 +509,20 @@ The adapter uses a 4-pass matching strategy:
 
 In thread replies, the adapter remembers which agent was originally invoked (thread affinity) — no need to @mention again for follow-ups.
 
-### User Identity Mapping
+### User Identity Mapping & Agent Permissions
 
-Platform users are mapped to MJ users by email:
-1. Extract email from platform message (Teams provides it directly)
-2. For Slack: call `users.info` API to get email (`users:read.email` scope)
-3. Look up email in MJ `UserCache` (case-insensitive)
-4. Fall back to `ContextUserEmail` service account if no match
+Platform users are mapped to active MJ users by email:
+1. Extract email from the incoming platform message (`activity.from.email` on Teams when present)
+2. Look up email via the platform API if omitted:
+   - **Slack:** `users.info` (`users:read.email` scope)
+   - **Teams:** `TeamsInfo.getMember(turnContext, userId)` using the Bot Framework token (no Microsoft Graph permission required)
+3. Match the email against active users in MJ `UserCache.Instance` (case-insensitive)
+4. **Fail closed by default:** if no active MJ user matches, the message is refused so external guests and unlinked accounts never inherit the `ContextUserEmail` service account's permissions. Set `AllowFallbackUser: true` in `Settings` only for intentionally open dev/demo or public bots.
 
-This gives proper per-user permission scoping without a separate auth flow.
+Agent routing enforces MJ's full agent permission model on every `@mention`, thread follow-up, slash command, form submission, and handoff:
+- **Discoverability:** Sub-agents, child agents (`ParentID`), and instantiation-required prototype templates (`InstantiationMode = 'Required'`) cannot be invoked directly.
+- **Per-user RBAC:** Every target agent (including thread affinity and `DefaultAgentName`) is checked against `MJ: AI Agent Permissions` (`CanView` and `CanRun`, plus the ancestor `CanRun` invariant for derived agents). Agents the user cannot view are never revealed in help notes or refusals.
+- **Per-app allow-list (`AllowedAgentIDs`):** Optionally set `AllowedAgentIDs: ['<agent-uuid>', ...]` in `Settings` to restrict a bot instance to a fixed set of agents (enforced across mentions, slash commands, handoffs, and task-graph delegation).
 
 ### Agent Delegation
 

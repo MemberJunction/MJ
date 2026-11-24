@@ -53,10 +53,38 @@ export interface MessagingAdapterSettings {
     DefaultAgentName: string;
 
     /**
-     * Fallback MJ User email for agent execution when the platform user
-     * cannot be mapped to an MJ user. Acts as a service account.
+     * MJ User email for the adapter's service account, used during initialization
+     * (loading metadata and agent definitions).
+     *
+     * By default (`AllowFallbackUser` omitted or `false`), incoming messages whose
+     * sender email cannot be mapped to an active MJ user are refused rather than
+     * executed under this service account.
      */
     ContextUserEmail: string;
+
+    /**
+     * Allow unmapped platform senders (users whose email cannot be resolved or does
+     * not match an active MJ user) to execute agents under `ContextUserEmail`.
+     *
+     * Defaults to `false` (fail closed) so external guests or unlinked accounts
+     * cannot inherit the service account's permissions. Set `true` only for
+     * intentionally open dev/demo or public bots.
+     *
+     * @default false
+     */
+    AllowFallbackUser?: boolean;
+
+    /**
+     * Optional allow-list of MJ Agent IDs this adapter instance may route to
+     * (via `@mention`, thread affinity, slash commands, form submissions, and
+     * delegation/handoffs).
+     *
+     * When omitted, any active, directly-discoverable agent the calling user has
+     * view and run permission for may be invoked. When specified (including `[]`),
+     * only agents whose ID is in this list are reachable; `DefaultAgentName` must
+     * also belong to this list when set.
+     */
+    AllowedAgentIDs?: string[];
 
     /** Platform-specific bot token for API access. */
     BotToken: string;
