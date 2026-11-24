@@ -29,6 +29,7 @@ export interface StreamableSessionStoreOptions {
 }
 
 interface TrackedSessionEntry<TTransport extends StreamableSessionClosable> {
+    SessionId: string;
     Session: StreamableSession<TTransport>;
     LastActiveAtMs: number;
 }
@@ -57,7 +58,10 @@ export class StreamableSessionStore<TTransport extends StreamableSessionClosable
         this.sweepIntervalMs = options.SweepIntervalMs ?? StreamableSessionStore.DEFAULT_SWEEP_INTERVAL_MS;
         this.onCloseError =
             options.OnCloseError ??
-            ((sessionId, error) => console.error(`[StreamableHTTP] Error closing session ${sessionId}:`, error));
+            ((sessionId, error) => {
+                const safePrefix = sessionId.slice(0, 8).replace(/[\r\n\t]/g, '');
+                console.error('[StreamableHTTP] Error closing session %s:', safePrefix, error);
+            });
     }
 
     /** Number of sessions currently tracked. */
@@ -76,8 +80,8 @@ export class StreamableSessionStore<TTransport extends StreamableSessionClosable
         }
         const now = Date.now();
         if (this.isExpired(entry, now)) {
-            this.sessions.delete(sessionId);
-            this.closeSession(sessionId, entry.Session);
+            this.sessions.delete(entry.SessionId);
+            this.closeSession(entry.SessionId, entry.Session);
             return undefined;
         }
         entry.LastActiveAtMs = now;
@@ -87,6 +91,7 @@ export class StreamableSessionStore<TTransport extends StreamableSessionClosable
     /** Starts tracking a session and ensures the idle sweep timer is running when enabled. */
     public Add(sessionId: string, session: StreamableSession<TTransport>): void {
         this.sessions.set(sessionId, {
+            SessionId: sessionId,
             Session: session,
             LastActiveAtMs: Date.now(),
         });
