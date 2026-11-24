@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
+import { FlowLayoutDirection } from '../interfaces/flow-types';
 
 /**
  * Internal toolbar for the generic flow editor canvas controls.
- * Provides zoom, fit-to-screen, auto-layout, and grid/minimap toggles.
+ * Provides zoom, fit-to-screen, auto-layout, LR⇄TB direction switch, and grid/minimap/legend toggles.
  */
 @Component({
   standalone: false,
@@ -21,9 +22,9 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
           <i class="fa-solid fa-expand"></i>
         </button>
       </div>
-    
+
       <div class="mj-flow-toolbar-divider"></div>
-    
+
       <div class="mj-flow-toolbar-group">
         <button class="mj-flow-toolbar-btn"
           [class.mj-flow-toolbar-btn--active]="!PanMode"
@@ -38,11 +39,11 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
           <i class="fa-solid fa-hand"></i>
         </button>
       </div>
-    
+
       @if (!ReadOnly) {
         <div class="mj-flow-toolbar-divider"></div>
       }
-    
+
       @if (!ReadOnly) {
         <div class="mj-flow-toolbar-group">
           <button class="mj-flow-toolbar-btn" (click)="AutoLayoutClicked.emit()" title="Auto Arrange">
@@ -50,10 +51,15 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
           </button>
         </div>
       }
-    
+
       <div class="mj-flow-toolbar-divider"></div>
-    
+
       <div class="mj-flow-toolbar-group">
+        <button class="mj-flow-toolbar-btn mj-flow-toolbar-btn--dir"
+          (click)="LayoutDirectionToggled.emit(LayoutDirection === 'horizontal' ? 'vertical' : 'horizontal')"
+          [title]="LayoutDirection === 'horizontal' ? 'Switch layout to Top-to-Bottom (TB)' : 'Switch layout to Left-to-Right (LR)'">
+          <i class="fa-solid" [class.fa-arrows-left-right]="LayoutDirection === 'horizontal'" [class.fa-arrows-up-down]="LayoutDirection !== 'horizontal'"></i>
+        </button>
         <button class="mj-flow-toolbar-btn"
           [class.mj-flow-toolbar-btn--active]="ShowGrid"
           (click)="GridToggled.emit(!ShowGrid)"
@@ -94,10 +100,11 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
       align-items: center;
       gap: 2px;
       padding: 4px 8px;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      background: color-mix(in srgb, var(--mj-bg-surface-elevated) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .mj-flow-toolbar-group {
@@ -109,7 +116,7 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
     .mj-flow-toolbar-divider {
       width: 1px;
       height: 20px;
-      background: #e2e8f0;
+      background: var(--mj-border-default);
       margin: 0 4px;
     }
 
@@ -122,31 +129,32 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
       border: none;
       border-radius: 6px;
       background: transparent;
-      color: #64748b;
+      color: var(--mj-text-secondary);
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: background-color var(--mj-transition-fast), color var(--mj-transition-fast);
       font-size: 13px;
     }
 
     .mj-flow-toolbar-btn:hover {
-      background: #f1f5f9;
-      color: #334155;
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
     }
 
     .mj-flow-toolbar-btn--active {
-      background: #eff6ff;
-      color: #3b82f6;
+      background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+      color: var(--mj-brand-primary);
     }
 
     .mj-flow-toolbar-btn--active:hover {
-      background: #dbeafe;
-      color: #2563eb;
+      background: color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
+      color: var(--mj-brand-primary-hover);
     }
 
     .mj-flow-toolbar-zoom {
+      font-family: var(--mj-font-family-mono);
       font-size: 11px;
-      font-weight: 500;
-      color: #64748b;
+      font-weight: var(--mj-font-medium);
+      color: var(--mj-text-muted);
       min-width: 38px;
       text-align: center;
       user-select: none;
@@ -162,11 +170,13 @@ export class FlowToolbarComponent {
   @Input() ShowLegend = true;
   @Input() ReadOnly = false;
   @Input() PanMode = false;
+  @Input() LayoutDirection: FlowLayoutDirection = 'vertical';
 
   @Output() ZoomInClicked = new EventEmitter<void>();
   @Output() ZoomOutClicked = new EventEmitter<void>();
   @Output() FitToScreenClicked = new EventEmitter<void>();
   @Output() AutoLayoutClicked = new EventEmitter<void>();
+  @Output() LayoutDirectionToggled = new EventEmitter<FlowLayoutDirection>();
   @Output() GridToggled = new EventEmitter<boolean>();
   @Output() MinimapToggled = new EventEmitter<boolean>();
   @Output() LegendToggled = new EventEmitter<boolean>();

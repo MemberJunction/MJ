@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CompositeKey, UserInfo } from '@memberjunction/core';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { NavigationTab } from '../../models/conversation-state.model';
 import { BeforeFolderEditEventArgs, AfterFolderEditEventArgs } from '../../events/chat-events';
@@ -10,6 +11,16 @@ import { BeforeFolderEditEventArgs, AfterFolderEditEventArgs } from '../../event
   template: `
     <div class="conversation-sidebar">
       @if (activeTab === 'conversations') {
+        <mj-my-agents-section
+          [Provider]="Provider"
+          [CurrentUser]="currentUser"
+          [ShowMyAgents]="ShowMyAgents"
+          [ActiveAgentId]="ActiveAgentId"
+          (StartChatWithAgent)="StartChatWithAgent.emit($event)"
+          (StartNewChatWithAgent)="StartNewChatWithAgent.emit($event)"
+          (StartOnboardingWithTemplate)="StartOnboardingWithTemplate.emit($event)"
+          (AgentInstanceChanged)="AgentInstanceChanged.emit($event)">
+        </mj-my-agents-section>
         <div class="sidebar-content">
           <mj-conversation-list
             [environmentId]="environmentId"
@@ -151,6 +162,10 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
   get isMobileView(): boolean {
     return this.IsMobileView;
   }
+  /** Show the My Agents section at the top of the sidebar (default true). */
+  @Input() ShowMyAgents: boolean = true;
+  /** Currently active/pinned agent ID in the selected conversation, highlighted in My Agents. */
+  @Input() ActiveAgentId: string | null = null;
   /** Show the Routines section at the bottom of the sidebar (bubbled from the workspace; default true). */
   @Input() ShowRoutines: boolean = true;
 
@@ -299,6 +314,15 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() afterFolderEdit = this.AfterFolderEdit;
+
+  /** User clicked one of their personal agent instances in My Agents to open/focus its thread. */
+  @Output() StartChatWithAgent = new EventEmitter<MJAIAgentEntityExtended>();
+  /** User explicitly clicked the hover '+' icon on an instance to spin up a fresh chat thread. */
+  @Output() StartNewChatWithAgent = new EventEmitter<MJAIAgentEntityExtended>();
+  /** User chose "Chat to Onboard" for an instantiable template agent. */
+  @Output() StartOnboardingWithTemplate = new EventEmitter<MJAIAgentEntityExtended>();
+  /** Emitted after a personal agent instance is created, tailored, or archived from the sidebar modal. */
+  @Output() AgentInstanceChanged = new EventEmitter<MJAIAgentEntityExtended | null>();
 
   OnPinSidebarRequested(): void {
     this.PinSidebarRequested.emit();

@@ -26,17 +26,22 @@
         </span>
       }
 
-      <!-- View Mode Toggle -->
+      <!-- Synchronized Dual-Lens View Mode Toggle -->
       <div class="mj-agent-editor-view-toggle">
         <button class="mj-agent-editor-view-btn"
           [class.mj-agent-editor-view-btn--active]="viewMode === 'diagram'"
           (click)="viewMode = 'diagram'">
-          <i class="fa-solid fa-diagram-project"></i> Diagram
+          <i class="fa-solid fa-diagram-project"></i> Canvas
+        </button>
+        <button class="mj-agent-editor-view-btn"
+          [class.mj-agent-editor-view-btn--active]="viewMode === 'split'"
+          (click)="viewMode = 'split'">
+          <i class="fa-solid fa-table-columns"></i> Split Playbook
         </button>
         <button class="mj-agent-editor-view-btn"
           [class.mj-agent-editor-view-btn--active]="viewMode === 'list'"
           (click)="viewMode = 'list'">
-          <i class="fa-solid fa-list"></i> List
+          <i class="fa-solid fa-list-ol"></i> Playbook
         </button>
       </div>
 
@@ -135,13 +140,24 @@
           </ul>
         </mj-alert>
       }
-      <!-- Diagram View -->
-      @if (viewMode === 'diagram') {
+      <!-- Canvas / Split Playbook View -->
+      @if (viewMode === 'diagram' || viewMode === 'split') {
         <div class="mj-agent-editor-diagram">
+          @if (viewMode === 'split') {
+            <div class="mj-agent-editor-split-playbook">
+              <mj-agent-step-list
+                [Steps]="steps"
+                [Paths]="paths"
+                [SelectedStepID]="selectedStep?.ID || null"
+                (StepClicked)="onStepClickedInList($event)">
+              </mj-agent-step-list>
+            </div>
+          }
           <mj-flow-editor #flowEditor
             [Nodes]="nodes"
             [Connections]="connections"
             [NodeTypes]="nodeTypes"
+            [ViewportKey]="AgentID ? 'agent:' + AgentID : null"
             [ReadOnly]="!isEditingActive"
             [ShowMinimap]="prefShowMinimap"
             [ShowPalette]="isEditingActive"
@@ -149,10 +165,11 @@
             [ShowLegend]="prefShowLegend"
             [ShowStatusBar]="true"
             [ShowToolbar]="true"
-            [AutoLayoutDirection]="'vertical'"
+            [AutoLayoutDirection]="prefLayoutDirection"
             (NodeSelected)="onNodeSelected($event)"
             (NodeAdded)="onNodeAdded($event)"
             (NodeRemoved)="onNodeRemoved($event)"
+            (NodeQuickAddClicked)="onNodeQuickAddClicked($event)"
             (ConnectionCreated)="onConnectionCreated($event)"
             (ConnectionRemoved)="onConnectionRemoved($event)"
             (ConnectionReassigned)="onConnectionReassigned($event)"
@@ -161,7 +178,8 @@
             (ConnectionsChanged)="onConnectionsChanged($event)"
             (GridToggled)="onGridPrefChanged($event)"
             (MinimapToggled)="onMinimapPrefChanged($event)"
-            (LegendToggled)="onLegendPrefChanged($event)">
+            (LegendToggled)="onLegendPrefChanged($event)"
+            (LayoutDirectionChanged)="onLayoutDirectionPrefChanged($event)">
           </mj-flow-editor>
           <!-- Properties Panel -->
           <div class="mj-agent-editor-properties"

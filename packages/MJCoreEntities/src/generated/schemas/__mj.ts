@@ -4491,8 +4491,8 @@ export const MJAIAgentSchema = z.object({
     LogoURL: z.string().nullable().describe(`
         * * Field Name: LogoURL
         * * Display Name: Logo URL
-        * * SQL Data Type: nvarchar(255)
-        * * Description: URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display.`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: URL to an image file, presigned asset URL, or base64 data URI (e.g., data:image/png;base64,...) for the agent logo or custom instance avatar. Takes precedence over IconClass in UI display.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -5020,6 +5020,34 @@ if this limit is exceeded.`),
     *   * Process
     *   * Worker
         * * Description: Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation).`),
+    BaseAgentID: z.string().nullable().describe(`
+        * * Field Name: BaseAgentID
+        * * Display Name: Base Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: Optional prototype/base agent ID for multi-level capability inheritance (instance-of), distinct from ParentID (structural sub-agent composition). Derived agents inherit prompts, actions, sub-agents, skills, configurations, modalities, and rhythm templates live from their BaseAgentID chain (up to MaxDepth 5).`),
+    InstantiationMode: z.union([z.literal('None'), z.literal('Optional'), z.literal('Required')]).describe(`
+        * * Field Name: InstantiationMode
+        * * Display Name: Instantiation Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * Optional
+    *   * Required
+        * * Description: Controls whether users can create tailored derived instances from this agent via BaseAgentID: None (direct-use only; default for catalog agents, sub-agents, and personal leaf instances), Optional (directly runnable and instantiable as a template), or Required (template/onboarding factory only; excluded from direct ad-hoc delegation).`),
+    AdditionalInstructions: z.string().nullable().describe(`
+        * * Field Name: AdditionalInstructions
+        * * Display Name: Additional Instructions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional standing instructions appended to this agent's prompt context and stacked down the BaseAgentID inheritance chain from root template to personal leaf instance.`),
+    IsPrimaryInstance: z.boolean().describe(`
+        * * Field Name: IsPrimaryInstance
+        * * Display Name: Is Primary Instance
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, marks this derived agent as the owner's primary instance among multiple instances sharing the same RootBaseAgentID for deterministic routing (e.g., inbound mailbox wakes, inter-agent requests, default dashboard selection).`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -5068,6 +5096,10 @@ if this limit is exceeded.`),
         * * Field Name: ConversationSummaryPrompt
         * * Display Name: Conversation Summary Prompt
         * * SQL Data Type: nvarchar(255)`),
+    BaseAgent: z.string().nullable().describe(`
+        * * Field Name: BaseAgent
+        * * Display Name: Base Agent
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -5087,6 +5119,26 @@ if this limit is exceeded.`),
     ParentIDChildCount: z.number().nullable().describe(`
         * * Field Name: ParentIDChildCount
         * * Display Name: Parent ID Child Count
+        * * SQL Data Type: int`),
+    RootBaseAgentID: z.string().nullable().describe(`
+        * * Field Name: RootBaseAgentID
+        * * Display Name: Root Base Agent ID
+        * * SQL Data Type: uniqueidentifier`),
+    BaseAgentIDDepth: z.number().nullable().describe(`
+        * * Field Name: BaseAgentIDDepth
+        * * Display Name: Base Agent ID Depth
+        * * SQL Data Type: int`),
+    BaseAgentIDPath: z.string().nullable().describe(`
+        * * Field Name: BaseAgentIDPath
+        * * Display Name: Base Agent ID Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    BaseAgentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: BaseAgentIDIsLeaf
+        * * Display Name: Base Agent ID Is Leaf
+        * * SQL Data Type: bit`),
+    BaseAgentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: BaseAgentIDChildCount
+        * * Display Name: Base Agent ID Child Count
         * * SQL Data Type: int`),
 });
 

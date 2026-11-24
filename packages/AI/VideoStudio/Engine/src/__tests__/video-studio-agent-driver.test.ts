@@ -184,6 +184,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 });
 
 import { PayloadManager } from '@memberjunction/ai-agents';
+import { JSONValidator } from '@memberjunction/global';
 import { VideoStudioAgent } from '../agents/video-studio-agent.js';
 import { FitTimelineToNarration } from '../narration/narration-timeline.js';
 import { CreateDeliveredSpecFixture } from './fixtures/delivered-spec.fixture.js';
@@ -227,13 +228,6 @@ type TestableVideoStudioAgent = VideoStudioAgent & {
         payload: Partial<VideoGenerationSpec>,
         stageSucceeded?: boolean,
     ): Partial<VideoGenerationSpec>;
-    ExecuteSubAgent<SC = unknown, SR = unknown>(
-        params: ExecuteAgentParams<SC>,
-        subAgentRequest: unknown,
-        subAgent: unknown,
-        stepEntity: MJAIAgentRunStepEntityExtended,
-        payload?: SR,
-    ): Promise<{ success: boolean; payload?: SR }>;
 };
 
 describe('VideoStudioAgent driver lifecycle', () => {
@@ -1057,7 +1051,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         (agent as unknown as { _agentRun: Partial<MJAIAgentRunEntityExtended> })._agentRun = {
             FinalPayloadObject: undefined,
         };
-        const storyboardStepResult = await agent.executeNextStep(
+        const storyboardStepResult = await agent.executeNextStep<Partial<VideoGenerationSpec>>(
             storyboardParams,
             dummyConfig,
             {
@@ -1795,8 +1789,11 @@ describe('VideoStudioAgent driver lifecycle', () => {
         ]);
     });
 
-    it('(16) preserves dotted filenames in Output.Source across ExecuteSubAgent + executeNextStep when PayloadManager drops dotted keys', async () => {
+    it('(16) preserves dotted filenames in Output.Source across real PayloadManager.MergeUpstreamPayload + executeNextStep', async () => {
         const agent = createAgent();
+        const parentSpec: Partial<VideoGenerationSpec> = CreateDeliveredSpecFixture();
+        delete parentSpec.Output;
+
         const subAgentPayload: Partial<VideoGenerationSpec> = {
             ...CreateDeliveredSpecFixture(),
             Output: {
@@ -1822,43 +1819,20 @@ describe('VideoStudioAgent driver lifecycle', () => {
             },
         };
 
-        const params = {
-            payload: {},
-            conversationMessages: [],
-        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
-
-        await agent.ExecuteSubAgent(
-            params,
-            { name: 'Video Studio - Motion Engineer' },
-            { Name: 'Video Studio - Motion Engineer' },
-            dummyStep,
+        const merged = new PayloadManager().MergeUpstreamPayload(
+            'Video Studio - Motion Engineer',
+            parentSpec,
             subAgentPayload,
+            ['Output.Source', 'Output.Source.*'],
         );
 
-        // Simulate PayloadManager.MergeUpstreamPayload dropping the dotted 'index.html' key
-        const corruptedByPayloadManager: Partial<VideoGenerationSpec> = {
-            ...subAgentPayload,
-            Output: {
-                ...subAgentPayload.Output!,
-                Source: {
-                    '16:9': {
-                        Format: '16:9',
-                        EntryFile: 'index.html',
-                        Files: {
-                            index: {} as unknown as string,
-                        },
-                        AssetKeys: [],
-                    },
-                },
-            },
-        };
-
         const nextParams = {
-            ...params,
+            payload: parentSpec,
+            conversationMessages: [],
             __mockNextStepResult: {
                 step: 'Retry',
                 terminate: false,
-                newPayload: corruptedByPayloadManager,
+                newPayload: merged.result,
             } as BaseAgentNextStep<Partial<VideoGenerationSpec>>,
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
 
@@ -1924,25 +1898,21 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(mockVideoStudioEngineInstance.GetArchetypeByName).not.toHaveBeenCalled();
     });
 
-    it('(18) restores stripped format keys (e.g. LayoutNotes: {"16": ...}) in ApplyStageResult so G2 passes', () => {
+    it('(18) preserves colon-bearing format keys (e.g. LayoutNotes: {"16:9": ...}) across JSONValidator.CleanValidationSyntax + ApplyStageResult so G2 passes', () => {
         const agent = createAgent();
         const spec = CreateDeliveredSpecFixture();
         spec.Interaction.Mode = 'Autonomous';
         spec.Film.Formats = ['16:9'];
         spec.Deliverables.Formats = ['16:9'];
-        spec.Beats = spec.Beats.map((beat) => ({
-            ...beat,
-            LayoutNotes: {
-                '16': beat.LayoutNotes['16:9'] ?? 'Centered metric layout',
-            } as unknown as Record<'16:9' | '9:16' | '1:1', string>,
-        }));
+
+        const cleanedSpec = new JSONValidator().CleanValidationSyntax<VideoGenerationSpec>(spec);
 
         const params = {
-            payload: spec,
+            payload: cleanedSpec,
             conversationMessages: [],
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
 
-        const afterStoryboard = agent.ApplyStageResult(params, 'Video Studio - Storyboard', spec);
+        const afterStoryboard = agent.ApplyStageResult(params, 'Video Studio - Storyboard', cleanedSpec);
         for (const beat of afterStoryboard.Beats ?? []) {
             expect(beat.LayoutNotes['16:9']).toBeDefined();
             expect((beat.LayoutNotes as Record<string, unknown>)['16']).toBeUndefined();
@@ -1951,7 +1921,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(g2?.Status).toBe('Passed');
     });
 
-    it('(19) restores empty arrays dropped by real PayloadManager.MergeUpstreamPayload so FitTimelineToNarration (cloneBeat) does not throw', () => {
+    it('(19) preserves empty arrays across real PayloadManager.MergeUpstreamPayload so FitTimelineToNarration (cloneBeat) does not throw', () => {
         const agent = createAgent();
         const parentSpec = CreateDeliveredSpecFixture();
         delete (parentSpec as Partial<VideoGenerationSpec>).Beats;
@@ -1976,35 +1946,27 @@ describe('VideoStudioAgent driver lifecycle', () => {
             ['Beats', 'Beats.*', 'StateList', 'StateList.*', 'Audio', 'Audio.*'],
         );
 
-        // Verify real MergeUpstreamPayload dropped empty DataRefs/AssetRefs/Cues arrays
-        expect(merged.result.Beats?.[0]?.DataRefs).toBeUndefined();
-        expect(merged.result.Beats?.[0]?.AssetRefs).toBeUndefined();
-        expect(merged.result.Audio?.Cues).toBeUndefined();
-        expect(() =>
-            FitTimelineToNarration({
-                Beats: merged.result.Beats ?? [],
-                Lines: merged.result.Audio?.Narration?.Script ?? [],
-                Cues: merged.result.Audio?.Cues ?? [],
-            }),
-        ).toThrow(/not iterable/);
+        expect(merged.result.Beats?.[0]?.DataRefs).toEqual([]);
+        expect(merged.result.Beats?.[0]?.AssetRefs).toEqual([]);
+        expect(merged.result.Audio?.Cues).toEqual([]);
 
         const params = {
             payload: merged.result,
             conversationMessages: [],
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
 
-        const repaired = agent.ApplyStageResult(params, 'Video Studio - Storyboard', merged.result);
-        for (const beat of repaired.Beats ?? []) {
+        const afterStoryboard = agent.ApplyStageResult(params, 'Video Studio - Storyboard', merged.result);
+        for (const beat of afterStoryboard.Beats ?? []) {
             expect(beat.OnScreenText).toBeInstanceOf(Array);
             expect(beat.DataRefs).toEqual([]);
             expect(beat.AssetRefs).toEqual([]);
         }
-        expect(repaired.Audio?.Cues).toEqual([]);
+        expect(afterStoryboard.Audio?.Cues).toEqual([]);
 
         const fitted = FitTimelineToNarration({
-            Beats: repaired.Beats ?? [],
-            Lines: repaired.Audio?.Narration?.Script ?? [],
-            Cues: repaired.Audio?.Cues ?? [],
+            Beats: afterStoryboard.Beats ?? [],
+            Lines: afterStoryboard.Audio?.Narration?.Script ?? [],
+            Cues: afterStoryboard.Audio?.Cues ?? [],
         });
         expect(fitted.Beats).toHaveLength(storyboardSpec.Beats.length);
         for (const beat of fitted.Beats) {

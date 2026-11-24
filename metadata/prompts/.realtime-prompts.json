@@ -26,25 +26,41 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 1,
+            "Priority": 10,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "3CC90FE2-1E01-4FE5-B027-BF85208EFBDB"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 9,
+            "Status": "Active"
           },
-          "sync": {
-            "lastModified": "2026-06-26T21:32:06.062Z",
-            "checksum": "15187ce7e5d0848c743cf9662a10d07a695ef4b65c2dfe7fa9e68a8c6ce18c80"
+          "primaryKey": {
+            "ID": "F04981E2-8A5E-42D8-997B-E75D9BAC6B0B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E08A3CC6-F0CD-47D3-9876-9D0DCAFE4FB8"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "0B4C7759-554B-4CE5-81AE-ACB43B71BD44"
-    },
-    "sync": {
-      "lastModified": "2026-06-26T21:32:05.998Z",
-      "checksum": "8a6fcb9b5d31e663ab8a5a6ee3bbd47e78e1e5f41c7201c282b4dd1819c0d943"
     }
   }
 ]

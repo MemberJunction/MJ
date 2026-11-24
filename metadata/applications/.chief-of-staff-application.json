@@ -1,26 +1,26 @@
 {
   "fields": {
-    "Name": "Chief of Staff",
-    "Description": "Your personal Chief of Staff AI agent: pending approvals, wake routines and their briefings, and the governance policy that bounds what it may do. Apps such as Tasks add their own pages through NavItem.* application settings.",
-    "Icon": "fa-solid fa-user-tie",
+    "Name": "My Agents",
+    "Description": "Command, personalize, schedule, and govern your personal AI agent instances and shared platform agents.",
+    "Icon": "fa-solid fa-wand-magic-sparkles",
     "DefaultForNewUser": false,
     "DefaultSequence": 15,
     "Color": "#1565c0",
     "DefaultNavItems": [
       {
         "Label": "Overview",
-        "Description": "Pending approvals, upcoming wakes and governance posture at a glance",
+        "Description": "Unified approvals, wake briefings, and coordination across your personal and shared agents",
         "Icon": "fa-solid fa-compass",
         "ResourceType": "Custom",
         "DriverClass": "ChiefOfStaffOverview",
         "isDefault": true
       },
       {
-        "Label": "Approvals & Wakes",
-        "Description": "Decide on the Chief of Staff's requests and manage its wake routines and briefings",
-        "Icon": "fa-solid fa-bell-concierge",
+        "Label": "Agents",
+        "Description": "Personalize your agent instances, choose your default chat responder, and configure governance guardrails",
+        "Icon": "fa-solid fa-robot",
         "ResourceType": "Custom",
-        "DriverClass": "ChiefOfStaffApprovals"
+        "DriverClass": "ChiefOfStaffGovernance"
       },
       {
         "Label": "Agent Channels",
@@ -28,13 +28,6 @@
         "Icon": "fa-solid fa-comments",
         "ResourceType": "Custom",
         "DriverClass": "ChiefOfStaffAgentChannels"
-      },
-      {
-        "Label": "Governance",
-        "Description": "The policy that sets the Chief of Staff's autonomy, channels and approval guardrails",
-        "Icon": "fa-solid fa-shield-halved",
-        "ResourceType": "Custom",
-        "DriverClass": "ChiefOfStaffGovernance"
       }
     ]
   },
@@ -45,7 +38,7 @@
     "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E70"
   },
   "sync": {
-    "lastModified": "2026-11-20T22:02:18.708Z",
-    "checksum": "20871925ff5c5e8b24620f30ec187b8ecea14bb4c05d95381a4d69e0849d4c31"
+    "lastModified": "2026-11-23T15:38:42.351Z",
+    "checksum": "918cf701666c087ed94def44ddb3423899e4e5a4d972c2d89d31fa30c5052e1c"
   }
 }
