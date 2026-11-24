@@ -213,6 +213,11 @@ deployment requirements and the extension points; this section is the package's 
 
 ### Sending
 
+A new installation cannot send until a sender, a provider, a provider message type and an address mapping for
+the recipient's entity are configured. See
+[Minimum setup to send one email](../../../guides/COMMUNICATIONS_V2_GUIDE.md#minimum-setup-to-send-one-email)
+in the guide.
+
 ```typescript
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 

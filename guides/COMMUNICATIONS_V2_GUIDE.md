@@ -196,6 +196,7 @@ These are metadata, synced from `metadata/` with `mj sync push`:
 | `metadata/communication-compliance-rule-types` | The nine rule types below, each with a JSON Schema for its parameters |
 | `metadata/communication-compliance-regimes` | CAN-SPAM, GDPR, UK GDPR, CASL, TCPA, CCPA, with their jurisdictions and rules |
 | `metadata/communication-principals` | `MJ: Users` as a principal |
+| `metadata/entity-communication-message-types` | The address mapping for that principal: `MJ: Users`, `Email` channel, read from the `Email` field |
 | `metadata/communication-sender-types`, `metadata/communication-senders` | The `Company` sender type and a `Default Organization` sender (`IsDefault = 1`) |
 | `metadata/communication-preferences` | `General updates` (`Marketing`, default `Opted In`) |
 | `metadata/communication-suppression-policies` | `SoftBounceThresholdPolicy` |
@@ -467,11 +468,41 @@ recipient. `UseV2` defaults to `false`.
 | The provider's webhook verification key | Authenticates delivery events | `/comms/webhooks/sendgrid` answers `401`; bounces and complaints never reach MJ. |
 | Work queue enabled (`workQueue.enabled`, on by default) and at least one MJAPI instance whose server role runs background workers (`all` or `worker`) | `comms.dispatch`, `comms.render` and `comms.activity` are consumed by the work-queue host | With `workQueue.enabled: false`, sends of any size run inline in the calling process. The public routes still publish to `comms.activity`; with no instance consuming it, bounces, complaints, unsubscribes, opens and clicks wait in the queue and no suppression is created. A rejected publish answers `503` for webhooks and unsubscribes; opens and clicks are dropped. |
 | A default sender with `FromEmail` set | The envelope's sender supplies the from address | `Send()` fails with `Sender not found`, or sends with an empty from address. |
+| A provider on the sender (`CommunicationProviderID`), or `Envelope.ProviderID` on each send | Chooses which provider delivers | The send uses the first provider the engine has loaded, whichever that is. |
+| A `MJ: Communication Provider Message Types` row for that provider and channel | Tells the dispatcher how the provider sends on the channel | The recipient fails with `MissingProviderMessageType`. |
+| For each principal entity: a `MJ: Entity Communication Message Types` row per channel, with at least one `MJ: Entity Communication Fields` row naming the address field | This is how a record's address is found | The recipient is blocked with `NoEndpoint`. Seeded for `MJ: Users` and `Email` only. |
 | The provider configured to post events to `/comms/webhooks/...`, and its own unsubscribe handling left off | MJ owns suppression | Provider and MJ suppression lists diverge. |
 
 The work-queue handlers run as the work-queue system user (`workQueue.systemUserEmail`), and the scheduled
 sweep as the engine's context user. API-only instances still publish to the queue; only worker instances
 consume it. The scheduled sweep is started on every MJAPI instance.
+
+### Minimum setup to send one email
+
+A new installation can evaluate the gate straight away, but it cannot send until each of these is in place.
+They are listed in the order a send needs them.
+
+1. **A sender.** `Default Organization` is seeded and is the default. Set its `FromEmail` and `FromName`.
+2. **A provider on the sender.** Set the sender's `CommunicationProviderID`. The provider's `Status` must be
+   `Active`. Leave `CredentialID` empty to use the provider's environment credentials, or point it at an
+   `MJ: Credentials` row.
+3. **A provider message type for the channel.** The provider needs a `MJ: Communication Provider Message Types`
+   row for `Email`. SendGrid and Microsoft Graph have one; a provider you add yourself does not.
+4. **An address mapping for the recipient's entity.** A `MJ: Entity Communication Message Types` row for the
+   entity and the `Email` channel, with a `MJ: Entity Communication Fields` row naming the field that holds the
+   address. `MJ: Users` is seeded. Every other principal entity (contacts, members, customers) needs its own,
+   along with a `MJ: Communication Principals` row.
+5. **A recipient that is a principal record**, as `{ Principal: { EntityID, RecordID } }`. Resolving a principal
+   is what registers its address as an endpoint. A recipient given only as `{ Endpoint: { Address } }` is
+   matched against endpoints that already exist and is blocked with `NoEndpoint` when the address is new.
+6. **Something that calls `Send`.** There is no screen for it. Call `CommunicationEngine.Instance.Send()` on the
+   server, or use V1 `RunEntityCommunication` with `UseV2 = true`.
+
+For links in the message to work, also set `MJAPI_PUBLIC_URL` and `MJ_COMMS_HMAC_SECRET` from the table above.
+
+To try this without a mail service, use the `Local JSON Mock` provider: set its `Status` to `Active`, add its
+`Email` provider message type, set `MJ_MOCK_COMM_DIR` to a writable folder, and make it the sender's provider.
+Each message is written to a JSON file per mailbox in that folder.
 
 ---
 
