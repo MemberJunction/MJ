@@ -384,6 +384,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Timer that refreshes the pre-computed relative-time labels on recentRecords (see refreshRecentRecordTimes / NG0100 note)
   private recentTimeRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  /** Set in ngOnDestroy so async setup in ngOnInit cannot start timers after tab teardown. */
+  private isDestroyed = false;
 
   // Favorite records from User Favorites (non-entity favorites)
   public FavoriteRecords: FavoriteRecord[] = [];
@@ -882,6 +884,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       await this.applyDeepLink(this.DeepLink);
     }
 
+    if (this.isDestroyed) {
+      return;
+    }
+
     // Subscribe to state changes
     this.StateService.State
       .pipe(takeUntil(this.destroy$))
@@ -957,6 +963,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // field + running detectChanges here (rather than calling a Date.now()-based method from the
     // template binding) is what prevents the ExpressionChangedAfterItHasBeenCheckedError (NG0100).
     const startTimer = () => {
+      if (this.isDestroyed) {
+        return;
+      }
       this.recentTimeRefreshTimer = setInterval(() => {
         if (this.RecentRecords.length > 0 && this.refreshRecentRecordTimes()) {
           if (this.ngZone) {
@@ -967,10 +976,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         }
       }, 30000);
     };
-    if (this.ngZone) {
-      this.ngZone.runOutsideAngular(startTimer);
-    } else {
-      startTimer();
+    if (!this.isDestroyed) {
+      if (this.ngZone) {
+        this.ngZone.runOutsideAngular(startTimer);
+      } else {
+        startTimer();
+      }
     }
 
     // Subscribe to favorite records changes
@@ -2049,6 +2060,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   override ngOnDestroy(): void {
+    this.isDestroyed = true;
     if (this.recentTimeRefreshTimer !== null) {
       clearInterval(this.recentTimeRefreshTimer);
       this.recentTimeRefreshTimer = null;
