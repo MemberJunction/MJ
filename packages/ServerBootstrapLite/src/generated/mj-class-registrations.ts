@@ -16,11 +16,6 @@ import {
     AnthropicLLM,
 } from '@memberjunction/ai-anthropic';
 
-// @memberjunction/ai-assemblyai (1 classes)
-import {
-    AssemblyAIRealtime,
-} from '@memberjunction/ai-assemblyai';
-
 // @memberjunction/ai-azure (2 classes)
 import {
     AzureEmbedding,
@@ -128,6 +123,12 @@ import {
     OpenAIRealtime,
 } from '@memberjunction/ai-openai';
 
+// @memberjunction/ai-assemblyai (2 classes)
+import {
+    AssemblyAIRealtime,
+    AssemblyAIVoiceRealtime,
+} from '@memberjunction/ai-assemblyai';
+
 // @memberjunction/ai-deepinfra (1 classes)
 import {
     DeepInfraLLM,
@@ -224,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (528 classes)
+// @memberjunction/core-entities (508 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -380,29 +381,11 @@ import {
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
-    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
-    MJCommunicationComplianceRegimeEntity,
-    MJCommunicationComplianceRegimeJurisdictionEntity,
-    MJCommunicationComplianceRegimeRuleEntity,
-    MJCommunicationComplianceRuleTypeEntity,
-    MJCommunicationConsentAuditLogEntity,
-    MJCommunicationEndpointEntity,
-    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
-    MJCommunicationPreferenceEntity,
-    MJCommunicationPrincipalEntity,
-    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
-    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
-    MJCommunicationSenderEntity,
-    MJCommunicationSenderPermissionEntity,
-    MJCommunicationSenderTypeEntity,
-    MJCommunicationSendingDomainEntity,
-    MJCommunicationSuppressionEntity,
-    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -556,8 +539,6 @@ import {
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
-    MJJurisdictionEntity,
-    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1639,7 +1620,6 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
-    AssemblyAIRealtime,
     AzureEmbedding,
     AzureLLM,
     BedrockEmbedding,
@@ -1675,6 +1655,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILLM,
     OpenAILiveRealtime,
     OpenAIRealtime,
+    AssemblyAIRealtime,
+    AssemblyAIVoiceRealtime,
     DeepInfraLLM,
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
@@ -1837,11 +1819,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
-    MJArtifactVersionAttributeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
     MJAuditLogEntity,
@@ -1861,29 +1843,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
-    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
-    MJCommunicationComplianceRegimeEntity,
-    MJCommunicationComplianceRegimeJurisdictionEntity,
-    MJCommunicationComplianceRegimeRuleEntity,
-    MJCommunicationComplianceRuleTypeEntity,
-    MJCommunicationConsentAuditLogEntity,
-    MJCommunicationEndpointEntity,
-    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
-    MJCommunicationPreferenceEntity,
-    MJCommunicationPrincipalEntity,
-    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
-    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
-    MJCommunicationSenderEntity,
-    MJCommunicationSenderPermissionEntity,
-    MJCommunicationSenderTypeEntity,
-    MJCommunicationSendingDomainEntity,
-    MJCommunicationSuppressionEntity,
-    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -2037,15 +2001,9 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
-    MJJurisdictionEntity,
-    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJListCategoryEntity,
     MJListDetailEntity,
     MJListDetailEntityExtended,
@@ -2065,6 +2023,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJMLModelScoringBindingEntity,
     MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
@@ -2246,10 +2208,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIAgentRunStepEntityExtended,
     MJAIModelEntityExtended,
     MJAIPromptCategoryEntityExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
     MJEntityDocumentEntityExtended,
@@ -2269,6 +2227,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
     ApolloCreateListAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
     ApolloGetListAccountsAction,
@@ -2450,10 +2412,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     LLMReranker,
     DecisionReasoningProvider,
     DecisionThenPromptReasoningProvider,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     PromptReasoningProvider,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
@@ -2473,6 +2431,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DecisionReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     FullTextSearchProvider,
     GraphSearchProvider,
     NoopReRanker,
@@ -2654,10 +2616,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJProjectEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
@@ -2677,6 +2635,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJTaskDependencyEntityServer,
     MJTaskEntityServer,
     MJTemplateContentEntityServer,
@@ -2858,10 +2820,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
     RunDecisionAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
@@ -2881,6 +2839,10 @@ const CLASS_REGISTRATIONS_6: any[] = [
     SyncMCPToolsAction,
     TavilySearchAction,
     TeamsWebhookAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
@@ -2957,12 +2919,11 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1278;
+export const CLASS_REGISTRATIONS_COUNT = 1259;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-anthropic',
-    '@memberjunction/ai-assemblyai',
     '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock',
     '@memberjunction/ai-betty',
@@ -2981,6 +2942,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-mistral',
     '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai',
+    '@memberjunction/ai-assemblyai',
     '@memberjunction/ai-deepinfra',
     '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-inception',

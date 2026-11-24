@@ -11,9 +11,10 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (9 classes)
+// @memberjunction/ai-realtime-client (10 classes)
 import {
     AssemblyAIRealtimeClient,
+    AssemblyAIVoiceRealtimeClient,
     ElevenLabsRealtimeClient,
     ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
@@ -36,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (528 classes)
+// @memberjunction/core-entities (508 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -192,29 +193,11 @@ import {
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
-    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
-    MJCommunicationComplianceRegimeEntity,
-    MJCommunicationComplianceRegimeJurisdictionEntity,
-    MJCommunicationComplianceRegimeRuleEntity,
-    MJCommunicationComplianceRuleTypeEntity,
-    MJCommunicationConsentAuditLogEntity,
-    MJCommunicationEndpointEntity,
-    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
-    MJCommunicationPreferenceEntity,
-    MJCommunicationPrincipalEntity,
-    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
-    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
-    MJCommunicationSenderEntity,
-    MJCommunicationSenderPermissionEntity,
-    MJCommunicationSenderTypeEntity,
-    MJCommunicationSendingDomainEntity,
-    MJCommunicationSuppressionEntity,
-    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -368,8 +351,6 @@ import {
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
-    MJJurisdictionEntity,
-    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -799,7 +780,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (126 classes)
+// @memberjunction/ng-dashboards (124 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -828,14 +809,12 @@ import {
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
-    CommunicationComplianceAdminResourceComponent,
     CommunicationDashboardComponent,
     CommunicationLogsResourceComponent,
     CommunicationMonitorResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
     CommunicationTemplatesResourceComponent,
-    CommunicationsAdminDashboardComponent,
     CommunicationsNewMessageResource,
     ComponentStudioDashboardComponent,
     ComponentStudioResourceComponent,
@@ -958,6 +937,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
+    AssemblyAIVoiceRealtimeClient,
     ElevenLabsRealtimeClient,
     ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
@@ -1124,29 +1104,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
-    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
-    MJCommunicationComplianceRegimeEntity,
-    MJCommunicationComplianceRegimeJurisdictionEntity,
-    MJCommunicationComplianceRegimeRuleEntity,
-    MJCommunicationComplianceRuleTypeEntity,
-    MJCommunicationConsentAuditLogEntity,
-    MJCommunicationEndpointEntity,
-    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
-    MJCommunicationPreferenceEntity,
-    MJCommunicationPrincipalEntity,
-    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
-    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
-    MJCommunicationSenderEntity,
-    MJCommunicationSenderPermissionEntity,
-    MJCommunicationSenderTypeEntity,
-    MJCommunicationSendingDomainEntity,
-    MJCommunicationSuppressionEntity,
-    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -1157,10 +1119,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
@@ -1178,6 +1136,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJContentProcessRunEntity,
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJContentSourceParamEntity,
     MJContentSourceTypeEntity,
     MJContentSourceTypeParamEntity,
@@ -1304,8 +1266,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
-    MJJurisdictionEntity,
-    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1361,10 +1321,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
@@ -1384,6 +1340,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
@@ -1565,10 +1525,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RealtimeMediaChannel,
     RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     RecordMentionProvider,
     RemoteBrowserChannel,
     SkillCommandProvider,
@@ -1588,6 +1544,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RoleManagementComponent,
     SettingsComponent,
     SqlLoggingComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     UserManagementComponent,
     RubricEngineBase,
     AIAgentCategoryHeaderPanel,
@@ -1692,14 +1652,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
-    CommunicationComplianceAdminResourceComponent,
     CommunicationDashboardComponent,
     CommunicationLogsResourceComponent,
     CommunicationMonitorResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
     CommunicationTemplatesResourceComponent,
-    CommunicationsAdminDashboardComponent,
     CommunicationsNewMessageResource,
     ComponentStudioDashboardComponent,
     ComponentStudioResourceComponent,
@@ -1769,10 +1727,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TelephonyOperationsDashboardComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     TestingDashboardTabResourceComponent,
     TestingExplorerResourceComponent,
     TestingReviewResourceComponent,
@@ -1794,6 +1748,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     WorkflowsResourceComponent,
     ArtifactResource,
     ChatCollectionsResource,
@@ -1825,7 +1783,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 837;
+export const CLASS_REGISTRATIONS_COUNT = 816;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
