@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T4 -> S8.3",
+    "Description": "Gate G6.6 (owner PR 4, phase 6, dataset T4, criterion S8.3): at most 28 of 400 T4 no-drift replays (n400 seeds) raise any drift alarm at q(12) = 0.0095 over 12 monthly looks of monitor procedure M on the truth sidecar.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G6.6\", \"owner:PR4\", \"phase:6\", \"dataset:T4\", \"criterion:S8.3\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 7200000,
+    "ExpectedOutcomes": {
+      "summary": "At most 28 of 400 replays alarm."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t4-s8-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "E99CE0D1-7B35-4ED0-81BE-7DD7E3FDF040"
+  }
+}

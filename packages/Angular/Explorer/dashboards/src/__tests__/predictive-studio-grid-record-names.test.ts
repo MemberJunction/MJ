@@ -22,17 +22,17 @@ describe('PSPredictionsGridComponent - Record Column & Lazy Viewport Lookup', ()
       component = new PSPredictionsGridComponent();
     });
 
-    component.setupColumnDefs();
+    component.SetupColumnDefs();
   });
 
   it('sets the record column header strictly to "Record" without hardcoded "Member"', () => {
-    const recordCol = component.columnDefs.find((col) => col.field === 'recordName');
+    const recordCol = component.ColumnDefs.find((col) => col.field === 'recordName');
     expect(recordCol).toBeDefined();
     expect(recordCol?.headerName).toBe('Record');
   });
 
   it('renders record link with open-in-explorer icon and data-action="open-record"', () => {
-    const recordCol = component.columnDefs.find((col) => col.field === 'recordName');
+    const recordCol = component.ColumnDefs.find((col) => col.field === 'recordName');
     expect(recordCol?.cellRenderer).toBeDefined();
 
     const mockRow: PredictionGridRow = {
@@ -60,7 +60,7 @@ describe('PSPredictionsGridComponent - Record Column & Lazy Viewport Lookup', ()
   });
 
   it('falls back to recordId when recordName is not yet resolved', () => {
-    const recordCol = component.columnDefs.find((col) => col.field === 'recordName');
+    const recordCol = component.ColumnDefs.find((col) => col.field === 'recordName');
     const mockRow: PredictionGridRow = {
       recordId: 'rec-uuid-9999',
       recordName: 'rec-uuid-9999',
@@ -108,7 +108,7 @@ describe('PSPredictionsGridComponent - Record Column & Lazy Viewport Lookup', ()
     } as unknown as IMetadataProvider;
 
     Object.defineProperty(component, 'ProviderToUse', { get: () => mockProvider });
-    component.resolvedEntityName = 'MoreCheese: Membership Periods';
+    component.ResolvedEntityName = 'MoreCheese: Membership Periods';
 
     const visibleRows: PredictionGridRow[] = [
       {
@@ -146,7 +146,7 @@ describe('PSPredictionsGridComponent - Record Column & Lazy Viewport Lookup', ()
     };
 
     (component as unknown as { gridApi: unknown }).gridApi = mockGridApi;
-    component.allRows = [...visibleRows];
+    component.AllRows = [...visibleRows];
 
     // Execute lazy resolution
     await (component as unknown as { resolveVisibleRecordNames: () => Promise<void> }).resolveVisibleRecordNames();

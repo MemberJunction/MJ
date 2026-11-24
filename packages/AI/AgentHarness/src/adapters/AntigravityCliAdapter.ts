@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseCliHarnessAdapter, HarnessCliRawEvent } from './BaseCliHarnessAdapter.js';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
 import { NormalizeAntigravityEnvironment, StripHarnessApiKeyEnvironment } from '../HarnessCredentialResolver.js';
-import { HarnessCapabilities, HarnessPermissionPolicy, HarnessTurnEvent } from '../types.js';
+import { HarnessCapabilities, HarnessPermissionPolicy, HarnessSessionConfig, HarnessTurnEvent } from '../types.js';
 import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
 export type AntigravityReasoningEffort = 'low' | 'medium' | 'high';
@@ -48,6 +48,14 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
             SupportsCloudExecution: false,
             SupportsAsyncWakeHandoff: false,
         };
+    }
+
+    /** @inheritdoc */
+    public override async StartSession(config: HarnessSessionConfig): Promise<void> {
+        this.didResume = false;
+        this.pendingTerminal = null;
+        this.reportedModel = undefined;
+        await super.StartSession(config);
     }
 
     /** @inheritdoc */

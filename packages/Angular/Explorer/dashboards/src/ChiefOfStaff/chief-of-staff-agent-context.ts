@@ -43,8 +43,11 @@ import {
  */
 export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 
-/** User setting key (`MJ: User Settings`) storing the user's preferred default chat agent ID. */
-export const DEFAULT_CHAT_AGENT_SETTING_KEY = 'chat.defaultAgentId';
+/** Canonical user setting key (`MJ: User Settings`) storing the user's preferred default chat agent ID. */
+export const DEFAULT_CHAT_AGENT_SETTING_KEY = 'Conversations.DefaultAgentID';
+
+/** Legacy user setting key read as a fallback if {@link DEFAULT_CHAT_AGENT_SETTING_KEY} is unset. */
+export const LEGACY_DEFAULT_CHAT_AGENT_SETTING_KEY = 'chat.defaultAgentId';
 
 /** User setting key (`MJ: User Settings`) storing My Agents roster filter and dashboard layout preferences. */
 export const MY_AGENTS_PREFERENCES_SETTING_KEY = 'myAgents.dashboardPreferences';

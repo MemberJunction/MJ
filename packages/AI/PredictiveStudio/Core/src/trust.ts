@@ -5,7 +5,8 @@
  * `MJ: ML Training Runs.ValidationResults`). It grades nothing itself: no AUC or R² bands, no accuracy reading, no
  * in-sample metrics. A run without a stored decision is "not evaluated" and cannot be acted on. Every number in the
  * copy comes from the stored paired comparison ("beats the flat guess by X [lo, hi]"), formatted by the gate's one
- * formatter ({@link GateRules.FormatInterval}).
+ * formatter ({@link GateRules.FormatInterval}). Each rendered number is also returned as a {@link TracedNumber} (the stored
+ * path it was read from), so a test or a gate can recompute it from the stored row.
  *
  * It lives in Core (browser-safe, shared by the server engine, the UI and the agent) so one rule drives the business
  * catalog, the predictions workspace and the agent's builder.
@@ -16,6 +17,7 @@ import type { StoredGateRecord } from './run-evaluation';
 import type { TrainerRequestConfig } from './trainer-contract';
 import { TrainingRunResultsParser } from './training-run-results';
 import { JsonParse } from './json-value';
+import type { TracedNumber } from './traced-number';
 
 /** What the verdict reads: the model's training run's stored results, and the model's Lineage. */
 export interface TrustInput {
@@ -83,6 +85,19 @@ export interface TrustEvidenceOptions {
   count?: number | null;  // case-violation-ok-legacy-back-compat: existing exported option shape
   /** What the rows are, in plain words (e.g. "members"). Defaults to "records". */
   noun?: string;  // case-violation-ok-legacy-back-compat: existing exported option shape
+  /**
+   * The `MJ: ML Training Runs` ID the count was read from (`$.gate.holdoutRows`). With it and a positive count the line
+   * returns the count as a {@link TracedNumber}; without it the line names no count.
+   */
+  runId?: string | null;  // case-violation-ok-legacy-back-compat: existing exported option shape
+}
+
+/** The evidence line and the traced number it renders (the holdout row count), if any. */
+export interface TrustEvidence {
+  /** The rendered line. */
+  readonly Text: string;
+  /** The numbers `Text` renders, each traced to the stored row it was read from. */
+  readonly Numbers: readonly TracedNumber[];
 }
 
 /** The trust verdict and its copy helpers. */
@@ -145,14 +160,101 @@ export class TrustVerdicts {
     return member.startsWith(GateRules.HeuristicPrefix) ? `the existing rule "${member.slice(GateRules.HeuristicPrefix.length)}"` : member;
   }
 
-  /** "Checked against N past members it had never seen." — never fabricates a number. */
-  public static TrustEvidenceLine(opts?: TrustEvidenceOptions): string {
+  /** The entity the trust numbers are read from: the training run that stores the gate decision. */
+  public static readonly RunEntityName = 'MJ: ML Training Runs';
+
+  /**
+   * "Checked against N past members it had never seen." — never fabricates a number. The count is named, and returned
+   * as a traced number (`$.gate.holdoutRows` of `runId`), only when `runId` is a non-empty string and `count` is a
+   * positive finite number; otherwise the line names no count and returns no number.
+   */
+  public static TrustEvidenceLine(opts?: TrustEvidenceOptions): TrustEvidence {
     const noun = opts?.noun?.trim() || 'records';
     const count = opts?.count;
-    if (count !== null && count !== undefined && Number.isFinite(count) && count > 0) {
-      return `Checked against ${Math.round(count).toLocaleString('en-US')} past ${noun} it had never seen.`;
+    const runId = opts?.runId;
+    if (typeof runId === 'string' && runId.length > 0 && typeof count === 'number' && Number.isFinite(count) && count > 0) {
+      const n = TrustVerdicts.traced(runId, '$.gate.holdoutRows', count, Math.round(count).toLocaleString('en-US'));
+      return { Text: `Checked against ${n.Text} past ${noun} it had never seen.`, Numbers: [n] };
     }
-    return `Checked against past ${noun} it had never seen.`;
+    return { Text: `Checked against past ${noun} it had never seen.`, Numbers: [] };
+  }
+
+  /**
+   * The three numbers of a shipped verdict's headline (value, lower, upper of its comparison with the flat guess, as
+   * {@link GateRules.FormatFourDecimals} renders them), each traced to the stored interval in `runId`'s results:
+   * `$.gate.intervals.modelVsDummy` for a shipped model, `$.gate.intervals.memberVsDummy["<member>"]` for a kept simple
+   * baseline. Empty for a verdict without a comparison.
+   */
+  public static ComparisonNumbers(verdict: TrustVerdict, runId: string): readonly TracedNumber[] {
+    const c = verdict.Comparison;
+    if (c === null || verdict.Outcome === null || verdict.Outcome === 'no-signal') return [];
+    const base = verdict.Outcome === 'model' ? '$.gate.intervals.modelVsDummy' : `$.gate.intervals.memberVsDummy[${JSON.stringify(c.Shipped)}]`;
+    return TrustVerdicts.intervalNumbers(runId, base, { value: c.Value, lower: c.Lower, upper: c.Upper });
+  }
+
+  /**
+   * The numbers the stored reason text (`gate.reason.text`) quotes, each traced to the stored field it was generated
+   * from (the intervals its reason code names, or the guard refusal's counts and bounds) and kept only when its token
+   * appears in the text. The gate's reason copy ({@link GateRules.DescribeGate}) names its constants in words (the
+   * coin-flip level, the margin), so every number a reason quotes is one of these.
+   */
+  public static ReasonNumbers(record: StoredGateRecord, runId: string): readonly TracedNumber[] {
+    const tokens = new Set(record.reason.text.match(TrustVerdicts.numericToken) || []);
+    return TrustVerdicts.reasonCandidates(record, runId).filter((n) => tokens.has(n.Text));
+  }
+
+  /**
+   * {@link ReasonNumbers} of the gate record `validationResults` stores (the `MJ: ML Training Runs` row `runId`): the
+   * numbers a verdict's `Reason` quotes. Empty when the run stores no gate decision (the not-evaluated reason quotes none).
+   */
+  public static StoredReasonNumbers(validationResults: string | null, runId: string): readonly TracedNumber[] {
+    const stored = TrustVerdicts.readStored({ ValidationResults: validationResults, Lineage: null });
+    return stored === null ? [] : TrustVerdicts.ReasonNumbers(stored.Gate, runId);
+  }
+
+  /** A number as copy renders it: an optional sign, digits with thousands separators, an optional fraction. */
+  private static readonly numericToken = /-?\d[\d,]*(?:\.\d+)?/g;
+
+  /** Every number a reason of this record's code is generated from. */
+  private static reasonCandidates(record: StoredGateRecord, runId: string): TracedNumber[] {
+    const iv = record.intervals;
+    const refusal = record.guardRefusal;
+    if (refusal !== null) {
+      switch (refusal.kind) {
+        case 'minority-class-below-minimum':
+          return [
+            TrustVerdicts.traced(runId, '$.gate.guardRefusal.rows', refusal.rows, String(refusal.rows)),
+            TrustVerdicts.traced(runId, '$.gate.guardRefusal.minimum', refusal.minimum, String(refusal.minimum)),
+          ];
+        case 'auc-interval-contains-chance':
+          return [
+            TrustVerdicts.traced(runId, '$.gate.guardRefusal.lower', refusal.lower, GateRules.FormatFourDecimals(refusal.lower)),
+            TrustVerdicts.traced(runId, '$.gate.guardRefusal.upper', refusal.upper, GateRules.FormatFourDecimals(refusal.upper)),
+          ];
+        case 'auc-interval-missing':
+          return [];
+      }
+    }
+    const shipped = record.decision.shipped;
+    const member = shipped === null ? undefined : iv.memberVsDummy[shipped];
+    const memberNumbers = shipped === null || member === undefined ? [] : TrustVerdicts.intervalNumbers(runId, `$.gate.intervals.memberVsDummy[${JSON.stringify(shipped)}]`, member);
+    const bestNumbers = iv.modelVsBestSimple === null ? [] : TrustVerdicts.intervalNumbers(runId, '$.gate.intervals.modelVsBestSimple', iv.modelVsBestSimple);
+    const modelNumbers = TrustVerdicts.intervalNumbers(runId, '$.gate.intervals.modelVsDummy', iv.modelVsDummy);
+    return record.decision.outcome === 'keep-simple-baseline' ? memberNumbers : [...modelNumbers, ...bestNumbers];
+  }
+
+  /** A stored interval's value, lower and upper bound at `base`, rendered with four decimals. */
+  private static intervalNumbers(runId: string, base: string, iv: StoredInterval): TracedNumber[] {
+    return [
+      TrustVerdicts.traced(runId, `${base}.value`, iv.value, GateRules.FormatFourDecimals(iv.value)),
+      TrustVerdicts.traced(runId, `${base}.lower`, iv.lower, GateRules.FormatFourDecimals(iv.lower)),
+      TrustVerdicts.traced(runId, `${base}.upper`, iv.upper, GateRules.FormatFourDecimals(iv.upper)),
+    ];
+  }
+
+  /** A number read from the training run's stored results at `path`. */
+  private static traced(runId: string, path: string, value: number, text: string): TracedNumber {
+    return { Value: value, Text: text, Source: { EntityName: TrustVerdicts.RunEntityName, RecordID: runId, Path: path } };
   }
 
   /** The completed envelope's gate record and trainer request, or null when the run stores no decision. */
