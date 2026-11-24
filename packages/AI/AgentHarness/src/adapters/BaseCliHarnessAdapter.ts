@@ -113,6 +113,7 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
     public async StartSession(config: HarnessSessionConfig): Promise<void> {
         this.config = config;
         this.turnCount = 0;
+        this.sessionId = undefined;
         LogStatus(`Harness CLI session starting: ${this.ExecutablePath} (workspace: ${config.WorkspacePath})`);
     }
 

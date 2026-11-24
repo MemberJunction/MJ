@@ -6,6 +6,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RunView } from '@memberjunction/core';
 import { GraphQLLiveKitClient, GraphQLDataProvider, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { UserHoldsAuthorization, REALTIME_ADVANCED_SESSION_CONTROLS } from '@memberjunction/ng-conversations';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import {
   ParseTurnAddressing,
   ParseTurnMode,
@@ -1121,12 +1122,34 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
       return;
     }
 
-    // Default the picker to the general assistant "Sage" when present, else the first candidate.
-    this.SelectedTargetId =
-      this.Agents.find((a) => a.Name.trim().toLowerCase() === 'sage')?.ID ?? this.Agents[0]?.ID ?? null;
+    // Default the picker to the first candidate synchronously (no NG0100), then refine
+    // asynchronously to the user's resolved default agent from DefaultAgentResolver.
+    const initialFallbackId = this.Agents[0]?.ID ?? null;
+    this.SelectedTargetId = initialFallbackId;
+    void this.applyUserDefaultTarget(initialFallbackId);
     // Land on the Meet home (start new / join existing / history) rather than jumping straight into the picker.
     this.Phase = 'landing';
     this.NotifyLoadComplete();
+  }
+
+  private async applyUserDefaultTarget(initialFallbackId: string | null): Promise<void> {
+    try {
+      const resolvedDefault = await ConversationsRuntime.Instance.DefaultAgent.Resolve({
+        contextUser: this.ProviderToUse.CurrentUser ?? undefined,
+        provider: this.ProviderToUse,
+      });
+      if (!resolvedDefault) {
+        return;
+      }
+      const match = this.Agents.find((a) => UUIDsEqual(a.ID, resolvedDefault.ID));
+      // Only update if the user hasn't already picked another agent or joined a room
+      if (match && this.Phase !== 'live' && this.SelectedTargetId === initialFallbackId) {
+        this.SelectedTargetId = match.ID;
+        this.cdr.markForCheck();
+      }
+    } catch {
+      // Keep the first-candidate fallback when no default agent is configured
+    }
   }
 
   // ── Meet landing navigation ─────────────────────────────────────────────────────────

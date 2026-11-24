@@ -279,6 +279,10 @@
   background: var(--mj-status-success);
 }
 
+.suggestion-type-badge.record {
+  background: var(--mj-brand-primary);
+}
+
 .mention-chip {
   display: inline-flex;
   align-items: center;

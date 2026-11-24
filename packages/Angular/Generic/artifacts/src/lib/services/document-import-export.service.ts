@@ -9,6 +9,7 @@ import {
 } from '@memberjunction/core-entities';
 import { ConvertDocxToHtml, type MammothModuleShim } from '../components/previews/office-preview.logic';
 import { IsVisualDiagramOrChartBlock, RasterizeBlockDiagramToPng } from '../utils/diagram-png-encoder';
+import { StripDocRecordLinksToPlainText } from '../utils/doc-record-link.util';
 import { PrintHtmlInSandboxedIframe, SanitizeHtmlForSandboxedFrame } from '../utils/html-sandbox.util';
 
 /** Options controlling optional `.docx` visual rasterization, live block rows, and snapshot verification (`§ 3.4`). */
@@ -188,7 +189,7 @@ export class DocumentImportExportService {
     const docx = await loadDocxModule();
     const { Document: DocxDocument, ImageRun, Packer, Paragraph, TextRun } = docx;
     const children: Array<DocxModule.Paragraph | DocxModule.Table> = [];
-    const normalizedMarkdown = (markdown ?? '').replace(/\r\n?/g, '\n');
+    const normalizedMarkdown = StripDocRecordLinksToPlainText((markdown ?? '').replace(/\r\n?/g, '\n'));
     const lines = normalizedMarkdown.split('\n');
     const parsedSegments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(normalizedMarkdown);
     const blockByStartLine = new Map(

@@ -17,6 +17,7 @@ export * from './lib/services/slide-deck-export.service';
 export * from './lib/services/artifact-version-diff.service';
 export * from './lib/services/artifact-ai-assistant-bridge';
 export * from './lib/services/live-sheet-client-tool.helper';
+export * from './lib/services/artifact-link-trigger.provider';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
@@ -37,6 +38,7 @@ export * from './lib/components/previews/audio-artifact-preview.component';
 export * from './lib/snapshot-helpers';
 export { ComputeLineDiff, type LineDiffLine, type LineDiffResult } from './lib/utils/line-diff';
 export * from './lib/utils/artifact-suggestion-normalizer.util';
+export * from './lib/utils/doc-record-link.util';
 export * from './lib/utils/frozen-snapshot-verification.util';
 export {
   CaptureRenderedElementThumbnail,

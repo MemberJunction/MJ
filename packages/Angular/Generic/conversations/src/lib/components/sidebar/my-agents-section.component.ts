@@ -202,7 +202,8 @@ export class MyAgentsSectionComponent
 
     const engine = this.aiEngine;
     const derived = engine.GetUserDerivedAgents(user);
-    const instantiable = engine.GetInstantiableAgents(user);
+    const canCreateInstances = this.canUserCreateAgentInstances(user);
+    const instantiable = canCreateInstances ? engine.GetInstantiableAgents(user) : [];
     this.HasInstantiableTemplates = instantiable.length > 0;
 
     // Count siblings per root so the primary star shows cleanly when user has 2+ instances of a root
@@ -261,6 +262,24 @@ export class MyAgentsSectionComponent
     );
 
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Returns false when `MJ: AI Agents` entity metadata is loaded and `user` does not hold
+   * `CanCreate` permission (for example external `Space Participant` users without `UI`
+   * agent-instance creation rights), hiding `"Set up My Chief of Staff"` and create CTAs.
+   */
+  private canUserCreateAgentInstances(user: UserInfo): boolean {
+    const provider = this.ProviderToUse;
+    if (!provider || typeof provider.EntityByName !== 'function') {
+      return true;
+    }
+    const agentEntity = provider.EntityByName('MJ: AI Agents');
+    if (!agentEntity || typeof agentEntity.GetUserPermisions !== 'function') {
+      return true;
+    }
+    const perms = agentEntity.GetUserPermisions(user);
+    return perms?.CanCreate === true;
   }
 
   private normalizeIcon(icon: string): string {

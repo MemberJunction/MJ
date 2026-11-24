@@ -1,0 +1,146 @@
+<div class="psbe" data-testid="ps-binding-editor">
+  <div class="psbe-head">
+    <div>
+      <div class="psbe-title">Scoring bindings</div>
+      <div class="psbe-sub">Each binding stores this pipeline's predictions for a target entity as a feature, visible to the users who hold its view authorization.</div>
+    </div>
+    @if (!Draft) {
+      <button mjButton variant="secondary" size="sm" data-testid="ps-binding-new" [disabled]="Loading || !Model" (click)="StartNew()">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> New binding
+      </button>
+    }
+  </div>
+
+  @if (LoadError) {
+    <div class="psbe-error" data-testid="ps-binding-load-error">{{ LoadError }}</div>
+  }
+
+  @if (Bindings.length > 0) {
+    <div class="psbe-list">
+      @for (b of Bindings; track b.ID) {
+        <div class="psbe-row" data-testid="ps-binding-row" [class.psbe-withdrawn]="b.Status === 'Withdrawn'">
+          <div class="psbe-row-main">
+            <div class="psbe-row-name">{{ b.FeatureName }} <span class="psbe-tag">{{ b.Status }}</span></div>
+            <div class="psbe-row-meta">
+              {{ EntityName(b) }} · {{ AuthorizationName(b) }}
+              · {{ b.RetentionDays === null ? 'all history kept' : 'kept ' + b.RetentionDays + ' days' }}
+              @if (b.TargetColumn) {
+                · copied to {{ b.TargetColumn }} ({{ b.TargetColumnSource }})
+              }
+            </div>
+          </div>
+          @if (b.Status === 'Active') {
+            <div class="psbe-row-actions">
+              <button mjButton variant="secondary" size="sm" data-testid="ps-binding-edit" [disabled]="Busy" (click)="StartEdit(b)">Edit</button>
+              <button mjButton variant="secondary" size="sm" data-testid="ps-binding-withdraw" [disabled]="Busy" (click)="RequestWithdraw(b)">Withdraw</button>
+            </div>
+          }
+        </div>
+        @if (PendingWithdrawal === b) {
+          <div class="psbe-confirm" data-testid="ps-binding-withdraw-prompt">
+            <span>Withdraw <strong>{{ b.FeatureName }}</strong>? It stops scoring, and any column value it copied is cleared unless a person has entered a value since. Its stored predictions stay and expire by retention.</span>
+            <div class="psbe-confirm-actions">
+              <button mjButton variant="danger" size="sm" data-testid="ps-binding-withdraw-confirm" [disabled]="Busy" (click)="ConfirmWithdraw()">Withdraw</button>
+              <button mjButton variant="secondary" size="sm" [disabled]="Busy" (click)="CancelWithdraw()">Cancel</button>
+            </div>
+          </div>
+        }
+      }
+    </div>
+  } @else if (!Loading && !LoadError && !Draft) {
+    <div class="psbe-empty">No scoring bindings yet: this pipeline's predictions are not stored for any entity.</div>
+  }
+
+  @if (Draft; as d) {
+    <div class="psbe-form" data-testid="ps-binding-form">
+      <div class="psbe-field">
+        <label for="psbe-pipeline">Pipeline</label>
+        <div id="psbe-pipeline" class="psbe-static">{{ Model?.Pipeline || Model?.PipelineID }} <span class="psbe-muted">(scores with its Published model)</span></div>
+      </div>
+
+      <div class="psbe-field">
+        <label for="psbe-feature">Feature name</label>
+        <input id="psbe-feature" class="psbe-input" type="text" data-testid="ps-binding-feature-name" [disabled]="d.Binding !== null || Busy" [(ngModel)]="d.FeatureName" placeholder="e.g. Renewal risk" />
+        @for (m of ErrorsFor('FeatureName'); track m) {
+          <div class="psbe-error" data-testid="ps-binding-feature-name-error">{{ m }}</div>
+        }
+      </div>
+
+      <div class="psbe-field">
+        <label for="psbe-entity">Target entity</label>
+        <select id="psbe-entity" class="psbe-input" data-testid="ps-binding-target-entity" [disabled]="d.Binding !== null || Busy" [ngModel]="d.TargetEntityID" (ngModelChange)="SetTargetEntity($event)">
+          <option [ngValue]="null">Choose an entity…</option>
+          @for (e of Entities; track e.ID) {
+            <option [ngValue]="e.ID">{{ e.Name }}</option>
+          }
+        </select>
+        @for (m of ErrorsFor('TargetEntityID'); track m) {
+          <div class="psbe-error">{{ m }}</div>
+        }
+      </div>
+
+      <div class="psbe-field">
+        <label for="psbe-auth">Who can see the predictions</label>
+        <select id="psbe-auth" class="psbe-input" data-testid="ps-binding-view-authorization" [disabled]="Busy" [(ngModel)]="d.ViewAuthorizationID">
+          <option [ngValue]="null">Choose an authorization…</option>
+          @for (a of Authorizations; track a.ID) {
+            <option [ngValue]="a.ID">{{ a.Name }}</option>
+          }
+        </select>
+        @for (m of ErrorsFor('ViewAuthorizationID'); track m) {
+          <div class="psbe-error">{{ m }}</div>
+        }
+      </div>
+
+      <div class="psbe-field">
+        <label for="psbe-retention">Keep history (days)</label>
+        <input id="psbe-retention" class="psbe-input psbe-narrow" type="number" min="1" data-testid="ps-binding-retention" [disabled]="Busy" [(ngModel)]="d.RetentionDays" placeholder="all" />
+        @for (m of ErrorsFor('RetentionDays'); track m) {
+          <div class="psbe-error">{{ m }}</div>
+        }
+      </div>
+
+      <div class="psbe-field">
+        <label class="psbe-check">
+          <input type="checkbox" data-testid="ps-binding-copy" [checked]="d.CopyToColumn" [disabled]="Busy" (change)="ToggleCopy()" />
+          Also copy the latest value into a column of the target entity
+        </label>
+        @if (d.CopyToColumn) {
+          <div class="psbe-copy">
+            <select class="psbe-input" data-testid="ps-binding-copy-column" aria-label="Column" [disabled]="Busy" [(ngModel)]="d.TargetColumn">
+              <option [ngValue]="null">Choose a column…</option>
+              @for (c of CopyColumns; track c) {
+                <option [value]="c">{{ c }}</option>
+              }
+            </select>
+            <input class="psbe-input" type="text" data-testid="ps-binding-copy-source" aria-label="Value copied" [disabled]="Busy" [(ngModel)]="d.TargetColumnSource" [placeholder]="DefaultCopySource" />
+            <div class="psbe-note" data-testid="ps-binding-copy-note">
+              <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+              A copied value is governed by that entity's field permissions, not by this binding's view authorization: anyone who can read the column sees it.
+            </div>
+          </div>
+        }
+        @for (m of CopyErrors; track m) {
+          <div class="psbe-error" data-testid="ps-binding-copy-error">{{ m }}</div>
+        }
+      </div>
+
+      @for (m of ErrorsFor('MLTrainingPipelineID'); track m) {
+        <div class="psbe-error">{{ m }}</div>
+      }
+      @if (GeneralError) {
+        <div class="psbe-error" data-testid="ps-binding-save-error">{{ GeneralError }}</div>
+      }
+
+      <div class="psbe-actions">
+        <button mjButton variant="primary" size="sm" data-testid="ps-binding-save" [disabled]="Busy" (click)="Save()">
+          @if (Busy) {
+            <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+          }
+          Save binding
+        </button>
+        <button mjButton variant="secondary" size="sm" data-testid="ps-binding-cancel" [disabled]="Busy" (click)="Cancel()">Cancel</button>
+      </div>
+    </div>
+  }
+</div>

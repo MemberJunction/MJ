@@ -7,15 +7,14 @@
  * returned in the response only), THIS script proves the closed loop: a model's predictions
  * are WRITTEN BACK into real entity columns and then READ BACK from those columns.
  *
- *   entity fields  →  PredictiveStudio.TrainModel    (MJAPI → TrainingEngine → sidecar /train)
- *                  →  PredictiveStudio.ScoreRecordSet (MJAPI → MLModelInferenceProcessor → /predict)
- *                         with writeBack OutputMapping → predictions persisted to columns
- *                  →  RunView the same rows           (the predictions now live in the columns)
+ *   entity fields  →  PredictiveStudio.TrainModel          (MJAPI → TrainingEngine → sidecar /train)
+ *                  →  PredictiveStudio.CreateScoringProcess (a scoring binding naming the RenewalScore column)
+ *                  →  PredictiveStudio.ScoreRecordSet       (MJAPI → ScoringService → /predict) with the
+ *                         bindingId → the binding's Feature Values, and the newest copied into the column
+ *                  →  RunView the same rows                 (the predictions now live in the column)
  *
- * The write-back uses the Record-Set-Processing OutputMapping format: a JSONPath-per-field map
- * from the prediction payload (which exposes `class` and `score`) onto entity field names:
- *
- *   writeBack: { OutputMapping: { fields: { PredictedRenewalClass: '$.class', RenewalScore: '$.score' } } }
+ * The column is written by the binding's column copy (one column per binding: its `TargetColumnSource`,
+ * the adverse probability for a classification). The class column is no longer written by this demo.
  *
  * The two THROWAWAY target columns were codegen'd onto the AssociationDemo `Memberships`
  * entity (vwMemberships / Membership table):
@@ -65,6 +64,7 @@ import {
   MJMLTrainingPipelineEntity,
   PredictiveStudioTrainModelOperation,
   PredictiveStudioScoreRecordSetOperation,
+  PredictiveStudioCreateScoringProcessOperation,
 } from '@memberjunction/core-entities';
 
 const DRIVER_KEY = 'logistic_regression';
@@ -322,35 +322,34 @@ async function main(): Promise<void> {
     // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
     console.log(`  promoted      → ${await PromoteToPublished(route, user, shippedModelId, TAG)}`);
 
-    // ── 4. Score WITH write-back (NOT dryRun) ────────────────────────────────
-    // The OutputMapping maps the prediction payload's `class` / `score` onto the two
-    // entity columns. The Record-Set-Processing runner persists them to the Membership rows.
-    banner('4. SCORE WITH WRITE-BACK (PredictiveStudio.ScoreRecordSet)');
+    // ── 4. Score through a binding that names the column (NOT dryRun) ────────
+    // The binding's column copy writes the newest score into RenewalScore for each scored Membership row.
+    banner('4. SCORE THROUGH A BINDING (PredictiveStudio.CreateScoringProcess + ScoreRecordSet)');
+    const created = await new PredictiveStudioCreateScoringProcessOperation().Execute(
+      { modelId: shippedModelId, targetEntityName: 'Memberships', scope: { filter: ROW_FILTER }, outputField: SCORE_COLUMN, name: `${TAG} scoring` },
+      { provider: route, user },
+    );
+    if (!created.Success || !created.Output || !created.Output.scoringBindingId) {
+      throw new Error(`Creating the scoring binding failed: ${created.ErrorMessage || 'no binding'}`);
+    }
     const scoreStart = Date.now();
     const scoreResult = await new PredictiveStudioScoreRecordSetOperation().Execute(
       {
         modelId: shippedModelId,
+        bindingId: created.Output.scoringBindingId,
         scope: { filter: { entityName: 'Memberships', extraFilter: ROW_FILTER, maxRows: ROW_COUNT } },
         dryRun: false,
-        writeBack: {
-          OutputMapping: {
-            fields: {
-              [CLASS_COLUMN]: '$.class',
-              [SCORE_COLUMN]: '$.score',
-            },
-          },
-        },
       },
       { provider: route, user },
     );
     console.log(`  Execute() Success=${scoreResult.Success}${scoreResult.ErrorMessage ? ` Error=${scoreResult.ErrorMessage}` : ''} (${Date.now() - scoreStart}ms)`);
     if (!scoreResult.Success || !scoreResult.Output) {
-      throw new Error(`Scoring (write-back) failed: ${scoreResult.ErrorMessage}`);
+      throw new Error(`Scoring through the binding failed (${scoreResult.ResultCode}): ${scoreResult.ErrorMessage}`);
     }
     const s = scoreResult.Output;
-    console.log(`  scored=${s.scored} failed=${s.failed} skipped=${s.skipped} wroteBack=${s.wroteBack}`);
-    if (!s.wroteBack) {
-      console.log('  WARNING: wroteBack=false — the runner did not persist predictions (check the write-back runner fix).');
+    console.log(`  status=${s.status} total=${s.total} written=${s.written} scoringRunId=${s.scoringRunId}`);
+    if (s.written === 0) {
+      console.log('  WARNING: written=0 — the binding wrote no Feature Value.');
     }
 
     // ── 5. Read the values back off the entity columns ───────────────────────

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { RealtimeSessionRuntime } from '@memberjunction/realtime-runtime';
 import {
     LoadAssemblyAIRealtimeClient,
+    LoadAssemblyAIVoiceRealtimeClient,
     LoadElevenLabsRealtimeClient,
     LoadElevenRealtimeClient,
     LoadGeminiRealtimeClient,
@@ -25,6 +26,7 @@ LoadOpenAILiveClient();
 LoadGeminiRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
+LoadAssemblyAIVoiceRealtimeClient();
 LoadxAIRealtimeClient();
 LoadElevenRealtimeClient();
 LoadHuggingFaceRealtimeClient();
