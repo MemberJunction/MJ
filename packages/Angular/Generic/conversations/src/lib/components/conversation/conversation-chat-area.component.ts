@@ -1202,7 +1202,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       rows,
       managerId,
       {
-        conversationManagerName: this.conversationManagerAgent?.Name ?? 'Sage',
+        conversationManagerName: this.conversationManagerAgent?.Name ?? null,
         isWithinFloor: msg => !this.AgentHistoryFrom || msg.__mj_CreatedAt >= this.AgentHistoryFrom,
       },
     );
@@ -1224,7 +1224,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const isManager = managerId ? UUIDsEqual(targetId, managerId) : false;
     const owner = {
       ID: targetId,
-      Name: meta?.Name || (isManager ? (this.conversationManagerAgent?.Name || 'Sage') : 'Agent'),
+      Name: meta?.Name || (isManager ? (this.conversationManagerAgent?.Name || 'Assistant') : 'Agent'),
       IsConversationManager: isManager,
     };
     this._cachedOwnerAgentKey = cacheKey;
@@ -1233,7 +1233,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   public get CurrentOwnerAgentName(): string {
-    return this.CurrentOwnerAgent?.Name || this.conversationManagerAgent?.Name || 'Sage';
+    return this.CurrentOwnerAgent?.Name || this.conversationManagerAgent?.Name || 'Assistant';
   }
 
   public get CurrentOwnerAccentVar(): string {

@@ -16,11 +16,6 @@ import {
     AnthropicLLM,
 } from '@memberjunction/ai-anthropic';
 
-// @memberjunction/ai-assemblyai (1 classes)
-import {
-    AssemblyAIRealtime,
-} from '@memberjunction/ai-assemblyai';
-
 // @memberjunction/ai-azure (2 classes)
 import {
     AzureEmbedding,
@@ -127,6 +122,12 @@ import {
     OpenAILiveRealtime,
     OpenAIRealtime,
 } from '@memberjunction/ai-openai';
+
+// @memberjunction/ai-assemblyai (2 classes)
+import {
+    AssemblyAIRealtime,
+    AssemblyAIVoiceRealtime,
+} from '@memberjunction/ai-assemblyai';
 
 // @memberjunction/ai-deepinfra (1 classes)
 import {
@@ -1634,7 +1635,6 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
-    AssemblyAIRealtime,
     AzureEmbedding,
     AzureLLM,
     BedrockEmbedding,
@@ -1670,6 +1670,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILLM,
     OpenAILiveRealtime,
     OpenAIRealtime,
+    AssemblyAIRealtime,
+    AssemblyAIVoiceRealtime,
     DeepInfraLLM,
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
@@ -1832,11 +1834,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
-    MJArtifactVersionAttributeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
     MJAuditLogEntity,
@@ -2036,11 +2038,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
-    MJMLModelPublishRecordEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
     MJMLMonitoringResultEntity,
     MJMLOutputBindingEntity,
@@ -2240,11 +2242,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RexRecommendationsProvider,
     DataContextItemServer,
     MJLibraryEntityExtended,
-    MJLibraryItemEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJLibraryItemEntityExtended,
     EntityActionInvocationMultipleRecords,
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
@@ -2444,11 +2446,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     LLMRubricEvaluator,
     SubmitHumanRubricAction,
     AzureAISearchProvider,
-    BGEReRanker,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    BGEReRanker,
     CohereReRanker,
     DecisionReRanker,
     ElasticsearchSearchProvider,
@@ -2648,11 +2650,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     QueryRefreshExtractionServerOperation,
-    APIRateLimiterAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    APIRateLimiterAction,
     ActionSmithAgent,
     ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
@@ -2852,11 +2854,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     UnshareListAction,
     UpdateListItemStatusAction,
     UpdateRecordAction,
-    ValidateAddressAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
     VerifyMyCommunicationCapabilitiesAction,
@@ -2947,12 +2949,11 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1273;
+export const CLASS_REGISTRATIONS_COUNT = 1274;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-anthropic',
-    '@memberjunction/ai-assemblyai',
     '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock',
     '@memberjunction/ai-betty',
@@ -2971,6 +2972,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-mistral',
     '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai',
+    '@memberjunction/ai-assemblyai',
     '@memberjunction/ai-deepinfra',
     '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-inception',

@@ -11,9 +11,10 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (9 classes)
+// @memberjunction/ai-realtime-client (10 classes)
 import {
     AssemblyAIRealtimeClient,
+    AssemblyAIVoiceRealtimeClient,
     ElevenLabsRealtimeClient,
     ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
@@ -941,6 +942,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
+    AssemblyAIVoiceRealtimeClient,
     ElevenLabsRealtimeClient,
     ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
@@ -1139,11 +1141,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentProcessRunEntity,
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
-    MJContentSourceParamEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentSourceParamEntity,
     MJContentSourceTypeEntity,
     MJContentSourceTypeParamEntity,
     MJContentTypeAttributeEntity,
@@ -1343,11 +1345,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
-    MJRecommendationRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
@@ -1547,11 +1549,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ViewPartComponent,
     WebURLConfigPanelComponent,
     WebURLPartComponent,
-    ApplicationManagementComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ApplicationManagementComponent,
     EntityPermissionsComponent,
     RoleManagementComponent,
     SettingsComponent,
@@ -1751,11 +1753,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VersionHistoryRestoreResourceComponent,
     VideoStudioArchetypesResourceComponent,
     VideoStudioBrandKitsResourceComponent,
-    VideoStudioProductionsResourceComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    VideoStudioProductionsResourceComponent,
     VisualizeResourceComponent,
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
@@ -1791,7 +1793,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 820;
+export const CLASS_REGISTRATIONS_COUNT = 821;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

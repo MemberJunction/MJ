@@ -546,7 +546,7 @@ describe('SLICE A governed artifact security, concurrency, discovery & realtime 
                     recordedFilters.push(`${params.EntityName}:${params.ExtraFilter}`);
                 }
                 if (params.EntityName === 'MJ: Artifact Permissions') {
-                    return { Success: true, Results: [{ ArtifactID: ART_ID }] };
+                    return { Success: true, Results: [{ ArtifactID: ART_ID, CanRead: true }] };
                 }
                 if (params.EntityName === 'MJ: Artifacts') {
                     return {

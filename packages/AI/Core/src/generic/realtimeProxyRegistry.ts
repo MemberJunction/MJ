@@ -56,6 +56,32 @@ export const REALTIME_SDP_EXCHANGE_PATH = '/realtime/sdp-exchange';
  */
 export const OPENAI_LIVE_SDP_EXCHANGE_PATH = REALTIME_SDP_EXCHANGE_PATH;
 
+/** The browser's side of an in-process upstream: how the upstream talks back to it, and ends the call. */
+export interface RealtimeInProcessPeer {
+    /** Sends one text frame to the browser. A no-op once the connection has closed. */
+    Send(frame: string): void;
+    /** Closes the browser connection, with a websocket close code and a short reason. Idempotent. */
+    Close(code?: number, reason?: string): void;
+}
+
+/**
+ * A realtime upstream that runs inside MJAPI instead of behind a websocket URL: a driver that assembles a voice agent
+ * from a provider's separate parts (speech to text, LLM, text to speech) implements it. The proxy owns the browser
+ * socket (size cap, pings, backpressure) and calls these two methods.
+ */
+export interface IRealtimeInProcessUpstream {
+    /** One text frame from the browser, in order. Must not throw for bad input: a throw ends the call. */
+    Receive(frame: string): void;
+    /**
+     * The browser connection is gone, for whatever reason, including a close the upstream asked for. Called exactly
+     * once. Release everything that costs money here.
+     */
+    Closed(): void;
+}
+
+/** Opens an in-process upstream for one browser connection. A throw closes that connection. */
+export type RealtimeInProcessUpstreamFactory = (peer: RealtimeInProcessPeer) => IRealtimeInProcessUpstream;
+
 /**
  * A short-lived, one-time authorization to open ONE upstream realtime websocket through the
  * MJAPI realtime proxy. Stored server-side only — the upstream URL and (optional) auth header
@@ -70,8 +96,10 @@ export const OPENAI_LIVE_SDP_EXCHANGE_PATH = REALTIME_SDP_EXCHANGE_PATH;
  * ({@link RealtimeProxyRegistry.Consume}) to open the authenticated upstream leg and pump frames.
  */
 export interface RealtimeProxyTicketEntry {
-    /** The internal upstream websocket URL to tunnel to (e.g. `ws://hf-s2s.internal:8000/v1/realtime`). */
+    /** The internal upstream websocket URL to tunnel to (e.g. `ws://hf-s2s.internal:8000/v1/realtime`). Empty for an in-process upstream. */
     UpstreamUrl: string;
+    /** Opens the upstream inside this process instead of at {@link UpstreamUrl}. */
+    OpenInProcess?: RealtimeInProcessUpstreamFactory;
     /**
      * Full `Authorization` header value applied on the UPSTREAM socket only (e.g. `Bearer <key>`).
      * Optional — many self-hosted endpoints are unauthenticated. Never serialized to the browser.
@@ -92,8 +120,10 @@ export interface RealtimeProxyTicketEntry {
 
 /** The parameters for minting a proxy ticket via {@link RealtimeProxyRegistry.Issue}. */
 export interface RealtimeProxyIssueParams {
-    /** The internal upstream websocket URL to tunnel to. */
-    UpstreamUrl: string;
+    /** The internal upstream websocket URL to tunnel to. Give this or {@link OpenInProcess}, not both. */
+    UpstreamUrl?: string;
+    /** Opens the upstream inside this process. Give this or {@link UpstreamUrl}, not both. */
+    OpenInProcess?: RealtimeInProcessUpstreamFactory;
     /** Full `Authorization` header value for the upstream socket (optional). */
     UpstreamAuthHeader?: string;
     /** The MJ user the ticket is for (optional). */
@@ -397,13 +427,19 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
     /**
      * Mints a single-use ticket authorizing ONE upstream open within its TTL window, and returns the
      * opaque id to embed in the browser-facing proxy URL. Prunes expired tickets as a side effect.
+     *
+     * @throws When the params name both an upstream URL and an in-process upstream, or neither.
      */
     public Issue(params: RealtimeProxyIssueParams): RealtimeProxyTicket {
+        if (Boolean(params.UpstreamUrl) === Boolean(params.OpenInProcess)) {
+            throw new Error('A realtime proxy ticket needs exactly one of UpstreamUrl and OpenInProcess');
+        }
         this.pruneExpired();
         const id = RealtimeProxyRegistry.newTicketId();
         const expiresAtMs = Date.now() + Math.max(1, params.TTLSeconds) * 1000;
         this._tickets.set(id, {
-            UpstreamUrl: params.UpstreamUrl,
+            UpstreamUrl: params.UpstreamUrl ?? '',
+            OpenInProcess: params.OpenInProcess,
             UpstreamAuthHeader: params.UpstreamAuthHeader,
             UserID: params.UserID,
             DriverClass: params.DriverClass,

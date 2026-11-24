@@ -157,7 +157,7 @@ export function FormatElapsed(ms: number): string {
  */
 export class RealtimeSessionState {
   /** Display name used for new delegation cards (set by the overlay's AgentName input). */
-  public AgentName = 'Sage';
+  public AgentName = 'Assistant';
 
   /** The merged, chronological thread (captions + delegation cards), oldest first. */
   public Items: RealtimeThreadItem[] = [];
