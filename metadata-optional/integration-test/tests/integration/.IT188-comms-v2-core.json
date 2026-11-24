@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT187 - Comms V2 Schema, Seeds and Endpoint Resolution",
+    "Name": "IT188 - Comms V2 Schema, Seeds and Endpoint Resolution",
     "Description": "Verifies all 20 Comms V2 entities in Metadata, starter metadata seeds, and V2SendService.ResolveEndpoints endpoint creation and deduplication against live SQL Server.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
