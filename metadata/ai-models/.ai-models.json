@@ -143,7 +143,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-opus-4-5-20251101",
             "MaxInputTokens": 200000,
@@ -226,9 +226,10 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 4.5 Opus pricing on Anthropic as of November 2025.  Released Nov 24, 2025. API name is gemini-3-pro-preview and will be updated to gemini-3-pro when GA releases. Features 1M token input context window, 64k output capacity, and knowledge cutoff of January 2025. Achieves state-of-the-art performance across 19 of 20 major AI benchmarks including top scores in reasoning (Humanity's Last Exam: 37.5%), coding (SWE-Bench: 76.2%), and multimodal understanding (MMLU: 91.8%).",
+            "Comments": "Claude Opus 4.5 (claude-opus-4-5-20251101) pricing on Anthropic direct since its November 24, 2025 release: $5/$25 per 1M in/out, cache read $0.50, 5-minute cache write $6.25 (1-hour write $10). Re-verified against the first-party rate card on 2026-11-24. [Corrected 2026-11-24: the previous Comments text on this row described Gemini 3 Pro, a copy-paste error.] WINDOW-CLOSED 2026-11-24: on November 23, 2026 Anthropic deprecated `claude-opus-4-5-20251101` (and the undated `claude-opus-4-5`) on the Claude API with retirement on January 22, 2027; recommended replacement `claude-opus-5-5`. EndedAt is set to the retirement date so this price stops being selected automatically; Status stays Active until then because the model is still served and billed at $5/$25. The Anthropic Inference Provider route is now Deprecated. Follow-up for the first run after 2027-01-22: flip that route to Inactive and this row to Expired per the routine's deprecation recipe. Amazon Bedrock and OpenRouter set their own retirement schedules and are deliberately untouched. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations ; https://platform.claude.com/docs/en/about-claude/pricing",
             "CacheReadPricePerUnit": 0.5,
-            "CacheWritePricePerUnit": 6.25
+            "CacheWritePricePerUnit": 6.25,
+            "EndedAt": "2027-01-22T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "6A987D9F-584B-48A0-B5C2-0231AF7EF063"
@@ -32668,6 +32669,368 @@
     },
     "primaryKey": {
       "ID": "2650AA17-1917-4415-94E2-93711C757334"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT-6.2 Astra",
+      "PowerRank": 28,
+      "Description": "OpenAI's GPT-6.2 point release of the flagship Astra model, released November 17, 2026 as the successor to GPT-6 Astra. 1,050,000-token context (922K max input), 128K max output. Reasoning effort low, medium, high, xhigh and max (no none). Streaming, Structured Outputs and tool calling (Responses API) supported. Priced 20% below GPT-6 Astra at $8/$40 per 1M in/out, cached input $0.40 (down from $1.00), 30-minute cache writes $10. A prompt above 272K input tokens re-rates the whole request at $16/$60 (cache read $2); that long-context tier is not modelled. Launched the same day on the OpenAI API, Microsoft Foundry (GA per Microsoft's announcement), Amazon Bedrock and OpenRouter. The Bedrock route is not modelled yet because its model ID could not be confirmed from a first-party source. Sources: https://developers.openai.com/api/docs/models/gpt-6.2-astra ; https://x.com/Azure/status/2122779469274378305 ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-6-2-astra.html ; https://openrouter.ai/openai/gpt-6.2-astra",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT-6 Astra",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "13ADEF1F-09A9-4406-83A8-982E4ECF423E"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-6.2-astra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5FE35E46-7CF8-49F7-AA07-9035A1EDDEC9"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-6.2-astra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "2E5E270C-B720-4878-8FAE-15A886846290"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-6.2-astra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1D6FE2DE-1358-4A16-A8CA-1BFAA7E854DE"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-11-17T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 8,
+            "OutputPricePerUnit": 40,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.4,
+            "CacheWritePricePerUnit": 10,
+            "Comments": "GPT-6.2 Astra launch pricing on OpenAI direct (2026-11-17), Standard tier: $8/$40 per 1M in/out, a 20% cut from GPT-6 Astra's $10/$50. Cached input $0.40/1M (was $1.00). CacheWritePricePerUnit records the 30-minute cache write at $10/1M. Batch is half rate ($4/$20, cached $0.20). LONG-CONTEXT TIER (not representable in this schema): a request whose input exceeds 272K tokens is billed in full at $16 input / $2 cache read / $60 output. Sourcing note: developers.openai.com is unreachable from the research environment, so the rate was taken from multiple independent launch write-ups that agree with one another; flagged in reports/ai-model-research/2026-11-24-weekly-report.md for a first-party re-read. Sources: https://developers.openai.com/api/docs/models/gpt-6.2-sol (model page, read via search; host blocked from this environment) ; https://www.datastudios.org/post/openai-gpt-6-2-astra-sol-launch-api-pricing-chatgpt-codex ; https://aitokenprice.com/news/gpt-6-2-pricing ; https://www.layer3labs.io/guides/gpt-6-2-pricing ; https://betanews.com/article/gpt-6-2-astra-api-pricing/"
+          },
+          "primaryKey": {
+            "ID": "D39431A0-6726-4317-ADC3-7AFF2C0592ED"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1DA7870C-A432-48AC-B4A3-79AC03FAECF9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT-6.2 Sol",
+      "PowerRank": 27,
+      "Description": "OpenAI's GPT-6.2 point release of the mid-tier Sol model, released November 17, 2026 as the successor to GPT-6.1 Sol. 1,050,000-token context (922K max input), 128K max output, knowledge cutoff June 1, 2026 (per OpenAI's model page). Reasoning effort low through max. Streaming, Structured Outputs and tool calling (Responses API) supported. Price unchanged from GPT-6.1 Sol: $2/$10 per 1M in/out, cached input $0.10, 30-minute cache writes $2.50. Some sources report a >272K-input long-context tier ($4/$15, cache read $0.20) as on GPT-6.1 Sol; others could not confirm it for 6.2 Sol, so it is noted, not modelled. Launched the same day on the OpenAI API, Microsoft Foundry (GA per Microsoft's announcement; Foundry region page lists gpt-6.2-sol version 2026-11-17), Amazon Bedrock and OpenRouter. The Bedrock route is not modelled yet (ID not confirmed first-party). Sources: https://developers.openai.com/api/docs/models/gpt-6.2-sol ; https://x.com/Azure/status/2122779469274378305 ; https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability ; https://openrouter.ai/openai/gpt-6.2-sol",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 5,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT-6.1 Sol",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "BD1F45EA-0DFE-48B4-9207-FBB7F2ED66FC"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-6.2-sol",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CB82EC51-CB0D-4154-BA62-9D2218E8CF73"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-6.2-sol",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "828E011D-2A1F-4142-A6B3-435308B57721"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-6.2-sol",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C9B398A2-4CCA-4E83-85C1-CFB243732DEE"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-11-17T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 10,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": 2.5,
+            "Comments": "GPT-6.2 Sol launch pricing on OpenAI direct (2026-11-17), Standard tier: $2/$10 per 1M in/out, unchanged from GPT-6.1 Sol. Cached input $0.10/1M. CacheWritePricePerUnit records the 30-minute cache write at $2.50/1M. Possible long-context tier above 272K input ($4/$15, cache read $0.20) is reported by some sources and not confirmed by others; not representable in this schema either way. Sourcing note: developers.openai.com is unreachable from the research environment, so the rate was taken from multiple independent launch write-ups that agree with one another; flagged in reports/ai-model-research/2026-11-24-weekly-report.md for a first-party re-read. Sources: https://developers.openai.com/api/docs/models/gpt-6.2-sol (model page, read via search; host blocked from this environment) ; https://www.datastudios.org/post/openai-gpt-6-2-astra-sol-launch-api-pricing-chatgpt-codex ; https://aitokenprice.com/news/gpt-6-2-pricing ; https://www.layer3labs.io/guides/gpt-6-2-pricing ; https://betanews.com/article/gpt-6-2-astra-api-pricing/"
+          },
+          "primaryKey": {
+            "ID": "CE3DEF90-D61B-45C4-9B22-53B9996C6FD4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "108459CE-9C8E-4F94-A006-4223B8EE1ADB"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen4 Max",
+      "PowerRank": 23,
+      "Description": "Alibaba Cloud's Qwen 4 generation flagship, generally available on Alibaba Cloud Model Studio on November 16, 2026 (API id qwen4-max) after a Token Plan preview from November 11. Successor to Qwen 3.8 Max. Sparse mixture-of-experts, ~2.4T total / ~71B active parameters, native vision input, no open weights. 1M-token context billed at a single flat rate (no long-prompt surcharge), 131,072 max output tokens; reasoning is on by default and thinking tokens bill as output. Tool calling and structured outputs supported. List price $1.50/$4.50 per 1M in/out (Singapore / international), cached input $0.075 - about 25% below Qwen 3.8 Max per token. Also available on OpenRouter as qwen/qwen4-max. Sources: https://routerplus.com/news/qwen4-max-generally-available-api-pricing ; https://neurohive.io/en/news/qwen4-max/ ; https://datanorth.ai/news/qwen4-max-api-cost-per-task ; https://models.litellm.ai/models/qwen4-max ; https://openrouter.ai/qwen/qwen4-max",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.8 Max",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "98E945C7-0833-40B2-84AB-930E0FA745D6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen4-max",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "4D4D3DE2-93C6-4378-9DC7-4DBCBB97E40E"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen4-max",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "004B9F0A-F915-4798-B921-17CD63A796B5"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-11-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 4.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Qwen4 Max pay-as-you-go list pricing on Alibaba Cloud Model Studio (international / Singapore region) at general availability, 2026-11-16: $1.50/1M input, $4.50/1M output, $0.075/1M cached input. Flat rate across the full 1M context (no long-prompt step-up). Other regions (Beijing, Hong Kong, Frankfurt, Virginia, Tokyo) are reported at $1.413/$4.24. Reasoning is on by default and thinking tokens bill at the output rate. Sourcing note: the Alibaba Model Studio pricing page is unreachable from the research environment; the rate is consistent across several independent write-ups. Flagged in reports/ai-model-research/2026-11-24-weekly-report.md for a first-party re-read. Sources: https://routerplus.com/news/qwen4-max-generally-available-api-pricing ; https://neurohive.io/en/news/qwen4-max/ ; https://datanorth.ai/news/qwen4-max-api-cost-per-task ; https://models.litellm.ai/models/qwen4-max ; https://openrouter.ai/qwen/qwen4-max"
+          },
+          "primaryKey": {
+            "ID": "806584B0-3B57-4784-9D90-1AB6D0819851"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E684254D-1660-48BD-9771-91765AB8EDD3"
     }
   }
 ]
