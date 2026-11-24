@@ -50,6 +50,16 @@ export interface ChannelCatalogEntry {
     };
 }
 
+/** One channel omitted by the host for this device/viewport, with the reason to give the user if asked. */
+export interface UnavailableChannelEntry {
+    /** The channel's descriptor key (e.g. `"Whiteboard"`). */
+    Key: string;
+    /** Human-readable channel name (e.g. `"Live Whiteboard"`). */
+    DisplayName: string;
+    /** Why this channel is unavailable on the current device/viewport. */
+    Reason: string;
+}
+
 /** Longest instruction text sent per channel. */
 const MAX_INSTRUCTION_CHARS = 800;
 /** Longest per-verb description sent. */
@@ -108,13 +118,19 @@ function renderEntry(entry: ChannelCatalogEntry): string[] {
  * Renders the catalog note for a session's channels.
  *
  * @param entries The session's channels (open and advertised).
+ * @param unavailable Channels omitted by the host on this device/viewport, with reasons to share if asked.
  * @returns The note text, or `null` when no channel needs describing (so a legacy-only session sends nothing new).
  */
-export function BuildChannelCatalogNote(entries: ReadonlyArray<ChannelCatalogEntry>): string | null {
+export function BuildChannelCatalogNote(
+    entries: ReadonlyArray<ChannelCatalogEntry>,
+    unavailable: ReadonlyArray<UnavailableChannelEntry> = [],
+): string | null {
     const described = entries.filter(needsEntry);
     const limits = renderVisibilityLimits(entries);
+    const unavailableLines = renderUnavailableChannels(unavailable);
     if (described.length === 0) {
-        return limits.length > 0 ? limits.join('\n') : null;
+        const tail = [...limits, ...unavailableLines];
+        return tail.length > 0 ? tail.join('\n') : null;
     }
     const header = [
         '[channels] Interactive channels in this session.',
@@ -134,8 +150,20 @@ export function BuildChannelCatalogNote(entries: ReadonlyArray<ChannelCatalogEnt
     if (omitted > 0) {
         lines.push(`(${omitted} more channel(s) omitted for length.)`);
     }
-    lines.push(...limits);
+    lines.push(...limits, ...unavailableLines);
     return lines.join('\n');
+}
+
+/** The "unavailable in this view" section: why host-filtered channels are omitted so the agent explains honestly without over-promising agent-scoped opt-in channels. */
+function renderUnavailableChannels(unavailable: ReadonlyArray<UnavailableChannelEntry>): string[] {
+    if (unavailable.length === 0) {
+        return [];
+    }
+    const lines = unavailable.map((u) => `- ${u.DisplayName} (channel "${u.Key}"): ${u.Reason}`);
+    return [
+        '[channels] Unavailable in this view (filtered out before per-agent policy: do not try to open or call these, and do not promise an opt-in channel is enabled for you on wider screens unless your instructions say you have it; if the user asks for one, share the reason below instead of claiming a permissions error):',
+        ...lines,
+    ];
 }
 
 /** The "visibility limits" section: what the agent perceives of each channel whose exposure is held down, and why. */

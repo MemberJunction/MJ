@@ -259,7 +259,7 @@ export function FindContinuityAgentMessage<T extends ContinuityHistoryMessage>(
     }
 ): T | null {
     const normalizedManagerId = NormalizeUUID(conversationManagerAgentId ?? '');
-    const managerName = options?.conversationManagerName ?? 'Sage';
+    const managerName = options?.conversationManagerName ?? null;
     const byId = new Map<string, T>();
     for (const m of messages) {
         if (m.ID) {

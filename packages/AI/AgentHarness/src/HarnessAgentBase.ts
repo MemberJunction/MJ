@@ -36,7 +36,12 @@ import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';
 import { CloudSandboxProvider } from './sandbox/CloudSandboxProvider.js';
 import {
     CloudSandboxOptions,
+    HarnessActivityHeartbeatCallback,
+    HarnessActivityHeartbeatInfo,
     HarnessAuthMode,
+    HarnessRunConfig,
+    HarnessTurnEvent,
+    HarnessTurnLimits,
     HarnessTurnResult,
     HarnessWorkspaceScope,
     HarnessNetworkPolicy,
@@ -154,7 +159,7 @@ export interface HarnessAgentConfig {
     mcpCredential?: string;
     posture?: HarnessPosture;
     permissions?: { allowedTools?: string[]; disallowedTools?: string[] };
-    limits?: { maxWallClockSeconds?: number };
+    limits?: HarnessTurnLimits;
     cloudSandboxDefaults?: Record<string, unknown>;
     cloudHarnessTargets?: unknown[];
 }
@@ -211,6 +216,15 @@ export class HarnessAgentBase extends BaseAgent {
     protected configuredEffort: HarnessReasoningEffort | undefined = undefined;
     protected persistedEffortLevel: number | undefined = undefined;
     protected turnIndex = 0;
+    protected activityHeartbeatCallback: HarnessActivityHeartbeatCallback | undefined = undefined;
+
+    /**
+     * Registers an optional callback invoked periodically while a harness turn emits live
+     * activity, allowing callers to renew external run leases without polling.
+     */
+    public SetActivityHeartbeatCallback(callback: HarnessActivityHeartbeatCallback | undefined): void {
+        this.activityHeartbeatCallback = callback;
+    }
 
     /**
      * Substitutes a harness turn for the prompt call a Loop agent would make.
@@ -230,10 +244,13 @@ export class HarnessAgentBase extends BaseAgent {
 
             const isFirstTurn = this.turnIndex === 1;
             const input = await this.buildTurnInput(promptParams, isFirstTurn);
-            const turn = await this.runTurn(input, config.limits?.maxWallClockSeconds);
+            const turn = await this.runTurn(input, {
+                limits: config.limits,
+                onActivityHeartbeat: this.resolveActivityHeartbeatCallback(),
+            });
             const promptRun = await this.recordPromptRun(promptParams, turn, startTime, input);
             this.persistExternalSessionId(turn.SessionId);
-            if (turn.TimedOut) {
+            if (turn.TimedOut || turn.Stalled) {
                 await this.EndHarnessSession('failure');
             }
 
@@ -478,26 +495,190 @@ export class HarnessAgentBase extends BaseAgent {
         }
     }
 
-    /** Accumulates one turn's event stream into a single result, enforcing optional wall-clock bounds. */
-    private async runTurn(input: string, maxWallClockSeconds?: number): Promise<HarnessTurnResult> {
+    /**
+     * Accumulates one turn's event stream into a single result, enforcing optional wall-clock
+     * bounds, rolling inactivity watchdogs, repeated tool-call loop detection, and live activity
+     * heartbeat callbacks.
+     */
+    protected async runTurn(
+        input: string,
+        configOrMaxWallClock?: number | HarnessRunConfig,
+    ): Promise<HarnessTurnResult> {
         const adapter = this.adapter!;
         const turn: HarnessTurnResult = { RawText: '', InputTokens: 0, OutputTokens: 0 };
 
+        const runConfig: HarnessRunConfig =
+            typeof configOrMaxWallClock === 'number'
+                ? { limits: { maxWallClockSeconds: configOrMaxWallClock } }
+                : (configOrMaxWallClock ?? {});
+        const limits = runConfig.limits;
+        const maxWallClockSeconds = limits?.maxWallClockSeconds;
+        const maxIdleSeconds = limits?.maxIdleSeconds;
+        const maxConsecutiveIdenticalToolCalls = limits?.maxConsecutiveIdenticalToolCalls;
+        const heartbeatIntervalMs = resolveHeartbeatIntervalMs(limits?.heartbeatIntervalSeconds);
+        const onActivityHeartbeat = runConfig.onActivityHeartbeat ?? this.resolveActivityHeartbeatCallback();
+
+        let aborted = false;
         let timedOut = false;
-        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        let stalled = false;
+        let stallReason: string | undefined;
+        let lastEventType: string | undefined;
+        let wallClockHandle: ReturnType<typeof setTimeout> | undefined;
+        let idleHandle: ReturnType<typeof setTimeout> | undefined;
         let endSessionPromise: Promise<void> | undefined;
-        if (typeof maxWallClockSeconds === 'number' && Number.isFinite(maxWallClockSeconds) && maxWallClockSeconds > 0) {
-            timeoutHandle = setTimeout(() => {
+        let resolveAbort: ((signal: TurnAbortSignal) => void) | null = null;
+        const abortPromise = new Promise<TurnAbortSignal>((resolve) => {
+            resolveAbort = resolve;
+        });
+
+        const clearTimers = (): void => {
+            if (wallClockHandle !== undefined) {
+                clearTimeout(wallClockHandle);
+                wallClockHandle = undefined;
+            }
+            if (idleHandle !== undefined) {
+                clearTimeout(idleHandle);
+                idleHandle = undefined;
+            }
+        };
+
+        const triggerAbort = (reasonLabel: string): void => {
+            if (aborted) {
+                return;
+            }
+            aborted = true;
+            clearTimers();
+            endSessionPromise = adapter.EndSession().catch((err) => {
+                LogError(`Failed terminating ${reasonLabel} harness session: ${describeError(err)}`);
+            });
+            if (resolveAbort) {
+                const resolve = resolveAbort;
+                resolveAbort = null;
+                resolve(ABORT_SENTINEL);
+            }
+        };
+
+        if (
+            typeof maxWallClockSeconds === 'number' &&
+            Number.isFinite(maxWallClockSeconds) &&
+            maxWallClockSeconds > 0
+        ) {
+            wallClockHandle = setTimeout(() => {
+                if (aborted) {
+                    return;
+                }
                 timedOut = true;
-                endSessionPromise = adapter.EndSession().catch((err) => {
-                    LogError(`Failed terminating timed-out harness session: ${describeError(err)}`);
-                });
+                triggerAbort('timed-out');
             }, maxWallClockSeconds * 1000);
         }
 
+        const hasIdleLimit =
+            typeof maxIdleSeconds === 'number' &&
+            Number.isFinite(maxIdleSeconds) &&
+            maxIdleSeconds > 0;
+
+        const resetIdleTimer = (): void => {
+            if (idleHandle !== undefined) {
+                clearTimeout(idleHandle);
+                idleHandle = undefined;
+            }
+            if (aborted || !hasIdleLimit) {
+                return;
+            }
+            idleHandle = setTimeout(() => {
+                if (aborted) {
+                    return;
+                }
+                stalled = true;
+                stallReason = buildIdleStallReason(
+                    maxIdleSeconds,
+                    lastEventType,
+                    adapter.RecentOutputLines,
+                );
+                triggerAbort('stalled');
+            }, maxIdleSeconds * 1000);
+        };
+
+        resetIdleTimer();
+
+        const hasToolLoopLimit =
+            typeof maxConsecutiveIdenticalToolCalls === 'number' &&
+            Number.isFinite(maxConsecutiveIdenticalToolCalls) &&
+            maxConsecutiveIdenticalToolCalls >= 1;
+        let lastToolSignature: string | null = null;
+        let consecutiveToolCount = 0;
+
+        const turnStartMs = Date.now();
+        let lastHeartbeatCallbackAt = 0;
+
+        const iterator = adapter.RunTurn(input)[Symbol.asyncIterator]();
+        let iteratorCompleted = false;
+
         try {
-            for await (const event of adapter.RunTurn(input)) {
+            while (!aborted) {
+                const nextPromise = iterator.next();
+                const nextResult = await Promise.race([nextPromise, abortPromise]);
+                if (isAbortSentinel(nextResult)) {
+                    void nextPromise.catch(() => undefined);
+                    break;
+                }
+                if (nextResult.done) {
+                    iteratorCompleted = true;
+                    break;
+                }
+                if (aborted) {
+                    break;
+                }
+
+                const event = nextResult.value;
+                lastEventType = event.Type;
+                const isTerminal = event.Type === 'turn-complete' || event.Type === 'session-error';
+
+                if (isTerminal) {
+                    if (idleHandle !== undefined) {
+                        clearTimeout(idleHandle);
+                        idleHandle = undefined;
+                    }
+                } else {
+                    resetIdleTimer();
+                    if (onActivityHeartbeat) {
+                        const now = Date.now();
+                        if (
+                            lastHeartbeatCallbackAt === 0 ||
+                            now - lastHeartbeatCallbackAt >= heartbeatIntervalMs
+                        ) {
+                            lastHeartbeatCallbackAt = now;
+                            invokeActivityHeartbeat(onActivityHeartbeat, {
+                                ElapsedMs: Math.max(0, now - turnStartMs),
+                                LastEventType: event.Type,
+                            });
+                        }
+                    }
+                }
+
                 switch (event.Type) {
+                    case 'tool-use-start': {
+                        if (hasToolLoopLimit) {
+                            const signature = buildToolCallSignature(event.ToolName, event.ArgumentsJson);
+                            if (signature === lastToolSignature) {
+                                consecutiveToolCount++;
+                            } else {
+                                lastToolSignature = signature;
+                                consecutiveToolCount = 1;
+                            }
+                            if (consecutiveToolCount >= maxConsecutiveIdenticalToolCalls) {
+                                stalled = true;
+                                stallReason = buildToolLoopStallReason(
+                                    event.ToolName,
+                                    consecutiveToolCount,
+                                    maxConsecutiveIdenticalToolCalls,
+                                    adapter.RecentOutputLines,
+                                );
+                                triggerAbort('stalled');
+                            }
+                        }
+                        break;
+                    }
                     case 'usage':
                         // Summed rather than replaced: a harness may report usage more than once per
                         // turn, and undercounting here silently weakens the cost guardrail.
@@ -520,15 +701,16 @@ export class HarnessAgentBase extends BaseAgent {
                         turn.CloudExecutionState = event.CloudExecutionState;
                         break;
                     default:
-                        // assistant-text and sandbox-activity are live-view only. They are deliberately
-                        // NOT persisted as run steps — the audit boundary is the turn, and widening it
-                        // to in-sandbox activity is a documented non-goal, not an oversight.
+                        // assistant-text, thinking-delta, tool-result, sandbox-activity, and
+                        // liveness-heartbeat are live-view / liveness signals only. They reset the
+                        // idle watchdog above and are deliberately NOT persisted as run steps.
                         break;
                 }
             }
         } finally {
-            if (timeoutHandle !== undefined) {
-                clearTimeout(timeoutHandle);
+            clearTimers();
+            if (!iteratorCompleted && typeof iterator.return === 'function') {
+                void Promise.resolve(iterator.return()).catch(() => undefined);
             }
             if (endSessionPromise) {
                 await endSessionPromise;
@@ -539,6 +721,10 @@ export class HarnessAgentBase extends BaseAgent {
             const timeoutMsg = `Harness turn exceeded configured limits.maxWallClockSeconds (${maxWallClockSeconds}s).`;
             turn.ErrorMessage = turn.ErrorMessage ? `${timeoutMsg} (${turn.ErrorMessage})` : timeoutMsg;
             turn.TimedOut = true;
+        } else if (stalled && stallReason) {
+            turn.Stalled = true;
+            turn.StallReason = ScrubHarnessSecrets(stallReason, this.sessionEnvironment);
+            turn.ErrorMessage = turn.ErrorMessage ? `${stallReason} (${turn.ErrorMessage})` : stallReason;
         }
 
         turn.RawText = ScrubHarnessSecrets(turn.RawText, this.sessionEnvironment);
@@ -548,6 +734,18 @@ export class HarnessAgentBase extends BaseAgent {
         turn.SessionId = adapter.SessionId;
         turn.ReportedModel = adapter.ReportedModel;
         return turn;
+    }
+
+    /** Resolves an optional activity heartbeat hook from instance configuration or execution context. */
+    private resolveActivityHeartbeatCallback(): HarnessActivityHeartbeatCallback | undefined {
+        if (this.activityHeartbeatCallback) {
+            return this.activityHeartbeatCallback;
+        }
+        const ctxCandidate = this._executeAgentParams()?.context?.onActivityHeartbeat;
+        if (typeof ctxCandidate === 'function') {
+            return ctxCandidate as HarnessActivityHeartbeatCallback;
+        }
+        return undefined;
     }
 
     /**
@@ -1403,9 +1601,10 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
-     * Terminates immediately when a harness turn hits its wall-clock cap instead of letting
-     * `BaseAgent` burn retries against an ended session, allowing the parent orchestrator to
-     * inspect committed progress and re-slice work cleanly.
+     * Terminates immediately when a harness turn hits its wall-clock cap, idle watchdog, or
+     * repeated tool-call loop threshold instead of letting `BaseAgent` burn retries against an
+     * ended session, allowing the parent orchestrator to inspect committed progress and re-slice
+     * work cleanly.
      */
     protected override async determineNextStep<P>(
         params: ExecuteAgentParams,
@@ -1417,7 +1616,9 @@ export class HarnessAgentBase extends BaseAgent {
         if (
             promptResult &&
             !promptResult.success &&
-            promptResult.errorMessage?.includes('limits.maxWallClockSeconds')
+            (promptResult.errorMessage?.includes('limits.maxWallClockSeconds') ||
+                promptResult.errorMessage?.includes('limits.maxIdleSeconds') ||
+                promptResult.errorMessage?.includes('limits.maxConsecutiveIdenticalToolCalls'))
         ) {
             return {
                 ...nextStep,
@@ -1549,6 +1750,125 @@ function isOutboundNetworkRequiredDriver(driverClass: string | null | undefined)
 
 function describeError(e: unknown): string {
     return e instanceof Error ? e.message : String(e);
+}
+
+const DEFAULT_ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
+const MAX_STALL_TAIL_CHARS = 1500;
+
+interface TurnAbortSignal {
+    readonly kind: 'aborted';
+}
+
+const ABORT_SENTINEL: TurnAbortSignal = { kind: 'aborted' };
+
+function isAbortSentinel(
+    value: IteratorResult<HarnessTurnEvent> | TurnAbortSignal,
+): value is TurnAbortSignal {
+    return 'kind' in value && value.kind === 'aborted';
+}
+
+function resolveHeartbeatIntervalMs(seconds: number | undefined): number {
+    if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0) {
+        return seconds * 1000;
+    }
+    return DEFAULT_ACTIVITY_HEARTBEAT_INTERVAL_MS;
+}
+
+function invokeActivityHeartbeat(
+    callback: HarnessActivityHeartbeatCallback,
+    info: HarnessActivityHeartbeatInfo,
+): void {
+    try {
+        const result = callback(info);
+        if (result && typeof result.then === 'function') {
+            void result.catch((err) => {
+                LogError(`Harness onActivityHeartbeat callback rejected: ${describeError(err)}`);
+            });
+        }
+    } catch (err) {
+        LogError(`Harness onActivityHeartbeat callback threw: ${describeError(err)}`);
+    }
+}
+
+type CanonicalJsonValue =
+    | string
+    | number
+    | boolean
+    | null
+    | CanonicalJsonValue[]
+    | { [key: string]: CanonicalJsonValue };
+
+function canonicalizeJsonValue(value: CanonicalJsonValue): CanonicalJsonValue {
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => canonicalizeJsonValue(item));
+    }
+    const sorted: { [key: string]: CanonicalJsonValue } = {};
+    for (const key of Object.keys(value).sort()) {
+        sorted[key] = canonicalizeJsonValue(value[key]);
+    }
+    return sorted;
+}
+
+/**
+ * Produces a deterministic canonical representation of a tool call's serialized arguments by
+ * recursively sorting JSON object keys. Non-JSON strings fall back to their trimmed text.
+ */
+export function CanonicalizeToolInput(argumentsJson: string | undefined): string {
+    if (argumentsJson === undefined) {
+        return '';
+    }
+    const trimmed = argumentsJson.trim();
+    if (!trimmed) {
+        return '';
+    }
+    try {
+        const parsed = JSON.parse(trimmed) as CanonicalJsonValue;
+        return JSON.stringify(canonicalizeJsonValue(parsed));
+    } catch {
+        return trimmed;
+    }
+}
+
+function buildToolCallSignature(toolName: string, argumentsJson: string | undefined): string {
+    return `${toolName.trim()}\u0000${CanonicalizeToolInput(argumentsJson)}`;
+}
+
+function formatRecentOutputTail(recentOutputLines: readonly string[]): string {
+    if (recentOutputLines.length === 0) {
+        return '';
+    }
+    const joined = recentOutputLines.join('\n');
+    const clipped =
+        joined.length > MAX_STALL_TAIL_CHARS
+            ? `...${joined.slice(joined.length - MAX_STALL_TAIL_CHARS)}`
+            : joined;
+    return `\nRecent output tail:\n${clipped}`;
+}
+
+function buildIdleStallReason(
+    maxIdleSeconds: number,
+    lastEventType: string | undefined,
+    recentOutputLines: readonly string[],
+): string {
+    const base =
+        `Harness turn stalled: no stream activity for configured limits.maxIdleSeconds (${maxIdleSeconds}s) ` +
+        `(last event: ${lastEventType ?? 'none'}).`;
+    return `${base}${formatRecentOutputTail(recentOutputLines)}`;
+}
+
+function buildToolLoopStallReason(
+    toolName: string,
+    consecutiveCount: number,
+    threshold: number,
+    recentOutputLines: readonly string[],
+): string {
+    const base =
+        `Harness turn stalled: repeated identical tool call '${toolName}' ${consecutiveCount} consecutive times ` +
+        `(exceeded limits.maxConsecutiveIdenticalToolCalls=${threshold}).`;
+    return `${base}${formatRecentOutputTail(recentOutputLines)}`;
 }
 
 function isLoopbackMcpUrl(rawUrl: string): boolean {
