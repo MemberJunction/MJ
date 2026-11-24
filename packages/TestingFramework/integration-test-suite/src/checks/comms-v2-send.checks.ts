@@ -342,7 +342,7 @@ export const CommsV2SendChecks: NamedCheck[] = [
         );
 
         runId = result.CommunicationRunID;
-        Assert(result.Success, 'Expected TemplatedCommunicationService.RenderAndSend to succeed');
+        Assert(result.Success, `Expected TemplatedCommunicationService.RenderAndSend to succeed: ${result.ErrorMessage ?? 'no error message'}`);
         AssertEqual(result.TotalCount, 1, 'Expected TotalCount = 1');
       } finally {
         const cleanup = new CommsCleanup(BUNDLE, ctx.User);

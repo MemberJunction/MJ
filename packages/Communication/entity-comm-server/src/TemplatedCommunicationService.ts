@@ -283,6 +283,9 @@ export class TemplatedCommunicationService
         Templates: params.Templates,
         AutoAppendComplianceFooter: autoAppendFooter,
         Recipients: batch,
+        // The render step refuses a batch that does not say who it renders as. The queued path
+        // above sets this; the in-process path has to as well.
+        ActingUserID: user?.ID,
       };
       const batchResult = await this.HandleRenderBatch(batchPayload, user, provider);
       if (!batchResult.Success) {

@@ -397,6 +397,26 @@ describe('TemplatedCommunicationService', () => {
     expect(sentOverride?.Body).toContain('123 Main St');
   });
 
+  it('REGRESSION: renders and sends in process when no work queue is configured', async () => {
+    // The default path, not RenderMode 'Inline'. With no queue it renders in the calling process,
+    // and the render step refuses a batch that does not name the acting user. That name was only
+    // set on the queued path, so this path failed for every sendable recipient.
+    const result = await service.RenderAndSend(
+      {
+        Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' },
+        EntityID: 'ent-customers',
+        Recipients: [{ Principal: { EntityID: 'ent-customers', RecordID: 'cust-1', RecordData: { FirstName: 'Alice' } } }],
+        Templates: { HTMLBodyTemplateID: 'tpl-html' },
+      },
+      MOCK_USER,
+    );
+
+    expect(result.ErrorMessage).toBeUndefined();
+    expect(result.Success).toBe(true);
+    expect(capturedEnqueued).toEqual([]);
+    expect(capturedSendCalls).toHaveLength(1);
+  });
+
   it('throws when template parameters have mismatched types across templates', async () => {
     state.templates['tpl-html'] = makeTemplate('tpl-html', 'HtmlTpl', '<p>HTML</p>', [
       { Name: 'orders', Type: 'Record' },
