@@ -31,7 +31,7 @@ export function WrapUntrustedExternalData(
     source: string,
     trustLevel: 'SemiTrusted' | 'Untrusted'
 ): string {
-    const safeSource = source.replace(/"/g, '&quot;');
+    const safeSource = source.replace(/"/g, '&quot;').replace(/>/g, '&gt;');
     const escapedContent = EscapeUntrustedDataTags(content);
     return `<untrusted_external_data source="${safeSource}" trust="${trustLevel}" warning="${UNTRUSTED_EXTERNAL_DATA_WARNING}">\n${escapedContent}\n</untrusted_external_data>`;
 }
@@ -67,7 +67,7 @@ function parseEnvelopeHeader(
 ): 'SemiTrusted' | 'Untrusted' {
     const rawSource = extractXmlAttrValue(header, 'source');
     if (rawSource) {
-        const decoded = rawSource.replace(/&quot;/g, '"');
+        const decoded = rawSource.replace(/&gt;/g, '>').replace(/&quot;/g, '"');
         if (decoded.length > 0 && !sources.includes(decoded)) {
             sources.push(decoded);
         }

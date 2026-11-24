@@ -216,20 +216,11 @@ import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from
 import { ScratchpadManager } from './ScratchpadManager';
 import { type ActiveRunTaint, ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import {
-    ActionResultSpilloverManager,
-    ExpirationConfigToMetadataFields,
-    FormatArtifactSpilloverHint,
-    GetActionConfigObject,
-    IndexEffectiveAgentActions,
-    MergeToolTurnMetadata,
-    MetadataToExpirationConfig,
-    PickMostRestrictiveExpirationConfig,
-    ResolveActionExpirationConfig,
-    ResolveActionMaxExecutionsPerRun,
-    ResolveLoopExpirationMetadata,
+    ActionLifecycleResolver,
     type ActionCompactMode,
     type ResolvedActionExpirationConfig,
-} from './ActionResultSpilloverManager';
+} from './ActionLifecycleResolver';
+import { ActionResultSpilloverManager } from './ActionResultSpilloverManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
 import { PayloadFeedbackManager, PayloadFeedbackContext, PayloadFeedbackQuestion, PayloadFeedbackResponse } from './PayloadFeedbackManager';
@@ -1766,7 +1757,7 @@ export class BaseAgent {
         }
 
         // 3. Action metadata catalog setting (Action.Config_Object?.outputTrustLevel)
-        const actionConfig = GetActionConfigObject(entity);
+        const actionConfig = ActionLifecycleResolver.GetActionConfigObject(entity);
         if (actionConfig && isLevel(actionConfig.outputTrustLevel)) {
             return actionConfig.outputTrustLevel;
         }
@@ -6772,8 +6763,8 @@ export class BaseAgent {
      * Indexes effective active `AIAgentAction` rows (including `BaseAgentID`-inherited rows) by
      * `ActionID` for O(1) lookup inside action/loop loops.
      */
-    private indexEffectiveAgentActions(agentId: string): ReturnType<typeof IndexEffectiveAgentActions> {
-        return IndexEffectiveAgentActions(this.getEffectiveAgentActions(agentId));
+    private indexEffectiveAgentActions(agentId: string): ReturnType<typeof ActionLifecycleResolver.IndexEffectiveAgentActions> {
+        return ActionLifecycleResolver.IndexEffectiveAgentActions(this.getEffectiveAgentActions(agentId));
     }
 
     /**
@@ -7863,7 +7854,7 @@ export class BaseAgent {
             })),
             { turnAdded: this._promptTurnCount, messageType: 'action-result' }
         ) as AgentChatMessage;
-        BaseAgent.insertToolResultsAfterCallTurn(messages, at, synthetic);
+        this.insertToolResultsAfterCallTurn(messages, at, synthetic);
     }
 
     /**
@@ -7875,7 +7866,7 @@ export class BaseAgent {
         const messages = params.conversationMessages;
         const at = BaseAgent.lastToolCallTurnIndex(messages);
         if (at >= 0 && at === messages.length - 2 && messages[at + 1].role === 'tool') {
-            BaseAgent.insertToolResultsAfterCallTurn(messages, at, results);
+            this.insertToolResultsAfterCallTurn(messages, at, results);
             return;
         }
         messages.push(results);
@@ -7918,10 +7909,14 @@ export class BaseAgent {
      * after the call turn is already a tool turn, the results merge into it instead of opening a
      * second one.
      */
-    private static insertToolResultsAfterCallTurn(messages: ChatMessage[], callTurnIndex: number, results: AgentChatMessage): void {
+    private insertToolResultsAfterCallTurn(messages: ChatMessage[], callTurnIndex: number, results: AgentChatMessage): void {
         const adjacent = messages[callTurnIndex + 1] as AgentChatMessage | undefined;
         if (adjacent?.role === 'tool' && Array.isArray(adjacent.content) && Array.isArray(results.content)) {
-            const mergedMetadata = MergeToolTurnMetadata(adjacent.metadata, results.metadata);
+            const mergedMetadata = ActionLifecycleResolver.MergeToolTurnMetadata(adjacent.metadata, results.metadata);
+            if (mergedMetadata) {
+                this._actionSpilloverManager.TransferPending(adjacent.metadata, mergedMetadata);
+                this._actionSpilloverManager.TransferPending(results.metadata, mergedMetadata);
+            }
             messages[callTurnIndex + 1] = {
                 ...adjacent,
                 content: [...adjacent.content, ...results.content],
@@ -9892,7 +9887,7 @@ export class BaseAgent {
                 if (!actionEntity) continue;
 
                 // Check for limit across per-agent AIAgentAction rows, dynamic actionChanges, and Action.Config
-                const maxExecutions = ResolveActionMaxExecutionsPerRun(
+                const maxExecutions = ActionLifecycleResolver.ResolveMaxExecutionsPerRun(
                     actionEntity,
                     params.agent.ID,
                     this._dynamicActionLimits,
@@ -11708,7 +11703,7 @@ export class BaseAgent {
             const target = params.conversationMessages[index] as AgentChatMessage;
             const artifactIds = this.areArtifactToolsEnabled(params) ? this._actionSpilloverManager.Materialize(target) : [];
             if (target.role === 'tool') {
-                const artifactNote = FormatArtifactSpilloverHint(artifactIds, this._artifactToolManager.HasArtifacts(), 'semicolon');
+                const artifactNote = ActionResultSpilloverManager.FormatSpilloverHint(artifactIds, this._artifactToolManager.HasArtifacts(), 'semicolon');
                 // a tool turn cannot be removed without orphaning the call it answers; stub it.
                 params.conversationMessages[index] = this.stubToolTurn(target, `[result expired — stubbed to recover context${artifactNote}]`);
                 this.emitMessageLifecycleEvent({
@@ -11746,6 +11741,19 @@ export class BaseAgent {
         );
     }
 
+    private estimateArtifactHintTokens(message: AgentChatMessage, params: ExecuteAgentParams): number {
+        if (!this.areArtifactToolsEnabled(params)) {
+            return 0;
+        }
+        const existingIds = message.metadata?.artifactIds;
+        if (existingIds?.length && this._artifactToolManager.HasArtifacts()) {
+            return this.heuristicTokenCount(ActionResultSpilloverManager.FormatSpilloverHint(existingIds, true));
+        }
+        return this._actionSpilloverManager.HasPending(message)
+            ? this.heuristicTokenCount(ActionResultSpilloverManager.SAMPLE_SPILLOVER_HINT)
+            : 0;
+    }
+
     private compactToolTurnForRecovery(
         originalMessage: AgentChatMessage,
         maxChars: number,
@@ -11753,30 +11761,22 @@ export class BaseAgent {
         params: ExecuteAgentParams
     ): { compacted: AgentChatMessage; saved: number } | null {
         const toolsEnabled = this.areArtifactToolsEnabled(params);
-        const existingIds = originalMessage.metadata?.artifactIds;
-        const hasExistingHint = toolsEnabled && Boolean(existingIds?.length) && this._artifactToolManager.HasArtifacts();
-        const hasOwnedPending = toolsEnabled && this._actionSpilloverManager.HasOwnedPending(originalMessage);
-        const previewHint = hasExistingHint
-            ? FormatArtifactSpilloverHint(existingIds, true)
-            : hasOwnedPending
-                ? FormatArtifactSpilloverHint(['A'], true)
-                : '';
-
-        const preview = this.formatToolRecoveryTurn(originalMessage, maxChars, previewHint);
-        const previewSaved = originalTokens - this.estimateTokens(preview.content);
-        if (previewSaved <= 0) {
-            return null;
-        }
-        if (!hasOwnedPending) {
-            return { compacted: preview, saved: previewSaved };
+        if (toolsEnabled && this._actionSpilloverManager.HasPending(originalMessage)) {
+            const plain = this.formatToolRecoveryTurn(originalMessage, maxChars, '');
+            const hintTokens = this.estimateArtifactHintTokens(originalMessage, params);
+            if (originalTokens - (this.estimateTokens(plain.content) + hintTokens) <= 0) {
+                return null;
+            }
+            this._actionSpilloverManager.Materialize(originalMessage);
         }
 
-        const artifactIds = this._actionSpilloverManager.Materialize(originalMessage);
-        const realHint = FormatArtifactSpilloverHint(artifactIds, this._artifactToolManager.HasArtifacts());
-        if (realHint === previewHint) {
-            return { compacted: preview, saved: previewSaved };
-        }
-        const compacted = this.formatToolRecoveryTurn(originalMessage, maxChars, realHint);
+        const hint = toolsEnabled
+            ? ActionResultSpilloverManager.FormatSpilloverHint(
+                originalMessage.metadata?.artifactIds,
+                this._artifactToolManager.HasArtifacts()
+            )
+            : '';
+        const compacted = this.formatToolRecoveryTurn(originalMessage, maxChars, hint);
         const saved = originalTokens - this.estimateTokens(compacted.content);
         return saved > 0 ? { compacted, saved } : null;
     }
@@ -11811,16 +11811,9 @@ export class BaseAgent {
         if (body.length <= maxChars) {
             return false;
         }
-        const toolsEnabled = this.areArtifactToolsEnabled(params);
-        const hasOwnedPending = toolsEnabled && this._actionSpilloverManager.HasOwnedPending(originalMessage);
-        const existingIds = originalMessage.metadata?.artifactIds;
-        const expectedHint = toolsEnabled && existingIds?.length && this._artifactToolManager.HasArtifacts()
-            ? FormatArtifactSpilloverHint(existingIds, true)
-            : hasOwnedPending
-                ? FormatArtifactSpilloverHint(['A'], true)
-                : '';
-        const preview = this.formatFirstNCharsCompaction(body, envelope, maxChars, true, expectedHint);
-        return originalTokens - this.estimateTokens(preview) > 0;
+        const plain = this.formatFirstNCharsCompaction(body, envelope, maxChars, true, '');
+        const hintTokens = this.estimateArtifactHintTokens(originalMessage, params);
+        return originalTokens - (this.estimateTokens(plain) + hintTokens) > 0;
     }
 
     /**
@@ -12334,7 +12327,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (calls.length === 0) {
             return false;
         }
-        BaseAgent.insertToolResultsAfterCallTurn(messages, at, BuildToolResultTurn(
+        this.insertToolResultsAfterCallTurn(messages, at, BuildToolResultTurn(
             calls.map((call) => ({
                 toolCallId: call.id,
                 toolName: call.name,
@@ -16656,7 +16649,6 @@ The context is now within limits. Please retry your request with the recovered c
         const clonedMeta: AgentChatMessageMetadata = {
             ...meta,
             ...(meta.artifactIds ? { artifactIds: [...meta.artifactIds] } : {}),
-            ...(meta.pendingSpilloverIds ? { pendingSpilloverIds: [...meta.pendingSpilloverIds] } : {}),
         };
         return {
             ...agentMsg,
@@ -21838,7 +21830,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Apply large binary content interception to prevent context overflow
             const agentActionsByActionId = this.indexEffectiveAgentActions(params.agent.ID);
             const toolsEnabled = this.areArtifactToolsEnabled(params);
-            const allPendingSpilloverIds: string[] = [];
+            const pendingSpilloverInputs: Array<Parameters<ActionResultSpilloverManager['QueueDeferred']>[1]> = [];
             const resolvedExpirationConfigs: ResolvedActionExpirationConfig[] = [];
             const actionSummaries: ActionResultSummary[] = actionResults.map(result => {
                 const actionResult = result.result;
@@ -21872,7 +21864,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // and skill-bundled (AISkillAction / Action.Config) invocations, and defer
                 // artifact spillover until compaction, expiry/removal, or context recovery
                 // so `_ARTIFACT_MANIFEST` and provider KV cache stay stable while inline.
-                const expirationConfig = ResolveActionExpirationConfig(
+                const expirationConfig = ActionLifecycleResolver.ResolveExpirationConfig(
                     result.actionEntity,
                     params.agent.ID,
                     params,
@@ -21881,21 +21873,15 @@ The context is now within limits. Please retry your request with the recovered c
                 if (expirationConfig != null && expirationConfig.ExpirationMode !== 'None') {
                     resolvedExpirationConfigs.push(expirationConfig);
                 }
-                const pendingSpilloverId = isActionSuccess && addConversationMessage && toolsEnabled
-                    ? this._actionSpilloverManager.QueueDeferred(
-                        {
-                            ActionName: result.action.name,
-                            OutputParams: sanitizedParams,
-                            Message: actionResult?.Message,
-                            StepNumber: stepNum,
-                            ExpirationConfig: expirationConfig,
-                            TrustLevel: trustLevel,
-                        },
-                        this._artifactToolManager
-                    )
-                    : undefined;
-                if (pendingSpilloverId) {
-                    allPendingSpilloverIds.push(pendingSpilloverId);
+                if (isActionSuccess && addConversationMessage && toolsEnabled) {
+                    pendingSpilloverInputs.push({
+                        ActionName: result.action.name,
+                        OutputParams: sanitizedParams,
+                        Message: actionResult?.Message,
+                        StepNumber: stepNum,
+                        ExpirationConfig: expirationConfig,
+                        TrustLevel: trustLevel,
+                    });
                 }
 
                 return {
@@ -21925,13 +21911,15 @@ The context is now within limits. Please retry your request with the recovered c
             // Build metadata from unified action expiration configuration (run override -> AIAgentAction -> Action.Config).
             // If multiple actions ran in parallel, use the most restrictive active expiration settings
             // (shortest turns -> Remove over Compact -> smaller CompactLength), ignoring 'None'.
-            const mostRestrictiveExpiration = PickMostRestrictiveExpirationConfig(resolvedExpirationConfigs);
+            const mostRestrictiveExpiration = ActionLifecycleResolver.PickMostRestrictiveExpiration(resolvedExpirationConfigs);
             const metadata: AgentChatMessageMetadata = {
                 turnAdded: this._promptTurnCount,
                 messageType: 'action-result',
-                ...ExpirationConfigToMetadataFields(mostRestrictiveExpiration),
-                ...(allPendingSpilloverIds.length > 0 ? { pendingSpilloverIds: allPendingSpilloverIds } : {}),
+                ...ActionLifecycleResolver.ExpirationToMetadataFields(mostRestrictiveExpiration),
             };
+            for (const spilloverInput of pendingSpilloverInputs) {
+                this._actionSpilloverManager.QueueDeferred(metadata, spilloverInput, this._artifactToolManager);
+            }
 
             if (addConversationMessage) {
                 // Add user message with results and optional metadata
@@ -24204,21 +24192,19 @@ The context is now within limits. Please retry your request with the recovered c
     ): void {
         const envelope = ExtractUntrustedEnvelope(content);
         const actionLabel = actionNames.length > 0 ? `${loopType}: ${actionNames.join(' → ')}` : `${loopType} Loop`;
-        const pendingSpilloverId = this._actionSpilloverManager.QueueDeferred(
+        this._actionSpilloverManager.QueueDeferred(
+            metadata,
             {
                 ActionName: actionLabel,
                 OutputParams: [],
                 Message: envelope ? envelope.UnwrappedText : content,
                 StepNumber: this._promptTurnCount,
-                ExpirationConfig: MetadataToExpirationConfig(metadata),
+                ExpirationConfig: ActionLifecycleResolver.MetadataToExpirationConfig(metadata),
                 TrustLevel: envelope ? envelope.TrustLevel : 'Trusted',
                 SourceName: envelope?.Source,
             },
             this._artifactToolManager
         );
-        if (pendingSpilloverId) {
-            metadata.pendingSpilloverIds = [pendingSpilloverId];
-        }
     }
 
     /**
@@ -24324,7 +24310,7 @@ The context is now within limits. Please retry your request with the recovered c
                 ?? this.resolveActionEntityForAgent(name, allActions, params)
             )
             .filter((a): a is MJActionEntityExtended => a != null);
-        return ResolveLoopExpirationMetadata(
+        return ActionLifecycleResolver.ResolveLoopExpirationMetadata(
             params,
             this._promptTurnCount,
             matchedActions,
@@ -25341,7 +25327,7 @@ The context is now within limits. Please retry your request with the recovered c
                 if (msg.metadata.expirationMode === 'Remove' && msg.role === 'tool') {
                     // a tool turn cannot be removed (it answers an assistant call); stub its blocks.
                     const artifactIds = this.areArtifactToolsEnabled(params) ? this._actionSpilloverManager.Materialize(msg) : [];
-                    const artifactNote = FormatArtifactSpilloverHint(artifactIds, this._artifactToolManager.HasArtifacts(), 'semicolon');
+                    const artifactNote = ActionResultSpilloverManager.FormatSpilloverHint(artifactIds, this._artifactToolManager.HasArtifacts(), 'semicolon');
                     params.conversationMessages[i] = this.stubToolTurn(msg, `[result expired after ${turnsAlive} turns${artifactNote}]`);
                     this.emitMessageLifecycleEvent({
                         type: 'message-expired',
@@ -25396,9 +25382,18 @@ The context is now within limits. Please retry your request with the recovered c
                 const compactedTurn = await CompactToolResultContentAsync(item.message, (text) =>
                     this.compactMessage({ ...item.message, content: text }, { ...item.metadata, originalLength: text.length }, params));
                 const saved = this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content);
+                const nextMetadata: AgentChatMessageMetadata = {
+                    ...item.message.metadata,
+                    wasCompacted: true,
+                    originalContent: preserveOriginal ? originalContent : undefined,
+                    originalLength: item.metadata.originalLength,
+                    tokensSaved: saved,
+                    canExpand: preserveOriginal,
+                };
+                this._actionSpilloverManager.TransferPending(item.message.metadata, nextMetadata);
                 params.conversationMessages[item.index] = {
                     ...compactedTurn,
-                    metadata: { ...item.message.metadata, wasCompacted: true, originalContent: preserveOriginal ? originalContent : undefined, originalLength: item.metadata.originalLength, tokensSaved: saved, canExpand: preserveOriginal }
+                    metadata: nextMetadata,
                 };
                 this.emitMessageLifecycleEvent({
                     type: 'message-compacted',
@@ -25422,17 +25417,19 @@ The context is now within limits. Please retry your request with the recovered c
             const tokensSaved = originalTokens - compactedTokens;
 
             // Update message in place
+            const nextMetadata: AgentChatMessageMetadata = {
+                ...item.message.metadata,
+                wasCompacted: true,
+                originalContent: preserveOriginal ? originalContent : undefined,
+                originalLength: item.metadata.originalLength,
+                tokensSaved,
+                canExpand: preserveOriginal,
+            };
+            this._actionSpilloverManager.TransferPending(item.message.metadata, nextMetadata);
             params.conversationMessages[item.index] = {
                 ...item.message,
                 content: compacted,
-                metadata: {
-                    ...item.message.metadata,
-                    wasCompacted: true,
-                    originalContent: preserveOriginal ? originalContent : undefined,
-                    originalLength: item.metadata.originalLength,
-                    tokensSaved,
-                    canExpand: preserveOriginal
-                }
+                metadata: nextMetadata,
             };
 
             this.emitMessageLifecycleEvent({
@@ -26135,7 +26132,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // A native-only agent has no message expansion, so its tool results do not offer it.
                 const expandable = !(message.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
                 const artifactHint = toolsEnabled
-                    ? FormatArtifactSpilloverHint(message.metadata?.artifactIds, this._artifactToolManager.HasArtifacts())
+                    ? ActionResultSpilloverManager.FormatSpilloverHint(message.metadata?.artifactIds, this._artifactToolManager.HasArtifacts())
                     : '';
                 return this.formatFirstNCharsCompaction(bodyToCompact, envelope, length, expandable, artifactHint);
             }
@@ -26205,7 +26202,7 @@ The context is now within limits. Please retry your request with the recovered c
                     }
                     const expandable = !(message.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
                     const artifactHint = toolsEnabled
-                        ? FormatArtifactSpilloverHint(message.metadata?.artifactIds, this._artifactToolManager.HasArtifacts())
+                        ? ActionResultSpilloverManager.FormatSpilloverHint(message.metadata?.artifactIds, this._artifactToolManager.HasArtifacts())
                         : '';
                     const rawSummary = ExtractUntrustedEnvelope(result.result.summary)?.UnwrappedText ?? result.result.summary;
                     const renderedSummary = envelope

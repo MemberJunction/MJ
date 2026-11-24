@@ -184,7 +184,7 @@ How a result's trust level is decided, first match wins:
 Client tools declare `TrustLevel` on their `ClientToolMetadata`; a browser DOM extractor should say `Untrusted`. In the `MJ: Actions` metadata catalog, `outputTrustLevel: "Untrusted"` is set on actions that ingest external content (web search and page content, inbox reader, HTTP request, URL metadata, RSS feeds, `Execute MCP Tool`), not on actions that send to an external system or list MJ's own MCP catalog.
 
 Trust labels propagate end to end across context-management and delegation boundaries:
-- **Spilled artifact tools (`ArtifactToolManager`)**: reads (`ExecuteSingleToolCall`), workspace listings (`list_workspace_artifacts`), and newly created or synthesized artifacts (`create_artifact`, `create_synthesized_artifact`) inherit the most restrictive `trustLevel`/`sourceName` of their source artifacts and the active run taint, and wrap returned content in `<untrusted_external_data>`.
+- **Spilled artifact tools (`ArtifactToolManager`)**: reads (`ExecuteSingleToolCall`), workspace listings (`list_workspace_artifacts`), refreshed artifacts (`refresh_and_snapshot_artifact`), source-link records (`follow_source_link`), and newly created or synthesized artifacts (`create_artifact`, `create_synthesized_artifact`) inherit the most restrictive `trustLevel`/`sourceName` of their source artifacts and the active run taint, and wrap returned content in `<untrusted_external_data>`.
 - **Sub-agent delegation (`ExportInputArtifacts`)**: parent artifacts passed to sub-agents preserve `trustLevel` and `sourceName`.
 - **Server-side pipelines (`Pipeline`)**: multi-stage pipelines taint and wrap their final output whenever any source stage reads from an untrusted or semi-trusted artifact or action.
 - **Compaction and emergency recovery**: `First N Chars` and `AI Summary` compaction as well as emergency context-recovery truncation (`TruncatePreservingUntrustedEnvelope`) preserve the outer `<untrusted_external_data>` XML boundary instead of slicing off the closing tag.
@@ -552,13 +552,13 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
-For action results specifically, expiration, compaction, and per-run execution limits follow a unified 3-tier precedence shared identically across directly-attached (`AIAgentAction`) and skill-bundled (`AISkillAction`) actions:
+For action results specifically, expiration, compaction, and per-run execution limits follow a unified 3-tier precedence (`ActionLifecycleResolver`) shared identically across directly-attached (`AIAgentAction`) and skill-bundled (`AISkillAction`) actions:
 
 1. `ExecuteAgentParams.messageExpirationOverride` — runtime caller override (passing `{ expirationMode: 'None' }` explicitly disables expiration for the run).
-2. Active `AIAgentAction` metadata — agent-specific `ResultExpirationTurns` / `ResultExpirationMode` / `CompactMode` / `CompactLength` / `CompactPromptID` / `MaxExecutionsPerRun`.
+2. Active `AIAgentAction` metadata — agent-specific `ResultExpirationTurns` / `ResultExpirationMode` / `CompactMode` / `CompactLength` / `CompactPromptID` / `MaxExecutionsPerRun` when `ResultExpirationTurns` is non-null (to opt a specific agent out of an `Action.Config` default via `AIAgentAction`, set `ResultExpirationMode = 'None'` with `ResultExpirationTurns = 0`).
 3. `Action.Config_Object` (`IActionConfiguration` JSON on `MJ: Actions.Config`) + `Action.DefaultCompactPromptID` — action-level defaults that apply automatically whenever no active `AIAgentAction` row sets `ResultExpirationTurns`.
 
-Large or tabular action outputs use lazy, KV-cache-preserving spillover into `ArtifactToolManager`: results remain inline in conversation history (without mutating the system prompt artifact manifest) until message compaction, expiration removal, or emergency context recovery triggers, at which point they materialize as queryable workspace artifacts and leave stub pointers in the compacted message.
+Mid-loop pruning/compaction runs once the conversation reaches the agent's compaction trigger (`isMidLoopCompactionThresholdReached` — 75% of `ContextWindowMaxTokens`, e.g. 90k tokens on Sage) or whenever `messageExpirationOverride` is passed, preserving provider prompt-cache prefixes on routine short turns. Large or tabular action outputs use lazy artifact spillover (`ActionResultSpilloverManager`) into `ArtifactToolManager`: results remain inline in conversation history (without mutating `_ARTIFACT_MANIFEST`) until compaction, expiration removal, or emergency context recovery actually fires, at which point they materialize as queryable workspace artifacts and leave stub pointers in the compacted message.
 
 ### With Post-Run Compaction, Scratchpad Pruning & Memory Extraction (`compactAfterRun`)
 

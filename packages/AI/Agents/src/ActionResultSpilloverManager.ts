@@ -1,50 +1,20 @@
 /**
- * @fileoverview Unified action-result lifecycle resolution and lazy artifact spillover manager.
+ * @fileoverview Lazy, KV-cache-preserving artifact spillover manager for action outputs.
  *
- * Centralizes:
- * - Action-level result expiration, compaction, and per-run execution limit resolution across
- *   run overrides (`ExecuteAgentParams.messageExpirationOverride`), active per-agent
- *   `MJAIAgentActionEntity` rows, and action metadata defaults (`Action.Config_Object`), so
- *   directly-attached (`AIAgentAction`) and skill-bundled (`AISkillAction`) actions share one path.
- * - Lazy, KV-cache-preserving artifact spillover queueing and materialization into
- *   {@link ArtifactToolManager}, deferring full serialization and manifest mutation until inline
- *   content is actually truncated, stubbed, or removed.
- * - Metadata merging when adjacent native `role: 'tool'` turns are combined.
+ * Keeps `_ARTIFACT_MANIFEST` untouched while full action results remain inline in conversation
+ * history, and materializes queryable artifacts into {@link ArtifactToolManager} only when inline
+ * content is actually compacted, stubbed, or removed. Pending spillover entries stay completely
+ * private to each manager instance (keyed by message metadata reference), so ephemeral handles
+ * never leak into serializable `AgentChatMessageMetadata` or across sub-agent boundaries.
  *
  * @module @memberjunction/ai-agents
  */
 
-import { CleanAndParseJSON, IndexByUUID, NormalizeUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
-import type { MJAIAgentActionEntity, MJActionEntity_IActionConfiguration } from '@memberjunction/core-entities';
-import type { ActionOutputTrustLevel, ActionParam, MJActionEntityExtended } from '@memberjunction/actions-base';
-import type {
-    AgentChatMessage,
-    AgentChatMessageMetadata,
-    ExecuteAgentParams,
-    InputArtifact,
-} from '@memberjunction/ai-core-plus';
-import { AIEngine } from '@memberjunction/aiengine';
+import type { ActionOutputTrustLevel, ActionParam } from '@memberjunction/actions-base';
+import type { AgentChatMessage, AgentChatMessageMetadata, InputArtifact } from '@memberjunction/ai-core-plus';
+import type { ResolvedActionExpirationConfig } from './ActionLifecycleResolver';
 import type { ArtifactToolManager } from './ArtifactToolManager';
-
-/** Allowed result-expiration modes derived directly from the `MJ: AI Agent Actions` entity. */
-export type ActionExpirationMode = MJAIAgentActionEntity['ResultExpirationMode'];
-
-/** Allowed result-compaction modes derived directly from the `MJ: AI Agent Actions` entity. */
-export type ActionCompactMode = NonNullable<MJAIAgentActionEntity['CompactMode']>;
-
-/**
- * Resolved result-expiration and compaction configuration for an action execution,
- * unified across run overrides (`ExecuteAgentParams.messageExpirationOverride`),
- * per-agent `MJAIAgentActionEntity` rows, and action-level defaults (`Action.Config`).
- */
-export interface ResolvedActionExpirationConfig {
-    ExpirationTurns: number;
-    ExpirationMode: ActionExpirationMode;
-    CompactMode?: ActionCompactMode;
-    CompactLength?: number;
-    CompactPromptID?: string;
-}
 
 /**
  * Character and row thresholds deciding when an action output warrants spillover registration
@@ -69,11 +39,12 @@ export interface ActionOutputSpilloverInput {
     SourceName?: string;
 }
 
-/** Tracks `normalizedActionId:reason` keys already warned about incomplete `Action.Config` metadata. */
-const warnedIncompleteActionExpirationConfigs = new Set<string>();
+interface PendingSpilloverEntry {
+    Input: ActionOutputSpilloverInput;
+    ArtifactManager: ArtifactToolManager;
+}
 
-/** Process-wide monotonic sequence counter for deferred spillover tokens across agent runs/instances. */
-let deferredSpilloverSequence = 0;
+type SpilloverTrustMetadata = Partial<Pick<InputArtifact, 'trustLevel' | 'sourceName'>>;
 
 const SPILLOVER_COMPACT_LENGTH_FALLBACK = 500;
 const SPILLOVER_COMPACT_CHAR_RATIO = 0.75;
@@ -83,534 +54,12 @@ const SPILLOVER_PERSISTENT_CHAR_THRESHOLD = 4000;
 const SPILLOVER_EXPIRING_ROW_THRESHOLD = 5;
 const SPILLOVER_PERSISTENT_ROW_THRESHOLD = 25;
 
-/**
- * Clears cached one-time incomplete `Action.Config` expiration warnings (primarily for test isolation).
- */
-export function ClearIncompleteActionExpirationWarnings(): void {
-    warnedIncompleteActionExpirationConfigs.clear();
-}
-
-/**
- * Reads the parsed `IActionConfiguration` JSON object from an `MJActionEntityExtended` instance.
- * Supports hydrated `Config_Object` and raw `Config_` JSON strings.
- */
-export function GetActionConfigObject(
-    actionEntity?: MJActionEntityExtended
-): MJActionEntity_IActionConfiguration | undefined {
-    if (!actionEntity) {
-        return undefined;
-    }
-    try {
-        if (actionEntity.Config_Object && typeof actionEntity.Config_Object === 'object') {
-            return actionEntity.Config_Object;
-        }
-    } catch (err) {
-        LogError(
-            `GetActionConfigObject: malformed Action.Config JSON on '${actionEntity.Name}': ${err instanceof Error ? err.message : String(err)}`
-        );
-    }
-    const rawConfig = actionEntity.Config_;
-    if (typeof rawConfig === 'string' && rawConfig.trim().length > 0) {
-        const parsed = CleanAndParseJSON<MJActionEntity_IActionConfiguration>(rawConfig, false);
-        if (parsed && typeof parsed === 'object') {
-            return parsed;
-        }
-    }
-    return undefined;
-}
-
-/**
- * Returns the effective `MJAIAgentActionEntity` rows for `agentId`, walking `BaseAgentID`
- * prototype inheritance via `AIEngine.Instance.GetEffectiveAgentActions` when available and
- * falling back to `AIEngine.Instance.AgentActions` only for lightweight test mocks that omit
- * `GetEffectiveAgentActions`.
- */
-function resolveEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[] {
-    const engine = AIEngine.Instance;
-    if (typeof engine?.GetEffectiveAgentActions === 'function') {
-        return engine.GetEffectiveAgentActions(agentId);
-    }
-    return (engine?.AgentActions ?? []).filter(aa => UUIDsEqual(aa.AgentID, agentId));
-}
-
-/**
- * Indexes already-resolved effective `MJAIAgentActionEntity` rows (which may include rows
- * inherited from a `BaseAgentID` ancestor) by `ActionID` for O(1) case-insensitive UUID lookup.
- */
-export function IndexEffectiveAgentActions(
-    agentActions: readonly MJAIAgentActionEntity[]
-): UUIDMap<MJAIAgentActionEntity> {
-    const active = agentActions.filter(aa => !aa.Status || aa.Status === 'Active');
-    return IndexByUUID(active, aa => aa.ActionID);
-}
-
-/**
- * Indexes effective active `MJAIAgentActionEntity` rows for a single agent by `ActionID`
- * in one linear pass so loops over actions perform O(1) case-insensitive UUID lookups.
- *
- * When `agentActions` is provided, filters that collection to active rows belonging to `agentId`.
- * When omitted, resolves effective rows (including `BaseAgentID` inheritance) via `AIEngine`.
- */
-export function IndexActiveAgentActions(
-    agentId: string,
-    agentActions?: readonly MJAIAgentActionEntity[]
-): UUIDMap<MJAIAgentActionEntity> {
-    if (agentActions !== undefined) {
-        const active = agentActions.filter(
-            aa => UUIDsEqual(aa.AgentID, agentId) && (!aa.Status || aa.Status === 'Active')
-        );
-        return IndexByUUID(active, aa => aa.ActionID);
-    }
-    return IndexEffectiveAgentActions(resolveEffectiveAgentActions(agentId));
-}
-
-function findActiveAgentAction(
-    agentId: string,
-    actionId: string,
-    agentActionsByActionId?: UUIDMap<MJAIAgentActionEntity>
-): MJAIAgentActionEntity | undefined {
-    if (agentActionsByActionId) {
-        return agentActionsByActionId.Get(actionId);
-    }
-    return resolveEffectiveAgentActions(agentId).find(
-        aa => UUIDsEqual(aa.ActionID, actionId) && (!aa.Status || aa.Status === 'Active')
-    );
-}
-
-function resolveOverrideExpiration(
-    override: ExecuteAgentParams['messageExpirationOverride']
-): ResolvedActionExpirationConfig | undefined {
-    if (!override) {
-        return undefined;
-    }
-    if (override.expirationMode === 'None') {
-        return {
-            ExpirationTurns: override.expirationTurns ?? 0,
-            ExpirationMode: 'None',
-        };
-    }
-    if (override.expirationTurns != null) {
-        const mode: ActionExpirationMode = override.expirationMode || 'Remove';
-        return {
-            ExpirationTurns: override.expirationTurns,
-            ExpirationMode: mode,
-            CompactMode: override.compactMode ?? (mode === 'Compact' ? 'First N Chars' : undefined),
-            CompactLength: override.compactLength,
-            CompactPromptID: override.compactPromptId,
-        };
-    }
-    return undefined;
-}
-
-function resolveAgentActionExpiration(
-    agentAction: MJAIAgentActionEntity,
-    actionConfig: MJActionEntity_IActionConfiguration | undefined,
-    defaultPromptId: string | undefined
-): ResolvedActionExpirationConfig {
-    const mode: ActionExpirationMode = agentAction.ResultExpirationMode || 'None';
-    return {
-        ExpirationTurns: agentAction.ResultExpirationTurns!,
-        ExpirationMode: mode,
-        CompactMode:
-            agentAction.CompactMode ??
-            actionConfig?.compactMode ??
-            (mode === 'Compact' ? 'First N Chars' : undefined),
-        CompactLength: agentAction.CompactLength ?? actionConfig?.compactLength ?? undefined,
-        CompactPromptID: agentAction.CompactPromptID ?? defaultPromptId,
-    };
-}
-
-function warnIncompleteActionConfigOnce(
-    actionEntity: MJActionEntityExtended,
-    reason: 'missing-mode' | 'missing-turns',
-    detail: string
-): void {
-    const warnKey = `${NormalizeUUID(actionEntity.ID)}:${reason}`;
-    if (!warnedIncompleteActionExpirationConfigs.has(warnKey)) {
-        warnedIncompleteActionExpirationConfigs.add(warnKey);
-        LogError(
-            `ResolveActionExpirationConfig: Action '${actionEntity.Name}' (${actionEntity.ID}) ${detail}; expiration is inactive.`
-        );
-    }
-}
-
-function resolveActionConfigExpiration(
-    actionEntity: MJActionEntityExtended,
-    actionConfig: MJActionEntity_IActionConfiguration,
-    defaultPromptId: string | undefined
-): ResolvedActionExpirationConfig | undefined {
-    if (actionConfig.resultExpirationTurns != null) {
-        const mode: ActionExpirationMode = actionConfig.resultExpirationMode ?? 'None';
-        if (mode !== 'None') {
-            return {
-                ExpirationTurns: actionConfig.resultExpirationTurns,
-                ExpirationMode: mode,
-                CompactMode: actionConfig.compactMode ?? (mode === 'Compact' ? 'First N Chars' : undefined),
-                CompactLength: actionConfig.compactLength,
-                CompactPromptID: defaultPromptId,
-            };
-        }
-        if (actionConfig.resultExpirationMode === undefined) {
-            warnIncompleteActionConfigOnce(
-                actionEntity,
-                'missing-mode',
-                `sets Action.Config.resultExpirationTurns=${actionConfig.resultExpirationTurns} without resultExpirationMode ('Compact' or 'Remove')`
-            );
-        }
-        return undefined;
-    }
-
-    if (actionConfig.resultExpirationMode === 'Compact' || actionConfig.resultExpirationMode === 'Remove') {
-        warnIncompleteActionConfigOnce(
-            actionEntity,
-            'missing-turns',
-            `sets Action.Config.resultExpirationMode='${actionConfig.resultExpirationMode}' without resultExpirationTurns`
-        );
-    }
-    return undefined;
-}
-
-/**
- * Resolves result-expiration and compaction settings for an action across a single unified
- * hierarchy so directly-attached actions (`AIAgentAction`) and skill-bundled actions
- * (`AISkillAction`) behave identically.
- *
- * Precedence:
- * 1. Run-level override (`params.messageExpirationOverride`), including explicit `expirationMode: 'None'` opt-out
- * 2. Active per-agent `MJAIAgentActionEntity` row when `ResultExpirationTurns != null`
- * 3. Action metadata defaults (`Action.Config_Object`, falling back to `Action.DefaultCompactPromptID`)
- */
-export function ResolveActionExpirationConfig(
-    actionEntity: MJActionEntityExtended | undefined,
-    agentId: string,
-    params?: ExecuteAgentParams,
-    agentActionsByActionId?: UUIDMap<MJAIAgentActionEntity>
-): ResolvedActionExpirationConfig | undefined {
-    const fromOverride = resolveOverrideExpiration(params?.messageExpirationOverride);
-    if (fromOverride) {
-        return fromOverride;
-    }
-    if (!actionEntity) {
-        return undefined;
-    }
-
-    const actionConfig = GetActionConfigObject(actionEntity);
-    const defaultPromptId = actionConfig?.compactPromptId ?? actionEntity.DefaultCompactPromptID ?? undefined;
-
-    const agentAction = findActiveAgentAction(agentId, actionEntity.ID, agentActionsByActionId);
-    if (agentAction && agentAction.ResultExpirationTurns != null) {
-        return resolveAgentActionExpiration(agentAction, actionConfig, defaultPromptId);
-    }
-
-    return actionConfig ? resolveActionConfigExpiration(actionEntity, actionConfig, defaultPromptId) : undefined;
-}
-
-function lookupDynamicActionLimit(
-    dynamicActionLimits: Readonly<Record<string, number>> | undefined,
-    actionId: string
-): number | undefined {
-    if (!dynamicActionLimits) {
-        return undefined;
-    }
-    if (dynamicActionLimits[actionId] != null) {
-        return dynamicActionLimits[actionId];
-    }
-    for (const [key, limit] of Object.entries(dynamicActionLimits)) {
-        if (UUIDsEqual(key, actionId)) {
-            return limit;
-        }
-    }
-    return undefined;
-}
-
-/**
- * Resolves the maximum executions per run for an action across active per-agent `AIAgentAction`
- * rows, dynamic `actionChanges` limits, and `Action.Config_Object?.maxExecutionsPerRun`.
- */
-export function ResolveActionMaxExecutionsPerRun(
-    actionEntity: MJActionEntityExtended,
-    agentId: string,
-    dynamicActionLimits?: Readonly<Record<string, number>>,
-    agentActionsByActionId?: UUIDMap<MJAIAgentActionEntity>
-): number | null {
-    const dbAgentAction = findActiveAgentAction(agentId, actionEntity.ID, agentActionsByActionId);
-    if (dbAgentAction?.MaxExecutionsPerRun != null) {
-        return dbAgentAction.MaxExecutionsPerRun;
-    }
-    const dynamicLimit = lookupDynamicActionLimit(dynamicActionLimits, actionEntity.ID);
-    if (dynamicLimit != null) {
-        return dynamicLimit;
-    }
-    const actionConfig = GetActionConfigObject(actionEntity);
-    if (typeof actionConfig?.maxExecutionsPerRun === 'number' && actionConfig.maxExecutionsPerRun > 0) {
-        return actionConfig.maxExecutionsPerRun;
-    }
-    return null;
-}
-
-interface ComparableExpiration {
-    ExpirationTurns: number;
-    ExpirationMode: ActionExpirationMode;
-    CompactLength?: number;
-}
-
-function isMoreRestrictiveExpiration(candidate: ComparableExpiration, current: ComparableExpiration): boolean {
-    if (candidate.ExpirationTurns !== current.ExpirationTurns) {
-        return candidate.ExpirationTurns < current.ExpirationTurns;
-    }
-    if (candidate.ExpirationMode !== current.ExpirationMode) {
-        return candidate.ExpirationMode === 'Remove';
-    }
-    if (candidate.ExpirationMode === 'Compact') {
-        const candidateLen = candidate.CompactLength ?? Number.POSITIVE_INFINITY;
-        const currentLen = current.CompactLength ?? Number.POSITIVE_INFINITY;
-        return candidateLen < currentLen;
-    }
-    return false;
-}
-
-/**
- * Picks the most restrictive active expiration config from one or more resolved action configs,
- * ignoring `undefined` and `'None'` entries.
- *
- * Precedence on ties:
- * 1. Shorter `ExpirationTurns`
- * 2. `'Remove'` over `'Compact'`
- * 3. Smaller `CompactLength` when both are `'Compact'`
- */
-export function PickMostRestrictiveExpirationConfig(
-    configs: readonly (ResolvedActionExpirationConfig | undefined)[]
-): ResolvedActionExpirationConfig | undefined {
-    let best: ResolvedActionExpirationConfig | undefined;
-    for (const cfg of configs) {
-        if (!cfg || cfg.ExpirationTurns == null || cfg.ExpirationMode === 'None') {
-            continue;
-        }
-        if (!best || isMoreRestrictiveExpiration(cfg, best)) {
-            best = cfg;
-        }
-    }
-    return best;
-}
-
-type ExpirationMetadataFields = Pick<
-    AgentChatMessageMetadata,
-    'expirationTurns' | 'expirationMode' | 'compactMode' | 'compactLength' | 'compactPromptId'
->;
-
-/**
- * Projects an active `ResolvedActionExpirationConfig` onto `AgentChatMessageMetadata` expiration
- * fields, returning an empty object when the config is absent or inactive (`'None'`).
- */
-export function ExpirationConfigToMetadataFields(
-    config?: ResolvedActionExpirationConfig
-): Partial<ExpirationMetadataFields> {
-    if (!config || config.ExpirationMode === 'None') {
-        return {};
-    }
-    return {
-        expirationTurns: config.ExpirationTurns,
-        expirationMode: config.ExpirationMode,
-        compactMode: config.CompactMode,
-        compactLength: config.CompactLength,
-        compactPromptId: config.CompactPromptID,
-    };
-}
-
-/**
- * Extracts a `ResolvedActionExpirationConfig` from `AgentChatMessageMetadata` when expiration
- * settings are present.
- */
-export function MetadataToExpirationConfig(
-    metadata?: AgentChatMessageMetadata
-): ResolvedActionExpirationConfig | undefined {
-    if (metadata?.expirationTurns == null || !metadata.expirationMode) {
-        return undefined;
-    }
-    return {
-        ExpirationTurns: metadata.expirationTurns,
-        ExpirationMode: metadata.expirationMode,
-        CompactMode: metadata.compactMode,
-        CompactLength: metadata.compactLength,
-        CompactPromptID: metadata.compactPromptId,
-    };
-}
-
-function normalizeMatchedActions(
-    matchedActions?: MJActionEntityExtended | readonly (MJActionEntityExtended | undefined)[]
-): MJActionEntityExtended[] {
-    if (Array.isArray(matchedActions)) {
-        return matchedActions.filter((a): a is MJActionEntityExtended => a != null);
-    }
-    return matchedActions ? [matchedActions as MJActionEntityExtended] : [];
-}
-
-/**
- * Resolves conversation message expiration metadata for a `ForEach`/`While` loop result message
- * using the unified `ResolveActionExpirationConfig` hierarchy across one or more loop-body actions.
- * Explicit `'None'` opt-outs disable expiration; unconfigured actions fall back to 3-turn `'Remove'`
- * so loop summaries stay bounded.
- */
-export function ResolveLoopExpirationMetadata(
-    params: ExecuteAgentParams,
-    turnAdded: number,
-    matchedActions?: MJActionEntityExtended | readonly (MJActionEntityExtended | undefined)[],
-    agentActionsByActionId?: UUIDMap<MJAIAgentActionEntity>
-): AgentChatMessageMetadata {
-    const baseMetadata: AgentChatMessageMetadata = {
-        turnAdded,
-        messageType: 'loop-result',
-    };
-
-    const fromOverride = resolveOverrideExpiration(params.messageExpirationOverride);
-    if (fromOverride) {
-        return { ...baseMetadata, ...ExpirationConfigToMetadataFields(fromOverride) };
-    }
-
-    const actions = normalizeMatchedActions(matchedActions);
-    if (actions.length > 0) {
-        const indexedActions = agentActionsByActionId ?? IndexActiveAgentActions(params.agent.ID);
-        const resolvedList = actions.map(action =>
-            ResolveActionExpirationConfig(action, params.agent.ID, params, indexedActions)
-        );
-        const mostRestrictive = PickMostRestrictiveExpirationConfig(resolvedList);
-        if (mostRestrictive) {
-            return { ...baseMetadata, ...ExpirationConfigToMetadataFields(mostRestrictive) };
-        }
-        if (resolvedList.every(r => r?.ExpirationMode === 'None')) {
-            return baseMetadata;
-        }
-    }
-
-    return { ...baseMetadata, expirationTurns: 3, expirationMode: 'Remove' };
-}
-
-function pickMoreRestrictiveExpiration(
-    a: AgentChatMessageMetadata,
-    b: AgentChatMessageMetadata
-): ExpirationMetadataFields {
-    const isActive = (m: AgentChatMessageMetadata): boolean =>
-        m.expirationTurns != null && m.expirationMode != null && m.expirationMode !== 'None';
-    const aActive = isActive(a);
-    const bActive = isActive(b);
-    if (aActive && bActive) {
-        const bWins = isMoreRestrictiveExpiration(
-            { ExpirationTurns: b.expirationTurns!, ExpirationMode: b.expirationMode!, CompactLength: b.compactLength },
-            { ExpirationTurns: a.expirationTurns!, ExpirationMode: a.expirationMode!, CompactLength: a.compactLength }
-        );
-        const chosen = bWins ? b : a;
-        return {
-            expirationTurns: chosen.expirationTurns,
-            expirationMode: chosen.expirationMode,
-            compactMode: chosen.compactMode,
-            compactLength: chosen.compactLength,
-            compactPromptId: chosen.compactPromptId,
-        };
-    }
-    const active = bActive ? b : aActive ? a : undefined;
-    return {
-        expirationTurns: active ? active.expirationTurns : (a.expirationTurns ?? b.expirationTurns),
-        expirationMode: active ? active.expirationMode : (a.expirationMode ?? b.expirationMode),
-        compactMode: active ? active.compactMode : (a.compactMode ?? b.compactMode),
-        compactLength: active ? active.compactLength : (a.compactLength ?? b.compactLength),
-        compactPromptId: active ? active.compactPromptId : (a.compactPromptId ?? b.compactPromptId),
-    };
-}
-
-function stripExpirationFields(
-    meta: AgentChatMessageMetadata
-): Omit<AgentChatMessageMetadata, keyof ExpirationMetadataFields> {
-    const { expirationTurns: _t, expirationMode: _m, compactMode: _cm, compactLength: _cl, compactPromptId: _cp, ...rest } = meta;
-    return rest;
-}
-
-/**
- * Merges conversation metadata when two `role: 'tool'` turns answering the same assistant call
- * turn are combined into one provider-valid tool turn. Preserves active expiration rules
- * (preferring the shorter `expirationTurns`, ignoring `'None'`) and unions artifact/spillover IDs.
- */
-export function MergeToolTurnMetadata(
-    a?: AgentChatMessageMetadata,
-    b?: AgentChatMessageMetadata
-): AgentChatMessageMetadata | undefined {
-    if (!a || !b) {
-        return a ?? b;
-    }
-    const mergeStringArrays = (x?: string[], y?: string[]): string[] | undefined => {
-        const combined = [...(x ?? []), ...(y ?? [])];
-        return combined.length > 0 ? Array.from(new Set(combined)) : undefined;
-    };
-    const exp = pickMoreRestrictiveExpiration(a, b);
-    const artifactIds = mergeStringArrays(a.artifactIds, b.artifactIds);
-    const pendingSpilloverIds = mergeStringArrays(a.pendingSpilloverIds, b.pendingSpilloverIds);
-    return {
-        ...stripExpirationFields(a),
-        ...stripExpirationFields(b),
-        turnAdded: Math.min(a.turnAdded ?? b.turnAdded ?? 0, b.turnAdded ?? a.turnAdded ?? 0),
-        messageType: a.messageType || b.messageType,
-        ...(exp.expirationTurns !== undefined ? { expirationTurns: exp.expirationTurns } : {}),
-        ...(exp.expirationMode !== undefined ? { expirationMode: exp.expirationMode } : {}),
-        ...(exp.compactMode !== undefined ? { compactMode: exp.compactMode } : {}),
-        ...(exp.compactLength !== undefined ? { compactLength: exp.compactLength } : {}),
-        ...(exp.compactPromptId !== undefined ? { compactPromptId: exp.compactPromptId } : {}),
-        ...(artifactIds ? { artifactIds } : {}),
-        ...(pendingSpilloverIds ? { pendingSpilloverIds } : {}),
-    };
-}
-
-/**
- * Formats the standardized inline hint reminding the model which materialized artifact handle(s)
- * hold the full queryable output after compaction or stubbing.
- */
-export function FormatArtifactSpilloverHint(
-    artifactIds: readonly string[] | undefined,
-    hasArtifacts: boolean,
-    style: 'sentence' | 'semicolon' = 'sentence'
-): string {
-    if (!hasArtifacts || !artifactIds || artifactIds.length === 0) {
-        return '';
-    }
-    const joined = artifactIds.join(', ');
-    return style === 'semicolon'
-        ? `; full output remains queryable via artifact tools on Artifact ${joined}`
-        : ` Full output remains queryable via artifact tools on Artifact ${joined}.`;
-}
-
-/**
- * Computes character and row spillover thresholds from resolved action expiration settings.
- * In `Compact` mode, only large outputs that compaction (`CompactLength`) would truncate
- * spill over into artifacts, keeping tiny lookup results out of `_ARTIFACT_MANIFEST`.
- */
-export function ResolveActionSpilloverThresholds(
-    expirationConfig?: ResolvedActionExpirationConfig
-): ActionSpilloverThresholds {
-    const willExpire = expirationConfig != null && expirationConfig.ExpirationMode !== 'None';
-    const isCompact = willExpire && expirationConfig.ExpirationMode === 'Compact';
-    const CharThreshold = isCompact
-        ? Math.max(
-            Math.floor(
-                (expirationConfig.CompactLength ?? SPILLOVER_COMPACT_LENGTH_FALLBACK) *
-                    SPILLOVER_COMPACT_CHAR_RATIO
-            ),
-            SPILLOVER_COMPACT_MIN_CHARS
-        )
-        : willExpire
-            ? SPILLOVER_EXPIRING_CHAR_THRESHOLD
-            : SPILLOVER_PERSISTENT_CHAR_THRESHOLD;
-    const RowThreshold = isCompact
-        ? Number.MAX_SAFE_INTEGER
-        : willExpire
-            ? SPILLOVER_EXPIRING_ROW_THRESHOLD
-            : SPILLOVER_PERSISTENT_ROW_THRESHOLD;
-    return { CharThreshold, RowThreshold };
+function isPlainRecord(val: unknown): val is Record<string, unknown> {
+    return val !== null && typeof val === 'object' && !Array.isArray(val);
 }
 
 function isTabularRowArray(val: unknown): val is Array<Record<string, unknown>> {
-    return (
-        Array.isArray(val) &&
-        val.length > 0 &&
-        val.every(r => r !== null && typeof r === 'object' && !Array.isArray(r))
-    );
+    return Array.isArray(val) && val.length > 0 && val.every(isPlainRecord);
 }
 
 function isSpilloverStringParam(val: unknown, charThreshold: number): val is string {
@@ -623,7 +72,7 @@ function isSpilloverStringParam(val: unknown, charThreshold: number): val is str
 }
 
 function estimatePrimitiveJsonChars(node: unknown): number | null {
-    if (node === null || node === undefined) {
+    if (node === null) {
         return 4;
     }
     if (typeof node === 'string') {
@@ -640,9 +89,9 @@ function estimatePrimitiveJsonChars(node: unknown): number | null {
 
 /**
  * Estimates whether pretty-printed JSON (`JSON.stringify(val, null, 2)`) meets `charThreshold`
- * using an incremental walk that stops as soon as the budget is crossed, avoiding eager full
- * serialization of huge nested objects at spillover queue time. Tracks active ancestors so cycles
- * are skipped without undercounting valid shared DAG object references.
+ * without eagerly serializing huge nested objects at spillover queue time. Tracks active ancestors
+ * for cycle safety while counting shared DAG references and skipping `undefined` object properties
+ * (matching `JSON.stringify`).
  */
 function exceedsJsonCharBudget(val: unknown, charThreshold: number): boolean {
     const state = { chars: 0, ancestors: new Set<object>() };
@@ -664,14 +113,18 @@ function exceedsJsonCharBudget(val: unknown, charThreshold: number): boolean {
             state.chars += 2;
             if (Array.isArray(obj)) {
                 return obj.some(item => {
-                    state.chars += 2 + depth * 2;
-                    return visit(item, depth + 1);
+                    state.chars += 2 + depth * 2 + (item === undefined ? 4 : 0);
+                    return item === undefined ? state.chars >= charThreshold : visit(item, depth + 1);
                 });
             }
             const record = obj as Record<string, unknown>;
             return Object.keys(record).some(k => {
+                const propVal = record[k];
+                if (propVal === undefined) {
+                    return false;
+                }
                 state.chars += k.length + 5 + depth * 2;
-                return visit(record[k], depth + 1);
+                return visit(propVal, depth + 1);
             });
         } finally {
             state.ancestors.delete(obj);
@@ -758,15 +211,15 @@ function inferSnapshotColumns(
     }));
 }
 
-type SpilloverTrustMetadata = Partial<Pick<InputArtifact, 'trustLevel' | 'sourceName'>>;
-
 function extractRawColumnsMetadata(outputParams: ActionParam[]): Array<Record<string, unknown>> | undefined {
     const columnsParam = outputParams.find(
         p => p.Name?.trim().toLowerCase() === 'columns' && Array.isArray(p.Value)
     );
-    return Array.isArray(columnsParam?.Value)
-        ? (columnsParam.Value as Array<Record<string, unknown>>)
-        : undefined;
+    if (!Array.isArray(columnsParam?.Value)) {
+        return undefined;
+    }
+    const records = columnsParam.Value.filter(isPlainRecord);
+    return records.length > 0 ? records : undefined;
 }
 
 function buildTabularSpilloverArtifacts(
@@ -946,21 +399,108 @@ function isParamEligibleForSpillover(
  * inline, and materializes artifacts only when inline content is compacted, stubbed, or removed.
  */
 export class ActionResultSpilloverManager {
-    private deferredSpillovers: Map<string, () => string[]> = new Map();
+    private pendingByMetadata = new Map<AgentChatMessageMetadata, PendingSpilloverEntry[]>();
 
-    /** Number of unmaterialized deferred spillover closures currently queued for this run. */
+    /**
+     * Computes character and row spillover thresholds from resolved action expiration settings.
+     * In `Compact` mode, only large outputs that compaction (`CompactLength`) would truncate
+     * spill over into artifacts, keeping tiny lookup results out of `_ARTIFACT_MANIFEST`.
+     */
+    public static ResolveThresholds(
+        expirationConfig?: ResolvedActionExpirationConfig
+    ): ActionSpilloverThresholds {
+        const willExpire = expirationConfig != null && expirationConfig.ExpirationMode !== 'None';
+        const isCompact = willExpire && expirationConfig.ExpirationMode === 'Compact';
+        const CharThreshold = isCompact
+            ? Math.max(
+                Math.floor(
+                    (expirationConfig.CompactLength ?? SPILLOVER_COMPACT_LENGTH_FALLBACK) *
+                        SPILLOVER_COMPACT_CHAR_RATIO
+                ),
+                SPILLOVER_COMPACT_MIN_CHARS
+            )
+            : willExpire
+                ? SPILLOVER_EXPIRING_CHAR_THRESHOLD
+                : SPILLOVER_PERSISTENT_CHAR_THRESHOLD;
+        const RowThreshold = isCompact
+            ? Number.MAX_SAFE_INTEGER
+            : willExpire
+                ? SPILLOVER_EXPIRING_ROW_THRESHOLD
+                : SPILLOVER_PERSISTENT_ROW_THRESHOLD;
+        return { CharThreshold, RowThreshold };
+    }
+
+    /**
+     * Formats the standardized inline hint reminding the model which materialized artifact handle(s)
+     * hold the full queryable output after compaction or stubbing.
+     */
+    public static FormatSpilloverHint(
+        artifactIds: readonly string[] | undefined,
+        hasArtifacts: boolean,
+        style: 'sentence' | 'semicolon' = 'sentence'
+    ): string {
+        if (!hasArtifacts || !artifactIds || artifactIds.length === 0) {
+            return '';
+        }
+        const joined = artifactIds.join(', ');
+        return style === 'semicolon'
+            ? `; full output remains queryable via artifact tools on Artifact ${joined}`
+            : ` Full output remains queryable via artifact tools on Artifact ${joined}.`;
+    }
+
+    /**
+     * Representative single-artifact spillover hint text used by context-recovery heuristics to
+     * estimate token overhead before materializing deferred spillovers.
+     */
+    public static readonly SAMPLE_SPILLOVER_HINT: string =
+        ActionResultSpilloverManager.FormatSpilloverHint(['A'], true);
+
+    /** Number of unmaterialized deferred spillover entries currently queued for this run. */
     public get PendingCount(): number {
-        return this.deferredSpillovers.size;
+        let count = 0;
+        for (const entries of this.pendingByMetadata.values()) {
+            count += entries.length;
+        }
+        return count;
     }
 
-    /** True when `message` references at least one deferred spillover token owned by this manager. */
-    public HasOwnedPending(message?: AgentChatMessage): boolean {
-        return Boolean(message?.metadata?.pendingSpilloverIds?.some(token => this.deferredSpillovers.has(token)));
+    /** True when `message` has at least one deferred spillover entry queued on this manager. */
+    public HasPending(message?: AgentChatMessage): boolean {
+        const meta = message?.metadata;
+        if (!meta) {
+            return false;
+        }
+        const entries = this.pendingByMetadata.get(meta);
+        return Boolean(entries && entries.length > 0);
     }
 
-    /** Discards all unmaterialized deferred spillover closures (called on run start/end). */
+    /** Discards all unmaterialized deferred spillover entries (called on run start/end). */
     public Clear(): void {
-        this.deferredSpillovers.clear();
+        this.pendingByMetadata.clear();
+    }
+
+    /**
+     * Moves any queued deferred spillover entries from `from` onto `to` (called when two adjacent
+     * native `role: 'tool'` turns are merged into a single provider-valid tool turn).
+     */
+    public TransferPending(
+        from: AgentChatMessageMetadata | undefined,
+        to: AgentChatMessageMetadata | undefined
+    ): void {
+        if (!from || !to || from === to) {
+            return;
+        }
+        const entries = this.pendingByMetadata.get(from);
+        if (!entries || entries.length === 0) {
+            return;
+        }
+        this.pendingByMetadata.delete(from);
+        const existing = this.pendingByMetadata.get(to);
+        if (existing) {
+            existing.push(...entries);
+        } else {
+            this.pendingByMetadata.set(to, [...entries]);
+        }
     }
 
     /**
@@ -972,7 +512,7 @@ export class ActionResultSpilloverManager {
         message: string | undefined,
         expirationConfig?: ResolvedActionExpirationConfig
     ): boolean {
-        const thresholds = ResolveActionSpilloverThresholds(expirationConfig);
+        const thresholds = ActionResultSpilloverManager.ResolveThresholds(expirationConfig);
         for (const param of outputParams) {
             if (isParamEligibleForSpillover(param, thresholds)) {
                 return true;
@@ -990,7 +530,7 @@ export class ActionResultSpilloverManager {
             trustLevel !== 'Trusted'
                 ? { trustLevel, sourceName: input.SourceName ?? `action:${input.ActionName}` }
                 : {};
-        const thresholds = ResolveActionSpilloverThresholds(input.ExpirationConfig);
+        const thresholds = ActionResultSpilloverManager.ResolveThresholds(input.ExpirationConfig);
         const tabular = buildTabularSpilloverArtifacts(
             input.ActionName,
             input.OutputParams,
@@ -1021,66 +561,63 @@ export class ActionResultSpilloverManager {
     }
 
     /**
-     * Defers artifact spillover registration until the inline message is compacted, removed, or
-     * recovered. Returns an opaque token stored on `metadata.pendingSpilloverIds`, or `undefined`
-     * when the output does not exceed spillover thresholds.
+     * Defers artifact spillover registration for `metadata` until the inline message is compacted,
+     * removed, or recovered. Returns `true` when queued, or `false` when the output is below
+     * spillover thresholds.
      */
     public QueueDeferred(
+        metadata: AgentChatMessageMetadata,
         input: ActionOutputSpilloverInput,
         artifactManager: ArtifactToolManager
-    ): string | undefined {
+    ): boolean {
         if (!this.WouldSpillOver(input.OutputParams, input.Message, input.ExpirationConfig)) {
-            return undefined;
+            return false;
         }
         const capturedInput: ActionOutputSpilloverInput = {
             ...input,
             OutputParams: input.OutputParams.map(param => ({ ...param })),
         };
-        const token = `spillover_${++deferredSpilloverSequence}_${Math.random().toString(36).slice(2, 10)}`;
-        this.deferredSpillovers.set(token, () =>
-            this.CollectCandidates(capturedInput).map(candidate => artifactManager.RegisterArtifact(candidate))
-        );
-        return token;
+        const entry: PendingSpilloverEntry = {
+            Input: capturedInput,
+            ArtifactManager: artifactManager,
+        };
+        const existing = this.pendingByMetadata.get(metadata);
+        if (existing) {
+            existing.push(entry);
+        } else {
+            this.pendingByMetadata.set(metadata, [entry]);
+        }
+        return true;
     }
 
     /**
-     * Materializes deferred spillovers owned by this manager from `message.metadata.pendingSpilloverIds`,
-     * populates `message.metadata.artifactIds`, and preserves any tokens owned by another run/parent.
+     * Materializes deferred spillovers tracked for `message.metadata`, populates
+     * `message.metadata.artifactIds`, and clears the consumed pending entries.
      */
     public Materialize(message?: AgentChatMessage): string[] {
-        const existing = message?.metadata?.artifactIds ?? [];
-        const pending = message?.metadata?.pendingSpilloverIds;
+        const meta = message?.metadata;
+        const existing = meta?.artifactIds ?? [];
+        if (!meta) {
+            return existing;
+        }
+        const pending = this.pendingByMetadata.get(meta);
         if (!pending || pending.length === 0) {
             return existing;
         }
+        this.pendingByMetadata.delete(meta);
 
         const materialized: string[] = [...existing];
-        const unconsumed: string[] = [];
-        for (const token of pending) {
-            const callback = this.deferredSpillovers.get(token);
-            if (callback) {
-                this.deferredSpillovers.delete(token);
-                for (const id of callback()) {
-                    if (!materialized.includes(id)) {
-                        materialized.push(id);
-                    }
+        for (const entry of pending) {
+            for (const candidate of this.CollectCandidates(entry.Input)) {
+                const id = entry.ArtifactManager.RegisterArtifact(candidate);
+                if (!materialized.includes(id)) {
+                    materialized.push(id);
                 }
-            } else {
-                unconsumed.push(token);
             }
         }
-
-        if (message?.metadata) {
-            if (unconsumed.length > 0) {
-                message.metadata.pendingSpilloverIds = unconsumed;
-            } else {
-                delete message.metadata.pendingSpilloverIds;
-            }
-            if (materialized.length > 0) {
-                message.metadata.artifactIds = materialized;
-            }
+        if (materialized.length > 0) {
+            meta.artifactIds = materialized;
         }
-
         return materialized;
     }
 

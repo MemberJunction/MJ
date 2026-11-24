@@ -1761,7 +1761,7 @@ export class ArtifactToolManager {
         settledData = rawData;
       } else if (result.success) {
         if (resultObj && resultObj['rlsCheckRequired'] === true) {
-          storedResult = await this.handleFollowSourceLinkRuntime(resultObj, activeRunIdForCall);
+          storedResult = await this.handleFollowSourceLinkRuntime(targetEntry, resultObj, activeRunIdForCall);
         } else if (resultObj && resultObj['requested'] === 'rerank') {
           storedResult = await this.handleRerankRuntime(targetEntry, resultObj, activeRunIdForCall);
         }
@@ -3630,21 +3630,27 @@ export class ArtifactToolManager {
       GovernedArtifactService.Instance.RecordTouchedArtifact(activeRunId, touchedSummary);
     }
 
-    return this.recordToolResult(call, startedAt, {
-      success: true,
-      data: {
-        changed: outcome.changed,
-        resultCode: outcome.resultCode,
-        artifactId: outcome.artifactId,
-        versionId: outcome.versionId ?? null,
-        versionNumber: outcome.versionNumber ?? null,
-        diffSummary: outcome.diffSummary ?? outcome.message,
-        signedFrozenBlocksCount: outcome.signedFrozenBlocksCount ?? 0,
+    return this.recordToolResult(
+      call,
+      startedAt,
+      {
+        success: true,
+        data: {
+          changed: outcome.changed,
+          resultCode: outcome.resultCode,
+          artifactId: outcome.artifactId,
+          versionId: outcome.versionId ?? null,
+          versionNumber: outcome.versionNumber ?? null,
+          diffSummary: outcome.diffSummary ?? outcome.message,
+          signedFrozenBlocksCount: outcome.signedFrozenBlocksCount ?? 0,
+        },
       },
-    });
+      openEntry,
+    );
   }
 
   private async handleFollowSourceLinkRuntime(
+    sourceEntry: ArtifactEntry,
     rawData: ArtifactToolArgs,
     activeRunId: string | undefined,
   ): Promise<ArtifactToolResult> {
@@ -3707,11 +3713,13 @@ export class ArtifactToolManager {
 
       const recordPayload = res.Results[0];
       const serializedRecord = JSON.stringify(recordPayload, null, 2);
+      const inheritedTrust = this.resolveCreationTrust([sourceEntry]);
       const registeredAlphaId = this.RegisterArtifact({
         name: `${entityName}: ${recordId.slice(0, 8)}`,
         typeName: 'JSON',
         content: serializedRecord,
         description: `Source record ${entityName} (${recordId}) opened via follow_source_link${activeRunId ? ` [run ${activeRunId}]` : ''}`,
+        ...inheritedTrust,
       });
 
       return {

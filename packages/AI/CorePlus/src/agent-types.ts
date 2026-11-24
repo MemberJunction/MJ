@@ -2853,12 +2853,6 @@ export type AgentChatMessageMetadata = {
      */
     artifactIds?: string[];
     /**
-     * Internal deferred spillover registration handle IDs resolved lazily by BaseAgent
-     * right before this message is compacted, stubbed, or removed, so routine uncompacted turns
-     * never mutate `_ARTIFACT_MANIFEST` in the system prompt or bust provider KV caches.
-     */
-    pendingSpilloverIds?: string[];
-    /**
      * True on the framework-authored trailing message that carries the loop agent's volatile
      * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the
      * final message of each request. It is appended to a COPY of the history for a
