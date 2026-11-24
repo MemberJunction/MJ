@@ -57,6 +57,11 @@ export interface ProcessActivityBatchResult {
   DuplicateCount: number;
   /** Events that failed. Their deduplication claim is released so a retry can process them. */
   ErrorCount: number;
+  /**
+   * Open and click hits from MJ's own routes whose tracking token matched no message log. They
+   * are dropped: not recorded, and not counted as errors.
+   */
+  UnmatchedCount?: number;
 }
 
 /** Result of {@link CommsActivityWorker.EraseEndpointPII}. */
@@ -110,6 +115,7 @@ export class CommsActivityWorker {
     let processedCount = 0;
     let errorCount = 0;
     let raceDuplicates = 0;
+    let unmatchedCount = 0;
     const processedEvents: NormalizedActivityEvent[] = [];
     const provider = this.getProvider();
     const transactional = isTransactionalProvider(provider) ? provider : undefined;
@@ -125,6 +131,14 @@ export class CommsActivityWorker {
         const preCorrelatedLog = !event.CommunicationProviderID
           ? await this.correlateEvent(event, contextUser)
           : undefined;
+        if (this.isUnmatchedTrackingHit(event, preCorrelatedLog)) {
+          if (inTx && transactional) {
+            await transactional.CommitTransaction();
+            inTx = false;
+          }
+          unmatchedCount++;
+          continue;
+        }
         if (event.ProviderEventID && event.CommunicationProviderID) {
           const claim = await this.claimProviderEvent(
             event.CommunicationProviderID,
@@ -173,7 +187,21 @@ export class CommsActivityWorker {
       ProcessedCount: processedCount,
       DuplicateCount: duplicateCount + raceDuplicates,
       ErrorCount: errorCount,
+      UnmatchedCount: unmatchedCount,
     };
+  }
+
+  /**
+   * True for an open or click hit from MJ's own routes whose tracking token matches no message
+   * log. Those routes accept a hit on its signature alone and leave the lookup to this worker, so
+   * a hit for a message that no longer exists arrives here. There is nothing to record it
+   * against, and it must not count as an error: an error makes the queue retry it for good.
+   */
+  private isUnmatchedTrackingHit(
+    event: NormalizedActivityEvent,
+    log: MJCommunicationLogEntity | undefined,
+  ): boolean {
+    return !log && !event.CommunicationProviderID && Boolean(event.TrackingToken);
   }
 
   /**

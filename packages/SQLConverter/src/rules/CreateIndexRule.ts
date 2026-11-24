@@ -20,16 +20,20 @@ export function ConvertDropIndex(sql: string): string | null {
 
 /**
  * Quote one entry of an index column list when PostgreSQL would otherwise fold it to lowercase:
- * a name with an upper-case letter, or one of MJ's `__mj_` columns. A trailing `ASC`/`DESC` stays
- * outside the quotes. Before, only an entry that was a bare identifier was quoted, so
- * `Name ASC` and `__mj_CreatedAt DESC` reached PostgreSQL unquoted (issue #5567).
+ * a name with an upper-case letter, or one of MJ's `__mj_` columns. A trailing sort modifier
+ * (`ASC`/`DESC`, optionally `NULLS FIRST|LAST`) stays outside the quotes. Before, only an entry that
+ * was a bare identifier was quoted, so `Name ASC`, `StartedAt DESC` and `__mj_CreatedAt DESC` reached
+ * PostgreSQL unquoted and the CREATE INDEX failed with `column "startedat" does not exist` (issue #5567).
+ *
+ * @param entry - One comma-separated entry, with its surrounding whitespace.
+ * @returns The entry with its identifier quoted, or unchanged when it needs no quoting.
  */
 export function QuoteIndexColumn(entry: string): string {
-  const m = entry.match(/^(\s*)([A-Za-z_]\w*)(\s+(?:ASC|DESC))?(\s*)$/i);
+  const m = entry.match(/^(\s*)([A-Za-z_]\w*)((?:\s+(?:ASC|DESC))?(?:\s+NULLS\s+(?:FIRST|LAST))?\s*)$/i);
   if (!m) return entry;
-  const [, lead, name, direction = '', trail] = m;
+  const [, lead, name, modifier] = m;
   if (!/[A-Z]/.test(name) && !/^__mj_/i.test(name)) return entry;
-  return `${lead}"${name}"${direction}${trail}`;
+  return `${lead}"${name}"${modifier}`;
 }
 
 export class CreateIndexRule implements IConversionRule {

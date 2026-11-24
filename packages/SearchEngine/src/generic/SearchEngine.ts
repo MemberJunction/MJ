@@ -66,7 +66,7 @@ import { RerankerBudgetGuard } from '../rerankers/RerankerBudgetGuard';
 import { RenderScopeTemplate, RenderScopeJsonTemplate } from './ScopeTemplateRenderer';
 import { LaneKindForIndexType } from './ScopeValueEscaper';
 import { CheckRenderedFolderPath, CheckRenderedTemplate, CheckRequiredMetadataKeys, ParseRequiredMetadataKeys } from './ScopeFilterGuard';
-import { ScopeDimensionResolver } from './ScopeDimensionResolver';
+import { ScopeDimensionResolverBase, GetScopeDimensionResolver } from './ScopeDimensionResolver';
 import {
     ScopeExplanation,
     ExplainScopeInput,
@@ -367,14 +367,14 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
     private _cache: Map<string, { result: SearchResult; expires: number }> = new Map();
 
-    private _dimensionResolver = new ScopeDimensionResolver();
-
     /**
-     * Resolver for a scope's declared Search Context dimensions. Overridable so a host can
-     * supply additional derivation sources (e.g. an external signal) without forking the engine.
+     * Resolver for a scope's declared Search Context dimensions. Defaults to the `ClassFactory`
+     * registration for {@link ScopeDimensionResolverBase} (via {@link GetScopeDimensionResolver}),
+     * and stays overridable on subclasses so a host can supply additional derivation sources
+     * without forking the engine.
      */
-    protected get dimensionResolver(): ScopeDimensionResolver {
-        return this._dimensionResolver;
+    protected get dimensionResolver(): ScopeDimensionResolverBase {
+        return GetScopeDimensionResolver();
     }
 
     /** Access the cached provider metadata from SearchEngineBase */

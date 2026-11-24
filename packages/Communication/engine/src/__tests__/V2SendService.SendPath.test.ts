@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessagePayload, RecipientSendTarget, SendingEnvelope, SendV2RecipientOutcome, SendV2Result } from '@memberjunction/communication-types';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { V2SendService, VerifyTrackingSignature } from '../V2SendService';
+import { V2SendService, VerifyOpenPixelSignature, VerifyTrackingSignature } from '../V2SendService';
 import {
   ENTITY,
   FakeSendProvider,
@@ -684,9 +684,11 @@ describe('V2SendService.Send — compliance injection and tracking', () => {
     expect(target).toBe('https://shop.example.org/offer?a=1&b=2');
     expect(VerifyTrackingSignature(clickToken, target, signature, HMAC_SECRET)).toBe(true);
 
-    // Open pixel carries the tracking token, never the unsubscribe token
-    const pixel = html.match(/<img src="https:\/\/app\.example\.org\/comms\/open\/([0-9a-fA-F-]+)\.gif"/);
+    // Open pixel carries the tracking token, never the unsubscribe token, and is signed so the
+    // open route can accept it without a lookup
+    const pixel = html.match(/<img src="https:\/\/app\.example\.org\/comms\/open\/([0-9a-fA-F-]+)\.gif\?sig=([a-f0-9]+)"/);
     expect(SameID(pixel?.[1], String(log?.TrackingToken))).toBe(true);
+    expect(VerifyOpenPixelSignature(pixel?.[1] ?? '', pixel?.[2] ?? '', HMAC_SECRET)).toBe(true);
 
     const decision = JSON.parse(String(log?.ComplianceDecision));
     expect(decision.Decision).toBe('Allowed');

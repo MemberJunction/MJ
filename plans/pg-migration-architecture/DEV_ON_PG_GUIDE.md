@@ -183,13 +183,15 @@ See `migrations-pg/V5_30_NOTES.md` for details. The tooling lives in `scripts/fi
 ### Operational note for existing PG dev environments
 Because we modified Flyway-tracked migration files, existing PG dev environments need a one-time `flyway repair` after pulling these changes — the file checksums have changed but the actual schema effects are identical (the previous `pg_cast` UPDATE was a no-op on environments that already had it).
 
-### Other things to validate before the first managed-PG install
-- **Extension allowlist**: We use `pgcrypto` and `uuid-ossp` (both on every major managed-PG allowlist). Audit before adding any new extension.
-- **Role hierarchy**: We `CREATE ROLE cdp_Developer/Integration/UI` — works on RDS as a regular user. Don't grant `SUPERUSER` to any role; managed PG won't allow it.
-- **SSL**: RDS forces TLS by default. The `DatabaseConnectionOptions.SSL` field on `PostgresProvider` config exists but the default has not been validated against RDS's certificate chain.
-- **Connection pool sizing**: RDS instance classes have hard `max_connections` ceilings. Audit `databaseSettings.connectionPool.max` in `mj.config.cjs` against the chosen instance.
-- **Performance tuning**: `work_mem`, `shared_buffers`, `effective_cache_size` etc. need RDS-parameter-group adjustments for production workloads.
-- **PG version**: We test against PG 16 + 18. RDS supports both; pick a version with our minimum (14+) headroom.
+### Settings for a managed PostgreSQL host
+- **TLS** (every MJ client: MJAPI, CodeGen, `mj migrate`, MetadataSync, pgvector): `PG_SSL_MODE` = `disable` | `require` | `verify-ca` | `verify-full`. Default: `disable` for `localhost` or a bare service name, `verify-full` for any other host. Point `PG_SSL_CA_FILE` at the provider's CA bundle when Node does not trust it (RDS: the region bundle; Azure's DigiCert/Microsoft roots are normally already in Node's store). `PG_SSL_SERVERNAME` overrides the name checked, e.g. behind Private Link. MJAPI also accepts `databaseSettings.postgres.ssl` in `mj.config.cjs`.
+- **Passwordless logins**: `PG_AUTH_MODE=azure-entra` (Azure Database for PostgreSQL, Azure HorizonDB; the login is the Entra principal created with `pgaadauth_create_principal`) or `aws-rds-iam` (RDS/Aurora; the login needs `rds_iam`). Install `@azure/identity` or `@aws-sdk/rds-signer` alongside. Token modes require `verify-ca` or `verify-full`.
+- **Before the first `mj migrate`**: run `mj doctor --db`. It checks the server version, the group roles and extensions the pending migrations need (and Azure's `azure.extensions` allowlist), the login's `CREATE` on the database, the schema owner, and TLS, and prints the SQL an administrator must run. `mj migrate` runs the same check first; `--skip-preflight` turns it off.
+- **Connections**: MJAPI opens an API pool (`connectionPool.max`, default 50), two read-only pools when a read-only login is set, and a CodeGen pool of 10. It warns at startup when that could exceed 80% of `max_connections`; set `connectionPool.expectedInstances` for a fleet.
+- **Read replicas**: `PG_READ_REPLICA_HOST` (and `PG_READ_REPLICA_PORT`) sends the ad-hoc read-only pool to a replica; `PG_READ_REPLICA_POOLS=all-read-only` sends application reads too, at the cost of read-your-writes.
+- **Role hierarchy**: the migrations GRANT to `cdp_Developer`, `cdp_Integration` and `cdp_UI`; create them (NOLOGIN) as an administrator. Never grant `SUPERUSER`; managed PG won't allow it.
+- **Performance tuning**: `work_mem`, `shared_buffers`, `effective_cache_size` etc. need parameter-group adjustments for production workloads.
+- **PG version**: 14 or later (16 and 18 are tested).
 
 ### What's known to work on managed PG today
 - Application-level PG (everything past `mj migrate` finishing) — the runtime, MJAPI, MJExplorer, CodeGen — uses only application-grade SQL that managed PG accepts.
