@@ -1,0 +1,47 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Feature Values",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Model Predictions View Gate"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Feature Values&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Feature Values",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Model Predictions View Gate"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Feature Values&RoleID=@lookup:MJ: Roles.Name=Developer&Type=Allow"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Feature Values",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Model Predictions View Gate"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Feature Values&RoleID=@lookup:MJ: Roles.Name=Integration&Type=Allow"
+    }
+  }
+]

@@ -3,7 +3,8 @@
  *
  * Builds the trainer request for one run from its Training Snapshot and Evaluation Protocol: the matrix and row
  * manifest as pre-authorised downloads carrying their stored SHA-256 (the sidecar verifies both before parsing), the
- * snapshot's feature-schema hash (copied from the snapshot row, never recomputed), the unit's task, the candidates, the
+ * snapshot's feature-schema hash (copied from the snapshot row, never recomputed), the verified incumbent with a download
+ * of its stored artifact when there is one (D4-93), the unit's task, the candidates, the
  * protocol's seed, one thread (so a seeded run is deterministic) and the protocol's compute budget as the timeout. The
  * snapshot's provenance file is not sent: the trainer does not read it.
  */
@@ -19,6 +20,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
+import type { TrainerIncumbent } from './trainer-incumbent';
 
 /** Everything one trainer request is built from. */
 export interface TrainerRequestInput {
@@ -28,6 +30,11 @@ export interface TrainerRequestInput {
     'ID' | 'ContentHash' | 'FeatureSchemaHash' | 'MatrixFileID' | 'MatrixSha256' | 'RowManifestFileID' | 'RowManifestSha256'
   >;
   readonly Files: ISnapshotFileStore;
+  /**
+   * The verified incumbent the run is compared with ({@link TrainerIncumbents}), or null for none (the protocol's rule
+   * is `none`, the pipeline has no Published model yet, or a retraining that replays a logged run).
+   */
+  readonly Incumbent: TrainerIncumbent | null;
   /** The protocol the run is judged under; whether it fits the unit is checked where training binds the two. */
   readonly Protocol: EvaluationProtocolSpec;
   readonly Task: TaskType;
@@ -51,15 +58,17 @@ export class TrainerRequestBuilder {
 
   /** The request for one run. */
   public static async BuildTrainerRequest(i: TrainerRequestInput): Promise<TrainerRequest> {
-    const [matrix, rowManifest] = await Promise.all([
+    const [matrix, rowManifest, incumbentArtifact] = await Promise.all([
       i.Files.CreatePreAuthDownload(i.Snapshot.MatrixFileID, i.Snapshot.MatrixSha256, i.Now),
       i.Files.CreatePreAuthDownload(i.Snapshot.RowManifestFileID, i.Snapshot.RowManifestSha256, i.Now),
+      // The incumbent's artifact is an `MJ: Files` row too: the same download path, issued by the provider its row names.
+      i.Incumbent === null ? Promise.resolve(null) : i.Files.CreatePreAuthDownload(i.Incumbent.FileID, i.Incumbent.Sha256, i.Now),
     ]);
     // `??` throughout: 0 is a real seed and a real retry bound, and a retrain replays it.
     return {
       trainingRunId: i.TrainingRunID,
       snapshot: { id: i.Snapshot.ID, contentHash: i.Snapshot.ContentHash, featureSchemaHash: i.Snapshot.FeatureSchemaHash, matrix, rowManifest },
-      incumbent: null,
+      incumbent: i.Incumbent === null || incumbentArtifact === null ? null : { modelId: i.Incumbent.ModelID, artifact: incumbentArtifact },
       protocol: i.Protocol,
       task: i.Task,
       candidates: i.Candidates,

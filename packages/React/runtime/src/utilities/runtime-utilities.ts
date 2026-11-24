@@ -334,9 +334,10 @@ export class RuntimeUtilities {
 
   /**
    * Scores records with a trained model by invoking the `PredictiveStudio.ScoreRecordSet` Remote
-   * Operation. Normalizes `records` to primary-key strings, requests ephemeral predictions (no
-   * write-back), and maps the result. Resilient — logs and returns a zeroed result with the input
-   * records counted as failed on any error.
+   * Operation. Normalizes `records` to primary-key strings, scores them with no binding (the model
+   * predicts and nothing is written), and maps the completed run: every record in its scope scored.
+   * Resilient — logs and returns a zeroed result with the input records counted as failed on a
+   * refused or failed run (its code and message name the refusal and the scoring run) or any error.
    */
   private async scoreMLRecords(
     provider: GraphQLDataProvider,
@@ -349,19 +350,19 @@ export class RuntimeUtilities {
       const input: PredictiveStudioScoreRecordSetInput = {
         modelId,
         scope: { records: keys }
-        // No writeBack → predictions are returned ephemerally.
+        // No bindingId → the model predicts; the predictions are returned and nothing is written.
       };
       const op = new PredictiveStudioScoreRecordSetOperation();
       const result = await op.Execute(input, { provider, user: options?.contextUser });
       if (!result.Success || !result.Output) {
-        console.error(`❌ score failed for model ${modelId}: ${result.ErrorMessage}`);
+        console.error(`❌ score failed for model ${modelId} (${result.ResultCode}): ${result.ErrorMessage}`);
         return { scoredCount: 0, failedCount: keys.length, skippedCount: 0, predictions: [] };
       }
       const out = result.Output;
       return {
-        scoredCount: out.scored,
-        failedCount: out.failed,
-        skippedCount: out.skipped,
+        scoredCount: out.total,
+        failedCount: 0,
+        skippedCount: 0,
         predictions: (out.predictions ?? []).map((p) => ({
           recordId: p.recordId,
           score: p.score,

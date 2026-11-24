@@ -251,6 +251,13 @@ class IntervalSpec(_Frozen):
     pairedTest: Literal["paired-bootstrap", "delong", "corrected-resampled-t", "diebold-mariano"]
 
 
+class RollbackTrigger(_Frozen):
+    """Core `RollbackTrigger` (`registry-contracts.ts`): the predecessor beats the current model for N periods."""
+    kind: Literal["previous-beats-current"]
+    margin: float = Field(ge=0)
+    consecutivePeriods: int = Field(ge=1)
+
+
 class PromotionRule(_Frozen):
     comparators: List[BaselineSpec]
     incumbent: Literal["current-published", "none"]
@@ -258,6 +265,12 @@ class PromotionRule(_Frozen):
     lowerBoundLevel: Level95
     pairedOn: Literal["same-holdout-rows"]
     decisionTable: Literal["Q13+Q14+Q15"]
+    # The four publish-side members (PR 4 D4-16, D4-17, D4-19). The engine sends the parsed protocol, whose parser
+    # fills each absent stored member with its default, so all four are always present; the trainer never reads them.
+    requiresHumanSignOff: bool
+    signOffExpiryDays: int = Field(ge=1)
+    autoPublishKeepBaseline: bool
+    rollbackOn: Optional[RollbackTrigger]
 
 
 class LeakageAuditSpec(_Frozen):
@@ -348,6 +361,9 @@ class ScheduledJobActor(_Frozen):
 class SystemActor(_Frozen):
     kind: Literal["system"]
     component: str
+    # Core `Actor`'s optional `processRunId` (the Record Process run of an auto-train initiator, PR 4 §5.1); the
+    # TypeScript member is optional, so here it may be absent.
+    processRunId: Optional[str] = None
 
 
 Actor = Annotated[Union[HumanActor, AgentActor, ScheduledJobActor, SystemActor], Field(discriminator="kind")]

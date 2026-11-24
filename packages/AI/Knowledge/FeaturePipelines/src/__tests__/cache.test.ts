@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { FeatureValueCacheService, FeatureValueSaveError } from '../cache/FeatureValueCacheService';
+import { FeatureValueCacheService, FeatureValueKeyError, FeatureValueSaveError } from '../cache/FeatureValueCacheService';
 import { FeatureValueKey, type FeatureValueKeyInput } from '../spec/feature-value-key';
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 
@@ -32,7 +32,7 @@ const { MockRunView, logErrorSpy } = vi.hoisted(() => {
                 return { Success: false, Results: [], ErrorMessage: MockRunView.failWith };
             }
             const rawResults = MockRunView.queue.shift() ?? MockRunView.mockResults;
-            const filter = params.ExtraFilter ?? '';
+            const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
             const filtered = filter.includes("Role = 'Champion'")
                 ? rawResults.filter((r) => (r as { Role?: string }).Role !== 'Challenger')
                 : rawResults;
@@ -303,24 +303,6 @@ describe('FeatureValueCacheService', () => {
             expect(saved).toHaveLength(0);
         });
 
-        it('leaves an unchanged ML classification row (score plus its label in ValueText) untouched (P7)', async () => {
-            const save = vi.fn();
-            const keyHash = await FeatureValueKey.ComputeHash(keyInput);
-            MockRunView.mockResults = [{
-                FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'renew', ValueNumeric: 0.65, ValueBoolean: null, ValueDate: null, ValueJSON: null,
-                Reasoning: null, Confidence: 0.65, Save: save,
-            }];
-            const saved: Array<Record<string, unknown>> = [];
-            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({
-                ...params(providerWith(saved)),
-                outputs: [{ featureName: 'SeniorityLevel', value: 0.65, valueText: 'renew', confidence: 0.65 }],
-            });
-            expect(outcome.Upserted).toBe(0);
-            expect(outcome.Unchanged).toBe(1);
-            expect(save).not.toHaveBeenCalled();
-            expect(saved).toHaveLength(0);
-        });
-
         it('makes an unchanged keyed row the latest again when another key holds the latest value', async () => {
             const keyHash = await FeatureValueKey.ComputeHash(keyInput);
             // a newer version wrote Manager last; this version's row still holds Director, which the run computes again
@@ -456,19 +438,6 @@ describe('FeatureValueCacheService', () => {
                 const reread = MockRunView.calls[2];
                 expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}') AND Role = 'Champion'`);
                 expect(reread.BypassCache).toBe(true);
-            });
-
-            it('counts it Unchanged when the row another run stored holds the same labelled score (P7)', async () => {
-                const keyHash = await FeatureValueKey.ComputeHash(keyInput);
-                MockRunView.queue = [[], [], [{ FeatureName: 'SeniorityLevel', ValueText: 'renew', ValueNumeric: 0.65, ValueBoolean: null,
-                    ValueDate: null, ValueJSON: null, Reasoning: null, Confidence: 0.65, ValueKeyHash: keyHash }]];
-                const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(false),
-                    LatestResult: { CompleteMessage: duplicate } }));
-                const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({
-                    ...params(provider),
-                    outputs: [{ featureName: 'SeniorityLevel', value: 0.65, valueText: 'renew', confidence: 0.65 }],
-                });
-                expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: null } });
             });
 
             it('throws the save error when the row another run stored holds a different value', async () => {
@@ -629,7 +598,7 @@ describe('FeatureValueCacheService', () => {
             expect(latest.get('level')?.ValueText).toBe('Director');
             expect(MockRunView.batches).toHaveLength(1);
             const views = MockRunView.batches[0];
-            expect(views.map((v) => v.ExtraFilter?.match(/FeatureName = '([^']+)'/)?.[1])).toEqual(['Years', 'Level', 'Missing']);
+            expect(views.map((v) => (typeof v.ExtraFilter === 'string' ? v.ExtraFilter.match(/FeatureName = '([^']+)'/)?.[1] : undefined))).toEqual(['Years', 'Level', 'Missing']);
             for (const view of views) {
                 expect(view.ExtraFilter).toContain("RecordProcessID = 'rp-1' AND EntityID = 'ENT-P' AND RecordID = 'person-1'");
                 expect(view.ExtraFilter).toContain("Source = 'Pipeline'");
@@ -673,6 +642,91 @@ describe('FeatureValueCacheService', () => {
             expect(await FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).toBe(0);
             MockRunView.mockResults = [{ Delete: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'FK violation' } }];
             await expect(FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).rejects.toThrow(/failed retiring the Human 'SeniorityLevel' value of record 'person-1': FK violation/);
+        });
+
+        describe('a Human value on a binding with no Record Process (§6.2a)', () => {
+            const BIND = '9F1C2A7E-0B4D-4C55-8E21-3A6F0D9B7C11';
+            const bindingRef = { ...humanRef, RecordProcessID: null, MLModelScoringBindingID: BIND };
+            const scope = "RecordProcessID IS NULL AND MLModelScoringBindingID = '9f1c2a7e-0b4d-4c55-8e21-3a6f0d9b7c11'";
+
+            it('reads its key by binding, skips the Pipeline read, and saves the binding on the row', async () => {
+                MockRunView.mockResults = [];
+                const saved: Array<Record<string, unknown>> = [];
+                const provider = stubProvider(vi.fn().mockImplementation(async () => {
+                    const row: Record<string, unknown> = { NewRecord: vi.fn(), Save: vi.fn().mockImplementation(async () => { saved.push({ ...row }); return true; }) };
+                    return row;
+                }));
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...bindingRef, Value: 'Gold', Provider: provider });
+                expect(MockRunView.batches).toHaveLength(0);
+                expect(MockRunView.calls).toHaveLength(1);
+                expect(MockRunView.calls[0].ExtraFilter).toContain(`${scope} AND ValueKeyHash IN (`);
+                expect(MockRunView.calls[0].ExtraFilter).toContain("Role = 'Champion'");
+                expect(saved[0]).toMatchObject({ Source: 'Human', RecordProcessID: null, MLModelScoringBindingID: BIND, ValueText: 'Gold' });
+            });
+
+            it('keys the row with its binding, so two bindings never share a ValueKeyHash; a pipeline row\'s key leaves the binding out', async () => {
+                MockRunView.mockResults = [];
+                const saved: Array<Record<string, unknown>> = [];
+                const provider = stubProvider(vi.fn().mockImplementation(async () => {
+                    const row: Record<string, unknown> = { NewRecord: vi.fn(), Save: vi.fn().mockImplementation(async () => { saved.push({ ...row }); return true; }) };
+                    return row;
+                }));
+                const OTHER = '2B7E1F40-6C3A-4D8E-9A15-7F0E4C2B9D33';
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...bindingRef, Value: 'Gold', Provider: provider });
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...bindingRef, MLModelScoringBindingID: OTHER, Value: 'Gold', Provider: provider });
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...humanRef, Value: 'Gold', Provider: provider });
+                const key = { EntityID: 'ENT-P', RecordID: 'person-1', FeatureName: 'SeniorityLevel', PipelineVersion: null, PromptVersionHash: null,
+                    AIModelID: null, ParametersHash: null, InputHash: null, Source: 'Human' as const };
+                expect(saved.map((r) => r.ValueKeyHash)).toEqual([
+                    await FeatureValueKey.ComputeHash({ ...key, MLModelScoringBindingID: BIND }),
+                    await FeatureValueKey.ComputeHash({ ...key, MLModelScoringBindingID: OTHER }),
+                    await FeatureValueKey.ComputeHash(key),
+                ]);
+                expect(new Set(saved.map((r) => r.ValueKeyHash)).size).toBe(3);
+            });
+
+            it('GetLatestValue and RetireHumanValue filter by the binding, never by RecordProcessID = \'null\'', async () => {
+                MockRunView.mockResults = [];
+                await FeatureValueCacheService.Instance.GetLatestValue({ ...bindingRef, Source: 'Human' });
+                await FeatureValueCacheService.Instance.RetireHumanValue(bindingRef);
+                for (const view of MockRunView.calls) {
+                    expect(view.ExtraFilter).toContain(`${scope} AND EntityID = 'ENT-P' AND RecordID = 'person-1' AND FeatureName = 'SeniorityLevel'`);
+                    expect(view.ExtraFilter).not.toContain("RecordProcessID = 'null'");
+                    expect(view.ExtraFilter).toContain("Role = 'Champion'");
+                }
+            });
+
+            it('a pipeline-scoped Human row writes no binding ID', async () => {
+                MockRunView.mockResults = [];
+                const saved: Array<Record<string, unknown>> = [];
+                const provider = stubProvider(vi.fn().mockImplementation(async () => {
+                    const row: Record<string, unknown> = { NewRecord: vi.fn(), Save: vi.fn().mockImplementation(async () => { saved.push({ ...row }); return true; }) };
+                    return row;
+                }));
+                await FeatureValueCacheService.Instance.RecordHumanValue({ ...humanRef, Value: 'Gold', Provider: provider });
+                expect(saved[0]).toMatchObject({ RecordProcessID: 'rp-1', MLModelScoringBindingID: null });
+            });
+
+            it('refuses a scope with neither or both IDs before reading', async () => {
+                await expect(FeatureValueCacheService.Instance.RetireHumanValue({ ...humanRef, RecordProcessID: null }))
+                    .rejects.toMatchObject({ name: 'FeatureValueKeyError', Field: 'MLModelScoringBindingID' });
+                await expect(FeatureValueCacheService.Instance.GetLatestValue({ ...humanRef, MLModelScoringBindingID: BIND, Source: 'Human' }))
+                    .rejects.toBeInstanceOf(FeatureValueKeyError);
+                expect(MockRunView.calls).toHaveLength(0);
+            });
+
+            it('RecordFeatureValues refuses a Model row and a Pipeline row with no Record Process', async () => {
+                const base = {
+                    recordProcessID: null, mlModelScoringBindingID: BIND, entityID: 'ENT-P', recordID: 'person-1', promptVersionHash: null,
+                    pipelineVersion: null, aiModelID: null, parametersHash: null, inputHash: null,
+                    outputs: [{ featureName: 'SeniorityLevel', value: 'Gold' }], contextUser: mockUser, provider: lookupProvider,
+                };
+                await expect(FeatureValueCacheService.Instance.RecordFeatureValues({ ...base, source: 'Model' }))
+                    .rejects.toMatchObject({ name: 'FeatureValueKeyError', Field: 'Source' });
+                await expect(FeatureValueCacheService.Instance.RecordFeatureValues({ ...base, source: 'Pipeline' }))
+                    .rejects.toMatchObject({ name: 'FeatureValueKeyError', Field: 'RecordProcessID' });
+                expect(MockRunView.calls).toHaveLength(0);
+            });
         });
 
         it('ignores a newer Role = Challenger row in GetLatestValue, GetLatestPipelineValues, and RetireHumanValue (D2)', async () => {

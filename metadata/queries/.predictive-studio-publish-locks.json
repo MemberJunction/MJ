@@ -1,0 +1,208 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Pipeline For Publish",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Lock this training pipeline so no other publish of it can run until my transaction ends, or tell me at once that another publish holds it.",
+      "Description": "Takes an update lock on one MJ: ML Training Pipelines row for the rest of the caller's transaction, serialising every publish of that pipeline. NOWAIT: when another transaction holds the lock it fails at once, and the Predictive Studio lifecycle gate waits up to 30 s by retrying.",
+      "SQL": "@file:SQL/predictive-studio-lock-pipeline.sql",
+      "TechnicalDescription": "SELECT ID FROM MLTrainingPipeline WITH (UPDLOCK, HOLDLOCK, NOWAIT) WHERE ID = PipelineID. Must run inside the caller's transaction on the caller's provider: the update and key-range locks are held until commit or rollback (a missing ID is range-locked too and returns no row). NOWAIT never waits: a held lock raises SQL Server error 1222 immediately; the lifecycle gate (LockPipelineAndModel) waits up to 30 s by retrying on 1222 with backoff, then refuses publish-in-progress (transient; D4-91). Single statement, as the platform's safety gate requires. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "B836D110-3B25-4D5D-8143-F9B4C60E92A5"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "PipelineID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Training Pipelines row to lock.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "731C5192-A681-46F8-B510-08C777D5B149"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Model For Publish",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Lock this model and tell me its current status, so I can check it is still in the state I expect before I change it, or tell me at once that another transition holds it.",
+      "Description": "Takes an update lock on one MJ: ML Models row for the rest of the caller's transaction and returns its Status; the Predictive Studio lifecycle gate refuses a transition unless it equals the expected from-state. NOWAIT: a held lock fails at once, and the lifecycle gate waits up to 30 s by retrying.",
+      "SQL": "@file:SQL/predictive-studio-lock-model.sql",
+      "TechnicalDescription": "SELECT Status FROM MLModel WITH (UPDLOCK, HOLDLOCK, NOWAIT) WHERE ID = ModelID. Must run inside the caller's transaction on the caller's provider, after the pipeline lock for a publish (D-020): the update and key-range locks are held until commit or rollback, so no other gate transition of the model interleaves. NOWAIT never waits: a held lock raises SQL Server error 1222 immediately; the lifecycle gate (LockPipelineAndModel) waits up to 30 s by retrying on 1222 with backoff, then refuses publish-in-progress (transient; D4-91). Returns one row when the model exists, none otherwise. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "D32FFABA-5191-4836-B769-EAEBB90779C0"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "ModelID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Models row to lock and read.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9F645A4B-CE90-46F0-AAB9-61952C66FE52"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Next Model Version",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "What version number should the next model of this training pipeline get?",
+      "Description": "Returns the next MJ: ML Models version for one training pipeline (the highest existing version plus one, or 1 for a pipeline with no models), holding the pipeline's model range locked so concurrent trainings receive distinct versions. Runs after the caller holds the pipeline lock, so it does not wait.",
+      "SQL": "@file:SQL/predictive-studio-next-model-version.sql",
+      "TechnicalDescription": "SELECT COALESCE(MAX(Version), 0) + 1 AS NextVersion FROM MLModel WITH (UPDLOCK, HOLDLOCK) WHERE PipelineID = PipelineID. Must run inside the caller's transaction after Predictive Studio: Lock Pipeline For Publish has locked the pipeline: every allocation for the pipeline is serialised behind that lock, so this read never waits (no NOWAIT needed); the key-range locks on the pipeline's models are held until commit or rollback, so two allocations cannot read the same maximum. Always returns exactly one row. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "46A5A870-4507-4846-BCCB-9BC4B9B41A97"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "PipelineID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Training Pipelines row whose next model version to allocate.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7D762D4F-434A-4BEE-B757-C4AABBD2ECFD"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Running Training Run",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Is a training run of this pipeline in flight right now, and if so which one?",
+      "Description": "Returns the newest MJ: ML Training Runs row of one training pipeline whose Status is Running and that started after the given instant, or no row. Predictive Studio auto-train reads it under the pipeline lock to claim the pipeline for one training at a time (single-flight, D4-12): a run in flight means another training owns the pipeline.",
+      "SQL": "@file:SQL/predictive-studio-running-training-run.sql",
+      "TechnicalDescription": "SELECT TOP 1 ID, StartedAt FROM MLTrainingRun WHERE PipelineID = PipelineID AND Status = 'Running' AND StartedAt > StartedAfter ORDER BY StartedAt DESC. Runs inside the caller's transaction after Predictive Studio: Lock Pipeline For Publish has locked the pipeline, so two claims of one pipeline read it in turn and the second sees the run row the first committed (TrainingClaims.ClaimPipeline). StartedAfter is an ISO 8601 UTC instant (now minus the stale threshold, 6 h by default): an older Running row is a stale claim and does not block. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "49A6D777-CCE3-4B21-940B-8CA2E19AB2A6"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "PipelineID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Training Pipelines row whose in-flight training run to read.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "060DF1C0-F56D-4E56-97A3-2DAD6C104026"
+          }
+        },
+        {
+          "fields": {
+            "Name": "StartedAfter",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2026-11-16T06:00:00.000Z",
+            "Description": "An ISO 8601 UTC instant: only a Running run that started after it counts as in flight (the caller passes now minus the stale threshold).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B302A357-F999-4D41-9B68-DAE2A0F48DF9"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Scoring Binding For Batch",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Hold this scoring binding for my scoring batch and tell me its current status, so a withdrawal cannot clear the binding's predictions while my batch is still writing them.",
+      "Description": "Takes a shared lock on one MJ: ML Model Scoring Bindings row for the rest of the caller's transaction and returns its Status. Predictive Studio's scoring service runs it first in every writing batch and stops the run when the binding is Withdrawn; a withdrawal waits for the batches in flight.",
+      "SQL": "@file:SQL/predictive-studio-lock-scoring-binding-for-batch.sql",
+      "TechnicalDescription": "SELECT Status FROM MLModelScoringBinding WITH (HOLDLOCK) WHERE ID = BindingID. Must run inside the caller's transaction on the caller's provider: the shared (and key-range) lock is held until commit or rollback, and HOLDLOCK makes it a locking read under READ_COMMITTED_SNAPSHOT too. ScoringBindings.Withdraw updates the row's Status first in its own transaction, so it waits for every batch holding the lock and its clearing of the binding's values and copies sees what they wrote (review R5, D4-289). Shared locks are compatible: concurrent runs of one binding do not serialise. Returns one row when the binding exists, none otherwise. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "0CEE54E6-B15E-4874-9836-6BE6F47CD54D"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "BindingID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Model Scoring Bindings row to lock and read.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0A740E41-805A-4DE7-A3FB-AF98873B6858"
+          }
+        }
+      ]
+    }
+  }
+]
