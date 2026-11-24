@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ng-shared
 
+## 5.51.5
+
+### Patch Changes
+
+- Updated dependencies [a1af21d]
+- Updated dependencies [5115043]
+  - @memberjunction/core@5.51.5
+  - @memberjunction/ai-engine-base@5.51.5
+  - @memberjunction/ai-core-plus@5.51.5
+  - @memberjunction/ng-base-application@5.51.5
+  - @memberjunction/ng-base-types@5.51.5
+  - @memberjunction/ng-notifications@5.51.5
+  - @memberjunction/ng-shared-generic@5.51.5
+  - @memberjunction/entity-communications-base@5.51.5
+  - @memberjunction/graphql-dataprovider@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

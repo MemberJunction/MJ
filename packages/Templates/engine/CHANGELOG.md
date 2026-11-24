@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/templates
 
+## 5.51.5
+
+### Patch Changes
+
+- Updated dependencies [a1af21d]
+- Updated dependencies [5115043]
+  - @memberjunction/core@5.51.5
+  - @memberjunction/ai-core-plus@5.51.5
+  - @memberjunction/aiengine@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/templates-base-types@5.51.5
+  - @memberjunction/ai-provider-bundle@5.51.5
+  - @memberjunction/ai@5.51.5
+  - @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

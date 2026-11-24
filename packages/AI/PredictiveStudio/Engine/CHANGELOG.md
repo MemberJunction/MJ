@@ -1,5 +1,24 @@
 # @memberjunction/predictive-studio
 
+## 5.51.5
+
+### Patch Changes
+
+- Updated dependencies [a1af21d]
+- Updated dependencies [5115043]
+  - @memberjunction/core@5.51.5
+  - @memberjunction/ai-agents@5.51.5
+  - @memberjunction/ai-core-plus@5.51.5
+  - @memberjunction/actions-base@5.51.5
+  - @memberjunction/actions@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/record-set-processor-base@5.51.5
+  - @memberjunction/record-set-processor@5.51.5
+  - @memberjunction/ai@5.51.5
+  - @memberjunction/predictive-studio-core@5.51.5
+  - @memberjunction/predictive-studio-sidecar@5.51.5
+  - @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

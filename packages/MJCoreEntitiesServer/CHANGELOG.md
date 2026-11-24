@@ -1,5 +1,37 @@
 # @memberjunction/core-entities-server
 
+## 5.51.5
+
+### Patch Changes
+
+- Updated dependencies [a1af21d]
+- Updated dependencies [1db5794]
+- Updated dependencies [5115043]
+  - @memberjunction/core@5.51.5
+  - @memberjunction/generic-database-provider@5.51.5
+  - @memberjunction/ai-engine-base@5.51.5
+  - @memberjunction/ai-core-plus@5.51.5
+  - @memberjunction/aiengine@5.51.5
+  - @memberjunction/tag-engine@5.51.5
+  - @memberjunction/ai-prompts@5.51.5
+  - @memberjunction/ai-vectordb@5.51.5
+  - @memberjunction/ai-vector-dupe@5.51.5
+  - @memberjunction/ai-vectors-memory@5.51.5
+  - @memberjunction/actions-base@5.51.5
+  - @memberjunction/doc-utils@5.51.5
+  - @memberjunction/integration-engine@5.51.5
+  - @memberjunction/integration-pk-classifier@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/sqlserver-dataprovider@5.51.5
+  - @memberjunction/scheduling-engine@5.51.5
+  - @memberjunction/ai-provider-bundle@5.51.5
+  - @memberjunction/ai@5.51.5
+  - @memberjunction/predictive-studio-core@5.51.5
+  - @memberjunction/global@5.51.5
+  - @memberjunction/sql-converter@5.51.5
+  - @memberjunction/sql-dialect@5.51.5
+  - @memberjunction/sql-parser@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

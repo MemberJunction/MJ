@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 5.51.5
+
+### Patch Changes
+
+- @memberjunction/ai@5.51.5
+- @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @memberjunction/ai-llamacpp
 
+## 5.51.5
+
+### Patch Changes
+
+- @memberjunction/ai@5.51.5
+- @memberjunction/ai-openai@5.51.5
+- @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

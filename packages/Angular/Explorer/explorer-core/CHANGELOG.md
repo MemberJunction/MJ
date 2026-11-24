@@ -1,5 +1,63 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.51.5
+
+### Patch Changes
+
+- 451b3a7: Backport to 5.x: `mj-dropdown` gains `AriaLabel`, `AriaLabelledBy`, `InputId` and `AriaDescribedBy` (applied to the trigger and the popup listbox, and composed into the filter box's name), points `aria-controls` at its listbox while open, and leaves the tab order when disabled. The filter box placeholder reads "Filter..." instead of "Search...". The shell's global search dropdown is named "Search in" (#4337).
+- Updated dependencies [a1af21d]
+- Updated dependencies [451b3a7]
+- Updated dependencies [5115043]
+  - @memberjunction/core@5.51.5
+  - @memberjunction/ng-ui-components@5.51.5
+  - @memberjunction/ng-dashboards@5.51.5
+  - @memberjunction/ai-engine-base@5.51.5
+  - @memberjunction/ai-core-plus@5.51.5
+  - @memberjunction/ng-auth-services@5.51.5
+  - @memberjunction/ng-base-application@5.51.5
+  - @memberjunction/ng-entity-form-dialog@5.51.5
+  - @memberjunction/ng-entity-permissions@5.51.5
+  - @memberjunction/ng-explorer-settings@5.51.5
+  - @memberjunction/ng-list-detail-grid@5.51.5
+  - @memberjunction/ng-shared@5.51.5
+  - @memberjunction/ng-ai-test-harness@5.51.5
+  - @memberjunction/ng-artifacts@5.51.5
+  - @memberjunction/ng-base-forms@5.51.5
+  - @memberjunction/ng-base-types@5.51.5
+  - @memberjunction/ng-composer@5.51.5
+  - @memberjunction/ng-container-directives@5.51.5
+  - @memberjunction/ng-conversations@5.51.5
+  - @memberjunction/ng-dashboard-viewer@5.51.5
+  - @memberjunction/ng-entity-viewer@5.51.5
+  - @memberjunction/ng-feedback@5.51.5
+  - @memberjunction/ng-file-storage@5.51.5
+  - @memberjunction/ng-list-management@5.51.5
+  - @memberjunction/ng-mj-livekit-room@5.51.5
+  - @memberjunction/ng-notifications@5.51.5
+  - @memberjunction/ng-query-viewer@5.51.5
+  - @memberjunction/ng-record-changes@5.51.5
+  - @memberjunction/ng-record-selector@5.51.5
+  - @memberjunction/ng-record-tags@5.51.5
+  - @memberjunction/ng-resource-permissions@5.51.5
+  - @memberjunction/ng-search@5.51.5
+  - @memberjunction/ng-shared-generic@5.51.5
+  - @memberjunction/ng-user-avatar@5.51.5
+  - @memberjunction/communication-types@5.51.5
+  - @memberjunction/entity-communications-client@5.51.5
+  - @memberjunction/graphql-dataprovider@5.51.5
+  - @memberjunction/interactive-component-types@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/templates-base-types@5.51.5
+  - @memberjunction/ng-generic-dialog@5.51.5
+  - @memberjunction/ng-export-service@5.51.5
+  - @memberjunction/ng-markdown@5.51.5
+  - @memberjunction/ng-pagination@5.51.5
+  - @memberjunction/ng-word-cloud@5.51.5
+  - @memberjunction/lists-base@5.51.5
+  - @memberjunction/export-engine@5.51.5
+  - @memberjunction/global@5.51.5
+  - @memberjunction/theme-engine@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

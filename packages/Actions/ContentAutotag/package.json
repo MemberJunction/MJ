@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions-content-autotag",
   "type": "module",
-  "version": "5.51.4",
+  "version": "5.51.5",
   "description": "Action classes that execute the content autotagging and vectorization actions.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,14 +22,14 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/actions": "5.51.4",
-    "@memberjunction/actions-base": "5.51.4",
-    "@memberjunction/content-autotagging": "5.51.4",
-    "@memberjunction/core": "5.51.4",
-    "@memberjunction/core-actions": "5.51.4",
-    "@memberjunction/core-entities": "5.51.4",
-    "@memberjunction/global": "5.51.4",
-    "@memberjunction/ai-vector-sync": "5.51.4",
+    "@memberjunction/actions": "5.51.5",
+    "@memberjunction/actions-base": "5.51.5",
+    "@memberjunction/content-autotagging": "5.51.5",
+    "@memberjunction/core": "5.51.5",
+    "@memberjunction/core-actions": "5.51.5",
+    "@memberjunction/core-entities": "5.51.5",
+    "@memberjunction/global": "5.51.5",
+    "@memberjunction/ai-vector-sync": "5.51.5",
     "axios": "^1.13.4"
   },
   "repository": {

@@ -1,5 +1,20 @@
 # @memberjunction/ng-action-gallery
 
+## 5.51.5
+
+### Patch Changes
+
+- Updated dependencies [a1af21d]
+- Updated dependencies [451b3a7]
+- Updated dependencies [5115043]
+  - @memberjunction/core@5.51.5
+  - @memberjunction/ng-ui-components@5.51.5
+  - @memberjunction/ng-ai-test-harness@5.51.5
+  - @memberjunction/ng-container-directives@5.51.5
+  - @memberjunction/ng-shared-generic@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

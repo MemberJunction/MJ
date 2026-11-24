@@ -1,5 +1,53 @@
 # @memberjunction/integration-test-suite
 
+## 5.51.5
+
+### Patch Changes
+
+- a1af21d: Backport: API-key scope, application and key-binding rows are re-read from the database every `scopeCacheTTLMs` (default 60 s), so a scope removed or an application deactivated by another process stops granting within one TTL instead of at restart. The refresh rebuilds the engine's lookup maps. A `BaseEngine` expiry tick now reads the database instead of the server cache, a failed tick re-arms the timer instead of ending the refresh, a failed first load still starts it, setting the interval to 0 stops it, and expiry timers no longer keep a Node process alive.
+- Updated dependencies [a1af21d]
+- Updated dependencies [5115043]
+  - @memberjunction/api-keys@5.51.5
+  - @memberjunction/core@5.51.5
+  - @memberjunction/ai-agents@5.51.5
+  - @memberjunction/ai-engine-base@5.51.5
+  - @memberjunction/ai-core-plus@5.51.5
+  - @memberjunction/aiengine@5.51.5
+  - @memberjunction/predictive-studio@5.51.5
+  - @memberjunction/ai-prompts@5.51.5
+  - @memberjunction/ai-bridge-base@5.51.5
+  - @memberjunction/ai-bridge-server@5.51.5
+  - @memberjunction/actions-base@5.51.5
+  - @memberjunction/actions@5.51.5
+  - @memberjunction/codegen-lib@5.51.5
+  - @memberjunction/communication-types@5.51.5
+  - @memberjunction/communication-engine@5.51.5
+  - @memberjunction/notifications@5.51.5
+  - @memberjunction/communication-ms-graph@5.51.5
+  - @memberjunction/communication-expo-push@5.51.5
+  - @memberjunction/communication-gmail@5.51.5
+  - @memberjunction/communication-sendgrid@5.51.5
+  - @memberjunction/communication-twilio@5.51.5
+  - @memberjunction/content-autotagging@5.51.5
+  - @memberjunction/conversations-runtime@5.51.5
+  - @memberjunction/graphql-dataprovider@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/metadata-sync@5.51.5
+  - @memberjunction/open-app-engine@5.51.5
+  - @memberjunction/query-processor@5.51.5
+  - @memberjunction/record-set-processor-base@5.51.5
+  - @memberjunction/record-set-processor@5.51.5
+  - @memberjunction/redis-provider@5.51.5
+  - @memberjunction/sqlserver-dataprovider@5.51.5
+  - @memberjunction/scheduling-engine@5.51.5
+  - @memberjunction/search-engine@5.51.5
+  - @memberjunction/templates-base-types@5.51.5
+  - @memberjunction/templates@5.51.5
+  - @memberjunction/testing-integration@5.51.5
+  - @memberjunction/ai@5.51.5
+  - @memberjunction/predictive-studio-core@5.51.5
+  - @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

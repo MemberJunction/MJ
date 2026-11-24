@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.51.5
+
+### Patch Changes
+
+- Updated dependencies [a1af21d]
+- Updated dependencies [451b3a7]
+- Updated dependencies [5115043]
+  - @memberjunction/core@5.51.5
+  - @memberjunction/ng-ui-components@5.51.5
+  - @memberjunction/ai-engine-base@5.51.5
+  - @memberjunction/ai-core-plus@5.51.5
+  - @memberjunction/actions-base@5.51.5
+  - @memberjunction/ng-base-application@5.51.5
+  - @memberjunction/ng-link-directives@5.51.5
+  - @memberjunction/ng-shared@5.51.5
+  - @memberjunction/ng-testing@5.51.5
+  - @memberjunction/ng-action-gallery@5.51.5
+  - @memberjunction/ng-actions@5.51.5
+  - @memberjunction/ng-agents@5.51.5
+  - @memberjunction/ng-ai-test-harness@5.51.5
+  - @memberjunction/ng-base-forms@5.51.5
+  - @memberjunction/ng-base-types@5.51.5
+  - @memberjunction/ng-code-editor@5.51.5
+  - @memberjunction/ng-deep-diff@5.51.5
+  - @memberjunction/ng-entity-relationship-diagram@5.51.5
+  - @memberjunction/ng-entity-viewer@5.51.5
+  - @memberjunction/ng-flow-editor@5.51.5
+  - @memberjunction/ng-join-grid@5.51.5
+  - @memberjunction/ng-list-management@5.51.5
+  - @memberjunction/ng-notifications@5.51.5
+  - @memberjunction/ng-record-process-studio@5.51.5
+  - @memberjunction/ng-resource-permissions@5.51.5
+  - @memberjunction/ng-search@5.51.5
+  - @memberjunction/ng-shared-generic@5.51.5
+  - @memberjunction/ng-timeline@5.51.5
+  - @memberjunction/ng-trees@5.51.5
+  - @memberjunction/ng-versions@5.51.5
+  - @memberjunction/graphql-dataprovider@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/templates-base-types@5.51.5
+  - @memberjunction/ng-tabstrip@5.51.5
+  - @memberjunction/ai@5.51.5
+  - @memberjunction/ng-markdown@5.51.5
+  - @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

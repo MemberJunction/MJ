@@ -1,5 +1,17 @@
 # @memberjunction/api-keys
 
+## 5.51.5
+
+### Patch Changes
+
+- a1af21d: Backport: API-key scope, application and key-binding rows are re-read from the database every `scopeCacheTTLMs` (default 60 s), so a scope removed or an application deactivated by another process stops granting within one TTL instead of at restart. The refresh rebuilds the engine's lookup maps. A `BaseEngine` expiry tick now reads the database instead of the server cache, a failed tick re-arms the timer instead of ending the refresh, a failed first load still starts it, setting the interval to 0 stops it, and expiry timers no longer keep a Node process alive.
+- Updated dependencies [a1af21d]
+- Updated dependencies [5115043]
+  - @memberjunction/api-keys-base@5.51.5
+  - @memberjunction/core@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 5.51.5
+
+### Patch Changes
+
+- a1af21d: Backport: API-key scope, application and key-binding rows are re-read from the database every `scopeCacheTTLMs` (default 60 s), so a scope removed or an application deactivated by another process stops granting within one TTL instead of at restart. The refresh rebuilds the engine's lookup maps. A `BaseEngine` expiry tick now reads the database instead of the server cache, a failed tick re-arms the timer instead of ending the refresh, a failed first load still starts it, setting the interval to 0 stops it, and expiry timers no longer keep a Node process alive.
+- 5115043: Updates are now checked against row-level security with their new values as well as the stored row. A user whose Update permission carries a row-level security filter could open a row they were allowed to edit, change the column the filter tests (for example the organization), and save it, moving the row out of their scope. That save is now refused with "the requested changes would move this record outside your permitted row scope". Saves that keep the row in scope behave as before. (#5783)
+
+  The row these checks test (the Update check above and the existing Create check) now includes NULL columns as typed `CAST(NULL AS <type>)`, mapped through the provider's SQL dialect. Before, a NULL column was left out, so a filter that referred to it failed with `Invalid column name` instead of evaluating; with the Update check that would have broken in-scope saves for users whose filters are joined with OR (two filtered roles) when a column in another branch is NULL.
+  - @memberjunction/global@5.51.5
+  - @memberjunction/sql-dialect@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes

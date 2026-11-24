@@ -1,5 +1,20 @@
 # @memberjunction/ai-knowledge-pipeline
 
+## 5.51.5
+
+### Patch Changes
+
+- Updated dependencies [a1af21d]
+- Updated dependencies [5115043]
+  - @memberjunction/core@5.51.5
+  - @memberjunction/aiengine@5.51.5
+  - @memberjunction/ai-vectors@5.51.5
+  - @memberjunction/ai-vectordb@5.51.5
+  - @memberjunction/ai-vector-sync@5.51.5
+  - @memberjunction/core-entities@5.51.5
+  - @memberjunction/ai@5.51.5
+  - @memberjunction/global@5.51.5
+
 ## 5.51.4
 
 ### Patch Changes
