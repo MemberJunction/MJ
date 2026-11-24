@@ -254,6 +254,16 @@ const mcpServerInfoSchema = z.object({
    * proxy's per-IP rate limit. Leave unset when clients connect directly.
    */
   trustProxy: TrustProxySettingSchema.optional(),
+  /**
+   * Idle timeout (ms) after which an unused Streamable HTTP session is closed and released.
+   * Defaults to 24 hours (`86_400_000`). Set to `0` to disable idle session expiration.
+   */
+  sessionIdleTtlMs: z.number().nonnegative().optional(),
+  /**
+   * Interval (ms) between background sweeps for idle Streamable HTTP sessions.
+   * Defaults to 5 minutes (`300_000`).
+   */
+  sessionSweepIntervalMs: z.number().nonnegative().optional(),
 });
 
 const configInfoSchema = z.object({
