@@ -38,7 +38,7 @@ export interface TargetTableConfig {
     TableName: string;
     /** MJ entity display name (e.g., "HubSpot Deal", "YM Member"). */
     EntityName: string;
-    /** Human-readable description for the table (emitted as sp_addextendedproperty). */
+    /** Human-readable description for the table (emitted as MS_Description on SQL Server and COMMENT ON TABLE on PostgreSQL). */
     Description?: string;
     /**
      * Primary key field name(s) from the source system.
@@ -75,7 +75,7 @@ export interface TargetColumnConfig {
     Scale: number | null;
     /** Default value SQL expression (null if none). */
     DefaultValue: string | null;
-    /** Human-readable description for the column (emitted as sp_addextendedproperty). */
+    /** Human-readable description for the column (emitted as MS_Description on SQL Server and COMMENT ON COLUMN on PostgreSQL). */
     Description?: string;
 }
 
