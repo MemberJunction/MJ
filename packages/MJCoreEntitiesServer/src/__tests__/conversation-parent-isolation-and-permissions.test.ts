@@ -1155,4 +1155,28 @@ describe('Epic 4a Slice 1 (AC-2): Conversation Sharing & ParentID Authorization 
         expect(unredacted.Parent).toBe('Parent Thread' ? 'Secret Parent Title' : 'Secret Parent Title');
         expect(unredacted.RootParentID).toBe(CONV_PARENT_ID);
     });
+
+    it('MJResourcePermissionEntityServer.CheckPermissions delegates non-Database (Network) providers to super.CheckPermissions so client GraphQL writes reach MJAPI', () => {
+        const superSpy = vi.spyOn(BaseEntity.prototype, 'CheckPermissions').mockReturnValue(true);
+        const networkProvider = {
+            ProviderType: 'Network',
+            Entities: [],
+            EntityByName: () => undefined,
+        } as unknown as IMetadataProvider & IRunViewProvider;
+
+        const perm = createPermissionStub(
+            networkProvider,
+            alice,
+            {
+                ID: 'perm-net-1',
+                ResourceTypeID: CONVERSATIONS_RESOURCE_TYPE_ID,
+                ResourceRecordID: CONV_PARENT_ID,
+                UserID: BOB_ID,
+            },
+            false
+        );
+
+        expect(perm.CheckPermissions(EntityPermissionType.Create, true)).toBe(true);
+        expect(superSpy).toHaveBeenCalledWith(EntityPermissionType.Create, true);
+    });
 });

@@ -9,7 +9,66 @@
     Message="This workflow has not created any steps.">
   </mj-empty-state>
 } @else {
-  <div class="run-view" [style.height]="Height">
+  <div class="run-view" [class.run-view--embedded]="IsEmbeddedMode" [style.height]="Height">
+    @if (ActiveDiagnostic; as diag) {
+      <div class="run-view-copilot" [attr.data-kind]="diag.Kind" role="status">
+        <div class="run-view-copilot-icon">
+          @switch (diag.Kind) {
+            @case ('held') { <i class="fa-solid fa-hand" aria-hidden="true"></i> }
+            @case ('worker-lost') { <i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> }
+            @case ('taint') { <i class="fa-solid fa-shield-halved" aria-hidden="true"></i> }
+            @case ('failed') { <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> }
+            @default { <i class="fa-solid fa-circle-pause" aria-hidden="true"></i> }
+          }
+        </div>
+        <div class="run-view-copilot-copy">
+          <div class="run-view-copilot-title">{{ diag.Title }}</div>
+          <div class="run-view-copilot-msg">{{ diag.Message }}</div>
+        </div>
+        <div class="run-view-copilot-actions">
+          @if (diag.Kind === 'held' && diag.EdgeID) {
+            <button type="button" class="run-view-copilot-btn run-view-copilot-btn--primary"
+                    (click)="EdgeOverrideRequested.emit({ EdgeID: diag.EdgeID, Verdict: 'true' })">
+              <i class="fa-solid fa-check" aria-hidden="true"></i>
+              Answer Yes
+            </button>
+            <button type="button" class="run-view-copilot-btn"
+                    (click)="EdgeOverrideRequested.emit({ EdgeID: diag.EdgeID, Verdict: 'false' })">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              Answer No
+            </button>
+          }
+          @if (diag.Kind === 'breakpoint' && diag.TaskID && CanStepSingle) {
+            <button type="button" class="run-view-copilot-btn run-view-copilot-btn--primary"
+                    (click)="RunStepRequested.emit(diag.TaskID)">
+              <i class="fa-solid fa-play" aria-hidden="true"></i>
+              Run This Step
+            </button>
+          }
+          @if (diag.Kind === 'failed' && diag.TaskID) {
+            <button type="button" class="run-view-copilot-btn run-view-copilot-btn--primary"
+                    (click)="RetryStepRequested.emit(diag.TaskID)">
+              <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+              Retry Step
+            </button>
+          }
+          @if (diag.TaskID && (diag.Kind === 'failed' || diag.Kind === 'taint' || diag.Kind === 'breakpoint')) {
+            <button type="button" class="run-view-copilot-btn"
+                    (click)="BlastRadiusRequested.emit(diag.TaskID)">
+              <i class="fa-solid fa-burst" aria-hidden="true"></i>
+              Impact
+            </button>
+          }
+          <button type="button" class="run-view-copilot-dismiss"
+                  (click)="OnDismissDiagnostic()"
+                  aria-label="Dismiss notice"
+                  title="Dismiss notice">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+    }
+
     <div class="run-view-summary">
       <span class="run-view-count">{{ CompletedCount }} of {{ TotalCount }} complete</span>
       @if (SkippedCount > 0) {
@@ -25,7 +84,16 @@
       } @else if (RunningCount > 0) {
         <span class="run-view-running">{{ RunningCount }} running</span>
       }
-      @if (AllowBreakpointEditing && SelectedTaskID) {
+      @if (IsEmbeddedMode) {
+        <button type="button" class="run-view-expand-btn"
+                (click)="ExpandRequested.emit()"
+                title="Open full canvas"
+                aria-label="Open full canvas">
+          <i class="fa-solid fa-up-right-and-down-left-from-center" aria-hidden="true"></i>
+          <span>Expand</span>
+        </button>
+      }
+      @if (AllowBreakpointEditing && SelectedTaskID && !IsEmbeddedMode) {
         <button
           type="button"
           class="run-view-bp"
@@ -40,75 +108,136 @@
       }
     </div>
 
-    <div class="run-view-body">
-      @if (ShowVariables && !Prefs.InvocationOpen) {
-        <button type="button" class="run-view-vars-rail"
-                (click)="OnToggleInvocation()"
-                title="Show step inputs and outputs"
-                aria-label="Show step inputs and outputs">
-          <i class="fa-solid fa-code" aria-hidden="true"></i>
-          <span>Data</span>
-        </button>
-      }
-      <as-split class="run-view-split" direction="horizontal" unit="percent"
-                [gutterSize]="8" (dragEnd)="OnInvocationSplitDragEnd($event.sizes)">
-        <as-split-area [size]="InvocationPaneSize" [minSize]="18" [visible]="InvocationPaneOpen">
-          <div class="run-view-vars">
-            <div class="run-view-vars-bar">
-              <div class="run-view-vars-title">
-                @if (SelectedTask; as step) {
-                  <span class="run-view-vars-step-name" [title]="step.Name">{{ step.Name }}</span>
-                  <span class="run-view-vars-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
-                } @else {
-                  <span>Step Inputs &amp; Outputs</span>
+    @if (IsEmbeddedMode) {
+      <div class="run-view-embedded-list" role="list">
+        @for (task of Tasks; track task.ID; let idx = $index) {
+          <button type="button"
+                  class="run-view-embedded-card"
+                  role="listitem"
+                  [class.run-view-embedded-card--selected]="SelectedTaskID === task.ID"
+                  [attr.data-status]="task.Status"
+                  (click)="OnEmbeddedStepSelected(task)">
+            <span class="run-view-embedded-num">{{ idx + 1 }}</span>
+            <div class="run-view-embedded-meta">
+              <span class="run-view-embedded-name">{{ task.Name }}</span>
+              @if (StepLiveProgress(task.ID); as live) {
+                <span class="run-view-embedded-live">{{ live.Message }}</span>
+                @if (live.Percent != null) {
+                  <span class="run-view-embedded-bar">
+                    <span class="run-view-embedded-fill" [style.width.%]="live.Percent"></span>
+                  </span>
                 }
-              </div>
-              <button type="button" class="run-view-vars-min"
-                      (click)="OnToggleInvocation()"
-                      title="Minimize"
-                      aria-label="Minimize invocation and output">
-                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
-              </button>
+              }
             </div>
-            @if (SelectedTask?.ErrorMessage; as errMsg) {
-              <div class="run-view-vars-error" role="status">
-                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
-                <span>{{ errMsg }}</span>
+            <span class="run-view-vars-status" [attr.data-status]="task.Status">{{ task.Status }}</span>
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="run-view-body">
+        @if (ShowVariables && !Prefs.InvocationOpen) {
+          <button type="button" class="run-view-vars-rail"
+                  (click)="OnToggleInvocation()"
+                  title="Show step inputs and outputs"
+                  aria-label="Show step inputs and outputs">
+            <i class="fa-solid fa-code" aria-hidden="true"></i>
+            <span>Data</span>
+          </button>
+        }
+        <as-split class="run-view-split" direction="horizontal" unit="percent"
+                  [gutterSize]="8" (dragEnd)="OnInvocationSplitDragEnd($event.sizes)">
+          <as-split-area [size]="InvocationPaneSize" [minSize]="18" [visible]="InvocationPaneOpen">
+            <div class="run-view-vars">
+              <div class="run-view-vars-bar">
+                <div class="run-view-vars-title">
+                  @if (SelectedTask; as step) {
+                    <span class="run-view-vars-step-name" [title]="step.Name">{{ step.Name }}</span>
+                    <span class="run-view-vars-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
+                  } @else {
+                    <span>Step Inputs &amp; Outputs</span>
+                  }
+                </div>
+                <button type="button" class="run-view-vars-min"
+                        (click)="OnToggleInvocation()"
+                        title="Minimize"
+                        aria-label="Minimize invocation and output">
+                  <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                </button>
               </div>
-            }
-            <mj-task-graph-variables
-              [TaskID]="SelectedTask?.ID"
-              [InputPayload]="SelectedTask?.InputPayload"
-              [OutputPayload]="SelectedTask?.OutputPayload"
-              [Invocation]="Invocation">
-            </mj-task-graph-variables>
-          </div>
-        </as-split-area>
-        <as-split-area [size]="CanvasPaneSize" [minSize]="40">
-          <div class="run-view-canvas">
-            <mj-task-graph-editor
-              [Spec]="Spec"
-              [RuntimeStatus]="RuntimeStatus"
-              [NodePositions]="Positions"
-              [DebugOverlay]="Overlay"
-              [ReadOnly]="true"
-              [ShowToolbar]="ShowToolbar"
-              [ToolbarVisibility]="ToolbarVisibility"
-              [ToolbarAlign]="ToolbarAlign"
-              [ShowPalette]="false"
-              [ShowProperties]="false"
-              [ShowMinimap]="false"
-              [ShowStatusBar]="false"
-              [ShowLegend]="ShowLegend"
-              (SelectionChanged)="OnSelectionChanged($event)"
-              (ConnectionSelected)="OnConnectionSelected($event)"
-              (LegendToggled)="LegendToggled.emit($event)"
-              (BeforeContextMenu)="OnBeforeContextMenu($event)"
-              (AfterContextMenuAction)="OnAfterContextMenuAction($event)">
-            </mj-task-graph-editor>
-          </div>
-        </as-split-area>
-      </as-split>
-    </div>
+              @if (SelectedTask?.ErrorMessage; as errMsg) {
+                <div class="run-view-vars-error" role="status">
+                  <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                  <span>{{ errMsg }}</span>
+                </div>
+              }
+              <mj-task-graph-variables
+                [TaskID]="SelectedTask?.ID"
+                [InputPayload]="SelectedTask?.InputPayload"
+                [OutputPayload]="SelectedTask?.OutputPayload"
+                [Invocation]="Invocation">
+              </mj-task-graph-variables>
+            </div>
+          </as-split-area>
+          <as-split-area [size]="CanvasPaneSize" [minSize]="40">
+            <div class="run-view-canvas">
+              <mj-task-graph-editor
+                [Spec]="Spec"
+                [RuntimeStatus]="RuntimeStatus"
+                [NodePositions]="Positions"
+                [DebugOverlay]="Overlay"
+                [ReadOnly]="true"
+                [AutoLayoutDirection]="LayoutDirection"
+                [XRayEnabled]="XRayEnabled"
+                [AllowBreakpointClick]="AllowBreakpointEditing"
+                [ViewportKey]="ParentTaskID ? 'run:' + ParentTaskID : null"
+                [ShowToolbar]="ShowToolbar"
+                [ToolbarVisibility]="ToolbarVisibility"
+                [ToolbarAlign]="ToolbarAlign"
+                [ShowPalette]="false"
+                [ShowProperties]="false"
+                [ShowMinimap]="false"
+                [ShowStatusBar]="false"
+                [ShowLegend]="ShowLegend"
+                (SelectionChanged)="OnSelectionChanged($event)"
+                (ConnectionSelected)="OnConnectionSelected($event)"
+                (LegendToggled)="LegendToggled.emit($event)"
+                (BeforeContextMenu)="OnBeforeContextMenu($event)"
+                (AfterContextMenuAction)="OnAfterContextMenuAction($event)"
+                (NodeBreakpointClicked)="OnCanvasNodeBreakpointClicked($event)"
+                (NodeRunStepClicked)="OnCanvasNodeRunStepClicked($event)"
+                (LayoutDirectionChanged)="OnCanvasLayoutDirectionChanged($event)">
+              </mj-task-graph-editor>
+            </div>
+          </as-split-area>
+        </as-split>
+      </div>
+    }
+
+    @if (CanShowReplayScrubber) {
+      <div class="run-view-replay" role="region" aria-label="Replay timeline">
+        <button type="button" class="run-view-replay-btn"
+                (click)="OnToggleReplayPlayback()"
+                [attr.aria-label]="ReplayPlaying ? 'Pause replay' : 'Play replay'"
+                [title]="ReplayPlaying ? 'Pause replay' : 'Play replay'">
+          <i class="fa-solid" [class.fa-pause]="ReplayPlaying" [class.fa-play]="!ReplayPlaying" aria-hidden="true"></i>
+        </button>
+        <span class="run-view-replay-label">Replay</span>
+        <input type="range"
+               class="run-view-replay-slider"
+               min="0"
+               max="100"
+               step="1"
+               [value]="ReplayPercent ?? 100"
+               (input)="OnReplaySliderInput($event)"
+               aria-label="Scrub replay position" />
+        <span class="run-view-replay-time">{{ ReplayTimeReadout }}</span>
+        @if (ReplayPercent != null && ReplayPercent < 100) {
+          <button type="button" class="run-view-replay-now"
+                  (click)="SetReplayPercent(null)">
+            Now
+          </button>
+        }
+      </div>
+    }
   </div>
 }

@@ -15,21 +15,31 @@ export class AITestHarnessDialogService {
   constructor(private testHarnessService: TestHarnessWindowManagerService) {}
 
   /**
-   * Opens the test harness window for an AI Agent
+   * Opens the test harness window for an AI Agent (or Workflow).
+   * Pass `{ initialDebugMode: true }` to initialize workflow mode in Debug (Start Paused) mode.
    */
-  OpenForAgent(agentId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
-    return this.testHarnessService.openAgentTestHarness({
+  OpenForAgent(
+    agentId: string,
+    viewContainerRef?: ViewContainerRef,
+    options?: { initialDebugMode?: boolean },
+  ): Observable<TestResult> {
+    return this.testHarnessService.OpenAgentTestHarness({
       agentId: agentId,
       // Don't pass title - let the window component generate it with the agent name
       width: '80vw',
       height: '80vh',
-      viewContainerRef: viewContainerRef
+      viewContainerRef: viewContainerRef,
+      initialDebugMode: options?.initialDebugMode,
     });
   }
 
   /** @deprecated Use {@link OpenForAgent}. */
-  openForAgent(agentId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
-    return this.OpenForAgent(agentId, viewContainerRef);
+  openForAgent(
+    agentId: string,
+    viewContainerRef?: ViewContainerRef,
+    options?: { initialDebugMode?: boolean },
+  ): Observable<TestResult> {
+    return this.OpenForAgent(agentId, viewContainerRef, options);
   }
 
   /**

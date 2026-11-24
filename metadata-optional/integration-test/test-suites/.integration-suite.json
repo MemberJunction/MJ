@@ -1810,6 +1810,17 @@
           "primaryKey": {
             "ID": "AA08B116-DF0B-4FE8-9D7E-E4C1461639CC"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT186 - Agent Instances and Multi-Level Prototype Inheritance",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D8863BF3-A892-4B2B-A758-B909350DE35D"
+          }
         }
       ]
     },

@@ -1,32 +1,25 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output } from '@angular/core';
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
-import { MJTaskEntity, WorkflowDraftOperation } from '@memberjunction/core-entities';
-import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { MJTaskDependencyEntity, MJTaskEntity, WorkflowDraftOperation } from '@memberjunction/core-entities';
+import { ProjectTaskRowsToSpec, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import {
     DEFAULT_WORKFLOW_START_MODE,
     WORKFLOW_START_OPTIONS,
+    WORKFLOW_STARTER_RECIPES,
     type PromotableRun,
     type WorkflowDraftRequest,
     type WorkflowStartMode,
     type WorkflowStartOption,
+    type WorkflowStarterRecipe,
 } from '../workflows.types';
+import { FormatShortDuration } from '../workflow-blueprint.util';
 
 /**
- * The Create Workflow front door — the screen that replaces today's save-the-agent-record-first
- * requirement.
+ * The Create Workflow front door — Split Compiler combining the 3 entry doors & AI prompt studio
+ * on the left with a live read-only Spatial Preview canvas on the right.
  *
- * Implements screens A and B of `mockups/workflow-ux/front-door-v1.html`, which is the locked
- * contract for this surface. Two of its five ratified answers are visible here:
- *
- * - **④ saving is capture, not scheduling.** No trigger is asked for anywhere on this screen. A new
- *   workflow is On demand until someone gives it a schedule, and asking at creation time turns a
- *   two-second capture into a configuration task.
- * - **Only settled runs are promotable.** An in-flight run may still change shape under a retry or a
- *   recovery branch, so the workflow you saved would not be the one that ran.
- *
- * Emits a {@link WorkflowDraftRequest} rather than persisting anything: "Nothing is saved until you
- * approve it" is a promise the middle tile makes in so many words, and the canvas is where approval
- * happens.
+ * Honors the promise: "Nothing is saved until you approve it." Drafting or selecting a past run
+ * renders an interactive preview first; only clicking Approve & Enter Studio emits `Created`.
  */
 @Component({
     standalone: false,
@@ -42,48 +35,36 @@ export class CreateWorkflowComponent {
     /** The user to run the drafting operation as. */
     @Input() CurrentUser: UserInfo | null = null;
 
-    /**
-     * True while the host is committing the workflow.
-     *
-     * Owned by the host rather than this component because the host is what saves. Without it the
-     * form stays live during the write and a second click would create a second workflow.
-     */
+    /** True while the host is committing the workflow. */
     @Input() Busy = false;
 
-    /** Emitted when the author commits. The host routes to the canvas. */
+    /** Emitted when the author approves and commits. The host saves and opens In-App Studio. */
     @Output() Created = new EventEmitter<WorkflowDraftRequest>();
     /** Emitted when the author backs out. */
     @Output() Cancelled = new EventEmitter<void>();
 
     public readonly StartOptions: readonly WorkflowStartOption[] = WORKFLOW_START_OPTIONS;
+    public readonly StarterRecipes: readonly WorkflowStarterRecipe[] = WORKFLOW_STARTER_RECIPES;
     public SelectedMode: WorkflowStartMode = DEFAULT_WORKFLOW_START_MODE;
 
     public WorkflowName = '';
     public Description = '';
+    public RefinementPrompt = '';
     public SelectedRunID: string | null = null;
 
     public PastRuns: PromotableRun[] = [];
     public IsLoadingRuns = false;
     public RunsError: string | null = null;
 
-    /**
-     * True while an agent is drafting the steps.
-     *
-     * Its own flag rather than a generic `busy`, because the wait is long enough to need explaining:
-     * a spinner with no words reads as a hang, and this one can take several seconds.
-     */
+    /** Live spatial preview spec (from AI drafting or past-run projection). Nothing saved yet! */
+    public PreviewSpec: TaskGraphSpec | null = null;
+    public IsLoadingPreview = false;
+
     public IsDrafting = false;
     public DraftError: string | null = null;
 
     constructor(private cdr: ChangeDetectorRef) {}
 
-    /**
-     * True when the form can be submitted.
-     *
-     * Each door has its own bar, because each asks for something different: `describe` needs the
-     * brief it will draft from, `past-run` needs the run being promoted, and `blank` needs only a
-     * name — there is nothing else to supply before the canvas opens.
-     */
     public get CanCreate(): boolean {
         if (this.Busy || !this.WorkflowName.trim()) {
             return false;
@@ -92,10 +73,18 @@ export class CreateWorkflowComponent {
             case 'describe':
                 return this.Description.trim().length > 0;
             case 'past-run':
-                return !!this.SelectedRunID;
+                return !!this.SelectedRunID && !this.IsLoadingPreview;
             case 'blank':
                 return true;
         }
+    }
+
+    public get CanDraftPreview(): boolean {
+        return this.SelectedMode === 'describe' && !this.IsDrafting && !this.Busy && this.Description.trim().length > 0;
+    }
+
+    public get PreviewStepCount(): number {
+        return this.PreviewSpec?.tasks.length ?? 0;
     }
 
     public async OnSelectMode(mode: WorkflowStartMode): Promise<void> {
@@ -103,18 +92,26 @@ export class CreateWorkflowComponent {
             return;
         }
         this.SelectedMode = mode;
+        this.DraftError = null;
+        if (mode === 'blank') {
+            this.PreviewSpec = null;
+        }
         this.cdr.markForCheck();
 
-        // Loaded on demand rather than up front: two of the three doors never look at past runs, and
-        // the query is the only database work this screen does.
         if (mode === 'past-run' && this.PastRuns.length === 0 && !this.IsLoadingRuns) {
             await this.LoadPastRuns();
         }
     }
 
-    public OnSelectRun(run: PromotableRun): void {
-        // Guarded rather than merely styled: an unsettled row is not selectable, and relying on CSS
-        // to convey that would leave it clickable for anyone navigating by keyboard.
+    public OnApplyRecipe(recipe: WorkflowStarterRecipe): void {
+        this.SelectedMode = 'describe';
+        this.WorkflowName = recipe.Name;
+        this.Description = recipe.Prompt;
+        this.DraftError = null;
+        this.cdr.markForCheck();
+    }
+
+    public async OnSelectRun(run: PromotableRun): Promise<void> {
         if (!run.IsSettled) {
             return;
         }
@@ -123,8 +120,40 @@ export class CreateWorkflowComponent {
             this.WorkflowName = run.Name;
         }
         this.cdr.markForCheck();
+        await this.projectPastRunPreview(run);
     }
 
+    /** Drafts (or refines) steps into the live right-hand Spatial Preview without saving. */
+    public async OnDraftPreview(): Promise<void> {
+        if (!this.CanDraftPreview) return;
+        const name = this.WorkflowName.trim() || 'Untitled Workflow';
+        const combinedDescription = this.RefinementPrompt.trim()
+            ? `${this.Description.trim()}\n\nRefinement: ${this.RefinementPrompt.trim()}`
+            : this.Description.trim();
+
+        this.IsDrafting = true;
+        this.DraftError = null;
+        this.cdr.markForCheck();
+        try {
+            const draft = await this.draftSteps({
+                Mode: 'describe',
+                Name: name,
+                Description: combinedDescription,
+            });
+            if (draft) {
+                this.PreviewSpec = draft;
+                if (this.RefinementPrompt.trim()) {
+                    this.Description = combinedDescription;
+                    this.RefinementPrompt = '';
+                }
+            }
+        } finally {
+            this.IsDrafting = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** Approves the preview (drafting first if needed) and emits to the host for saving into Studio. */
     public async OnCreate(): Promise<void> {
         if (!this.CanCreate || this.IsDrafting) {
             return;
@@ -136,21 +165,28 @@ export class CreateWorkflowComponent {
             SourceRunID: this.SelectedMode === 'past-run' ? this.SelectedRunID ?? undefined : undefined,
         };
 
-        // Only the "Describe it" door drafts. Blank canvas has nothing to draft FROM, and promoting a
-        // past run is a projection of a graph that already exists rather than an act of authorship.
-        if (request.Mode !== 'describe') {
+        if (request.Mode === 'blank') {
             this.Created.emit(request);
             return;
         }
 
+        if (request.Mode === 'past-run') {
+            this.Created.emit({ ...request, Draft: this.PreviewSpec ?? undefined });
+            return;
+        }
+
+        // Describe mode: if user already drafted & inspected a preview, approve it immediately!
+        if (this.PreviewSpec && this.PreviewSpec.tasks.length > 0) {
+            this.Created.emit({ ...request, Draft: this.PreviewSpec });
+            return;
+        }
+
+        // Otherwise draft on click and hand off to Studio.
         this.IsDrafting = true;
         this.DraftError = null;
         this.cdr.markForCheck();
         try {
             const draft = await this.draftSteps(request);
-            // A failed draft does NOT block the author. They described what they wanted and are
-            // entitled to get to the canvas; drafting is a head start, not a gate. The error stays
-            // on screen so the failure is not silent.
             this.Created.emit({ ...request, Draft: draft ?? undefined });
         } finally {
             this.IsDrafting = false;
@@ -158,13 +194,6 @@ export class CreateWorkflowComponent {
         }
     }
 
-    /**
-     * Asks the server to draft the steps.
-     *
-     * A Remote Operation rather than a bespoke mutation, per the program's standing rule — the same
-     * call is reachable from MCP and an Action, so an agent can draft a workflow the same way this
-     * screen does.
-     */
     private async draftSteps(request: WorkflowDraftRequest): Promise<TaskGraphSpec | null> {
         try {
             const op = new WorkflowDraftOperation();
@@ -191,24 +220,23 @@ export class CreateWorkflowComponent {
     }
 
     /**
-     * Loads the runs a workflow can be promoted from.
-     *
-     * Reads parent task rows — a graph's root — because that is the unit someone recognises as "a
-     * run". Filtered to terminal statuses in SQL rather than in memory so an instance with a long
-     * history does not pull every task row across the wire to discard most of them.
+     * Loads promotable runs PLUS a single batched query of their child steps so each row shows
+     * real step counts and waiting-on-person notes without N+1 round-trips.
      */
     public async LoadPastRuns(): Promise<void> {
         this.IsLoadingRuns = true;
         this.RunsError = null;
         this.cdr.markForCheck();
         try {
-            const result = await RunView.FromMetadataProvider(this.Provider).RunView<MJTaskEntity>(
+            const rv = RunView.FromMetadataProvider(this.Provider);
+            const result = await rv.RunView<MJTaskEntity>(
                 {
                     EntityName: 'MJ: Tasks',
-                    ExtraFilter: `ParentID IS NULL AND Status IN ('Complete','Failed','Cancelled')`,
+                    ExtraFilter: `ParentID IS NULL AND Status IN ('Complete','Failed','Cancelled','In Progress')`,
                     OrderBy: '__mj_UpdatedAt DESC',
                     MaxRows: 25,
                     ResultType: 'entity_object',
+                    BypassCache: true,
                 },
                 undefined,
             );
@@ -217,7 +245,34 @@ export class CreateWorkflowComponent {
                 this.PastRuns = [];
                 return;
             }
-            this.PastRuns = (result.Results ?? []).map((t) => this.toPromotableRun(t));
+            const parents = result.Results ?? [];
+            const stepCounts = new Map<string, number>();
+            const humanWaitingCounts = new Map<string, number>();
+
+            if (parents.length > 0) {
+                const idList = parents.map((p) => `'${p.ID}'`).join(',');
+                const childRes = await rv.RunView<MJTaskEntity>(
+                    {
+                        EntityName: 'MJ: Tasks',
+                        ExtraFilter: `ParentID IN (${idList})`,
+                        ResultType: 'entity_object',
+                        BypassCache: true,
+                    },
+                    undefined,
+                );
+                if (childRes.Success) {
+                    for (const child of childRes.Results ?? []) {
+                        const pid = (child.ParentID ?? '').toLowerCase();
+                        if (!pid) continue;
+                        stepCounts.set(pid, (stepCounts.get(pid) ?? 0) + 1);
+                        if (child.StepType === 'Human' && child.Status === 'In Progress') {
+                            humanWaitingCounts.set(pid, (humanWaitingCounts.get(pid) ?? 0) + 1);
+                        }
+                    }
+                }
+            }
+
+            this.PastRuns = parents.map((t) => this.toPromotableRun(t, stepCounts, humanWaitingCounts));
         } catch (e) {
             this.RunsError = e instanceof Error ? e.message : String(e);
             this.PastRuns = [];
@@ -227,22 +282,70 @@ export class CreateWorkflowComponent {
         }
     }
 
-    /** Projects a parent task row into the row the list renders. */
-    private toPromotableRun(task: MJTaskEntity): PromotableRun {
+    /** Queries the chosen past run's child steps & dependencies and projects them into a live preview. */
+    private async projectPastRunPreview(run: PromotableRun): Promise<void> {
+        this.IsLoadingPreview = true;
+        this.DraftError = null;
+        this.cdr.markForCheck();
+        try {
+            const rv = RunView.FromMetadataProvider(this.Provider);
+            const [tasksRes, depsRes] = await Promise.all([
+                rv.RunView<MJTaskEntity>({
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ParentID='${run.ID}'`,
+                    OrderBy: 'CASE WHEN StartedAt IS NULL THEN 1 ELSE 0 END, StartedAt, __mj_CreatedAt',
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                }),
+                rv.RunView<MJTaskDependencyEntity>({
+                    EntityName: 'MJ: Task Dependencies',
+                    ExtraFilter: `TaskID IN (SELECT ID FROM [__mj].[vwTasks] WHERE ParentID='${run.ID}')`,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                }),
+            ]);
+            if (this.SelectedRunID !== run.ID) return;
+            const childTasks = tasksRes.Success ? (tasksRes.Results ?? []) : [];
+            const deps = depsRes.Success ? (depsRes.Results ?? []) : [];
+            const projection = ProjectTaskRowsToSpec(
+                this.WorkflowName.trim() || run.Name,
+                childTasks,
+                deps,
+            );
+            this.PreviewSpec = projection.Spec;
+        } catch (e) {
+            this.DraftError = e instanceof Error ? e.message : String(e);
+            this.PreviewSpec = null;
+        } finally {
+            this.IsLoadingPreview = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    private toPromotableRun(
+        task: MJTaskEntity,
+        stepCounts: Map<string, number>,
+        humanWaitingCounts: Map<string, number>,
+    ): PromotableRun {
+        const key = task.ID.toLowerCase();
+        const waiting = humanWaitingCounts.get(key) ?? 0;
+        const durationMs =
+            task.StartedAt && task.CompletedAt
+                ? Math.max(0, new Date(task.CompletedAt).getTime() - new Date(task.StartedAt).getTime())
+                : null;
         return {
             ID: task.ID,
             Name: task.Name,
-            // Not queried per row on purpose: a count per run would be N queries for a decorative
-            // number. The canvas shows the real shape the moment a run is chosen.
-            StepCount: 0,
+            StepCount: stepCounts.get(key) ?? 0,
             Age: this.describeAge(task.CompletedAt ?? task.__mj_UpdatedAt),
             AgentName: task.Agent ?? 'Unattributed',
             Status: task.Status,
             IsSettled: task.Status === 'Complete',
+            WaitingNote: waiting > 0 ? `${waiting} waiting on a person` : undefined,
+            Duration: durationMs != null ? FormatShortDuration(durationMs) : undefined,
         };
     }
 
-    /** Human-readable age. Deliberately coarse — "2 days ago" is what someone scans for. */
     private describeAge(when: Date | null): string {
         if (!when) {
             return 'recently';

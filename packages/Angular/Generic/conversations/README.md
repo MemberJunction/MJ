@@ -631,6 +631,19 @@ Uses `@memberjunction/ng-ui-components` for dialogs, buttons, inputs, layout, in
 - `@angular/forms` ^21.x
 - `@angular/platform-browser` ^21.x
 
+## Personal Agent Instances ("My Agents")
+
+Provides a Grok-Bot-style left-rail experience and interactive studio for creating, tailoring, and chatting with personal derived AI Agent instances (`BaseAgentID != null`).
+
+| Component | Selector | Key Inputs & Outputs |
+| --- | --- | --- |
+| **`MyAgentsSectionComponent`** | `mj-my-agents-section` | `@Input() CurrentUser`, `@Input() ActiveAgentId`, `@Input() Provider`; `@Output() StartChatWithAgent` (reuses latest pinned thread or opens new), `@Output() StartNewChatWithAgent` (explicit `+` fresh thread), `@Output() StartOnboardingWithTemplate`. Styled with `--mj-chat-list-*` tokens to harmonize natively inside the dark-navy Conversations rail, sorting primary and `Required`-template instances first. |
+| **`AgentInstanceEditorModalComponent`** | `mj-agent-instance-editor-modal` | `@Input() Visible` (`[(Visible)]`), `@Input() Mode` (`'create' \| 'edit'`), `@Input() EditingAgent`, `@Input() InitialBaseAgentId`, `@Input() CurrentUser`; `@Output() Saved`, `@Output() Archived`, `@Output() ChatToOnboard`. Supports both **"Chat to Onboard"** and direct editing of icon/avatar (`LogoURL`), voice persona, `StyleOverride` (`Tone` + `SpeakingStyle`), `AdditionalInstructions`, autonomy mode, and `IsPrimaryInstance`. |
+| **`ConversationSidebarComponent`** | `mj-conversation-sidebar` | `@Input() ShowMyAgents` (default `true`); embeds `<mj-my-agents-section>` above the conversation list. |
+| **`ConversationAgentPickerComponent` & `MessageItemComponent`** | `mj-conversation-agent-picker`, `mj-message-item` | Excludes `InstantiationMode === 'Required'` templates, groups `My Agents` above catalog agents, renders `LogoURL` → Persona `PreviewImageURL` → `IconClass`, and live-refreshes when onboarding re-pins `Conversation.DefaultAgentID`. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+
 ## Build
 
 ```bash

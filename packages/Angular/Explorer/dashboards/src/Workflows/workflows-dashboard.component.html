@@ -1,68 +1,488 @@
 <mj-page-layout>
-  <mj-page-header
-    Title="Workflows"
-    Icon="fa-solid fa-diagram-project"
-    Subtitle="Repeatable pathways that always follow the same route.">
+  @if (ActiveStudioWorkflow; as studioWf) {
+    <mj-page-header
+      [Title]="studioWf.Name"
+      [Icon]="studioWf.IconClass || 'fa-solid fa-diagram-project'"
+      [Subtitle]="studioWf.Description || 'Edit steps, paths, and triggers for this workflow.'">
 
-    <div meta>
-      @if (!IsLoading && !IsCreating) {
-        <mj-stat-badge Icon="fa-solid fa-diagram-project" [Label]="Workflows.length + ' saved'"></mj-stat-badge>
-      }
-    </div>
+      <div meta>
+        <span class="wf-status-pill" [attr.data-status]="studioWf.Status">{{ studioWf.Status }}</span>
+        <span class="wf-trigger-pill">
+          <i class="fa-solid" [class.fa-clock]="studioWf.TriggerKind === 'schedule'"
+             [class.fa-bolt]="studioWf.TriggerKind === 'event'"
+             [class.fa-hand-pointer]="studioWf.TriggerKind !== 'schedule' && studioWf.TriggerKind !== 'event'"
+             aria-hidden="true"></i>
+          {{ studioWf.TriggerSummary }}
+        </span>
+      </div>
 
-    <div actions>
-      @if (IsCreating) {
-        <button mjButton variant="secondary" size="sm" (click)="OnCancelCreate()">
-          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to workflows
+      <div actions>
+        <button mjButton variant="flat" size="sm" (click)="OnBackToCatalog()">
+          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> All Workflows
         </button>
-      } @else {
-        <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadData()"></mj-refresh-button>
-        <button mjButton variant="primary" size="sm" (click)="OnStartCreate()">
-          <i class="fa-solid fa-plus" aria-hidden="true"></i> Create Workflow
+        <button mjButton variant="secondary" size="sm" (click)="OnDebugWorkflow(studioWf)"
+                title="Open workflow debugger paused before the first step">
+          <i class="fa-solid fa-bug" aria-hidden="true"></i> Debug
         </button>
-      }
-    </div>
-  </mj-page-header>
+        <button mjButton variant="primary" size="sm" (click)="OnRunWorkflow(studioWf)"
+                title="Run this workflow now">
+          <i class="fa-solid fa-play" aria-hidden="true"></i> Run Workflow
+        </button>
+      </div>
 
-  <mj-page-body>
-    @if (IsCreating) {
-      @if (SaveError) {
-        <mj-alert Variant="error" [Message]="SaveError"></mj-alert>
-      }
-      <mj-create-workflow
-        [Busy]="IsSaving"
-        [Provider]="ProviderToUse"
-        [CurrentUser]="ProviderToUse.CurrentUser"
-        (Created)="OnCreated($event)"
-        (Cancelled)="OnCancelCreate()">
-      </mj-create-workflow>
-    } @else if (IsLoading) {
-      <mj-loading></mj-loading>
-    } @else if (LoadError) {
-      <mj-alert Variant="error" [Message]="LoadError"></mj-alert>
-    } @else if (Workflows.length === 0) {
-      <mj-empty-state
-        Icon="fa-solid fa-diagram-project"
-        Title="No workflows yet"
-        Message="A workflow runs the same steps the same way every time. Describe what you want done and we will draft it.">
-      </mj-empty-state>
-    } @else {
-      <div class="wf-list">
-        @for (item of Workflows; track item.ID) {
-          <button type="button" class="wf-row" (click)="OnOpenWorkflow(item)">
-            <span class="wf-row-main">
-              <span class="wf-row-name">{{ item.Name }}</span>
-              @if (item.Description) {
-                <span class="wf-row-desc">{{ item.Description }}</span>
-              }
+      <div toolbar>
+        <div class="wf-studio-tabs" role="tablist">
+          <button type="button"
+                  role="tab"
+                  class="wf-studio-tab"
+                  [class.wf-studio-tab--active]="StudioTab === 'canvas'"
+                  [attr.aria-selected]="StudioTab === 'canvas'"
+                  (click)="OnSelectStudioTab('canvas')">
+            <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+            Canvas &amp; Playbook
+          </button>
+          <button type="button"
+                  role="tab"
+                  class="wf-studio-tab"
+                  [class.wf-studio-tab--active]="StudioTab === 'triggers'"
+                  [attr.aria-selected]="StudioTab === 'triggers'"
+                  (click)="OnSelectStudioTab('triggers')">
+            <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+            Triggers &amp; Entry Points
+          </button>
+          <button type="button"
+                  role="tab"
+                  class="wf-studio-tab"
+                  [class.wf-studio-tab--active]="StudioTab === 'runs'"
+                  [attr.aria-selected]="StudioTab === 'runs'"
+                  (click)="OnSelectStudioTab('runs')">
+            <i class="fa-solid fa-timeline" aria-hidden="true"></i>
+            Runs
+          </button>
+        </div>
+      </div>
+    </mj-page-header>
+
+    <mj-page-body>
+      <div class="wf-studio-body">
+        @if (StudioTab === 'canvas') {
+          <mj-flow-agent-editor
+            [AgentID]="studioWf.ID"
+            [EditMode]="true"
+            [ShowSaveControls]="true"
+            [DefaultViewMode]="'split'"
+            [CanvasTitle]="null"
+            (Saved)="loadData()">
+          </mj-flow-agent-editor>
+        } @else if (StudioTab === 'triggers') {
+          <div class="wf-triggers-pane">
+            <mj-agent-invocations
+              [Provider]="ProviderToUse"
+              [AgentID]="studioWf.ID"
+              [Active]="StudioTab === 'triggers'"
+              [ExposeAsAction]="studioWf.ExposeAsAction ?? false"
+              (RecordOpenRequested)="OnOpenInvocationRecord($event)">
+            </mj-agent-invocations>
+          </div>
+        } @else {
+          <div class="wf-studio-runs-pane">
+            @if (StudioRunsLoading) {
+              <mj-loading text="Loading runs..."></mj-loading>
+            } @else if (StudioRuns.length === 0) {
+              <div class="wf-studio-runs-empty">
+                <mj-empty-state
+                  Icon="fa-solid fa-timeline"
+                  Title="No runs yet for this workflow"
+                  Message="Click Run Workflow or Debug above to launch a run and watch every step live.">
+                </mj-empty-state>
+                <div class="wf-studio-runs-empty-cta">
+                  <button mjButton variant="primary" size="sm" (click)="OnRunWorkflow(studioWf)">
+                    <i class="fa-solid fa-play" aria-hidden="true"></i> Run Workflow
+                  </button>
+                  <button mjButton variant="secondary" size="sm" (click)="OnDebugWorkflow(studioWf)">
+                    <i class="fa-solid fa-bug" aria-hidden="true"></i> Debug
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <div class="wf-studio-runs-split">
+                <div class="wf-studio-runs-list">
+                  <div class="wf-studio-runs-list-head">
+                    <span>Recent Runs ({{ StudioRuns.length }})</span>
+                    <button mjButton variant="flat" size="sm" (click)="RefreshStudioRuns()" aria-label="Refresh runs">
+                      <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                  @for (run of StudioRuns; track run.ID) {
+                    <button type="button"
+                            class="wf-studio-run-row"
+                            [class.wf-studio-run-row--selected]="run.ID === SelectedStudioRunID"
+                            (click)="OnSelectStudioRun(run.ID)">
+                      <span class="wf-studio-run-name">{{ run.Name }}</span>
+                      <div class="wf-studio-run-meta">
+                        <span class="wf-status-pill" [attr.data-status]="run.Status">{{ run.Status }}</span>
+                        <span class="wf-metric-dur">{{ run.Duration }}</span>
+                      </div>
+                    </button>
+                  }
+                </div>
+                <div class="wf-studio-runs-viewer">
+                  @if (SelectedStudioRun; as selRun) {
+                    <mj-task-graph-debugger
+                      [Provider]="ProviderToUse"
+                      [ParentTaskID]="selRun.ID"
+                      [WorkflowName]="selRun.Name"
+                      [LiveUpdates]="selRun.Status === 'In Progress'"
+                      [ShowReplayScrubber]="true"
+                      [AllowRememberBreakpoints]="true"
+                      Height="100%">
+                    </mj-task-graph-debugger>
+                  } @else {
+                    <mj-empty-state
+                      Icon="fa-solid fa-hand-pointer"
+                      Title="Select a run"
+                      Message="Choose a run on the left to inspect its steps and outputs.">
+                    </mj-empty-state>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </mj-page-body>
+  } @else {
+    <mj-page-header
+      Title="Workflows"
+      Icon="fa-solid fa-diagram-project"
+      Subtitle="Repeatable pathways that always follow the same route.">
+
+      <div meta>
+        @if (!IsLoading && !IsCreating) {
+          <mj-stat-badge
+            Icon="fa-solid fa-diagram-project"
+            [Count]="FilteredWorkflows.length"
+            [Total]="Workflows.length"
+            Label="workflows">
+          </mj-stat-badge>
+          @if (ActiveRunningCount > 0) {
+            <span class="wf-meta-pill wf-meta-pill--live">
+              <i class="fa-solid fa-circle-play" aria-hidden="true"></i>
+              {{ ActiveRunningCount }} running
             </span>
-            <span class="wf-row-trigger">{{ item.TriggerSummary }}</span>
-            <span class="wf-row-status" [class.wf-row-status-active]="item.Status === 'Active'">
-              {{ item.Status }}
+          }
+          @if (PendingDecisions.length > 0) {
+            <span class="wf-meta-pill wf-meta-pill--warn">
+              <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+              {{ PendingDecisions.length }} waiting on person
             </span>
+          }
+        }
+      </div>
+
+      <div actions>
+        @if (IsCreating) {
+          <button mjButton variant="secondary" size="sm" (click)="OnCancelCreate()">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to workflows
+          </button>
+        } @else {
+          <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadData()"></mj-refresh-button>
+          <button mjButton variant="primary" size="sm" (click)="OnStartCreate()">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i> Create Workflow
           </button>
         }
       </div>
-    }
-  </mj-page-body>
+
+      @if (!IsCreating) {
+        <div toolbar>
+          <mj-page-search
+            [Value]="SearchText"
+            Placeholder="Search workflows..."
+            (ValueChange)="OnSearchChange($event)">
+          </mj-page-search>
+
+          <mj-filter-popover
+            Label="Filter"
+            [ActiveCount]="ActiveFilterCount"
+            [ShowClearAll]="ActiveFilterCount > 0">
+            <mj-filter-panel
+              [Fields]="FilterFields"
+              [Values]="FilterValues"
+              (ValuesChange)="OnFilterValuesChange($event)"
+              (Reset)="OnResetFilters()">
+            </mj-filter-panel>
+          </mj-filter-popover>
+
+          <div class="wf-toolbar-spacer"></div>
+
+          <mj-view-toggle
+            [Options]="ViewOptions"
+            [ActiveKey]="ViewMode"
+            (KeyChange)="OnViewModeChange($event)">
+          </mj-view-toggle>
+        </div>
+      }
+    </mj-page-header>
+
+    <mj-page-body>
+      @if (IsCreating) {
+        @if (SaveError) {
+          <div class="wf-save-error">
+            <mj-alert Variant="error" [Message]="SaveError"></mj-alert>
+          </div>
+        }
+        <mj-create-workflow
+          [Busy]="IsSaving"
+          [Provider]="ProviderToUse"
+          [CurrentUser]="ProviderToUse.CurrentUser"
+          (Created)="OnCreated($event)"
+          (Cancelled)="OnCancelCreate()">
+        </mj-create-workflow>
+      } @else if (IsLoading) {
+        <mj-loading text="Loading workflows..."></mj-loading>
+      } @else if (LoadError) {
+        <mj-alert Variant="error" [Message]="LoadError"></mj-alert>
+      } @else {
+        @if (PendingDecisions.length > 0) {
+          <section class="wf-inbox" aria-label="Needs your decision">
+            <div class="wf-inbox-head">
+              <div class="wf-inbox-title">
+                <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+                <span>Needs Your Decision</span>
+                <span class="wf-inbox-count">{{ PendingDecisions.length }}</span>
+              </div>
+              <span class="wf-inbox-sub">Paused at a person step waiting for approval or input.</span>
+            </div>
+            <div class="wf-inbox-items">
+              @for (dec of PendingDecisions; track dec.TaskID) {
+                <button type="button" class="wf-inbox-card" (click)="OnReviewPendingDecision(dec)">
+                  <div class="wf-inbox-card-main">
+                    <span class="wf-inbox-step">{{ dec.StepName }}</span>
+                    <span class="wf-inbox-wf">{{ dec.WorkflowName }}</span>
+                  </div>
+                  <span class="wf-inbox-cta">
+                    Review <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
+        }
+
+        @if (Workflows.length === 0) {
+          <mj-empty-state
+            Icon="fa-solid fa-diagram-project"
+            Title="No workflows yet"
+            Message="A workflow runs the same steps the same way every time. Describe what you want done and we will draft it.">
+          </mj-empty-state>
+        } @else if (FilteredWorkflows.length === 0) {
+          <mj-empty-state
+            Icon="fa-solid fa-filter"
+            Title="No matching workflows"
+            Message="Try clearing your search or filter criteria.">
+          </mj-empty-state>
+        } @else if (ViewMode === 'blueprints') {
+          <div class="wf-blueprints-grid">
+            @for (item of FilteredWorkflows; track item.ID) {
+              <article class="wf-bp-card"
+                       tabindex="0"
+                       role="button"
+                       (click)="OnOpenWorkflow(item)"
+                       (keydown.enter)="OnOpenWorkflow(item)">
+                <div class="wf-bp-preview">
+                  @if (item.BlueprintSvg && item.BlueprintSvg.Steps.length > 0) {
+                    <svg class="wf-bp-svg" [attr.viewBox]="item.BlueprintSvg.ViewBox" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                      @for (pathLine of item.BlueprintSvg.Paths; track pathLine.ID) {
+                        <path class="wf-bp-edge" [attr.d]="pathLine.PathD"></path>
+                      }
+                      @for (stepRect of item.BlueprintSvg.Steps; track stepRect.ID) {
+                        <rect
+                          class="wf-bp-step"
+                          [attr.data-kind]="stepRect.Kind"
+                          [class.wf-bp-step--loop]="stepRect.IsLoop"
+                          [attr.x]="stepRect.X"
+                          [attr.y]="stepRect.Y"
+                          [attr.width]="stepRect.Width"
+                          [attr.height]="stepRect.Height"
+                          rx="4"
+                          ry="4">
+                        </rect>
+                      }
+                    </svg>
+                  } @else {
+                    <div class="wf-bp-empty-preview">
+                      <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+                      <span>No steps yet</span>
+                    </div>
+                  }
+                  <span class="wf-status-pill wf-bp-status" [attr.data-status]="item.Status">{{ item.Status }}</span>
+                </div>
+
+                <div class="wf-bp-body">
+                  <div class="wf-bp-title-row">
+                    <span class="wf-bp-icon">
+                      <i [ngClass]="item.IconClass || 'fa-solid fa-diagram-project'" aria-hidden="true"></i>
+                    </span>
+                    <span class="wf-bp-name">{{ item.Name }}</span>
+                  </div>
+                  @if (item.Description) {
+                    <p class="wf-bp-desc">{{ item.Description }}</p>
+                  }
+
+                  <div class="wf-bp-tags">
+                    <span class="wf-trigger-pill">
+                      <i class="fa-solid" [class.fa-clock]="item.TriggerKind === 'schedule'"
+                         [class.fa-bolt]="item.TriggerKind === 'event'"
+                         [class.fa-hand-pointer]="item.TriggerKind !== 'schedule' && item.TriggerKind !== 'event'"
+                         aria-hidden="true"></i>
+                      {{ item.TriggerSummary }}
+                    </span>
+                    <span class="wf-cap-pill">{{ item.StepCount ?? 0 }} {{ (item.StepCount ?? 0) === 1 ? 'step' : 'steps' }}</span>
+                    @if (item.HasHumanStep) {
+                      <span class="wf-cap-pill wf-cap-pill--human">
+                        <i class="fa-solid fa-user-check" aria-hidden="true"></i> Person
+                      </span>
+                    }
+                    @if (item.HasLoop) {
+                      <span class="wf-cap-pill wf-cap-pill--loop">
+                        <i class="fa-solid fa-repeat" aria-hidden="true"></i> Loop
+                      </span>
+                    }
+                  </div>
+                </div>
+
+                <div class="wf-bp-foot">
+                  <div class="wf-bp-foot-left">
+                    <div class="wf-spark" [attr.aria-label]="'Recent runs for ' + item.Name">
+                      @if (item.RecentBars && item.RecentBars.length > 0) {
+                        @for (bar of item.RecentBars; track bar.ID) {
+                          <span class="wf-spark-bar"
+                                [attr.data-status]="bar.Status"
+                                [style.height.%]="bar.HeightPct"
+                                [title]="bar.Tooltip"></span>
+                        }
+                      } @else {
+                        <span class="wf-spark-none">No runs yet</span>
+                      }
+                    </div>
+                    <div class="wf-bp-metrics">
+                      @if (item.HealthPercent != null) {
+                        <span class="wf-metric-ok">{{ item.HealthPercent }}%</span>
+                      }
+                      @if (item.P50Duration && item.P50Duration !== '—') {
+                        <span class="wf-metric-dur">p50 {{ item.P50Duration }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="wf-bp-actions">
+                    <button type="button"
+                            class="wf-card-action wf-card-action--run"
+                            title="Run workflow"
+                            [attr.aria-label]="'Run ' + item.Name"
+                            (click)="OnRunWorkflow(item, $event)">
+                      <i class="fa-solid fa-play" aria-hidden="true"></i> Run
+                    </button>
+                    <button type="button"
+                            class="wf-card-action wf-card-action--debug"
+                            title="Debug workflow (start paused)"
+                            [attr.aria-label]="'Debug ' + item.Name"
+                            (click)="OnDebugWorkflow(item, $event)">
+                      <i class="fa-solid fa-bug" aria-hidden="true"></i> Debug
+                    </button>
+                  </div>
+                </div>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="wf-table-wrap">
+            <table class="wf-ops-table">
+              <thead>
+                <tr>
+                  <th>Workflow</th>
+                  <th>Steps</th>
+                  <th>Starts By</th>
+                  <th>Last 10 Runs</th>
+                  <th>Health</th>
+                  <th>p50</th>
+                  <th>Status</th>
+                  <th class="wf-ops-actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of FilteredWorkflows; track item.ID) {
+                  <tr class="wf-ops-row" (click)="OnOpenWorkflow(item)" tabindex="0" (keydown.enter)="OnOpenWorkflow(item)">
+                    <td>
+                      <div class="wf-ops-name-cell">
+                        <span class="wf-bp-icon wf-bp-icon--sm">
+                          <i [ngClass]="item.IconClass || 'fa-solid fa-diagram-project'" aria-hidden="true"></i>
+                        </span>
+                        <div class="wf-ops-name-copy">
+                          <span class="wf-ops-name">{{ item.Name }}</span>
+                          @if (item.Description) {
+                            <span class="wf-ops-desc">{{ item.Description }}</span>
+                          }
+                        </div>
+                      </div>
+                    </td>
+                    <td class="wf-ops-num">
+                      <span>{{ item.StepCount ?? 0 }}</span>
+                      @if (item.HasHumanStep) {
+                        <i class="fa-solid fa-user-check wf-ops-flag" title="Includes Person step" aria-hidden="true"></i>
+                      }
+                      @if (item.HasLoop) {
+                        <i class="fa-solid fa-repeat wf-ops-flag" title="Includes Loop" aria-hidden="true"></i>
+                      }
+                    </td>
+                    <td>
+                      <span class="wf-trigger-pill">{{ item.TriggerSummary }}</span>
+                    </td>
+                    <td>
+                      <div class="wf-spark wf-spark--table">
+                        @if (item.RecentBars && item.RecentBars.length > 0) {
+                          @for (bar of item.RecentBars; track bar.ID) {
+                            <span class="wf-spark-bar"
+                                  [attr.data-status]="bar.Status"
+                                  [style.height.%]="bar.HeightPct"
+                                  [title]="bar.Tooltip"></span>
+                          }
+                        } @else {
+                          <span class="wf-spark-none">—</span>
+                        }
+                      </div>
+                    </td>
+                    <td class="wf-ops-num">
+                      {{ item.HealthPercent != null ? item.HealthPercent + '%' : '—' }}
+                    </td>
+                    <td class="wf-ops-num">{{ item.P50Duration || '—' }}</td>
+                    <td>
+                      <span class="wf-status-pill" [attr.data-status]="item.Status">{{ item.Status }}</span>
+                    </td>
+                    <td class="wf-ops-actions-cell">
+                      <div class="wf-bp-actions">
+                        <button type="button"
+                                class="wf-card-action wf-card-action--run"
+                                title="Run workflow"
+                                [attr.aria-label]="'Run ' + item.Name"
+                                (click)="OnRunWorkflow(item, $event)">
+                          <i class="fa-solid fa-play" aria-hidden="true"></i> Run
+                        </button>
+                        <button type="button"
+                                class="wf-card-action wf-card-action--debug"
+                                title="Debug workflow (start paused)"
+                                [attr.aria-label]="'Debug ' + item.Name"
+                                (click)="OnDebugWorkflow(item, $event)">
+                          <i class="fa-solid fa-bug" aria-hidden="true"></i> Debug
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+    </mj-page-body>
+  }
 </mj-page-layout>

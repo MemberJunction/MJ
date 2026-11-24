@@ -56,6 +56,7 @@ describe('ChiefOfStaffOverviewComponent — reloads when what it shows changes',
     raise('MJ: AI Agent Requests');
     raise('MJ: User Routine Runs');
     raise('MJ: User Routines');
+    raise('MJ: Conversation Details');
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(load).toHaveBeenCalledTimes(1);
@@ -64,7 +65,7 @@ describe('ChiefOfStaffOverviewComponent — reloads when what it shows changes',
   it('ignores changes to entities it does not show', async () => {
     const { load } = createComponent();
 
-    raise('MJ: Conversation Details');
+    raise('MJ: Applications');
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(load).not.toHaveBeenCalled();

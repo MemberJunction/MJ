@@ -58,46 +58,36 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 5.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 3
           },
           "primaryKey": {
             "ID": "AE1AE616-A2A7-40F4-B186-0646A45CC3A0"
-          },
-          "sync": {
-            "lastModified": "2026-02-13T20:48:55.757Z",
-            "checksum": "681b374ee1553a33bd3eaec4ccf26074c9ecdc0aaf252d7f6efb2a0424addee5"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 10
+            "Priority": 10,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "7C6CC54F-6038-4DAB-810C-0D18A1CC659B"
-          },
-          "sync": {
-            "lastModified": "2026-10-02T21:42:11.464Z",
-            "checksum": "16ae6811aae94d52bed203c8c0d10a4f2d74035edf8bbe657cc0fb9c54a03df3"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 9
+            "Priority": 9,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "4ACF758C-A505-4785-89CA-DC0A7BA6C2C6"
-          },
-          "sync": {
-            "lastModified": "2026-10-02T21:42:11.481Z",
-            "checksum": "13bc8b6a2097c32d1a3db8a9cdd44e04bd8e5e7cc4a8971fe6178a2f8aff5958"
           }
         },
         {
@@ -149,10 +139,6 @@
     },
     "primaryKey": {
       "ID": "7FF02D68-02AE-49A1-AA5E-843D52367D57"
-    },
-    "sync": {
-      "lastModified": "2026-08-05T18:34:38.797Z",
-      "checksum": "09bce141afb49576edb6bde07fae17fa9d8f1050f7d20458a3b8e880f3a2a6d8"
     }
   }
 ]
