@@ -141,8 +141,7 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
         const queue: HarnessTurnEvent[] = [];
         let notifyNext: (() => void) | null = null;
         let stdoutDone = false;
-        let stdoutError: unknown = undefined;
-        let hasStdoutError = false;
+        let stdoutError: Error | undefined = undefined;
         let consumerClosed = false;
 
         const wake = (): void => {
@@ -193,8 +192,7 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
                     enqueue(event);
                 }
             } catch (err) {
-                stdoutError = err;
-                hasStdoutError = true;
+                stdoutError = err instanceof Error ? err : new Error(String(err));
             } finally {
                 stdoutDone = true;
                 wake();
@@ -216,7 +214,7 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
             }
 
             await pumpStdout;
-            if (hasStdoutError) {
+            if (stdoutError !== undefined) {
                 throw stdoutError;
             }
 
