@@ -972,8 +972,8 @@ batch.
 Check these against the code before relying on the opposite; they describe the implementation as it stands.
 
 - **One provider for delivery events.** The public webhook route and the `comms.activity` handler support
-  SendGrid only (13.5). First-party open, click and unsubscribe events are attributed to the provider named
-  `SendGrid`.
+  SendGrid only (13.5). Open, click and unsubscribe events from MJ's own routes are attributed to the provider
+  that sent the message, taken from its log.
 - **Mixed-entity sends.** Jurisdiction and attributes are resolved with the principal driver of the first
   recipient's entity. Send one entity per call when entities use different drivers.
 - **Per-recipient `CorrelationData`** on `RecipientSendTarget` is not stored; only `Envelope.CorrelationData`
