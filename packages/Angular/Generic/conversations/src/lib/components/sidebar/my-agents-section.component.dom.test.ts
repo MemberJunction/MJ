@@ -214,4 +214,56 @@ describe('MyAgentsSectionComponent (DOM)', () => {
     expect(startedNew.map((a) => a.Name)).toEqual(['Cato']);
     expect(started.map((a) => a.Name)).toEqual(['Pepper']);
   });
+
+  it('E5: hides "Set up My Chief of Staff" and create CTA for external Space Participant users lacking CanCreate on MJ: AI Agents', async () => {
+    const cosTemplate: StubAgent = {
+      ID: COS_ID,
+      Name: 'Chief of Staff',
+      Description: 'Executive partner',
+      BaseAgentID: null,
+      OwnerUserID: null,
+      InstantiationMode: 'Required',
+      IsPrimaryInstance: false,
+      IconClass: 'fa-solid fa-user-tie',
+      LogoURL: null,
+      Status: 'Active',
+    };
+    mockAiEngineState.instantiable = [cosTemplate];
+    mockAiEngineState.byId.set(COS_ID.toLowerCase(), cosTemplate);
+
+    const externalParticipant = {
+      ID: '33333333-0000-4000-8000-000000000001',
+      Name: 'External Space Participant',
+      UserRoles: [{ Role: 'Space Participant', RoleID: 'role-space-participant' }],
+    } as Partial<UserInfo> as UserInfo;
+
+    const restrictedProvider = {
+      CurrentUser: externalParticipant,
+      EntityByName: (name: string) =>
+        name === 'MJ: AI Agents'
+          ? {
+              GetUserPermisions: () => ({
+                CanRead: true,
+                CanCreate: false,
+                CanUpdate: false,
+                CanDelete: false,
+              }),
+            }
+          : null,
+    } as Partial<IMetadataProvider> as IMetadataProvider;
+
+    const fixture = renderComponentFixture(MyAgentsSectionComponent, {
+      imports: [CommonModule],
+      declarations: [MyAgentsSectionComponent, StubAgentInstanceEditorModalComponent],
+      inputs: { CurrentUser: externalParticipant, Provider: restrictedProvider, ShowMyAgents: true },
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.HasInstantiableTemplates).toBe(false);
+    expect(fixture.componentInstance.UnonboardedRequiredTemplates).toHaveLength(0);
+    expect(fixture.componentInstance.IsVisible).toBe(false);
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).not.toContain('Set up My Chief of Staff');
+  });
 });

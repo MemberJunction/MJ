@@ -203,7 +203,7 @@ export interface RealtimeAvatarCaption {
   styleUrl: './realtime-session-overlay.component.css'
 })
 export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, AfterViewChecked, OnDestroy {
-  private _agentName = 'Sage';
+  private _agentName = 'Assistant';
 
   /**
    * True while the call is MINIMIZED: the overlay hides itself (CSS, not destruction) so
@@ -213,10 +213,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @Input() Hidden = false;
 
-  /** Display name of the agent the voice session fronts (e.g. "Sage"). */
+  /** Display name of the agent the voice session fronts. */
   @Input()
   set AgentName(value: string) {
-    this._agentName = value || 'Sage';
+    this._agentName = value || 'Assistant';
     this.State.AgentName = this._agentName;
   }
   get AgentName(): string {

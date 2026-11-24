@@ -1113,20 +1113,36 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         const trimmedPreview = (input.messagePreview ?? '').trim().slice(0, 500);
         const results: AgentWakeTriggerResult[] = [];
 
+        const resolvedPeers = await Promise.all(
+            peers.map(async (peer) => {
+                const resolved = await this.resolvePrimaryUserAgentForTarget(
+                    peer.AgentID,
+                    peer.UserID,
+                    systemUser,
+                    md
+                );
+                return {
+                    peer,
+                    targetAgentID: resolved.ID || peer.AgentID,
+                    targetAgentName: resolved.Name,
+                };
+            })
+        );
+
         const policyEvaluations = await CheckActivePoliciesForBatch(
-            peers.map((peer) => ({ AgentID: peer.AgentID, UserID: peer.UserID })),
+            resolvedPeers.map((entry) => ({ AgentID: entry.targetAgentID, UserID: entry.peer.UserID })),
             systemUser,
             { provider: md, preferCache: true }
         );
 
-        for (const peer of peers) {
-            const evalResult = policyEvaluations.get(BuildPolicyPairKey(peer.AgentID, peer.UserID));
+        for (const { peer, targetAgentID, targetAgentName } of resolvedPeers) {
+            const evalResult = policyEvaluations.get(BuildPolicyPairKey(targetAgentID, peer.UserID));
             if (!evalResult?.Allowed || !evalResult.Policy) {
                 results.push(
                     this.notTriggered(
                         'POLICY_DENIED',
                         evalResult?.Reason ??
-                            `Peer user "${peer.UserID}" does not have an Active coordination policy for agent "${peer.AgentID}".`
+                            `Peer user "${peer.UserID}" does not have an Active coordination policy for agent "${targetAgentID}".`
                     )
                 );
                 continue;
@@ -1158,8 +1174,8 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
             const wakeResult = await this.upsertImmediateWakeRoutine({
                 targetUserID: peer.UserID,
-                targetAgentID: peer.AgentID,
-                targetAgentName: policy.Agent ?? null,
+                targetAgentID,
+                targetAgentName: targetAgentName ?? policy.Agent ?? null,
                 workstreamKey,
                 wakeReason,
                 resumeState,

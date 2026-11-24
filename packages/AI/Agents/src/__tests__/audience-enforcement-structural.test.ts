@@ -503,4 +503,47 @@ describe('MJ-1 Structural Audience Common-Reach Mode', () => {
             expect(actionHarness.dispatched[0].IsStructuralAudience).toBeUndefined();
         });
     });
+
+    describe('E3: ScopeCommonReach & SupportsAudience enforcement on derived BaseAgentID instances', () => {
+        it('enforces SupportsAudience narrowing on derived instances inheriting from a root template', async () => {
+            const derivedPepper = {
+                ...AGENT,
+                ID: 'aaaaaaaa-0000-4000-8000-0000000000aa',
+                Name: 'Pepper',
+                BaseAgentID: AGENT_ID,
+                OwnerUserID: CALLER_ID,
+                IsPrimaryInstance: true,
+            } as MJAIAgentEntityExtended;
+
+            const structuralAudience: AgentRunAudience = { Mode: 'ScopeCommonReach', ScopeAsserted: true };
+            const derivedParams = makeParams(structuralAudience, { agent: derivedPepper });
+
+            // Inherited SupportsAudience action (Scoped Search) succeeds with IsStructuralAudience=true
+            const allowedResult = await agent.ExecuteSingleAction(
+                derivedParams,
+                { name: 'Scoped Search', params: { Query: 'space docs' } },
+                makeActionEntity(),
+                CALLER
+            );
+            expect(allowedResult.Success).toBe(true);
+            expect(actionHarness.dispatched).toHaveLength(1);
+            expect(actionHarness.dispatched[0].IsStructuralAudience).toBe(true);
+
+            // Inherited non-audience action (Send Email) is refused & locked out for the derived instance
+            const nonAudienceEntity = makeActionEntity({
+                ID: 'aaaaaaaa-0000-4000-8000-0000000000fb',
+                Name: 'Send Email',
+                DriverClass: '__Test_NonAudienceAction',
+            });
+            const refused = await agent.ExecuteSingleAction(
+                derivedParams,
+                { name: 'Send Email', params: {} },
+                nonAudienceEntity,
+                CALLER
+            );
+            expect(refused.Success).toBe(false);
+            expect(refused.ResultCode).toBe(AUDIENCE_UNSUPPORTED_RESULT_CODE);
+            expect(actionHarness.dispatched).toHaveLength(1);
+        });
+    });
 });
