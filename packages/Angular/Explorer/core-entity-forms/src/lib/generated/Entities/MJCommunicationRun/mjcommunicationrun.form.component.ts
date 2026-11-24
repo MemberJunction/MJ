@@ -19,8 +19,10 @@ export class MJCommunicationRunFormComponent extends BaseFormComponent {
             { sectionKey: 'runMetadata', sectionName: 'Run Metadata', isExpanded: false },
             { sectionKey: 'executionTimeline', sectionName: 'Execution Timeline', isExpanded: true },
             { sectionKey: 'resultNotes', sectionName: 'Result & Notes', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false }
+            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
+            { sectionKey: 'mJCommunicationRunChunks', sectionName: 'Communication Run Chunks', isExpanded: false }
         ]);
     }
 }

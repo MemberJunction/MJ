@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Communications: Admin",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "2AC01C69-7FF5-4499-B838-5097DBD05B5E"
+    }
+  }
+]

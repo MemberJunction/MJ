@@ -1,0 +1,27 @@
+{
+  "entity": "MJ: Communication Senders",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".communication-senders.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "CommunicationSenderTypeID": {
+        "entity": "MJ: Communication Sender Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {}
+  }
+}

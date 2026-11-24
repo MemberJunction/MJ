@@ -193,6 +193,8 @@ Actions used by the Chief of Staff agent (and other autonomous agents) to manage
 
 The mailbox actions run through the enterprise provider's app-level credential (Microsoft Graph or Gmail) and the gate in `BaseUserScopedCommunicationAction`: the caller's email domain must match the provider's `AllowedEmailDomains`, the provider's `EnterpriseScopeMode` must allow personal mailboxes (otherwise the action falls back to the user's `MJ: AI Bridge Agent Identities` utility inbox), and the provider's mailbox-access preflight must succeed. The per-user OAuth service described below is a separate, not-yet-wired path to the same mailboxes.
 
+The `Send` operation of `Manage My Email Inbox and Drafts` also checks its `To` address against Communications V2 endpoint status and suppressions, as a `Transactional` message: an address with a hard bounce, an invalid-address status or an erasure on record is refused with result code `COMPLIANCE_BLOCKED` before the provider is called. See the [Communications V2 Guide](../../../guides/COMMUNICATIONS_V2_GUIDE.md#10-v1-behavior-and-the-v1-bridge).
+
 ### Communication (3 actions)
 
 Send messages via the MJ Communication Framework or webhook integrations.

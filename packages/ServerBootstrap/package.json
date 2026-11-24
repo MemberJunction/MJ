@@ -102,6 +102,7 @@
     "@memberjunction/archiving-engine": "6.3.0-edge.1",
     "@memberjunction/auth-providers": "6.3.0-edge.1",
     "@memberjunction/codegen-lib": "6.3.0-edge.1",
+    "@memberjunction/communication-engine": "6.3.0-edge.1",
     "@memberjunction/communication-ms-graph": "6.3.0-edge.1",
     "@memberjunction/communication-sendgrid": "6.3.0-edge.1",
     "@memberjunction/communication-types": "6.3.0-edge.1",
