@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (508 classes)
+// @memberjunction/core-entities (534 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -193,11 +193,30 @@ import {
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
+    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
+    MJCommunicationComplianceRegimeEntity,
+    MJCommunicationComplianceRegimeJurisdictionEntity,
+    MJCommunicationComplianceRegimeRuleEntity,
+    MJCommunicationComplianceRuleTypeEntity,
+    MJCommunicationConsentAuditLogEntity,
+    MJCommunicationEndpointEntity,
+    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
+    MJCommunicationPreferenceEntity,
+    MJCommunicationPrincipalEntity,
+    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
+    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
+    MJCommunicationRunChunkEntity,
     MJCommunicationRunEntity,
+    MJCommunicationSenderEntity,
+    MJCommunicationSenderPermissionEntity,
+    MJCommunicationSenderTypeEntity,
+    MJCommunicationSendingDomainEntity,
+    MJCommunicationSuppressionEntity,
+    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -351,6 +370,8 @@ import {
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
+    MJJurisdictionEntity,
+    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -373,8 +394,12 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -539,6 +564,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -956,11 +982,30 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
+    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
+    MJCommunicationComplianceRegimeEntity,
+    MJCommunicationComplianceRegimeJurisdictionEntity,
+    MJCommunicationComplianceRegimeRuleEntity,
+    MJCommunicationComplianceRuleTypeEntity,
+    MJCommunicationConsentAuditLogEntity,
+    MJCommunicationEndpointEntity,
+    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
+    MJCommunicationPreferenceEntity,
+    MJCommunicationPrincipalEntity,
+    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
+    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
+    MJCommunicationRunChunkEntity,
     MJCommunicationRunEntity,
+    MJCommunicationSenderEntity,
+    MJCommunicationSenderPermissionEntity,
+    MJCommunicationSenderTypeEntity,
+    MJCommunicationSendingDomainEntity,
+    MJCommunicationSuppressionEntity,
+    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -969,6 +1014,10 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
@@ -988,10 +1037,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentProcessRunEntity,
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJContentSourceParamEntity,
     MJContentSourceTypeEntity,
     MJContentSourceTypeParamEntity,
@@ -1118,6 +1163,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
+    MJJurisdictionEntity,
+    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1140,8 +1187,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -1167,6 +1218,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1192,10 +1247,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
@@ -1310,6 +1361,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -1370,6 +1422,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     InteractiveComponentChannel,
     RealtimeAvatarChannel,
     RealtimeCameraChannel,
@@ -1396,10 +1452,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     LibraryResource,
     ListDetailResource,
     OmnibarAgentProvider,
@@ -1498,7 +1550,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 684;
+export const CLASS_REGISTRATIONS_COUNT = 710;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

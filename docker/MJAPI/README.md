@@ -129,6 +129,9 @@ graph TD
 | `AUTO_CREATE_NEW_USERS` | Auto-create users on first login | `false` |
 | `MJ_BASE_ENCRYPTION_KEY` | Base64 32-byte key for field-level encryption (`openssl rand -base64 32`) | -- |
 | `MJ_ARTIFACT_COLLAB_HMAC_SECRET` | `>= 32`-char HMAC secret for real-time Yjs collaboration tickets (`openssl rand -hex 32`); live sync fails closed if unset | -- |
+| `MJ_COMMS_HMAC_SECRET` | HMAC secret for Communications V2 click-tracking links (`openssl rand -hex 32`); same value on every replica; click tracking is off if unset | -- |
+| `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` | SendGrid Event Webhook public verification key; `POST /comms/webhooks/sendgrid` answers `401` if unset | -- |
+| `MJ_COMMS_PREFERENCE_ELEMENT_SRC` | Optional URL of the Communications V2 preference center element bundle | served by MJAPI |
 | `MJ_FROZEN_BLOCK_HMAC_SECRET` | `>= 32`-char HMAC secret for signing/verifying frozen governed document/slide/sheet snapshots (`openssl rand -hex 32`) | -- |
 
 ## SSH Access (Debugging)

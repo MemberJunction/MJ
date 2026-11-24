@@ -80,6 +80,14 @@ graph TD
 
 ### Communication Dashboard
 - Monitor, logs, providers, runs, and template management for entity communications
+- **Compliance & Admin** (`CommunicationComplianceAdminResource`, `CommunicationsAdminDashboardComponent`): administration for [Communications V2](../../../../guides/COMMUNICATIONS_V2_GUIDE.md), in six tabs:
+  - **Gate Simulator**: run the compliance gate for a sender, recipient, preference and message class without sending
+  - **Senders & Permissions**: `MJ: Communication Senders` and who may send as each
+  - **Regimes & Jurisdictions**: enable or disable compliance regimes and review their rules and jurisdictions
+  - **Endpoints & Suppressions**: look up an address, see its status and suppressions, block it, or revoke a suppression
+  - **Policies & Principals**: suppression policies, and the entities registered as message recipients
+  - **Sending Domains & DNS**: register a domain with its provider, show the DNS records to publish, verify, revoke
+- Server-side actions use the `Communications.*` Remote Operations and require Owner privileges or the `Communications: Admin` authorization; the tabs read and edit the underlying entities under normal entity permissions.
 
 ### Testing Dashboard
 - Test execution, analytics, review, and explorer views for MJ's testing framework

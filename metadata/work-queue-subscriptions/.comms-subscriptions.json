@@ -1,0 +1,59 @@
+[
+  {
+    "fields": {
+      "Name": "comms.dispatch-worker",
+      "Description": "Processes chunked comms.dispatch V2 outbound deliveries.",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=comms.dispatch",
+      "PartitionMode": "None",
+      "MaxAttempts": 5,
+      "BackoffBaseSeconds": 5,
+      "BackoffMaxSeconds": 300,
+      "LeaseSeconds": 120,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "comms.dispatch",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "FDC392FC-E25F-4FD7-B9BC-1AB1A466A0CE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "comms.render-worker",
+      "Description": "Processes batched comms.render template rendering and V2 dispatch.",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=comms.render",
+      "PartitionMode": "None",
+      "MaxAttempts": 5,
+      "BackoffBaseSeconds": 5,
+      "BackoffMaxSeconds": 300,
+      "LeaseSeconds": 120,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "comms.render",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B9B55409-2CAB-4CA4-835E-363B33BB978B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "comms.activity-worker",
+      "Description": "Processes inbound comms.activity events (webhooks, opens, clicks, unsubscribes).",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=comms.activity",
+      "PartitionMode": "None",
+      "MaxAttempts": 5,
+      "BackoffBaseSeconds": 5,
+      "BackoffMaxSeconds": 300,
+      "LeaseSeconds": 120,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "comms.activity",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "AD130C6A-7F9C-4AD5-B112-42F667DA1FBB"
+    }
+  }
+]

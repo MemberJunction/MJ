@@ -33,14 +33,17 @@
     "@memberjunction/predictive-studio-sidecar": "6.3.0-edge.1",
     "@memberjunction/record-set-processor": "6.3.0-edge.1",
     "@memberjunction/record-set-processor-base": "6.3.0-edge.1",
+    "@memberjunction/scheduling-base-types": "6.3.0-edge.1",
+    "@memberjunction/scheduling-engine": "6.3.0-edge.1",
     "@memberjunction/storage": "6.3.0-edge.1",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@memberjunction/unit-testing": "6.3.0-edge.1",
     "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3",
     "tsc-alias": "^1.8.10",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
   "repository": {

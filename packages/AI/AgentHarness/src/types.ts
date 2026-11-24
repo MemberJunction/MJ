@@ -330,12 +330,51 @@ export type HarnessActivityHeartbeatCallback = (
     info: HarnessActivityHeartbeatInfo,
 ) => void | Promise<void>;
 
+/** Canonical CLI vendor keys supported by the multi-account subscription pool. */
+export type HarnessPoolVendor = 'claude' | 'agy' | 'codex' | 'gemini';
+
+/** Balancing strategy used by {@link HarnessAccountPoolService} to select a healthy CLI account slot. */
+export type HarnessAccountSelectionStrategy =
+    | 'least-in-flight'
+    | 'round-robin'
+    | 'weighted'
+    | 'priority-failover';
+
 /**
- * Per-run execution limits and liveness hooks for a harness turn.
+ * Per-run multi-account CLI subscription pool options.
+ *
+ * Enabled automatically whenever effective `authMode` resolves to `'cli-login'` and at least one
+ * healthy pool or OS-default slot exists for the harness vendor.
+ */
+export interface HarnessAccountPoolExecutionOptions {
+    /** Explicitly enable (`true`) or disable (`false`) account pooling for this run. */
+    enabled?: boolean;
+    /** Override the pool's default slot selection strategy for this run. */
+    strategy?: HarnessAccountSelectionStrategy;
+    /** Pin execution to a specific enrolled or OS-default slot ID. */
+    slotId?: string;
+    /** Maximum automatic mid-run account failovers on quota/rate-limit errors. Defaults to 3. */
+    maxAccountSwitchesPerRun?: number;
+    /** Optional lease TTL in milliseconds. */
+    leaseTtlMs?: number;
+    /** Optional pool directory override (defaults to `MJ_HARNESS_ACCOUNT_POOL_DIR` or `~/.mj/harness-accounts`). */
+    poolDir?: string;
+}
+
+/**
+ * Per-run execution limits, liveness hooks, and multi-account pool controls for a harness turn.
  */
 export interface HarnessRunConfig {
     /** Wall-clock, idle watchdog, repeated tool-loop, and heartbeat cadence limits. */
     limits?: HarnessTurnLimits;
     /** Optional hook invoked periodically on live turn activity. */
     onActivityHeartbeat?: HarnessActivityHeartbeatCallback;
+    /** Optional multi-account CLI subscription pool controls. */
+    accountPool?: HarnessAccountPoolExecutionOptions;
 }
+
+/**
+ * Execution options accepted by {@link HarnessAgentBase} runs and callers configuring limits,
+ * liveness heartbeats, and multi-account CLI subscription pooling.
+ */
+export type HarnessExecutionOptions = HarnessRunConfig;

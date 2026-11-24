@@ -30,7 +30,6 @@ Foundational packages that provide the application shell, routing, authenticatio
 | [explorer-core](./Explorer/explorer-core/README.md) | `@memberjunction/ng-explorer-core` | Core Explorer framework: application shell, routing, resource containers, and navigation |
 | [explorer-modules](./Explorer/explorer-modules/README.md) | `@memberjunction/ng-explorer-modules` | Consolidated Explorer NgModule bundle that re-exports all Explorer feature modules |
 | [base-application](./Explorer/base-application/README.md) | `@memberjunction/ng-base-application` | BaseApplication class system for app-centric navigation |
-| [auth-services](./Explorer/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, and Okta provider support |
 | [shared](./Explorer/shared/README.md) | `@memberjunction/ng-shared` | Shared Explorer utilities, base components, services, and events used across Explorer packages |
 | [workspace-initializer](./Explorer/workspace-initializer/README.md) | `@memberjunction/ng-workspace-initializer` | Workspace initialization service and components for bootstrapping the Explorer environment |
 
@@ -155,6 +154,7 @@ Components for managing credentials and resource access control.
 |---------|-----|-------------|
 | [credentials](./Generic/credentials/README.md) | `@memberjunction/ng-credentials` | Components for credential management -- panels and dialogs for creating and editing credentials |
 | [resource-permissions](./Generic/resource-permissions/README.md) | `@memberjunction/ng-resource-permissions` | Generic components for displaying/editing permissions for a resource |
+| [auth-services](./Generic/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, Okta, Cognito, WorkOS, Magic Link, and Local Dev provider support |
 
 ### UI Utilities
 

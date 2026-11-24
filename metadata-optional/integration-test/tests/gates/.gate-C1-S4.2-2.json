@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S4.2 #2",
+    "Description": "Gate G3.5 (owner PR 4, phase 3, dataset C1, criterion S4.2): a C1 challenger retrained on the same snapshot does not replace the incumbent unless the paired improvement's lower bound exceeds the declared margin; on the unchanged data the incumbent is kept, 1 of 1. The check trains C1 on its reference split, evaluates and publishes that model through the lifecycle gate, retrains the same pipeline (the trainer sends the incumbent, so the run stores the paired comparison), evaluates the challenger and asks the gate to publish it: the publish must be refused does-not-beat-incumbent, the incumbent must stay Published, and both runs must have trained on snapshots with the same content hash. Mutation: let the live incumbent comparison, PublishRules.checkIncumbent, take the point estimate instead of the lower bound (GateRules.BeatsByMargin(diff, margin) → diff.value >= margin; D4-103): the challenger replaces the incumbent. The retrain's paired diff is exactly 0 [0, 0], so a strict point-estimate (>) mutation cannot fail this check.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G3.5\", \"owner:PR4\", \"phase:3\", \"dataset:C1\", \"criterion:S4.2 #2\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
+    "ExpectedOutcomes": {
+      "summary": "The retrained C1 challenger is withheld does-not-beat-incumbent and the incumbent stays Published, 1 of 1."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s4-2-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "B8E552F9-0580-44B8-8E2E-C5C8DCB55715"
+  }
+}

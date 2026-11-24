@@ -9,7 +9,8 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.failures import RunClock, TrainerFailure
 from app.trainer_schemas import (
-    EvaluationProtocol, SeededRandomHoldout, TrainerCompleted, TrainerFailed, TrainerRequest, TrainerResult,
+    EvaluationProtocol, PromotionRule, SeededRandomHoldout, SystemActor, TrainerCompleted, TrainerFailed, TrainerRequest,
+    TrainerResult,
 )
 from tests.tools.trainer_fixture import FileServer, JsonObject, JsonValue, candidates, protocol, request, snapshot_files
 from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
@@ -33,6 +34,11 @@ EVALUATION_PROTOCOL_KEYS = [
     "leakageAudit", "exclusions", "slices", "predictionIntervals", "residualDiagnostics", "retrainTriggers", "search",
     "budgets", "minMinorityClassRows", "guardFieldsEditableBy", "authoredBy",
 ]
+# The members of Core/src/evaluation-protocol.ts PromotionRule, in declaration order (PR 4 adds the last four).
+PROMOTION_RULE_KEYS = [
+    "comparators", "incumbent", "margin", "lowerBoundLevel", "pairedOn", "decisionTable",
+    "requiresHumanSignOff", "signOffExpiryDays", "autoPublishKeepBaseline", "rollbackOn",
+]
 
 
 @pytest.mark.parametrize("model, keys, count", [
@@ -40,6 +46,7 @@ EVALUATION_PROTOCOL_KEYS = [
     (TrainerCompleted, TRAINER_COMPLETED_KEYS, 23),
     (TrainerFailed, TRAINER_FAILED_KEYS, 5),
     (EvaluationProtocol, EVALUATION_PROTOCOL_KEYS, 27),
+    (PromotionRule, PROMOTION_RULE_KEYS, 10),
 ])
 def test_the_mirror_has_exactly_the_typescript_members(model: type[BaseModel], keys: list[str], count: int) -> None:
     assert len(keys) == count
@@ -137,6 +144,13 @@ _DRIFT = {"kind": "calibration-drift", "slopeOutside": [0.8, 1.2], "consecutiveP
     ("drift range reversed", _with("retrainTriggers", [{**_DRIFT, "slopeOutside": [1.2, 0.8]}])),
     ("drift range empty", _with("retrainTriggers", [{**_DRIFT, "slopeOutside": [1.0, 1.0]}])),
     ("empty author", _with("authoredBy", {"kind": "human", "userId": ""})),
+    ("rollbackOn of another kind",
+     _with("promotion.rollbackOn", {"kind": "outcome-degradation", "margin": 0, "consecutivePeriods": 2})),
+    ("rollbackOn negative margin",
+     _with("promotion.rollbackOn", {"kind": "previous-beats-current", "margin": -0.01, "consecutivePeriods": 2})),
+    ("rollbackOn over 0 periods",
+     _with("promotion.rollbackOn", {"kind": "previous-beats-current", "margin": 0, "consecutivePeriods": 0})),
+    ("signOffExpiryDays 0", _with("promotion.signOffExpiryDays", 0)),
 ])
 def test_the_protocol_refuses_what_the_core_parser_refuses(case: str, proto: JsonObject) -> None:
     with pytest.raises(ValidationError):
@@ -150,6 +164,18 @@ def test_the_protocol_accepts_the_boundaries_the_core_parser_accepts() -> None:
     assert EvaluationProtocol.model_validate(ok).seed == 0
     seeded = EvaluationProtocol.model_validate(_with("holdout", {"kind": "seeded-random", "fraction": 0.25})).holdout
     assert isinstance(seeded, SeededRandomHoldout) and seeded.fraction == 0.25
+
+
+def test_a_protocol_authored_by_a_system_run_with_a_process_run_id_is_accepted() -> None:
+    authored = EvaluationProtocol.model_validate(
+        _with("authoredBy", {"kind": "system", "component": "auto-train", "processRunId": "PR-1"})).authoredBy
+    assert isinstance(authored, SystemActor) and authored.processRunId == "PR-1"
+    plain = EvaluationProtocol.model_validate(_with("authoredBy", {"kind": "system", "component": "auto-train"})).authoredBy
+    assert isinstance(plain, SystemActor) and plain.processRunId is None
+
+
+def test_a_null_rollback_on_turns_automated_rollback_off() -> None:
+    assert EvaluationProtocol.model_validate(_with("promotion.rollbackOn", None)).promotion.rollbackOn is None
 
 
 def test_budget_hard_stop_raises_budget_exceeded() -> None:

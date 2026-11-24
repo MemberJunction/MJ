@@ -77,7 +77,7 @@ const loadNgDashboardsArchivingDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/archiving-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
+// --- @memberjunction/ng-dashboards → ./communication-dashboards.module (9 entries) ---
 const loadNgDashboardsCommunicationDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/communication-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/communication-dashboards.module').then(() => {})
@@ -256,6 +256,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseDashboard::CommunicationsAdminDashboard': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationComplianceAdminResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationLogsResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationMonitorResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationProvidersResource': loadNgDashboardsCommunicationDashboardsModule,
@@ -407,4 +409,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 151;
+export const LAZY_FEATURE_CONFIG_COUNT = 153;

@@ -31,9 +31,138 @@ export function WrapUntrustedExternalData(
     source: string,
     trustLevel: 'SemiTrusted' | 'Untrusted'
 ): string {
-    const safeSource = source.replace(/"/g, '&quot;');
+    const safeSource = source.replace(/"/g, '&quot;').replace(/>/g, '&gt;');
     const escapedContent = EscapeUntrustedDataTags(content);
     return `<untrusted_external_data source="${safeSource}" trust="${trustLevel}" warning="${UNTRUSTED_EXTERNAL_DATA_WARNING}">\n${escapedContent}\n</untrusted_external_data>`;
+}
+
+/** Parsed representation of one or more `<untrusted_external_data>` blocks in a message. */
+export interface UntrustedEnvelopeMatch {
+    Source: string;
+    TrustLevel: 'SemiTrusted' | 'Untrusted';
+    UnwrappedText: string;
+}
+
+const UNTRUSTED_OPEN_PREFIX = '<untrusted_external_data ';
+const UNTRUSTED_CLOSE_TAG = '</untrusted_external_data>';
+
+function extractXmlAttrValue(header: string, attrName: string): string | undefined {
+    const prefix = ` ${attrName}="`;
+    const attrIndex = header.indexOf(prefix);
+    if (attrIndex === -1) {
+        return undefined;
+    }
+    const valueStart = attrIndex + prefix.length;
+    const valueEnd = header.indexOf('"', valueStart);
+    if (valueEnd === -1) {
+        return undefined;
+    }
+    return header.slice(valueStart, valueEnd);
+}
+
+function parseEnvelopeHeader(
+    header: string,
+    sources: string[],
+    currentTrust: 'SemiTrusted' | 'Untrusted' | undefined,
+): 'SemiTrusted' | 'Untrusted' {
+    const rawSource = extractXmlAttrValue(header, 'source');
+    if (rawSource) {
+        const decoded = rawSource.replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+        if (decoded.length > 0 && !sources.includes(decoded)) {
+            sources.push(decoded);
+        }
+    }
+    const rawTrust = extractXmlAttrValue(header, 'trust');
+    if (rawTrust === 'SemiTrusted' && currentTrust === undefined) {
+        return 'SemiTrusted';
+    }
+    return currentTrust === 'SemiTrusted' && rawTrust === 'SemiTrusted' ? 'SemiTrusted' : 'Untrusted';
+}
+
+function readEnvelopeBody(text: string, openEnd: number): { body: string; nextCursor: number } {
+    let bodyStart = openEnd + 1;
+    if (bodyStart < text.length && text.charCodeAt(bodyStart) === 10) {
+        bodyStart += 1;
+    }
+    const closeStart = text.indexOf(UNTRUSTED_CLOSE_TAG, bodyStart);
+    if (closeStart === -1) {
+        return { body: text.slice(bodyStart), nextCursor: text.length };
+    }
+    let bodyEnd = closeStart;
+    if (bodyEnd > bodyStart && text.charCodeAt(bodyEnd - 1) === 10) {
+        bodyEnd -= 1;
+    }
+    return {
+        body: text.slice(bodyStart, bodyEnd),
+        nextCursor: closeStart + UNTRUSTED_CLOSE_TAG.length,
+    };
+}
+
+/**
+ * Extracts unwrapped body text and highest-severity trust metadata from text containing one or more
+ * `<untrusted_external_data>` envelopes using linear `indexOf`/`slice` scanning (no regex backtracking).
+ * Returns `null` when no envelope opening tag is present.
+ */
+export function ExtractUntrustedEnvelope(text: string): UntrustedEnvelopeMatch | null {
+    if (text.indexOf(UNTRUSTED_OPEN_PREFIX) === -1) {
+        return null;
+    }
+
+    const parts: string[] = [];
+    const sources: string[] = [];
+    let trustLevel: 'SemiTrusted' | 'Untrusted' | undefined;
+    let cursor = 0;
+
+    while (cursor < text.length) {
+        const openStart = text.indexOf(UNTRUSTED_OPEN_PREFIX, cursor);
+        if (openStart === -1) {
+            parts.push(text.slice(cursor));
+            break;
+        }
+        if (openStart > cursor) {
+            parts.push(text.slice(cursor, openStart));
+        }
+
+        const openEnd = text.indexOf('>', openStart + UNTRUSTED_OPEN_PREFIX.length);
+        const header = openEnd === -1
+            ? text.slice(openStart + '<untrusted_external_data'.length)
+            : text.slice(openStart + '<untrusted_external_data'.length, openEnd);
+        trustLevel = parseEnvelopeHeader(header, sources, trustLevel);
+
+        if (openEnd === -1) {
+            break;
+        }
+        const { body, nextCursor } = readEnvelopeBody(text, openEnd);
+        parts.push(body);
+        cursor = nextCursor;
+    }
+
+    return {
+        Source: sources.length > 0 ? sources.join(', ') : 'external',
+        TrustLevel: trustLevel ?? 'Untrusted',
+        UnwrappedText: parts.join(''),
+    };
+}
+
+/**
+ * Truncates `text` to `maxChars` of content while preserving any `<untrusted_external_data>` boundary
+ * (so truncation never slices off `</untrusted_external_data>` or leaves an unclosed XML wrapper).
+ */
+export function TruncatePreservingUntrustedEnvelope(
+    text: string,
+    maxChars: number,
+    formatSuffix: (originalLength: number) => string,
+): string {
+    const envelope = ExtractUntrustedEnvelope(text);
+    if (!envelope) {
+        return text.length > maxChars ? `${text.slice(0, maxChars)}… ${formatSuffix(text.length)}` : text;
+    }
+    if (envelope.UnwrappedText.length <= maxChars) {
+        return text;
+    }
+    const slice = `${envelope.UnwrappedText.slice(0, maxChars)}…`;
+    const wrapped = WrapUntrustedExternalData(slice, envelope.Source, envelope.TrustLevel);
+    return `${wrapped} ${formatSuffix(envelope.UnwrappedText.length)}`;
 }
 
 /** A content block type that carries media: every type other than text and tool results. */

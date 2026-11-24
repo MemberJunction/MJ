@@ -8,6 +8,8 @@
       "Status": "Active",
       "AcceptsSkills": "All",
       "SkillActivationMode": "Auto",
+      "MaxIterationsPerRun": 20,
+      "ContextWindowMaxTokens": 120000,
       "ExecutionOrder": 0,
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "System Only",

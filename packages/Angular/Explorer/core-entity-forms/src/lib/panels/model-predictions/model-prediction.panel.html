@@ -1,9 +1,9 @@
 <!--
-  Entity-agnostic model-prediction panel. Renders NOTHING unless the current
-  record's entity has active scoring bindings or historical prediction runs.
-  Driven entirely by metadata — no entity-specific or domain-specific markup.
+  Entity-agnostic model-prediction panel (§5.8.5). Renders NOTHING unless the record has a prediction the user is
+  authorized to see, a pipeline feature value, or a failed read (shown with its reason). Driven entirely by Feature
+  Values and binding metadata.
 -->
-@if (HasPredictions) {
+@if (HasContent) {
   <mj-collapsible-panel
       SectionKey="modelPredictions"
       [Order]="DisplayOrder"
@@ -13,13 +13,18 @@
       [FormContext]="FormContext"
       [BadgeCount]="Cards.length">
 
-    <!-- Active prediction cards -->
+    @if (LoadError) {
+      <div class="mpp-load-error" data-testid="ps-prediction-load-error" role="alert">
+        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+        <span>{{ LoadError }}</span>
+      </div>
+    }
+
     @if (Cards.length > 0) {
       <div class="mpp-cards">
-        @for (card of Cards; track card.BindingId) {
-          <div class="mpp-card">
+        @for (card of Cards; track card.BindingID) {
+          <div class="mpp-card" data-testid="ps-prediction-card" [attr.data-binding-id]="card.BindingID">
 
-            <!-- Header: label + provenance + history button -->
             <div class="mpp-card-head">
               <div class="mpp-head-left">
                 <div class="mpp-label">{{ card.Label }}</div>
@@ -32,40 +37,35 @@
                   }
                 </div>
               </div>
-              <button type="button" 
-                      class="mpp-card-history-btn" 
-                      (click)="OpenHistoryForModel(card.modelId, $event)" 
-                      title="View prediction history for this model">
-                <i class="fa-solid fa-clock-rotate-left"></i> History
-              </button>
             </div>
 
-            <!-- Value -->
             <div class="mpp-value-row">
-              <span class="mpp-value" [class.mpp-value-muted]="card.DisplayValue === '—'">
+              <span class="mpp-value" data-testid="ps-prediction-value" [class.mpp-value-muted]="card.DisplayValue === '—'">
                 {{ card.DisplayValue }}
               </span>
               @if (card.StatusLabel) {
-                <span class="mpp-status-badge" [class]="'mpp-badge-' + card.BadgeColor">
+                <span class="mpp-status-badge" [class]="'mpp-status-badge mpp-badge-' + card.BadgeColor">
                   @if (card.BadgeIcon) {
-                    <i [class]="'fa-solid ' + card.BadgeIcon"></i>
+                    <i [class]="'fa-solid ' + card.BadgeIcon" aria-hidden="true"></i>
                   }
                   <span>{{ card.StatusLabel }}</span>
                 </span>
               }
             </div>
 
-            <!-- Probability gauge — semantic color matching outcome polarity -->
-            @if (card.IsProbability) {
-              <div class="mpp-gauge" role="img"
-                   [attr.aria-label]="card.Label + ' ' + card.DisplayValue + (card.StatusLabel ? ', ' + card.StatusLabel : '')">
+            @if (card.Class) {
+              <div class="mpp-class" data-testid="ps-prediction-class">
+                Predicted <strong>{{ card.Class }}</strong>
+                @if (card.ClassProbability) {
+                  <span class="mpp-muted">({{ card.ClassProbability }})</span>
+                }
+              </div>
+            }
+
+            @if (card.Kind === 'probability') {
+              <div class="mpp-gauge" role="img" [attr.aria-label]="card.Label + ' ' + card.DisplayValue + (card.StatusLabel ? ', ' + card.StatusLabel : '')">
                 <div class="mpp-gauge-track">
-                  <div class="mpp-gauge-fill"
-                       [class.mpp-band-low]="card.Band === 'low'"
-                       [class.mpp-band-mid]="card.Band === 'mid'"
-                       [class.mpp-band-high]="card.Band === 'high'"
-                       [class]="'mpp-color-' + card.BadgeColor"
-                       [style.width.%]="card.GaugePct"></div>
+                  <div [class]="'mpp-gauge-fill mpp-color-' + card.BadgeColor" [style.width.%]="card.GaugePct"></div>
                 </div>
                 <div class="mpp-gauge-scale">
                   <span>0%</span>
@@ -75,180 +75,113 @@
               </div>
             }
 
-            <!-- Top drivers (feature importance) — omitted cleanly when unavailable -->
+            @if (card.Classes.length > 2) {
+              <div class="mpp-classes">
+                @for (c of card.Classes; track c.Class) {
+                  <div class="mpp-driver">
+                    <span class="mpp-driver-name" [title]="c.Class">{{ c.Class }} · {{ c.Pct }}%</span>
+                    <span class="mpp-driver-bar-track"><span class="mpp-driver-bar-fill" [style.width.%]="c.Pct"></span></span>
+                  </div>
+                }
+              </div>
+            }
+
             @if (card.Drivers.length > 0) {
-              <div class="mpp-drivers">
+              <div class="mpp-drivers" data-testid="ps-prediction-drivers">
                 <div class="mpp-drivers-title">
                   <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
-                  Top drivers
+                  Why this record
                 </div>
-                @for (driver of card.Drivers; track driver.name) {
+                @for (driver of card.Drivers; track driver.Name) {
                   <div class="mpp-driver">
-                    <span class="mpp-driver-name" [title]="driver.name">{{ driver.name }}</span>
+                    <span class="mpp-driver-name" [title]="driver.Name + (driver.RaisesAdverse ? ': raises' : ': lowers')">
+                      <i [class]="driver.RaisesAdverse ? 'fa-solid fa-arrow-up mpp-up' : 'fa-solid fa-arrow-down mpp-down'" aria-hidden="true"></i>
+                      {{ driver.Name }}
+                    </span>
                     <span class="mpp-driver-bar-track">
                       <span class="mpp-driver-bar-fill" [style.width.%]="driver.RelativePct"></span>
                     </span>
                   </div>
                 }
               </div>
-            } @else if (card.DriversHidden) {
-              <div class="mpp-drivers" data-testid="mpp-drivers-hidden">
+            }
+
+            @if (card.History.length > 0) {
+              <div class="mpp-history">
                 <div class="mpp-drivers-title">
-                  <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
-                  Top drivers
+                  <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  History
                 </div>
-                <div class="mpp-drivers-note">{{ DriversHiddenNote }}</div>
+                <svg class="mpp-sparkline" viewBox="-4 -4 108 108" preserveAspectRatio="none" role="img" [attr.aria-label]="card.Label + ' history, ' + card.History.length + ' values'">
+                  @if (card.History.length > 1) {
+                    <polyline class="mpp-sparkline-line" [attr.points]="card.SparklinePoints"></polyline>
+                  }
+                  @for (p of card.History; track p.ID) {
+                    <circle class="mpp-sparkline-point" data-testid="ps-prediction-history-point" [attr.cx]="p.X" [attr.cy]="p.Y" r="3">
+                      <title>{{ p.AsOf }}: {{ p.Display }}</title>
+                    </circle>
+                  }
+                </svg>
               </div>
             }
 
+            <div class="mpp-lineage" data-testid="ps-prediction-lineage">
+              @if (card.Lineage.Source === 'Model') {
+                <span>Model v{{ card.Lineage.ModelVersion || '?' }}</span>
+                @if (card.Lineage.ScoringRunID) {
+                  <span class="mpp-dot" aria-hidden="true">·</span>
+                  <span>scoring run {{ card.Lineage.ScoringRunID }}</span>
+                }
+              } @else {
+                <span>Entered by a person</span>
+              }
+              @if (card.Lineage.AsOf) {
+                <span class="mpp-dot" aria-hidden="true">·</span>
+                <span>as of {{ card.Lineage.AsOf }}</span>
+              }
+              @if (card.Lineage.InTraining) {
+                <span class="mpp-dot" aria-hidden="true">·</span>
+                <span class="mpp-optimistic">
+                  <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                  this record was in the training set, so the score is optimistic
+                </span>
+              }
+            </div>
           </div>
         }
       </div>
     }
 
-    <!-- Prediction History Section -->
-    <div class="mpp-history-section">
-      <div class="mpp-history-header" (click)="ToggleHistorySection()" role="button" tabindex="0">
-        <div class="mpp-history-title">
-          <i class="fa-solid fa-clock-rotate-left"></i>
-          <span>Prediction History</span>
-          @if (HistoryItems.length > 0) {
-            <span class="mpp-history-badge">{{ HistoryItems.length }}</span>
-          }
+    @if (DerivedValues.length > 0) {
+      <div class="mpp-derived" data-testid="ps-derived-values">
+        <div class="mpp-drivers-title">
+          <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+          Derived values
         </div>
-        <div class="mpp-history-chevron">
-          <i [class]="ShowHistorySection ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
-        </div>
-      </div>
-
-      @if (ShowHistorySection) {
-        <div class="mpp-history-body">
-          @if (LoadingHistory) {
-            <div class="mpp-history-loading">
-              <i class="fa-solid fa-spinner fa-spin"></i> Loading prediction history…
+        @for (v of DerivedValues; track v.Key) {
+          <div class="mpp-derived-row">
+            <div class="mpp-derived-head">
+              <span class="mpp-derived-name">{{ v.FeatureName }}</span>
+              <span class="mpp-derived-value" [class.mpp-value-muted]="!v.HasValue">{{ v.DisplayValue }}</span>
             </div>
-          } @else if (HistoryItems.length === 0) {
-            <div class="mpp-history-empty">
-              No historical prediction runs recorded for this record yet.
+            <div class="mpp-derived-meta">
+              <span>{{ v.Pipeline }}@if (v.PipelineVersion !== null) { v{{ v.PipelineVersion }}}</span>
+              @if (ConfidencePct(v); as pct) {
+                <span class="mpp-dot" aria-hidden="true">·</span>
+                <span>confidence {{ pct }}</span>
+              }
+              @if (v.Source === 'Human') {
+                <span class="mpp-dot" aria-hidden="true">·</span>
+                <span>entered by a person</span>
+              }
             </div>
-          } @else {
-            <!-- Multi-model filter tabs if multiple models present -->
-            @if (ModelSummaries.length > 1) {
-              <div class="mpp-model-filters">
-                <button type="button" 
-                        class="mpp-filter-pill" 
-                        [class.active]="SelectedModelId === null || SelectedModelId === 'ALL'"
-                        (click)="SelectModelFilter(null)">
-                  All Models ({{ HistoryItems.length }})
-                </button>
-                @for (mod of ModelSummaries; track mod.modelId) {
-                  <button type="button" 
-                          class="mpp-filter-pill" 
-                          [class.active]="SelectedModelId === mod.modelId"
-                          (click)="SelectModelFilter(mod.modelId)">
-                    {{ mod.ModelName }} ({{ mod.count }})
-                  </button>
-                }
-              </div>
+            @if (v.Reasoning) {
+              <div class="mpp-derived-reasoning">{{ v.Reasoning }}</div>
             }
-
-            <!-- History table -->
-            <div class="mpp-history-table-wrap">
-              <table class="mpp-history-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Model</th>
-                    <th>Prediction</th>
-                    <th>Status</th>
-                    <th class="actions-th">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (item of FilteredHistory; track item.id) {
-                    <tr class="mpp-history-row" [class.expanded]="ExpandedHistoryItemId === item.id">
-                      <td class="mpp-col-date">{{ item.FormattedTime }}</td>
-                      <td class="mpp-col-model">
-                        <div class="mpp-history-model-name">{{ item.ModelName }}</div>
-                        <div class="mpp-history-model-prov">{{ item.Provenance }}</div>
-                      </td>
-                      <td class="mpp-col-pred">
-                        <div class="mpp-pred-cell">
-                          <span class="mpp-history-pred-val">{{ item.DisplayValue }}</span>
-                          @if (item.PredictedClass && item.NumericValue != null && item.IsProbability) {
-                            <span class="mpp-history-pred-sub">({{ (item.NumericValue * 100) | number:'1.0-1' }}%)</span>
-                          }
-                          @if (item.StatusLabel) {
-                            <span class="mpp-status-badge mpp-badge-sm" [class]="'mpp-badge-' + item.BadgeColor">
-                              @if (item.BadgeIcon) {
-                                <i [class]="'fa-solid ' + item.BadgeIcon"></i>
-                              }
-                              <span>{{ item.StatusLabel }}</span>
-                            </span>
-                          }
-                        </div>
-                      </td>
-                      <td class="mpp-col-status">
-                        <span class="mpp-status-pill" [class]="'mpp-status-' + item.status.toLowerCase()">
-                          {{ item.status }}
-                        </span>
-                      </td>
-                      <td class="mpp-col-actions">
-                        <button type="button" 
-                                class="mpp-action-btn"
-                                (click)="ToggleHistoryDetails(item, $event)" 
-                                [title]="ExpandedHistoryItemId === item.id ? 'Hide details' : 'Inspect payload & drivers'">
-                          <i [class]="ExpandedHistoryItemId === item.id ? 'fa-solid fa-chevron-up' : 'fa-solid fa-code'"></i>
-                          {{ ExpandedHistoryItemId === item.id ? 'Close' : 'Inspect' }}
-                        </button>
-                        <button type="button" 
-                                class="mpp-action-btn mpp-action-drilldown"
-                                (click)="DrilldownToPredictionRecord(item, $event)"
-                                title="Open underlying Process Run Detail record in Explorer">
-                          <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Row
-                        </button>
-                      </td>
-                    </tr>
-                    @if (ExpandedHistoryItemId === item.id) {
-                      <tr class="mpp-history-detail-row">
-                        <td colspan="5">
-                          <div class="mpp-history-detail-pane">
-                            @if (item.ErrorMessage) {
-                              <div class="mpp-detail-error">
-                                <strong>Error:</strong> {{ item.ErrorMessage }}
-                              </div>
-                            }
-                            @if (item.Drivers.length > 0) {
-                              <div class="mpp-detail-drivers">
-                                <div class="mpp-detail-subtitle"><i class="fa-solid fa-ranking-star"></i> Attributed Drivers</div>
-                                <div class="mpp-detail-driver-list">
-                                  @for (d of item.Drivers; track d.name) {
-                                    <div class="mpp-detail-driver-item">
-                                      <span class="mpp-driver-name">{{ d.name }}</span>
-                                      <span class="mpp-driver-bar-track">
-                                        <span class="mpp-driver-bar-fill" [style.width.%]="d.RelativePct"></span>
-                                      </span>
-                                    </div>
-                                  }
-                                </div>
-                              </div>
-                            }
-                            <div class="mpp-detail-payload">
-                              <div class="mpp-detail-subtitle"><i class="fa-solid fa-file-code"></i> Result Payload</div>
-                              <pre class="mpp-payload-pre">{{ item.RawPayload | json }}</pre>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    }
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
-        </div>
-      }
-    </div>
+          </div>
+        }
+      </div>
+    }
 
   </mj-collapsible-panel>
 }

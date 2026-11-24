@@ -219,6 +219,61 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT188 - Comms V2 Schema, Seeds and Endpoint Resolution",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C7010AE1-872E-4A24-A5B4-4E69FC625466"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT189 - Comms V2 Compliance Gate and Jurisdiction Rollup",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9F5E95A1-6883-4FE4-A569-62E245D3FB3D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT190 - Comms V2 Send Pipeline and Templated Delivery",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "25202F2D-5B25-45DF-818F-9EBC60C44F71"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT191 - Comms V2 Activity Worker and GDPR Erasure",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6E581282-6ABB-4741-8502-F947BBF7B02E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT192 - Comms V2 Public Routes and Sends over the Wire (client transport)",
+            "Sequence": 87,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E74B8956-FFF5-47FF-B7B2-60EC4CDF3BE7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT22 - User Routines Dispatcher",
             "Sequence": 16,
             "Status": "Active"
@@ -1588,7 +1643,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "48e68478-dd3b-4be1-ab4f-7e5f974372e0"
+            "ID": "48E68478-DD3B-4BE1-AB4F-7E5F974372E0"
           }
         },
         {
@@ -1809,6 +1864,17 @@
           },
           "primaryKey": {
             "ID": "D8863BF3-A892-4B2B-A758-B909350DE35D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT187 - PS Prediction Serving — Zero Schema Change",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AB9A7DFE-F06B-4759-81F9-5E56175234E6"
           }
         }
       ]
