@@ -20,7 +20,8 @@ export class MJCountryFormComponent extends BaseFormComponent {
             { sectionKey: 'geographicData', sectionName: 'Geographic Data', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJStateProvinces', sectionName: 'State Provinces', isExpanded: false },
-            { sectionKey: 'mJRecordGeoCodes', sectionName: 'Record Geo Codes', isExpanded: false }
+            { sectionKey: 'mJRecordGeoCodes', sectionName: 'Record Geo Codes', isExpanded: false },
+            { sectionKey: 'mJJurisdictions', sectionName: 'Jurisdictions', isExpanded: false }
         ]);
     }
 }

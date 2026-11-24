@@ -1,0 +1,610 @@
+import { MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import {
+  BaseComplianceRule,
+  CommunicationEngineBase,
+  ComplianceAuditSnapshot,
+  ComplianceEvalContext,
+  ComplianceGateResult,
+  ComplianceObligations,
+  ComplianceRuleOutcome,
+  EnforcementMode,
+  MessageClass,
+  SuppressionReason,
+} from '@memberjunction/communication-types';
+import type { MJCommunicationSuppressionEntity } from '@memberjunction/core-entities';
+import { JurisdictionResolver } from './JurisdictionResolver';
+import type { QuietHoursEvalContext } from './rules/QuietHoursRuleDriver';
+
+/** `Reason` of the block returned for a `Marketing` message that names no preference. */
+export const PREFERENCE_REQUIRED_REASON = 'PreferenceRequired';
+
+/**
+ * Per-recipient inputs to {@link ComplianceGate.Evaluate} that are not part of the rule context.
+ */
+export interface ComplianceGateEvalOptions {
+  /**
+   * Candidate suppressions. The gate keeps only those that are active, unexpired and match the
+   * recipient, sender chain, channel, preference and message class.
+   */
+  Suppressions: MJCommunicationSuppressionEntity[];
+  /**
+   * The recipient's jurisdiction as an `MJ: Jurisdictions` ID or `Code`; `null` or omitted when
+   * unknown.
+   */
+  RecipientJurisdiction?: string | null;
+  /** The sender's jurisdiction. Defaults to the sender's `JurisdictionID`. */
+  SenderJurisdiction?: string | null;
+  /** Enforcement mode used when the sender has none. Defaults to `'Enforce'`. */
+  InstanceEnforcementMode?: EnforcementMode;
+  /** Unsubscribe link to place in the returned obligations, when already known. */
+  UnsubscribeURL?: string;
+}
+
+interface SuppressionEvaluation {
+  HardBlock?: MJCommunicationSuppressionEntity;
+  OverridableBlock?: MJCommunicationSuppressionEntity;
+}
+
+interface RegimeEvaluation {
+  BlockedReason?: string;
+  QuietHoursDeferral?: ComplianceRuleOutcome;
+  Obligations: ComplianceObligations;
+  ApplicableRegimes: string[];
+  ExpandedRecipientJurisdictions: string[];
+  ExpandedSenderJurisdictions: string[];
+  MergedRules: Record<string, Record<string, unknown>>;
+}
+
+const ALL_CLASSES: ReadonlySet<MessageClass> = new Set([
+  'Transactional',
+  'Operational',
+  'Marketing',
+]);
+const NON_TRANSACTIONAL_CLASSES: ReadonlySet<MessageClass> = new Set([
+  'Operational',
+  'Marketing',
+]);
+const MESSAGE_CLASS_RANK: Record<MessageClass, number> = {
+  Transactional: 0,
+  Operational: 1,
+  Marketing: 2,
+};
+
+/**
+ * 5-step compliance gate:
+ * 1. Endpoint.Status & Suppressions (Endpoint.Status + CommunicationSuppression)
+ * 2. Regimes (expands jurisdictions, merges 9 rule types)
+ * 3. Preferences (runs only when PreferenceID is set; handles Pending + Option B override)
+ * 4. QuietHours (Deferred + DeferUntil)
+ * 5. Result (EnforcementMode Off/Shadow/Enforce; Hard Bounce / Invalid Address always blocked)
+ */
+export class ComplianceGate {
+  private readonly resolver: JurisdictionResolver;
+
+  constructor(resolver?: JurisdictionResolver) {
+    this.resolver = resolver ?? new JurisdictionResolver();
+  }
+
+  /**
+   * Evaluates one recipient. Synchronous and free of I/O: every row it needs is on `ctx`, in
+   * `options`, or in the engine's metadata cache.
+   */
+  public Evaluate(
+    ctx: ComplianceEvalContext,
+    options: ComplianceGateEvalOptions,
+  ): ComplianceGateResult {
+    const enforcementMode: EnforcementMode =
+      ctx.Sender.EnforcementMode ?? options.InstanceEnforcementMode ?? 'Enforce';
+
+    // Step 1: Endpoint status & Suppressions
+    const endpointBlock = this.evaluateEndpointStatus(ctx);
+    const suppressionResult = this.evaluateSuppressions(ctx, options.Suppressions);
+    const senderJurisdiction = options.SenderJurisdiction ?? ctx.Sender.JurisdictionID ?? null;
+
+    // Step 2: Regimes
+    const regimeResult = this.evaluateRegimes(
+      ctx,
+      options.RecipientJurisdiction ?? null,
+      senderJurisdiction,
+      options.UnsubscribeURL,
+    );
+
+    const auditSnapshot: ComplianceAuditSnapshot = {
+      EnforcementMode: enforcementMode,
+      ApplicableRegimes: regimeResult.ApplicableRegimes,
+      ExpandedRecipientJurisdictions: regimeResult.ExpandedRecipientJurisdictions,
+      ExpandedSenderJurisdictions: regimeResult.ExpandedSenderJurisdictions,
+      MergedRules: regimeResult.MergedRules,
+    };
+
+    // A Marketing message must be sent under a preference. The preference is what the recipient's
+    // opt-out, the one-click unsubscribe header and the preference page all refer to; without one
+    // an unsubscribe has nothing specific to apply to. This is a malformed send, not a compliance
+    // finding about the recipient, so no enforcement mode waives it.
+    if (ctx.MessageClass === 'Marketing' && !ctx.Preference) {
+      return {
+        Decision: 'Blocked',
+        Reason: PREFERENCE_REQUIRED_REASON,
+        Detail: 'A Marketing message must be sent under a preference (Envelope.PreferenceID)',
+        Obligations: regimeResult.Obligations,
+        AuditSnapshot: auditSnapshot,
+      };
+    }
+
+    if (endpointBlock?.IsTerminal) {
+      return this.applyEnforcementMode(
+        {
+          Decision: 'Blocked',
+          Reason: endpointBlock.Reason,
+          Detail: endpointBlock.Detail,
+          Obligations: regimeResult.Obligations,
+          AuditSnapshot: auditSnapshot,
+        },
+        endpointBlock.Reason,
+      );
+    }
+
+    if (suppressionResult.HardBlock) {
+      return this.applyEnforcementMode(
+        {
+          Decision: 'Blocked',
+          Reason: suppressionResult.HardBlock.Reason,
+          Detail: `Suppressed by ${suppressionResult.HardBlock.Reason}`,
+          SuppressionID: suppressionResult.HardBlock.ID,
+          Obligations: regimeResult.Obligations,
+          AuditSnapshot: auditSnapshot,
+        },
+        suppressionResult.HardBlock.Reason,
+      );
+    }
+
+    if (endpointBlock) {
+      return this.applyEnforcementMode(
+        {
+          Decision: 'Blocked',
+          Reason: endpointBlock.Reason,
+          Detail: endpointBlock.Detail,
+          Obligations: regimeResult.Obligations,
+          AuditSnapshot: auditSnapshot,
+        },
+        endpointBlock.Reason,
+      );
+    }
+
+    // Step 3: Preferences & Option B override
+    const prefBlock = this.evaluatePreferences(
+      ctx,
+      suppressionResult.OverridableBlock,
+      regimeResult.MergedRules,
+      auditSnapshot,
+    );
+    if (prefBlock) {
+      return this.applyEnforcementMode({
+        Decision: 'Blocked',
+        Reason: prefBlock.Reason,
+        Detail: prefBlock.Detail,
+        SuppressionID: prefBlock.SuppressionID,
+        Obligations: regimeResult.Obligations,
+        AuditSnapshot: auditSnapshot,
+      });
+    }
+
+    if (regimeResult.BlockedReason) {
+      return this.applyEnforcementMode({
+        Decision: 'Blocked',
+        Reason: 'ComplianceRegime',
+        Detail: regimeResult.BlockedReason,
+        Obligations: regimeResult.Obligations,
+        AuditSnapshot: auditSnapshot,
+      });
+    }
+
+    // Step 4: QuietHours
+    if (regimeResult.QuietHoursDeferral && regimeResult.QuietHoursDeferral.DeferUntil) {
+      return this.applyEnforcementMode({
+        Decision: 'Deferred',
+        Reason: 'QuietHours',
+        Detail: regimeResult.QuietHoursDeferral.FailureReason,
+        DeferUntil: regimeResult.QuietHoursDeferral.DeferUntil,
+        Obligations: regimeResult.Obligations,
+        AuditSnapshot: auditSnapshot,
+      });
+    }
+
+    // Step 5: Allowed
+    return {
+      Decision: 'Allowed',
+      Obligations: regimeResult.Obligations,
+      AuditSnapshot: auditSnapshot,
+    };
+  }
+
+  private evaluateEndpointStatus(
+    ctx: ComplianceEvalContext,
+  ): { Reason: SuppressionReason | 'Erased'; Detail: string; IsTerminal: boolean } | null {
+    switch (ctx.Endpoint.Status) {
+      case 'Hard Bounced':
+        return {
+          Reason: 'Hard Bounce',
+          Detail: 'Endpoint status is Hard Bounced',
+          IsTerminal: true,
+        };
+      case 'Invalid':
+        return {
+          Reason: 'Invalid Address',
+          Detail: 'Endpoint status is Invalid',
+          IsTerminal: true,
+        };
+      case 'Erased':
+        return {
+          Reason: 'Erased',
+          Detail: 'Endpoint status is Erased',
+          IsTerminal: true,
+        };
+      case 'Complained':
+        if (NON_TRANSACTIONAL_CLASSES.has(ctx.MessageClass)) {
+          return {
+            Reason: 'Spam Complaint',
+            Detail: 'Endpoint status is Complained',
+            IsTerminal: false,
+          };
+        }
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  private evaluateSuppressions(
+    ctx: ComplianceEvalContext,
+    suppressions: MJCommunicationSuppressionEntity[],
+  ): SuppressionEvaluation {
+    const senderChain = new UUIDSet([ctx.Sender.ID, ...ctx.SenderAncestors]);
+    const nowMs = ctx.Now.getTime();
+    let overridable: MJCommunicationSuppressionEntity | undefined;
+    let hardBlock: MJCommunicationSuppressionEntity | undefined;
+
+    for (const s of suppressions) {
+      if (s.Status !== 'Active') continue;
+      if (s.ExpiresAt && s.ExpiresAt.getTime() <= nowMs) continue;
+      if (!this.matchesTarget(s, ctx)) continue;
+      if (s.CommunicationSenderID !== null && !senderChain.Has(s.CommunicationSenderID)) continue;
+      if (s.BaseMessageTypeID !== null && !UUIDsEqual(s.BaseMessageTypeID, ctx.ChannelID)) continue;
+      if (
+        s.CommunicationPreferenceID !== null &&
+        (!ctx.Preference || !UUIDsEqual(s.CommunicationPreferenceID, ctx.Preference.ID))
+      ) {
+        continue;
+      }
+      if (!this.reasonCoversMessage(s, ctx.MessageClass)) continue;
+
+      if (s.Reason === 'User Unsubscribe' && s.CommunicationPreferenceID === null) {
+        overridable = overridable ?? s;
+        continue;
+      }
+
+      if (s.Reason === 'Hard Bounce' || s.Reason === 'Invalid Address') {
+        return { HardBlock: s };
+      }
+      hardBlock = hardBlock ?? s;
+    }
+
+    if (hardBlock) {
+      return { HardBlock: hardBlock };
+    }
+    return { OverridableBlock: overridable };
+  }
+
+  private matchesTarget(s: MJCommunicationSuppressionEntity, ctx: ComplianceEvalContext): boolean {
+    if (s.CommunicationEndpointID !== null && UUIDsEqual(s.CommunicationEndpointID, ctx.Endpoint.ID)) {
+      return true;
+    }
+    if (
+      ctx.Principal &&
+      s.EntityID !== null &&
+      UUIDsEqual(s.EntityID, ctx.Principal.EntityID) &&
+      s.RecordID === ctx.Principal.RecordID
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private reasonCoversMessage(
+    s: MJCommunicationSuppressionEntity,
+    messageClass: MessageClass,
+  ): boolean {
+    switch (s.Reason) {
+      case 'Hard Bounce':
+      case 'Invalid Address':
+        return ALL_CLASSES.has(messageClass);
+      case 'Spam Complaint':
+      case 'Admin Block':
+        return NON_TRANSACTIONAL_CLASSES.has(messageClass);
+      case 'User Unsubscribe':
+      case 'Policy':
+        return s.CommunicationPreferenceID !== null || NON_TRANSACTIONAL_CLASSES.has(messageClass);
+      default:
+        return false;
+    }
+  }
+
+  /** Whether `channelID` is the `Email` base message type. False when the channel is not known. */
+  private isEmailChannel(channelID: string): boolean {
+    const channels = CommunicationEngineBase.Instance.BaseMessageTypes ?? [];
+    return channels.some((t) => UUIDsEqual(t.ID, channelID) && t.Type?.trim().toLowerCase() === 'email');
+  }
+
+  private evaluateRegimes(
+    ctx: ComplianceEvalContext,
+    recipientJurisdiction: string | null,
+    senderJurisdiction: string | null,
+    unsubscribeURL?: string,
+  ): RegimeEvaluation {
+    const active = this.resolver.CollectActiveRegimes({
+      RecipientJurisdiction: recipientJurisdiction,
+      SenderJurisdiction: senderJurisdiction,
+    });
+    const groupedRules = this.resolver.CollectRulesByType(
+      active.Regimes,
+      ctx.ChannelID,
+      ctx.MessageClass,
+    );
+
+    // Marketing email always carries the one-click unsubscribe header, whether or not a regime is
+    // enabled. It is a mailbox-provider requirement (RFC 8058), not a jurisdictional one, and the
+    // unsubscribe route works for every message. A regime can add obligations; it cannot remove
+    // this one.
+    const baselineOneClickHeader = ctx.MessageClass === 'Marketing' && this.isEmailChannel(ctx.ChannelID);
+
+    const obligations: ComplianceObligations = {
+      RequireOneClickHeader: baselineOneClickHeader,
+      RequireFooterUnsubscribe: false,
+      RequireSenderPostalAddress: false,
+      SenderPostalAddress: ctx.Sender.PostalAddress ?? undefined,
+      SenderName: ctx.Sender.FromName ?? ctx.Sender.Name ?? undefined,
+      AllowOpenPixel: true,
+      AllowClickTracking: true,
+      UnsubscribeURL: unsubscribeURL,
+      PreferenceCenterURL: ctx.Sender.PreferenceCenterURL ?? undefined,
+    };
+
+    const mergedRules: Record<string, Record<string, unknown>> = {};
+    const jurisdictionTimezones = this.resolver.GetJurisdictionTimezones(recipientJurisdiction);
+    let blockedReason: string | undefined;
+    let quietHoursDeferral: ComplianceRuleOutcome | undefined;
+
+    for (const group of groupedRules) {
+      const driver = this.instantiateRuleDriver(group.RuleType.DriverClass);
+      if (!driver) {
+        if (!blockedReason) {
+          blockedReason = `Compliance rule driver '${group.RuleType.DriverClass}' for '${group.RuleType.Name}' could not be loaded`;
+        }
+        continue;
+      }
+
+      const paramSets: Record<string, unknown>[] = [];
+      let paramError: string | undefined;
+      for (const r of group.Rules) {
+        const parsed = this.parseRuleParams(r.Parameters);
+        if (parsed.Error) {
+          paramError = parsed.Error;
+          break;
+        }
+        paramSets.push(parsed.Params);
+      }
+      if (paramError) {
+        if (!blockedReason) {
+          blockedReason = `${paramError} in rule '${group.RuleType.Name}'`;
+        }
+        continue;
+      }
+
+      let merged: ReturnType<typeof driver.MergeStrictest>;
+      try {
+        merged = driver.MergeStrictest(paramSets);
+      } catch (err) {
+        // A driver that rejects its parameters cannot decide; a compliance gate that cannot decide blocks.
+        if (!blockedReason) {
+          blockedReason = `Invalid parameters in rule '${group.RuleType.Name}': ${err instanceof Error ? err.message : String(err)}`;
+        }
+        continue;
+      }
+      mergedRules[group.RuleType.Name] = merged;
+
+      const evalCtx: QuietHoursEvalContext = {
+        ...ctx,
+        JurisdictionTimezones: jurisdictionTimezones,
+      };
+      const outcome = driver.Evaluate(merged, evalCtx);
+      if (outcome.ObligationsPatch) {
+        Object.assign(obligations, outcome.ObligationsPatch);
+        obligations.RequireOneClickHeader = obligations.RequireOneClickHeader || baselineOneClickHeader;
+      }
+      if (!outcome.Passed) {
+        if (outcome.Decision === 'Deferred') {
+          quietHoursDeferral = outcome;
+        } else if (!blockedReason) {
+          blockedReason = outcome.FailureReason ?? `Blocked by ${group.RuleType.Name}`;
+        }
+      }
+    }
+
+    return {
+      BlockedReason: blockedReason,
+      QuietHoursDeferral: quietHoursDeferral,
+      Obligations: obligations,
+      ApplicableRegimes: active.Regimes.map((r) => r.Name),
+      ExpandedRecipientJurisdictions: this.resolver.GetJurisdictionCodes(
+        active.ExpandedRecipientJurisdictions,
+      ),
+      ExpandedSenderJurisdictions: this.resolver.GetJurisdictionCodes(
+        active.ExpandedSenderJurisdictions,
+      ),
+      MergedRules: mergedRules,
+    };
+  }
+
+  private evaluatePreferences(
+    ctx: ComplianceEvalContext,
+    overridableSuppression: MJCommunicationSuppressionEntity | undefined,
+    mergedRules: Record<string, Record<string, unknown>>,
+    auditSnapshot: ComplianceAuditSnapshot,
+  ): { Reason: string; Detail: string; SuppressionID?: string } | null {
+    if (!ctx.Preference) {
+      if (overridableSuppression) {
+        return {
+          Reason: overridableSuppression.Reason,
+          Detail: 'Blocked by User Unsubscribe suppression',
+          SuppressionID: overridableSuppression.ID,
+        };
+      }
+      return null;
+    }
+
+    if (ctx.Preference.Status === 'Disabled') {
+      return {
+        Reason: 'PreferenceDisabled',
+        Detail: `Preference '${ctx.Preference.Name}' is disabled`,
+      };
+    }
+
+    if (
+      ctx.Preference.MessageClass &&
+      MESSAGE_CLASS_RANK[ctx.MessageClass] < MESSAGE_CLASS_RANK[ctx.Preference.MessageClass]
+    ) {
+      return {
+        Reason: 'MessageClassMismatch',
+        Detail: `Envelope MessageClass '${ctx.MessageClass}' is less strict than preference '${ctx.Preference.Name}' MessageClass '${ctx.Preference.MessageClass}'`,
+      };
+    }
+
+    const pp = ctx.PrincipalPreference;
+    if (pp) {
+      if (pp.State === 'Pending') {
+        if (ctx.MessageClass === 'Marketing' || ctx.MessageClass === 'Operational') {
+          return {
+            Reason: 'DoubleOptInPending',
+            Detail: 'Double opt-in confirmation is pending',
+          };
+        }
+        return null;
+      }
+
+      if (pp.State === 'Opted Out') {
+        return {
+          Reason: 'OptedOut',
+          Detail: `Principal opted out of preference '${ctx.Preference.Name}'`,
+        };
+      }
+
+      // State === 'Opted In'
+      if (overridableSuppression) {
+        if (this.canApplyOptionBOverride(pp, overridableSuppression)) {
+          auditSnapshot.OverrideApplied = 'OptionB:PreferenceResubscribe';
+          return null;
+        }
+        return {
+          Reason: overridableSuppression.Reason,
+          Detail: 'User Unsubscribe suppression not overridden by preference consent',
+          SuppressionID: overridableSuppression.ID,
+        };
+      }
+
+      return null;
+    }
+
+    // No PrincipalPreference row
+    if (overridableSuppression) {
+      return {
+        Reason: overridableSuppression.Reason,
+        Detail: 'Blocked by User Unsubscribe suppression',
+        SuppressionID: overridableSuppression.ID,
+      };
+    }
+
+    const consentRule = mergedRules['ConsentModel'];
+    const isSoftOptInAllowed =
+      consentRule?.Model === 'opt-in' &&
+      consentRule?.SoftOptIn === true &&
+      ctx.PrincipalAttributes?.IsExistingCustomer === true;
+
+    if (!isSoftOptInAllowed && ctx.Preference.DefaultState === 'Opted Out') {
+      return {
+        Reason: 'OptedOut',
+        Detail: `Preference '${ctx.Preference.Name}' defaults to Opted Out`,
+      };
+    }
+
+    return null;
+  }
+
+  private canApplyOptionBOverride(
+    pp: NonNullable<ComplianceEvalContext['PrincipalPreference']>,
+    suppression: MJCommunicationSuppressionEntity,
+  ): boolean {
+    if (pp.ConsentAt.getTime() <= suppression.EffectiveAt.getTime()) {
+      return false;
+    }
+    if (pp.ConsentSource !== 'Signup Form' && pp.ConsentSource !== 'Preference Center') {
+      return false;
+    }
+    return pp.OptInMethod === 'Double' || pp.CommunicationLogID !== null;
+  }
+
+  private applyEnforcementMode(
+    result: ComplianceGateResult,
+    suppressionReason?: SuppressionReason | 'Erased',
+  ): ComplianceGateResult {
+    const isHardBounceOrInvalid =
+      suppressionReason === 'Hard Bounce' ||
+      suppressionReason === 'Invalid Address' ||
+      suppressionReason === 'Erased';
+
+    if (isHardBounceOrInvalid || result.AuditSnapshot.EnforcementMode === 'Enforce') {
+      return result;
+    }
+
+    if (result.AuditSnapshot.EnforcementMode === 'Shadow') {
+      return {
+        Decision: 'Allowed',
+        Reason: result.Reason,
+        Detail: `Shadow mode: would have ${result.Decision} (${result.Detail ?? result.Reason ?? 'policy'})`,
+        SuppressionID: result.SuppressionID,
+        Obligations: result.Obligations,
+        AuditSnapshot: result.AuditSnapshot,
+      };
+    }
+
+    // EnforcementMode === 'Off'
+    return {
+      Decision: 'Allowed',
+      Obligations: result.Obligations,
+      AuditSnapshot: result.AuditSnapshot,
+    };
+  }
+
+  private instantiateRuleDriver(driverClass: string): BaseComplianceRule | null {
+    const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseComplianceRule>(
+      BaseComplianceRule,
+      driverClass,
+    );
+    if (!instance || instance.constructor === BaseComplianceRule) {
+      return null;
+    }
+    return instance;
+  }
+
+  private parseRuleParams(raw: string | null): { Params: Record<string, unknown>; Error?: string } {
+    if (!raw || !raw.trim()) return { Params: {} };
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { Params: parsed as Record<string, unknown> };
+      }
+      return { Params: {}, Error: 'Rule parameters must be a JSON object' };
+    } catch {
+      return { Params: {}, Error: 'Malformed JSON in rule parameters' };
+    }
+  }
+}

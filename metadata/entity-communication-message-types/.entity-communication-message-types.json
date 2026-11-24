@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+      "BaseMessageTypeID": "@lookup:MJ: Communication Base Message Types.Type=Email",
+      "IsActive": true,
+      "CommunicationPrincipalID": "@lookup:MJ: Communication Principals.Name=Users"
+    },
+    "relatedEntities": {
+      "MJ: Entity Communication Fields": [
+        {
+          "fields": {
+            "EntityCommunicationMessageTypeID": "@parent:ID",
+            "FieldName": "Email",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Communication Fields.EntityCommunicationMessageTypeID=@parent:ID&FieldName=Email?create&Priority=1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Communication Message Types.EntityID=@lookup:MJ: Entities.Name=MJ: Users&BaseMessageTypeID=@lookup:MJ: Communication Base Message Types.Type=Email?create&IsActive=true"
+    }
+  }
+]
