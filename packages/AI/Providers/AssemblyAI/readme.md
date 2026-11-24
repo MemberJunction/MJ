@@ -29,8 +29,8 @@ browser mic -> MJAPI -> STT 3.7 Realtime Agent -> LLM Gateway -> TTS-1 -> MJAPI 
 - API key: `AI_VENDOR_API_KEY__AssemblyAIVoiceRealtime`
 - `Model` / `APIName` names the speech-to-text model (`assemblyai-stt-3-7-realtime-agent`)
 - `Config` keys: `voice` (a library voice's slug, or a voice's UUID), `llmModel` (default `gemma-4-31b`; free accounts cannot
-  use every gateway model), `keyterms`, `firstMessage`, `disableAutoResponse`, and the normalized `turnDetection`
-  (`Eagerness`, `SilenceDurationMs`, `Threshold`)
+  use every gateway model), `keyterms` (the first 100 are used), `firstMessage`,
+  `disableAutoResponse`, and the normalized `turnDetection` (`Eagerness`, `SilenceDurationMs`, `Threshold`)
 - A long system prompt slows the first words of every reply, because the LLM reads it each turn
 
 ## Voice Agent API (`AssemblyAIRealtime`)
