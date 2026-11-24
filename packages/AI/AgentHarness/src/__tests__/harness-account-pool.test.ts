@@ -508,4 +508,89 @@ describe('HarnessAccountPoolService', () => {
             expect(service.GetSlot('os-default-claude', o)?.enabled).toBe(false);
         });
     });
+
+    describe('Live CLI Binary Health Probing', () => {
+        it('flags slots as Binary Missing and blocks HasHealthySlot / AcquireSlotLease when credentials exist but binary is unrunnable', () => {
+            // Simulate ~/.codex/auth.json present on disk while the `codex` binary throws ENOENT
+            fs.mkdirSync(path.join(fakeRealHome, '.codex'), { recursive: true });
+            fs.writeFileSync(path.join(fakeRealHome, '.codex', 'auth.json'), '{"tokens":{}}', 'utf8');
+
+            const service = HarnessAccountPoolService.Instance;
+            const failingProbe = (
+                vendor: 'claude' | 'agy' | 'codex' | 'gemini',
+                binary: string,
+            ) =>
+                vendor === 'codex'
+                    ? { Available: false, Binary: binary, Error: 'spawnSync codex ENOENT' }
+                    : { Available: true, Binary: binary, Version: '1.0.0' };
+
+            const probeOpts = opts({
+                VerifyBinaryExecutable: true,
+                BinaryProbe: failingProbe,
+            });
+
+            // os-default-codex still appears in ListSlots (so operators see the stale auth file),
+            // but authStatus is 'Binary Missing' instead of misleadingly saying 'Ready'
+            const listed = service.ListSlots({ vendor: 'codex' }, probeOpts);
+            expect(listed).toHaveLength(1);
+            expect(listed[0].slotId).toBe('os-default-codex');
+            expect(listed[0].authenticated).toBe(true);
+            expect(listed[0].BinaryAvailable).toBe(false);
+            expect(listed[0].BinaryError).toContain('ENOENT');
+            expect(listed[0].authStatus).toBe('Binary Missing');
+
+            // HasHealthySlot and AcquireSlotLease MUST treat the broken binary as unusable
+            expect(service.HasHealthySlot('codex', undefined, probeOpts)).toBe(false);
+            expect(service.AcquireSlotLease({ vendor: 'codex' }, probeOpts)).toBeNull();
+
+            // When binary IS healthy, the same credentials report Ready and lease cleanly
+            const healthyOpts = opts({
+                VerifyBinaryExecutable: true,
+                BinaryProbe: (_vendor, binary) => ({ Available: true, Binary: binary, Version: '0.1.0' }),
+            });
+            const healthyListed = service.ListSlots({ vendor: 'codex' }, healthyOpts);
+            expect(healthyListed[0].authStatus).toBe('Ready');
+            expect(healthyListed[0].BinaryAvailable).toBe(true);
+            expect(service.HasHealthySlot('codex', undefined, healthyOpts)).toBe(true);
+            const lease = service.AcquireSlotLease({ vendor: 'codex' }, healthyOpts);
+            expect(lease?.slotId).toBe('os-default-codex');
+            if (lease) {
+                service.ReleaseSlotLease(lease.leaseId, healthyOpts);
+            }
+        });
+
+        it('memoizes default ProbeVendorBinaryAvailable results per (vendor, PATH) and clears via ClearBinaryProbeCache', () => {
+            const service = HarnessAccountPoolService.Instance;
+            service.ClearBinaryProbeCache();
+
+            const emptyBinDir = makeTempDir('mj-empty-path-');
+            tempDirs.push(emptyBinDir);
+            const t0 = Date.parse('2026-11-24T15:00:00.000Z');
+            const emptyPathOpts = opts({
+                env: { HOME: fakeRealHome, PATH: emptyBinDir },
+                nowMs: t0,
+            });
+
+            const first = service.ProbeVendorBinaryAvailable('codex', emptyPathOpts);
+            expect(first.Available).toBe(false);
+            expect(first.Binary).toBe('codex');
+            expect(first.Error).toBeTruthy();
+
+            // Second call within TTL returns the exact memoized object
+            const second = service.ProbeVendorBinaryAvailable('codex', {
+                ...emptyPathOpts,
+                nowMs: t0 + 1000,
+            });
+            expect(second).toBe(first);
+
+            // Clearing the cache forces a fresh probe
+            service.ClearBinaryProbeCache();
+            const third = service.ProbeVendorBinaryAvailable('codex', {
+                ...emptyPathOpts,
+                nowMs: t0 + 2000,
+            });
+            expect(third).not.toBe(first);
+            expect(third.Available).toBe(false);
+        });
+    });
 });

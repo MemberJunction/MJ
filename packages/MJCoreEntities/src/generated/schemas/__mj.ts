@@ -13239,6 +13239,145 @@ export const MJCommentSchema = z.object({
 export type MJCommentEntityType = z.infer<typeof MJCommentSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Communication Activities
+ */
+export const MJCommunicationActivitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationLogID: z.string().nullable().describe(`
+        * * Field Name: CommunicationLogID
+        * * Display Name: Communication Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Logs (vwCommunicationLogs.ID)
+        * * Description: Message the event belongs to. NULL when the event could not be matched.`),
+    CommunicationEndpointID: z.string().nullable().describe(`
+        * * Field Name: CommunicationEndpointID
+        * * Display Name: Communication Endpoint ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Endpoints (vwCommunicationEndpoints.ID)
+        * * Description: Endpoint the event concerns.`),
+    CommunicationSenderID: z.string().nullable().describe(`
+        * * Field Name: CommunicationSenderID
+        * * Display Name: Communication Sender ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+        * * Description: Sender of the message, copied from the log for reporting without a join.`),
+    CommunicationProviderID: z.string().describe(`
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+        * * Description: Provider that reported the event.`),
+    EventType: z.union([z.literal('Clicked'), z.literal('Deferred'), z.literal('Delivered'), z.literal('Dropped'), z.literal('Hard Bounce'), z.literal('Opened'), z.literal('Queued'), z.literal('Sent'), z.literal('Soft Bounce'), z.literal('Spam Complaint'), z.literal('Unsubscribed')]).describe(`
+        * * Field Name: EventType
+        * * Display Name: Event Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Clicked
+    *   * Deferred
+    *   * Delivered
+    *   * Dropped
+    *   * Hard Bounce
+    *   * Opened
+    *   * Queued
+    *   * Sent
+    *   * Soft Bounce
+    *   * Spam Complaint
+    *   * Unsubscribed
+        * * Description: Normalized event type.`),
+    OccurredAt: z.date().describe(`
+        * * Field Name: OccurredAt
+        * * Display Name: Occurred At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the event happened, per the provider.`),
+    ReceivedAt: z.date().describe(`
+        * * Field Name: ReceivedAt
+        * * Display Name: Received At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When MJ received the event.`),
+    ProviderEventID: z.string().nullable().describe(`
+        * * Field Name: ProviderEventID
+        * * Display Name: Provider Event ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Provider's unique event ID (for example SendGrid sg_event_id). Unique per provider; duplicates are dropped.`),
+    ProviderMessageID: z.string().nullable().describe(`
+        * * Field Name: ProviderMessageID
+        * * Display Name: Provider Message ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Provider's message ID, used to match the event when tracking metadata is missing.`),
+    TargetURL: z.string().nullable().describe(`
+        * * Field Name: TargetURL
+        * * Display Name: Target URL
+        * * SQL Data Type: nvarchar(2000)
+        * * Description: Clicked URL, for Clicked events.`),
+    BounceCode: z.string().nullable().describe(`
+        * * Field Name: BounceCode
+        * * Display Name: Bounce Code
+        * * SQL Data Type: nvarchar(50)
+        * * Description: SMTP or provider bounce code, for bounce events.`),
+    BounceReason: z.string().nullable().describe(`
+        * * Field Name: BounceReason
+        * * Display Name: Bounce Reason
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Provider bounce or drop explanation.`),
+    IsMachineEvent: z.boolean().describe(`
+        * * Field Name: IsMachineEvent
+        * * Display Name: Is Machine Event
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 when the open or click is judged automated (mail privacy proxies, link scanners). Excluded from engagement.`),
+    IPAddress: z.string().nullable().describe(`
+        * * Field Name: IPAddress
+        * * Display Name: IP Address
+        * * SQL Data Type: nvarchar(45)
+        * * Description: IP address reported with the event. Subject to the retention policy.`),
+    UserAgent: z.string().nullable().describe(`
+        * * Field Name: UserAgent
+        * * Display Name: User Agent
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: User agent reported with the event. Subject to the retention policy.`),
+    CorrelationData: z.string().nullable().describe(`
+        * * Field Name: CorrelationData
+        * * Display Name: Correlation Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Caller CorrelationData echoed back by the provider.`),
+    RawPayload: z.string().nullable().describe(`
+        * * Field Name: RawPayload
+        * * Display Name: Raw Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Original provider payload for troubleshooting. Purged under the retention policy.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationLog: z.date().nullable().describe(`
+        * * Field Name: CommunicationLog
+        * * Display Name: Communication Log
+        * * SQL Data Type: datetimeoffset`),
+    CommunicationSender: z.string().nullable().describe(`
+        * * Field Name: CommunicationSender
+        * * Display Name: Communication Sender
+        * * SQL Data Type: nvarchar(200)`),
+    CommunicationProvider: z.string().nullable().describe(`
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCommunicationActivityEntityType = z.infer<typeof MJCommunicationActivitySchema>;
+
+/**
  * zod schema definition for the entity MJ: Communication Base Message Types
  */
 export const MJCommunicationBaseMessageTypeSchema = z.object({
@@ -13288,6 +13427,503 @@ export const MJCommunicationBaseMessageTypeSchema = z.object({
 });
 
 export type MJCommunicationBaseMessageTypeEntityType = z.infer<typeof MJCommunicationBaseMessageTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Compliance Regime Jurisdictions
+ */
+export const MJCommunicationComplianceRegimeJurisdictionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationComplianceRegimeID: z.string().describe(`
+        * * Field Name: CommunicationComplianceRegimeID
+        * * Display Name: Communication Compliance Regime ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Compliance Regimes (vwCommunicationComplianceRegimes.ID)
+        * * Description: The regime.`),
+    JurisdictionID: z.string().describe(`
+        * * Field Name: JurisdictionID
+        * * Display Name: Jurisdiction ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Jurisdictions (vwJurisdictions.ID)
+        * * Description: The jurisdiction (country, subdivision or group) where it applies.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationComplianceRegime: z.string().nullable().describe(`
+        * * Field Name: CommunicationComplianceRegime
+        * * Display Name: Communication Compliance Regime
+        * * SQL Data Type: nvarchar(100)`),
+    Jurisdiction: z.string().nullable().describe(`
+        * * Field Name: Jurisdiction
+        * * Display Name: Jurisdiction
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJCommunicationComplianceRegimeJurisdictionEntityType = z.infer<typeof MJCommunicationComplianceRegimeJurisdictionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Compliance Regime Rules
+ */
+export const MJCommunicationComplianceRegimeRuleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationComplianceRegimeID: z.string().describe(`
+        * * Field Name: CommunicationComplianceRegimeID
+        * * Display Name: Communication Compliance Regime ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Compliance Regimes (vwCommunicationComplianceRegimes.ID)
+        * * Description: The regime this rule belongs to.`),
+    CommunicationComplianceRuleTypeID: z.string().describe(`
+        * * Field Name: CommunicationComplianceRuleTypeID
+        * * Display Name: Communication Compliance Rule Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Compliance Rule Types (vwCommunicationComplianceRuleTypes.ID)
+        * * Description: The kind of rule.`),
+    BaseMessageTypeID: z.string().nullable().describe(`
+        * * Field Name: BaseMessageTypeID
+        * * Display Name: Base Message Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+        * * Description: Channel the rule applies to. NULL = all channels.`),
+    MessageClass: z.union([z.literal('Marketing'), z.literal('Operational'), z.literal('Transactional')]).nullable().describe(`
+        * * Field Name: MessageClass
+        * * Display Name: Message Class
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Marketing
+    *   * Operational
+    *   * Transactional
+        * * Description: Message class the rule applies to. NULL = all classes.`),
+    Parameters: z.string().nullable().describe(`
+        * * Field Name: Parameters
+        * * Display Name: Parameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Rule parameters as JSON, validated against the rule type's ParameterSchema, for example {"Model":"Opt-In"} or {"StartHour":21,"EndHour":8}.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Citation or reviewer notes for the parameter values.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active or Disabled.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationComplianceRegime: z.string().nullable().describe(`
+        * * Field Name: CommunicationComplianceRegime
+        * * Display Name: Communication Compliance Regime
+        * * SQL Data Type: nvarchar(100)`),
+    CommunicationComplianceRuleType: z.string().nullable().describe(`
+        * * Field Name: CommunicationComplianceRuleType
+        * * Display Name: Communication Compliance Rule Type
+        * * SQL Data Type: nvarchar(100)`),
+    BaseMessageType: z.string().nullable().describe(`
+        * * Field Name: BaseMessageType
+        * * Display Name: Base Message Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationComplianceRegimeRuleEntityType = z.infer<typeof MJCommunicationComplianceRegimeRuleSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Compliance Regimes
+ */
+export const MJCommunicationComplianceRegimeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique regime name.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Summary of the regime and its scope.`),
+    AppliesBy: z.union([z.literal('Recipient'), z.literal('Recipient or Sender'), z.literal('Sender')]).describe(`
+        * * Field Name: AppliesBy
+        * * Display Name: Applies By
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Recipient
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Recipient
+    *   * Recipient or Sender
+    *   * Sender
+        * * Description: Whose jurisdiction triggers the regime: the recipient's, the sender's, or either.`),
+    AppliesWhenJurisdictionUnknown: z.boolean().describe(`
+        * * Field Name: AppliesWhenJurisdictionUnknown
+        * * Display Name: Applies When Jurisdiction Unknown
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the regime applies to recipients whose jurisdiction cannot be resolved. Default 1, so unknown recipients get the strictest combination of enabled regimes.`),
+    ReferenceURL: z.string().nullable().describe(`
+        * * Field Name: ReferenceURL
+        * * Display Name: Reference URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Link to the authoritative text or the legal review behind the rule parameters.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Disabled
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active regimes are enforced. Defaults to Disabled: an admin turns each regime on.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJCommunicationComplianceRegimeEntityType = z.infer<typeof MJCommunicationComplianceRegimeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Compliance Rule Types
+ */
+export const MJCommunicationComplianceRuleTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique rule type name.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the rule controls and how the strictest value is chosen.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(200)
+        * * Description: ClassFactory key of a BaseComplianceRule subclass implementing Evaluate and Combine.`),
+    ParameterSchema: z.string().nullable().describe(`
+        * * Field Name: ParameterSchema
+        * * Display Name: Parameter Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON schema that regime rule Parameters must satisfy.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active or Disabled.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJCommunicationComplianceRuleTypeEntityType = z.infer<typeof MJCommunicationComplianceRuleTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Consent Audit Logs
+ */
+export const MJCommunicationConsentAuditLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationSuppressionID: z.string().nullable().describe(`
+        * * Field Name: CommunicationSuppressionID
+        * * Display Name: Communication Suppression ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Suppressions (vwCommunicationSuppressions.ID)
+        * * Description: Suppression that changed. Exactly one of this and CommunicationPrincipalPreferenceID is set.`),
+    CommunicationPrincipalPreferenceID: z.string().nullable().describe(`
+        * * Field Name: CommunicationPrincipalPreferenceID
+        * * Display Name: Communication Principal Preference ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Principal Preferences (vwCommunicationPrincipalPreferences.ID)
+        * * Description: Principal preference that changed. Exactly one of this and CommunicationSuppressionID is set.`),
+    Action: z.union([z.literal('Confirmed'), z.literal('Created'), z.literal('Expired'), z.literal('Revoked'), z.literal('Updated')]).describe(`
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Confirmed
+    *   * Created
+    *   * Expired
+    *   * Revoked
+    *   * Updated
+        * * Description: Created, Updated, Revoked or Expired.`),
+    PreviousValue: z.string().nullable().describe(`
+        * * Field Name: PreviousValue
+        * * Display Name: Previous Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the row before the change. NULL on Created.`),
+    NewValue: z.string().nullable().describe(`
+        * * Field Name: NewValue
+        * * Display Name: New Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the row after the change.`),
+    Source: z.union([z.literal('API'), z.literal('Admin'), z.literal('Import'), z.literal('One-Click Header'), z.literal('Policy'), z.literal('Preference Center'), z.literal('Provider Webhook'), z.literal('Signup Form'), z.literal('System')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * API
+    *   * Admin
+    *   * Import
+    *   * One-Click Header
+    *   * Policy
+    *   * Preference Center
+    *   * Provider Webhook
+    *   * Signup Form
+    *   * System
+        * * Description: Where the change came from.`),
+    CommunicationLogID: z.string().nullable().describe(`
+        * * Field Name: CommunicationLogID
+        * * Display Name: Communication Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Logs (vwCommunicationLogs.ID)
+        * * Description: Message whose link or event caused the change, when applicable.`),
+    IPAddress: z.string().nullable().describe(`
+        * * Field Name: IPAddress
+        * * Display Name: IP Address
+        * * SQL Data Type: nvarchar(45)
+        * * Description: IP address of the request that made the change.`),
+    UserAgent: z.string().nullable().describe(`
+        * * Field Name: UserAgent
+        * * Display Name: User Agent
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: User agent of the request that made the change.`),
+    ChangedByUserID: z.string().nullable().describe(`
+        * * Field Name: ChangedByUserID
+        * * Display Name: Changed By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: MJ user who made the change, when not the person themselves.`),
+    ChangedAt: z.date().describe(`
+        * * Field Name: ChangedAt
+        * * Display Name: Changed At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the change happened.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationLog: z.date().nullable().describe(`
+        * * Field Name: CommunicationLog
+        * * Display Name: Communication Log
+        * * SQL Data Type: datetimeoffset`),
+    ChangedByUser: z.string().nullable().describe(`
+        * * Field Name: ChangedByUser
+        * * Display Name: Changed By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationConsentAuditLogEntityType = z.infer<typeof MJCommunicationConsentAuditLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Endpoint Principals
+ */
+export const MJCommunicationEndpointPrincipalSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationEndpointID: z.string().describe(`
+        * * Field Name: CommunicationEndpointID
+        * * Display Name: Communication Endpoint ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Endpoints (vwCommunicationEndpoints.ID)
+        * * Description: The endpoint.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Entity of the principal record.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the principal record (polymorphic, paired with EntityID).`),
+    FirstSeenAt: z.date().describe(`
+        * * Field Name: FirstSeenAt
+        * * Display Name: First Seen At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the engine first resolved this record to this endpoint.`),
+    LastSeenAt: z.date().describe(`
+        * * Field Name: LastSeenAt
+        * * Display Name: Last Seen At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the engine last resolved this record to this endpoint.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCommunicationEndpointPrincipalEntityType = z.infer<typeof MJCommunicationEndpointPrincipalSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Endpoints
+ */
+export const MJCommunicationEndpointSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    BaseMessageTypeID: z.string().describe(`
+        * * Field Name: BaseMessageTypeID
+        * * Display Name: Base Message Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+        * * Description: Channel of the address: the communication base message type (Email, SMS, ...).`),
+    NormalizedValue: z.string().nullable().describe(`
+        * * Field Name: NormalizedValue
+        * * Display Name: Normalized Value
+        * * SQL Data Type: nvarchar(320)
+        * * Description: Normalized address: email lowercased and trimmed (dots and plus-tags kept); phone in E.164. NULL when Status is Erased.`),
+    ValueHash: z.string().describe(`
+        * * Field Name: ValueHash
+        * * Display Name: Value Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hex digest of the normalized value. Preserved on erasure so re-imported addresses resolve to the same suppressed endpoint.`),
+    Domain: z.string().nullable().describe(`
+        * * Field Name: Domain
+        * * Display Name: Domain
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Email domain, for domain-level deliverability reporting. NULL for non-email channels.`),
+    Status: z.union([z.literal('Active'), z.literal('Complained'), z.literal('Erased'), z.literal('Hard Bounced'), z.literal('Invalid'), z.literal('Soft Bouncing')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complained
+    *   * Erased
+    *   * Hard Bounced
+    *   * Invalid
+    *   * Soft Bouncing
+        * * Description: Health summary maintained from activity. Suppression rows remain the authority for blocking.`),
+    SoftBounceCount: z.number().describe(`
+        * * Field Name: SoftBounceCount
+        * * Display Name: Soft Bounce Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Consecutive soft bounces since the last delivery. A configurable threshold converts repeated soft bounces into a suppression.`),
+    LastSentAt: z.date().nullable().describe(`
+        * * Field Name: LastSentAt
+        * * Display Name: Last Sent At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Last time any message was handed to a provider for this address.`),
+    LastDeliveredAt: z.date().nullable().describe(`
+        * * Field Name: LastDeliveredAt
+        * * Display Name: Last Delivered At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Last confirmed delivery.`),
+    LastBouncedAt: z.date().nullable().describe(`
+        * * Field Name: LastBouncedAt
+        * * Display Name: Last Bounced At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Last bounce of any kind.`),
+    LastEngagedAt: z.date().nullable().describe(`
+        * * Field Name: LastEngagedAt
+        * * Display Name: Last Engaged At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Last human open or click (machine events excluded).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    BaseMessageType: z.string().nullable().describe(`
+        * * Field Name: BaseMessageType
+        * * Display Name: Base Message Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationEndpointEntityType = z.infer<typeof MJCommunicationEndpointSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Logs
@@ -13359,6 +13995,91 @@ export const MJCommunicationLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Entity of the principal record the message was sent to.`),
+    RecordID: z.string().nullable().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the principal record (polymorphic, paired with EntityID). NULL for transactional sends to a bare address.`),
+    CommunicationEndpointID: z.string().nullable().describe(`
+        * * Field Name: CommunicationEndpointID
+        * * Display Name: Communication Endpoint ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Endpoints (vwCommunicationEndpoints.ID)
+        * * Description: Endpoint the message was sent to.`),
+    RecipientAddress: z.string().nullable().describe(`
+        * * Field Name: RecipientAddress
+        * * Display Name: Recipient Address
+        * * SQL Data Type: nvarchar(320)
+        * * Description: Address as sent, kept even if the endpoint row later changes.`),
+    CommunicationSenderID: z.string().nullable().describe(`
+        * * Field Name: CommunicationSenderID
+        * * Display Name: Communication Sender ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+        * * Description: Sender the message went out on behalf of. Scopes any unsubscribe or complaint the message triggers.`),
+    CommunicationPreferenceID: z.string().nullable().describe(`
+        * * Field Name: CommunicationPreferenceID
+        * * Display Name: Communication Preference ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Preferences (vwCommunicationPreferences.ID)
+        * * Description: Preference the message was sent under. Scopes a one-click unsubscribe.`),
+    MessageClass: z.union([z.literal('Marketing'), z.literal('Operational'), z.literal('Transactional')]).nullable().describe(`
+        * * Field Name: MessageClass
+        * * Display Name: Message Class
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Marketing
+    *   * Operational
+    *   * Transactional
+        * * Description: Transactional, Operational or Marketing. NULL for messages logged before Communications V2.`),
+    ScheduledAt: z.date().nullable().describe(`
+        * * Field Name: ScheduledAt
+        * * Display Name: Scheduled At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Requested send time (SendAt), or the deferral time the compliance gate set (for example after quiet hours).`),
+    ProviderMessageID: z.string().nullable().describe(`
+        * * Field Name: ProviderMessageID
+        * * Display Name: Provider Message ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: The provider's ID for the message (for example SendGrid X-Message-Id). Set once handed off; the send handler skips logs that already have one.`),
+    UnsubscribeToken: z.string().nullable().describe(`
+        * * Field Name: UnsubscribeToken
+        * * Display Name: Unsubscribe Token
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Non-enumerable random UUIDv4 capability token used in one-click unsubscribe and preference center links.`),
+    TrackingToken: z.string().nullable().describe(`
+        * * Field Name: TrackingToken
+        * * Display Name: Tracking Token
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Separate random UUIDv4 token for open-tracking pixels so image-proxy logs never hold unsubscribe capability.`),
+    CorrelationData: z.string().nullable().describe(`
+        * * Field Name: CorrelationData
+        * * Display Name: Correlation Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Caller-supplied JSON echoed into provider tracking metadata and back on every activity event (for example a campaign or sequence step ID).`),
+    ComplianceDecision: z.string().nullable().describe(`
+        * * Field Name: ComplianceDecision
+        * * Display Name: Compliance Decision
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON record of the gate's decision: applicable regimes and jurisdictions, resolved rules, obligations injected. Evidence of why the message was allowed.`),
+    IsDryRun: z.boolean().describe(`
+        * * Field Name: IsDryRun
+        * * Display Name: Is Dry Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when the message went through the provider's dry-run path and was not delivered. A dry-run log is Complete but is never counted as sent.`),
+    DeferredPayload: z.string().nullable().describe(`
+        * * Field Name: DeferredPayload
+        * * Display Name: Deferred Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of the rendered message (subject and bodies) for a send deferred to a later time. Written when the log is created Pending, read by the scheduled sweep, and cleared once the message is dispatched so the body is not kept.`),
     CommunicationProvider: z.string().nullable().describe(`
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
@@ -13371,9 +14092,382 @@ export const MJCommunicationLogSchema = z.object({
         * * Field Name: CommunicationRun
         * * Display Name: Communication Run
         * * SQL Data Type: nvarchar(100)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    CommunicationSender: z.string().nullable().describe(`
+        * * Field Name: CommunicationSender
+        * * Display Name: Communication Sender
+        * * SQL Data Type: nvarchar(200)`),
+    CommunicationPreference: z.string().nullable().describe(`
+        * * Field Name: CommunicationPreference
+        * * Display Name: Communication Preference
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJCommunicationLogEntityType = z.infer<typeof MJCommunicationLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Preferences
+ */
+export const MJCommunicationPreferenceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationSenderID: z.string().nullable().describe(`
+        * * Field Name: CommunicationSenderID
+        * * Display Name: Communication Sender ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+        * * Description: Owning sender. NULL means the preference is shared across senders; non-NULL means the preference is owned by that specific sender.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Name shown in the preference center. Unique per sender.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Explanation shown in the preference center.`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional grouping heading in the preference center.`),
+    MessageClass: z.union([z.literal('Marketing'), z.literal('Operational'), z.literal('Transactional')]).describe(`
+        * * Field Name: MessageClass
+        * * Display Name: Message Class
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Marketing
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Marketing
+    *   * Operational
+    *   * Transactional
+        * * Description: Transactional, Operational or Marketing. Decides which suppression reasons and regime rules apply to messages sent under this preference.`),
+    DefaultState: z.union([z.literal('Opted In'), z.literal('Opted Out')]).describe(`
+        * * Field Name: DefaultState
+        * * Display Name: Default State
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Opted In
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Opted In
+    *   * Opted Out
+        * * Description: State assumed when a principal has no Principal Preference row. An applicable opt-in regime overrides Opted In for Marketing: explicit consent is then required.`),
+    BaseMessageTypeID: z.string().nullable().describe(`
+        * * Field Name: BaseMessageTypeID
+        * * Display Name: Base Message Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+        * * Description: Channel this preference applies to. NULL means all channels.`),
+    IsUserVisible: z.boolean().describe(`
+        * * Field Name: IsUserVisible
+        * * Display Name: Is User Visible
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 0, the preference is internal and hidden from the preference center.`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Order in the preference center.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active or Disabled. Sends naming a disabled preference are refused.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationSender: z.string().nullable().describe(`
+        * * Field Name: CommunicationSender
+        * * Display Name: Communication Sender
+        * * SQL Data Type: nvarchar(200)`),
+    BaseMessageType: z.string().nullable().describe(`
+        * * Field Name: BaseMessageType
+        * * Display Name: Base Message Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationPreferenceEntityType = z.infer<typeof MJCommunicationPreferenceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Principal Preferences
+ */
+export const MJCommunicationPrincipalPreferenceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Entity of the principal record.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the principal record (polymorphic, paired with EntityID).`),
+    CommunicationPreferenceID: z.string().describe(`
+        * * Field Name: CommunicationPreferenceID
+        * * Display Name: Communication Preference ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Preferences (vwCommunicationPreferences.ID)
+        * * Description: The preference this choice is for.`),
+    CommunicationSenderID: z.string().nullable().describe(`
+        * * Field Name: CommunicationSenderID
+        * * Display Name: Communication Sender ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+        * * Description: Sender this choice applies to (and its descendants). NULL means every sender.`),
+    State: z.union([z.literal('Opted In'), z.literal('Opted Out'), z.literal('Pending')]).describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Opted In
+    *   * Opted Out
+    *   * Pending
+        * * Description: Pending (awaiting double opt-in confirmation), Opted In or Opted Out.`),
+    OptInMethod: z.union([z.literal('Double'), z.literal('Single')]).nullable().describe(`
+        * * Field Name: OptInMethod
+        * * Display Name: Opt In Method
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Double
+    *   * Single
+        * * Description: Whether consent was captured via Single or Double opt-in. Preserved after Pending transitions to Opted In.`),
+    ConfirmedAt: z.date().nullable().describe(`
+        * * Field Name: ConfirmedAt
+        * * Display Name: Confirmed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When double opt-in confirmation was completed. NULL for single opt-in or while still Pending.`),
+    ConfirmationToken: z.string().nullable().describe(`
+        * * Field Name: ConfirmationToken
+        * * Display Name: Confirmation Token
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Random UUIDv4 token used in double opt-in confirmation links, separate from UnsubscribeToken.`),
+    ConsentSource: z.union([z.literal('API'), z.literal('Admin'), z.literal('Import'), z.literal('One-Click Header'), z.literal('Preference Center'), z.literal('Provider Webhook'), z.literal('Signup Form')]).describe(`
+        * * Field Name: ConsentSource
+        * * Display Name: Consent Source
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * API
+    *   * Admin
+    *   * Import
+    *   * One-Click Header
+    *   * Preference Center
+    *   * Provider Webhook
+    *   * Signup Form
+        * * Description: Where the choice was captured.`),
+    ConsentAt: z.date().describe(`
+        * * Field Name: ConsentAt
+        * * Display Name: Consent At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the choice was made.`),
+    ConsentText: z.string().nullable().describe(`
+        * * Field Name: ConsentText
+        * * Display Name: Consent Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The exact wording the person agreed to, kept as consent evidence where a regime requires it.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When implied consent lapses (for example under a ConsentExpiry rule). NULL means no expiry.`),
+    CommunicationLogID: z.string().nullable().describe(`
+        * * Field Name: CommunicationLogID
+        * * Display Name: Communication Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Logs (vwCommunicationLogs.ID)
+        * * Description: Message whose link or header produced this choice, when applicable.`),
+    IPAddress: z.string().nullable().describe(`
+        * * Field Name: IPAddress
+        * * Display Name: IP Address
+        * * SQL Data Type: nvarchar(45)
+        * * Description: IP address of the request that made the choice.`),
+    UserAgent: z.string().nullable().describe(`
+        * * Field Name: UserAgent
+        * * Display Name: User Agent
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: User agent of the request that made the choice.`),
+    ChangedByUserID: z.string().nullable().describe(`
+        * * Field Name: ChangedByUserID
+        * * Display Name: Changed By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: MJ user who made the change on the person's behalf (admin or API). NULL for self-service.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    CommunicationPreference: z.string().nullable().describe(`
+        * * Field Name: CommunicationPreference
+        * * Display Name: Communication Preference
+        * * SQL Data Type: nvarchar(200)`),
+    CommunicationSender: z.string().nullable().describe(`
+        * * Field Name: CommunicationSender
+        * * Display Name: Communication Sender
+        * * SQL Data Type: nvarchar(200)`),
+    CommunicationLog: z.date().nullable().describe(`
+        * * Field Name: CommunicationLog
+        * * Display Name: Communication Log
+        * * SQL Data Type: datetimeoffset`),
+    ChangedByUser: z.string().nullable().describe(`
+        * * Field Name: ChangedByUser
+        * * Display Name: Changed By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationPrincipalPreferenceEntityType = z.infer<typeof MJCommunicationPrincipalPreferenceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Principals
+ */
+export const MJCommunicationPrincipalSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity registered as a principal. One registration per entity.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Display name shown in the principal selector, for example People or Organizations. The selector is hidden when only one principal is active.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this principal represents and which app registered it.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(200)
+        * * Description: ClassFactory key of a BaseCommunicationPrincipal subclass. NULL uses the metadata-only base class.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON slot mapping, for example {"Slots":{"FullName":"FullName","Jurisdiction":"Addresses.CountryISO2","Timezone":"Timezone","PreferredLanguage":"Language"}}. Slots may traverse relationships. Address slots live in Entity Communication Fields.`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Order of principals in pickers.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active principals can be sent to; Disabled principals are refused by the engine.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCommunicationPrincipalEntityType = z.infer<typeof MJCommunicationPrincipalSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Provider Events
+ */
+export const MJCommunicationProviderEventSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationProviderID: z.string().describe(`
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+        * * Description: Provider that delivered the webhook event.`),
+    ProviderEventID: z.string().describe(`
+        * * Field Name: ProviderEventID
+        * * Display Name: Provider Event ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Provider's unique event ID (for example SendGrid sg_event_id).`),
+    ReceivedAt: z.date().describe(`
+        * * Field Name: ReceivedAt
+        * * Display Name: Received At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When MJ processed the event, used by the 7-day retention purge.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationProvider: z.string().nullable().describe(`
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCommunicationProviderEventEntityType = z.infer<typeof MJCommunicationProviderEventSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Provider Message Types
@@ -13553,6 +14647,22 @@ export const MJCommunicationProviderSchema = z.object({
         * * Display Name: Allowed O Auth Tenant I Ds
         * * SQL Data Type: nvarchar(1000)
         * * Description: Optional comma-separated allowlist of identity tenant identifiers (Gate 3) that a user-delegated OAuth token must carry: Azure AD tenant IDs (tid) or Google Workspace hosted domains (hd). NULL means no tenant restriction beyond AllowedEmailDomains.`),
+    RequireVerifiedDomain: z.boolean().describe(`
+        * * Field Name: RequireVerifiedDomain
+        * * Display Name: Require Verified Domain
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, sends through this provider require a Verified Communication Sending Domain matching the sender's domain and credential.`),
+    DeliveryGuarantee: z.union([z.literal('At Least Once'), z.literal('At Most Once')]).describe(`
+        * * Field Name: DeliveryGuarantee
+        * * Display Name: Delivery Guarantee
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: At Most Once
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+        * * Description: What happens when a send's outcome is unknown (the provider may have accepted it, but the result was never recorded). At Most Once: never resend; the message is reported as Failed with OutcomeUnknown, so a recipient may miss it. At Least Once: resend; a recipient may get it twice. Default for every send through this provider.`),
     DefaultCredential: z.string().nullable().describe(`
         * * Field Name: DefaultCredential
         * * Display Name: Default Credential
@@ -13560,6 +14670,71 @@ export const MJCommunicationProviderSchema = z.object({
 });
 
 export type MJCommunicationProviderEntityType = z.infer<typeof MJCommunicationProviderSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Run Chunks
+ */
+export const MJCommunicationRunChunkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationRunID: z.string().describe(`
+        * * Field Name: CommunicationRunID
+        * * Display Name: Communication Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Runs (vwCommunicationRuns.ID)
+        * * Description: Run the chunk belongs to.`),
+    ChunkIndex: z.number().describe(`
+        * * Field Name: ChunkIndex
+        * * Display Name: Chunk Index
+        * * SQL Data Type: int
+        * * Description: Zero-based position of the chunk in the run. Unique per run.`),
+    Status: z.union([z.literal('Complete'), z.literal('Failed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+        * * Description: Complete when the chunk was processed (individual recipients may still be blocked or failed); Failed when the chunk was refused before any recipient was processed.`),
+    RecipientCount: z.number().describe(`
+        * * Field Name: RecipientCount
+        * * Display Name: Recipient Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of recipients in the chunk.`),
+    CompletedAt: z.date().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the chunk finished.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Why the chunk was refused, when Status is Failed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationRun: z.string().nullable().describe(`
+        * * Field Name: CommunicationRun
+        * * Display Name: Communication Run
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationRunChunkEntityType = z.infer<typeof MJCommunicationRunChunkSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Runs
@@ -13622,6 +14797,20 @@ export const MJCommunicationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ChunkCount: z.number().nullable().describe(`
+        * * Field Name: ChunkCount
+        * * Display Name: Chunk Count
+        * * SQL Data Type: int
+        * * Description: Number of queued chunks the run was split into. The run is ended when this many Communication Run Chunks have been recorded. NULL for a run that is not chunked.`),
+    DeliveryGuarantee: z.union([z.literal('At Least Once'), z.literal('At Most Once')]).nullable().describe(`
+        * * Field Name: DeliveryGuarantee
+        * * Display Name: Delivery Guarantee
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+        * * Description: Overrides the sender and provider DeliveryGuarantee for every send in this run. NULL inherits.`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -13629,6 +14818,623 @@ export const MJCommunicationRunSchema = z.object({
 });
 
 export type MJCommunicationRunEntityType = z.infer<typeof MJCommunicationRunSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Sender Permissions
+ */
+export const MJCommunicationSenderPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationSenderID: z.string().describe(`
+        * * Field Name: CommunicationSenderID
+        * * Display Name: Communication Sender ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+        * * Description: The sender the grant applies to.`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Role granted the permission. Exactly one of RoleID and UserID is set.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User granted the permission. Exactly one of RoleID and UserID is set.`),
+    PermissionLevel: z.union([z.literal('Manage'), z.literal('Send'), z.literal('View')]).describe(`
+        * * Field Name: PermissionLevel
+        * * Display Name: Permission Level
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Manage
+    *   * Send
+    *   * View
+        * * Description: View: see activity and reports. Send: send as this sender. Manage: also edit the sender, its preferences and its suppressions. Each level includes the ones before it.`),
+    AppliesToChildSenders: z.boolean().describe(`
+        * * Field Name: AppliesToChildSenders
+        * * Display Name: Applies To Child Senders
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the grant also applies to every descendant sender.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationSender: z.string().nullable().describe(`
+        * * Field Name: CommunicationSender
+        * * Display Name: Communication Sender
+        * * SQL Data Type: nvarchar(200)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationSenderPermissionEntityType = z.infer<typeof MJCommunicationSenderPermissionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Sender Types
+ */
+export const MJCommunicationSenderTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name, for example Company, Brand, Tenant or Newsletter.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this sender type represents.`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Entity whose records back senders of this type, for example MJ: Companies. NULL for senders defined only in Communication Senders (for example a brand with no source record).`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(200)
+        * * Description: ClassFactory key of a BaseCommunicationSender subclass for custom resolution, templating context or permission checks. NULL uses the metadata-only base class.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON slot mapping from the backing entity, for example {"Slots":{"Name":"Name","SendingDomain":"Domain","LogoURL":"LogoURL","Website":"Website"}}. Values set on a Communication Sender row override mapped values.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active or Disabled.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCommunicationSenderTypeEntityType = z.infer<typeof MJCommunicationSenderTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Senders
+ */
+export const MJCommunicationSenderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationSenderTypeID: z.string().describe(`
+        * * Field Name: CommunicationSenderTypeID
+        * * Display Name: Communication Sender Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Sender Types (vwCommunicationSenderTypes.ID)
+        * * Description: The sender type this sender belongs to.`),
+    RecordID: z.string().nullable().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the backing record in the sender type's entity (for example an MJ: Companies ID). NULL when the sender has no backing record.`),
+    ParentSenderID: z.string().nullable().describe(`
+        * * Field Name: ParentSenderID
+        * * Display Name: Parent Sender ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+        * * Description: Parent sender, for example the company a brand or newsletter belongs to. Suppressions, preferences and permissions on a parent apply to its descendants.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Display name used in the preference center and reports.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this sender is and who manages it.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this sender is used for sends that name no sender. At most one default sender per instance.`),
+    FromEmail: z.string().nullable().describe(`
+        * * Field Name: FromEmail
+        * * Display Name: From Email
+        * * SQL Data Type: nvarchar(320)
+        * * Description: Default From address for email sent by this sender.`),
+    FromName: z.string().nullable().describe(`
+        * * Field Name: FromName
+        * * Display Name: From Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Default From display name.`),
+    ReplyToEmail: z.string().nullable().describe(`
+        * * Field Name: ReplyToEmail
+        * * Display Name: Reply To Email
+        * * SQL Data Type: nvarchar(320)
+        * * Description: Default Reply-To address.`),
+    FromPhone: z.string().nullable().describe(`
+        * * Field Name: FromPhone
+        * * Display Name: From Phone
+        * * SQL Data Type: nvarchar(32)
+        * * Description: Default sending phone number or short code for SMS, in E.164 form.`),
+    SendingDomain: z.string().nullable().describe(`
+        * * Field Name: SendingDomain
+        * * Display Name: Sending Domain
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Authenticated sending domain (SPF/DKIM/DMARC). Also a rate-limiting key for the send queue.`),
+    PostalAddress: z.string().nullable().describe(`
+        * * Field Name: PostalAddress
+        * * Display Name: Postal Address
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Physical postal address injected into footers when a regime's SenderIdentification rule requires it.`),
+    JurisdictionID: z.string().nullable().describe(`
+        * * Field Name: JurisdictionID
+        * * Display Name: Jurisdiction ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Jurisdictions (vwJurisdictions.ID)
+        * * Description: Where the sender is established. Regimes whose AppliesBy includes Sender apply based on this jurisdiction.`),
+    CommunicationProviderID: z.string().nullable().describe(`
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+        * * Description: Default provider for this sender's sends, overriding the instance default.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Provider credential for this sender (for example a per-tenant SendGrid subuser key). Secrets live only in MJ: Credentials.`),
+    PreferenceCenterURL: z.string().nullable().describe(`
+        * * Field Name: PreferenceCenterURL
+        * * Display Name: Preference Center URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Public preference center URL for this sender. Used as the redirect after one-click unsubscribe and in footers.`),
+    TemplateContext: z.string().nullable().describe(`
+        * * Field Name: TemplateContext
+        * * Display Name: Template Context
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON brand variables exposed to templates and callers as Sender.*, for example {"LogoURL":"...","PrimaryColor":"#0B5394","FooterText":"..."}. Merged down the sender hierarchy: a child's values override its parent's.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Driver-specific JSON settings for this sender.`),
+    EnforcementMode: z.union([z.literal('Enforce'), z.literal('Off'), z.literal('Shadow')]).nullable().describe(`
+        * * Field Name: EnforcementMode
+        * * Display Name: Enforcement Mode
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Enforce
+    *   * Off
+    *   * Shadow
+        * * Description: Per-sender override of the instance compliance enforcement mode (Off, Shadow or Enforce). NULL uses the instance setting.`),
+    DeliveryGuarantee: z.union([z.literal('At Least Once'), z.literal('At Most Once')]).nullable().describe(`
+        * * Field Name: DeliveryGuarantee
+        * * Display Name: Delivery Guarantee
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+        * * Description: Overrides the provider's DeliveryGuarantee for sends from this sender. NULL inherits from the nearest ancestor sender, then the provider.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Suspended')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Suspended
+        * * Description: Active senders can send; Suspended senders are paused (for example a reputation problem); Disabled senders are retired.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationSenderType: z.string().nullable().describe(`
+        * * Field Name: CommunicationSenderType
+        * * Display Name: Communication Sender Type
+        * * SQL Data Type: nvarchar(100)`),
+    ParentSender: z.string().nullable().describe(`
+        * * Field Name: ParentSender
+        * * Display Name: Parent Sender
+        * * SQL Data Type: nvarchar(200)`),
+    Jurisdiction: z.string().nullable().describe(`
+        * * Field Name: Jurisdiction
+        * * Display Name: Jurisdiction
+        * * SQL Data Type: nvarchar(200)`),
+    CommunicationProvider: z.string().nullable().describe(`
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJCommunicationSenderEntityType = z.infer<typeof MJCommunicationSenderSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Sending Domains
+ */
+export const MJCommunicationSendingDomainSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationProviderID: z.string().describe(`
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+        * * Description: Provider that authenticates the domain (for example SendGrid).`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: MJ: Credential (account or subuser) owning this domain authentication. NULL uses default environment credentials.`),
+    Domain: z.string().describe(`
+        * * Field Name: Domain
+        * * Display Name: Domain
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Authenticated sending domain (for example mail.example.org).`),
+    ProviderDomainID: z.string().nullable().describe(`
+        * * Field Name: ProviderDomainID
+        * * Display Name: Provider Domain ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Provider's domain-authentication record ID (for example SendGrid whitelabel domain ID).`),
+    Status: z.union([z.literal('Failed'), z.literal('Pending'), z.literal('Revoked'), z.literal('Verified')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * Pending
+    *   * Revoked
+    *   * Verified
+        * * Description: Pending, Verified, Failed or Revoked.`),
+    DNSRecords: z.string().nullable().describe(`
+        * * Field Name: DNSRecords
+        * * Display Name: DNS Records
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of required DNS records (Type, Purpose, Host, Value, Validated, LastError) returned by the provider.`),
+    LastVerifiedAt: z.date().nullable().describe(`
+        * * Field Name: LastVerifiedAt
+        * * Display Name: Last Verified At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When DNS validation was last checked.`),
+    VerifiedAt: z.date().nullable().describe(`
+        * * Field Name: VerifiedAt
+        * * Display Name: Verified At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the domain first reached Verified status.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationProvider: z.string().nullable().describe(`
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJCommunicationSendingDomainEntityType = z.infer<typeof MJCommunicationSendingDomainSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Suppression Policies
+ */
+export const MJCommunicationSuppressionPolicySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Unique policy name.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the policy protects against.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(200)
+        * * Description: ClassFactory key of a BaseCommunicationSuppressionPolicy subclass.`),
+    Parameters: z.string().nullable().describe(`
+        * * Field Name: Parameters
+        * * Display Name: Parameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Driver parameters as JSON, for example {"Signal":"Spam Complaint","Threshold":3,"WindowDays":90,"Scope":"Global"}.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active or Disabled.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJCommunicationSuppressionPolicyEntityType = z.infer<typeof MJCommunicationSuppressionPolicySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Suppressions
+ */
+export const MJCommunicationSuppressionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationEndpointID: z.string().nullable().describe(`
+        * * Field Name: CommunicationEndpointID
+        * * Display Name: Communication Endpoint ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Endpoints (vwCommunicationEndpoints.ID)
+        * * Description: Blocked address. Address-level rows protect every principal that shares the address. At least one of endpoint or principal is set.`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Entity of the blocked principal record, when the block is principal-level.`),
+    RecordID: z.string().nullable().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the blocked principal record (polymorphic, paired with EntityID).`),
+    CommunicationSenderID: z.string().nullable().describe(`
+        * * Field Name: CommunicationSenderID
+        * * Display Name: Communication Sender ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+        * * Description: Sender the block applies to, including its descendants. NULL = global: every sender. Hard bounces and invalid addresses are always global.`),
+    CommunicationPreferenceID: z.string().nullable().describe(`
+        * * Field Name: CommunicationPreferenceID
+        * * Display Name: Communication Preference ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Preferences (vwCommunicationPreferences.ID)
+        * * Description: Preference the block applies to. NULL = all preferences of the classes the reason covers.`),
+    BaseMessageTypeID: z.string().nullable().describe(`
+        * * Field Name: BaseMessageTypeID
+        * * Display Name: Base Message Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+        * * Description: Channel the block applies to. NULL = all channels.`),
+    Reason: z.union([z.literal('Admin Block'), z.literal('Hard Bounce'), z.literal('Invalid Address'), z.literal('Policy'), z.literal('Spam Complaint'), z.literal('User Unsubscribe')]).describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Admin Block
+    *   * Hard Bounce
+    *   * Invalid Address
+    *   * Policy
+    *   * Spam Complaint
+    *   * User Unsubscribe
+        * * Description: Why the block exists. Hard Bounce and Invalid Address block every class; Spam Complaint and Admin Block block Operational and Marketing; User Unsubscribe and Policy block Marketing, or only the named preference when one is set.`),
+    Source: z.union([z.literal('API'), z.literal('Admin'), z.literal('Import'), z.literal('One-Click Header'), z.literal('Policy'), z.literal('Preference Center'), z.literal('Provider Webhook')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * API
+    *   * Admin
+    *   * Import
+    *   * One-Click Header
+    *   * Policy
+    *   * Preference Center
+    *   * Provider Webhook
+        * * Description: Where the signal came from.`),
+    Status: z.union([z.literal('Active'), z.literal('Expired'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    *   * Revoked
+        * * Description: Active rows block. Revoked rows were lifted (for example the person resubscribed). Expired rows passed ExpiresAt.`),
+    EffectiveAt: z.date().describe(`
+        * * Field Name: EffectiveAt
+        * * Display Name: Effective At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the block took effect.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional automatic end, for example a cooling-off block after soft bounces. NULL = until revoked.`),
+    RevokedAt: z.date().nullable().describe(`
+        * * Field Name: RevokedAt
+        * * Display Name: Revoked At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the block was lifted. Set exactly when Status is Revoked.`),
+    RevokedByUserID: z.string().nullable().describe(`
+        * * Field Name: RevokedByUserID
+        * * Display Name: Revoked By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: MJ user who lifted the block, when it was not the person themselves.`),
+    CommunicationLogID: z.string().nullable().describe(`
+        * * Field Name: CommunicationLogID
+        * * Display Name: Communication Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Logs (vwCommunicationLogs.ID)
+        * * Description: The message that triggered the block (one-click unsubscribe, bounce, complaint). Also identifies the sender for sender-scoped blocks.`),
+    CommunicationSuppressionPolicyID: z.string().nullable().describe(`
+        * * Field Name: CommunicationSuppressionPolicyID
+        * * Display Name: Communication Suppression Policy ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Suppression Policies (vwCommunicationSuppressionPolicies.ID)
+        * * Description: Suppression policy that created the block. Required when Reason is Policy.`),
+    IPAddress: z.string().nullable().describe(`
+        * * Field Name: IPAddress
+        * * Display Name: IP Address
+        * * SQL Data Type: nvarchar(45)
+        * * Description: IP address of the request that created the block.`),
+    UserAgent: z.string().nullable().describe(`
+        * * Field Name: UserAgent
+        * * Display Name: User Agent
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: User agent of the request that created the block.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-text notes, for example why an admin added the block.`),
+    CreatedByUserID: z.string().nullable().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: MJ user who created the block (admin or API). NULL for provider- or recipient-originated blocks.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    CommunicationSender: z.string().nullable().describe(`
+        * * Field Name: CommunicationSender
+        * * Display Name: Communication Sender
+        * * SQL Data Type: nvarchar(200)`),
+    CommunicationPreference: z.string().nullable().describe(`
+        * * Field Name: CommunicationPreference
+        * * Display Name: Communication Preference
+        * * SQL Data Type: nvarchar(200)`),
+    BaseMessageType: z.string().nullable().describe(`
+        * * Field Name: BaseMessageType
+        * * Display Name: Base Message Type
+        * * SQL Data Type: nvarchar(100)`),
+    RevokedByUser: z.string().nullable().describe(`
+        * * Field Name: RevokedByUser
+        * * Display Name: Revoked By User
+        * * SQL Data Type: nvarchar(100)`),
+    CommunicationLog: z.date().nullable().describe(`
+        * * Field Name: CommunicationLog
+        * * Display Name: Communication Log
+        * * SQL Data Type: datetimeoffset`),
+    CommunicationSuppressionPolicy: z.string().nullable().describe(`
+        * * Field Name: CommunicationSuppressionPolicy
+        * * Display Name: Communication Suppression Policy
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByUser: z.string().nullable().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationSuppressionEntityType = z.infer<typeof MJCommunicationSuppressionSchema>;
 
 /**
  * zod schema definition for the entity MJ: Companies
@@ -21818,6 +23624,12 @@ export const MJEntityCommunicationMessageTypeSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CommunicationPrincipalID: z.string().nullable().describe(`
+        * * Field Name: CommunicationPrincipalID
+        * * Display Name: Communication Principal ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Principals (vwCommunicationPrincipals.ID)
+        * * Description: The principal this channel mapping belongs to. NULL for rows created before Communications V2; the engine falls back to matching EntityID.`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -21825,6 +23637,10 @@ export const MJEntityCommunicationMessageTypeSchema = z.object({
     BaseMessageType: z.string().nullable().describe(`
         * * Field Name: BaseMessageType
         * * Display Name: Base Message Type
+        * * SQL Data Type: nvarchar(100)`),
+    CommunicationPrincipal: z.string().nullable().describe(`
+        * * Field Name: CommunicationPrincipal
+        * * Display Name: Communication Principal
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -27721,6 +29537,117 @@ export const MJInteractionSchema = z.object({
 });
 
 export type MJInteractionEntityType = z.infer<typeof MJInteractionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Jurisdiction Members
+ */
+export const MJJurisdictionMemberSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GroupJurisdictionID: z.string().describe(`
+        * * Field Name: GroupJurisdictionID
+        * * Display Name: Group Jurisdiction ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Jurisdictions (vwJurisdictions.ID)
+        * * Description: The containing jurisdiction, for example EU or US.`),
+    MemberJurisdictionID: z.string().describe(`
+        * * Field Name: MemberJurisdictionID
+        * * Display Name: Member Jurisdiction ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Jurisdictions (vwJurisdictions.ID)
+        * * Description: The contained jurisdiction, for example FR or US-CA.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    GroupJurisdiction: z.string().nullable().describe(`
+        * * Field Name: GroupJurisdiction
+        * * Display Name: Group Jurisdiction
+        * * SQL Data Type: nvarchar(200)`),
+    MemberJurisdiction: z.string().nullable().describe(`
+        * * Field Name: MemberJurisdiction
+        * * Display Name: Member Jurisdiction
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJJurisdictionMemberEntityType = z.infer<typeof MJJurisdictionMemberSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Jurisdictions
+ */
+export const MJJurisdictionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Code: z.string().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Unique code: ISO 3166-1 alpha-2 for countries (US, FR), ISO 3166-2 for subdivisions (US-CA), or a short group code (EU, EEA).`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Display name, for example France, California or European Union.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Notes on the jurisdiction and what it covers.`),
+    Type: z.union([z.literal('Country'), z.literal('Group'), z.literal('Subdivision')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Country
+    *   * Group
+    *   * Subdivision
+        * * Description: Country, Subdivision or Group. Groups contain other jurisdictions through Jurisdiction Members.`),
+    CountryID: z.string().nullable().describe(`
+        * * Field Name: CountryID
+        * * Display Name: Country ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+        * * Description: For Country and Subdivision jurisdictions, the matching row in MJ: Countries.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active jurisdictions are used in resolution; Disabled ones are ignored.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Country: z.string().nullable().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJJurisdictionEntityType = z.infer<typeof MJJurisdictionSchema>;
 
 /**
  * zod schema definition for the entity MJ: Knowledge Hub Saved Searches

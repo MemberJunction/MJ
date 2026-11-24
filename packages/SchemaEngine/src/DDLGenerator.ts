@@ -163,21 +163,27 @@ export class DDLGenerator {
 
   /**
    * Generate description metadata for table + columns.
+   * Skips absent or whitespace-only descriptions and validates identifiers so direct
+   * callers are safe even outside {@link GenerateCreateTable}.
    * @param idempotent - When true, emit re-run-safe variants (guarded so re-adding an
    *   existing description does not error). Default false preserves the original output.
    */
   GenerateDescriptions(def: TableDefinition, dialect: SQLDialect, idempotent = false): string[] {
+    ValidateIdentifier(def.SchemaName, 'schema');
+    ValidateIdentifier(def.TableName, 'table');
+
     const statements: string[] = [];
     const allColumns = [...def.Columns, ...(def.AdditionalColumns ?? [])];
 
-    if (def.Description) {
+    if (this.hasMeaningfulDescription(def.Description)) {
       statements.push(idempotent
         ? dialect.CommentOnObjectIfAbsent('TABLE', def.SchemaName, def.TableName, def.Description)
         : dialect.CommentOnObject('TABLE', def.SchemaName, def.TableName, def.Description) + ';');
     }
 
     for (const col of allColumns) {
-      if (col.Description) {
+      ValidateIdentifier(col.Name, 'column');
+      if (this.hasMeaningfulDescription(col.Description)) {
         statements.push(idempotent
           ? dialect.CommentOnColumnIfAbsent(def.SchemaName, def.TableName, col.Name, col.Description)
           : dialect.CommentOnColumn(def.SchemaName, def.TableName, col.Name, col.Description));
@@ -189,6 +195,9 @@ export class DDLGenerator {
 
   /**
    * Generate ALTER TABLE ADD COLUMN statement.
+   * When the column carries a non-whitespace `Description`, appends an idempotent column
+   * comment statement (`MS_Description` guarded by `sys.fn_listextendedproperty` on SQL Server,
+   * `COMMENT ON COLUMN` on PostgreSQL) via the dialect.
    */
   GenerateAlterTableAddColumn(schemaName: string, tableName: string, column: ColumnDefinition, platform: DatabasePlatform): string {
     ValidateIdentifier(schemaName, 'schema');
@@ -205,7 +214,13 @@ export class DDLGenerator {
       scale: column.Scale,
     });
 
-    return `ALTER TABLE ${fullTable}\n    ${d.AddColumnClause({ name: column.Name, sqlType, nullable: column.IsNullable, defaultValue: column.DefaultValue ?? undefined })};`;
+    const alterStmt = `ALTER TABLE ${fullTable}\n    ${d.AddColumnClause({ name: column.Name, sqlType, nullable: column.IsNullable, defaultValue: column.DefaultValue ?? undefined })};`;
+    if (this.hasMeaningfulDescription(column.Description)) {
+      const descStmt = d.CommentOnColumnIfAbsent(schemaName, tableName, column.Name, column.Description);
+      return `${alterStmt}\n\n${descStmt}`;
+    }
+
+    return alterStmt;
   }
 
   /**
@@ -228,6 +243,10 @@ export class DDLGenerator {
   }
 
   // ─── Private helpers ─────────────────────────────────────────────
+
+  private hasMeaningfulDescription(description: string | undefined | null): description is string {
+    return description != null && description.replace(/\0/g, '').trim().length > 0;
+  }
 
   private capIndexedColumnType(col: ColumnDefinition, indexedColSet: Set<string>, dialect: SQLDialect): ColumnDefinition {
     if (!indexedColSet.has(col.Name.toLowerCase())) {

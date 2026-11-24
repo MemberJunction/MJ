@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { STANDARD_COLUMN_DESCRIPTIONS } from '../DDLGenerator.js';
 import { SchemaEvolution } from '../SchemaEvolution.js';
 import type { SourceObjectInfo, TargetTableConfig, TargetColumnConfig, ExistingTableInfo } from '../interfaces.js';
 
@@ -194,6 +195,28 @@ describe('SchemaEvolution', () => {
             // Already-present standard columns are NOT re-added.
             expect(added).not.toContain('__mj_integration_SyncStatus');
             expect(added).not.toContain('__mj_integration_LastSyncedAt');
+
+            // Backfilled standard columns carry STANDARD_COLUMN_DESCRIPTIONS end-to-end into DDL.
+            const snapshotCol = diff.AddedColumns.find(c => c.TargetColumnName === '__mj_integration_LastSyncedSnapshot');
+            expect(snapshotCol?.Description).toBe(STANDARD_COLUMN_DESCRIPTIONS['__mj_integration_LastSyncedSnapshot']);
+            const ssSql = evo.GenerateEvolutionMigration(diff, 'hubspot', 'Contact', 'sqlserver');
+            expect(ssSql).toContain('sp_addextendedproperty');
+            expect(ssSql).toContain("@level2name = '__mj_integration_LastSyncedSnapshot'");
+
+            const pgDiff = evo.DiffSchema(MakeSourceObject(), target, existing, 'postgresql');
+            const pgSql = evo.GenerateEvolutionMigration(pgDiff, 'hubspot', 'Contact', 'postgresql');
+            expect(pgSql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."__mj_integration_LastSyncedSnapshot" IS`);
+
+            // A legacy table with zero standard columns backfills all 12 with non-empty descriptions.
+            const bareExisting = MakeLegacyExistingTable([
+                { Name: 'Email', SqlType: 'NVARCHAR(255)', IsNullable: true },
+            ]);
+            const fullBackfill = evo.DiffSchema(MakeSourceObject(), target, bareExisting, 'sqlserver');
+            const backfilledStd = fullBackfill.AddedColumns.filter(c => c.TargetColumnName.startsWith('__mj_integration_'));
+            expect(new Set(backfilledStd.map(c => c.TargetColumnName))).toEqual(new Set(Object.keys(STANDARD_COLUMN_DESCRIPTIONS)));
+            for (const col of backfilledStd) {
+                expect(col.Description?.trim().length).toBeGreaterThan(0);
+            }
         });
 
         it('should add a key column that the existing table does not have, as nullable', () => {
@@ -266,6 +289,27 @@ describe('SchemaEvolution', () => {
             const sql = evo.GenerateEvolutionMigration(diff, 'hubspot', 'Contact', 'sqlserver');
             expect(sql).toContain('ALTER TABLE [hubspot].[Contact]');
             expect(sql).toContain('ADD [Phone]');
+        });
+
+        it('should emit column descriptions on added columns for SQL Server and PostgreSQL', () => {
+            const diff = {
+                AddedColumns: [
+                    { SourceFieldName: 'phone', TargetColumnName: 'Phone', TargetSqlType: 'NVARCHAR(50)', IsNullable: true, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null, Description: 'Primary business phone number' },
+                ],
+                ModifiedColumns: [],
+                RemovedColumns: [],
+            };
+            const ssSql = evo.GenerateEvolutionMigration(diff, 'hubspot', 'Contact', 'sqlserver');
+            expect(ssSql).toContain('sp_addextendedproperty');
+            expect(ssSql).toContain("@value = N'Primary business phone number'");
+            expect(ssSql).toContain("@level2name = 'Phone'");
+
+            const pgDiff = {
+                ...diff,
+                AddedColumns: [{ ...diff.AddedColumns[0], TargetSqlType: 'VARCHAR(50)' }],
+            };
+            const pgSql = evo.GenerateEvolutionMigration(pgDiff, 'hubspot', 'Contact', 'postgresql');
+            expect(pgSql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Phone" IS 'Primary business phone number';`);
         });
 
         it('should produce ALTER TABLE ALTER for modified columns', () => {

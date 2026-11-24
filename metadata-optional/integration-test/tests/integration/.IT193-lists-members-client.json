@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT188 - List Member Mutations (client transport)",
+    "Name": "IT193 - List Member Mutations (client transport)",
     "Description": "The bulk member mutations of the Lists API, called over GraphQL against a running MJAPI, deterministic (no model calls). LC1 adds records to a throwaway list (a repeated ID is added once), moves two of them to a second list with removeFromSource, and removes one from the second list; after each step it checks the mutation counts and the member counts in the database. The check creates and deletes its own two MJ: Lists rows. It reports Skipped when the run is not on the client transport.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

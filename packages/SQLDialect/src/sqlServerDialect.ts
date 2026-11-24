@@ -215,7 +215,7 @@ export class SQLServerBinding implements DialectBinding {
 export class SQLServerDialect extends SQLDialect {
     private readonly writer: DialectWriter = Object.freeze(new SQLServerWriter());
     private readonly binding: DialectBinding = Object.freeze(new SQLServerBinding());
-    private readonly ddl: DialectSchemaDDL = Object.freeze(new SQLServerSchemaDDL(this.writer));
+    private readonly ddl: DialectSchemaDDL = Object.freeze(new SQLServerSchemaDDL(this.writer, SQL_SERVER_LEXICAL));
 
     get PlatformKey(): DatabasePlatform {
         return 'sqlserver';
