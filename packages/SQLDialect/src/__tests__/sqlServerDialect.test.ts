@@ -284,6 +284,39 @@ describe('SQLServerDialect', () => {
             expect(sql).toContain('sp_addextendedproperty');
             expect(sql).toContain('User accounts');
         });
+
+        it('should cap comments at MaxCommentLength (3,700 UTF-16 code units) without splitting surrogate pairs and strip NUL bytes', () => {
+            expect(dialect.MaxCommentLength).toBe(3700);
+            const longSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', 'X'.repeat(5000));
+            const match = longSql.match(/@value = N'([^']*)'/);
+            expect(match).not.toBeNull();
+            expect(match![1].length).toBe(3700);
+            expect(match![1].endsWith('...')).toBe(true);
+
+            // Emoji ('😀', 2 UTF-16 code units) straddling cut - 1 (3696) and cut (3697)
+            const prefixLen = dialect.MaxCommentLength! - 4;
+            const surrogateSql = dialect.CommentOnObject('TABLE', '__mj', 'User', 'A'.repeat(prefixLen) + '😀' + 'B'.repeat(50));
+            const surMatch = surrogateSql.match(/@value = N'([^']*)'/);
+            expect(surMatch).not.toBeNull();
+            expect(surMatch![1].length).toBe(prefixLen + 3);
+            expect(surMatch![1].endsWith('...')).toBe(true);
+            for (let i = 0; i < surMatch![1].length; i++) {
+                const code = surMatch![1].charCodeAt(i);
+                expect(code >= 0xD800 && code <= 0xDFFF).toBe(false);
+            }
+
+            const nulSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', 'hello\0world');
+            expect(nulSql).toContain("@value = N'helloworld'");
+
+            // Apostrophes double in T-SQL source text without inflating the evaluated sql_variant UTF-16 length beyond MaxCommentLength
+            const quotedDesc = "It's ".repeat(1000); // 5,000 chars with 1,000 apostrophes
+            const quotedSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', quotedDesc);
+            const quotedMatch = quotedSql.match(/@value = N'((?:[^']|'')*)'/);
+            expect(quotedMatch).not.toBeNull();
+            const unescaped = quotedMatch![1].replace(/''/g, "'");
+            expect(unescaped.length).toBe(dialect.MaxCommentLength);
+            expect(unescaped.endsWith('...')).toBe(true);
+        });
     });
 
     describe('IIF', () => {

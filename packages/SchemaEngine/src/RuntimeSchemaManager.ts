@@ -2007,20 +2007,24 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /**
-   * Execute the migration SQL against the database.
-   * Delegates CLI tool selection to the DBExecProvider abstraction.
+   * Resolve `${flyway:defaultSchema}` placeholders, split a migration script into dialect batches
+   * (e.g. standalone `GO` lines on SQL Server), and chunk any oversized batch (>32 KB) into groups
+   * of 25 top-level statements so bulk RSU migrations stay under client request timeouts without
+   * splitting inside string literals, quoted identifiers, comments, or dollar-quoted blocks.
    */
-  private async executeMigration(sql: string): Promise<boolean> {
-    const defaultSchema = rsuConfig.DefaultSchema;
+  public static SplitMigrationBatches(
+    sql: string,
+    platform: DatabasePlatform,
+    defaultSchema: string = rsuConfig.DefaultSchema,
+    log?: (message: string) => void,
+  ): string[] {
     const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
-    // Primary split: GO batch separators (SQL Server SSMS convention, not
-    // valid T-SQL). Many CodeGen-generated migrations include them between
-    // logical blocks and we want one ExecuteSQL call per block.
-    const goBatches = resolvedSQL
-      .split(/^\s*GO\s*$/gim)
-      .map((b) => b.trim())
-      .filter((b) => b.length > 0);
+    // Primary split: standalone batch separator lines (SQL Server's `GO` SSMS convention;
+    // PostgreSQL has no batch separator). Dialect-owned so `GO` inside string literals,
+    // quoted identifiers, or comments never splits mid-token.
+    const dialect = GetDialect(platform);
+    const goBatches = dialect.SplitBatches(resolvedSQL);
 
     // Secondary chunking: bulk RSU migrations (e.g. Salesforce 1100+ tables)
     // can produce a single 1.7MB+ batch with ~17K ALTER TABLE statements
@@ -2043,17 +2047,28 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         finalBatches.push(batch);
         continue;
       }
-      // Split on statement-ending `;` (preserve the `;`) and re-group — but NEVER inside a
-      // PostgreSQL dollar-quoted block (DO $$…$$ / function bodies / the integration view-drop
-      // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
-      // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
-      // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
-      const statements = GetDialect(this.platform).SplitStatements(batch);
-      this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
+      // Split on top-level statement-ending `;` + EOL while respecting string literals,
+      // quoted identifiers, comments, and PostgreSQL dollar-quoted blocks (`DO $$…$$` / `$mj_dropviews$`).
+      const statements = dialect.SplitStatements(batch);
+      log?.(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
       }
     }
+    return finalBatches;
+  }
+
+  /**
+   * Execute the migration SQL against the database.
+   * Delegates CLI tool selection to the DBExecProvider abstraction.
+   */
+  private async executeMigration(sql: string): Promise<boolean> {
+    const finalBatches = RuntimeSchemaManager.SplitMigrationBatches(
+      sql,
+      this.platform,
+      rsuConfig.DefaultSchema,
+      (msg) => this.rsuLog(msg),
+    );
 
     try {
       for (let i = 0; i < finalBatches.length; i++) {
