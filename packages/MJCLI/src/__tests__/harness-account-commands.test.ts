@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Config } from '@oclif/core';
+import { Config } from '@oclif/core';
 import {
     HARNESS_ACCOUNT_POOL_DIR_ENV_VAR,
     HarnessAccountPoolService,
@@ -25,12 +25,10 @@ import {
     type HarnessAccountListJsonOutput,
 } from '../lib/harness-account.js';
 
-function createFakeOclifConfig(): Config {
-    return {
-        bin: 'mj',
-        runHook: vi.fn().mockResolvedValue({ successes: [], failures: [] }),
-        pjson: { name: '@memberjunction/cli', version: '6.3.0-edge.1', oclif: {} },
-    } as unknown as Config;
+function createTestOclifConfig(): Config {
+    const config = new Config({ root: process.cwd() });
+    vi.spyOn(config, 'runHook').mockResolvedValue({ successes: [], failures: [] });
+    return config;
 }
 
 interface CommandInstance {
@@ -45,7 +43,7 @@ async function runOclifCommand<T extends CommandInstance>(
 ): Promise<{ logs: string[]; warnings: string[] }> {
     const logs: string[] = [];
     const warnings: string[] = [];
-    const instance = new Ctor(argv, createFakeOclifConfig());
+    const instance = new Ctor(argv, createTestOclifConfig());
     vi.spyOn(instance, 'log').mockImplementation((msg?: string) => {
         if (msg !== undefined) {
             logs.push(String(msg));

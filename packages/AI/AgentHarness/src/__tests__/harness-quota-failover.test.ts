@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentHarnessEntity } from '@memberjunction/core-entities';
 import {
     ClassifyHarnessQuotaError,
@@ -139,6 +139,7 @@ class FailoverTestableHarnessAgent extends HarnessAgentBase {
         ExternalSessionID: 'prior-account-session-abc',
     };
     private fakeTypeConfig: HarnessAgentConfig = {};
+    private readonly fakeSandboxProvider: ISandboxProvider = new FakeSandboxProvider();
 
     public ConfigureForTest(
         adapter: FailoverFakeAdapter,
@@ -148,35 +149,64 @@ class FailoverTestableHarnessAgent extends HarnessAgentBase {
         this.fakeAdapter = adapter;
         this.fakeHarnessRow = harnessRow;
         this.fakeTypeConfig = typeConfig;
-
-        // Wire minimal BaseAgent internals accessed by HarnessAgentBase
-        const internals = this as unknown as {
-            _agentRun?: { ID: string; Agent: string; ExternalSessionID: string | null };
-            _executeParams?: {
-                agent?: { ID?: string; TypeConfiguration?: string | null };
-            };
-        };
-        internals._agentRun = this.fakeAgentRun;
-        internals._executeParams = {
-            agent: {
-                ID: 'agent-1',
-                TypeConfiguration: JSON.stringify(typeConfig),
-            },
-        };
     }
 
-    public async ExecutePromptForTest(promptParams: AIPromptParams) {
+    public async ExecutePromptForTest(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
         return this.executePrompt(promptParams);
+    }
+
+    protected override _agentRunId(): string {
+        return this.fakeAgentRun.ID;
+    }
+
+    protected override _agentRunAgentId(): string {
+        return 'agent-1';
+    }
+
+    protected override _agentRunExternalSessionId(): string | undefined {
+        const current = this.fakeAgentRun.ExternalSessionID?.trim();
+        return current && current.length > 0 ? current : undefined;
+    }
+
+    protected override _agentTypeConfiguration(): string | null {
+        return JSON.stringify(this.fakeTypeConfig);
+    }
+
+    protected override persistExternalSessionId(sessionId: string | undefined): void {
+        if (sessionId && this.fakeAgentRun.ExternalSessionID !== sessionId) {
+            this.fakeAgentRun.ExternalSessionID = sessionId;
+        }
+    }
+
+    protected override clearExternalSessionId(): void {
+        this.fakeAgentRun.ExternalSessionID = null;
+    }
+
+    protected override async loadHarnessRow(): Promise<MJAIAgentHarnessEntity> {
+        if (!this.fakeHarnessRow) {
+            throw new Error('fakeHarnessRow not configured');
+        }
+        return this.fakeHarnessRow;
+    }
+
+    protected override resolveAdapter(): BaseHarnessAdapter {
+        if (!this.fakeAdapter) {
+            throw new Error('fakeAdapter not configured');
+        }
+        return this.fakeAdapter;
+    }
+
+    protected override createSandboxProvider(): ISandboxProvider {
+        return this.fakeSandboxProvider;
+    }
+
+    protected override async recordPromptRun(): Promise<undefined> {
+        return undefined;
     }
 
     protected override async renderSystemPrompt(): Promise<string> {
         return '';
     }
-
-    // Override private-by-convention startup helpers through subclassing? No, those are private.
-    // Instead, override resolveGrantedEnvironment? We test real resolveGrantedEnvironment,
-    // and intercept loadHarnessRow/resolveAdapter/createSandboxProvider via mock or prototype?
-    // Even cleaner: we let tests prime via MJGlobal.ClassFactory or override via helper.
 }
 
 describe('HarnessQuotaClassifier', () => {
@@ -374,23 +404,10 @@ describe('HarnessAgentBase Mid-Run Quota Failover & Session Continuity', () => {
         };
         agent.ConfigureForTest(adapter, harnessRow, typeConfig);
 
-        // Stub the 3 DB/provider lookups on the agent instance while keeping real auth, leasing, failover, and turn logic
-        const agentInternal = agent as unknown as {
-            loadHarnessRow: () => Promise<MJAIAgentHarnessEntity>;
-            resolveAdapter: () => BaseHarnessAdapter;
-            createSandboxProvider: () => ISandboxProvider;
-            recordPromptRun: () => Promise<undefined>;
-        };
-        agentInternal.loadHarnessRow = async () => harnessRow;
-        agentInternal.resolveAdapter = () => adapter;
-        agentInternal.createSandboxProvider = () => new FakeSandboxProvider();
-        agentInternal.recordPromptRun = async () => undefined;
-
-        const promptParams = {
-            conversationMessages: [
-                { role: 'user', content: 'Refactor the scheduler and add unit tests.' },
-            ],
-        } as unknown as AIPromptParams;
+        const promptParams = new AIPromptParams();
+        promptParams.conversationMessages = [
+            { role: 'user', content: 'Refactor the scheduler and add unit tests.' },
+        ];
 
         const result = await agent.ExecutePromptForTest(promptParams);
 
@@ -473,20 +490,9 @@ describe('HarnessAgentBase Mid-Run Quota Failover & Session Continuity', () => {
         });
         agent.SetActivityHeartbeatCallback(callerHeartbeat);
 
-        const agentInternal = agent as unknown as {
-            loadHarnessRow: () => Promise<MJAIAgentHarnessEntity>;
-            resolveAdapter: () => BaseHarnessAdapter;
-            createSandboxProvider: () => ISandboxProvider;
-            recordPromptRun: () => Promise<undefined>;
-        };
-        agentInternal.loadHarnessRow = async () => harnessRow;
-        agentInternal.resolveAdapter = () => adapter;
-        agentInternal.createSandboxProvider = () => new FakeSandboxProvider();
-        agentInternal.recordPromptRun = async () => undefined;
-
-        const result = await agent.ExecutePromptForTest({
-            conversationMessages: [{ role: 'user', content: 'ping' }],
-        } as unknown as AIPromptParams);
+        const promptParams = new AIPromptParams();
+        promptParams.conversationMessages = [{ role: 'user', content: 'ping' }];
+        const result = await agent.ExecutePromptForTest(promptParams);
 
         expect(result.success).toBe(true);
         expect(renewSpy).toHaveBeenCalledTimes(1);

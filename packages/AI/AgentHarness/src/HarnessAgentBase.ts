@@ -787,10 +787,9 @@ export class HarnessAgentBase extends BaseAgent {
         return joined.length > 900 ? `...${joined.slice(joined.length - 897)}` : joined;
     }
 
-    private clearExternalSessionId(): void {
-        const run = (this as unknown as { _agentRun?: { ExternalSessionID?: string | null } })._agentRun;
-        if (run) {
-            run.ExternalSessionID = null;
+    protected clearExternalSessionId(): void {
+        if (this.AgentRun) {
+            this.AgentRun.ExternalSessionID = null;
         }
     }
 
@@ -1193,7 +1192,7 @@ export class HarnessAgentBase extends BaseAgent {
      * Returns undefined only when the row could not be created, which is logged loudly rather than
      * swallowed: without it the run's cost and token totals stay at zero and its guardrails go blind.
      */
-    private async recordPromptRun(
+    protected async recordPromptRun(
         promptParams: AIPromptParams,
         turn: HarnessTurnResult,
         startTime: Date,
@@ -1366,7 +1365,7 @@ export class HarnessAgentBase extends BaseAgent {
      * deliberately stops. It was added, documented, and then never populated, so answering "did this
      * run resume its session?" meant reading the vendor's files off disk instead of the run record.
      */
-    private persistExternalSessionId(sessionId: string | undefined): void {
+    protected persistExternalSessionId(sessionId: string | undefined): void {
         const run = (this as unknown as { _agentRun?: { ExternalSessionID?: string | null } })._agentRun;
         if (run && sessionId && run.ExternalSessionID !== sessionId) {
             run.ExternalSessionID = sessionId;
@@ -1662,7 +1661,7 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /** Loads the harness registry row this agent selected by name. */
-    private async loadHarnessRow(harnessName: string | undefined, contextUser?: UserInfo): Promise<MJAIAgentHarnessEntity> {
+    protected async loadHarnessRow(harnessName: string | undefined, contextUser?: UserInfo): Promise<MJAIAgentHarnessEntity> {
         if (!harnessName) {
             throw new Error(
                 "Agent is of type 'Harness' but its TypeConfiguration does not name a harness. " +
@@ -1690,7 +1689,7 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /** Resolves the adapter class named by the harness row. */
-    private resolveAdapter(harness: MJAIAgentHarnessEntity): BaseHarnessAdapter {
+    protected resolveAdapter(harness: MJAIAgentHarnessEntity): BaseHarnessAdapter {
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseHarnessAdapter>(
             BaseHarnessAdapter,
             harness.DriverClass,
@@ -1708,7 +1707,7 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /** Chooses a sandbox provider from the agent's configuration. */
-    private createSandboxProvider(config: HarnessAgentConfig): ISandboxProvider {
+    protected createSandboxProvider(config: HarnessAgentConfig): ISandboxProvider {
         switch (config.sandbox?.provider) {
             case 'cloud':
                 return new CloudSandboxProvider(config.sandbox.cloud);
@@ -2154,11 +2153,11 @@ export class HarnessAgentBase extends BaseAgent {
     // Kept as small named methods so the coupling to BaseAgent's private state is visible in one
     // place rather than scattered through the class.
 
-    private _agentRunId(): string {
+    protected _agentRunId(): string {
         return (this as unknown as { _agentRun?: { ID?: string } })._agentRun?.ID ?? 'unknown-run';
     }
 
-    private _agentRunAgentId(): string {
+    protected _agentRunAgentId(): string {
         return this._executeAgentParams()?.agent?.ID ?? '';
     }
 
@@ -2170,16 +2169,16 @@ export class HarnessAgentBase extends BaseAgent {
      * reaching for `.agent` there silently yields undefined and every run fails with "does not name
      * a harness" no matter how it is configured.
      */
-    private _agentRunConversationId(): string | null {
+    protected _agentRunConversationId(): string | null {
         return (this as unknown as { _agentRun?: { ConversationID?: string | null } })._agentRun?.ConversationID ?? null;
     }
 
-    private _agentRunExternalSessionId(): string | undefined {
+    protected _agentRunExternalSessionId(): string | undefined {
         const current = this.AgentRun?.ExternalSessionID?.trim();
         return current && current.length > 0 ? current : undefined;
     }
 
-    private _agentTypeConfiguration(): string | null {
+    protected _agentTypeConfiguration(): string | null {
         return this._executeAgentParams()?.agent?.TypeConfiguration ?? null;
     }
 
