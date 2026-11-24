@@ -77,9 +77,10 @@ source of truth for fields and value lists.
 | `MJ: Communication Principal Preferences` | One principal's state for one preference (`Opted In`, `Opted Out`, `Pending`) and the evidence of consent. |
 | `MJ: Communication Suppressions` | A reason not to send: scoped to an endpoint and/or a principal, optionally to a sender, a preference and a channel. |
 | `MJ: Communication Suppression Policies` | An automated rule that creates suppressions from activity, with a `DriverClass` and `Parameters`. |
-| `MJ: Communication Consent Audit Logs` | Append-only history of every suppression and preference change. Updates and deletes are disabled on the entity by the metadata in `metadata/entities/`, which reaches an installed database with the release `Metadata_Sync` migration; until that seed runs, the schema migration alone leaves the entity's API update and delete enabled. Deleting an entity with `spDeleteEntityWithCoreDependencies` removes the audit rows of the preferences and principal-only suppressions it deletes (section 7). |
+| `MJ: Communication Consent Audit Logs` | Append-only history of every suppression and preference change. The database enforces it: the trigger `trgCommunicationConsentAuditLog_AppendOnly` refuses every update and every delete, through MJ or raw SQL. The one exception is `spDeleteEntityWithCoreDependencies`, which removes the audit rows of the preferences and principal-only suppressions it deletes when their entity is deleted (section 7). |
 | `MJ: Communication Activities` | One delivery or engagement event. |
 | `MJ: Communication Provider Events` | Provider event IDs already processed (the deduplication ledger). |
+| `MJ: Communication Run Chunks` | One row per finished chunk of a chunked run; the run ends when its `ChunkCount` chunks are recorded. |
 | `MJ: Jurisdictions`, `MJ: Jurisdiction Members` | Countries, subdivisions and groups (`EU`, `EEA`), and which jurisdictions belong to which group. |
 | `MJ: Communication Compliance Regimes` | A body of rules (CAN-SPAM, GDPR, ...) with how it applies (`AppliesBy`) and whether it applies when the jurisdiction is unknown. |
 | `MJ: Communication Compliance Regime Jurisdictions` | The jurisdictions a regime is attached to. |
@@ -334,10 +335,37 @@ principal attributes and `Endpoint`) and `Comms.Obligations`, in addition to the
 with its log at dispatch. Templates do not need to render the link: the dispatcher appends the compliance footer
 after rendering whenever the gate requires it.
 
+### Delivery guarantee: a missed message or a duplicate
+
+Every send records a log before it calls the provider. If the worker dies, or saving the log fails after
+the provider accepted the message, the log is left `In-Progress` with no `ProviderMessageID`, and nobody
+knows whether the message went out. There are only two safe answers, and you choose one:
+
+| `DeliveryGuarantee` | When a log is stuck `In-Progress` for over 15 minutes | Risk you accept |
+|---|---|---|
+| **`At Most Once`** (default) | Reported `Failed` with reason `OutcomeUnknown`. Never resent. | **A recipient may miss the message.** |
+| **`At Least Once`** | Reclaimed and sent again. | **A recipient may get the message twice.** |
+
+Pick `At Most Once` for anything where a duplicate is worse than a gap: invoices, payment notices,
+marketing. Pick `At Least Once` where a gap is worse than a duplicate: password resets, security alerts,
+one-time codes.
+
+Set it at whichever level fits; the most specific one wins:
+
+1. `Envelope.DeliveryGuarantee`, for one send.
+2. `MJ: Communication Runs`.`DeliveryGuarantee`, for every send in a run (a chunked send stores the
+   envelope's value on its run).
+3. `MJ: Communication Senders`.`DeliveryGuarantee`, then each ancestor sender's, nearest first.
+4. `MJ: Communication Providers`.`DeliveryGuarantee`, which is never empty and defaults to `At Most Once`.
+
+If the setting cannot be read, `At Most Once` is used, because it never sends twice. Either way, two
+workers never send the same run and endpoint at the same moment: each log is claimed with one conditional
+`UPDATE` before the provider call.
+
 ### Scheduling and deferral
 
 A recipient deferred by quiet hours, or any recipient when `Envelope.ScheduledAt` is in the future, is stored
-as a `Pending` log with its payload. `CommunicationEngine.StartScheduledDeferralSweep()` (started by MJAPI,
+as a `Pending` log with its rendered message in `DeferredPayload`, which is cleared once it is sent. `CommunicationEngine.StartScheduledDeferralSweep()` (started by MJAPI,
 every 60 seconds) picks up due logs, evaluates them again, and sends, fails or re-defers each one.
 
 ---
@@ -436,7 +464,7 @@ category, implemented in `packages/MJServer/src/operations/CommsAdminOperations.
 | `Communications.VerifySendingDomain` | Asks the provider to validate the DNS records, stores the per-record results, and sets the status to `Verified`, `Pending` or `Failed`. |
 | `Communications.DeleteSendingDomain` | Removes the registration from the provider and marks the row `Revoked`. |
 | `Communications.RevokeSuppression` | Revokes a suppression, writes the audit entry, clears the matching suppression at the provider when it supports that, and returns the endpoint to `Active` when no active suppression remains. |
-| `Communications.BlockEndpoint` | Creates an `Admin Block` suppression for an endpoint. |
+| `Communications.BlockEndpoint` | Creates an `Admin Block` suppression for an endpoint. An address has at most one active Admin Block (a filtered unique index enforces it); blocking an already-blocked address returns the existing block. |
 
 Each requires the caller to be an Owner or to hold the **`Communications: Admin`** authorization.
 
