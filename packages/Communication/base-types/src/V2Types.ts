@@ -244,8 +244,26 @@ export interface SendToPrincipalsParams {
    * `comms.dispatch` work items when a work-queue publisher is configured.
    */
   Recipients: RecipientSendTarget[];
-  /** Optional existing CommunicationRun ID (used by comms.dispatch chunk workers to avoid creating duplicate runs). */
+  /**
+   * Existing CommunicationRun to add to (comms.dispatch chunks, templated batches). A run passed in
+   * belongs to the caller: `Send()` does not end it, so the caller must call `EndRun` once every
+   * chunk has finished, or passes `RunChunk` so the last chunk ends it.
+   */
   CommunicationRunID?: string;
+  /**
+   * This call's place in a run split into chunks (`Index` is 0-based, `Count` the total). With it,
+   * the chunk that completes the run ends it, exactly once, however the chunks interleave or are
+   * redelivered. Ignored without `CommunicationRunID`.
+   */
+  RunChunk?: RunChunkPosition;
+}
+
+/** Position of one chunk in a run split across work items. See `SendToPrincipalsParams.RunChunk`. */
+export interface RunChunkPosition {
+  /** 0-based chunk number, unique within the run. */
+  Index: number;
+  /** Total number of chunks in the run. The same on every chunk. */
+  Count: number;
 }
 
 /** An address resolved to its `MJ: Communication Endpoints` row. */
@@ -296,10 +314,15 @@ export interface PrincipalAttributes {
 /**
  * Result for one recipient. `'Sent'`: the provider accepted the message. `'Blocked'`: the gate or
  * an obligation check stopped it. `'Deferred'`: stored as a `Pending` log to send later (quiet
- * hours or `ScheduledAt`). `'Failed'`: the provider or log bookkeeping failed. `'Queued'` is
- * reserved; the dispatcher does not currently return it.
+ * hours or `ScheduledAt`). `'Failed'`: the provider or log bookkeeping failed. `'DryRun'`: the
+ * envelope was a dry run and the provider accepted it without delivering; the log is `Complete`
+ * with `"DryRun": true` in its `ComplianceDecision`. `'Queued'` is reserved; the dispatcher does
+ * not currently return it.
+ *
+ * A `'Failed'` outcome with reason `OutcomeUnknown` means a previous attempt may already have
+ * reached the provider. It is not resent; reconcile it from the provider's delivery events.
  */
-export type SendV2OutcomeStatus = 'Queued' | 'Sent' | 'Blocked' | 'Deferred' | 'Failed';
+export type SendV2OutcomeStatus = 'Queued' | 'Sent' | 'Blocked' | 'Deferred' | 'Failed' | 'DryRun';
 
 /** What happened to one recipient of an inline send. */
 export interface SendV2RecipientOutcome {
@@ -352,6 +375,8 @@ export interface SendV2Result {
   BlockedCount: number;
   /** Recipients stored for later dispatch. */
   DeferredCount: number;
+  /** Recipients of a dry run that the provider accepted without delivering. Not counted in `QueuedCount`. */
+  DryRunCount?: number;
   /** Per-recipient results. Present for inline sends. */
   Outcomes?: SendV2RecipientOutcome[];
   /** Why the send could not start, or the joined batch errors of an in-process templated send. */

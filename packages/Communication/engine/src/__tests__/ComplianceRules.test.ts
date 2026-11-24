@@ -51,6 +51,12 @@ describe('Compliance Rule Drivers', () => {
   describe('ConsentModelRuleDriver', () => {
     const driver = new ConsentModelRuleDriver();
 
+    it('rejects a missing or unrecognised model instead of treating it as opt-out', () => {
+      expect(() => driver.MergeStrictest([{ model: 'optin' }])).toThrow(/must be 'opt-in' or 'opt-out'/);
+      expect(() => driver.MergeStrictest([{}])).toThrow(/got nothing/);
+      expect(() => driver.MergeStrictest([{ model: 'opt-out' }, { model: 'Opt In' }])).toThrow();
+    });
+
     it('merges opt-in over opt-out and preserves softOptIn only when all opt-in regimes allow it', () => {
       expect(driver.MergeStrictest([{ model: 'opt-out' }, { model: 'opt-in', softOptIn: true }])).toEqual({
         Model: 'opt-in',

@@ -316,6 +316,46 @@ describe('V2SendService.Send — compliance gate', () => {
     expect(provider.Attempts).toHaveLength(0);
   });
 
+  it('blocks a child sender from mailing someone who opted out under its parent sender', async () => {
+    arrange({ Sender: { ParentSenderID: IDS.ParentSender } });
+    SeedSender(db, { ID: IDS.ParentSender, Name: 'Parent Org', IsDefault: false });
+    const bob = SeedPrincipal(db, 'contact-1', 'bob@example.com');
+    db.Seed(ENTITY.PrincipalPreferences, {
+      EntityID: IDS.ContactsEntity,
+      RecordID: 'contact-1',
+      CommunicationPreferenceID: IDS.Preference,
+      CommunicationSenderID: IDS.ParentSender,
+      State: 'Opted Out',
+      ConsentSource: 'Preference Center',
+      ConsentAt: new Date('2026-03-01T00:00:00Z'),
+    });
+
+    const result = await send([{ Principal: bob.Ref }], envelope('Marketing'));
+
+    expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Blocked', Reason: 'OptedOut' });
+    expect(provider.Attempts).toHaveLength(0);
+  });
+
+  it('keeps a parent-sender opt-out in force even when the child sender has an opt-in row', async () => {
+    arrange({ Sender: { ParentSenderID: IDS.ParentSender } });
+    SeedSender(db, { ID: IDS.ParentSender, Name: 'Parent Org', IsDefault: false });
+    const bob = SeedPrincipal(db, 'contact-1', 'bob@example.com');
+    const base = {
+      EntityID: IDS.ContactsEntity,
+      RecordID: 'contact-1',
+      CommunicationPreferenceID: IDS.Preference,
+      ConsentSource: 'Preference Center',
+      ConsentAt: new Date('2026-03-01T00:00:00Z'),
+    };
+    db.Seed(ENTITY.PrincipalPreferences, { ...base, CommunicationSenderID: IDS.ParentSender, State: 'Opted Out' });
+    db.Seed(ENTITY.PrincipalPreferences, { ...base, CommunicationSenderID: IDS.Sender, State: 'Opted In' });
+
+    const result = await send([{ Principal: bob.Ref }], envelope('Marketing'));
+
+    expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Blocked', Reason: 'OptedOut' });
+    expect(provider.Attempts).toHaveLength(0);
+  });
+
   it('blocks Marketing mail when the regime requires a postal address the sender does not have', async () => {
     arrange({ Compliance: MarketingCompliance(), Sender: { PostalAddress: null } });
     SeedEndpoint(db, 'alice@example.com');
@@ -797,10 +837,35 @@ describe('V2SendService.Send — Save() failures', () => {
     expect(logFor(alice)?.Status).toBe('Failed');
   });
 
+  it('recovers when recording the result fails once: the bounded retry saves it', async () => {
+    const alice = SeedEndpoint(db, 'alice@example.com');
+    db.FailSave(ENTITY.Logs, { When: (row) => row.Status === 'Complete', Times: 1 });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await send([toAddress('alice@example.com')]);
+
+    expect(provider.Attempts).toHaveLength(1);
+    expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Sent' });
+    expect(logFor(alice)?.Status).toBe('Complete');
+  });
+
+  it('reports a stale In-Progress log as OutcomeUnknown and never resends it', async () => {
+    const alice = SeedEndpoint(db, 'alice@example.com');
+    const run = SeedRun(db);
+    seedLog(run, alice, { Status: 'In-Progress', __mj_UpdatedAt: new Date(Date.now() - 60 * 60 * 1000) });
+
+    const result = await send([toAddress('alice@example.com')], envelope('Operational'), String(run.ID));
+
+    expect(provider.Attempts).toHaveLength(0);
+    expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Failed', Reason: 'OutcomeUnknown' });
+    expect(logFor(alice)?.Status).toBe('In-Progress');
+  });
+
   it('reports PostSendLogSaveFailed when the result cannot be recorded, and a retry does not send twice', async () => {
     const alice = SeedEndpoint(db, 'alice@example.com');
     const run = SeedRun(db);
-    db.FailSave(ENTITY.Logs, { When: (row) => row.Status === 'Complete', Times: 1 });
+    db.FailSave(ENTITY.Logs, { When: (row) => row.Status === 'Complete', Times: 3 });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     const first = await send([toAddress('alice@example.com')], envelope('Operational'), String(run.ID));
     expect(provider.Delivered).toHaveLength(1);
@@ -824,6 +889,121 @@ describe('V2SendService.Send — Save() failures', () => {
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toBe('Failed to create communication run');
     expect(provider.Attempts).toHaveLength(0);
+  });
+});
+
+describe('V2SendService.CheckV1ComplianceGate', () => {
+  it('blocks a V1 send to an address whose principal unsubscribed, not only an address-level suppression', async () => {
+    const alice = SeedEndpoint(db, 'alice@example.com');
+    db.Seed('MJ: Communication Endpoint Principals', {
+      CommunicationEndpointID: alice.ID,
+      EntityID: IDS.ContactsEntity,
+      RecordID: 'contact-1',
+      FirstSeenAt: new Date(),
+      LastSeenAt: new Date(),
+    });
+    SeedSuppression(db, { EntityID: IDS.ContactsEntity, RecordID: 'contact-1', Reason: 'User Unsubscribe', Source: 'One-Click Header' });
+
+    const operational = await service.CheckV1ComplianceGate(IDS.ChannelEmail, 'alice@example.com', 'Operational', users.CallerUser);
+    const transactional = await service.CheckV1ComplianceGate(IDS.ChannelEmail, 'alice@example.com', 'Transactional', users.CallerUser);
+
+    expect(operational).toMatchObject({ Allowed: false, Reason: 'User Unsubscribe' });
+    expect(transactional.Allowed).toBe(true);
+  });
+
+  it('fails closed when the principal links cannot be read', async () => {
+    SeedEndpoint(db, 'alice@example.com');
+    db.FailRunView('MJ: Communication Endpoint Principals');
+
+    const result = await service.CheckV1ComplianceGate(IDS.ChannelEmail, 'alice@example.com', 'Operational', users.CallerUser);
+
+    expect(result).toMatchObject({ Allowed: false, Reason: 'GateLookupFailed' });
+  });
+});
+
+describe('V2SendService.Send — runs split into chunks', () => {
+  function sendChunk(address: string, run: FakeRow, index: number, count: number): Promise<SendV2Result> {
+    return service.Send(
+      {
+        Envelope: envelope('Operational'),
+        Payload: PAYLOAD,
+        Recipients: [toAddress(address)],
+        CommunicationRunID: String(run.ID),
+        RunChunk: { Index: index, Count: count },
+      },
+      users.CallerUser,
+      () => provider.AsProvider(),
+    );
+  }
+
+  it('leaves a passed-in run open until its last chunk finishes, then ends it once', async () => {
+    for (const a of ['a@example.com', 'b@example.com', 'c@example.com']) SeedEndpoint(db, a);
+    const run = SeedRun(db);
+    const runRow = (): FakeRow | undefined => db.Rows(ENTITY.Runs).find((r) => SameID(String(r.ID), String(run.ID)));
+
+    await sendChunk('c@example.com', run, 2, 3);
+    expect(runRow()?.Status).toBe('In-Progress');
+    await sendChunk('a@example.com', run, 0, 3);
+    await sendChunk('a@example.com', run, 0, 3); // redelivered chunk: not counted twice
+    expect(runRow()?.Status).toBe('In-Progress');
+    expect(runRow()?.EndedAt ?? null).toBeNull();
+
+    await sendChunk('b@example.com', run, 1, 3);
+    expect(runRow()?.Status).toBe('Complete');
+    expect(runRow()?.EndedAt).toBeInstanceOf(Date);
+    expect(provider.Attempts).toHaveLength(3);
+  });
+
+  it('counts a chunk that Send() refuses before sending, and one that throws, so the run still ends', async () => {
+    SeedEndpoint(db, 'a@example.com');
+    const run = SeedRun(db);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const chunk = (index: number, senderID: string, getProvider: () => ReturnType<FakeSendProvider['AsProvider']>) =>
+      service.Send(
+        {
+          Envelope: envelope('Operational', { SenderID: senderID }),
+          Payload: PAYLOAD,
+          Recipients: [toAddress('a@example.com')],
+          CommunicationRunID: String(run.ID),
+          RunChunk: { Index: index, Count: 3 },
+        },
+        users.CallerUser,
+        getProvider,
+      );
+
+    const refused = await chunk(0, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', () => provider.AsProvider());
+    await expect(
+      chunk(1, IDS.Sender, () => {
+        throw new Error('provider unavailable');
+      }),
+    ).rejects.toThrow('provider unavailable');
+    await chunk(0, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', () => provider.AsProvider()); // redelivered: not counted twice
+    expect(db.Rows(ENTITY.Runs)[0].Status).toBe('In-Progress');
+    await chunk(2, IDS.Sender, () => provider.AsProvider());
+
+    expect(refused).toMatchObject({ Success: false, ErrorMessage: 'Sender not found' });
+    expect(db.Rows(ENTITY.Runs)[0].Status).toBe('Complete');
+    expect(provider.Attempts).toHaveLength(1);
+  });
+
+  it('does not end a passed-in run when the chunk does not say where it sits', async () => {
+    SeedEndpoint(db, 'a@example.com');
+    const run = SeedRun(db);
+
+    await send([toAddress('a@example.com')], envelope('Operational'), String(run.ID));
+
+    expect(db.Rows(ENTITY.Runs)[0].Status).toBe('Pending');
+  });
+
+  it('stamps each queued chunk with its position and the acting user', async () => {
+    const published: Array<Record<string, unknown>> = [];
+    service.Configure({ AsyncThreshold: 2, ChunkSize: 2, EnqueueWork: async (_t, payload) => { published.push(payload); } });
+
+    const result = await send(['a', 'b', 'c', 'd', 'e'].map((x) => toAddress(`${x}@example.com`)));
+
+    expect(result.IsAsyncRun).toBe(true);
+    expect(published.map((p) => p.RunChunk)).toEqual([{ Index: 0, Count: 3 }, { Index: 1, Count: 3 }, { Index: 2, Count: 3 }]);
+    expect(published.every((p) => p.ActingUserID === users.CallerUser.ID)).toBe(true);
   });
 });
 

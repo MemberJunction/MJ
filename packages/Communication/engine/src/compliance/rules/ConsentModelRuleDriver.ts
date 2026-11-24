@@ -20,6 +20,7 @@ export interface ConsentModelMerged {
 /**
  * Resolves consent model across applicable regimes:
  * - `opt-in` beats `opt-out`.
+ * - Any other `model` value throws, which blocks the send (fail closed).
  * - `softOptIn` is preserved only if all applicable `opt-in` regimes allow it.
  */
 @RegisterClass(BaseComplianceRule, 'ConsentModelRuleDriver')
@@ -32,6 +33,12 @@ export class ConsentModelRuleDriver extends BaseComplianceRule<ConsentModelMerge
       if (rawModel === 'opt-in') {
         const softOptIn = ReadBooleanParam(params, 'softOptIn', 'SoftOptIn') === true;
         optInSets.push({ SoftOptIn: softOptIn });
+      } else if (rawModel !== 'opt-out') {
+        // A missing or misspelled model ('optin', 'Opt In') must not silently become opt-out:
+        // the gate turns this error into a block for the whole rule.
+        throw new Error(
+          `ConsentModel 'model' must be 'opt-in' or 'opt-out'; got ${rawModel === undefined ? 'nothing' : `'${rawModel}'`}`,
+        );
       }
     }
 

@@ -241,7 +241,7 @@ if (!result.Success) {
     throw new Error(result.ErrorMessage);          // the send could not start
 }
 for (const outcome of result.Outcomes ?? []) {
-    // Status: 'Sent' | 'Blocked' | 'Deferred' | 'Failed'
+    // Status: 'Sent' | 'Blocked' | 'Deferred' | 'Failed' | 'DryRun'
     console.log(outcome.Status, outcome.Reason, outcome.Detail);
 }
 ```
@@ -252,8 +252,29 @@ provider, and a verified sending domain when the provider has `RequireVerifiedDo
 returns `Success: false`. After that, blocked or failed recipients are reported per recipient and do not change
 `Success`.
 
+The provider is the envelope's `ProviderID`, else the sender's `CommunicationProviderID`. When neither is set,
+`Send()` uses the only active sending provider for the channel, and fails if there are several rather than
+pick one.
+
 With more recipients than `AsyncThreshold` and a configured `EnqueueWork`, the send is published as
-`comms.dispatch` chunks and returns `IsAsyncRun: true` without `Outcomes`.
+`comms.dispatch` chunks and returns `IsAsyncRun: true` without `Outcomes`. Each chunk carries the caller's
+`ActingUserID`, so the worker sends as that user.
+
+**Runs.** A send with no `CommunicationRunID` starts a run and ends it. A send given a `CommunicationRunID`
+(a `comms.dispatch` chunk, a templated batch) adds to that run and leaves it open: whoever started the run
+ends it once every chunk has finished.
+
+**At most once.** A message is never sent twice for the same run and endpoint. A log is claimed with one
+conditional `UPDATE`, so the database provider must support `ExecuteSQL`; without it nothing is sent. A log
+left `In-Progress` without a `ProviderMessageID` is not resent: if it is older than 15 minutes the recipient
+is reported `Failed` with reason `OutcomeUnknown`, because the provider may already have the message. Settle
+those from the provider's delivery events. The claim SQL is written for SQL Server.
+
+**Dry runs.** With `Envelope.DryRun`, an accepted message is reported `DryRun` and counted in `DryRunCount`,
+not `QueuedCount`. Its log is `Complete` with `"DryRun": true` in `ComplianceDecision`.
+
+**Preferences across senders.** A principal's choice for a preference is read for the sender, its ancestors
+and sender-less rows. An opt-out at any of those levels blocks the send; otherwise the nearest row wins.
 
 ### Checking eligibility
 
@@ -342,8 +363,10 @@ on a message, or `MJ_COMMS_V1_COMPLIANCE_GATE=true` for the whole instance, to c
 addresses against endpoint status and active suppressions before the provider is called. The class is
 `Message.MessageClass` (`Transactional` when absent), so a checked V1 send is blocked by hard bounces, invalid
 addresses and erased endpoints, and additionally by complaints, unsubscribes, admin blocks and policy
-suppressions when the caller marks it `Operational` or `Marketing`. A blocked send returns `Success: false` and
-marks its log `Failed`. Addresses with no endpoint row are always allowed.
+suppressions when the caller marks it `Operational` or `Marketing`. Suppressions on a principal that has used
+the address (through `MJ: Communication Endpoint Principals`) count as well as suppressions on the address
+itself. A blocked send returns `Success: false` and marks its log `Failed`. Addresses with no endpoint row are
+always allowed.
 
 ## Dependencies
 

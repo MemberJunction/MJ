@@ -382,8 +382,51 @@ export class FakeCommsDb {
     };
     const metadataSide: Pick<IMetadataProvider, 'GetEntityObject'> = Object.assign(runViewSide, {
       GetEntityObject: <T extends BaseEntity>(entityName: string) => Promise.resolve(this.materialize<T>(entityName, {}, true)),
+      ExecuteSQL: <T>(sql: string, parameters?: FakeFieldValue[], options?: { description?: string }) =>
+        Promise.resolve(this.executeSQL(sql, parameters ?? [], options?.description) as T[]),
     });
     return metadataSide as IMetadataProvider;
+  }
+
+  /** Every raw `ExecuteSQL` issued, by its `description`. */
+  public readonly ExecuteSQLCalls: string[] = [];
+
+  /**
+   * Emulates the two conditional UPDATE … OUTPUT claims the send path issues (matched by their
+   * `description`, not by parsing SQL). Like the real statement it is one atomic step, and an
+   * injected `FailSave` on the log entity makes it throw, the way a failed SQL statement would.
+   */
+  private executeSQL(sql: string, parameters: FakeFieldValue[], description: string | undefined): Array<{ ID: string }> {
+    this.ExecuteSQLCalls.push(description ?? sql);
+    const logs = this.table('MJ: Communication Logs');
+    const claimable = (row: FakeRow): boolean => {
+      const failure = this.takeFailure(this.saveFailures, 'MJ: Communication Logs', row);
+      if (failure) throw new Error(failure);
+      return true;
+    };
+    if (description === 'V2SendService.tryAtomicClaimLog') {
+      const row = logs.find((r) => sameText(r.ID, String(parameters[0])));
+      if (!row || (row.Status !== 'Pending' && row.Status !== 'Failed') || !claimable(row)) return [];
+      row.Status = 'In-Progress';
+      row.__mj_UpdatedAt = new Date();
+      return [{ ID: String(row.ID) }];
+    }
+    if (description === 'V2SendService.claimDueDeferredLogs') {
+      const now = new Date();
+      const due = logs
+        .filter((r) => r.Status === 'Pending' && r.Direction === 'Sending' && r.ScheduledAt instanceof Date && r.ScheduledAt <= now)
+        .sort((a, b) => (a.ScheduledAt as Date).getTime() - (b.ScheduledAt as Date).getTime())
+        .slice(0, Number(parameters[0]));
+      return due.filter(claimable).map((row) => {
+        row.Status = 'In-Progress';
+        row.__mj_UpdatedAt = now;
+        return { ID: String(row.ID) };
+      });
+    }
+    if (description === 'V2SendService.readRunLedger' || description === 'V2SendService.advanceRunLedger') {
+      return this.executeRunLedgerSQL(description, parameters) as Array<{ ID: string }>;
+    }
+    throw new Error(`FakeCommsDb.ExecuteSQL does not emulate: ${description ?? sql}`);
   }
 
   /**
@@ -441,6 +484,21 @@ export class FakeCommsDb {
    */
   public OnceBeforeSave(entityName: string, hook: (row: FakeRow) => void): void {
     this.beforeSaveHooks.push({ EntityName: entityName, Hook: hook });
+  }
+
+  /** The run-ledger read and its compare-and-swap UPDATE (matched on Status and Comments). */
+  private executeRunLedgerSQL(description: string, parameters: FakeFieldValue[]): FakeRow[] {
+    const run = this.table('MJ: Communication Runs').find((r) => sameText(r.ID, String(parameters[0])));
+    if (!run) return [];
+    if (description === 'V2SendService.readRunLedger') {
+      return [{ Status: run.Status ?? null, Comments: run.Comments ?? null }];
+    }
+    const [, comments, status, expectedStatus, expectedComments] = parameters;
+    if (run.Status !== expectedStatus || (run.Comments ?? null) !== (expectedComments ?? null)) return [];
+    run.Comments = comments;
+    run.Status = status;
+    if (status === 'Complete') run.EndedAt = new Date();
+    return [{ ID: String(run.ID) }];
   }
 
   private table(entityName: string): FakeRow[] {

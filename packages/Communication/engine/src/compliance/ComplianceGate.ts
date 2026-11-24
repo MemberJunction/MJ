@@ -400,7 +400,16 @@ export class ComplianceGate {
         continue;
       }
 
-      const merged = driver.MergeStrictest(paramSets);
+      let merged: ReturnType<typeof driver.MergeStrictest>;
+      try {
+        merged = driver.MergeStrictest(paramSets);
+      } catch (err) {
+        // A driver that rejects its parameters cannot decide; a compliance gate that cannot decide blocks.
+        if (!blockedReason) {
+          blockedReason = `Invalid parameters in rule '${group.RuleType.Name}': ${err instanceof Error ? err.message : String(err)}`;
+        }
+        continue;
+      }
       mergedRules[group.RuleType.Name] = merged;
 
       const evalCtx: QuietHoursEvalContext = {

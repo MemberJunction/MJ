@@ -178,7 +178,7 @@ describe('V2SendService chunk fan-out', () => {
     const service = new V2SendService();
     const svcInternal = service as unknown as {
       loadPreference: (id: string, user: unknown) => Promise<unknown>;
-      loadPrincipalPreferences: (refs: unknown[], prefId: string, senderId: string, user: unknown) => Promise<unknown>;
+      loadPrincipalPreferences: (refs: unknown[], prefId: string, senderChain: Array<{ ID: string }>, user: unknown) => Promise<unknown>;
       checkSenderPermission: (sender: { ID: string; Name: string; ParentSenderID: string | null }, user: { ID: string; UserRoles: Array<{ RoleID: string }> }) => Promise<{ Allowed: boolean; ErrorMessage?: string }>;
       loadSenderAncestry: (sender: unknown, user: unknown) => Promise<unknown[]>;
     };
@@ -196,7 +196,7 @@ describe('V2SendService chunk fan-out', () => {
       ErrorMessage: 'DB timeout',
     } as never);
     await expect(
-      svcInternal.loadPrincipalPreferences([{ EntityID: 'ent-1', RecordID: 'rec-1' }], 'pref-1', 'sender-1', {}),
+      svcInternal.loadPrincipalPreferences([{ EntityID: 'ent-1', RecordID: 'rec-1' }], 'pref-1', [{ ID: 'sender-1' }], {}),
     ).rejects.toThrow('Failed loading communication principal preferences');
 
     // Sender permission enforcement: blocks user without Send/Manage, allows user with Send role
@@ -222,6 +222,7 @@ describe('V2SendService chunk fan-out', () => {
         Success: true,
         Results: [{ ID: 'ep-1', Status: 'Active' }],
       } as never)
+      .mockResolvedValueOnce({ Success: true, Results: [] } as never) // endpoint → principal links
       .mockResolvedValueOnce({
         Success: true,
         Results: [{ ID: 'sup-1', Reason: 'User Unsubscribe', Status: 'Active', ExpiresAt: null }],
