@@ -269,8 +269,8 @@ const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(
 | | V1 path (default) | `UseV2: true` |
 |---|---|---|
 | Sender | `Message.From` | The default `MJ: Communication Senders` row |
-| Message class | `Operational` (unless `Message.ContextData.MessageClass` is set) | `Operational` |
-| Checks | Endpoint status and suppressions | The full gate: suppressions, regimes, quiet hours |
+| Message class | `Operational` (unless `Message.MessageClass` is set) | `Operational` |
+| Checks | None by default. Endpoint status and suppressions when `Message.CheckComplianceGate` or `MJ_COMMS_V1_COMPLIANCE_GATE=true` is set | The full gate: suppressions, regimes, quiet hours |
 | Added to the message | Nothing | Compliance footer, unsubscribe headers, tracking, as the regimes require |
 | Rendering | Per recipient, in-process | `TemplatedCommunicationService` (`Inline` for `PreviewOnly` or `IncludeProcessedMessages`, else `WorkQueue`); untemplated messages go straight to `CommunicationEngine.Send()` |
 | Result | `EntityCommunicationResult` | The same shape; blocked and deferred recipients are items with `Skipped: true` |

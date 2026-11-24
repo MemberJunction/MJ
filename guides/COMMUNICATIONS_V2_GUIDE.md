@@ -441,16 +441,21 @@ the sender's `SendingDomain`, provider and credential.
 
 ## 10. V1 behavior and the V1 bridge
 
-**V1 sends are now gated.** `CommunicationEngine.SendSingleMessage()` (and therefore `SendMessages()`) checks
-the To, CC and BCC addresses against endpoint status and active suppressions before calling the provider. The
-message class is read from `message.ContextData.MessageClass` and defaults to `Transactional`, so by default
-only hard bounces, invalid addresses and erased endpoints block a V1 send. An address MJ has never seen is
-always allowed. A blocked V1 send returns `Success: false` with the reason in `Error` and marks its log
-`Failed`. Regimes, preferences, footers and tracking are not applied to V1 sends.
+**V1 sends are unchanged unless you opt in.** `CommunicationEngine.SendSingleMessage()` and `SendMessages()`
+call the provider exactly as before. Two switches turn on a check against the V2 suppression data:
+
+- per message, `Message.CheckComplianceGate = true`;
+- for the whole instance, the environment variable `MJ_COMMS_V1_COMPLIANCE_GATE=true`.
+
+With either set, the To, CC and BCC addresses are checked against endpoint status and active suppressions before
+the provider is called. The class is `Message.MessageClass`, defaulting to `Transactional`, so a V1 send that
+does not set one is blocked only by hard bounces, invalid addresses and erased endpoints. An address MJ has
+never seen is always allowed. A blocked V1 send returns `Success: false` with the reason in `Error` and marks
+its log `Failed`. Regimes, preferences, footers and tracking are never applied to V1 sends.
 
 `RunEntityCommunication()` sets `MessageClass = 'Operational'` on V1 sends unless the message already carries
-one, so entity communications are also stopped by complaints, unsubscribes, admin blocks and policy
-suppressions.
+one. So when the check is on, entity communications are also stopped by complaints, unsubscribes, admin blocks
+and policy suppressions.
 
 **Opting in to V2.** Set `EntityCommunicationParams.UseV2 = true` (or `Message.ContextData.UseV2 = true`) to
 route `RunEntityCommunication()` through the full V2 pipeline:
@@ -529,6 +534,7 @@ Each message is written to a JSON file per mailbox in that folder.
 | `MJ_COMMS_HMAC_SECRET` | MJAPI (`ConfigureCommsV2WorkQueue`, `/comms/click`), `V2SendService` | For click tracking | none | Secret for the HMAC-SHA256 signature on click-tracking links. **Secret**: use a long random value (`openssl rand -hex 32`), keep it out of source control, and set the same value on every instance. Unset: links are left unrewritten and `/comms/click` rejects every request. Changing it invalidates the click links in mail already sent (they answer `400`); unsubscribe links are unaffected. |
 | `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` | MJAPI (`POST /comms/webhooks/sendgrid`) | For the webhook URL without a credential ID | none | SendGrid Event Webhook **public** verification key (PEM, or the base64 key SendGrid shows). Not a secret, but it must match the signing key SendGrid uses. Unset: that route answers `401`. Not used by `/comms/webhooks/sendgrid/:credentialId`, which reads the key from the credential. |
 | `MJ_COMMS_PREFERENCE_ELEMENT_SRC` | MJAPI (`GET /comms/preferences/:token`) | No | none | URL of the `<mj-comms-preference-center>` bundle to load in the preference page, for example a CDN copy. Unset: MJAPI serves the bundle from the installed `@memberjunction/ng-communications` package at `/comms/preferences-element.js`, and falls back to the built-in page when that bundle is not built. The script is loaded with the page's CSP nonce; only point this at a URL you control. |
+| `MJ_COMMS_V1_COMPLIANCE_GATE` | `CommunicationEngine.SendSingleMessage` | No | off | Set to `true` to check every V1 send against endpoint status and active suppressions (section 10). Unset: V1 sends are not checked unless the message sets `CheckComplianceGate`. |
 | `COMMS_ELEMENT_SOURCEMAP` | `@memberjunction/ng-communications` build (`scripts/build-element.mjs`) | No | off | Set to `1` to emit a source map for the element bundle. Build-time only; leave it off for published builds. |
 | `COMMUNICATION_VENDOR_API_KEY__SENDGRID` | `@memberjunction/communication-sendgrid` | When the sender has no credential | none | SendGrid API key. Used for sends and for sending-domain operations when no `MJ: Credentials` row is linked. **Secret.** A sender with a `CredentialID` never falls back to it. |
 | `MJAPI_PUBLIC_URL`, `MJAPI_BASE_PATH` | MJAPI | For any real deployment | derived from host and port | Base of every link placed in a message. See [`packages/MJAPI/CLAUDE.md`](../packages/MJAPI/CLAUDE.md). |

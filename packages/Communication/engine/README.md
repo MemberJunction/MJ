@@ -335,14 +335,15 @@ Each call merges into the existing configuration and clears the 60-second caches
 MJAPI configures all of this at startup (`ConfigureCommsV2WorkQueue` in `@memberjunction/server`); a standalone
 host must call `ConfigureV2Dispatch()` and, if it wants deferred sends, `StartScheduledDeferralSweep()` itself.
 
-### V1 sends are gated too
+### V1 sends can opt in to the suppression check
 
-`SendSingleMessage()` now checks the To, CC and BCC addresses against endpoint status and active suppressions
-before calling the provider. The class comes from `message.ContextData.MessageClass` (`Transactional` when
-absent), so a V1 send is blocked by hard bounces, invalid addresses and erased endpoints, and additionally by
-complaints, unsubscribes, admin blocks and policy suppressions when the caller marks it `Operational` or
-`Marketing`. A blocked send returns `Success: false` and marks its log `Failed`. Addresses with no endpoint row
-are always allowed.
+V1 `SendSingleMessage()` and `SendMessages()` are unchanged by default. Set `Message.CheckComplianceGate = true`
+on a message, or `MJ_COMMS_V1_COMPLIANCE_GATE=true` for the whole instance, to check the To, CC and BCC
+addresses against endpoint status and active suppressions before the provider is called. The class is
+`Message.MessageClass` (`Transactional` when absent), so a checked V1 send is blocked by hard bounces, invalid
+addresses and erased endpoints, and additionally by complaints, unsubscribes, admin blocks and policy
+suppressions when the caller marks it `Operational` or `Marketing`. A blocked send returns `Success: false` and
+marks its log `Failed`. Addresses with no endpoint row are always allowed.
 
 ## Dependencies
 
