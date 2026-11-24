@@ -13843,6 +13843,11 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   type-checked (it names `MJMLModelEntity`) and which does not resolve on that shard. The generated class-registration
   manifests (imports and a class list, no statement that can write a field) are no longer candidates; a planted-manifest
   test red first → R0 5/5.
+- **CI at `f5f771dd99`:** the R0 scan failed again on a hand-written file (`ai-agent-form.component.ts` imports next's
+  unbuilt `@memberjunction/ng-ai-test-harness`). The scan now requires resolution only for imports of packages that
+  can carry `MJMLModelEntity` (`core-entities`, `core-entities-server`, `predictive-studio*`; MJ forbids cross-package
+  re-exports) → R0 6/6, test red first. Shard 4's TaskGraph "scales near-linearly" and IT PB18 are timing gates outside
+  PS.
 
 ## 12. Refresh log (append-only)
 

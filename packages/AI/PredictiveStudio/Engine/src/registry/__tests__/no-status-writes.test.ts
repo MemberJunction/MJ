@@ -39,8 +39,9 @@ interface ScanProgram {
  * `<expr>[key]` with a key whose type is the literal `'Status'` — its left side itself, or any target of an object or
  * array destructuring assignment on its left (`({ Status: model.Status } = src)`, `[model.Status] = values`) — and the
  * checker's type of `<expr>` — or a member of its union/intersection, or any base class — has the symbol name
- * `MJMLModelEntity`. An `@memberjunction/*` import the program cannot resolve throws, so a root whose types do not
- * resolve fails the scan instead of silently finding nothing.
+ * `MJMLModelEntity`. An import of a package that can carry that type ({@link StatusAssignments.ModelTypeSource}) the
+ * program cannot resolve throws, so a root whose model types do not resolve fails the scan instead of silently finding
+ * nothing.
  *
  * {@link ScanCalls} lists the call forms that write a field without an assignment — `model.Set('Status', …)`,
  * `model.SetMany({ Status })`, `Object.assign(model, { Status })` on an ML model — as a report, not a failure (the gate's
@@ -55,7 +56,7 @@ export class StatusAssignments {
    * Every assignment to an `MJMLModelEntity`'s `Status` under `roots` (relative to the repository root, or absolute),
    * except in files whose repository-relative path ends with an `Allow` entry.
    *
-   * @throws Error when a root does not exist, or a candidate's `@memberjunction/*` import does not resolve
+   * @throws Error when a root does not exist, or a candidate's import of a model-type package does not resolve
    */
   public static Scan(roots: readonly string[], options: { readonly Allow: readonly string[] }): readonly StatusAssignment[] {
     const found: StatusAssignment[] = [];
@@ -149,11 +150,22 @@ export class StatusAssignments {
       && !StatusAssignments.GENERATED_MANIFEST.test(posix);
   }
 
-  /** Throws naming the file when one of its `@memberjunction/*` imports has no module symbol (its types would be unknown). */
+  /**
+   * True for a package that can hand a file an `MJMLModelEntity`: the generated entities, their server subclasses, and
+   * the Predictive Studio packages. MJ forbids re-exports between packages, so no other package carries the type; an
+   * unresolved import of one cannot hide an ML model Status write, while it would fail the scan whenever a package the
+   * scanning environment has not built (a CI unit shard's) is imported by a file the scan reads.
+   */
+  public static ModelTypeSource(specifier: string): boolean {
+    return specifier === '@memberjunction/core-entities' || specifier === '@memberjunction/core-entities-server'
+      || specifier.startsWith('@memberjunction/predictive-studio');
+  }
+
+  /** Throws naming the file when one of its imports of a {@link ModelTypeSource} package has no module symbol (its types would be unknown). */
   private static assertImportsResolve(source: ts.SourceFile, checker: ts.TypeChecker): void {
     for (const statement of source.statements) {
       if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
-      if (!statement.moduleSpecifier.text.startsWith('@memberjunction/')) continue;
+      if (!StatusAssignments.ModelTypeSource(statement.moduleSpecifier.text)) continue;
       if (checker.getSymbolAtLocation(statement.moduleSpecifier) === undefined) {
         throw new Error(`StatusAssignments: ${source.fileName} imports ${statement.moduleSpecifier.text}, which does not resolve with the Engine's compiler options`);
       }
@@ -311,6 +323,22 @@ describe('R0 one publish function: no Status write outside the lifecycle gate (s
       }
       const candidates = StatusAssignments.Candidates(scratch).map((f) => path.basename(f));
       expect(candidates).toEqual(['planted.ts']);
+    }, 60_000);
+
+    it('scans past an unresolved import of a package that cannot carry an ML model type, and fails on one that can', () => {
+      const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ps-r0-imports-'));
+      try {
+        fs.mkdirSync(path.join(other, 'src'));
+        const file = path.join(other, 'src', 'form.ts');
+        fs.writeFileSync(file, "import { Harness } from '@memberjunction/ng-not-built-here';\nexport const h: Harness | null = null;\nexport function f(a: { Status: string }): void { a.Status = 'x'; }\n");
+        expect(StatusAssignments.Scan([other], { Allow: [] })).toEqual([]);
+        fs.writeFileSync(file, "import { Thing } from '@memberjunction/core-entities-not-built';\nexport function f(a: { Status: string }): void { a.Status = 'x'; }\nexport const t: Thing | null = null;\n");
+        expect(StatusAssignments.ModelTypeSource('@memberjunction/core-entities')).toBe(true);
+        expect(StatusAssignments.ModelTypeSource('@memberjunction/predictive-studio-core')).toBe(true);
+        expect(StatusAssignments.ModelTypeSource('@memberjunction/ng-ai-test-harness')).toBe(false);
+      } finally {
+        fs.rmSync(other, { recursive: true, force: true });
+      }
     }, 60_000);
 
     it('reports the Set / SetMany / Object.assign calls on an ML model with their form, and not those on another entity', () => {
