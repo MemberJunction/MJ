@@ -30,6 +30,7 @@
  */
 
 import { LogError, LogStatus, RunQuery, UserInfo } from '@memberjunction/core';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { MJSearchScopeEntity } from '@memberjunction/core-entities';
 import {
     SearchContext,
@@ -85,7 +86,54 @@ export class ScopeDimensionError extends Error {
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-export class ScopeDimensionResolver {
+/**
+ * Extension point for SearchScope dimension resolution.
+ *
+ * MJ's stock {@link ScopeDimensionResolver} derives `ServerDerived` dimensions from an approved
+ * `MJ: Queries` row bound to `(PrimaryScopeRecordID, UserID, AgentID, SkillID)`. A host whose
+ * access model carries server-trusted context beyond those four keys — such as per-tenant
+ * entitlements or an evaluation audience — subclasses {@link ScopeDimensionResolver} and registers
+ * against this base:
+ *
+ * ```ts
+ * @RegisterClass(ScopeDimensionResolverBase, SCOPE_DIMENSION_RESOLVER_KEY)
+ * export class MyDimensionResolver extends ScopeDimensionResolver {
+ *     protected override async deriveServerValue(
+ *         dim: ScopeSecondaryDimension,
+ *         input: DimensionResolutionInput,
+ *     ): Promise<SecondaryScopeValue | undefined> {
+ *         const stock = await super.deriveServerValue(dim, input);
+ *         // Intersect / narrow within `stock` so an override never widens past the caller's bound.
+ *         return this.narrowForAudience(dim, input, stock);
+ *     }
+ * }
+ * ```
+ *
+ * Do NOT pass an explicit priority to `@RegisterClass`: `ClassFactory.Register` automatically
+ * assigns one higher than the highest already registered for this `(base, key)`, so a consumer
+ * subclassing {@link ScopeDimensionResolver} always outranks MJ's own registration.
+ */
+export abstract class ScopeDimensionResolverBase {
+    /**
+     * Resolve the effective Search Context for a scope.
+     *
+     * @throws {ScopeDimensionError} when a declared dimension cannot be resolved safely —
+     *   the caller MUST fail the search rather than proceed with a partial bound.
+     */
+    public abstract Resolve(input: DimensionResolutionInput): Promise<DimensionResolutionResult>;
+}
+
+/**
+ * `ClassFactory` key shared by MJ's stock dimension resolver and any consumer override registered
+ * against {@link ScopeDimensionResolverBase}.
+ *
+ * There is one active resolver per deployment, so a single shared key avoids the keyless
+ * registration warning while keeping subclass ordering deterministic.
+ */
+export const SCOPE_DIMENSION_RESOLVER_KEY = 'ScopeDimensionResolver';
+
+@RegisterClass(ScopeDimensionResolverBase, SCOPE_DIMENSION_RESOLVER_KEY)
+export class ScopeDimensionResolver extends ScopeDimensionResolverBase {
     /**
      * Resolve the effective Search Context for a scope.
      *
@@ -648,4 +696,28 @@ export class ScopeDimensionResolver {
         }
         return serverValue;
     }
+}
+
+/**
+ * The stock resolver instance.
+ *
+ * Prefer {@link GetScopeDimensionResolver}, which honours a consumer's registered override. This
+ * constant always yields MJ's own implementation and therefore bypasses any subclass registered
+ * against {@link ScopeDimensionResolverBase}.
+ */
+export const DefaultScopeDimensionResolver = new ScopeDimensionResolver();
+
+/**
+ * The resolver to use — a consumer's registered subclass if there is one, otherwise MJ's own.
+ *
+ * Resolved per call rather than cached at module load, so a registration made during application
+ * startup is never missed due to import order. Construction is trivial and the class is stateless.
+ *
+ * Falls back to {@link DefaultScopeDimensionResolver} when nothing else is registered.
+ */
+export function GetScopeDimensionResolver(): ScopeDimensionResolverBase {
+    return MJGlobal.Instance.ClassFactory.CreateInstance<ScopeDimensionResolverBase>(
+        ScopeDimensionResolverBase,
+        SCOPE_DIMENSION_RESOLVER_KEY,
+    ) ?? DefaultScopeDimensionResolver;
 }
