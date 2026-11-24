@@ -24,6 +24,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Models&Name=CodeVersion"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.074Z",
+            "checksum": "794d3985d7ca5c286f072365a9fb2127ace7b51524a2b0fc3f19b8ac4f44f7f9"
           }
         },
         {
@@ -37,6 +41,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Models&Name=OutputSemantics"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.088Z",
+            "checksum": "64a3782134973359f6a521a5e6696fe87b6badfa677567c18a5d59e7a36d2ab5"
           }
         },
         {
@@ -50,6 +58,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Models&Name=Delivery"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.103Z",
+            "checksum": "6f1e729fe16fcba9a34fd329d6ea4eb766bf2c4ab40d5da44f4bef924667f56f"
           }
         }
       ]
