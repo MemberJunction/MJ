@@ -148,7 +148,7 @@ export { SynthesizeChannelDescriptor, BuildToolBackedVerbs, VerbNameForTool } fr
 export { ChannelActionDispatcher, CHANNEL_OPEN_ACTION, type ChannelDispatchHost, type DispatchableChannel } from './channels/channel-action-dispatcher';
 export { ComputeStateDelta, FormatChannelNote, ListChangedPaths, type StateDelta } from './channels/channel-state-delta';
 export { FormatParameterList } from './channels/channel-schema-format';
-export { BuildChannelCatalogNote, type ChannelCatalogEntry } from './channels/channel-catalog-note';
+export { BuildChannelCatalogNote, type ChannelCatalogEntry, type UnavailableChannelEntry } from './channels/channel-catalog-note';
 export {
     VisualPerceptionPump,
     type VisualFrameReason,

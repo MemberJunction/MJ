@@ -1157,6 +1157,15 @@ export abstract class BaseRealtimeClient {
     }
 
     /**
+     * Whether a credential is minted ahead, shortly before the current one expires, for the next reconnect to use.
+     * `false` for a driver whose credential only opens one connection, which outlives it: each reconnect mints its own,
+     * so one minted ahead is never used.
+     */
+    protected get RefreshesCredentialAhead(): boolean {
+        return true;
+    }
+
+    /**
      * How many connections `credential` may open, or `undefined` for no limit (the default). A driver whose provider
      * counts uses on a credential overrides it, so the client re-mints before it would open a connection the
      * credential has no use left for, instead of spending a failed attempt finding out.
@@ -1265,7 +1274,7 @@ export abstract class BaseRealtimeClient {
     }
 
     private scheduleCredentialRefresh(): void {
-        if (!this.SupportsMidCallReconnect || !this.tokenRefreshCallback || this.reconnectController.IsDisposed) {
+        if (!this.RefreshesCredentialAhead || !this.SupportsMidCallReconnect || !this.tokenRefreshCallback || this.reconnectController.IsDisposed) {
             return;
         }
         this.reconnectController.ScheduleCredentialRefresh(
