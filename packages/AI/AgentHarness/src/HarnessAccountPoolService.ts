@@ -1409,12 +1409,16 @@ function resolveUniqueSlotId(
 }
 
 function sanitizeSlug(input: string): string {
-    return input
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9_-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 64);
+    const replaced = input.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+    let start = 0;
+    let end = replaced.length;
+    while (start < end && replaced.charCodeAt(start) === 45) {
+        start++;
+    }
+    while (end > start && replaced.charCodeAt(end - 1) === 45) {
+        end--;
+    }
+    return replaced.slice(start, end).slice(0, 64);
 }
 
 function normalizeWeight(value: number | undefined): number {

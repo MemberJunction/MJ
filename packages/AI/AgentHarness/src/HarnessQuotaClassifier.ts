@@ -168,13 +168,38 @@ function clampNumber(value: number, min: number, max: number): number {
 }
 
 /**
+ * Collapses runs of horizontal whitespace (`' '`, `'\t'`) into a single space while preserving
+ * line breaks and capping length, ensuring all downstream timestamp matchers run in strict O(n).
+ */
+function normalizeForTimestampParsing(raw: string): string {
+    const capped = raw.length > 4096 ? raw.slice(0, 4096) : raw;
+    let out = '';
+    let prevWasSpace = false;
+    for (let i = 0; i < capped.length; i++) {
+        const ch = capped[i];
+        if (ch === ' ' || ch === '\t' || ch === '\r') {
+            if (!prevWasSpace) {
+                out += ' ';
+                prevWasSpace = true;
+            }
+        } else {
+            out += ch;
+            prevWasSpace = false;
+        }
+    }
+    return out;
+}
+
+/**
  * Attempts to extract a reset timestamp (in epoch ms) from common vendor quota error messages:
  * - Relative durations: `"try again in 45 minutes"`, `"resets in 2h 30m"`, `"Retry-After: 120"`
  * - ISO-8601 timestamps: `"resets at 2026-11-24T15:30:00Z"`
  * - Date strings: `"resets at Nov 24, 2026 15:00 UTC"`
  * - Clock times: `"resets at 5pm UTC"`, `"resets at 3:30 PM"`, `"resets 14:00"`
  */
-function parseResetTimestampMs(text: string, nowMs: number): number | null {
+function parseResetTimestampMs(rawText: string, nowMs: number): number | null {
+    const text = normalizeForTimestampParsing(rawText);
+
     // 1. Explicit ISO-8601 timestamp (e.g., 2026-11-24T15:00:00Z or 2026-11-24T15:00:00-06:00)
     const isoMatch = text.match(
         /\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2}))\b/i,
@@ -188,7 +213,7 @@ function parseResetTimestampMs(text: string, nowMs: number): number | null {
 
     // 2. Relative duration phrases: "try again in 2h 15m", "resets in 45 minutes", "retry after 90s"
     const relativeLeadMatch = text.match(
-        /\b(?:try\s+again\s+in|retry[- ]after[:=\s]*|resets?\s+in|available\s+in|wait\s+)\s*([^\n.,;]+)/i,
+        /\b(?:try again in|retry[- ]after[:=]?|resets? in|available in|wait) ([^\n.,;]{1,80})/i,
     );
     if (relativeLeadMatch) {
         const durationMs = parseRelativeDurationMs(relativeLeadMatch[1]);
@@ -198,7 +223,7 @@ function parseResetTimestampMs(text: string, nowMs: number): number | null {
     }
 
     // 3. Bare `Retry-After: <seconds>` header syntax
-    const retryAfterSecMatch = text.match(/\bretry[- ]after\s*[:=]\s*(\d+)\b/i);
+    const retryAfterSecMatch = text.match(/\bretry[- ]after ?[:=] ?(\d{1,7})\b/i);
     if (retryAfterSecMatch) {
         const secs = Number(retryAfterSecMatch[1]);
         if (Number.isFinite(secs) && secs > 0) {
@@ -208,7 +233,7 @@ function parseResetTimestampMs(text: string, nowMs: number): number | null {
 
     // 4. Full date phrase after "resets at / resets on / until / available at"
     const datePhraseMatch = text.match(
-        /\b(?:resets?\s+(?:at|on)|available\s+(?:at|on)|until)\s+([A-Z][a-z]{2,8}\s+\d{1,2},?\s+\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM))?)?(?:\s*(?:UTC|GMT|Z))?)/i,
+        /\b(?:resets? (?:at|on)|available (?:at|on)|until) ([A-Z][a-z]{2,8} \d{1,2},? \d{4}(?: \d{1,2}:\d{2}(?::\d{2})?(?: ?(?:AM|PM))?)?(?: ?(?:UTC|GMT|Z))?)/i,
     );
     if (datePhraseMatch) {
         const parsed = Date.parse(datePhraseMatch[1]);
@@ -219,7 +244,7 @@ function parseResetTimestampMs(text: string, nowMs: number): number | null {
 
     // 5. Clock time after "resets (at)" or "until": e.g. "resets at 5pm UTC", "resets 3:30 PM", "resets at 14:00 UTC"
     const clockMatch = text.match(
-        /\b(?:resets?(?:\s+at)?|until|available\s+at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s*\(?([A-Z]{2,5}|UTC|GMT|Z)\)?)?/i,
+        /\b(?:resets?(?: at)?|until|available at) (\d{1,2})(?::(\d{2}))?(?: ?(am|pm))?(?: ?\(?([A-Z]{1,5})\)?)?/i,
     );
     if (clockMatch) {
         const hourRaw = Number(clockMatch[1]);
@@ -259,12 +284,13 @@ function parseResetTimestampMs(text: string, nowMs: number): number | null {
 }
 
 function parseRelativeDurationMs(fragment: string): number | null {
-    const unitRegex = /(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?)\b/gi;
+    const bounded = fragment.slice(0, 120);
+    const unitRegex = /\b(\d{1,6}(?:\.\d{1,2})?) ?(ms|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?)\b/gi;
     let totalMs = 0;
     let matchedAny = false;
     let match: RegExpExecArray | null;
 
-    while ((match = unitRegex.exec(fragment)) !== null) {
+    while ((match = unitRegex.exec(bounded)) !== null) {
         const amount = Number(match[1]);
         const unit = match[2].toLowerCase();
         if (!Number.isFinite(amount) || amount <= 0) {
@@ -289,7 +315,7 @@ function parseRelativeDurationMs(fragment: string): number | null {
     }
 
     // Bare integer seconds directly following "retry after 60"
-    const bareSec = fragment.trim().match(/^(\d+)(?:\s|$)/);
+    const bareSec = bounded.trim().match(/^(\d{1,7})(?: |$)/);
     if (bareSec) {
         const secs = Number(bareSec[1]);
         if (Number.isFinite(secs) && secs > 0) {
