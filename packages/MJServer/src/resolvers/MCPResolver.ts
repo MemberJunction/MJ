@@ -22,6 +22,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { configInfo } from '../config.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 const UUID_SHAPE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -561,6 +562,7 @@ export class MCPToolCountsResult {
 /**
  * MCP Resolver for GraphQL operations
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class MCPResolver extends ResolverBase {
     /**

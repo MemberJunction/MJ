@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, Metadata, type MJLimitsOverride, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, LogError, Metadata, type MJLimitsOverride, RunView, UserInfo } from '@memberjunction/core';
 import {
     BUILT_IN_CONVERSATION_TYPE_IDS,
     CONVERSATION_TYPE_CODES,
@@ -25,6 +25,19 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
 const MY_AGENTS_APPLICATION_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E70';
+
+/**
+ * A new entity object, or an error that names the entity. `GetEntityObject` logs and returns null
+ * when the entity cannot be created (for example, a database whose migration for it has not run),
+ * and dereferencing that null hides the cause behind "Cannot read properties of null".
+ */
+async function newEntityObject<T extends BaseEntity>(md: IMetadataProvider, entityName: string, user: UserInfo): Promise<T> {
+    const entity = await md.GetEntityObject<T>(entityName, user);
+    if (!entity) {
+        throw new Error(`Entity ${entityName} not found in metadata or could not be created`);
+    }
+    return entity;
+}
 
 function resolveMyAgentsApplicationId(md: IMetadataProvider): string | null {
     const apps = (md as { Applications?: ReadonlyArray<{ ID: string; Name?: string }> }).Applications;
@@ -429,7 +442,7 @@ export class OpenAgentChannelAction extends BaseAction {
                 BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL;
 
             const myAgentsAppId = resolveMyAgentsApplicationId(md);
-            const channel = await md.GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', systemUser);
+            const channel = await newEntityObject<MJAgentChannelEntity>(md, 'MJ: Agent Channels', systemUser);
             channel.NewRecord();
             channel.Name = topic.slice(0, 255);
             channel.UserID = contextUser.ID;
@@ -490,10 +503,7 @@ export class OpenAgentChannelAction extends BaseAction {
             ];
 
             for (const spec of participantSpecs) {
-                const participant = await md.GetEntityObject<MJAgentChannelParticipantEntity>(
-                    'MJ: Agent Channel Participants',
-                    systemUser
-                );
+                const participant = await newEntityObject<MJAgentChannelParticipantEntity>(md, 'MJ: Agent Channel Participants', systemUser);
                 participant.NewRecord();
                 participant.AgentChannelID = channel.ID;
                 participant.UserID = spec.userId;
@@ -515,7 +525,7 @@ export class OpenAgentChannelAction extends BaseAction {
 
             // Post opening message as contextUser (channel initiator/participant); mark server-authored when an agent posts.
             const callingAgentId = extractContextAgentId(params.Context);
-            const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            const detail = await newEntityObject<MJConversationDetailEntity>(md, 'MJ: Conversation Details', contextUser);
             detail.NewRecord();
             detail.ConversationID = channel.ID;
             detail.UserID = contextUser.ID;
@@ -619,7 +629,7 @@ export class ReplyInAgentChannelAction extends BaseAction {
 
             const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
             const systemUser = UserCache.Instance.GetSystemUser() ?? contextUser;
-            const channel = await md.GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', systemUser);
+            const channel = await newEntityObject<MJAgentChannelEntity>(md, 'MJ: Agent Channels', systemUser);
             const loaded = await channel.Load(channelId);
             if (!loaded) {
                 return {
@@ -671,7 +681,7 @@ export class ReplyInAgentChannelAction extends BaseAction {
                 };
             }
 
-            const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            const detail = await newEntityObject<MJConversationDetailEntity>(md, 'MJ: Conversation Details', contextUser);
             detail.NewRecord();
             detail.ConversationID = channel.ID;
             detail.UserID = contextUser.ID;
@@ -881,7 +891,7 @@ export class GetAgentChannelAction extends BaseAction {
                 };
             }
 
-            const channel = await md.GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', systemUser);
+            const channel = await newEntityObject<MJAgentChannelEntity>(md, 'MJ: Agent Channels', systemUser);
             const loaded = await channel.Load(channelId);
             if (!loaded) {
                 return {

@@ -12,6 +12,7 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 
 import { CompositeKeyInputType, CompositeKeyOutputType, KeyValuePairOutputType } from '../generic/KeyInputOutputTypes.js';
 import { GetReadOnlyProvider } from '../util.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 @InputType()
 export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
@@ -67,6 +68,7 @@ export class PotentialDuplicateResponseType extends PotentialDuplicateResponse {
   declare PotentialDuplicateResult: PotentialDuplicateResult[];
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver(PotentialDuplicateResponseType)
 export class DuplicateRecordResolver {
   @Query(() => PotentialDuplicateResponseType)
