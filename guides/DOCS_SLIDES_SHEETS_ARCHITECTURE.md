@@ -288,7 +288,8 @@ For binary artifacts (`ContentMode = 'File'`), `packages/MJServer/src/resolvers/
 ## 13. Docs in the Semantic Graph
 
 A saved MJ Doc is indexed into the Content Pipeline and the "Library Knowledge" graph with no extra
-step: its passages attach to concepts, `[[Name]]` links become `LinksTo` Record Links, and docs that
+step: its passages attach to concepts, durable record-mention links (inserted via `[[` autocomplete
+using `ConversationUtility.CreateRecordLink`) become `LinksTo` Record Links, and docs that
 share concepts become related. Visibility follows the doc's own sharing; nothing in the graph shows a
 reader text from a doc they cannot open. Full path, seeds and access rules:
 [Canon & Semantic Graphs §7](CANON_AND_SEMANTIC_GRAPHS_GUIDE.md#7-mj-docs-in-the-graph).
@@ -300,5 +301,4 @@ loads on first open. Picking a related artifact emits `OpenArtifactRequested` fr
 nothing subscribes, the viewer switches to that artifact in place. Picking any other record emits
 `OpenEntityRecord`.
 
-Not built yet: the `[[` autocomplete (waits for the editor replacement), links to entity records or
-concepts, inline Canon-check comments, and a Library inbox of unconnected docs.
+Not built yet: links to concepts, inline Canon-check comments, and a Library inbox of unconnected docs.

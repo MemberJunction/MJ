@@ -32,6 +32,7 @@ import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
 import { AgentOrbStateFor, RealtimeAgentOrbComponent, type RealtimeAgentOrbState } from './realtime-agent-orb.component';
+import { IsNarrowRealtimeViewport } from './capture/realtime-capture-channel';
 import { RealtimeCameraCheckCardComponent } from './capture/realtime-camera-check-card.component';
 import { SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY } from './realtime-surface-placement-prefs';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
@@ -202,7 +203,7 @@ export interface RealtimeAvatarCaption {
   styleUrl: './realtime-session-overlay.component.css'
 })
 export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, AfterViewChecked, OnDestroy {
-  private _agentName = 'Sage';
+  private _agentName = 'Assistant';
 
   /**
    * True while the call is MINIMIZED: the overlay hides itself (CSS, not destruction) so
@@ -212,10 +213,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @Input() Hidden = false;
 
-  /** Display name of the agent the voice session fronts (e.g. "Sage"). */
+  /** Display name of the agent the voice session fronts. */
   @Input()
   set AgentName(value: string) {
-    this._agentName = value || 'Sage';
+    this._agentName = value || 'Assistant';
     this.State.AgentName = this._agentName;
   }
   get AgentName(): string {
@@ -1602,7 +1603,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * earned, and Details is what earns it (same shape as {@link AllowDevLinks}).
    */
   public get ShowDetailsControl(): boolean {
-    return !this.IsReviewing && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
+    return !this.IsReviewing && !IsNarrowRealtimeViewport() && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
   }
 
   /**
