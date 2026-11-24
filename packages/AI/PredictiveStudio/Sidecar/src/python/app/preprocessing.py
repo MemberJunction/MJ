@@ -11,10 +11,11 @@ stable ordering.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
+from .array_types import FArr
 from .missing_values import is_missing
 
 # A fitted-preprocessing payload is a JSON-serializable dict:
@@ -173,11 +174,65 @@ def _coerce_numeric(value: Any, column: str) -> float:
     return f
 
 
+_REQUIRED_OP_KEYS: Dict[str, Tuple[str, ...]] = {
+    "impute": ("col",),
+    "standardize": ("stats",),
+    "bin": ("col", "edges"),
+    "onehot": ("col", "vocabulary"),
+}
+
+
+def validate_fitted_preprocessing(fitted: Mapping[str, Any]) -> None:
+    """Checks that a fitted preprocessing has the shape the apply helpers read, before any of them runs.
+
+    Raises:
+        ValueError: naming the op (by position and name) and the key it lacks, an unknown op, or an
+            ``output_columns`` that is not a list of column names.
+    """
+    output_columns = fitted.get("output_columns")
+    if not isinstance(output_columns, list) or not all(isinstance(c, str) for c in output_columns):
+        raise ValueError("fitted preprocessing: output_columns must be a list of column names")
+    ops = fitted.get("ops", [])
+    if not isinstance(ops, list):
+        raise ValueError("fitted preprocessing: ops must be a list")
+    for index, params in enumerate(ops):
+        if not isinstance(params, dict) or not isinstance(params.get("op"), str):
+            raise ValueError(f"fitted preprocessing: op {index} has no op name")
+        required = _REQUIRED_OP_KEYS.get(params["op"])
+        if required is None:
+            raise ValueError(f"fitted preprocessing: op {index} ('{params['op']}') is not a known op")
+        missing = [key for key in required if key not in params]
+        if missing:
+            raise ValueError(
+                f"fitted preprocessing: op {index} ('{params['op']}') lacks {', '.join(missing)}"
+            )
+
+
+def source_columns(fitted: FittedPreprocessing) -> List[str]:
+    """The raw feature columns a fitted preprocessing reads, in ``output_columns`` order: the source column of each
+    emitted column (``<col>__missing`` of an indicator impute, ``<col>=<category>`` of a one-hot) and every
+    pass-through column, each named once.
+    """
+    emitted: Dict[str, str] = {}
+    for op in fitted.get("ops", []):
+        if op["op"] == "impute" and op.get("indicator"):
+            emitted[f"{op['col']}__missing"] = op["col"]
+        elif op["op"] == "onehot":
+            for category in op["vocabulary"]:
+                emitted[f"{op['col']}={category}"] = op["col"]
+    sources: List[str] = []
+    for out in fitted["output_columns"]:
+        col = emitted.get(out, out)
+        if col not in sources:
+            sources.append(col)
+    return sources
+
+
 def transform(
     rows: Sequence[Dict[str, Any]],
     fitted: FittedPreprocessing,
     feature_columns: Sequence[str],
-) -> np.ndarray:
+) -> FArr:
     """Apply frozen fitted params to rows — APPLY ONLY, never re-fit.
 
     ``rows`` are feature-name -> value dicts (the /predict shape). Output column

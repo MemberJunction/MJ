@@ -13,10 +13,12 @@
  *   can open the artifact.
  * - Saves are debounced per artifact (collaborative editing compacts versions often), and one
  *   artifact is never indexed twice at once.
- * - `[[Name]]` in the text becomes an `MJ: Record Links` row (`LinkType = 'LinksTo'`) to the artifact
- *   of that name, which the Record Link edge provider projects into the graph. Names are resolved as
- *   the artifact's owner, so a link only ever points at an artifact its author can open. Links are
- *   reconciled on every index: a removed `[[...]]` removes its link.
+ * - Durable record-mention tokens (`@{"_mode":"mention","type":"record","entityName":"...","name":"...","ID":"..."}`,
+ *   created with {@link ConversationUtility.CreateRecordLink}) become `MJ: Record Links` rows
+ *   (`LinkType = 'LinksTo'`) whose `TargetEntityID` and `TargetRecordID` come straight from the
+ *   token. Name-to-ID resolution never happens on the server; plain `[[Name]]` text stays plain
+ *   text. Target readability is not checked at index time — the graph engine hides endpoints a
+ *   viewer cannot read. Links are reconciled on every index: a removed token removes its link.
  * - A deleted artifact, or one whose latest version has no text, is taken out of the index; the
  *   Delete stage retracts what the Graph stage inferred from it. A deleted artifact's links, to it
  *   and from it, are deleted too.
@@ -24,11 +26,11 @@
  * Runs only in the process where the save happened (entity events are local), so several API
  * servers never index the same save twice. Indexing runs as the system user: it writes on behalf of
  * the platform, and who may READ the results is decided later, per viewer, by the access policies.
- * The one read done as someone else is link resolution, done as the owner (above).
  *
  * @module @memberjunction/content-pipeline
  */
 
+import { ConversationUtility, type MentionContent } from '@memberjunction/ai-core-plus';
 import {
     BaseEntity,
     BaseEntityEvent,
@@ -41,19 +43,17 @@ import {
     WellKnownUserSource,
 } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJArtifactEntity, MJArtifactVersionEntity, MJRecordLinkEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/generic-database-provider';
-import { BaseSingleton, EscapeSQLString, ExcludeByUUIDs, MJEvent, MJEventType, MJGlobal, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJEvent, MJEventType, MJGlobal, NormalizeUUID, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { ContentUploadIngestor } from './ContentUploadIngestor.js';
 
 const ARTIFACTS_ENTITY = 'MJ: Artifacts';
 const ARTIFACT_VERSIONS_ENTITY = 'MJ: Artifact Versions';
 const RECORD_LINKS_ENTITY = 'MJ: Record Links';
-/** `MJ: Record Links.LinkType` for a `[[Name]]` reference; also the graph edge type it projects as. */
+/** `MJ: Record Links.LinkType` for a durable record-mention link; also the graph edge type it projects as. */
 export const ARTIFACT_LINK_TYPE = 'LinksTo';
 const DEFAULT_DEBOUNCE_MS = 10_000;
-/** Most `[[...]]` links one document may create; past it the rest are ignored (and logged). */
+/** Most record-link tokens one document may turn into links; past it the rest are ignored (and logged). */
 const MAX_LINKS_PER_ARTIFACT = 200;
-const WIKI_LINK = /\[\[([^\[\]\n|]{1,200})(?:\|[^\[\]\n]{0,200})?\]\]/g;
 
 /** One Content Source that indexes artifacts, read from its `Configuration.Artifacts`. */
 export interface ArtifactIndexTarget {
@@ -76,21 +76,36 @@ export interface ArtifactIndexResult {
     ArtifactID: string;
     Outcomes: ArtifactIndexOutcome[];
     /**
-     * `[[...]]` links created and removed; `null` when the artifact is not indexed anywhere, or its
-     * owner is unknown so its links were left alone. For a deleted artifact, the links to and from it
-     * that were removed.
+     * Record links created and removed; `null` when the artifact is not indexed anywhere.
+     * For a deleted artifact, the links to and from it that were removed.
      */
     Links: ArtifactLinkResult | null;
 }
 
-/** What reconciling one artifact's `[[...]]` links changed. */
+/** What reconciling one artifact's durable record links changed. */
 export interface ArtifactLinkResult {
     Created: number;
     Removed: number;
-    Unresolved: string[];
+    /** Entity names or token descriptions skipped because the entity is unknown or PK fields are missing. */
+    Skipped: string[];
 }
 
-type ArtifactRow = Pick<MJArtifactEntity, 'ID' | 'Name' | 'Description' | 'Type' | 'EnvironmentID' | 'UserID'>;
+/** A parsed record-mention token extracted from document text. */
+export interface ParsedRecordLinkToken {
+    EntityName: string;
+    Label: string;
+    Content: MentionContent;
+    RawToken: string;
+}
+
+interface ResolvedLinkTarget {
+    TargetEntityID: string;
+    TargetRecordID: string;
+    LinkText: string;
+    DedupKey: string;
+}
+
+type ArtifactRow = Pick<MJArtifactEntity, 'ID' | 'Name' | 'Description' | 'Type'>;
 type VersionRow = Pick<MJArtifactVersionEntity, 'ID' | 'Content' | 'VersionNumber'>;
 
 /**
@@ -152,7 +167,7 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
 
     /**
      * Index one artifact now in every Content Source configured for its type: push its latest text,
-     * or remove it when it is gone or empty, then reconcile its `[[...]]` links.
+     * or remove it when it is gone or empty, then reconcile its record-mention links.
      */
     public async IndexArtifact(artifactID: string, provider: IMetadataProvider, contextUser?: UserInfo): Promise<ArtifactIndexResult> {
         const user = contextUser ?? (await WellKnownUserSource.Instance.GetSystemUser(provider));
@@ -176,28 +191,9 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
         if (!artifact) {
             result.Links = await this.removeAllLinks(artifactID, provider, user);
         } else if (targets.some((t) => t.ArtifactTypes.has(typeName))) {
-            result.Links = await this.reconcileLinksAsOwner(artifact, text ?? '', provider, user);
+            result.Links = await this.reconcileLinks(artifact, text ?? '', provider, user);
         }
         return result;
-    }
-
-    /**
-     * The artifact's owner, from the server's user cache, or `null` when the cache does not hold them.
-     * `[[Name]]` targets are resolved as this user, so a link can only point at an artifact the
-     * author could open. Protected so a host with its own user source can override it.
-     */
-    protected async ResolveOwner(ownerID: string): Promise<UserInfo | null> {
-        return UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, ownerID)) ?? null;
-    }
-
-    /** Reconcile links with the owner as the reader of candidate targets; without a known owner, change nothing. */
-    private async reconcileLinksAsOwner(artifact: ArtifactRow, text: string, provider: IMetadataProvider, user: UserInfo): Promise<ArtifactLinkResult | null> {
-        const owner = artifact.UserID ? await this.ResolveOwner(artifact.UserID) : null;
-        if (!owner) {
-            LogError(`ArtifactGraphIndexer: owner ${artifact.UserID} of artifact ${artifact.ID} is not in the user cache; its [[...]] links were left as they were`);
-            return null;
-        }
-        return this.reconcileLinks(artifact, text, provider, user, owner);
     }
 
     /** Content Sources whose configuration indexes artifacts. */
@@ -312,7 +308,7 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
         const result = await RunView.FromMetadataProvider(provider).RunView<ArtifactRow>(
             {
                 EntityName: ARTIFACTS_ENTITY,
-                Fields: ['ID', 'Name', 'Description', 'Type', 'EnvironmentID', 'UserID'],
+                Fields: ['ID', 'Name', 'Description', 'Type'],
                 ExtraFilter: `[ID] = '${EscapeSQLString(artifactID)}'`,
                 ResultType: 'simple',
                 BypassCache: true,
@@ -345,83 +341,91 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
     }
 
     /**
-     * Make the artifact's `LinksTo` record links match the `[[...]]` references in its text. A name
-     * resolves to an artifact in the same environment with exactly that name (case-insensitive); when
-     * several match, one owned by the same user wins; still ambiguous or missing, it stays unresolved.
-     * Candidates are read as the owner, so only artifacts the owner can open are ever linked; the
-     * links themselves are written as the indexing user.
+     * Make the artifact's `LinksTo` record links match the durable record-mention tokens in its
+     * text. Every target entity and primary key comes straight from the token — no name lookup
+     * and no target readability check at index time. Unknown entities and malformed tokens are
+     * logged and skipped.
      */
-    private async reconcileLinks(artifact: ArtifactRow, text: string, provider: IMetadataProvider, user: UserInfo, owner: UserInfo): Promise<ArtifactLinkResult> {
-        const names = ParseArtifactLinks(text);
-        const resolved = await this.resolveLinkTargets(artifact, names, provider, owner);
-        const existing = await this.loadLinks(artifact.ID, 'outgoing', provider, user);
+    private async reconcileLinks(artifact: ArtifactRow, text: string, provider: IMetadataProvider, user: UserInfo): Promise<ArtifactLinkResult> {
         const artifactEntity = provider.EntityByName(ARTIFACTS_ENTITY);
         if (!artifactEntity) {
             throw new Error(`entity '${ARTIFACTS_ENTITY}' is not in metadata`);
         }
+        const { Targets, Skipped } = this.resolveTokensToTargets(artifact.ID, artifactEntity.ID, text, provider);
+        const desiredKeys = new Set(Targets.map((t) => t.DedupKey));
+        const existing = await this.loadLinks(artifact.ID, 'outgoing', provider, user);
         let removed = 0;
+        const presentKeys = new Set<string>();
         for (const link of existing) {
-            if (!resolved.Targets.Has(link.TargetRecordID) || !UUIDsEqual(link.TargetEntityID, artifactEntity.ID)) {
+            const key = recordLinkDedupKey(link.TargetEntityID, link.TargetRecordID);
+            if (!desiredKeys.has(key)) {
                 if (!(await link.Delete())) {
                     throw new Error(`could not remove record link ${link.ID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
                 removed++;
+            } else {
+                presentKeys.add(key);
             }
         }
-        const present = new UUIDSet(existing.filter((l) => UUIDsEqual(l.TargetEntityID, artifactEntity.ID)).map((l) => l.TargetRecordID));
         let created = 0;
         let sequence = 0;
-        for (const [targetID, linkText] of resolved.Ordered) {
+        for (const target of Targets) {
             sequence++;
-            if (present.Has(targetID)) {
+            if (presentKeys.has(target.DedupKey)) {
                 continue;
             }
-            await this.createLink(artifact.ID, artifactEntity.ID, targetID, linkText, sequence, provider, user);
+            await this.createLink(artifact.ID, artifactEntity.ID, target.TargetEntityID, target.TargetRecordID, target.LinkText, sequence, provider, user);
             created++;
         }
-        return { Created: created, Removed: removed, Unresolved: resolved.Unresolved };
+        return { Created: created, Removed: removed, Skipped };
     }
 
-    private async resolveLinkTargets(
-        artifact: ArtifactRow,
-        names: string[],
+    /** Convert parsed record-mention tokens to distinct `(TargetEntityID, TargetRecordID)` targets. */
+    private resolveTokensToTargets(
+        artifactID: string,
+        artifactEntityID: string,
+        text: string,
         provider: IMetadataProvider,
-        reader: UserInfo,
-    ): Promise<{ Targets: UUIDSet; Ordered: Array<[string, string]>; Unresolved: string[] }> {
-        const out = { Targets: new UUIDSet(), Ordered: [] as Array<[string, string]>, Unresolved: [] as string[] };
-        if (names.length === 0) {
-            return out;
-        }
-        const envFilter = artifact.EnvironmentID ? `[EnvironmentID] = '${EscapeSQLString(artifact.EnvironmentID)}' AND ` : '';
-        // LOWER on both sides: the match is case-insensitive even on a case-sensitive collation.
-        const nameList = names.map((n) => `'${EscapeSQLString(n.toLowerCase())}'`).join(', ');
-        const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJArtifactEntity, 'ID' | 'Name' | 'UserID'>>(
-            { EntityName: ARTIFACTS_ENTITY, Fields: ['ID', 'Name', 'UserID'], ExtraFilter: `${envFilter}LOWER([Name]) IN (${nameList})`, ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true },
-            reader,
-        );
-        if (!result.Success) {
-            throw new Error(`could not resolve [[...]] links of artifact ${artifact.ID}: ${result.ErrorMessage}`);
-        }
-        // Index the candidates once (never the linking artifact itself), so each name is a lookup.
-        const candidates = ExcludeByUUIDs(result.Results, [artifact.ID]);
-        const sameOwner = new UUIDSet(candidates.filter((r) => UUIDsEqual(r.UserID, artifact.UserID)).map((r) => r.ID));
-        const byName = new Map<string, Array<Pick<MJArtifactEntity, 'ID' | 'Name' | 'UserID'>>>();
-        for (const row of candidates) {
-            const key = row.Name.trim().toLowerCase();
-            byName.set(key, [...(byName.get(key) ?? []), row]);
-        }
-        for (const name of names) {
-            const matches = byName.get(name.toLowerCase()) ?? [];
-            const owned = matches.filter((m) => sameOwner.Has(m.ID));
-            const pick = matches.length === 1 ? matches[0] : owned.length === 1 ? owned[0] : undefined;
-            if (!pick) {
-                out.Unresolved.push(name);
-            } else if (!out.Targets.Has(pick.ID)) {
-                out.Targets.Add(pick.ID);
-                out.Ordered.push([pick.ID, name]);
+    ): { Targets: ResolvedLinkTarget[]; Skipped: string[] } {
+        const tokens = ParseRecordLinkTokens(text);
+        const targets: ResolvedLinkTarget[] = [];
+        const skipped: string[] = [];
+        const seen = new Set<string>();
+        for (const token of tokens) {
+            const targetEntity = provider.EntityByName(token.EntityName);
+            if (!targetEntity) {
+                LogError(`ArtifactGraphIndexer: skipping record link in artifact ${artifactID} — unknown entity '${token.EntityName}'`);
+                skipped.push(token.EntityName);
+                continue;
             }
+            const pkNames = targetEntity.PrimaryKeys.map((pk) => pk.Name);
+            const compositeKey = ConversationUtility.CompositeKeyFromRecordLink(token.Content, pkNames);
+            if (!compositeKey) {
+                LogError(`ArtifactGraphIndexer: skipping malformed record link in artifact ${artifactID} for entity '${token.EntityName}' — missing primary key field(s)`);
+                skipped.push(token.EntityName);
+                continue;
+            }
+            const targetRecordID = compositeKey.ToCompactURLSegment();
+            if (UUIDsEqual(targetEntity.ID, artifactEntityID) && UUIDsEqual(targetRecordID, artifactID)) {
+                continue;
+            }
+            const dedupKey = recordLinkDedupKey(targetEntity.ID, targetRecordID);
+            if (seen.has(dedupKey)) {
+                continue;
+            }
+            if (targets.length >= MAX_LINKS_PER_ARTIFACT) {
+                LogStatusEx({ message: `ArtifactGraphIndexer: more than ${MAX_LINKS_PER_ARTIFACT} record links in artifact ${artifactID}; the rest are ignored.`, verboseOnly: true });
+                break;
+            }
+            seen.add(dedupKey);
+            targets.push({
+                TargetEntityID: targetEntity.ID,
+                TargetRecordID: targetRecordID,
+                LinkText: token.Label,
+                DedupKey: dedupKey,
+            });
         }
-        return out;
+        return { Targets: targets, Skipped: skipped };
     }
 
     /** A deleted artifact takes its `LinksTo` rows with it, both the ones it made and the ones pointing at it. */
@@ -433,7 +437,7 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
             }
             removed++;
         }
-        return { Created: 0, Removed: removed, Unresolved: [] };
+        return { Created: 0, Removed: removed, Skipped: [] };
     }
 
     /** The artifact's `LinksTo` record links: the ones it makes, or those plus the ones pointing at it. */
@@ -458,43 +462,67 @@ export class ArtifactGraphIndexer extends BaseSingleton<ArtifactGraphIndexer> {
         return result.Results;
     }
 
-    private async createLink(sourceID: string, artifactEntityID: string, targetID: string, linkText: string, sequence: number, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+    private async createLink(
+        sourceID: string,
+        sourceEntityID: string,
+        targetEntityID: string,
+        targetRecordID: string,
+        linkText: string,
+        sequence: number,
+        provider: IMetadataProvider,
+        user: UserInfo,
+    ): Promise<void> {
         const link = await provider.GetEntityObject<MJRecordLinkEntity>(RECORD_LINKS_ENTITY, user);
         link.NewRecord();
-        link.SourceEntityID = artifactEntityID;
+        link.SourceEntityID = sourceEntityID;
         link.SourceRecordID = sourceID;
-        link.TargetEntityID = artifactEntityID;
-        link.TargetRecordID = targetID;
+        link.TargetEntityID = targetEntityID;
+        link.TargetRecordID = targetRecordID;
         link.LinkType = ARTIFACT_LINK_TYPE;
         link.Sequence = sequence;
         link.Metadata = JSON.stringify({ LinkText: linkText, CreatedBy: 'ArtifactGraphIndexer' });
         if (!(await link.Save())) {
-            throw new Error(`could not create record link to ${targetID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            throw new Error(`could not create record link to ${targetRecordID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }
 }
 
 /**
- * Distinct `[[Name]]` (or `[[Name|label]]`) references in `text`, in order of first appearance,
- * trimmed and de-duplicated case-insensitively; at most {@link MAX_LINKS_PER_ARTIFACT}.
+ * Extracts all record-mention tokens (`@{"_mode":"mention","type":"record",...}`) from `text`
+ * in order of appearance, reusing {@link ConversationUtility.ParseSpecialContent}.
  */
-export function ParseArtifactLinks(text: string): string[] {
-    const seen = new Set<string>();
-    const names: string[] = [];
-    for (const match of text.matchAll(WIKI_LINK)) {
-        const name = match[1].trim();
-        const key = name.toLowerCase();
-        if (name.length === 0 || seen.has(key)) {
+export function ParseRecordLinkTokens(text: string): ParsedRecordLinkToken[] {
+    if (!text) {
+        return [];
+    }
+    const tokens = ConversationUtility.ParseSpecialContent(text);
+    const out: ParsedRecordLinkToken[] = [];
+    for (const token of tokens) {
+        if (token.mode !== 'mention') {
             continue;
         }
-        if (names.length >= MAX_LINKS_PER_ARTIFACT) {
-            LogStatusEx({ message: `ArtifactGraphIndexer: more than ${MAX_LINKS_PER_ARTIFACT} [[...]] links; the rest are ignored.`, verboseOnly: true });
-            break;
+        const content = token.content as MentionContent;
+        if (content.type !== 'record' || !content.entityName) {
+            continue;
         }
-        seen.add(key);
-        names.push(name);
+        const entityName = content.entityName.trim();
+        if (!entityName) {
+            continue;
+        }
+        const label = (content.name ?? '').trim() || entityName;
+        out.push({
+            EntityName: entityName,
+            Label: label,
+            Content: content,
+            RawToken: token.originalText,
+        });
     }
-    return names;
+    return out;
+}
+
+/** Case-normalized key for de-duplicating and reconciling `(TargetEntityID, TargetRecordID)` pairs. */
+function recordLinkDedupKey(entityID: string, recordID: string): string {
+    return `${NormalizeUUID(entityID)}|${recordID.trim().toLowerCase()}`;
 }
 
 /** The entity's provider when it is also a metadata provider (it is, on a server), else `null`. */

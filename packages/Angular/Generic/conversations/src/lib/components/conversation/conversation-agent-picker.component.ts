@@ -13,10 +13,12 @@ import { LogError } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import type { MJConversationEntity } from '@memberjunction/core-entities';
+import { UserInfoEngine, type MJConversationEntity } from '@memberjunction/core-entities';
+import { DefaultAgentResolver } from '@memberjunction/conversations-runtime';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
+import { ConversationAgentService } from '../../services/conversation-agent.service';
 
 /**
  * Header widget that lets a user pin a default AI agent on the active
@@ -80,6 +82,9 @@ import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
                                     <i [class]="IconClassFor(agent)"></i>
                                 }
                                 <span class="mj-cv-agent-picker__item-name">{{ agent.Name }}</span>
+                                @if (IsUserDefaultAgent(agent)) {
+                                    <span class="mj-cv-agent-picker__default-tag">Default</span>
+                                }
                                 @if (BaseAgentNameFor(agent)) {
                                     <span class="mj-cv-agent-picker__base-tag">{{ BaseAgentNameFor(agent) }}</span>
                                 }
@@ -103,11 +108,37 @@ import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
                                     <i [class]="IconClassFor(agent)"></i>
                                 }
                                 <span class="mj-cv-agent-picker__item-name">{{ agent.Name }}</span>
+                                @if (IsUserDefaultAgent(agent)) {
+                                    <span class="mj-cv-agent-picker__default-tag">Default</span>
+                                }
                             </button>
                         }
                     }
                     @if (EligibleAgents.length === 0) {
                         <div class="mj-cv-agent-picker__empty">No agents available</div>
+                    }
+                    @if (CanShowUserDefaultFooter) {
+                        <div class="mj-cv-agent-picker__footer">
+                            @if (CanSetPinnedAsUserDefault) {
+                                <button
+                                    type="button"
+                                    class="mj-cv-agent-picker__footer-btn"
+                                    [disabled]="IsSavingUserDefault"
+                                    (click)="SetUserDefaultAgent(CurrentPinnedAgent?.ID ?? null)">
+                                    <i class="fa-solid fa-star"></i>
+                                    <span>Default {{ CurrentPinnedAgent?.Name }} for new chats</span>
+                                </button>
+                            } @else if (UserDefaultAgentId) {
+                                <button
+                                    type="button"
+                                    class="mj-cv-agent-picker__footer-btn"
+                                    [disabled]="IsSavingUserDefault"
+                                    (click)="SetUserDefaultAgent(null)">
+                                    <i class="fa-solid fa-rotate-left"></i>
+                                    <span>Reset new-chat default to org default</span>
+                                </button>
+                            }
+                        </div>
                     }
                 </div>
             }
@@ -164,6 +195,21 @@ import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
             font-size: 10px; padding: 1px 6px; border-radius: var(--mj-radius-full, 999px);
             background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); flex-shrink: 0;
         }
+        .mj-cv-agent-picker__default-tag {
+            font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: var(--mj-radius-full, 999px);
+            background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+            color: var(--mj-brand-primary); flex-shrink: 0;
+        }
+        .mj-cv-agent-picker__footer {
+            border-top: 1px solid var(--mj-border-default); margin-top: 4px; padding-top: 4px;
+        }
+        .mj-cv-agent-picker__footer-btn {
+            display: flex; align-items: center; gap: 8px; width: 100%;
+            padding: 6px 12px; background: transparent; border: none; cursor: pointer;
+            color: var(--mj-brand-primary); font-size: 12px; font-weight: 500; text-align: left;
+        }
+        .mj-cv-agent-picker__footer-btn:hover:not(:disabled) { background: var(--mj-bg-surface-hover); }
+        .mj-cv-agent-picker__footer-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .mj-cv-agent-picker__item:hover { background: var(--mj-bg-surface-hover); }
         .mj-cv-agent-picker__item--selected { background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); }
         .mj-cv-agent-picker__item--selected i { color: var(--mj-brand-primary); }
@@ -196,11 +242,17 @@ export class ConversationAgentPickerComponent implements OnInit {
     /** Emitted after a successful save with the new (or null) agent ID. */
     @Output() AgentChanged = new EventEmitter<string | null>();
 
+    /** Emitted after the user updates their per-user default agent for new chats (`Conversations.DefaultAgentID`). */
+    @Output() UserDefaultAgentChanged = new EventEmitter<string | null>();
+
     public IsOpen = false;
     public EligibleAgents: MJAIAgentEntityExtended[] = [];
+    public UserDefaultAgentId: string | null = null;
+    public IsSavingUserDefault = false;
 
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly notifications = inject(MJNotificationService);
+    private readonly agentService = inject(ConversationAgentService, { optional: true });
     private _allowedAgentIDs: readonly string[] | null = null;
     /** Every top-level, active agent, before the allowed list narrows it. */
     private catalogAgents: MJAIAgentEntityExtended[] = [];
@@ -211,9 +263,89 @@ export class ConversationAgentPickerComponent implements OnInit {
             // loaded — most app shells warm it up at boot, but the picker
             // could mount before that completes.
             await AIEngineBase.Instance.Config(false);
+            if (UserInfoEngine?.Instance) {
+                await UserInfoEngine.Instance.Config(false, this.CurrentUser ?? undefined);
+            }
+            this.refreshUserDefaultAgentId();
             this.rebuildCatalog();
         } catch (err) {
             LogError(`ConversationAgentPicker.ngOnInit: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    public get CurrentPinnedAgent(): MJAIAgentEntityExtended | undefined {
+        return this.currentPinnedAgent;
+    }
+
+    public get CanSetPinnedAsUserDefault(): boolean {
+        const pinned = this.currentPinnedAgent;
+        if (!pinned || pinned.InstantiationMode === 'Required') return false;
+        return !this.IsUserDefaultAgent(pinned);
+    }
+
+    public get CanShowUserDefaultFooter(): boolean {
+        return Boolean(this.CurrentUser && (this.CanSetPinnedAsUserDefault || this.UserDefaultAgentId));
+    }
+
+    public IsUserDefaultAgent(agent: MJAIAgentEntityExtended): boolean {
+        return Boolean(this.UserDefaultAgentId && UUIDsEqual(agent.ID, this.UserDefaultAgentId));
+    }
+
+    private refreshUserDefaultAgentId(): void {
+        if (!UserInfoEngine?.Instance || typeof UserInfoEngine.Instance.GetSetting !== 'function') {
+            this.UserDefaultAgentId = null;
+            return;
+        }
+        const raw =
+            UserInfoEngine.Instance.GetSetting(DefaultAgentResolver.SETTING_NAME)?.trim() ||
+            UserInfoEngine.Instance.GetSetting(DefaultAgentResolver.LEGACY_USER_SETTING_NAME)?.trim() ||
+            '';
+        this.UserDefaultAgentId = raw || null;
+    }
+
+    public async SetUserDefaultAgent(agentId: string | null): Promise<void> {
+        if (this.IsSavingUserDefault || !this.CurrentUser) return;
+        this.IsSavingUserDefault = true;
+        this.cdr.markForCheck();
+        try {
+            const saved = await UserInfoEngine.Instance.SetSetting(
+                DefaultAgentResolver.SETTING_NAME,
+                agentId ?? '',
+                this.CurrentUser
+            );
+            if (!saved) {
+                this.notifications.CreateSimpleNotification(
+                    'Failed to update your default agent for new chats.',
+                    'error',
+                    4500
+                );
+                return;
+            }
+            const legacy = UserInfoEngine.Instance.GetSetting(DefaultAgentResolver.LEGACY_USER_SETTING_NAME);
+            if (legacy) {
+                await UserInfoEngine.Instance.SetSetting(
+                    DefaultAgentResolver.LEGACY_USER_SETTING_NAME,
+                    '',
+                    this.CurrentUser
+                );
+            }
+            this.UserDefaultAgentId = agentId;
+            this.agentService?.ClearConversationManagerCache();
+            this.UserDefaultAgentChanged.emit(agentId);
+            const label = agentId
+                ? (this.EligibleAgents.find(a => UUIDsEqual(a.ID, agentId))?.Name ?? 'Selected agent')
+                : 'Organization Default';
+            this.notifications.CreateSimpleNotification(
+                `Default agent for new chats set to ${label}.`,
+                'success',
+                3500
+            );
+            this.IsOpen = false;
+        } catch (err) {
+            LogError(`ConversationAgentPicker.SetUserDefaultAgent: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            this.IsSavingUserDefault = false;
+            this.cdr.markForCheck();
         }
     }
 
@@ -294,6 +426,7 @@ export class ConversationAgentPickerComponent implements OnInit {
         if (this.Disabled || !this.Conversation) return;
         this.IsOpen = !this.IsOpen;
         if (this.IsOpen) {
+            this.refreshUserDefaultAgentId();
             this.rebuildCatalog();
         }
         this.cdr.markForCheck();

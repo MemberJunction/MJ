@@ -1,22 +1,23 @@
 /**
  * ArtifactGraphIndexer: which artifacts are indexed is metadata (a push-only source's
  * `Configuration.Artifacts`); saves are debounced per artifact; the latest version is pushed, or
- * the item removed when the artifact or its text is gone; `[[Name]]` links are reconciled.
+ * the item removed when the artifact or its text is gone; durable record-mention links are
+ * reconciled directly from token IDs without any server-side name resolution.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConversationUtility } from '@memberjunction/ai-core-plus';
 import { BaseEntity, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { MJEventType, type MJEvent } from '@memberjunction/global';
-import { ArtifactGraphIndexer, ParseArtifactLinks } from '../ArtifactGraphIndexer.js';
+import { ArtifactGraphIndexer, ParseRecordLinkTokens } from '../ArtifactGraphIndexer.js';
 import { ContentUploadIngestor } from '../ContentUploadIngestor.js';
 
 const ARTIFACTS_ENTITY_ID = 'a0000000-0000-4000-8000-0000000000e1';
+const ORDER_LINES_ENTITY_ID = 'a0000000-0000-4000-8000-0000000000e2';
 const user = { ID: 'u0000000-0000-4000-8000-000000000001', Name: 'System', UserRoles: [] } as unknown as UserInfo;
-const owner = { ID: 'owner', Name: 'Owner', UserRoles: [] } as unknown as UserInfo;
 
-/** `ReadableBy` stands in for the artifact read hooks: when set, only those user IDs see the row. */
-interface ArtifactRow { ID: string; Name: string; Description: string | null; Type: string; EnvironmentID: string; UserID: string; ReadableBy?: string[] }
-interface LinkRow { ID: string; SourceEntityID: string; SourceRecordID: string; TargetEntityID: string; TargetRecordID: string; LinkType: string }
+interface ArtifactRow { ID: string; Name: string; Description: string | null; Type: string }
+interface LinkRow { ID: string; SourceEntityID: string; SourceRecordID: string; TargetEntityID: string; TargetRecordID: string; LinkType: string; Metadata?: string }
 
 function sources(config: Record<string, unknown> | null) {
     return [
@@ -31,17 +32,18 @@ function mockEngine(config: Record<string, unknown> | null): void {
     vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'ContentSources', 'get').mockReturnValue(sources(config) as never);
 }
 
-/** `ownerUser` is what the user cache returns for the artifact's owner; `null` means the cache does not hold them. */
-function makeWorld(ownerUser: UserInfo | null = owner) {
-    vi.spyOn(ArtifactGraphIndexer.Instance as unknown as { ResolveOwner: (id: string) => Promise<UserInfo | null> }, 'ResolveOwner').mockResolvedValue(ownerUser);
+function makeWorld() {
+    const discountLink = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Discount Rules', { ID: 'art-2' });
+    const compositeLink = ConversationUtility.CreateRecordLink('Order Lines', 'Order 42 Line 3', { OrderID: '42', LineNumber: 3 });
+    const missingEntityLink = ConversationUtility.CreateRecordLink('No Such Entity', 'Missing', { ID: 'x-1' });
     const artifacts: ArtifactRow[] = [
-        { ID: 'art-1', Name: 'Pricing Policy', Description: 'How we price', Type: 'Markdown Document', EnvironmentID: 'env', UserID: 'owner' },
-        { ID: 'art-2', Name: 'Discount Rules', Description: null, Type: 'Markdown Document', EnvironmentID: 'env', UserID: 'owner' },
-        { ID: 'art-3', Name: 'Budget', Description: null, Type: 'Excel Spreadsheet', EnvironmentID: 'env', UserID: 'owner' },
-        { ID: 'art-4', Name: 'Refunds', Description: null, Type: 'Markdown Document', EnvironmentID: 'env', UserID: 'owner' },
+        { ID: 'art-1', Name: 'Pricing Policy', Description: 'How we price', Type: 'Markdown Document' },
+        { ID: 'art-2', Name: 'Discount Rules', Description: null, Type: 'Markdown Document' },
+        { ID: 'art-3', Name: 'Budget', Description: null, Type: 'Excel Spreadsheet' },
+        { ID: 'art-4', Name: 'Refunds', Description: null, Type: 'Markdown Document' },
     ];
     const versions: Record<string, string | null> = {
-        'art-1': '# Pricing\nSee [[Discount Rules]] and [[discount rules|again]] and [[Missing Doc]].',
+        'art-1': `# Pricing\nSee ${discountLink}, ${compositeLink}, and ${missingEntityLink}. Plain [[Refunds]] stays text.`,
         'art-2': 'Discounts.',
         'art-3': 'a,b,c',
         'art-4': '   ',
@@ -51,21 +53,14 @@ function makeWorld(ownerUser: UserInfo | null = owner) {
     ];
     const created: LinkRow[] = [];
     const deleted: string[] = [];
-    const nameReaders: string[] = [];
-    const runView = async (params: RunViewParams, reader?: UserInfo) => {
+    const artifactQueries: RunViewParams[] = [];
+    const runView = async (params: RunViewParams) => {
         const filter = String(params.ExtraFilter ?? '');
         let rows: object[] = [];
         if (params.EntityName === 'MJ: Artifacts') {
+            artifactQueries.push(params);
             const id = /\[ID\] = '([^']+)'/.exec(filter)?.[1];
-            // Like a case-sensitive collation: `[Name] IN` matches exactly, `LOWER([Name]) IN` ignores case.
-            const lowered = filter.includes('LOWER([Name]) IN');
-            const names = Array.from(/\[Name\]\)? IN \(([^)]*)\)/.exec(filter)?.[1].matchAll(/'([^']*)'/g) ?? []).map((m) => m[1]);
-            if (!id) {
-                nameReaders.push(reader?.ID ?? '');
-            }
-            rows = artifacts
-                .filter((a) => (id ? a.ID === id : names.includes(lowered ? a.Name.toLowerCase() : a.Name)))
-                .filter((a) => !a.ReadableBy || a.ReadableBy.includes(reader?.ID ?? ''));
+            rows = id ? artifacts.filter((a) => a.ID === id) : [];
         } else if (params.EntityName === 'MJ: Artifact Versions') {
             const id = /\[ArtifactID\] = '([^']+)'/.exec(filter)?.[1] ?? '';
             rows = id in versions ? [{ ID: `${id}-v1`, Content: versions[id], VersionNumber: 1 }] : [];
@@ -78,8 +73,12 @@ function makeWorld(ownerUser: UserInfo | null = owner) {
         }
         return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
     };
+    const entities: Record<string, { ID: string; Name: string; PrimaryKeys: Array<{ Name: string }> }> = {
+        'MJ: Artifacts': { ID: ARTIFACTS_ENTITY_ID, Name: 'MJ: Artifacts', PrimaryKeys: [{ Name: 'ID' }] },
+        'Order Lines': { ID: ORDER_LINES_ENTITY_ID, Name: 'Order Lines', PrimaryKeys: [{ Name: 'OrderID' }, { Name: 'LineNumber' }] },
+    };
     const provider = {
-        EntityByName: (name: string) => (name === 'MJ: Artifacts' ? { ID: ARTIFACTS_ENTITY_ID, Name: name } : undefined),
+        EntityByName: (name: string) => entities[name],
         GetEntityObject: async () => {
             const row: Partial<LinkRow> & { Sequence?: number; Metadata?: string } = {};
             return Object.assign(row, {
@@ -91,7 +90,7 @@ function makeWorld(ownerUser: UserInfo | null = owner) {
         RunView: runView,
         RunViews: async (list: RunViewParams[]) => Promise.all(list.map((p) => runView(p))),
     } as unknown as IMetadataProvider;
-    return { artifacts, versions, links, created, deleted, nameReaders, provider };
+    return { artifacts, versions, links, created, deleted, artifactQueries, provider };
 }
 
 function saveEvent(entityName: string, fields: Record<string, string>, type: 'save' | 'delete' = 'save'): MJEvent {
@@ -104,13 +103,27 @@ function saveEvent(entityName: string, fields: Record<string, string>, type: 'sa
     } as MJEvent;
 }
 
-describe('ParseArtifactLinks', () => {
-    it('reads [[Name]] and [[Name|label]] once each, case-insensitively, in order', () => {
-        expect(ParseArtifactLinks('[[A Doc]] text [[b|label]] [[a doc]] [[ ]] [not a link] [[C]]')).toEqual(['A Doc', 'b', 'C']);
+describe('ParseRecordLinkTokens', () => {
+    it('extracts record-mention tokens in order and ignores plain [[Name]] and non-record mentions', () => {
+        const artToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Pricing Policy', { ID: 'art-2' });
+        const compToken = ConversationUtility.CreateRecordLink('Order Lines', 'Line 3', { OrderID: '42', LineNumber: 3 });
+        const agentToken = ConversationUtility.CreateMention('agent', 'ag-1', 'Skip');
+        const text = `See ${artToken}, [[Plain Wiki]], ${agentToken}, and ${compToken}.`;
+
+        const tokens = ParseRecordLinkTokens(text);
+        expect(tokens.map((t) => ({ EntityName: t.EntityName, Label: t.Label }))).toEqual([
+            { EntityName: 'MJ: Artifacts', Label: 'Pricing Policy' },
+            { EntityName: 'Order Lines', Label: 'Line 3' },
+        ]);
     });
 
-    it('ignores links spanning lines or nested brackets', () => {
-        expect(ParseArtifactLinks('[[line\nbreak]] [[a[b]]')).toEqual([]);
+    it('ignores malformed JSON tokens without throwing', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            expect(ParseRecordLinkTokens('Broken @{"_mode":"mention","type":"record",bad json} and @{unclosed')).toEqual([]);
+        } finally {
+            warn.mockRestore();
+        }
     });
 });
 
@@ -135,48 +148,69 @@ describe('ArtifactGraphIndexer.IndexArtifact', () => {
         expect(result.Outcomes).toEqual([{ ContentSourceID: 'SRC-DOCS', Status: 'Indexed', ContentItemID: 'item-1' }]);
     });
 
-    it('reconciles [[...]] links: creates the resolved ones, removes the ones no longer in the text, reports the unresolved', async () => {
+    it('turns record-mention tokens (including composite keys) into LinksTo rows, removes stale links, skips unknown entities, and never queries MJ: Artifacts by name', async () => {
         mockEngine({ ArtifactTypes: ['Markdown Document'] });
         const w = makeWorld();
         vi.spyOn(ContentUploadIngestor, 'IngestText').mockResolvedValue({ ContentItemID: 'item-1', Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: 'erd-1' });
         const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
-        expect(result.Links).toEqual({ Created: 1, Removed: 1, Unresolved: ['Missing Doc'] });
+
+        expect(result.Links).toEqual({ Created: 2, Removed: 1, Skipped: ['No Such Entity'] });
         expect(w.deleted).toEqual(['link-old']);
-        expect(w.created).toHaveLength(1);
-        expect(w.created[0]).toMatchObject({ SourceRecordID: 'art-1', TargetRecordID: 'art-2', LinkType: 'LinksTo', SourceEntityID: ARTIFACTS_ENTITY_ID, TargetEntityID: ARTIFACTS_ENTITY_ID });
+        expect(w.created).toHaveLength(2);
+        expect(w.created[0]).toMatchObject({
+            SourceEntityID: ARTIFACTS_ENTITY_ID,
+            SourceRecordID: 'art-1',
+            TargetEntityID: ARTIFACTS_ENTITY_ID,
+            TargetRecordID: 'art-2',
+            LinkType: 'LinksTo',
+        });
+        expect(w.created[1]).toMatchObject({
+            SourceEntityID: ARTIFACTS_ENTITY_ID,
+            SourceRecordID: 'art-1',
+            TargetEntityID: ORDER_LINES_ENTITY_ID,
+            TargetRecordID: 'OrderID|42||LineNumber|3',
+            LinkType: 'LinksTo',
+        });
+        // No name-lookup query ever runs against MJ: Artifacts — only the single ID lookup for art-1 itself.
+        expect(w.artifactQueries).toHaveLength(1);
+        expect(w.artifactQueries[0].ExtraFilter).toBe("[ID] = 'art-1'");
+        expect(w.artifactQueries.every((q) => !String(q.ExtraFilter ?? '').toLowerCase().includes('name'))).toBe(true);
     });
 
-    it('resolves [[...]] targets as the owner, so an artifact the owner cannot open is never linked', async () => {
+    it('ignores malformed record tokens with missing PK fields and leaves plain [[Name]] unlinked', async () => {
         mockEngine({ ArtifactTypes: ['Markdown Document'] });
         const w = makeWorld();
-        // Readable by the indexing (system) user, but not by the owner of the linking document.
-        w.artifacts[1].ReadableBy = [user.ID];
+        const missingPkToken = '@{"_mode":"mention","type":"record","entityName":"Order Lines","name":"Broken","OrderID":"42"}';
+        const brokenJson = '@{"_mode":"mention","type":"record",not-json}';
+        w.versions['art-1'] = `See [[Discount Rules]], ${missingPkToken}, and ${brokenJson}.`;
         vi.spyOn(ContentUploadIngestor, 'IngestText').mockResolvedValue({ ContentItemID: 'item-1', Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: 'erd-1' });
-        const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
-        expect(w.nameReaders).toEqual(['owner']);
-        expect(result.Links).toEqual({ Created: 0, Removed: 1, Unresolved: ['Discount Rules', 'Missing Doc'] });
-        expect(w.created).toHaveLength(0);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
+            expect(result.Links).toEqual({ Created: 0, Removed: 1, Skipped: ['Order Lines'] });
+            expect(w.created).toHaveLength(0);
+            expect(w.deleted).toEqual(['link-old']);
+        } finally {
+            warn.mockRestore();
+        }
     });
 
-    it('leaves the links alone when the owner is not in the user cache', async () => {
-        mockEngine({ ArtifactTypes: ['Markdown Document'] });
-        const w = makeWorld(null);
-        vi.spyOn(ContentUploadIngestor, 'IngestText').mockResolvedValue({ ContentItemID: 'item-1', Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: 'erd-1' });
-        const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
-        expect(result.Links).toBeNull();
-        expect(w.deleted).toEqual([]);
-        expect(w.created).toHaveLength(0);
-        expect(w.nameReaders).toEqual([]);
-    });
-
-    it('matches names case-insensitively even on a case-sensitive collation', async () => {
+    it('reconciles link removals when a token is removed from a subsequent save', async () => {
         mockEngine({ ArtifactTypes: ['Markdown Document'] });
         const w = makeWorld();
-        w.versions['art-1'] = 'See [[discount RULES]].';
+        const keepToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Refunds', { ID: 'art-4' });
+        w.versions['art-1'] = `Keep ${keepToken}.`;
         vi.spyOn(ContentUploadIngestor, 'IngestText').mockResolvedValue({ ContentItemID: 'item-1', Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: 'erd-1' });
-        const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
-        expect(result.Links?.Unresolved).toEqual([]);
-        expect(w.created.map((l) => l.TargetRecordID)).toEqual(['art-2']);
+
+        // First index: existing link-old (to art-4) matches -> 0 created, 0 removed.
+        const first = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
+        expect(first.Links).toEqual({ Created: 0, Removed: 0, Skipped: [] });
+
+        // Second index after removing the token -> link-old is removed.
+        w.versions['art-1'] = 'No links anymore.';
+        const second = await ArtifactGraphIndexer.Instance.IndexArtifact('art-1', w.provider, user);
+        expect(second.Links).toEqual({ Created: 0, Removed: 1, Skipped: [] });
+        expect(w.deleted).toEqual(['link-old']);
     });
 
     it('deletes the links to and from a deleted artifact, and no others', async () => {
@@ -188,7 +222,7 @@ describe('ArtifactGraphIndexer.IndexArtifact', () => {
         );
         vi.spyOn(ContentUploadIngestor, 'RemoveText').mockResolvedValue(null);
         const result = await ArtifactGraphIndexer.Instance.IndexArtifact('art-gone', w.provider, user);
-        expect(result.Links).toEqual({ Created: 0, Removed: 2, Unresolved: [] });
+        expect(result.Links).toEqual({ Created: 0, Removed: 2, Skipped: [] });
         expect(w.deleted.sort()).toEqual(['link-in', 'link-out']);
         expect(w.links.map((l) => l.ID)).toEqual(['link-old']);
     });

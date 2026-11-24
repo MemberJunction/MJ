@@ -1,0 +1,22 @@
+[
+  {
+    "_comments": [
+      "ML Scoring Runs - one row per scoring call, including dry runs and refusals. Record-change tracking is off",
+      "(PR 4 plan §5.1: rows are written by the scoring service only). CodeGen's default for a new table turned tracking",
+      "on; this record sets ONLY TrackRecordChanges, so the entity's caching and user-search attributes stay at their",
+      "CodeGen values."
+    ],
+    "fields": {
+      "Name": "MJ: ML Scoring Runs",
+      "BaseView": "vwMLScoringRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: ML Scoring Runs"
+    },
+    "sync": {
+      "lastModified": "2026-11-11T00:10:22.602Z",
+      "checksum": "1653db3260b11eacaedec085688677e9000af0c1347f4d78266df6f916217b2c"
+    }
+  }
+]

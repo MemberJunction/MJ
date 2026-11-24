@@ -55,6 +55,8 @@ services:
       MJ_FROZEN_BLOCK_HMAC_SECRET: "${MJ_FROZEN_BLOCK_HMAC_SECRET:-}"
       MJ_FROZEN_SNAPSHOT_SECRET: "${MJ_FROZEN_SNAPSHOT_SECRET:-}"
       MJ_DEV_AUTH_ENABLED: "${MJ_DEV_AUTH_ENABLED:-true}"
+      # Safe here because the API port above is bound strictly to 127.0.0.1 on the host
+      MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: "${MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE:-true}"
       # LLM Provider API Keys
       AI_VENDOR_API_KEY__OpenAILLM: "${OPENAI_API_KEY:-}"
       AI_VENDOR_API_KEY__AnthropicLLM: "${ANTHROPIC_API_KEY:-}"

@@ -213,7 +213,7 @@ def test_a_legacy_linear_model_without_a_training_mean_returns_no_driver() -> No
     assert _row_contributions(model, X, ["x"]) == [None] * 4
     model.mj_driver_baseline_ = X.mean(axis=0)
     rows = _row_contributions(model, X, ["x"])
-    assert rows[0] is not None and rows[3] is not None and rows[0][0]["value"] < 0 < rows[3][0]["value"]
+    assert rows[0] is not None and rows[3] is not None and rows[0][0].value < 0 < rows[3][0].value
 
 
 def test_a_trainer_run_ships_the_training_mean_in_every_linear_envelope(server: FileServer) -> None:

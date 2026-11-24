@@ -15,6 +15,9 @@
   "features": {},
   "betas": {},
   "intercept": null,
+  "seriesLag": {
+    "lagColumn": "LagTarget"
+  },
   "sizingNote": "240 monthly periods (20 years; Ruling Q9: >= 240 months), monthly rather than daily because it pairs with the monthly D1/T1 scenarios and 240 months gives a lag-1 autocorrelation SE of 0.028 at phi 0.9 (T4 has no trend and no seasonality). Forecast scores use a rolling origin with K = 12 non-overlapping 12-month windows (144 scored forecasts, first origin after 96 training months), because a single 12-point test window measures RMSE with a relative SE of 0.309 while the 12 origins bring it to 0.089 (between-origin spread; evidence/logs/P2/recovery.txt). With phi 0.9 and a constant mean, a last-value naive forecast is close to the oracle (paired t = 0.99), so T4 is a monitoring scenario, not a forecast-ranking one: the series wanders for years while its mean never moves, which a drift monitor must not mistake for drift.",
   "rollingOrigin": {
     "K": 12,

@@ -53,6 +53,8 @@ export {
 export {
     DefaultAgentResolver,
     type DefaultAgentResolveOptions,
+    type DefaultAgentResolutionResult,
+    type DefaultAgentResolutionSource,
 } from './default-agent/DefaultAgentResolver';
 export {
     SessionsObserver,

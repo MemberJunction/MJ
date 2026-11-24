@@ -281,4 +281,60 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
             ValidateAgentPersonaOwnership({ ID: PEPPER_ID, BaseAgentID: COS_ID, OwnerUserID: BOB }, alice, PEPPER_ID)
         ).toHaveLength(1);
     });
+
+    it('E4: enforces transitive ancestor CanRun invariant on BaseAgentID write across multi-level chains', () => {
+        const restrictedRoot = baseAgentRow({
+            ID: 'c0000000-0000-0000-0000-000000000001',
+            Name: 'Exec Chief of Staff',
+            BaseAgentID: null,
+            InstantiationMode: 'Optional',
+        });
+        const intermediateTemplate = baseAgentRow({
+            ID: 'c0000000-0000-0000-0000-000000000002',
+            Name: 'Regional CoS Template',
+            BaseAgentID: restrictedRoot.ID,
+            InstantiationMode: 'Optional',
+        });
+        // Root requires ROLE_SALES; intermediate is shared with ROLE_UI (so Bob passes intermediate directly
+        // but must still be rejected transitively because he lacks CanRun on restrictedRoot!)
+        const ROLE_UI = 'r0000000-0000-0000-0000-000000000009';
+        const rootPerm = Object.create(MJAIAgentPermissionEntity.prototype) as MJAIAgentPermissionEntity;
+        Object.defineProperties(rootPerm, {
+            AgentID: { value: restrictedRoot.ID },
+            RoleID: { value: ROLE_SALES },
+            UserID: { value: null },
+            CanView: { value: true },
+            CanRun: { value: true },
+            CanEdit: { value: false },
+            CanDelete: { value: false },
+        });
+        const intermediatePerm = Object.create(MJAIAgentPermissionEntity.prototype) as MJAIAgentPermissionEntity;
+        Object.defineProperties(intermediatePerm, {
+            AgentID: { value: intermediateTemplate.ID },
+            RoleID: { value: ROLE_UI },
+            UserID: { value: null },
+            CanView: { value: true },
+            CanRun: { value: true },
+            CanEdit: { value: false },
+            CanDelete: { value: false },
+        });
+
+        // Bob holds ROLE_UI (direct access to intermediateTemplate) but lacks ROLE_SALES on restrictedRoot -> rejected!
+        const deniedErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({ BaseAgentID: intermediateTemplate.ID, OwnerUserID: BOB }),
+            User: makeUser(BOB, 'User', [ROLE_UI]),
+            AllAgents: [restrictedRoot, intermediateTemplate],
+            AllPermissions: [rootPerm, intermediatePerm],
+        });
+        expect(deniedErrors.some((e) => /do not have permission to run/i.test(e.Message))).toBe(true);
+
+        // Alice holds ROLE_UI + ROLE_SALES -> permitted to derive from intermediateTemplate
+        const allowedErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({ BaseAgentID: intermediateTemplate.ID, OwnerUserID: ALICE }),
+            User: makeUser(ALICE, 'User', [ROLE_UI, ROLE_SALES]),
+            AllAgents: [restrictedRoot, intermediateTemplate],
+            AllPermissions: [rootPerm, intermediatePerm],
+        });
+        expect(allowedErrors).toEqual([]);
+    });
 });

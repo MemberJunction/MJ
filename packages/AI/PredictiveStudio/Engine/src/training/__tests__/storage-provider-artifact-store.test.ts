@@ -1,8 +1,12 @@
+import type * as NodeCrypto from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StorageProviderArtifactStore } from '../storage-provider-artifact-store';
+import { ArtifactAlreadyStoredError } from '../types';
+import { ObjectKeyReservations } from '../object-key-reservations';
 import { LocalArtifactPath } from '../artifact-store';
 import { PredictiveStudioStorage } from '../../storage/ps-storage-provider';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
@@ -14,12 +18,32 @@ RegisterMemoryStorage('PS Artifact Store Test Local', local);
 const localRow = ProviderRow('7C3B2E4D-5F60-4172-8C8D-9E0F1A2B3C4D', 'Local File System', 'PS Artifact Store Test Local', true);
 const bytes = new TextEncoder().encode('{"model":"bytes"}');
 
+/** The UUID the store's next keys are built from, when a test fixes it ({@link KeyFor}); null draws a fresh one. */
+const keyUuid = vi.hoisted(() => ({ Fixed: null as string | null }));
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeCrypto>();
+  return { ...actual, randomUUID: (): string => keyUuid.Fixed || actual.randomUUID() };
+});
+const FIXED_UUID = '0F1E2D3C-4B5A-4697-8877-665544332211';
+
+/** The key the store's next save of `name` writes: fixes the UUID its key is built from. */
+function KeyFor(name: string): string {
+  keyUuid.Fixed = FIXED_UUID;
+  return `${StorageProviderArtifactStore.KEY_PREFIX}/${FIXED_UUID}/${name}`;
+}
+
+/** Lower-case hex SHA-256 of the bytes. */
+function Sha256Hex(data: Uint8Array): string {
+  return createHash('sha256').update(data).digest('hex');
+}
+
 describe('StorageProviderArtifactStore', () => {
   let files: FakeFilesTable;
   let store: StorageProviderArtifactStore;
   let baseDir = '';
   let savedArtifactDir: string | undefined;
   beforeEach(() => {
+    keyUuid.Fixed = null;
     log.length = 0;
     local.Reset();
     ServeStorageProviders([localRow]);
@@ -35,8 +59,35 @@ describe('StorageProviderArtifactStore', () => {
     rmSync(baseDir, { recursive: true, force: true });
   });
 
+  it('refuses to overwrite an existing object and writes nothing', async () => {
+    local.Objects.set(KeyFor('model.json'), new TextEncoder().encode('earlier'));
+    await expect(store.save(bytes, 'model.json')).rejects.toBeInstanceOf(ArtifactAlreadyStoredError);
+    expect(new TextDecoder().decode(local.Objects.get(KeyFor('model.json')))).toBe('earlier');
+  });
+  it('refuses the second of two saves of one key started together, and the first save\'s bytes stay stored', async () => {
+    const key = KeyFor('model.json');
+    const second = new TextEncoder().encode('{"model":"second"}');
+    // Two stores, as two concurrent trainings each build their own; both derive the same key.
+    const other = new StorageProviderArtifactStore(files, new PredictiveStudioStorage(files.Provider(), TestUser, 'Local File System'));
+    const outcomes = await Promise.allSettled([store.save(bytes, 'model.json'), other.save(second, 'model.json')]);
+    expect(outcomes.map((o) => o.status)).toEqual(['fulfilled', 'rejected']);
+    const refused = outcomes[1];
+    if (refused.status === 'rejected') expect(refused.reason).toBeInstanceOf(ArtifactAlreadyStoredError);
+    expect(log.filter((e) => e.startsWith('local.put'))).toHaveLength(1);
+    expect(local.Objects.get(key)).toEqual(bytes);
+    expect([...files.Rows.Values()].map((r) => r.ProviderKey)).toEqual([key]);
+    // The key is released once the first save's row is saved: a later save of it is refused by the object it holds.
+    await expect(other.save(second, 'model.json')).rejects.toBeInstanceOf(ArtifactAlreadyStoredError);
+    expect(ObjectKeyReservations.Instance.IsReserved(localRow.ID, key)).toBe(false);
+  });
+  it('returns the SHA-256 of the bytes it stored, with the provider and key', async () => {
+    const stored = await store.save(bytes, 'model.json');
+    expect(stored).toMatchObject({ sha256: Sha256Hex(bytes), sizeBytes: bytes.byteLength, writeOnce: true });
+    expect(local.Objects.get(stored.providerKey)).toEqual(bytes);
+  });
+
   it('save puts the bytes under predictive-studio/model-artifacts/<uuid>/<name> and records ProviderID, ProviderKey and Status Uploaded', async () => {
-    const fileId = await store.save(bytes, 'trainer-r1-c1.json');
+    const { fileId } = await store.save(bytes, 'trainer-r1-c1.json');
     const row = files.Rows.Get(fileId);
     expect(row?.ProviderKey).toMatch(/^predictive-studio\/model-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/trainer-r1-c1\.json$/i);
     expect(row?.ProviderID).toBe(localRow.ID);
@@ -45,8 +96,8 @@ describe('StorageProviderArtifactStore', () => {
   });
 
   it('two saves of identical bytes get different keys', async () => {
-    const first = files.Rows.Get(await store.save(bytes, 'trainer-r1-c1.json'));
-    const second = files.Rows.Get(await store.save(bytes, 'trainer-r1-c1.json'));
+    const first = files.Rows.Get((await store.save(bytes, 'trainer-r1-c1.json')).fileId);
+    const second = files.Rows.Get((await store.save(bytes, 'trainer-r1-c1.json')).fileId);
     expect(first?.ProviderKey).not.toBe(second?.ProviderKey);
     expect(local.Objects.size).toBe(2);
   });
@@ -72,7 +123,7 @@ describe('StorageProviderArtifactStore', () => {
   });
 
   it('rollback deletes object then row', async () => {
-    const fileId = await store.save(bytes, 'trainer-r1-c1.json');
+    const { fileId } = await store.save(bytes, 'trainer-r1-c1.json');
     const key = files.Rows.Get(fileId)?.ProviderKey || '';
     log.length = 0;
     await store.delete(fileId);
@@ -80,7 +131,7 @@ describe('StorageProviderArtifactStore', () => {
     expect(local.Objects.size).toBe(0);
     expect(files.Rows.Size).toBe(0);
 
-    const kept = await store.save(bytes, 'trainer-r1-c2.json');
+    const { fileId: kept } = await store.save(bytes, 'trainer-r1-c2.json');
     const keptKey = files.Rows.Get(kept)?.ProviderKey || '';
     local.RefuseDelete = true;
     await expect(store.delete(kept)).rejects.toThrow(keptKey);

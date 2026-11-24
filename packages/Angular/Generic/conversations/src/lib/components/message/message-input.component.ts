@@ -1359,10 +1359,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     let resolved: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
     if (!targetId) {
       if (manager?.ID) {
-        resolved = { ID: manager.ID, Name: manager.Name || 'Sage', IsConversationManager: true };
+        resolved = { ID: manager.ID, Name: manager.Name || 'Assistant', IsConversationManager: true };
       }
     } else if (manager?.ID && UUIDsEqual(targetId, manager.ID)) {
-      resolved = { ID: manager.ID, Name: manager.Name || 'Sage', IsConversationManager: true };
+      resolved = { ID: manager.ID, Name: manager.Name || 'Assistant', IsConversationManager: true };
     } else {
       const found = AIEngineBase.Instance.ReadableAgents?.find(a => UUIDsEqual(a.ID, targetId));
       if (found) {
@@ -1388,7 +1388,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   public get CurrentRouteAgentName(): string {
-    return this.CurrentRouteAgent?.Name || this.ConverationManagerAgent?.Name || 'Sage';
+    return this.CurrentRouteAgent?.Name || this.ConverationManagerAgent?.Name || 'Assistant';
   }
 
   public get CurrentRouteAccentVar(): string {
@@ -1409,7 +1409,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     if (!manager) {
       return false;
     }
-    const name = manager.Name || 'Sage';
+    const name = manager.Name || 'Assistant';
     if (this.InputBox) {
       const inserted = this.InputBox.InsertMention(
         {
@@ -1488,7 +1488,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         return match.Name;
       }
     }
-    return this.ConverationManagerAgent?.Name ?? 'Sage';
+    return this.ConverationManagerAgent?.Name ?? 'Assistant';
   }
 
   /** True while the "Start a voice call with…" agent picker popover is open. */
@@ -2848,7 +2848,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       await this.executeAgentContinuation(
         messageDetail,
         manager.ID,
-        manager.Name || 'Sage',
+        manager.Name || 'Assistant',
         messageDetail.ConversationID,
         branchId,
         null, // Sage doesn't use payload continuity
@@ -2883,7 +2883,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       history,
       managerId,
       {
-        conversationManagerName: this.ConverationManagerAgent?.Name ?? 'Sage',
+        conversationManagerName: this.ConverationManagerAgent?.Name ?? null,
         isWithinFloor: msg => this.isWithinHistoryFloor(msg),
       }
     );
@@ -3235,23 +3235,23 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const conversationId = userMessage.ConversationID;
 
     try {
-      // Sage's reply shows as a local placeholder until the server creates the row and names it.
+      const managerName = this.ConverationManagerAgent?.Name || 'Assistant';
+      // The manager's reply shows as a local placeholder until the server creates the row and names it.
       conversationManagerMessage = await this.createReplyPlaceholder(conversationId, branchId, userMessage.ID, this.ConverationManagerAgent?.ID ?? null);
 
-      // Use Sage to evaluate and route
-      // Stage 1: Sage evaluates the message
+      // Use conversation manager to evaluate and route
       const result = await this.agentService.ProcessMessage(
         conversationId,
         userMessage,
         this.ConversationHistory,
         this.adoptReplyRow(conversationManagerMessage, {
-          agentName: 'Sage',
+          agentName: managerName,
           status: 'Evaluating message...',
           relatedMessageId: userMessage.ID,
           conversationId,
           conversationName: this.ConversationName
         }),
-        this.createProgressCallback(conversationManagerMessage, 'Sage'),
+        this.createProgressCallback(conversationManagerMessage, managerName),
         this.AppContext,
         this.PlanModeEnabled, // per-request Plan Mode toggle
         this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
@@ -3271,16 +3271,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         await this.applyAgentFailureToDetail(
           conversationManagerMessage,
           userMessage,
-          this.ConverationManagerAgent?.Name || 'Sage',
+          managerName,
           result,
           'failed',
         );
-        console.warn('⚠️ Sage failed:', agentFailureMessage(result, 'Agent evaluation failed'));
+        console.warn(`⚠️ ${managerName} failed:`, agentFailureMessage(result, 'Agent evaluation failed'));
         return;
       }
 
-      // The server wrote Sage's reply; show it as the server left it before routing on.
-      await this.settleReply(conversationManagerMessage, '❌ Sage could not start.');
+      // The server wrote the manager's reply; show it as the server left it before routing on.
+      await this.settleReply(conversationManagerMessage, `❌ ${managerName} could not start.`);
       await this.routeConversationManagerResult(userMessage, result, conversationId, branchId, conversationManagerMessage);
     } catch (error) {
       console.error('❌ Error processing message through agents:', error);

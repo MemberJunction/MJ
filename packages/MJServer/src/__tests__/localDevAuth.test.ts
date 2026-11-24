@@ -108,7 +108,21 @@ describe('localDevAuth security invariants', () => {
       ).Allowed
     ).toBe(true);
 
-    // 2b. Rejects Docker bridge IPs when NOT running inside a container
+    // 2b. Rejects Docker bridge IPs when MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE is unset or 'false' (never inferred from /.dockerenv)
+    expect(
+      VerifyLocalhostRequest(
+        createMockRequest({ remoteAddress: '172.18.0.1', host: 'localhost:4000' }),
+        { NODE_ENV: 'development' }
+      ).Allowed
+    ).toBe(false);
+
+    expect(
+      VerifyLocalhostRequest(
+        createMockRequest({ remoteAddress: '::ffff:192.168.65.1', host: 'localhost:4000' }),
+        { NODE_ENV: 'development' }
+      ).Allowed
+    ).toBe(false);
+
     expect(
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '172.18.0.1', host: 'localhost:4000' }),
