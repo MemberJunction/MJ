@@ -63,7 +63,8 @@ export interface AuthGateConfig {
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer header (could be API key or OAuth token)
  *
- * Query parameters are deliberately not a source (see the note at the end of the function).
+ * SECURITY: query-parameter API keys (?apiKey=/api_key=) are deliberately NOT accepted —
+ * URLs land in access logs, proxy logs, and browser history, leaking the credential.
  *
  * @param request - The incoming HTTP request
  * @returns Extracted credentials
@@ -103,10 +104,19 @@ export function ExtractCredentials(request: Request | http.IncomingMessage): Ext
     }
   }
 
-  // SECURITY: API keys are deliberately NOT accepted from query parameters. A credential in the
-  // URL persists in access logs, proxies, browser history and Referer headers — and the key this
-  // gate accepts can be the system key. MJServer applies the same rule (ArtifactCollaborationServer
-  // rejects ?token=/?apiKey=). Clients must send `x-mj-api-key` or `Authorization: Bearer`.
+  // SECURITY: API keys in query parameters are no longer accepted — they leak into logs, proxies,
+  // browser history and Referer headers, and the key this gate accepts can be the system key. If
+  // one is present, warn so callers know to move the key into a header.
+  if (!result.apiKey && request.url) {
+    try {
+      const url = new URL(request.url, `http://${request.headers.host}`);
+      if (url.searchParams.has('apiKey') || url.searchParams.has('api_key')) {
+        console.warn('[AuthGate] API keys in query parameters are no longer accepted; provide the key via the x-api-key header instead.');
+      }
+    } catch {
+      // URL parsing failed, skip query params
+    }
+  }
 
   return result;
 }
@@ -405,11 +415,26 @@ async function validateOAuthCredentials(token: string): Promise<AuthResult> {
 
   if (userResult.error) {
     const is403 = userResult.error.code === 'user_not_found' || userResult.error.code === 'user_inactive';
+    if (is403) {
+      // SECURITY: keep the detailed reason (which includes the probed email) server-side only.
+      // Returning distinct "user not found" vs. signature-failure responses lets any IdP token
+      // holder enumerate which emails exist in MemberJunction.
+      console.warn(`[AuthGate] OAuth user resolution denied (${userResult.error.code}): ${userResult.error.message}`);
+      return {
+        authenticated: false,
+        method: 'oauth',
+        error: {
+          status: 403,
+          code: 'access_denied',
+          message: 'Access denied',
+        },
+      };
+    }
     return {
       authenticated: false,
       method: 'oauth',
       error: {
-        status: is403 ? 403 : 401,
+        status: 401,
         code: userResult.error.code,
         message: userResult.error.message,
       },
