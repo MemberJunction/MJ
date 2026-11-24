@@ -13,24 +13,30 @@ import {
     type InteractiveLoginCommandSpec,
 } from '@memberjunction/ai-agent-harness';
 
+/** Result returned by an {@link InteractiveLoginRunner} invocation. */
+export interface InteractiveLoginResult {
+    Status: number | null;
+    Error?: Error;
+}
+
 /** Function signature for spawning interactive CLI logins (injectable for unit tests). */
 export type InteractiveLoginRunner = (
     spec: InteractiveLoginCommandSpec,
     env: Record<string, string>,
-) => { status: number | null; error?: Error };
+) => InteractiveLoginResult;
 
 /** Default interactive login runner using `spawnSync(..., { stdio: 'inherit' })`. */
 export function RunInteractiveCliLogin(
     spec: InteractiveLoginCommandSpec,
     env: Record<string, string>,
-): { status: number | null; error?: Error } {
+): InteractiveLoginResult {
     const result: SpawnSyncReturns<Buffer> = spawnSync(spec.command, spec.args, {
         stdio: 'inherit',
         env,
     });
     return {
-        status: result.status,
-        error: result.error,
+        Status: result.status,
+        Error: result.error,
     };
 }
 
@@ -109,10 +115,10 @@ export function FormatSlotIsolationInstructions(
 
 /** Structured JSON payload emitted by `mj harness account list --json`. */
 export interface HarnessAccountListJsonOutput {
-    poolDir: string;
-    strategy: HarnessAccountSelectionStrategy;
-    includeOsDefaultLogin: boolean;
-    slots: HarnessAccountSlotStatus[];
+    PoolDir: string;
+    Strategy: HarnessAccountSelectionStrategy;
+    IncludeOsDefaultLogin: boolean;
+    Slots: HarnessAccountSlotStatus[];
 }
 
 /** Renders the `mj harness account list` human-readable table. */

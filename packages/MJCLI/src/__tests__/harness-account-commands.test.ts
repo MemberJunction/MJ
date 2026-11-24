@@ -72,13 +72,13 @@ describe('mj harness account commands', () => {
         tempDirs.push(poolDir, fakeHome);
         process.env[HARNESS_ACCOUNT_POOL_DIR_ENV_VAR] = poolDir;
         process.env.HOME = fakeHome;
-        HarnessAccountAdd.loginRunner = RunInteractiveCliLogin;
-        HarnessAccountLogin.loginRunner = RunInteractiveCliLogin;
+        HarnessAccountAdd.LoginRunner = RunInteractiveCliLogin;
+        HarnessAccountLogin.LoginRunner = RunInteractiveCliLogin;
     });
 
     afterEach(() => {
-        HarnessAccountAdd.loginRunner = RunInteractiveCliLogin;
-        HarnessAccountLogin.loginRunner = RunInteractiveCliLogin;
+        HarnessAccountAdd.LoginRunner = RunInteractiveCliLogin;
+        HarnessAccountLogin.LoginRunner = RunInteractiveCliLogin;
         vi.restoreAllMocks();
         if (origPoolDir === undefined) {
             delete process.env[HARNESS_ACCOUNT_POOL_DIR_ENV_VAR];
@@ -125,11 +125,11 @@ describe('mj harness account commands', () => {
 
     it('enrolls a slot via `mj harness account add` with interactive login and verifies isolated env', async () => {
         const calls: Array<{ spec: InteractiveLoginCommandSpec; env: Record<string, string> }> = [];
-        HarnessAccountAdd.loginRunner = (spec, env) => {
+        HarnessAccountAdd.LoginRunner = (spec, env) => {
             calls.push({ spec, env });
             // Simulate `claude auth login` writing credentials into CLAUDE_CONFIG_DIR
             fs.writeFileSync(path.join(env.CLAUDE_CONFIG_DIR, '.credentials.json'), '{}', 'utf8');
-            return { status: 0 };
+            return { Status: 0 };
         };
 
         const { logs } = await runOclifCommand(HarnessAccountAdd, [
@@ -158,17 +158,17 @@ describe('mj harness account commands', () => {
             poolDir,
         ]);
         const parsed = JSON.parse(listOut.logs.join('\n')) as HarnessAccountListJsonOutput;
-        expect(parsed.strategy).toBe('least-in-flight');
-        expect(parsed.slots).toHaveLength(1);
-        expect(parsed.slots[0].label).toBe('Pro #2');
-        expect(parsed.slots[0].weight).toBe(2);
-        expect(parsed.slots[0].priority).toBe(50);
-        expect(parsed.slots[0].authStatus).toBe('Ready');
+        expect(parsed.Strategy).toBe('least-in-flight');
+        expect(parsed.Slots).toHaveLength(1);
+        expect(parsed.Slots[0].label).toBe('Pro #2');
+        expect(parsed.Slots[0].weight).toBe(2);
+        expect(parsed.Slots[0].priority).toBe(50);
+        expect(parsed.Slots[0].authStatus).toBe('Ready');
     });
 
     it('supports `--no-login` on add, plus set-strategy, disable, enable, clear-cooldown, login, and remove --purge-files', async () => {
-        const loginSpy = vi.fn().mockReturnValue({ status: 0 });
-        HarnessAccountAdd.loginRunner = loginSpy;
+        const loginSpy = vi.fn().mockReturnValue({ Status: 0 });
+        HarnessAccountAdd.LoginRunner = loginSpy;
 
         await runOclifCommand(HarnessAccountAdd, [
             'agy',
@@ -207,12 +207,12 @@ describe('mj harness account commands', () => {
 
         // re-login via `mj harness account login` clears cooldown and runs `agy` with isolated HOME
         service.MarkSlotCooldown('agy-team', '429 again', new Date(Date.now() + 600_000).toISOString(), { poolDir });
-        HarnessAccountLogin.loginRunner = (spec, env) => {
+        HarnessAccountLogin.LoginRunner = (spec, env) => {
             expect(spec.command).toBe('agy');
             expect(env.HOME).toBe(slot!.slotDir);
             expect(env.XDG_CONFIG_HOME).toBe(path.join(slot!.slotDir, '.config'));
             fs.mkdirSync(path.join(env.HOME, '.gemini', 'antigravity'), { recursive: true });
-            return { status: 0 };
+            return { Status: 0 };
         };
         await runOclifCommand(HarnessAccountLogin, ['agy-team', '--pool-dir', poolDir]);
         const afterLogin = service.GetSlot('agy-team', { poolDir });

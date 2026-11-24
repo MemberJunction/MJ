@@ -31,7 +31,7 @@ export default class HarnessAccountLogin extends Command {
     };
 
     /** Overridable runner hook for deterministic unit tests. */
-    public static loginRunner: InteractiveLoginRunner = RunInteractiveCliLogin;
+    public static LoginRunner: InteractiveLoginRunner = RunInteractiveCliLogin;
 
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(HarnessAccountLogin);
@@ -54,12 +54,12 @@ export default class HarnessAccountLogin extends Command {
         const loginSpec = service.GetInteractiveLoginCommand(slot.vendor);
         this.log(`\nLaunching interactive login: ${loginSpec.displayCommand}\n`);
         const loginEnv = BuildInteractiveLoginEnv(envOverrides);
-        const outcome = HarnessAccountLogin.loginRunner(loginSpec, loginEnv);
-        if (outcome.error) {
-            this.error(`Failed to launch '${loginSpec.command}': ${outcome.error.message}`, { exit: 1 });
+        const outcome = HarnessAccountLogin.LoginRunner(loginSpec, loginEnv);
+        if (outcome.Error) {
+            this.error(`Failed to launch '${loginSpec.command}': ${outcome.Error.message}`, { exit: 1 });
         }
-        if (outcome.status !== 0) {
-            this.error(`Interactive login exited with status ${outcome.status ?? 'unknown'}.`, { exit: 1 });
+        if (outcome.Status !== 0) {
+            this.error(`Interactive login exited with status ${outcome.Status ?? 'unknown'}.`, { exit: 1 });
         }
 
         service.ClearSlotCooldown(slot.slotId, poolOpts);

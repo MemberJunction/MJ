@@ -58,7 +58,7 @@ export default class HarnessAccountAdd extends Command {
     };
 
     /** Overridable runner hook for deterministic unit tests. */
-    public static loginRunner: InteractiveLoginRunner = RunInteractiveCliLogin;
+    public static LoginRunner: InteractiveLoginRunner = RunInteractiveCliLogin;
 
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(HarnessAccountAdd);
@@ -102,15 +102,15 @@ export default class HarnessAccountAdd extends Command {
             const loginSpec = service.GetInteractiveLoginCommand(vendor);
             this.log(`\nLaunching interactive login: ${loginSpec.displayCommand}\n`);
             const loginEnv = BuildInteractiveLoginEnv(envOverrides);
-            const outcome = HarnessAccountAdd.loginRunner(loginSpec, loginEnv);
-            if (outcome.error) {
+            const outcome = HarnessAccountAdd.LoginRunner(loginSpec, loginEnv);
+            if (outcome.Error) {
                 this.warn(
-                    `Could not launch '${loginSpec.command}': ${outcome.error.message}. ` +
+                    `Could not launch '${loginSpec.command}': ${outcome.Error.message}. ` +
                         `Run \`mj harness account login ${slot.slotId}\` once the CLI is installed.`,
                 );
-            } else if (outcome.status !== 0) {
+            } else if (outcome.Status !== 0) {
                 this.warn(
-                    `Interactive login command exited with status ${outcome.status ?? 'unknown'}. ` +
+                    `Interactive login command exited with status ${outcome.Status ?? 'unknown'}. ` +
                         `You can retry with \`mj harness account login ${slot.slotId}\`.`,
                 );
             }

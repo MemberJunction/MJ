@@ -51,10 +51,10 @@ export default class HarnessAccountList extends Command {
 
         if (flags.json) {
             const payload: HarnessAccountListJsonOutput = {
-                poolDir,
-                strategy: pool.strategy,
-                includeOsDefaultLogin: pool.includeOsDefaultLogin,
-                slots,
+                PoolDir: poolDir,
+                Strategy: pool.strategy,
+                IncludeOsDefaultLogin: pool.includeOsDefaultLogin,
+                Slots: slots,
             };
             this.log(JSON.stringify(payload, null, 2));
             return;
