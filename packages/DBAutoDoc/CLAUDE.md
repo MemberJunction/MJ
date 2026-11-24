@@ -4,7 +4,7 @@
 - **[docs/](docs/)** — User-facing documentation (USER_GUIDE, ARCHITECTURE, API_USAGE, GUARDRAILS)
 - **[research/v1/](research/v1/)** — Research paper, benchmark results, comparison scripts
 - **[research/related-work/](research/related-work/)** — Comparisons with related systems (NVIDIA Auto-Ontology)
-- **[plans/active/](plans/active/)** — Future work; start at [improvement-roadmap.md](plans/active/improvement-roadmap.md), which maps open MJ issues/PRs onto each item
+- **[plans/active/](plans/active/)** — Future work; start at [improvement-roadmap.md](plans/active/improvement-roadmap.md), which maps open MJ issues/PRs onto each item, and [connector-ground-truth-flywheel.md](plans/active/connector-ground-truth-flywheel.md) for pre-verified connector metadata locking
 - **[plans/completed/](plans/completed/)** — Completed work (deterministic gates, benchmark iteration, etc.)
 
 ## Key Files

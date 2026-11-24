@@ -18,6 +18,7 @@ export class MJEntityCommunicationMessageTypeFormComponent extends BaseFormCompo
         this.initSections([
             { sectionKey: 'mappingKeys', sectionName: 'Mapping Keys', isExpanded: true },
             { sectionKey: 'messageAttributes', sectionName: 'Message Attributes', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityCommunicationFields', sectionName: 'Entity Communication Fields', isExpanded: false }
         ]);

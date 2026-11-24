@@ -13,7 +13,12 @@ import type {
     TargetColumnConfig,
     TargetTableConfig,
 } from './interfaces.js';
-import { DDLGenerator, ValidateIdentifier } from './DDLGenerator.js';
+import {
+    DDLGenerator,
+    STANDARD_COLUMN_DESCRIPTIONS,
+    ValidateIdentifier,
+    type StandardIntegrationColumnName,
+} from './DDLGenerator.js';
 import { TypeMapper } from './TypeMapper.js';
 
 /**
@@ -37,14 +42,11 @@ export class SchemaEvolution {
         const sourceColMap = new Map(targetConfig.Columns.map(c => [c.TargetColumnName.toLowerCase(), c]));
 
         // Standard columns to ignore in the diff (managed by Schema Builder / CodeGen)
-        const standardCols = new Set(['id', 'sourcerecordid', 'sourcejson', 'syncstatus', 'lastsyncedat',
-                                       '__mj_createdat', '__mj_updatedat',
-                                       '__mj_integration_syncstatus', '__mj_integration_lastsyncedat',
-                                       '__mj_integration_lastsyncedsnapshot', '__mj_integration_syncmessage',
-                                       '__mj_integration_contenthash', '__mj_integration_customoverflow',
-                                       '__mj_integration_externalversion', '__mj_integration_lastseenmodifiedvalue',
-                                       '__mj_integration_lastreconciledat', '__mj_integration_lastwriterdirection',
-                                       '__mj_integration_istombstoned', '__mj_integration_deleteddetectedat']);
+        const standardCols = new Set([
+            'id', 'sourcerecordid', 'sourcejson', 'syncstatus', 'lastsyncedat',
+            '__mj_createdat', '__mj_updatedat',
+            ...Object.keys(STANDARD_COLUMN_DESCRIPTIONS).map(c => c.toLowerCase()),
+        ]);
 
         const added: TargetColumnConfig[] = [];
         const modified: ColumnModification[] = [];
@@ -210,7 +212,7 @@ export class SchemaEvolution {
     private ensureStandardColumns(existing: ExistingTableInfo, platform: DatabasePlatform): TargetColumnConfig[] {
         const have = new Set(existing.Columns.map(c => c.Name.toLowerCase()));
         const isSql = platform === 'sqlserver';
-        const std: TargetColumnConfig[] = [
+        const std: Array<TargetColumnConfig & { TargetColumnName: StandardIntegrationColumnName }> = [
             { SourceFieldName: '__mj_integration_SyncStatus', TargetColumnName: '__mj_integration_SyncStatus', TargetSqlType: isSql ? 'NVARCHAR(50)' : 'VARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: "'Active'" },
             { SourceFieldName: '__mj_integration_LastSyncedAt', TargetColumnName: '__mj_integration_LastSyncedAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
             { SourceFieldName: '__mj_integration_LastSyncedSnapshot', TargetColumnName: '__mj_integration_LastSyncedSnapshot', TargetSqlType: isSql ? 'NVARCHAR(MAX)' : 'TEXT', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
@@ -225,7 +227,9 @@ export class SchemaEvolution {
             { SourceFieldName: '__mj_integration_IsTombstoned', TargetColumnName: '__mj_integration_IsTombstoned', TargetSqlType: isSql ? 'BIT' : 'BOOLEAN', IsNullable: false, MaxLength: null, Precision: null, Scale: null, DefaultValue: isSql ? '0' : 'FALSE' },
             { SourceFieldName: '__mj_integration_DeletedDetectedAt', TargetColumnName: '__mj_integration_DeletedDetectedAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
         ];
-        return std.filter(c => !have.has(c.TargetColumnName.toLowerCase()));
+        return std
+            .map(c => ({ ...c, Description: STANDARD_COLUMN_DESCRIPTIONS[c.TargetColumnName] }))
+            .filter(c => !have.has(c.TargetColumnName.toLowerCase()));
     }
 
     /**

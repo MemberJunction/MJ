@@ -1,0 +1,31 @@
+{
+  "entity": "MJ: Jurisdiction Members",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".jurisdiction-members.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "GroupJurisdictionID": {
+        "entity": "MJ: Jurisdictions",
+        "field": "Code"
+      },
+      "MemberJurisdictionID": {
+        "entity": "MJ: Jurisdictions",
+        "field": "Code"
+      }
+    },
+    "relatedEntities": {}
+  }
+}

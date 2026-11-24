@@ -6,6 +6,8 @@
   "directoryOrder": [
     "countries",
     "state-provinces",
+    "jurisdictions",
+    "jurisdiction-members",
     "permission-domains",
     "instance-configurations",
     "encryption-key-sources",
@@ -102,7 +104,16 @@
     "entity-permissions",
     "widget-instances",
     "remote-operation-categories",
-    "remote-operations"
+    "remote-operations",
+    "communication-principals",
+    "entity-communication-message-types",
+    "communication-sender-types",
+    "communication-senders",
+    "communication-preferences",
+    "communication-compliance-rule-types",
+    "communication-compliance-regimes",
+    "communication-suppression-policies",
+    "work-queue-subscriptions"
   ],
   "sqlLogging": {
     "enabled": true,
