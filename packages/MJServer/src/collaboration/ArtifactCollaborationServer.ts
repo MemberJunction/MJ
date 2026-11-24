@@ -150,28 +150,28 @@ export const DEFAULT_IDLE_ROOM_TTL_MS = 30_000;
 export const DEFAULT_COLLABORATION_HEARTBEAT_MS = 30_000;
 
 const WORKING_STATE_FLUSH_DEBOUNCE_MS = 2500;
-const MAX_COLLAB_FRAME_BYTES = 16 * 1024 * 1024; // 16 MB
-const MAX_AWARENESS_FRAME_BYTES = 16_384; // 16 KB
-const MAX_ACTIVE_COLLAB_ROOMS = 2_000;
-const MAX_ACTIVE_ROOMS_PER_USER = 50;
-const MAX_ROOM_DOC_BYTES = 8 * 1024 * 1024; // 8 MB
-const MAX_RETAINED_DIRTY_ROOMS = 250;
-const RETAINED_DIRTY_ROOM_TTL_MS = 15 * 60_000; // 15 minutes
+const MAX_COLLAB_FRAME_BYTES = 16 * 1024 * 1024; // 16 MB WebSocket maxPayload protocol ceiling against oversized binary frames
+const MAX_AWARENESS_FRAME_BYTES = 16_384; // 16 KB per-frame ceiling for ephemeral cursor/presence awareness payloads
+const MAX_ACTIVE_COLLAB_ROOMS = 2_000; // Process-wide DoS guard on simultaneous open WebSocket Yjs rooms
+const MAX_ACTIVE_ROOMS_PER_USER = 50; // Per-authenticated-user DoS guard on concurrent open rooms
+const MAX_ROOM_DOC_BYTES = 8 * 1024 * 1024; // 8 MB encoded Y.Doc state ceiling to prevent single-room OOM exhaustion
+const MAX_RETAINED_DIRTY_ROOMS = 250; // Backpressure guard on rooms awaiting retry after a failed DB working-state flush
+const RETAINED_DIRTY_ROOM_TTL_MS = 15 * 60_000; // 15m retention window for dirty rooms retrying failed DB flushes
 const CLIENT_FRAME_RATE_WINDOW_MS = 10_000;
-const MAX_CLIENT_FRAMES_PER_WINDOW = 500;
-const MAX_VERSION_SAVE_ATTEMPTS = 3;
-const MAX_IDLE_FLUSH_RETRIES = 3;
+const MAX_CLIENT_FRAMES_PER_WINDOW = 500; // Per-connection flood guard (50 frames/sec sustained over 10s window)
+const MAX_VERSION_SAVE_ATTEMPTS = 3; // Optimistic-concurrency retry attempts when persisting MJ: Artifact Versions
+const MAX_IDLE_FLUSH_RETRIES = 3; // Retry attempts for transient DB errors during idle room working-state flush
 const COLLABORATION_ALLOWED_ORIGINS_ENV = 'MJ_COLLABORATION_ALLOWED_ORIGINS';
 const REALTIME_ALLOWED_ORIGINS_ENV = 'MJ_REALTIME_PROXY_ALLOWED_ORIGINS';
-const MAX_LOGGED_ORIGIN_CHARS = 200;
+const MAX_LOGGED_ORIGIN_CHARS = 200; // Truncation length when logging untrusted Origin headers to prevent log bloat
 
 /** Reserved high Yjs clientID block for server-emitted AI agent awareness (browser clients cannot claim or spoof). */
 export const AGENT_AWARENESS_CLIENT_ID_BASE = 0x70000000;
 export const AGENT_AWARENESS_CLIENT_ID_MAX = 0x7fffffff;
-const DEFAULT_AGENT_PRESENCE_THROTTLE_MS = 150;
-const DEFAULT_AGENT_PRESENCE_DECAY_MS = 8_000;
-const DEFAULT_AGENT_PRESENCE_TTL_MS = 60_000;
-const DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS = 2_500;
+const DEFAULT_AGENT_PRESENCE_THROTTLE_MS = 150; // 150ms coalescing interval for rapid AI agent presence broadcasts
+const DEFAULT_AGENT_PRESENCE_DECAY_MS = 8_000; // 8s idle threshold before active agent presence transitions to idle
+const DEFAULT_AGENT_PRESENCE_TTL_MS = 60_000; // 60s expiry window for stale agent awareness entries without heartbeats
+const DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS = 2_500; // 2.5s UX grace delay so completed agent presence badge fades smoothly
 const SAFE_AWARENESS_COLOR_RE =
     /^(#[0-9a-fA-F]{3,8}|var\(--mj-[a-zA-Z0-9-]+\)|(rgb|hsl)a?\([0-9.,\s%/]+\))$/;
 const DEFAULT_AWARENESS_COLOR = 'var(--mj-brand-primary)';
@@ -610,13 +610,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         maxPayload: MAX_COLLAB_FRAME_BYTES
     });
 
-    private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512;
-    private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8;
-    private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144;
-    private static readonly SYNC_WAIT_TIMEOUT_MS = 1500;
-    private static readonly MAX_CONTROLLED_CLIENT_IDS_PER_CONN = 32;
-    private static readonly MAX_AGENT_CLOCK_HIGH_WATER_ENTRIES = 10_000;
-    private static readonly COMPACTION_LEASE_TTL_MS = 15_000;
+    private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512; // Cross-node state-vector dedup ring (2 keys per compacted version; falls back to content hash on miss)
+    private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8; // Recent compacted version vectors retained per artifact for peer catch-up
+    private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144; // 256 KB pub/sub relay frame ceiling; larger updates fall back to DB working-state hydration
+    private static readonly SYNC_WAIT_TIMEOUT_MS = 1500; // 1.5s bounded wait for peer sync-state reply over pub/sub relay before cold DB fallback
+    private static readonly MAX_CONTROLLED_CLIENT_IDS_PER_CONN = 32; // Per-socket Yjs awareness clientID ownership bound against spoofed awareness floods
+    private static readonly MAX_AGENT_CLOCK_HIGH_WATER_ENTRIES = 10_000; // Replay-protection high-water clock ring across distinct agent presence sessions
+    private static readonly COMPACTION_LEASE_TTL_MS = 15_000; // 15s cross-node compaction lease window preventing duplicate version inserts
 
     private static getSharedCollabState(): {
         CompactedStateVectors: Map<

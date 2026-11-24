@@ -321,7 +321,7 @@ interface StampedPolicyCacheEntry {
  * Singleton engine that loads and evaluates `MJ: AI Agent User Policies` records.
  */
 export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> {
-    private static readonly NONE_POLICY_CACHE_TTL_MS = 30_000;
+    private static readonly NONE_POLICY_CACHE_TTL_MS = 30_000; // 30s negative-cache TTL when no policy row exists yet for an (agent, user) pair
 
     private readonly expressionEvaluator = new SafeExpressionEvaluator();
     /**

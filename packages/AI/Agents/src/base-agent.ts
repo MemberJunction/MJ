@@ -1018,7 +1018,7 @@ export class BaseAgent {
     private _budgetCostEvents: BudgetCostEvent[] = [];
     private _budgetDayBaselines: Record<string, number> = {};
     private _lastRecordedCostUsd: number = 0;
-    private static readonly REMOTE_PAUSE_POLL_INTERVAL_MS = 2_000;
+    private static readonly REMOTE_PAUSE_POLL_INTERVAL_MS = 2_000; // 2s minimum interval between cross-server DB checks for cooperative pause requests
     private _lastRemotePausePollMs: number = 0;
     private _pendingCheckpointPersistence: PendingRunawayCheckpointPersistence | null = null;
     private _pausedRunOutcome: {

@@ -2,6 +2,7 @@
 "@memberjunction/ai-agents": patch
 "@memberjunction/ai-agent-harness": patch
 "@memberjunction/ai-mcp-server": patch
+"@memberjunction/global": patch
 "@memberjunction/ng-artifacts": patch
 "@memberjunction/ng-dashboard-viewer": patch
 "@memberjunction/ng-dashboards": patch

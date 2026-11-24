@@ -44,8 +44,8 @@ interface TrackedSessionEntry<TTransport extends StreamableSessionClosable> {
  * exceed {@link IdleTtlMs} without ever evicting active sessions under an arbitrary count cap.
  */
 export class StreamableSessionStore<TTransport extends StreamableSessionClosable = StreamableSessionClosable> {
-    public static readonly DEFAULT_IDLE_TTL_MS = 24 * 60 * 60 * 1000;
-    public static readonly DEFAULT_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+    public static readonly DEFAULT_IDLE_TTL_MS = 24 * 60 * 60 * 1000; // 24h fallback idle session timeout when mcpServerSettings.sessionIdleTtlMs is unset
+    public static readonly DEFAULT_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5m fallback background sweep cadence when mcpServerSettings.sessionSweepIntervalMs is unset
 
     private readonly sessions = new Map<string, TrackedSessionEntry<TTransport>>();
     private readonly idleTtlMs: number;

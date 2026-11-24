@@ -28,7 +28,8 @@ pnpm --filter @memberjunction/global exec vitest run \
   src/__tests__/UUIDCompliance.test.ts \
   src/__tests__/MultiProviderCompliance.test.ts \
   src/__tests__/FieldSecurityEgressCompliance.test.ts \
-  src/__tests__/PlatformStringCompliance.test.ts || status=1
+  src/__tests__/PlatformStringCompliance.test.ts \
+  src/__tests__/StaticNumericLiteralCompliance.test.ts || status=1
 
 # MJCore's own config: the shared one finds no project from inside MJCore, and MJCore's config
 # does not exclude this scanner.
@@ -66,6 +67,7 @@ if [ "$status" -ne 0 ]; then
   echo ""
   echo "check:guards failed. The rules behind each scanner:"
   echo "  UUID comparisons / nested scans -> .claude/rules/typescript-style.md (COMPARE UUIDs WITH THE @memberjunction/global HELPERS)"
+  echo "  static numeric literals / caps  -> .claude/rules/typescript-style.md (NO ARBITRARY HARD CAPS OR UNEXPLAINED STATIC NUMERIC LITERALS)"
   echo "  global Metadata provider        -> .claude/rules/data-access.md (Don't Reach for the Global Metadata Provider)"
   echo "  primary-key assumptions         -> .claude/rules/data-access.md (Primary keys: never assume a column named ID)"
   echo "  entity serialization at egress  -> guides/FIELD_LEVEL_SECURITY_GUIDE.md (Building on field-level security)"

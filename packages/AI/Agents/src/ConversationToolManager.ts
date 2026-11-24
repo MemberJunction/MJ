@@ -113,9 +113,9 @@ const MAX_SUMMARIZE_RANGE_MESSAGES = 500;
 const MAX_SUMMARIZE_INPUT_CHARS = 100_000;
 /** Total character budget for a range result — beyond it, messages are dropped with a note. */
 const MAX_RANGE_TOTAL_CHARS = 32_000;
-/** searchConversation result caps. */
+/** searchConversation result caps: default page size and per-call ceiling so one search response fits comfortably in context. */
 const DEFAULT_SEARCH_RESULTS = 20;
-const MAX_SEARCH_RESULTS = 50;
+const MAX_SEARCH_RESULTS = 50; // Per-call search hit ceiling; model pages narrower sequence slices for additional hits
 /** Snippet length around a search match. */
 const SNIPPET_CHARS = 300;
 /**
