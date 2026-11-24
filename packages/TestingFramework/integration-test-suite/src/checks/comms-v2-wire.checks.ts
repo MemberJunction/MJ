@@ -1,5 +1,5 @@
 /**
- * comms-v2-wire.checks.ts — the 'comms-v2-wire' bundle (CV2W1–CV2W5, IT191): the Comms V2 surfaces
+ * comms-v2-wire.checks.ts — the 'comms-v2-wire' bundle (CV2W1–CV2W6, IT192): the Comms V2 surfaces
  * that have a wire, driven over that wire against a running MJAPI.
  *
  * TRANSPORT: **client**. Nothing here calls an engine class in this process. Fixtures are saved
@@ -19,6 +19,10 @@
  *   CV2W5: the same query routed to V2 Send (ContextData.UseV2) for a recipient whose endpoint has
  *          an active Hard Bounce suppression reports the recipient skipped with that reason and
  *          writes no Communication Log (so nothing was handed to a provider).
+ *   CV2W6: a signed click link answers 302 to its target and a signed open pixel answers with the
+ *          GIF, and the handler records a Clicked and an Opened activity on the log; a click with a
+ *          wrong signature answers 400; a correctly signed click and open for a tracking token on
+ *          no log are answered the same way and the handler records nothing for them.
  *
  * WHAT IS NOT HERE, AND WHY.
  *   - A real (non-preview) V1 send over GraphQL. The mutation input has no DryRun and MJAPI holds
@@ -36,13 +40,17 @@
  * (MJ_BASE_ENCRYPTION_KEY), which the CI lane generates per run. To test the instance-wide key
  * instead, give this process MJ_IT_SENDGRID_WEBHOOK_PRIVATE_KEY (PEM, or base64 PKCS#8 DER) matching
  * MJAPI's COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID; the checks then post to `/comms/webhooks/sendgrid`.
+ * CV2W6 signs its links with MJ_COMMS_HMAC_SECRET, which this process and MJAPI must both hold with
+ * the same value (the CI lane generates one per run); without it the check skips.
  * The `/comms` base URL is MJ_IT_COMMS_URL, else the GraphQL endpoint's origin + MJAPI_BASE_PATH + `/comms`.
  *
  * FIXTURES. All created through MJAPI, named with the run's tag and tagged safe to delete; see
  * comms-v2-fixtures.ts for the naming rules and for the append-only rows teardown cannot remove.
  * CV2W4/CV2W5 use a throwaway `MJ: Employees` row as the recipient and, when the entity has no
  * email message-type mapping, a temporary one that teardown removes. The two Communication Runs
- * MJAPI starts for CV2W4 and CV2W5 are not removed: the V1 result does not return their IDs.
+ * MJAPI starts for CV2W4 and CV2W5 are not removed: the V1 result does not return their IDs. Nor are
+ * the two `MJ: Communication Provider Events` rows the handler writes for CV2W6's hits: their IDs are
+ * hashes made inside MJAPI, so nothing here can name them.
  */
 import { createPrivateKey, createSign, generateKeyPairSync, randomUUID } from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
@@ -50,6 +58,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import type {
     MJCredentialEntity,
+    MJCommunicationActivityEntity,
     MJCommunicationEndpointEntity,
     MJCommunicationLogEntity,
     MJCommunicationSuppressionEntity,
@@ -58,7 +67,7 @@ import type {
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
 } from '@memberjunction/core-entities';
-import { ComputeEndpointHash } from '@memberjunction/communication-engine';
+import { ComputeEndpointHash, ComputeOpenPixelSignature, ComputeTrackingSignature } from '@memberjunction/communication-engine';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
@@ -72,6 +81,7 @@ const EMPLOYEES_ENTITY = 'MJ: Employees';
 const SIGNATURE_HEADER = 'X-Twilio-Email-Event-Webhook-Signature';
 const TIMESTAMP_HEADER = 'X-Twilio-Email-Event-Webhook-Timestamp';
 const PRIVATE_KEY_ENV = 'MJ_IT_SENDGRID_WEBHOOK_PRIVATE_KEY';
+const TRACKING_SECRET_ENV = 'MJ_COMMS_HMAC_SECRET';
 /** How long a check waits for MJAPI's work-queue host to consume what a route enqueued. */
 const HANDLER_WAIT_MS = 90_000;
 const POLL_INTERVAL_MS = 1_000;
@@ -387,6 +397,63 @@ async function postComms(s: WireState, path: string, headers: Record<string, str
         parsed = { error: text.slice(0, 300) };
     }
     return { Status: response.status, Body: parsed };
+}
+
+/** What a tracking route answered: its status, and the two headers the checks read. */
+interface TrackingAnswer {
+    Status: number;
+    Location: string | null;
+    ContentType: string | null;
+}
+
+/** A GET to a public tracking route, as a mail client or a browser following a link sends it. No redirect is followed. */
+async function getTracking(s: WireState, pathAndQuery: string): Promise<TrackingAnswer> {
+    const response = await fetch(`${s.Refs.CommsUrl}${pathAndQuery}`, {
+        headers: { 'User-Agent': COMMS_IT_TAG_ASCII },
+        redirect: 'manual',
+    });
+    await response.arrayBuffer();
+    return { Status: response.status, Location: response.headers.get('location'), ContentType: response.headers.get('content-type') };
+}
+
+function clickPath(token: string, target: string, secret: string): string {
+    return `/click/${token}?u=${encodeURIComponent(target)}&sig=${ComputeTrackingSignature(token, target, secret)}`;
+}
+
+function openPath(token: string, secret: string): string {
+    return `/open/${token}.gif?sig=${ComputeOpenPixelSignature(token, secret)}`;
+}
+
+type ActivityRow = Pick<MJCommunicationActivityEntity, 'ID' | 'EventType' | 'TargetURL' | 'CommunicationLogID'>;
+
+async function readActivities(user: UserInfo, filter: string): Promise<ActivityRow[]> {
+    const res = await new RunView().RunView<ActivityRow>(
+        {
+            EntityName: 'MJ: Communication Activities',
+            ExtraFilter: filter,
+            Fields: ['ID', 'EventType', 'TargetURL', 'CommunicationLogID'],
+            ResultType: 'simple',
+            BypassCache: true,
+        },
+        user,
+    );
+    Assert(res.Success, `reading communication activities over GraphQL failed: ${res.ErrorMessage ?? ''}`);
+    return res.Results;
+}
+
+/** Polls (bounded) until the log has an activity of each of `eventTypes`. */
+async function waitForActivities(user: UserInfo, logID: string, eventTypes: Array<ActivityRow['EventType']>, cause: string): Promise<ActivityRow[]> {
+    const deadline = Date.now() + HANDLER_WAIT_MS;
+    for (;;) {
+        const rows = await readActivities(user, `CommunicationLogID='${EscapeSQLString(logID)}'`);
+        if (eventTypes.every((type) => rows.some((row) => row.EventType === type))) {
+            return rows;
+        }
+        if (Date.now() > deadline) {
+            Assert(false, `the log has activities [${rows.map((r) => r.EventType).join(', ')}], not [${eventTypes.join(', ')}], ${HANDLER_WAIT_MS} ms after ${cause}: is MJAPI's work-queue host running with the comms.activity subscription pushed?`);
+        }
+        await Sleep(POLL_INTERVAL_MS);
+    }
 }
 
 /** The one-click POST a mail client sends for `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. */
@@ -756,6 +823,51 @@ export const CommsV2WireChecks: NamedCheck[] = [
             const logFilter = `RecipientAddress='${EscapeSQLString(target.Address)}' OR CommunicationEndpointID='${EscapeSQLString(target.Endpoint.ID)}'`;
             AssertEqual(await countLogs(s.Refs.User, logFilter), 0, 'a blocked recipient must get no Communication Log, so nothing reached a provider');
             AssertEqual(await readEndpointStatus(s.Refs.User, target.Endpoint.ID), 'Active', 'a blocked send must not change the endpoint');
+        },
+    },
+    {
+        Id: 'comms-v2-wire.CV2W6',
+        Name: 'CV2W6: signed click and open hits over HTTP are answered at once and recorded by the comms.activity handler; hits for a token on no log are answered and dropped',
+        Fn: async () => {
+            const s = fx();
+            const secret = process.env[TRACKING_SECRET_ENV];
+            if (!secret) {
+                SkipCheck(`${TRACKING_SECRET_ENV} is not set in the test process; it must match MJAPI's to sign tracking links`);
+            }
+            const recipient = await createRecipient(s, 'tracking');
+            const token = recipient.Log.TrackingToken;
+            Assert(token != null && token.length > 0, 'the fixture log has no TrackingToken');
+            const target = `https://example.com/mj-it/${s.Refs.RunTag}/landing?a=1&b=2`;
+            const orphanTarget = `https://example.com/mj-it/${s.Refs.RunTag}/orphan`;
+            const orphanToken = randomUUID();
+
+            const tampered = await getTracking(s, `${clickPath(token!, target, secret!)}0`);
+            AssertEqual(tampered.Status, 400, 'a click whose signature does not verify must answer 400');
+
+            const click = await getTracking(s, clickPath(token!, target, secret!));
+            AssertEqual(click.Status, 302, 'a signed click must answer 302');
+            AssertEqual(click.Location, target, 'a signed click must redirect to its target');
+            const open = await getTracking(s, openPath(token!, secret!));
+            AssertEqual(open.Status, 200, 'a signed open pixel must answer 200');
+            AssertEqual(open.ContentType, 'image/gif', 'a signed open pixel must answer with the GIF');
+
+            // The routes do not look the token up, so a correctly signed hit for a token on no log is
+            // answered exactly like a real one. Dropping it is the handler's job.
+            const orphanClick = await getTracking(s, clickPath(orphanToken, orphanTarget, secret!));
+            AssertEqual(orphanClick.Status, 302, 'a signed click for a token on no log must still answer 302');
+            AssertEqual(orphanClick.Location, orphanTarget, 'a signed click for a token on no log must still redirect to its target');
+            const orphanOpen = await getTracking(s, openPath(orphanToken, secret!));
+            AssertEqual(orphanOpen.Status, 200, 'a signed open pixel for a token on no log must still answer 200');
+
+            const rows = await waitForActivities(s.Refs.User, recipient.Log.ID, ['Clicked', 'Opened'], 'the signed click and open requests');
+            AssertEqual(rows.length, 2, 'the tampered click must not have been recorded, so the log has exactly two activities');
+            AssertEqual(rows.find((r) => r.EventType === 'Clicked')?.TargetURL, target, 'the Clicked activity must record the link target');
+
+            // The orphan hits were sent before the recorded ones were read back. Give the handler a
+            // little longer to have seen them, then check that it recorded nothing.
+            await Sleep(NEGATIVE_WAIT_MS);
+            const orphans = await readActivities(s.Refs.User, `TargetURL='${EscapeSQLString(orphanTarget)}'`);
+            AssertEqual(orphans.length, 0, 'a click for a token on no log must not be recorded');
         },
     },
 ];

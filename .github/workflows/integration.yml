@@ -761,6 +761,9 @@ jobs:
           echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
           echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          # Comms V2 click links and open pixels are signed with this. MJAPI verifies them and the
+          # test process signs them (comms-v2-wire.CV2W6), so both need the same value.
+          echo "MJ_COMMS_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "MJ_MAGIC_LINK_PRIVATE_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | base64 | tr -d '\n')" >> "$GITHUB_ENV"
 
       # Clone the provisioned [test] database into 3 isolated worker databases ([test_s1],
@@ -1214,6 +1217,8 @@ jobs:
           echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
           echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          # Signs Comms V2 click links and open pixels; MJAPI and the test process share it (comms-v2-wire.CV2W6).
+          echo "MJ_COMMS_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "MJ_MAGIC_LINK_PRIVATE_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | base64 | tr -d '\n')" >> "$GITHUB_ENV"
 
       # PostgreSQL copies a database from a template, so the worker databases cost seconds.
