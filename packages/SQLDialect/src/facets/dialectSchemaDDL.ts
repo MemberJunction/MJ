@@ -148,6 +148,8 @@ export interface DialectSchemaDDL {
     readonly MaxInRowSizeBytes: number | null;
     /** Maximum columns per table, or `null` when effectively unbounded. */
     readonly MaxColumnCount: number | null;
+    /** Maximum UTF-16 code units allowed in object/column comment values, or `null` when effectively unbounded. */
+    readonly MaxCommentLength: number | null;
     /** Minimum in-row byte footprint of a column of the given raw SQL type. */
     EstimateInRowBytes(rawSqlType: string): number;
     /** The clause that returns inserted values. */
@@ -162,7 +164,9 @@ export interface DialectSchemaDDL {
     RowCountExpression(): string;
     /** The batch separator. */
     BatchSeparator(): string;
-    /** Splits an oversized batch into statements on `;` + end-of-line boundaries. */
+    /** Splits a SQL script on top-level batch separator lines (e.g. `GO`), ignoring separators inside strings and comments. */
+    SplitBatches(sql: string): string[];
+    /** Splits an oversized batch into statements on top-level `;` + end-of-line boundaries, ignoring strings, comments, and dollar-quoted blocks. */
     SplitStatements(batch: string): string[];
     /** SQL that checks whether a database object exists. */
     ExistenceCheckSQL(objectType: string, schema: string, name: string): string;

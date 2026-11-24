@@ -2014,13 +2014,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const defaultSchema = rsuConfig.DefaultSchema;
     const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
-    // Primary split: GO batch separators (SQL Server SSMS convention, not
-    // valid T-SQL). Many CodeGen-generated migrations include them between
-    // logical blocks and we want one ExecuteSQL call per block.
-    const goBatches = resolvedSQL
-      .split(/^\s*GO\s*$/gim)
-      .map((b) => b.trim())
-      .filter((b) => b.length > 0);
+    // Primary split: standalone batch separator lines (SQL Server's `GO` SSMS convention;
+    // PostgreSQL has no batch separator). Dialect-owned so `GO` inside string literals or
+    // comments never splits mid-literal.
+    const dialect = GetDialect(this.platform);
+    const goBatches = dialect.SplitBatches(resolvedSQL);
 
     // Secondary chunking: bulk RSU migrations (e.g. Salesforce 1100+ tables)
     // can produce a single 1.7MB+ batch with ~17K ALTER TABLE statements
@@ -2043,12 +2041,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         finalBatches.push(batch);
         continue;
       }
-      // Split on statement-ending `;` (preserve the `;`) and re-group — but NEVER inside a
-      // PostgreSQL dollar-quoted block (DO $$…$$ / function bodies / the integration view-drop
-      // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
-      // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
-      // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
-      const statements = GetDialect(this.platform).SplitStatements(batch);
+      // Split on top-level statement-ending `;` + EOL while respecting string literals,
+      // comments, and PostgreSQL dollar-quoted blocks (DO $$…$$ / function bodies / `$mj_dropviews$`).
+      const statements = dialect.SplitStatements(batch);
       this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));

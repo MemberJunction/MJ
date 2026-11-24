@@ -167,7 +167,7 @@ describe('DDLGenerator', () => {
                 ],
             });
             const sql = gen.GenerateCreateTable(config, 'postgresql');
-            expect(sql).toContain(`COMMENT ON TABLE "hubspot"."Contact" IS 'HubSpot''s primary contact table';`);
+            expect(sql).toContain(`COMMENT ON TABLE hubspot."Contact" IS 'HubSpot''s primary contact table';`);
             expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email" IS 'Contact''s primary email';`);
             for (const colName of Object.keys(STANDARD_COLUMN_DESCRIPTIONS)) {
                 expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."${colName}" IS`);
@@ -182,7 +182,7 @@ describe('DDLGenerator', () => {
                 ],
             });
             const ssSql = gen.GenerateCreateTable(config, 'sqlserver');
-            expect(ssSql).not.toContain("@level1type = N'TABLE', @level1name = 'Contact';");
+            expect(ssSql).not.toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', NULL, NULL)");
             expect(ssSql).not.toContain("@level2name = 'Email'");
 
             const pgSql = gen.GenerateCreateTable(config, 'postgresql');
@@ -190,14 +190,14 @@ describe('DDLGenerator', () => {
             expect(pgSql).not.toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email"`);
         });
 
-        it('should validate identifiers when GenerateExtendedProperties or GeneratePostgresComments is called directly', () => {
+        it('should validate identifiers when GenerateExtendedProperties or GenerateDescriptions is called directly', () => {
             const badSchema = MakeTableConfig({ SchemaName: 'bad schema!' });
             expect(() => gen.GenerateExtendedProperties(badSchema)).toThrow('Invalid schema name');
-            expect(() => gen.GeneratePostgresComments(badSchema)).toThrow('Invalid schema name');
+            expect(() => gen.GenerateDescriptions(badSchema, 'postgresql')).toThrow('Invalid schema name');
 
             const badCol = MakeTableConfig({ Columns: [MakeColumn({ TargetColumnName: 'bad col!' })] });
             expect(() => gen.GenerateExtendedProperties(badCol)).toThrow('Invalid column name');
-            expect(() => gen.GeneratePostgresComments(badCol)).toThrow('Invalid column name');
+            expect(() => gen.GenerateDescriptions(badCol, 'postgresql')).toThrow('Invalid column name');
         });
     });
 
@@ -262,6 +262,7 @@ describe('DDLGenerator', () => {
         });
 
         it('should cap SQL Server MS_Description values to stay under sql_variant 7,500-byte limit while preserving full length on PostgreSQL', () => {
+            const maxChars = GetDialect('sqlserver').MaxCommentLength!;
             const longDescription = 'X'.repeat(5000);
             const ssCol = MakeColumn({
                 TargetColumnName: 'Notes',
@@ -271,7 +272,7 @@ describe('DDLGenerator', () => {
             const ssSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', ssCol, 'sqlserver');
             const valueMatch = ssSql.match(/@value = N'([^']*)'/);
             expect(valueMatch).not.toBeNull();
-            expect(valueMatch![1].length).toBe(DDLGenerator.MAX_SQLSERVER_DESCRIPTION_CHARS);
+            expect(valueMatch![1].length).toBe(maxChars);
             expect(valueMatch![1].endsWith('...')).toBe(true);
 
             const pgCol = { ...ssCol, TargetSqlType: 'TEXT' };
@@ -279,23 +280,8 @@ describe('DDLGenerator', () => {
             expect(pgSql).toContain(`IS '${longDescription}';`);
         });
 
-        it('should not split a UTF-16 surrogate pair when truncating SQL Server descriptions', () => {
-            // Place a 2-code-unit emoji ('😀') straddling cut - 1 (index MAX - 4) and cut (index MAX - 3).
-            const prefixLen = DDLGenerator.MAX_SQLSERVER_DESCRIPTION_CHARS - 4;
-            const descWithSurrogateAtBoundary = 'A'.repeat(prefixLen) + '😀' + 'B'.repeat(50);
-            const normalized = DDLGenerator.NormalizeDescription(descWithSurrogateAtBoundary, 'sqlserver');
-            expect(normalized).not.toBeNull();
-            expect(normalized!.length).toBe(prefixLen + 3);
-            expect(normalized!.endsWith('...')).toBe(true);
-            // Must contain no lone high/low surrogate code units.
-            for (let i = 0; i < normalized!.length; i++) {
-                const code = normalized!.charCodeAt(i);
-                expect(code >= 0xD800 && code <= 0xDFFF).toBe(false);
-            }
-        });
-
-        it('should sanitize semicolon-newline sequences in descriptions so RSU SplitStatements never splits mid-literal', () => {
-            const trickyDescription = 'Status codes:\n- A: Active;\n- I: Inactive;   \r\n\n- D: Deleted;\n';
+        it('should preserve semicolon-newline and $$ sequences verbatim while SQLDialect.SplitStatements keeps statements intact', () => {
+            const trickyDescription = 'Status codes (cost in $$):\n- A: Active;\n- I: Inactive;   \r\n\n- D: Deleted;\n';
             const ssCol = MakeColumn({
                 TargetColumnName: 'Status',
                 TargetSqlType: 'NVARCHAR(50)',
@@ -305,13 +291,13 @@ describe('DDLGenerator', () => {
             const ssStatements = GetDialect('sqlserver').SplitStatements(ssSql);
             // Exactly 2 statements: ALTER TABLE ADD + guarded sp_addextendedproperty.
             expect(ssStatements).toHaveLength(2);
-            expect(ssStatements[1]).toContain('Active; - I: Inactive; - D: Deleted;');
+            expect(ssStatements[1]).toContain(trickyDescription);
 
             const pgCol = { ...ssCol, TargetSqlType: 'VARCHAR(50)' };
             const pgSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', pgCol, 'postgresql');
             const pgStatements = GetDialect('postgresql').SplitStatements(pgSql);
             expect(pgStatements).toHaveLength(2);
-            expect(pgStatements[1]).toContain('Active; - I: Inactive; - D: Deleted;');
+            expect(pgStatements[1]).toContain(trickyDescription);
         });
     });
 

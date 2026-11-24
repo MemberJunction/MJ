@@ -274,54 +274,14 @@ export class PostgreSQLSchemaDDL extends BaseSchemaDDL {
         return `ROLLBACK TO SAVEPOINT ${name}`;
     }
 
-    /**
-     * Splits an oversized SQL batch into individual statements on `;`+EOL
-     * boundaries — but NEVER inside a PostgreSQL dollar-quoted block
-     * (`$$ … $$` or `$tag$ … $tag$`), whose body legitimately contains
-     * `;`+newline (DO blocks, PL/pgSQL function bodies, the integration
-     * view-drop guard `$mj_dropviews$`). A naive `split(/;\s*\n/g)` tears
-     * those apart. Outside dollar blocks the boundary semantics mirror the
-     * base `split(/;\s*\n/g)` (a `;` then optional inline whitespace then a
-     * newline). Each returned statement ends with `;`.
-     */
-    SplitStatements(batch: string): string[] {
-        const statements: string[] = [];
-        let current = '';
-        let dollarTag: string | null = null;   // active dollar-quote tag (e.g. '$$' or '$fn$'), or null
-        const isTagChar = (c: string) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c === '_';
-        for (let i = 0; i < batch.length; i++) {
-            const ch = batch[i];
-            if (ch === '$') {
-                // Scan a dollar-quote tag: `$` [A-Za-z0-9_]* `$`.
-                let j = i + 1;
-                while (j < batch.length && isTagChar(batch[j])) j++;
-                if (batch[j] === '$') {
-                    const tag = batch.slice(i, j + 1);
-                    if (dollarTag === null) dollarTag = tag;          // entering a dollar-quoted block
-                    else if (dollarTag === tag) dollarTag = null;     // matching close → exiting
-                    current += tag;
-                    i = j;
-                    continue;
-                }
-            }
-            if (ch === ';' && dollarTag === null) {
-                // Boundary = `;` then optional spaces/tabs/CR then a newline — only OUTSIDE a dollar block.
-                let j = i + 1;
-                while (j < batch.length && (batch[j] === ' ' || batch[j] === '\t' || batch[j] === '\r')) j++;
-                if (j < batch.length && batch[j] === '\n') {
-                    current += ';';
-                    const trimmed = current.trim();
-                    if (trimmed.length > 0) statements.push(trimmed);
-                    current = '';
-                    i = j;   // skip the inline whitespace; the loop's i++ steps past the newline
-                    continue;
-                }
-            }
-            current += ch;
-        }
-        const tail = current.trim();
-        if (tail.length > 0) statements.push(tail);
-        return statements.map((s) => (s.endsWith(';') ? s : s + ';'));
+    /** PostgreSQL supports `$$…$$` / `$tag$…$tag$` dollar-quoted blocks in DO blocks and functions. */
+    protected override get SupportsDollarQuotedStrings(): boolean {
+        return true;
+    }
+
+    /** PostgreSQL supports `E'...'` backslash-escaped string literals. */
+    protected override get SupportsEscapeStringLiterals(): boolean {
+        return true;
     }
 
     ExistenceCheckSQL(objectType: string, schema: string, name: string): string {
@@ -452,7 +412,7 @@ export class PostgreSQLSchemaDDL extends BaseSchemaDDL {
     }
 
     CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
-        const escaped = comment.replace(/'/g, "''");
+        const escaped = this.EscapeComment(comment);
         return `COMMENT ON COLUMN "${schema}"."${table}"."${column}" IS '${escaped}';`;
     }
 
@@ -500,7 +460,7 @@ export class PostgreSQLSchemaDDL extends BaseSchemaDDL {
     }
 
     CommentOnObject(objectType: string, schema: string, name: string, comment: string): string {
-        const escapedComment = comment.replace(/'/g, "''");
+        const escapedComment = this.EscapeComment(comment);
         const normalizedType = objectType.toUpperCase();
         return `COMMENT ON ${normalizedType} ${schema}."${name}" IS '${escapedComment}'`;
     }

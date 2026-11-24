@@ -2,7 +2,6 @@
  * DDLGenerator — produces CREATE TABLE / ALTER TABLE SQL strings.
  * File-emission only — never executes SQL.
  */
-import { EscapeSQLString } from '@memberjunction/global';
 import { GetDialect } from '@memberjunction/sql-dialect';
 import type { DatabasePlatform, TargetColumnConfig, TargetTableConfig, ColumnModification } from './interfaces.js';
 
@@ -44,82 +43,6 @@ export const STANDARD_COLUMN_DESCRIPTIONS: Readonly<Record<StandardIntegrationCo
  * Generates DDL SQL for creating and altering integration tables.
  */
 export class DDLGenerator {
-    /**
-     * SQL Server `sp_addextendedproperty` types `@value` as `sql_variant`, which caps payloads at
-     * 7,500 bytes (3,750 UTF-16 code units for `N'...'` literals; >4,000 code units also promotes
-     * the literal to `nvarchar(max)`, which SQL Server refuses to implicitly convert to `sql_variant`).
-     * Cap at 3,700 UTF-16 code units (7,400 bytes) to stay safely under both limits.
-     */
-    public static readonly MAX_SQLSERVER_DESCRIPTION_CHARS = 3700;
-
-    /**
-     * Normalize a table or column description for DDL emission:
-     * - Returns `null` when absent or whitespace-only.
-     * - Collapses `;` + whitespace containing `\n` into `; ` so RSU's 32 KB batch chunker
-     *   (`SQLDialect.SplitStatements`) never splits mid-literal across `ExecuteSQL` chunks.
-     * - Truncates SQL Server descriptions to {@link MAX_SQLSERVER_DESCRIPTION_CHARS} UTF-16 code
-     *   units (surrogate-pair safe) so `sp_addextendedproperty` never exceeds `sql_variant`'s
-     *   7,500-byte ceiling. PostgreSQL `COMMENT ON` (`text`) is not length-capped.
-     */
-    public static NormalizeDescription(
-        description: string | undefined | null,
-        platform: DatabasePlatform
-    ): string | null {
-        if (!description || description.trim().length === 0) {
-            return null;
-        }
-        const chunkSafe = DDLGenerator.collapseSemicolonNewlines(description);
-        if (platform === 'sqlserver') {
-            return DDLGenerator.truncateSqlServerDescription(chunkSafe);
-        }
-        return chunkSafe;
-    }
-
-    private static collapseSemicolonNewlines(value: string): string {
-        if (!value.includes(';') || !value.includes('\n')) {
-            return value;
-        }
-        let result = '';
-        let i = 0;
-        while (i < value.length) {
-            const ch = value[i];
-            if (ch !== ';') {
-                result += ch;
-                i++;
-                continue;
-            }
-            let j = i + 1;
-            let sawNewline = false;
-            while (j < value.length && /\s/.test(value[j])) {
-                if (value[j] === '\n') {
-                    sawNewline = true;
-                }
-                j++;
-            }
-            if (sawNewline) {
-                result += j < value.length ? '; ' : ';';
-                i = j;
-            } else {
-                result += ';';
-                i++;
-            }
-        }
-        return result;
-    }
-
-    private static truncateSqlServerDescription(value: string): string {
-        const maxChars = DDLGenerator.MAX_SQLSERVER_DESCRIPTION_CHARS;
-        if (value.length <= maxChars) {
-            return value;
-        }
-        const ellipsis = '...';
-        let cut = maxChars - ellipsis.length;
-        const lastCode = value.charCodeAt(cut - 1);
-        if (lastCode >= 0xD800 && lastCode <= 0xDBFF) {
-            cut--;
-        }
-        return value.slice(0, cut) + ellipsis;
-    }
     /**
      * Generate CREATE SCHEMA IF NOT EXISTS statement.
      */
@@ -233,26 +156,13 @@ export class DDLGenerator {
         // "There is already an object named '<table>'" collisions.
         const createTable = this.generateIdempotentCreateTableStatement(fullTable, body, platform);
 
-        const trailing: string[] = [...softIndexes, ...this.generateDescriptionsForPlatform(config, platform)];
+        const trailing: string[] = [...softIndexes, ...this.GenerateDescriptions(config, platform)];
 
         if (trailing.length > 0) {
             return createTable + '\n\n' + trailing.join('\n\n');
         }
 
         return createTable;
-    }
-
-    private generateDescriptionsForPlatform(config: TargetTableConfig, platform: DatabasePlatform): string[] {
-        switch (platform) {
-            case 'sqlserver':
-                return this.GenerateExtendedProperties(config);
-            case 'postgresql':
-                return this.GeneratePostgresComments(config);
-            default: {
-                const unsupported: never = platform;
-                throw new Error(`generateDescriptionsForPlatform: unsupported database platform '${String(unsupported)}'`);
-            }
-        }
     }
 
     /**
@@ -277,131 +187,48 @@ export class DDLGenerator {
     }
 
     /**
-     * Generate sp_addextendedproperty calls for table and column descriptions.
+     * Generate idempotent table and column description statements for the target platform
+     * via `SQLDialect` (`MS_Description` guarded by `sys.fn_listextendedproperty` on SQL Server,
+     * `COMMENT ON TABLE`/`COMMENT ON COLUMN` on PostgreSQL).
      */
-    GenerateExtendedProperties(config: TargetTableConfig): string[] {
-        const { tableDescription, columnDescriptions } = this.collectDescriptions(config, 'sqlserver');
-        const props: string[] = [];
-
-        if (tableDescription !== null) {
-            const exec =
-                `EXEC sp_addextendedproperty\n` +
-                `    @name = N'MS_Description',\n` +
-                `    @value = N'${EscapeSQLString(tableDescription)}',\n` +
-                `    @level0type = N'SCHEMA', @level0name = '${config.SchemaName}',\n` +
-                `    @level1type = N'TABLE', @level1name = '${config.TableName}';`;
-            props.push(this.guardExtendedProperty(config.SchemaName, config.TableName, null, exec));
-        }
-
-        for (const { columnName, description } of columnDescriptions) {
-            props.push(this.makeColumnExtendedProperty(config.SchemaName, config.TableName, columnName, description));
-        }
-
-        return props;
-    }
-
-    /**
-     * Generate PostgreSQL COMMENT ON TABLE and COMMENT ON COLUMN statements for descriptions.
-     */
-    GeneratePostgresComments(config: TargetTableConfig): string[] {
-        const { tableDescription, columnDescriptions } = this.collectDescriptions(config, 'postgresql');
-        const comments: string[] = [];
-
-        if (tableDescription !== null) {
-            const fullTable = `${QuotePostgres(config.SchemaName)}.${QuotePostgres(config.TableName)}`;
-            comments.push(`COMMENT ON TABLE ${fullTable} IS '${EscapeSQLString(tableDescription)}';`);
-        }
-
-        for (const { columnName, description } of columnDescriptions) {
-            comments.push(this.makePostgresColumnComment(config.SchemaName, config.TableName, columnName, description));
-        }
-
-        return comments;
-    }
-
-    private collectDescriptions(config: TargetTableConfig, platform: DatabasePlatform): {
-        tableDescription: string | null;
-        columnDescriptions: Array<{ columnName: string; description: string }>;
-    } {
+    GenerateDescriptions(config: TargetTableConfig, platform: DatabasePlatform): string[] {
         ValidateIdentifier(config.SchemaName, 'schema');
         ValidateIdentifier(config.TableName, 'table');
 
-        const tableDescription = DDLGenerator.NormalizeDescription(config.Description, platform);
+        const dialect = GetDialect(platform);
+        const statements: string[] = [];
 
-        const columnDescriptions: Array<{ columnName: string; description: string }> = [];
+        if (this.hasMeaningfulDescription(config.Description)) {
+            statements.push(dialect.CommentOnObjectIfAbsent('TABLE', config.SchemaName, config.TableName, config.Description));
+        }
+
         for (const [colName, desc] of Object.entries(STANDARD_COLUMN_DESCRIPTIONS)) {
-            const normalizedStd = DDLGenerator.NormalizeDescription(desc, platform);
-            if (normalizedStd !== null) {
-                columnDescriptions.push({ columnName: colName, description: normalizedStd });
+            if (this.hasMeaningfulDescription(desc)) {
+                statements.push(dialect.CommentOnColumnIfAbsent(config.SchemaName, config.TableName, colName, desc));
             }
         }
+
         for (const col of config.Columns) {
             ValidateIdentifier(col.TargetColumnName, 'column');
-            const normalizedCol = DDLGenerator.NormalizeDescription(col.Description, platform);
-            if (normalizedCol !== null) {
-                columnDescriptions.push({ columnName: col.TargetColumnName, description: normalizedCol });
+            if (this.hasMeaningfulDescription(col.Description)) {
+                statements.push(dialect.CommentOnColumnIfAbsent(config.SchemaName, config.TableName, col.TargetColumnName, col.Description));
             }
         }
 
-        return { tableDescription, columnDescriptions };
-    }
-
-    private makeColumnDescriptionStatement(
-        schemaName: string, tableName: string, columnName: string, description: string, platform: DatabasePlatform
-    ): string {
-        switch (platform) {
-            case 'sqlserver':
-                return this.makeColumnExtendedProperty(schemaName, tableName, columnName, description);
-            case 'postgresql':
-                return this.makePostgresColumnComment(schemaName, tableName, columnName, description);
-            default: {
-                const unsupported: never = platform;
-                throw new Error(`makeColumnDescriptionStatement: unsupported database platform '${String(unsupported)}'`);
-            }
-        }
-    }
-
-    private makePostgresColumnComment(
-        schemaName: string, tableName: string, columnName: string, description: string
-    ): string {
-        return `COMMENT ON COLUMN ${QuotePostgres(schemaName)}.${QuotePostgres(tableName)}.${QuotePostgres(columnName)} IS '${EscapeSQLString(description)}';`;
-    }
-
-    private makeColumnExtendedProperty(
-        schemaName: string, tableName: string, columnName: string, description: string
-    ): string {
-        const escaped = EscapeSQLString(description);
-        const exec =
-            `EXEC sp_addextendedproperty\n` +
-            `    @name = N'MS_Description',\n` +
-            `    @value = N'${escaped}',\n` +
-            `    @level0type = N'SCHEMA', @level0name = '${schemaName}',\n` +
-            `    @level1type = N'TABLE', @level1name = '${tableName}',\n` +
-            `    @level2type = N'COLUMN', @level2name = '${columnName}';`;
-        return this.guardExtendedProperty(schemaName, tableName, columnName, exec);
+        return statements;
     }
 
     /**
-     * Wrap an sp_addextendedproperty EXEC in an existence guard so re-running a migration is
-     * idempotent — without it, re-adding MS_Description to a table/column that already has it
-     * throws "Property cannot be added ... already has the property". Single-statement IF
-     * (no BEGIN/END) so RSU's batch chunking on ';\n' can't split it. SQL Server only —
-     * postgresql uses no extended properties here. Pass columnName=null for a table-level
-     * property, or the column name for a column-level one (levels must match the EXEC).
+     * Generate SQL Server `sp_addextendedproperty` calls for table and column descriptions.
+     * Delegates to {@link GenerateDescriptions} for `'sqlserver'`.
      */
-    private guardExtendedProperty(
-        schemaName: string, tableName: string, columnName: string | null, execStatement: string
-    ): string {
-        const level2 = columnName ? `N'COLUMN', N'${columnName}'` : `NULL, NULL`;
-        return (
-            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(` +
-            `N'MS_Description', N'SCHEMA', N'${schemaName}', N'TABLE', N'${tableName}', ${level2}))\n` +
-            execStatement
-        );
+    GenerateExtendedProperties(config: TargetTableConfig): string[] {
+        return this.GenerateDescriptions(config, 'sqlserver');
     }
 
     /**
-     * Generate ALTER TABLE ADD COLUMN statement.
+     * Generate ALTER TABLE ADD COLUMN statement (plus an idempotent column description
+     * statement when `column.Description` is non-whitespace).
      */
     GenerateAlterTableAddColumn(
         schemaName: string,
@@ -413,6 +240,23 @@ export class DDLGenerator {
         ValidateIdentifier(tableName, 'table');
         ValidateIdentifier(column.TargetColumnName, 'column');
 
+        const alterStmt = this.buildIdempotentAddColumnStatement(schemaName, tableName, column, platform);
+        if (this.hasMeaningfulDescription(column.Description)) {
+            const descStmt = GetDialect(platform).CommentOnColumnIfAbsent(
+                schemaName, tableName, column.TargetColumnName, column.Description
+            );
+            return `${alterStmt}\n\n${descStmt}`;
+        }
+
+        return alterStmt;
+    }
+
+    private buildIdempotentAddColumnStatement(
+        schemaName: string,
+        tableName: string,
+        column: TargetColumnConfig,
+        platform: DatabasePlatform
+    ): string {
         const q = platform === 'sqlserver' ? QuoteSqlServer : QuotePostgres;
         const fullTable = `${q(schemaName)}.${q(tableName)}`;
         const nullable = column.IsNullable ? 'NULL' : 'NOT NULL';
@@ -421,35 +265,27 @@ export class DDLGenerator {
         // Idempotency guard — re-applying after a partial/interrupted run (or any re-sync) must not
         // fail because the column already exists. SQL Server has no `ADD COLUMN IF NOT EXISTS`, so we
         // gate with a single-statement IF over sys.columns (no BEGIN/END, so RSU's ';\n' batch chunker
-        // can't split it — same shape as GuardExtendedProperty). Postgres has native IF NOT EXISTS.
-        let alterStmt: string;
+        // can't split it). Postgres has native IF NOT EXISTS.
         switch (platform) {
             case 'sqlserver': {
                 const addStmt = `ALTER TABLE ${fullTable}\n    ADD ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
-                alterStmt =
+                return (
                     `IF NOT EXISTS (SELECT 1 FROM sys.columns ` +
                     `WHERE object_id = OBJECT_ID(N'${q(schemaName)}.${q(tableName)}') ` +
-                    `AND name = N'${column.TargetColumnName}')\n${addStmt}`;
-                break;
+                    `AND name = N'${column.TargetColumnName}')\n${addStmt}`
+                );
             }
             case 'postgresql':
-                alterStmt = `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
-                break;
+                return `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
             default: {
                 const unsupported: never = platform;
                 throw new Error(`GenerateAlterTableAddColumn: unsupported database platform '${String(unsupported)}'`);
             }
         }
+    }
 
-        const normalizedDescription = DDLGenerator.NormalizeDescription(column.Description, platform);
-        if (normalizedDescription !== null) {
-            const descStmt = this.makeColumnDescriptionStatement(
-                schemaName, tableName, column.TargetColumnName, normalizedDescription, platform
-            );
-            return `${alterStmt}\n\n${descStmt}`;
-        }
-
-        return alterStmt;
+    private hasMeaningfulDescription(description: string | undefined | null): description is string {
+        return description != null && description.replace(/\0/g, '').trim().length > 0;
     }
 
     /**

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GetDialect } from '@memberjunction/sql-dialect';
-import { DDLGenerator, STANDARD_COLUMN_DESCRIPTIONS } from '../DDLGenerator.js';
+import { STANDARD_COLUMN_DESCRIPTIONS } from '../DDLGenerator.js';
 import { SchemaBuilder } from '../SchemaBuilder.js';
 import type { SchemaBuilderInput, SourceSchemaInfo, TargetTableConfig } from '../interfaces.js';
 import { RuntimeSchemaManager } from '@memberjunction/schema-engine';
@@ -299,42 +299,56 @@ describe('SchemaBuilder (integration)', () => {
             }
         });
 
-        it('should emit normalized descriptions, strip whitespace-only ones, cap SQL Server length, and keep SplitStatements intact via BuildSchema', () => {
+        it('should strip whitespace-only descriptions, cap SQL Server length, preserve multi-line descriptions verbatim, and keep SplitBatches/SplitStatements intact via BuildSchema', () => {
+            const maxChars = GetDialect('sqlserver').MaxCommentLength!;
             const longDesc = 'Z'.repeat(4500);
-            const semiNewlineDesc = 'Line 1;\nLine 2;\r\nLine 3';
+            const trickyDesc = 'Line 1 (cost in $$);\nGo\nLine 2;\r\nLine 3';
             const configs = MakeTargetConfigs();
-            configs[0].Description = semiNewlineDesc;
+            configs[0].Description = trickyDesc;
             configs[0].Columns[0].Description = '   \t  '; // whitespace-only — must be omitted
             configs[0].Columns[1].Description = longDesc;
             configs[1].Description = '   '; // whitespace-only table description — must be omitted
 
+            const ssDialect = GetDialect('sqlserver');
             const ssOut = builder.BuildSchema(MakeInput({ Platform: 'sqlserver', TargetConfigs: structuredClone(configs) }));
             expect(ssOut.Errors).toHaveLength(0);
             const ssSql = ssOut.MigrationFiles[0].Content;
             // Whitespace-only ContactID and Deal table descriptions omitted
             expect(ssSql).not.toContain("@level2name = 'ContactID'");
-            expect(ssSql).not.toContain("@level1type = N'TABLE', @level1name = N'Deal'");
-            // Semicolon-newline collapsed so SplitStatements does not split inside string literal
-            expect(ssSql).toContain('Line 1; Line 2; Line 3');
-            // Email description capped at MAX_SQLSERVER_DESCRIPTION_CHARS
+            expect(ssSql).not.toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Deal', NULL, NULL)");
+            // Multi-line description preserved verbatim and survives SplitBatches + SplitStatements
+            expect(ssSql).toContain(trickyDesc);
+            const ssBatches = ssDialect.SplitBatches(ssSql);
+            // Expect 2 batches: CREATE SCHEMA (followed by GO) + CREATE TABLE/indexes/descriptions (not split on 'Go' inside description)
+            expect(ssBatches).toHaveLength(2);
+            for (const stmt of ssDialect.SplitStatements(ssBatches[1])) {
+                const quoteCount = (stmt.match(/'/g) ?? []).length;
+                expect(quoteCount % 2).toBe(0);
+            }
+            // Email description capped at SQL Server MaxCommentLength
             const emailExecMatch = ssSql.match(/@value = N'(Z+\.\.\.)'[\s\S]*?@level2name = 'Email'/);
             expect(emailExecMatch).not.toBeNull();
-            expect(emailExecMatch![1].length).toBe(DDLGenerator.MAX_SQLSERVER_DESCRIPTION_CHARS);
+            expect(emailExecMatch![1].length).toBe(maxChars);
             // Every standard column description emitted on SQL Server
             for (const colName of Object.keys(STANDARD_COLUMN_DESCRIPTIONS)) {
                 expect(ssSql).toContain(`@level2name = '${colName}'`);
             }
 
+            const pgDialect = GetDialect('postgresql');
             const pgOut = builder.BuildSchema(MakeInput({ Platform: 'postgresql', TargetConfigs: structuredClone(configs) }));
             expect(pgOut.Errors).toHaveLength(0);
             const pgSql = pgOut.MigrationFiles[0].Content;
             expect(pgSql).not.toContain(`COMMENT ON COLUMN "hubspot"."Contact"."ContactID"`);
             expect(pgSql).not.toContain(`COMMENT ON TABLE hubspot."Deal"`);
-            expect(pgSql).toContain(`COMMENT ON TABLE hubspot."Contact" IS 'Line 1; Line 2; Line 3';`);
+            expect(pgSql).toContain(`COMMENT ON TABLE hubspot."Contact" IS '${trickyDesc}';`);
             // PostgreSQL keeps full >3,700-char description uncapped
             expect(pgSql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email" IS '${longDesc}';`);
-            // SplitStatements produces no unclosed single-quoted fragments
-            for (const stmt of GetDialect('postgresql').SplitStatements(pgSql)) {
+            // SplitBatches + SplitStatements keep every statement intact with balanced quotes (even with `;\n`, `$$`, and `Go`)
+            const pgBatches = pgDialect.SplitBatches(pgSql);
+            expect(pgBatches).toHaveLength(1);
+            const pgStatements = pgDialect.SplitStatements(pgBatches[0]);
+            expect(pgStatements.length).toBeGreaterThan(20);
+            for (const stmt of pgStatements) {
                 const quoteCount = (stmt.match(/'/g) ?? []).length;
                 expect(quoteCount % 2).toBe(0);
             }

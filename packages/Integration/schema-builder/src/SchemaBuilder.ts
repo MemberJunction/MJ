@@ -30,7 +30,6 @@ import { MetadataEmitter } from './MetadataEmitter.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { SchemaEvolution } from './SchemaEvolution.js';
 import {
-    DDLGenerator as IntegrationDDLGenerator,
     STANDARD_COLUMN_DESCRIPTIONS,
     type StandardIntegrationColumnName,
 } from './DDLGenerator.js';
@@ -307,8 +306,8 @@ export class SchemaBuilder {
             SchemaName: config.SchemaName,
             TableName: config.TableName,
             EntityName: config.EntityName,
-            Description: IntegrationDDLGenerator.NormalizeDescription(config.Description, platform) ?? undefined,
-            Columns: config.Columns.map(c => this.convertColumn(c, platform)),
+            Description: config.Description,
+            Columns: config.Columns.map(c => this.convertColumn(c)),
             SoftPrimaryKeys: config.PrimaryKeyFields,
             ForeignKeys: (config.SoftForeignKeys ?? []).map(fk => ({
                 ColumnName: fk.FieldName,
@@ -370,7 +369,7 @@ export class SchemaBuilder {
     }
 
     /** Convert a TargetColumnConfig to a generic ColumnDefinition. */
-    private convertColumn(col: TargetColumnConfig, platform: DatabasePlatform): ColumnDefinition {
+    private convertColumn(col: TargetColumnConfig): ColumnDefinition {
         return {
             Name: col.TargetColumnName,
             Type: 'string' as SchemaFieldType, // Overridden by RawSqlType
@@ -380,7 +379,7 @@ export class SchemaBuilder {
             Precision: col.Precision ?? undefined,
             Scale: col.Scale ?? undefined,
             DefaultValue: col.DefaultValue ?? undefined,
-            Description: IntegrationDDLGenerator.NormalizeDescription(col.Description, platform) ?? undefined,
+            Description: col.Description,
         };
     }
 

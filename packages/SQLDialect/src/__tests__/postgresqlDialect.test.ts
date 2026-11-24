@@ -385,6 +385,13 @@ describe('PostgreSQLDialect', () => {
             const sql = dialect.CommentOnObject('TABLE', '__mj', 'User', "User's accounts");
             expect(sql).toContain("User''s accounts");
         });
+
+        it('should leave long comments uncapped and strip NUL bytes', () => {
+            expect(dialect.MaxCommentLength).toBeNull();
+            const longDesc = 'Z'.repeat(5000);
+            expect(dialect.CommentOnColumn('__mj', 'User', 'Bio', longDesc)).toContain(`IS '${longDesc}';`);
+            expect(dialect.CommentOnObject('TABLE', '__mj', 'User', 'hello\0world')).toContain("IS 'helloworld'");
+        });
     });
 
     describe('IIF', () => {

@@ -42,14 +42,11 @@ export class SchemaEvolution {
         const sourceColMap = new Map(targetConfig.Columns.map(c => [c.TargetColumnName.toLowerCase(), c]));
 
         // Standard columns to ignore in the diff (managed by Schema Builder / CodeGen)
-        const standardCols = new Set(['id', 'sourcerecordid', 'sourcejson', 'syncstatus', 'lastsyncedat',
-                                       '__mj_createdat', '__mj_updatedat',
-                                       '__mj_integration_syncstatus', '__mj_integration_lastsyncedat',
-                                       '__mj_integration_lastsyncedsnapshot', '__mj_integration_syncmessage',
-                                       '__mj_integration_contenthash', '__mj_integration_customoverflow',
-                                       '__mj_integration_externalversion', '__mj_integration_lastseenmodifiedvalue',
-                                       '__mj_integration_lastreconciledat', '__mj_integration_lastwriterdirection',
-                                       '__mj_integration_istombstoned', '__mj_integration_deleteddetectedat']);
+        const standardCols = new Set([
+            'id', 'sourcerecordid', 'sourcejson', 'syncstatus', 'lastsyncedat',
+            '__mj_createdat', '__mj_updatedat',
+            ...Object.keys(STANDARD_COLUMN_DESCRIPTIONS).map(c => c.toLowerCase()),
+        ]);
 
         const added: TargetColumnConfig[] = [];
         const modified: ColumnModification[] = [];

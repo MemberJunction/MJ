@@ -415,6 +415,15 @@ export abstract class SQLDialect extends QueryDialect implements SQLParserDialec
     }
 
     /**
+     * Maximum UTF-16 code units allowed in object/column comment values, or `null` when effectively
+     * unbounded. SQL Server caps `sp_addextendedproperty`'s `sql_variant` `@value` at 7,500 bytes
+     * (3,700 UTF-16 code units with margin); PostgreSQL `COMMENT ON` (`text`) has no practical cap.
+     */
+    get MaxCommentLength(): number | null {
+        return this.DDL.MaxCommentLength;
+    }
+
+    /**
      * Minimum in-row byte footprint of a column of the given raw SQL type. Off-row-capable
      * variable-length / LOB types contribute only their in-row pointer; fixed-length types contribute
      * their full size. Only meaningful for dialects that report a {@link MaxInRowSizeBytes}.
@@ -625,18 +634,25 @@ export abstract class SQLDialect extends QueryDialect implements SQLParserDialec
     }
 
     /**
-     * Splits an oversized SQL batch into individual statements on `;`+EOL
+     * Splits a SQL script on standalone batch separator lines (e.g., `GO` on SQL Server) while
+     * respecting string literals, comments, and dollar-quoted blocks so a separator word inside
+     * a description or comment never splits mid-literal. On dialects with no batch separator
+     * (PostgreSQL), returns the non-empty script as a single batch.
+     */
+    SplitBatches(sql: string): string[] {
+        return this.DDL.SplitBatches(sql);
+    }
+
+    /**
+     * Splits an oversized SQL batch into individual statements on top-level `;`+EOL
      * boundaries so a caller (e.g. the RSU migration executor) can re-group
      * them into smaller chunks that each fit under a client request timeout.
      *
-     * Base implementation = the naive `split(/;\s*\n/g)` semantics: split on a
-     * `;` followed by optional inline whitespace and a newline, trim each
-     * fragment, drop empties, and ensure each returned statement ends with `;`.
-     * This is correct for SQL Server (no dollar-quoted blocks).
-     *
-     * PostgreSQL overrides this with a dollar-quote-aware split that never
-     * tears apart `DO $$ … $$` / `$tag$ … $tag$` blocks whose bodies
-     * legitimately contain `;`+newline.
+     * Respects single-quoted string literals (`'...'` with `''` escapes, plus PostgreSQL
+     * `E'...'` escape strings and `$$…$$` / `$tag$…$tag$` dollar-quoted blocks) as well as
+     * `--` line comments and nested block comments so `;`+newline inside descriptions,
+     * defaults, or procedural bodies never splits mid-statement. Each returned statement ends
+     * with `;`.
      */
     SplitStatements(batch: string): string[] {
         return this.DDL.SplitStatements(batch);
