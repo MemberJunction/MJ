@@ -135,6 +135,7 @@ function createHarness(initial: TestTab[]): Harness {
   // Object.create skips field initializers, so the collections a constructed component owns are set here.
   internals['componentRefs'] = new Map();
   internals['tabsCurrentlyLoading'] = new Set<string>();
+  internals['queuedTabLoads'] = new Map<string, unknown>();
   internals['layoutInitialized'] = true;
   internals['layoutManager'] = {
     IsInitialized: true,

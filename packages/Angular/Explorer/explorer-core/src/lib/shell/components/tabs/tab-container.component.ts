@@ -148,6 +148,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   // and onTabShown can race to call loadTabContent, resulting in duplicate component rendering.
   private tabsCurrentlyLoading = new Set<string>();
 
+  // A load asked for while the same tab is already loading, by tab id: the container that caller
+  // passed. Dropping that request lost the newer container, so a pane GL re-rendered mid-load
+  // stayed blank — the in-flight load attached to the discarded element. The queued load runs
+  // once the in-flight one finishes, against whichever container is live by then.
+  private queuedTabLoads = new Map<string, unknown>();
+
   // Record-tab shows GL fired while the records region was HIDDEN, by tab id.
   // Their content loads are deferred until the region is the visible surface —
   // see the TabShown handler in wireRecordsLayoutEvents.
@@ -469,7 +475,31 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     if (showing && activeTab && this.recordsLayoutInitialized) {
       this.focusRecordsTab(activeTab.id);
+      this.reloadBlankActiveRecordTab(activeTab.id);
     }
+  }
+
+  /**
+   * Load the active record tab again when its pane is empty and nothing is loading it.
+   *
+   * GL loads a pane on its FIRST show only, and opening a record that is already the active tab
+   * only re-focuses it, so a pane whose load attached nowhere stayed blank on every re-open until
+   * Reset Layout deleted the tab. This makes re-opening it the recovery. A loaded pane is never
+   * empty: the origin crumb or the content wrapper is always in it.
+   */
+  private reloadBlankActiveRecordTab(tabId: string): void {
+    if (!this.ShowRecordsRegion || this.recordsCreatingTabs || this.recordsRebuilding) {
+      return;
+    }
+    if (this.tabsCurrentlyLoading.has(tabId) || this.pendingRecordShows.has(tabId)) {
+      return;
+    }
+    const live = this.recordsLayoutManager.GetContainer(tabId);
+    if (!live?.element || live.element.childElementCount > 0) {
+      return;
+    }
+    this.recordsLayoutManager.MarkTabNotLoaded(tabId);
+    this.loadShownRecordTab(tabId, live).catch(e => LogError(`Blank record tab reload failed for ${tabId}: ${e}`));
   }
 
   /** Add/remove/style record tabs in the records GL to match the configuration */
@@ -811,9 +841,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (this.workspaceManager.GetActiveTabId() === tab.id) {
       const container = this.recordsLayoutManager.GetContainer(tab.id);
       if (container) {
-        void this.loadTabContent(tab.id, container).then(() => {
-          this.recordsLayoutManager.MarkTabLoaded(tab.id);
-        });
+        this.loadShownRecordTab(tab.id, container).catch(e => LogError(`Record tab reload failed for ${tab.id}: ${e}`));
       }
     }
     return true;
@@ -2305,6 +2333,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // This can happen when a tab's content changes while active — both the workspace
     // config subscription reload path and onTabShown can race to call this method.
     if (this.tabsCurrentlyLoading.has(tabId)) {
+      this.queuedTabLoads.set(tabId, container);
       return;
     }
     this.tabsCurrentlyLoading.add(tabId);
@@ -2318,7 +2347,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }
 
       // Get the container element from Golden Layout
-      const glContainer = container as { element: HTMLElement };
+      let glContainer = container as { element: HTMLElement };
       if (!glContainer?.element) {
         LogError('Golden Layout container element not found');
         this.emitFirstLoadCompleteOnce();
@@ -2327,9 +2356,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       // Extract resource data from tab configuration
       const resourceData = await this.getResourceDataFromTab(tab);
+      // GL may have re-rendered this pane while we awaited — attach to the live element.
+      glContainer = this.liveTabContainer(tabId, glContainer);
       if (!resourceData) {
         LogError(`Unable to create ResourceData for tab: ${tab.title}`);
-        this.emitFirstLoadCompleteOnce();
+        this.renderTabErrorCard(glContainer.element, {
+          IconClass: 'fa-solid fa-triangle-exclamation',
+          Title: 'This tab could not be opened.',
+          Detail: `The information needed to show "${tab.title}" could not be read. Close the tab and open it again.`,
+        });
         return;
       }
 
@@ -2405,6 +2440,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         BaseResourceComponent,
         driverClass
       );
+      // The lazy registration lookup can outlive the container too — move to the live one.
+      const liveAfterRegistration = this.liveTabContainer(tabId, glContainer);
+      if (liveAfterRegistration !== glContainer) {
+        liveAfterRegistration.element.innerHTML = '';
+        this.ensureRecordOriginCrumb(tab, liveAfterRegistration.element);
+        glContainer = liveAfterRegistration;
+      }
 
       if (!resourceReg) {
         LogError(`Unable to find resource registration for driver class: ${driverClass}`);
@@ -2507,7 +2549,48 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }
     } finally {
       this.tabsCurrentlyLoading.delete(tabId);
+      this.runQueuedTabLoad(tabId);
     }
+  }
+
+  /**
+   * Run the load queued while `tabId` was loading (see `queuedTabLoads`), into the live container.
+   * Record tabs go through `loadShownRecordTab`, so they are marked loaded only once content is in
+   * the pane.
+   */
+  private runQueuedTabLoad(tabId: string): void {
+    if (!this.queuedTabLoads.has(tabId)) {
+      return;
+    }
+    const queued = this.queuedTabLoads.get(tabId);
+    this.queuedTabLoads.delete(tabId);
+    const tab = this.workspaceManager.GetTab(tabId);
+    if (!tab) {
+      return;
+    }
+    if (this.isRecordTab(tab)) {
+      const live = this.recordsLayoutManager.GetContainer(tabId) ?? queued;
+      this.loadShownRecordTab(tabId, live).catch(e => LogError(`Queued record tab load failed for ${tabId}: ${e}`));
+    } else {
+      const live = this.layoutManager.GetContainer(tabId) ?? queued;
+      this.loadTabContent(tabId, live).catch(e => LogError(`Queued tab load failed for ${tabId}: ${e}`));
+    }
+  }
+
+  /**
+   * The container to attach `tabId`'s content to: `current`, unless GL has since replaced it (its
+   * element left the document) with a live one. A load that attaches to a replaced element leaves
+   * the visible pane blank with nothing logged.
+   */
+  private liveTabContainer(tabId: string, current: { element: HTMLElement }): { element: HTMLElement } {
+    if (current.element?.isConnected !== false) {
+      return current;
+    }
+    const tab = this.workspaceManager.GetTab(tabId);
+    const manager = tab && this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
+    const live = manager.GetContainer(tabId);
+    // Return GL's own container (not a copy) so its show/hide events can still be wired.
+    return live?.element ? (live as { element: HTMLElement }) : current;
   }
 
   /**
@@ -3489,10 +3572,21 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         `Context: ${JSON.stringify(context, null, 2)}`
     );
 
-    // Clear the host before injecting the error UI.
+    this.renderTabErrorCard(host, {
+      IconClass: 'fa-solid fa-puzzle-piece',
+      Title: 'This view isn’t available in the running build.',
+      Detail: `No component is registered for driver class "${driverClass}". The Angular package that provides this view likely isn't bundled into this Explorer build.`,
+    });
+  }
+
+  /**
+   * Replace a pane's content with an error card, so a tab that cannot load says so instead of
+   * staying blank. Also satisfies the shell's first-load gate so the loading overlay clears.
+   */
+  private renderTabErrorCard(host: HTMLElement, text: { IconClass: string; Title: string; Detail: string }): void {
     host.innerHTML = '';
     const wrapper = document.createElement('div');
-    wrapper.className = 'tab-content-wrapper missing-resource-error';
+    wrapper.className = 'tab-content-wrapper tab-load-error';
     wrapper.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 32px; box-sizing: border-box;';
     wrapper.setAttribute('role', 'alert');
 
@@ -3510,19 +3604,21 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     ].join(';');
 
     const icon = document.createElement('div');
-    icon.innerHTML = '<i class="fa-solid fa-puzzle-piece"></i>';
+    const glyph = document.createElement('i');
+    glyph.className = text.IconClass;
+    icon.appendChild(glyph);
     icon.style.cssText = 'font-size: 32px; color: var(--mj-status-warning); margin-bottom: 12px;';
 
     const title = document.createElement('h2');
-    title.textContent = 'This view isn’t available in the running build.';
+    title.textContent = text.Title;
     title.style.cssText = 'font-size: 18px; font-weight: 600; margin: 0 0 12px 0; color: var(--mj-status-warning-text);';
 
     const detail = document.createElement('p');
-    detail.textContent = `No component is registered for driver class "${driverClass}". The Angular package that provides this view likely isn't bundled into this Explorer build.`;
+    detail.textContent = text.Detail;
     detail.style.cssText = 'font-size: 14px; line-height: 1.5; color: var(--mj-text-secondary); margin: 0 0 12px 0;';
 
     const hint = document.createElement('p');
-    hint.textContent = 'See browser console for technical details (driver class, application, nav item).';
+    hint.textContent = 'See the browser console for technical details.';
     hint.style.cssText = 'font-size: 12px; color: var(--mj-text-muted); margin: 0; font-style: italic;';
 
     card.appendChild(icon);
