@@ -30,6 +30,8 @@ export interface RefreshDatabaseConfig {
     RequestTimeout?: number;
     /** PostgreSQL TLS options in node-postgres' `ssl` shape; omitted means plain TCP. */
     SSL?: Record<string, unknown>;
+    /** PostgreSQL token logins only: gives the password when the connection opens. Used instead of `Password`. */
+    PasswordSource?: () => Promise<string>;
 }
 
 const ALWAYS_EXCLUDE_FROM_FIELD_PROCS = ['sys', 'staging'];
@@ -227,7 +229,7 @@ async function openRefreshConnection(platform: DatabasePlatform, database: Refre
             host: database.Host,
             port: database.Port,
             user: database.User,
-            password: database.Password,
+            password: database.PasswordSource ?? database.Password,
             database: database.Database,
             // Explicit, so an unset value means plain TCP instead of falling back to PGSSLMODE.
             ssl: database.SSL ?? false,

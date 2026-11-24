@@ -440,6 +440,7 @@ export default class Migrate extends Command {
           Encrypt: config.dbEncrypt,
           TrustServerCertificate: config.dbTrustServerCertificate,
           ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
+          ...(pgSecurity?.PasswordSource ? { PasswordSource: pgSecurity.PasswordSource } : {}),
         },
       });
       spinner.succeed(`Metadata refreshed for ${targetSchema}`);

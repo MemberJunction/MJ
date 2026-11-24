@@ -154,6 +154,7 @@ export async function BuildOrchestratorContext(
       TrustServerCertificate: config.dbTrustServerCertificate,
       RequestTimeout: config.dbRequestTimeout,
       ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
+      ...(pgSecurity?.PasswordSource ? { PasswordSource: pgSecurity.PasswordSource } : {}),
     },
     GitHubOptions: BuildGitHubOptions(config),
     RepoRoot: process.cwd(),

@@ -449,12 +449,22 @@ async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayCo
   }
 }
 
+/** The result of {@link ResolvePostgresMigrationSecurity}. */
+export interface PostgresMigrationSecurity {
+  SSL?: Record<string, unknown>;
+  Password?: string;
+  PasswordSource?: () => Promise<string>;
+}
+
 /**
  * TLS and password for a PostgreSQL migration run, from the shared `PG_SSL_*` and `PG_AUTH_MODE`
- * settings every MJ PostgreSQL client follows. A token login fetches one token up front: a migration
- * run opens one connection and finishes well within a token's lifetime.
+ * settings every MJ PostgreSQL client follows.
+ *
+ * For a token login, `PasswordSource` gives a token each time it is called; pass it to every client
+ * that accepts a function, so each connection asks for its own. `Password` is one token fetched now,
+ * for Skyway, whose password option is a string.
  */
-export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Promise<{ SSL?: Record<string, unknown>; Password?: string }> {
+export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Promise<PostgresMigrationSecurity> {
   const ssl: PgSslConfig = BuildPgSslConfig(mjConfig.dbHost);
   // BuildPgPasswordSource refuses a token login whose TLS does not verify the server.
   const source = BuildPgPasswordSource(ResolvePgAuthMode(), {
@@ -466,5 +476,5 @@ export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Prom
   // Skyway types its SSL option as a plain record and treats `true` as "TLS, unverified", so pass
   // the object as a record and leave the option out for plain TCP.
   const sslRecord: Record<string, unknown> | undefined = typeof ssl === 'object' && ssl !== null ? Object.fromEntries(Object.entries(ssl)) : undefined;
-  return { SSL: sslRecord, Password: source ? await source() : undefined };
+  return source ? { SSL: sslRecord, Password: await source(), PasswordSource: source } : { SSL: sslRecord };
 }

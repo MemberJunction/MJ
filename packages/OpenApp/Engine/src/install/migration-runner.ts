@@ -131,6 +131,12 @@ export interface SkywayDatabaseConfig {
      * `PG_SSL_*` settings. Omit it for plain TCP. SQL Server uses `Encrypt` instead.
      */
     SSL?: Record<string, unknown>;
+    /**
+     * PostgreSQL token logins only: gives the password for a new connection. When set, each
+     * migration run and each metadata refresh takes its password from here and `Password` is not
+     * used. Build it with `BuildPgPasswordSource` from `@memberjunction/postgresql-dataprovider`.
+     */
+    PasswordSource?: () => Promise<string>;
 }
 
 /**
@@ -189,7 +195,11 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // packages are not installed — and a genuinely-missing package gets the actionable
         // optionalDependencies guidance instead of a raw resolver error.
         const Skyway = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
-        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
+        // Skyway takes the password as a string, so a token login fetches one for this run.
+        const runDatabaseConfig = DatabaseConfig.PasswordSource
+            ? { ...DatabaseConfig, Password: await DatabaseConfig.PasswordSource() }
+            : DatabaseConfig;
+        const config = BuildSkywayConfig(MigrationsDir, SchemaName, runDatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
         // Skyway 0.6.x requires an explicit provider, selected by platform.
         config.Provider = await CreateSkywayProvider(platform, config.Database);
 
