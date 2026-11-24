@@ -194,7 +194,7 @@ export class CommunicationsAdminDashboardComponent extends BaseDashboard impleme
         { EntityName: 'MJ: Communication Sender Permissions', ResultType: 'entity_object' },
         { EntityName: 'MJ: Communication Preferences', OrderBy: 'DisplayOrder ASC, Name ASC', ResultType: 'entity_object' },
         { EntityName: 'MJ: Communication Principals', OrderBy: 'DisplayOrder ASC, Name ASC', ResultType: 'entity_object' },
-        { EntityName: 'MJ: Communication Base Message Types', OrderBy: 'Name ASC', ResultType: 'entity_object' },
+        { EntityName: 'MJ: Communication Base Message Types', OrderBy: 'Type ASC', ResultType: 'entity_object' },
         { EntityName: 'MJ: Communication Compliance Regimes', OrderBy: 'Name ASC', ResultType: 'entity_object' },
         { EntityName: 'MJ: Communication Compliance Regime Jurisdictions', ResultType: 'entity_object' },
         { EntityName: 'MJ: Communication Compliance Regime Rules', ResultType: 'entity_object' },
