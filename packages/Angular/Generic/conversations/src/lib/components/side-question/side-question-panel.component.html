@@ -119,7 +119,7 @@
             {{
               turn.IsStreaming
                 ? (State?.ActiveAgentName || CurrentAgentLabel)
-                : (turn.Answer?.Agent || State?.ActiveAgentName || 'Sage')
+                : (turn.Answer?.Agent || State?.ActiveAgentName || DefaultAgentName)
             }}
           </span>
           @if (turn.IsStreaming && State?.ActiveStatusText && !State?.StreamingText) {
@@ -158,6 +158,7 @@
   <div class="sq-composer">
     <mj-ai-composer
       #aiComposer
+      [Compact]="true"
       [Placeholder]="ComposerPlaceholder"
       [Disabled]="IsBusyAsking"
       [Rows]="1"

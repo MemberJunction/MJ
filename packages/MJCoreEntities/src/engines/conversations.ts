@@ -2178,6 +2178,23 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return UUIDsEqual(typeId, agentChannelTypeId);
     }
 
+    /**
+     * True when `typeId` matches the `SIDE_QUESTION` conversation type (comparing against both
+     * the metadata-resolved ID and the built-in seeded UUID fallback).
+     */
+    public IsSideQuestionTypeId(typeId: string | null | undefined): boolean {
+        if (!typeId) {
+            return false;
+        }
+        const sideQuestionTypeId =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SIDE_QUESTION) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
+        return (
+            UUIDsEqual(typeId, sideQuestionTypeId) ||
+            UUIDsEqual(typeId, BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION)
+        );
+    }
+
     private buildVisibleConversationsFilter(
         environmentId: string,
         userId: string,
@@ -2231,7 +2248,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
         const sideQuestionClause = options?.includeSideQuestions
             ? ''
-            : ` AND (TypeID IS NULL OR TypeID<>'${EscapeSQLString(sideQuestionTypeId)}')`;
+            : ` AND (TypeID IS NULL OR TypeID <> '${EscapeSQLString(sideQuestionTypeId)}')`;
         return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}${agentChannelClause}${sideQuestionClause}`;
     }
 
@@ -2653,7 +2670,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         conversation.UserID = contextUser.ID;
         const defaultTypeCode = options?.anchorType
             ? CONVERSATION_TYPE_CODES.COMMENT
-            : options?.parentId
+            : options?.parentBranchId
                 ? CONVERSATION_TYPE_CODES.SIDE_QUESTION
                 : CONVERSATION_TYPE_CODES.CHAT;
         const resolvedTypeId =
@@ -2738,7 +2755,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             conversation.ApplicationScope !== 'Application' &&
             conversation.AnchorType == null &&
             conversation.LinkedEntityID == null &&
-            conversation.ParentID == null &&
+            !this.IsSideQuestionTypeId(conversation.TypeID) &&
             !this.isAgentChannelTypeId(conversation.TypeID) &&
             !this.GetConversation(conversation.ID)
         ) {
@@ -5841,11 +5858,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                     (event.baseEntity as MJConversationEntity | null)?.TypeID ??
                     null;
                 const parentBranchId = data['ParentBranchID'] as string | null | undefined;
-                const sideQuestionTypeId =
-                    this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SIDE_QUESTION) ??
-                    BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
                 const isSideQuestion =
-                    (typeId != null && (UUIDsEqual(typeId, sideQuestionTypeId) || UUIDsEqual(typeId, BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION))) ||
+                    this.IsSideQuestionTypeId(typeId) ||
                     parentBranchId != null;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
@@ -6212,13 +6226,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         parentConversationId: string,
         parentBranchId: string | null,
         options?: { name?: string; environmentId?: string; projectId?: string | null; defaultAgentId?: string | null },
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJConversationEntity> {
         const user = contextUser ?? this.ContextUser;
         if (!user) {
             throw new Error('GetOrCreateSideConversation requires a user context.');
         }
-        const existing = await this.LoadSideConversations(parentConversationId, parentBranchId, user);
+        const md = provider ?? this.ProviderToUse;
+        const existing = await this.LoadSideConversations(parentConversationId, parentBranchId, user, md);
         if (existing.length > 0) {
             return existing[0];
         }
@@ -6233,7 +6249,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             parentName = cachedParent.Name;
         }
         if (!environmentId) {
-            const parentEntity = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+            const parentEntity = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
             if (!(await parentEntity.Load(parentConversationId))) {
                 throw new Error(`Parent conversation ${parentConversationId} could not be loaded.`);
             }
@@ -6313,7 +6329,6 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 OrderBy: '__mj_CreatedAt DESC',
                 Fields: ['ID', 'DefaultAgentID'],
                 MaxRows: 1,
-                BypassCache: true,
                 SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
@@ -6347,16 +6362,18 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public async ClearSideConversation(
         sideConversationId: string,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<boolean> {
         const user = contextUser ?? this.ContextUser;
-        const conversation = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+        const md = provider ?? this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
         if (!(await conversation.Load(sideConversationId))) {
             return false;
         }
         conversation.IsArchived = true;
         if (!(await conversation.Save())) {
-            throw new Error(conversation.LatestResult?.Message || `Failed to clear side conversation ${sideConversationId}`);
+            throw new Error(conversation.LatestResult?.CompleteMessage || `Failed to clear side conversation ${sideConversationId}`);
         }
         this.removeDetailCache(sideConversationId);
         return true;

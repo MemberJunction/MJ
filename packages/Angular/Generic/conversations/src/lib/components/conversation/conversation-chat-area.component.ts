@@ -453,8 +453,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private _allowRemoteBrowser = false;
   /**
-   * Host-level opt-in for Antigravity-style Side Questions (`[Side Qs]` header button, `Alt+/`
-   * shortcut, floating drawer / dockable split pane). Defaults true.
+   * Host-level opt-in for Antigravity-style Side Questions (trigger button below the composer's
+   * live-status row, `Alt+/` shortcut, and single-turn side-question panel above the composer).
+   * Defaults true.
    */
   @Input() AllowSideQuestions = true;
 
@@ -1656,15 +1657,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @ViewChild(SideQuestionPanelComponent) private sideQuestionPanel?: SideQuestionPanelComponent;
   public IsSideQuestionOpen = false;
   public SideQuestionTurnCount = 0;
-
-  /** @deprecated Use {@link SideQuestionTurnCount}. */
-  public get SideQuestionMessageCount(): number {
-    return this.SideQuestionTurnCount;
-  }
-  /** @deprecated Use {@link SideQuestionTurnCount}. */
-  public set SideQuestionMessageCount(value: number) {
-    this.SideQuestionTurnCount = value;
-  }
   private sideQuestionSubDestroy$?: Subject<void>;
 
   public get CanUseSideQuestions(): boolean {

@@ -406,6 +406,10 @@ interface PromptWithholding {
     Handoff: boolean;
     /** The caller's browser and view are not: no client tools, no app context (an audience). */
     CallerContext: boolean;
+    /** Client tools are withheld (audience run OR read-only Side Question run). */
+    ClientTools: boolean;
+    /** Mutating/outbound actions are withheld from the action catalog (read-only Side Question run). */
+    ReadOnlyMode: boolean;
 }
 
 /** The run's validated scope as memory, retrieval and scoped prompt configuration take it (`BaseAgent.runScopeForContext`). */
@@ -4013,38 +4017,53 @@ export class BaseAgent {
      * the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
      */
     private promptWithholding(params: ExecuteAgentParams): PromptWithholding {
+        const callerContext = this.runAudienceAddsReader(params);
+        const readOnlyMode = Boolean(params.SideQuestionContext?.ReadOnlyMode);
         return {
             TaskGraphs: this.runWithholdsTaskGraphs(params),
             Handoff: this.runWithholdsHandoff(params),
-            CallerContext: this.runAudienceAddsReader(params)
+            CallerContext: callerContext,
+            ClientTools: callerContext || readOnlyMode,
+            ReadOnlyMode: readOnlyMode,
         };
     }
 
     /**
-     * The client-tools and app-context prompt sections ({@link buildClientToolPromptSection}, {@link buildAppContextSection}),
-     * both empty when the caller's context is withheld ({@link promptWithholding}): the prompt then offers no client tool
-     * and none of the caller's app context. {@link executeClientToolsStep} refuses a client-tools step emitted anyway.
+     * The client-tools and app-context prompt sections ({@link buildClientToolPromptSection}, {@link buildAppContextSection}).
+     * Under an audience (`withholdCallerContext`), both are withheld; in read-only Side Question mode (`withholdClientTools`),
+     * client tools are withheld while keeping the caller's own app context. {@link executeClientToolsStep} refuses any
+     * client-tools step emitted anyway.
      */
     private callerContextSections(
         agent: MJAIAgentEntityExtended,
         extraData: Record<string, unknown> | undefined,
-        withhold: boolean
+        withholdCallerContext: boolean,
+        withholdClientTools: boolean = withholdCallerContext
     ): { clientToolDetails: string; appContext: string } {
-        if (withhold) {
-            return { clientToolDetails: '', appContext: '' };
-        }
         return {
-            clientToolDetails: this.buildClientToolPromptSection(agent, extraData),
-            appContext: this.buildAppContextSection(extraData),
+            clientToolDetails: withholdCallerContext || withholdClientTools
+                ? ''
+                : this.buildClientToolPromptSection(agent, extraData),
+            appContext: withholdCallerContext
+                ? ''
+                : this.buildAppContextSection(extraData),
         };
     }
 
     /**
-     * The `Failed` step for a client-tools step under an audience, or null. Client tools run in the caller's browser and
-     * what they return comes back into a run whose output reaches the room; the prompt does not offer them then
-     * ({@link callerContextSections}), and this refuses a step the model emits anyway, as {@link taskGraphRefusal} does a graph.
+     * The `Failed` step for a client-tools step when client tools are withheld (under an audience or during a
+     * read-only Side Question run), or null.
      */
     private clientToolsRefusal(params: ExecuteAgentParams, previousDecision: BaseAgentNextStep): BaseAgentNextStep | null {
+        if (params.SideQuestionContext?.ReadOnlyMode) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'Client tools are not available during a read-only Side Question run.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
         if (!this.runAudienceAddsReader(params)) {
             return null;
         }
@@ -4835,7 +4854,9 @@ export class BaseAgent {
                 // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
                 // host-level onProgress the parent execution carries.
                 onProgress: this.combineProgressCallbacks(request.OnProgress, params.onProgress),
-                ...(params.SideQuestionContext ? { SideQuestionContext: params.SideQuestionContext } : {}),
+                ...(params.SideQuestionContext
+                    ? { SideQuestionContext: { ...params.SideQuestionContext, ActiveRunsSnapshot: null } }
+                    : {}),
             });
 
             const artifacts = await CollectDelegatedRunArtifactsSafely({
@@ -8952,7 +8973,14 @@ export class BaseAgent {
         // at it. See resolveRuntimeStateDelivery for the two ways a template can fail that test.
         const effectiveSystemPrompt = systemPrompt ?? (promptParams.prompt as MJAIPromptEntityExtended | undefined);
         const delivery = await this.resolveRuntimeStateDelivery(effectiveSystemPrompt, params.contextUser);
-        const activeRunsSnapshot = params.SideQuestionContext?.ActiveRunsSnapshot ?? null;
+        // In append-only mode, turn 1's volatile state message stays in conversation history, so only
+        // include the static active-runs snapshot on the first prompt turn to avoid duplicating it on
+        // subsequent loop iterations.
+        const isAppendOnly = this.shouldUseAppendOnlyTrailingState(promptParams);
+        const activeRunsSnapshot =
+            isAppendOnly && this._promptTurnCount > 0
+                ? null
+                : (params.SideQuestionContext?.ActiveRunsSnapshot ?? null);
         if (delivery === 'embedded') {
             this.logStatus(
                 '⚠️ System prompt template still contains volatile blocks (database template unsynced); skipping trailing runtime-state fragment to avoid duplicate state.',
@@ -14547,6 +14575,10 @@ The context is now within limits. Please retry your request with the recovered c
                     actionDetails = this.formatActionDetails(activeActions, boundActionParams);
                 }
             }
+            if (withholding?.ReadOnlyMode) {
+                activeActions = activeActions.filter((a) => this.IsActionAllowedInReadOnlyMode(a));
+                actionDetails = this.formatActionDetails(activeActions, boundActionParams);
+            }
             // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
             // Store for later validation in validateSubAgentNextStep (see getEffectiveSubAgentsForValidation)
@@ -14604,8 +14636,14 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentDetails = this.narrowedCatalogSection('agent', uniqueActiveSubAgents, subAgentDetails, shown => this.formatSubAgentDetails(shown));
             const skillsCatalog = this.narrowedCatalogSection('skill', availableSkills, this.formatSkillsCatalog(availableSkills), shown => this.formatSkillsCatalog(shown));
 
-            // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
-            const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
+            // The client tools and the app context (per-run, from extraData) — neither under an audience,
+            // and no client tools in read-only Side Question mode (callerContextSections).
+            const { clientToolDetails, appContext } = this.callerContextSections(
+                agent,
+                extraData,
+                withholding?.CallerContext === true,
+                withholding?.ClientTools === true
+            );
 
             const subAgentConsultEnabled = uniqueActiveSubAgents.some(
                 sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
@@ -15972,6 +16010,9 @@ The context is now within limits. Please retry your request with the recovered c
 
         const sideQuestionBlocked = this.checkSideQuestionReadOnlyAction(params, action, actionEntity, contextUser ?? params.contextUser);
         if (sideQuestionBlocked) {
+            if (!skipBreaker) {
+                this.lockOutAction(action, actionEntity, 'fatal');
+            }
             return sideQuestionBlocked;
         }
 
@@ -16098,8 +16139,84 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Leading action-name verbs treated as read-only fallback when an action omits both
+     * `Action.Config.isReadOnly` and `Action.Config.Verb`. Subclasses may override to tune fallback rules.
+     */
+    protected get ReadOnlyActionNamePrefixes(): readonly string[] {
+        return ['get', 'list', 'search', 'find', 'query', 'read', 'fetch', 'lookup', 'describe', 'inspect', 'calculate', 'analyze', 'count', 'check', 'view', 'show'];
+    }
+
+    /**
+     * Leading action-name verbs treated as mutating/outbound fallback when an action omits
+     * `Action.Config.isReadOnly`, `disallowWhenTainted`, and `Action.Config.Verb`.
+     */
+    protected get MutatingActionNamePrefixes(): readonly string[] {
+        return ['create', 'update', 'delete', 'upsert', 'remove', 'archive', 'send', 'post', 'modify', 'write', 'insert', 'drop', 'patch', 'put', 'merge', 'assign', 'approve', 'reject', 'cancel', 'close', 'complete', 'trigger', 'deploy', 'publish'];
+    }
+
+    /**
+     * Object nouns paired with embedded write verbs (e.g. "HubSpot Create Contact") in the name fallback.
+     */
+    protected get MutatingActionObjectNouns(): readonly string[] {
+        return ['record', 'email', 'message', 'item', 'contact', 'deal', 'task', 'notification', 'lead', 'ticket', 'company'];
+    }
+
+    /**
+     * Determines whether an action is permitted during read-only execution modes (such as Side Questions).
+     *
+     * Resolution precedence (metadata first, linear name fallback last):
+     * 1. `Action.Config_Object.isReadOnly` (`true` allows, `false` blocks).
+     * 2. `Action.Config_Object.disallowWhenTainted === true` blocks.
+     * 3. `Action.Config_Object.Verb` (integration routing metadata: read verbs allow, write verbs block).
+     * 4. Linear word-token fallback on `Action.Name` against {@link ReadOnlyActionNamePrefixes} /
+     *    {@link MutatingActionNamePrefixes}.
+     */
+    protected IsActionAllowedInReadOnlyMode(
+        actionEntity: MJActionEntityExtended,
+        _params?: ExecuteAgentParams
+    ): boolean {
+        const cfg = actionEntity.Config_Object;
+        if (cfg?.isReadOnly === true) {
+            return true;
+        }
+        if (cfg?.isReadOnly === false || cfg?.disallowWhenTainted === true) {
+            return false;
+        }
+        if (cfg?.Verb) {
+            const verb = cfg.Verb.trim().toLowerCase();
+            if (this.ReadOnlyActionNamePrefixes.includes(verb)) {
+                return true;
+            }
+            if (this.MutatingActionNamePrefixes.includes(verb)) {
+                return false;
+            }
+        }
+        return !this.isMutatingActionNameFallback(actionEntity.Name ?? '');
+    }
+
+    private isMutatingActionNameFallback(actionName: string): boolean {
+        const words = extractLowercaseWords(actionName);
+        if (words.length === 0 || this.ReadOnlyActionNamePrefixes.includes(words[0])) {
+            return false;
+        }
+        if (this.MutatingActionNamePrefixes.includes(words[0])) {
+            return true;
+        }
+        if (words[0] === 'execute' && words[1] === 'mcp') {
+            return true;
+        }
+        const embeddedWriteVerbs = ['create', 'update', 'delete', 'remove', 'send'];
+        for (let i = 0; i < words.length - 1; i++) {
+            if (embeddedWriteVerbs.includes(words[i]) && this.MutatingActionObjectNouns.includes(words[i + 1])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Blocks mutating or outbound/irreversible actions during a Side Question run (`ReadOnlyMode`).
-     * Allows read/query/search actions to inspect workspace or integration state safely.
+     * Delegates policy evaluation to {@link IsActionAllowedInReadOnlyMode}.
      */
     private checkSideQuestionReadOnlyAction(
         params: ExecuteAgentParams,
@@ -16110,11 +16227,10 @@ The context is now within limits. Please retry your request with the recovered c
         if (!params.SideQuestionContext?.ReadOnlyMode) {
             return null;
         }
-        const actionName = (actionEntity.Name || action.name || '').trim();
-        const isDisallowWhenTainted = actionEntity.Config_Object?.disallowWhenTainted === true;
-        if (!isDisallowWhenTainted && !isMutatingSideQuestionActionName(actionName)) {
+        if (this.IsActionAllowedInReadOnlyMode(actionEntity, params)) {
             return null;
         }
+        const actionName = (actionEntity.Name || action.name || '').trim();
         return {
             Success: false,
             ResultCode: POLICY_DENIED_RESULT_CODE,
@@ -16633,7 +16749,9 @@ The context is now within limits. Please retry your request with the recovered c
                 SearchScopeIDs: params.SearchScopeIDs, // the host's search scopes bound the sub-agent too
                 ...this.subAgentTaint(params), // a tainted parent's sub-agent starts tainted
                 conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
-                ...(params.SideQuestionContext ? { SideQuestionContext: params.SideQuestionContext } : {}),
+                ...(params.SideQuestionContext
+                    ? { SideQuestionContext: { ...params.SideQuestionContext, ActiveRunsSnapshot: null } }
+                    : {}),
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
                     // Re-apply post-INSERT: this callback can fire while the step's INSERT is still in flight,
@@ -26555,22 +26673,25 @@ The context is now within limits. Please retry your request with the recovered c
     }
 }
 
-const SIDE_QUESTION_READ_ONLY_VERB =
-    /^(get|list|search|find|query|read|fetch|lookup|describe|inspect|calculate|analyze|count|check|view|show)\b/i;
-
-const SIDE_QUESTION_MUTATING_ACTION_NAME =
-    /^(create|update|delete|upsert|remove|archive|send|post|modify|write|insert|drop|patch|put|merge|assign|approve|reject|cancel|close|complete|trigger|execute\s+mcp|deploy|publish)\b|\b(create|update|delete|remove|send)\s+(record|email|message|item|contact|deal|task|notification|lead|ticket|company)\b/i;
-
 /**
- * Classifies whether an action name represents a write/mutating or outbound operation that should
- * be refused during a read-only Side Question turn when `Config_Object.disallowWhenTainted` is unset.
+ * Extracts lowercase ASCII letter tokens from `text` in a single linear pass (no regex backtracking).
  */
-function isMutatingSideQuestionActionName(actionName: string): boolean {
-    const trimmed = actionName.trim();
-    if (!trimmed || SIDE_QUESTION_READ_ONLY_VERB.test(trimmed)) {
-        return false;
+function extractLowercaseWords(text: string): string[] {
+    const words: string[] = [];
+    let start = -1;
+    for (let i = 0; i <= text.length; i++) {
+        const code = i < text.length ? text.charCodeAt(i) : 0;
+        const isAlpha = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+        if (isAlpha) {
+            if (start === -1) {
+                start = i;
+            }
+        } else if (start !== -1) {
+            words.push(text.slice(start, i).toLowerCase());
+            start = -1;
+        }
     }
-    return SIDE_QUESTION_MUTATING_ACTION_NAME.test(trimmed);
+    return words;
 }
 
 

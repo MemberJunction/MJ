@@ -1,4 +1,7 @@
-<div class="message-input-box-container" (click)="OnContainerClick($event)">
+<div
+  class="message-input-box-container"
+  [class.message-input-box-container--compact]="Compact"
+  (click)="OnContainerClick($event)">
   <div class="input-wrapper">
     <mj-mention-editor
       #mentionEditor

@@ -2,19 +2,27 @@
  * @fileoverview Builds a live, point-in-time snapshot of active and recently completed
  * agent runs on a parent conversation for Side Question execution.
  *
- * Queries `MJ: AI Agent Runs`, descendant sub-agent runs, recent `MJ: AI Agent Run Steps`,
- * and `MJ: Tasks` fresh from the database provider (bypassing cache), enriches in-flight
- * runs on the same MJAPI replica with {@link AgentRunWatchdog.ReadLiveRunHint}, and
- * wraps untrusted run/step payloads safely inside `<untrusted_external_data>` after
- * escaping runtime-state tags.
+ * Queries `MJ: AI Agent Runs` (batched with `MJ: Conversation Branches` on forked threads),
+ * descendant sub-agent runs + detail placements, recent `MJ: AI Agent Run Steps`, and
+ * `MJ: Tasks` fresh from the database provider (bypassing cache), enriches in-flight runs
+ * on the same MJAPI replica with {@link AgentRunWatchdog.ReadLiveRunHint}, and wraps
+ * untrusted run/step payloads safely via {@link WrapUntrustedExternalData} after escaping
+ * runtime-state tags.
  *
  * @module @memberjunction/ai-agents
  */
 
 import { IMetadataProvider, LogError, RunView, type RunViewParams, type RunViewResult, UserInfo } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, GroupByUUID, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import { ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import {
+    ConversationEngine,
+    type ConversationBranchRow,
+    type MJAIAgentRunEntity,
+    type MJAIAgentRunStepEntity,
+    type MJTaskEntity,
+} from '@memberjunction/core-entities';
 import { AgentRunWatchdog } from './agent-run-watchdog';
+import { WrapUntrustedExternalData } from './client-tool-results';
 import { EscapeRuntimeStateTags } from './runtime-state-fragment';
 
 /** Parameters for {@link ActiveAgentRunSnapshotService.CaptureSnapshot}. */
@@ -36,7 +44,7 @@ interface AgentRunSnapshotRow {
     ParentRunID: string | null;
     RootParentRunID: string | null;
     ParentRunIDDepth: number | null;
-    Status: string;
+    Status: MJAIAgentRunEntity['Status'];
     StartedAt: Date | string;
     CompletedAt: Date | string | null;
     ErrorMessage: string | null;
@@ -53,7 +61,7 @@ interface AgentRunStepSnapshotRow {
     StepNumber: number;
     StepType: string;
     StepName: string;
-    Status: string;
+    Status: MJAIAgentRunStepEntity['Status'];
     StartedAt: Date | string;
     CompletedAt: Date | string | null;
     ErrorMessage: string | null;
@@ -65,7 +73,7 @@ interface TaskSnapshotRow {
     ID: string;
     ParentID: string | null;
     Name: string;
-    Status: string;
+    Status: MJTaskEntity['Status'];
     PercentComplete: number | null;
     AgentRunID: string | null;
     StepType: string | null;
@@ -78,7 +86,54 @@ interface DetailPlacementRow {
     Sequence: number;
 }
 
-const ACTIVE_RUN_STATUSES = new Set<string>(['Running', 'Paused', 'AwaitingFeedback']);
+const AGENT_RUN_SNAPSHOT_FIELDS: string[] = [
+    'ID',
+    'AgentID',
+    'Agent',
+    'ParentRunID',
+    'RootParentRunID',
+    'ParentRunIDDepth',
+    'Status',
+    'StartedAt',
+    'CompletedAt',
+    'ErrorMessage',
+    'FinalStep',
+    'FinalPayload',
+    'ConversationID',
+    'ConversationDetailID',
+    'TotalPromptIterations',
+];
+
+const AGENT_RUN_STEP_FIELDS: string[] = [
+    'ID',
+    'AgentRunID',
+    'StepNumber',
+    'StepType',
+    'StepName',
+    'Status',
+    'StartedAt',
+    'CompletedAt',
+    'ErrorMessage',
+    'OutputData',
+    'PayloadAtEnd',
+];
+
+const TASK_SNAPSHOT_FIELDS: string[] = [
+    'ID',
+    'ParentID',
+    'Name',
+    'Status',
+    'PercentComplete',
+    'AgentRunID',
+    'StepType',
+    'ErrorMessage',
+];
+
+const ACTIVE_RUN_STATUSES: ReadonlySet<MJAIAgentRunEntity['Status']> = new Set([
+    'Running',
+    'Paused',
+    'AwaitingFeedback',
+]);
 
 /**
  * Captures point-in-time status, step progress, task-graph state, and same-replica
@@ -94,22 +149,22 @@ export class ActiveAgentRunSnapshotService extends BaseSingleton<ActiveAgentRunS
     }
 
     /** Maximum number of parent-conversation runs to include in a snapshot. */
-    protected get maxRunsToInspect(): number {
+    protected get MaxRunsToInspect(): number {
         return 5;
     }
 
     /** Maximum number of recent steps shown per run. */
-    protected get maxStepsPerRun(): number {
+    protected get MaxStepsPerRun(): number {
         return 8;
     }
 
     /** Character cap per previewed payload/output/live-hint string. */
-    protected get maxStepPreviewChars(): number {
+    protected get MaxStepPreviewChars(): number {
         return 400;
     }
 
     /** Window (minutes) for including recently completed/failed/cancelled runs alongside active runs. */
-    protected get recentTerminalWindowMinutes(): number {
+    protected get RecentTerminalWindowMinutes(): number {
         return 10;
     }
 
@@ -122,86 +177,100 @@ export class ActiveAgentRunSnapshotService extends BaseSingleton<ActiveAgentRunS
         const now = Date.now();
         const nowIso = new Date(now).toISOString();
 
-        const rootRunsResult = await rv.RunView<AgentRunSnapshotRow>(
-            {
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `ConversationID='${EscapeSQLString(params.ParentConversationID)}'`,
-                OrderBy: 'StartedAt DESC',
-                Fields: [
-                    'ID',
-                    'AgentID',
-                    'Agent',
-                    'ParentRunID',
-                    'RootParentRunID',
-                    'ParentRunIDDepth',
-                    'Status',
-                    'StartedAt',
-                    'CompletedAt',
-                    'ErrorMessage',
-                    'FinalStep',
-                    'FinalPayload',
-                    'ConversationID',
-                    'ConversationDetailID',
-                    'TotalPromptIterations',
-                ],
-                MaxRows: this.maxRunsToInspect * 2,
-                BypassCache: true,
-                SkipTotalRowCount: true,
-                ResultType: 'simple',
-            },
-            params.ContextUser
-        );
-
-        if (!rootRunsResult.Success) {
-            LogError(`ActiveAgentRunSnapshotService: failed to query runs for ${params.ParentConversationID}: ${rootRunsResult.ErrorMessage}`);
+        const primaryLoad = await this.loadPrimaryRunsAndBranches(rv, params);
+        if (!primaryLoad.Success) {
             return `Snapshot unavailable at ${nowIso} (unable to read active run records).`;
         }
 
-        const cutoffMs = now - this.recentTerminalWindowMinutes * 60_000;
-        const candidatePrimaryRuns = (rootRunsResult.Results ?? [])
+        const cutoffMs = now - this.RecentTerminalWindowMinutes * 60_000;
+        const candidatePrimaryRuns = primaryLoad.Runs
             .filter((r) => this.isRelevantRun(r, cutoffMs))
-            .slice(0, this.maxRunsToInspect);
+            .slice(0, this.MaxRunsToInspect);
 
         if (candidatePrimaryRuns.length === 0) {
-            return `Snapshot captured at ${nowIso}: No agent runs are currently running, paused, or completed within the last ${this.recentTerminalWindowMinutes} minutes on the main conversation.`;
+            return `Snapshot captured at ${nowIso}: No agent runs are currently running, paused, or completed within the last ${this.RecentTerminalWindowMinutes} minutes on the main conversation.`;
         }
 
-        const { descendants, detailById, branches } = await this.loadDescendantsAndBranchContext(
+        const { descendants, detailById } = await this.loadDescendantsAndDetailPlacements(
             rv,
-            params,
+            params.ContextUser,
             candidatePrimaryRuns
         );
         const primaryRuns = this.filterRunsByBranchPath(
             candidatePrimaryRuns,
             params.ParentBranchID ?? null,
             detailById,
-            branches
+            primaryLoad.Branches
         );
 
         if (primaryRuns.length === 0) {
-            return `Snapshot captured at ${nowIso}: No agent runs are currently running, paused, or completed within the last ${this.recentTerminalWindowMinutes} minutes on this branch.`;
+            return `Snapshot captured at ${nowIso}: No agent runs are currently running, paused, or completed within the last ${this.RecentTerminalWindowMinutes} minutes on this branch.`;
         }
 
-        const primaryIds = new UUIDSet(primaryRuns.map((r) => r.ID));
-        const byRunId = new UUIDMap<AgentRunSnapshotRow>();
-        for (const run of primaryRuns) {
-            byRunId.Set(run.ID, run);
-        }
-        for (const desc of descendants) {
-            const rootOrParent = desc.RootParentRunID ?? desc.ParentRunID;
-            if (!rootOrParent || !primaryIds.Has(rootOrParent)) {
-                continue;
-            }
-            if (!byRunId.Has(desc.ID)) {
-                byRunId.Set(desc.ID, desc);
-            }
-        }
-        const allRuns = [...byRunId.Values()];
-        const allRunIds = allRuns.map((r) => r.ID);
-
-        const { stepsByRun, tasksByRun } = await this.loadStepsAndTasksBatched(rv, params.ContextUser, allRunIds);
+        const allRuns = this.mergeDescendantRuns(primaryRuns, descendants);
+        const { stepsByRun, tasksByRun } = await this.loadStepsAndTasksBatched(
+            rv,
+            params.ContextUser,
+            allRuns.map((r) => r.ID)
+        );
 
         return this.formatSnapshot(now, nowIso, params, primaryRuns, allRuns, stepsByRun, tasksByRun);
+    }
+
+    private async loadPrimaryRunsAndBranches(
+        rv: RunView,
+        params: CaptureActiveRunsSnapshotParams
+    ): Promise<{ Success: boolean; Runs: AgentRunSnapshotRow[]; Branches: ConversationBranchRow[] }> {
+        const rootRunsQuery = this.buildRunSnapshotQuery(
+            `ConversationID='${EscapeSQLString(params.ParentConversationID)}'`,
+            'StartedAt DESC',
+            this.MaxRunsToInspect * 2
+        );
+
+        if (!params.ParentBranchID) {
+            const res = await rv.RunView<AgentRunSnapshotRow>(rootRunsQuery, params.ContextUser);
+            if (!res.Success) {
+                LogError(`ActiveAgentRunSnapshotService: failed to query runs for ${params.ParentConversationID}: ${res.ErrorMessage}`);
+                return { Success: false, Runs: [], Branches: [] };
+            }
+            return { Success: true, Runs: res.Results ?? [], Branches: [] };
+        }
+
+        const branchesQuery: RunViewParams = {
+            EntityName: 'MJ: Conversation Branches',
+            ExtraFilter: `ConversationID='${EscapeSQLString(params.ParentConversationID)}'`,
+            Fields: ['ID', 'ConversationID', 'ParentBranchID', 'ForkFromSequence'],
+            BypassCache: true,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+        };
+
+        const [runsRes, branchRes] = (await rv.RunViews([rootRunsQuery, branchesQuery], params.ContextUser)) as [
+            RunViewResult<AgentRunSnapshotRow> | undefined,
+            RunViewResult<ConversationBranchRow> | undefined,
+        ];
+        if (!runsRes?.Success) {
+            LogError(`ActiveAgentRunSnapshotService: failed to query runs for ${params.ParentConversationID}: ${runsRes?.ErrorMessage ?? 'unknown error'}`);
+            return { Success: false, Runs: [], Branches: [] };
+        }
+        return {
+            Success: true,
+            Runs: runsRes.Results ?? [],
+            Branches: branchRes?.Success ? (branchRes.Results ?? []) : [],
+        };
+    }
+
+    private buildRunSnapshotQuery(extraFilter: string, orderBy: string, maxRows: number): RunViewParams {
+        return {
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: extraFilter,
+            OrderBy: orderBy,
+            Fields: AGENT_RUN_SNAPSHOT_FIELDS,
+            MaxRows: maxRows,
+            BypassCache: true,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+        };
     }
 
     private isRelevantRun(run: AgentRunSnapshotRow, cutoffMs: number): boolean {
@@ -212,58 +281,51 @@ export class ActiveAgentRunSnapshotService extends BaseSingleton<ActiveAgentRunS
         return timestamp >= cutoffMs;
     }
 
-    private async loadDescendantsAndBranchContext(
+    private mergeDescendantRuns(
+        primaryRuns: AgentRunSnapshotRow[],
+        descendants: AgentRunSnapshotRow[]
+    ): AgentRunSnapshotRow[] {
+        const primaryIds = new UUIDSet(primaryRuns.map((r) => r.ID));
+        const byRunId = new UUIDMap<AgentRunSnapshotRow>();
+        for (const run of primaryRuns) {
+            byRunId.Set(run.ID, run);
+        }
+        for (const desc of descendants) {
+            const rootOrParent = desc.RootParentRunID ?? desc.ParentRunID;
+            if (rootOrParent && primaryIds.Has(rootOrParent) && !byRunId.Has(desc.ID)) {
+                byRunId.Set(desc.ID, desc);
+            }
+        }
+        return [...byRunId.Values()];
+    }
+
+    private async loadDescendantsAndDetailPlacements(
         rv: RunView,
-        params: CaptureActiveRunsSnapshotParams,
+        contextUser: UserInfo,
         seedRuns: AgentRunSnapshotRow[]
     ): Promise<{
         descendants: AgentRunSnapshotRow[];
         detailById: UUIDMap<DetailPlacementRow>;
-        branches: ConversationBranchRow[];
     }> {
         const descendants: AgentRunSnapshotRow[] = [];
         const detailById = new UUIDMap<DetailPlacementRow>();
-        let branches: ConversationBranchRow[] = [];
-
         const seedIn = this.sqlInList(seedRuns.map((r) => r.ID));
         if (!seedIn) {
-            return { descendants, detailById, branches };
+            return { descendants, detailById };
         }
+
+        const requests: RunViewParams[] = [
+            this.buildRunSnapshotQuery(
+                `RootParentRunID IN (${seedIn}) OR ParentRunID IN (${seedIn})`,
+                'StartedAt ASC',
+                this.MaxRunsToInspect * 4
+            ),
+        ];
 
         const detailIds = new UUIDSet(
             seedRuns.map((r) => r.ConversationDetailID).filter((id): id is string => Boolean(id))
         );
-        const requests: RunViewParams[] = [
-            {
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `RootParentRunID IN (${seedIn}) OR ParentRunID IN (${seedIn})`,
-                OrderBy: 'StartedAt ASC',
-                Fields: [
-                    'ID',
-                    'AgentID',
-                    'Agent',
-                    'ParentRunID',
-                    'RootParentRunID',
-                    'ParentRunIDDepth',
-                    'Status',
-                    'StartedAt',
-                    'CompletedAt',
-                    'ErrorMessage',
-                    'FinalStep',
-                    'FinalPayload',
-                    'ConversationID',
-                    'ConversationDetailID',
-                    'TotalPromptIterations',
-                ],
-                MaxRows: this.maxRunsToInspect * 4,
-                BypassCache: true,
-                SkipTotalRowCount: true,
-                ResultType: 'simple',
-            },
-        ];
-
         const detailIn = detailIds.Size > 0 ? this.sqlInList([...detailIds]) : '';
-        const detailQueryIdx = detailIn ? requests.length : -1;
         if (detailIn) {
             requests.push({
                 EntityName: 'MJ: Conversation Details',
@@ -275,43 +337,24 @@ export class ActiveAgentRunSnapshotService extends BaseSingleton<ActiveAgentRunS
             });
         }
 
-        const branchesQueryIdx = params.ParentBranchID && detailIn ? requests.length : -1;
-        if (branchesQueryIdx >= 0) {
-            requests.push({
-                EntityName: 'MJ: Conversation Branches',
-                ExtraFilter: `ConversationID='${EscapeSQLString(params.ParentConversationID)}'`,
-                Fields: ['ID', 'ConversationID', 'ParentBranchID', 'ForkFromSequence'],
-                BypassCache: true,
-                SkipTotalRowCount: true,
-                ResultType: 'simple',
-            });
-        }
-
         try {
-            const results = await rv.RunViews(requests, params.ContextUser);
-            const descRes = results[0] as RunViewResult<AgentRunSnapshotRow> | undefined;
+            const [descRes, detailRes] = (await rv.RunViews(requests, contextUser)) as [
+                RunViewResult<AgentRunSnapshotRow> | undefined,
+                RunViewResult<DetailPlacementRow> | undefined,
+            ];
             if (descRes?.Success && descRes.Results) {
                 descendants.push(...descRes.Results);
             }
-            if (detailQueryIdx >= 0) {
-                const detailRes = results[detailQueryIdx] as RunViewResult<DetailPlacementRow> | undefined;
-                if (detailRes?.Success && detailRes.Results) {
-                    for (const row of detailRes.Results) {
-                        detailById.Set(row.ID, row);
-                    }
-                }
-            }
-            if (branchesQueryIdx >= 0) {
-                const branchRes = results[branchesQueryIdx] as RunViewResult<ConversationBranchRow> | undefined;
-                if (branchRes?.Success && branchRes.Results) {
-                    branches = branchRes.Results;
+            if (detailRes?.Success && detailRes.Results) {
+                for (const row of detailRes.Results) {
+                    detailById.Set(row.ID, row);
                 }
             }
         } catch (err: unknown) {
-            LogError(`ActiveAgentRunSnapshotService: descendant/branch query failed: ${err instanceof Error ? err.message : String(err)}`);
+            LogError(`ActiveAgentRunSnapshotService: descendant/detail query failed: ${err instanceof Error ? err.message : String(err)}`);
         }
 
-        return { descendants, detailById, branches };
+        return { descendants, detailById };
     }
 
     private filterRunsByBranchPath(
@@ -368,75 +411,59 @@ export class ActiveAgentRunSnapshotService extends BaseSingleton<ActiveAgentRunS
             return { stepsByRun, tasksByRun };
         }
 
-        try {
-            const [stepsResult, taskResult] = (await rv.RunViews(
-                [
-                    {
-                        EntityName: 'MJ: AI Agent Run Steps',
-                        ExtraFilter: `AgentRunID IN (${inList})`,
-                        OrderBy: 'StepNumber DESC',
-                        Fields: [
-                            'ID',
-                            'AgentRunID',
-                            'StepNumber',
-                            'StepType',
-                            'StepName',
-                            'Status',
-                            'StartedAt',
-                            'CompletedAt',
-                            'ErrorMessage',
-                            'OutputData',
-                            'PayloadAtEnd',
-                        ],
-                        MaxRows: runIds.length * this.maxStepsPerRun,
-                        BypassCache: true,
-                        SkipTotalRowCount: true,
-                        ResultType: 'simple',
-                    },
-                    {
-                        EntityName: 'MJ: Tasks',
-                        ExtraFilter: `AgentRunID IN (${inList})`,
-                        OrderBy: 'StartedAt ASC',
-                        Fields: [
-                            'ID',
-                            'ParentID',
-                            'Name',
-                            'Status',
-                            'PercentComplete',
-                            'AgentRunID',
-                            'StepType',
-                            'ErrorMessage',
-                        ],
-                        MaxRows: 25,
-                        BypassCache: true,
-                        SkipTotalRowCount: true,
-                        ResultType: 'simple',
-                    },
-                ],
-                contextUser
-            )) as [RunViewResult<AgentRunStepSnapshotRow> | undefined, RunViewResult<TaskSnapshotRow> | undefined];
+        const requests: RunViewParams[] = [
+            {
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID IN (${inList})`,
+                OrderBy: 'StepNumber DESC',
+                Fields: AGENT_RUN_STEP_FIELDS,
+                MaxRows: runIds.length * this.MaxStepsPerRun,
+                BypassCache: true,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+            },
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `AgentRunID IN (${inList})`,
+                OrderBy: 'StartedAt ASC',
+                Fields: TASK_SNAPSHOT_FIELDS,
+                MaxRows: 25,
+                BypassCache: true,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+            },
+        ];
 
+        try {
+            const [stepsResult, taskResult] = (await rv.RunViews(requests, contextUser)) as [
+                RunViewResult<AgentRunStepSnapshotRow> | undefined,
+                RunViewResult<TaskSnapshotRow> | undefined,
+            ];
             if (stepsResult?.Success && stepsResult.Results) {
                 const grouped = GroupByUUID(stepsResult.Results, (s) => s.AgentRunID);
                 for (const [runKey, runSteps] of grouped) {
-                    stepsByRun.Set(runKey, runSteps.slice(0, this.maxStepsPerRun));
+                    stepsByRun.Set(runKey, runSteps.slice(0, this.MaxStepsPerRun));
                 }
             }
             if (taskResult?.Success && taskResult.Results) {
-                for (const task of taskResult.Results) {
-                    if (!task.AgentRunID) {
-                        continue;
-                    }
-                    const bucket = tasksByRun.Get(task.AgentRunID) ?? [];
-                    bucket.push(task);
-                    tasksByRun.Set(task.AgentRunID, bucket);
-                }
+                this.indexTasksByRun(taskResult.Results, tasksByRun);
             }
         } catch (err: unknown) {
             LogError(`ActiveAgentRunSnapshotService: batched step/task query failed: ${err instanceof Error ? err.message : String(err)}`);
         }
 
         return { stepsByRun, tasksByRun };
+    }
+
+    private indexTasksByRun(tasks: TaskSnapshotRow[], target: UUIDMap<TaskSnapshotRow[]>): void {
+        for (const task of tasks) {
+            if (!task.AgentRunID) {
+                continue;
+            }
+            const bucket = target.Get(task.AgentRunID) ?? [];
+            bucket.push(task);
+            target.Set(task.AgentRunID, bucket);
+        }
     }
 
     private formatSnapshot(
@@ -464,10 +491,7 @@ export class ActiveAgentRunSnapshotService extends BaseSingleton<ActiveAgentRunS
         const orderedPrimary = [...primaryRuns].sort((a, b) => {
             const aActive = ACTIVE_RUN_STATUSES.has(a.Status) ? 0 : 1;
             const bActive = ACTIVE_RUN_STATUSES.has(b.Status) ? 0 : 1;
-            if (aActive !== bActive) {
-                return aActive - bActive;
-            }
-            return this.toEpochMs(b.StartedAt) - this.toEpochMs(a.StartedAt);
+            return aActive !== bActive ? aActive - bActive : this.toEpochMs(b.StartedAt) - this.toEpochMs(a.StartedAt);
         });
 
         for (const run of orderedPrimary) {
@@ -494,59 +518,65 @@ export class ActiveAgentRunSnapshotService extends BaseSingleton<ActiveAgentRunS
         lines.push(`${heading} (run \`${run.ID}\`, ${elapsedSec}, iterations: ${run.TotalPromptIterations ?? 0}${run.FinalStep ? `, finalStep: ${run.FinalStep}` : ''})`);
 
         if (run.ErrorMessage) {
-            lines.push(`${indent}  - Error: ${this.wrapUntrusted(run.ErrorMessage)}`);
+            lines.push(`${indent}  - Error: ${this.wrapUntrusted(run.ErrorMessage, 'agent-run-error')}`);
         }
-
         const liveHint = AgentRunWatchdog.Instance.ReadLiveRunHint(run.ID);
         if (liveHint) {
-            lines.push(`${indent}  - In-flight state (this replica): ${this.wrapUntrusted(liveHint)}`);
+            lines.push(`${indent}  - In-flight state (this replica): ${this.wrapUntrusted(liveHint, 'agent-run-live-hint')}`);
         }
 
-        const tasks = tasksByRun.Get(run.ID) ?? [];
-        if (tasks.length > 0) {
-            lines.push(`${indent}  - Tasks:`);
-            for (const task of tasks) {
-                const pct = task.PercentComplete != null ? ` (${task.PercentComplete}%)` : '';
-                const stepKind = task.StepType ? ` [${task.StepType}]` : '';
-                const err = task.ErrorMessage ? ` — error: ${this.truncateAndEscape(task.ErrorMessage)}` : '';
-                lines.push(`${indent}    - ${this.truncateAndEscape(task.Name)}${stepKind}: ${task.Status}${pct}${err}`);
-            }
-        }
-
-        const steps = [...(stepsByRun.Get(run.ID) ?? [])].sort((a, b) => a.StepNumber - b.StepNumber);
-        if (steps.length > 0) {
-            lines.push(`${indent}  - Recent steps:`);
-            for (const step of steps) {
-                const stepElapsed = this.formatElapsedSeconds(step.StartedAt, step.CompletedAt, now);
-                const err = step.ErrorMessage ? ` | error: ${this.truncateAndEscape(step.ErrorMessage)}` : '';
-                lines.push(
-                    `${indent}    - #${step.StepNumber} [${step.StepType}] ${this.truncateAndEscape(step.StepName)} -> ${step.Status} (${stepElapsed})${err}`
-                );
-                const previewSource = step.OutputData ?? step.PayloadAtEnd;
-                if (previewSource && previewSource.trim()) {
-                    lines.push(`${indent}      preview: ${this.wrapUntrusted(previewSource)}`);
-                }
-            }
-        }
+        this.appendRunTasks(lines, indent, tasksByRun.Get(run.ID) ?? []);
+        this.appendRunSteps(lines, indent, stepsByRun.Get(run.ID) ?? [], now);
 
         if (run.FinalPayload && run.FinalPayload.trim()) {
-            lines.push(`${indent}  - Final payload: ${this.wrapUntrusted(run.FinalPayload)}`);
+            lines.push(`${indent}  - Final payload: ${this.wrapUntrusted(run.FinalPayload, 'agent-run-final-payload')}`);
         }
 
-        const children = childrenByParent.Get(run.ID) ?? [];
-        for (const child of children) {
+        for (const child of childrenByParent.Get(run.ID) ?? []) {
             this.appendRunBlock(lines, child, now, depth + 1, stepsByRun, tasksByRun, childrenByParent);
         }
     }
 
-    private wrapUntrusted(text: string): string {
-        return `<untrusted_external_data>${this.truncateAndEscape(text)}</untrusted_external_data>`;
+    private appendRunTasks(lines: string[], indent: string, tasks: TaskSnapshotRow[]): void {
+        if (tasks.length === 0) {
+            return;
+        }
+        lines.push(`${indent}  - Tasks:`);
+        for (const task of tasks) {
+            const pct = task.PercentComplete != null ? ` (${task.PercentComplete}%)` : '';
+            const stepKind = task.StepType ? ` [${task.StepType}]` : '';
+            const err = task.ErrorMessage ? ` — error: ${this.truncateAndEscape(task.ErrorMessage)}` : '';
+            lines.push(`${indent}    - ${this.truncateAndEscape(task.Name)}${stepKind}: ${task.Status}${pct}${err}`);
+        }
+    }
+
+    private appendRunSteps(lines: string[], indent: string, rawSteps: AgentRunStepSnapshotRow[], now: number): void {
+        if (rawSteps.length === 0) {
+            return;
+        }
+        const steps = [...rawSteps].sort((a, b) => a.StepNumber - b.StepNumber);
+        lines.push(`${indent}  - Recent steps:`);
+        for (const step of steps) {
+            const stepElapsed = this.formatElapsedSeconds(step.StartedAt, step.CompletedAt, now);
+            const err = step.ErrorMessage ? ` | error: ${this.truncateAndEscape(step.ErrorMessage)}` : '';
+            lines.push(
+                `${indent}    - #${step.StepNumber} [${step.StepType}] ${this.truncateAndEscape(step.StepName)} -> ${step.Status} (${stepElapsed})${err}`
+            );
+            const previewSource = step.OutputData ?? step.PayloadAtEnd;
+            if (previewSource && previewSource.trim()) {
+                lines.push(`${indent}      preview: ${this.wrapUntrusted(previewSource, 'agent-run-step-output')}`);
+            }
+        }
+    }
+
+    private wrapUntrusted(text: string, source: string): string {
+        return WrapUntrustedExternalData(this.truncateAndEscape(text), source, 'Untrusted');
     }
 
     private truncateAndEscape(raw: string): string {
         const singleLine = raw.replace(/\s+/g, ' ').trim();
-        const truncated = singleLine.length > this.maxStepPreviewChars
-            ? `${singleLine.slice(0, this.maxStepPreviewChars)}...`
+        const truncated = singleLine.length > this.MaxStepPreviewChars
+            ? `${singleLine.slice(0, this.MaxStepPreviewChars)}...`
             : singleLine;
         return EscapeRuntimeStateTags(truncated);
     }
@@ -570,7 +600,6 @@ export class ActiveAgentRunSnapshotService extends BaseSingleton<ActiveAgentRunS
     }
 
     private sqlInList(ids: string[]): string {
-        const cleaned = ids.filter((id) => Boolean(id)).map((id) => `'${EscapeSQLString(id)}'`);
-        return cleaned.join(',');
+        return ids.filter((id) => Boolean(id)).map((id) => `'${EscapeSQLString(id)}'`).join(',');
     }
 }

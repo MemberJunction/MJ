@@ -4,25 +4,25 @@ import {
     ElementRef,
     EventEmitter,
     Input,
-    OnChanges,
     OnDestroy,
     OnInit,
     Output,
-    SimpleChanges,
     ViewChild,
     inject,
 } from '@angular/core';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { IsAgentAllowed, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     ConversationsRuntime,
+    DefaultAgentResolver,
     SideQuestionController,
     SideQuestionScopeState,
     type MentionPerson,
 } from '@memberjunction/conversations-runtime';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SendSlotMode } from '@memberjunction/ng-composer';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -69,11 +69,12 @@ export function BuildSideQuestionTurns(
 }
 
 /**
- * Antigravity-style Side Questions drawer anchored below the main composer.
+ * Antigravity-style Side Questions panel anchored above the main composer.
  *
- * Defaults to Sage (never inherits specialized main-thread agents like Query Builder), reuses
- * `<mj-conversation-agent-picker>` + `<mj-ai-composer>`, persists the chosen agent on
- * `SideConversation.DefaultAgentID`, and steps through side Q&A turns one at a time via arrows.
+ * Defaults to the conversation manager agent (never inherits specialized main-thread agents like
+ * Query Builder), reuses `<mj-conversation-agent-picker>` + `<mj-ai-composer [Compact]="true">`,
+ * persists the chosen agent on `SideConversation.DefaultAgentID`, and steps through side Q&A
+ * turns one at a time via arrows.
  */
 @Component({
     standalone: false,
@@ -81,23 +82,87 @@ export function BuildSideQuestionTurns(
     templateUrl: './side-question-panel.component.html',
     styleUrls: ['./side-question-panel.component.css'],
 })
-export class SideQuestionPanelComponent implements OnInit, OnChanges, OnDestroy {
+export class SideQuestionPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly agentStateService = inject(AgentStateService);
     private readonly destroy$ = new Subject<void>();
     private scopeDestroy$ = new Subject<void>();
+    private isInitialized = false;
     private lastScopeKey: string | null = null;
     private lastTurnCount = 0;
+
+    private _currentUser!: UserInfo;
+    private _parentConversation: MJConversationEntity | null = null;
+    private _parentBranchId: string | null = null;
+    private _applicationId: string | null = null;
+    private _allowedAgentIDs: readonly string[] | null = null;
 
     @ViewChild('aiComposer') private aiComposer?: AiComposerComponent;
     @ViewChild('answerContainer') private answerContainer?: ElementRef<HTMLDivElement>;
 
-    @Input() Provider: IMetadataProvider | null = null;
-    @Input() CurrentUser!: UserInfo;
-    @Input() ParentConversation: MJConversationEntity | null = null;
-    @Input() ParentBranchId: string | null = null;
-    @Input() ApplicationId: string | null = null;
-    @Input() AllowedAgentIDs: readonly string[] | null = null;
+    @Input()
+    public get CurrentUser(): UserInfo {
+        return this._currentUser;
+    }
+    public set CurrentUser(value: UserInfo) {
+        const changed = !UUIDsEqual(this._currentUser?.ID, value?.ID);
+        this._currentUser = value;
+        if (this.isInitialized && changed) {
+            this.bindToScope();
+            void this.loadDefaultAgentAndMentions();
+        }
+    }
+
+    @Input()
+    public get ParentConversation(): MJConversationEntity | null {
+        return this._parentConversation;
+    }
+    public set ParentConversation(value: MJConversationEntity | null) {
+        const changed = !UUIDsEqual(this._parentConversation?.ID, value?.ID);
+        this._parentConversation = value;
+        if (this.isInitialized && changed) {
+            this.bindToScope();
+        }
+    }
+
+    @Input()
+    public get ParentBranchId(): string | null {
+        return this._parentBranchId;
+    }
+    public set ParentBranchId(value: string | null) {
+        const normalized = value ?? null;
+        const changed = !UUIDsEqual(this._parentBranchId, normalized);
+        this._parentBranchId = normalized;
+        if (this.isInitialized && changed) {
+            this.bindToScope();
+        }
+    }
+
+    @Input()
+    public get ApplicationId(): string | null {
+        return this._applicationId;
+    }
+    public set ApplicationId(value: string | null) {
+        const normalized = value ?? null;
+        const changed = !UUIDsEqual(this._applicationId, normalized);
+        this._applicationId = normalized;
+        if (this.isInitialized && changed) {
+            void this.loadDefaultAgentAndMentions();
+        }
+    }
+
+    @Input()
+    public get AllowedAgentIDs(): readonly string[] | null {
+        return this._allowedAgentIDs;
+    }
+    public set AllowedAgentIDs(value: readonly string[] | null) {
+        const changed = this._allowedAgentIDs !== value;
+        this._allowedAgentIDs = value;
+        if (this.isInitialized && changed) {
+            void this.loadDefaultAgentAndMentions();
+        }
+    }
+
     @Input() AllowMentions = true;
     @Input() AllowAgentMentions = true;
     @Input() AllowEntityMentions = true;
@@ -117,6 +182,14 @@ export class SideQuestionPanelComponent implements OnInit, OnChanges, OnDestroy 
 
     public DefaultManagerAgent: MJAIAgentEntityExtended | null = null;
     public EligibleAgents: MJAIAgentEntityExtended[] = [];
+
+    private get aiEngine(): AIEngineBase {
+        const provider = this.ProviderToUse;
+        if (provider && typeof AIEngineBase.GetProviderInstance === 'function') {
+            return AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
+        }
+        return AIEngineBase.Instance;
+    }
 
     public get Messages(): MJConversationDetailEntity[] {
         return this.State?.Messages ?? [];
@@ -172,7 +245,7 @@ export class SideQuestionPanelComponent implements OnInit, OnChanges, OnDestroy 
         if (savedId) {
             const match =
                 this.EligibleAgents.find((a) => UUIDsEqual(a.ID, savedId)) ??
-                (AIEngineBase.Instance.ReadableAgents ?? []).find((a) => UUIDsEqual(a.ID, savedId));
+                (this.aiEngine.ReadableAgents ?? []).find((a) => UUIDsEqual(a.ID, savedId));
             if (match) {
                 return match;
             }
@@ -181,7 +254,7 @@ export class SideQuestionPanelComponent implements OnInit, OnChanges, OnDestroy 
     }
 
     public get DefaultAgentName(): string {
-        return this.DefaultManagerAgent?.Name || 'Sage';
+        return this.DefaultManagerAgent?.Name || DefaultAgentResolver.FALLBACK_AGENT_NAME;
     }
 
     public get DefaultAgentOptionLabel(): string {
@@ -218,16 +291,9 @@ export class SideQuestionPanelComponent implements OnInit, OnChanges, OnDestroy 
     }
 
     public ngOnInit(): void {
+        this.isInitialized = true;
+        this.bindToScope();
         void this.loadDefaultAgentAndMentions();
-    }
-
-    public ngOnChanges(changes: SimpleChanges): void {
-        if (changes['ParentConversation'] || changes['ParentBranchId'] || changes['CurrentUser']) {
-            this.bindToScope();
-        }
-        if (changes['AllowedAgentIDs'] || changes['ApplicationId'] || changes['CurrentUser'] || changes['Provider']) {
-            void this.loadDefaultAgentAndMentions();
-        }
     }
 
     public ngOnDestroy(): void {
@@ -315,13 +381,16 @@ export class SideQuestionPanelComponent implements OnInit, OnChanges, OnDestroy 
             this.ConfirmingClear = false;
             return;
         }
-        await ConversationsRuntime.Instance.SideQuestions.ClearScope(
+        const cleared = await ConversationsRuntime.Instance.SideQuestions.ClearScope(
             conv.ID,
             this.ParentBranchId ?? null,
-            this.CurrentUser
+            this.CurrentUser,
+            this.Provider ?? undefined
         );
-        this.ActiveTurnIndex = 0;
-        this.lastTurnCount = 0;
+        if (cleared) {
+            this.ActiveTurnIndex = 0;
+            this.lastTurnCount = 0;
+        }
         this.ConfirmingClear = false;
         this.cdr?.markForCheck?.();
     }
@@ -413,8 +482,9 @@ export class SideQuestionPanelComponent implements OnInit, OnChanges, OnDestroy 
 
     private async loadDefaultAgentAndMentions(): Promise<void> {
         try {
-            await AIEngineBase.Instance.Config(false, this.CurrentUser, this.Provider ?? undefined);
-            const agents = (AIEngineBase.Instance.ReadableAgents ?? [])
+            const engine = this.aiEngine;
+            await engine.Config(false, this.CurrentUser, this.Provider ?? undefined);
+            const agents = (engine.ReadableAgents ?? [])
                 .filter(
                     (a) =>
                         !a.ParentID &&
@@ -432,11 +502,12 @@ export class SideQuestionPanelComponent implements OnInit, OnChanges, OnDestroy 
                     provider: this.Provider ?? undefined,
                 });
             } catch {
-                this.DefaultManagerAgent = agents.find((a) => a.Name === 'Sage') ?? null;
+                this.DefaultManagerAgent =
+                    agents.find((a) => a.Name === DefaultAgentResolver.FALLBACK_AGENT_NAME) ?? null;
             }
             this.cdr?.markForCheck?.();
         } catch {
-            // Leave existing catalog intact; backend still resolves default Sage.
+            // Leave existing catalog intact; backend still resolves default manager agent.
         }
     }
 

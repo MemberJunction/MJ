@@ -42,6 +42,7 @@ class StubAiComposerComponent {
     @Input() Placeholder = '';
     @Input() Disabled = false;
     @Input() Rows = 1;
+    @Input() Compact = false;
     @Input() ShowCharacterCount = false;
     @Input() EnableMentions = true;
     @Input() EnableAgentMentions = true;

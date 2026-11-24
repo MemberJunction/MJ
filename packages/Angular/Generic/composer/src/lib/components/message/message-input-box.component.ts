@@ -60,6 +60,8 @@ export class MessageInputBoxComponent {
   @Input() Provider: IMetadataProvider | null = null;
   @Input() CurrentUser?: UserInfo;
   @Input() Rows: number = 3;
+  /** Compact inline layout (single-row editor + send button side-by-side) for tight drawers/panels. */
+  @Input() Compact: boolean = false;
 
   // Attachment settings
   @Input() EnableAttachments: boolean = true;

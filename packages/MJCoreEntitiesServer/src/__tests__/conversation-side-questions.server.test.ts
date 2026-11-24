@@ -113,12 +113,12 @@ vi.mock('@memberjunction/core-entities', async () => {
             this.Results.push(result);
         }
 
-        protected async beforeBranchDelete(): Promise<boolean> {
+        protected async BeforeBranchDelete(): Promise<boolean> {
             return true;
         }
 
         public async Delete(): Promise<boolean> {
-            if (!(await this.beforeBranchDelete())) {
+            if (!(await this.BeforeBranchDelete())) {
                 return false;
             }
             return true;
@@ -173,6 +173,34 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
         const result = entity.Validate();
         expect(result.Success).toBe(false);
         expect(result.Errors.some((e) => e.Source === 'ParentID')).toBe(true);
+    });
+
+    it('rejects converting a saved conversation into or out of SIDE_QUESTION in Validate()', () => {
+        const promoteToSide = new MJConversationEntityServer();
+        promoteToSide.IsSaved = true;
+        promoteToSide.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION;
+        promoteToSide.ParentID = 'parent-1';
+        promoteToSide.Fields.set('TypeID', {
+            Dirty: true,
+            OldValue: BUILT_IN_CONVERSATION_TYPE_IDS.CHAT,
+            Value: BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION,
+        });
+        const promoteResult = promoteToSide.Validate();
+        expect(promoteResult.Success).toBe(false);
+        expect(promoteResult.Errors.some((e) => e.Source === 'TypeID')).toBe(true);
+
+        const demoteFromSide = new MJConversationEntityServer();
+        demoteFromSide.IsSaved = true;
+        demoteFromSide.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
+        demoteFromSide.ParentID = 'parent-1';
+        demoteFromSide.Fields.set('TypeID', {
+            Dirty: true,
+            OldValue: BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION,
+            Value: BUILT_IN_CONVERSATION_TYPE_IDS.CHAT,
+        });
+        const demoteResult = demoteFromSide.Validate();
+        expect(demoteResult.Success).toBe(false);
+        expect(demoteResult.Errors.some((e) => e.Source === 'TypeID')).toBe(true);
     });
 
     it('rejects ParentBranchID without ParentID and rejects self-parenting in Validate()', () => {
@@ -321,6 +349,73 @@ describe('MJConversationEntityServer — Side Questions guards', () => {
         hoisted.runViewMock.mockResolvedValueOnce({ Success: true, Results: [blockedChild] });
         expect(await branch.Delete()).toBe(false);
         expect(branch['Results'].some((r) => !r.Success && r.Message.includes('Blocked child delete'))).toBe(true);
+
+        rvSpy.mockRestore();
+    });
+
+    it('wraps conversation and branch deletes in RunInEntityTransaction and rolls back when super.Delete fails', async () => {
+        const rvSpy = vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: hoisted.runViewMock,
+        } as Partial<RunView> as RunView);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue({ ID: 'sys' } as UserInfo);
+
+        const commitTx = vi.fn().mockResolvedValue(undefined);
+        const rollbackTx = vi.fn().mockResolvedValue(undefined);
+        const beginTx = vi.fn().mockResolvedValue({
+            IsNested: false,
+            Commit: commitTx,
+            Rollback: rollbackTx,
+        });
+
+        const child = { Delete: vi.fn().mockResolvedValue(true) };
+        hoisted.runViewMock.mockResolvedValueOnce({ Success: true, Results: [child] });
+
+        const parentConv = new MJConversationEntityServer();
+        parentConv.ID = 'parent-1';
+        parentConv.ParentID = null;
+        parentConv.TypeID = BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
+        parentConv.ProviderToUse = Object.assign(parentConv.ProviderToUse, {
+            SupportsEntityTransactions: true,
+            BeginEntityTransaction: beginTx,
+        });
+        const superConvDelete = vi.spyOn(Object.getPrototypeOf(MJConversationEntityServer.prototype), 'Delete').mockResolvedValueOnce(false);
+
+        expect(await parentConv.Delete()).toBe(false);
+        expect(child.Delete).toHaveBeenCalledTimes(1);
+        expect(beginTx).toHaveBeenCalledTimes(1);
+        expect(rollbackTx).toHaveBeenCalledTimes(1);
+        expect(commitTx).not.toHaveBeenCalled();
+        superConvDelete.mockRestore();
+
+        // Branch delete also rolls back transaction if super.Delete returns false
+        beginTx.mockClear();
+        commitTx.mockClear();
+        rollbackTx.mockClear();
+        const branchChild = { Delete: vi.fn().mockResolvedValue(true) };
+        hoisted.runViewMock.mockResolvedValueOnce({ Success: true, Results: [branchChild] });
+
+        const branch = new MJConversationBranchEntityServer();
+        branch.ID = 'branch-1';
+        branch.ProviderToUse = Object.assign(branch.ProviderToUse, {
+            SupportsEntityTransactions: true,
+            BeginEntityTransaction: beginTx,
+        });
+        const superBranchDelete = vi
+            .spyOn(Object.getPrototypeOf(MJConversationBranchEntityServer.prototype), 'Delete')
+            .mockImplementationOnce(async function (this: MJConversationBranchEntityServer) {
+                const hook = (this as Partial<{ BeforeBranchDelete(): Promise<boolean> }>).BeforeBranchDelete;
+                if (hook) {
+                    await hook.call(this);
+                }
+                return false;
+            });
+
+        expect(await branch.Delete()).toBe(false);
+        expect(branchChild.Delete).toHaveBeenCalledTimes(1);
+        expect(beginTx).toHaveBeenCalledTimes(1);
+        expect(rollbackTx).toHaveBeenCalledTimes(1);
+        expect(commitTx).not.toHaveBeenCalled();
+        superBranchDelete.mockRestore();
 
         rvSpy.mockRestore();
     });

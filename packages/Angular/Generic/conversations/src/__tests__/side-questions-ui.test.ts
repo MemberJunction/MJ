@@ -153,7 +153,7 @@ describe('Side Questions UI Components', () => {
             { ID: 'a1', Role: 'Agent', Message: 'First answer', Agent: 'Sage' },
             { ID: 'u2', Role: 'User', Message: 'Second question' },
             { ID: 'a2', Role: 'Agent', Message: '', Agent: 'Research Agent' },
-        ] as unknown as MJConversationDetailEntity[];
+        ] as Partial<MJConversationDetailEntity>[] as MJConversationDetailEntity[];
 
         const settled = BuildSideQuestionTurns(rows, false);
         expect(settled).toHaveLength(2);
@@ -173,7 +173,7 @@ describe('Side Questions UI Components', () => {
             { ID: 'a1', Role: 'Agent', Message: 'Answer 1' },
             { ID: 'u2', Role: 'User', Message: 'Question 2' },
             { ID: 'a2', Role: 'Agent', Message: 'Answer 2' },
-        ] as unknown as MJConversationDetailEntity[];
+        ] as Partial<MJConversationDetailEntity>[] as MJConversationDetailEntity[];
 
         const panel = createPanelHarness({ messages, activeTurnIndex: 1 });
         expect(panel.TurnCount).toBe(2);

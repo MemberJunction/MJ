@@ -128,7 +128,7 @@ function createProvider(storedMessages: MockDetailEntity[]): IMetadataProvider {
             };
             return row;
         }),
-    } as unknown as IMetadataProvider;
+    } as Partial<IMetadataProvider> as IMetadataProvider;
 }
 
 describe('SideQuestionController', () => {
@@ -178,7 +178,7 @@ describe('SideQuestionController', () => {
         expect(SideQuestionController.ScopeKey('ABC', 'DEF')).toBe('abc::def');
     });
 
-    it('loads lightweight summary counts without fetching detail rows via LoadScopeSummary', async () => {
+    it('loads lightweight summary counts without fetching detail rows and memoizes repeat calls unless forceRefresh is true', async () => {
         hoisted.getSideConversationSummary.mockResolvedValue({
             SideConversationId: 'side-1',
             DefaultAgentID: 'agent-research',
@@ -189,6 +189,15 @@ describe('SideQuestionController', () => {
         expect(state.TurnCount).toBe(3);
         expect(state.PreferredAgentId).toBe('agent-research');
         expect(hoisted.loadSideConversationDetails).not.toHaveBeenCalled();
+        expect(hoisted.getSideConversationSummary).toHaveBeenCalledTimes(1);
+
+        // Repeat call on same scope hits memoization (0 extra DB round trips)
+        await controller.LoadScopeSummary('parent-1', null, user);
+        expect(hoisted.getSideConversationSummary).toHaveBeenCalledTimes(1);
+
+        // Explicit forceRefresh bypasses memoization
+        await controller.LoadScopeSummary('parent-1', null, user, undefined, true);
+        expect(hoisted.getSideConversationSummary).toHaveBeenCalledTimes(2);
     });
 
     it('loads persisted side conversations and their detail messages via ConversationEngine', async () => {
@@ -296,7 +305,7 @@ describe('SideQuestionController', () => {
         expect(controller.GetScopeState('parent-1', null).PreferredAgentId).toBe('agent-research');
     });
 
-    it('clears/archives side conversation state cleanly via ClearScope', async () => {
+    it('clears/archives side conversation state cleanly via ClearScope and preserves state on failure', async () => {
         hoisted.loadSideConversations.mockResolvedValue([{ ID: 'side-1', ParentID: 'parent-1' }]);
         hoisted.loadSideConversationDetails.mockResolvedValue([
             {
@@ -308,17 +317,29 @@ describe('SideQuestionController', () => {
                 Status: 'Complete',
             },
         ]);
-        hoisted.clearSideConversation.mockResolvedValue(true);
+        const provider = createProvider([]);
+        await controller.LoadScope('parent-1', 'branch-1', user, provider);
 
-        await controller.LoadScope('parent-1', 'branch-1', user, createProvider([]));
-        const ok = await controller.ClearScope('parent-1', 'branch-1', user);
+        // Failed archive preserves existing messages and reports an error
+        hoisted.clearSideConversation.mockResolvedValueOnce(false);
+        const failed = await controller.ClearScope('parent-1', 'branch-1', user, provider);
+        expect(failed).toBe(false);
+        const retained = controller.GetScopeState('parent-1', 'branch-1');
+        expect(retained.SideConversation?.ID).toBe('side-1');
+        expect(retained.Messages).toHaveLength(1);
+        expect(retained.ErrorMessage).toContain('Failed to clear');
+
+        // Successful archive clears state
+        hoisted.clearSideConversation.mockResolvedValueOnce(true);
+        const ok = await controller.ClearScope('parent-1', 'branch-1', user, provider);
         expect(ok).toBe(true);
-        expect(hoisted.clearSideConversation).toHaveBeenCalledWith('side-1', user);
+        expect(hoisted.clearSideConversation).toHaveBeenLastCalledWith('side-1', user, provider);
 
         const state = controller.GetScopeState('parent-1', 'branch-1');
         expect(state.SideConversation).toBeNull();
         expect(state.Messages).toHaveLength(0);
         expect(state.TurnCount).toBe(0);
+        expect(state.ErrorMessage).toBeNull();
     });
 
     it('defaults to Sage when no @mention or PreferredAgent is supplied', async () => {

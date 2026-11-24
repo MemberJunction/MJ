@@ -145,7 +145,9 @@ describe('Side Questions — Core Entities & Access', () => {
             options?: { includeSideQuestions?: boolean }
         ) => string;
         const defaultFilter = Reflect.apply(buildFilter, ConversationEngine.Instance, ['env-1', 'u1', []]);
-        expect(defaultFilter).toContain(`TypeID<>'${BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION}'`);
+        expect(defaultFilter).toContain(`TypeID <> '${BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION}'`);
+        expect(ConversationEngine.Instance.IsSideQuestionTypeId(BUILT_IN_CONVERSATION_TYPE_IDS.SIDE_QUESTION)).toBe(true);
+        expect(ConversationEngine.Instance.IsSideQuestionTypeId(BUILT_IN_CONVERSATION_TYPE_IDS.CHAT)).toBe(false);
 
         const optInFilter = Reflect.apply(buildFilter, ConversationEngine.Instance, [
             'env-1',
