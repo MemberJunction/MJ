@@ -335,3 +335,44 @@ describe('test.yml — backstop integrity', () => {
         expect(names).toContain('Resolve backstop alarm on green');
     });
 });
+
+describe('test.yml — intra-package sharding & read-only next test cache seed (Option A)', () => {
+    it('passes --split-above to plan-test-shards and passes splitPackages via env', () => {
+        const planStep = readJobSteps('build').find((s) => s.name === 'Plan test shards');
+        expect(planStep).toBeDefined();
+        expect(planStep.body.join('\n')).toMatch(/--split-above=\d+/);
+
+        const runStep = readJobSteps('test').find((s) => s.name === 'Run unit tests');
+        expect(runStep).toBeDefined();
+        const body = runStep.body.join('\n');
+        expect(body).toMatch(/SHARD_SPLIT_PACKAGES: \$\{\{ matrix\.shard\.splitPackages \|\| '' \}\}/);
+        expect(body).toMatch(/npx turbo run test --filter="\$pkg" -- --shard="\$shard_arg"/);
+    });
+
+    it('restores turbo-test-v1 read-only in test shards and only publishes it from next backstops', () => {
+        const testSteps = readJobSteps('test');
+        const restoreSeed = testSteps.find((s) => s.name === 'Restore next test cache seed');
+        expect(restoreSeed).toBeDefined();
+        const restoreBody = restoreSeed.body.join('\n');
+        expect(restoreBody).toMatch(/uses: actions\/cache\/restore@/);
+        expect(restoreBody).toMatch(/key: turbo-test-v1-/);
+
+        // Test shards must NEVER directly call actions/cache/save for turbo-test-v1
+        const directSave = testSteps.find((s) => /actions\/cache\/save@/.test(s.body.join('\n')));
+        expect(directSave).toBeUndefined();
+
+        // Delta upload in test shards must be gated to push/schedule on next
+        const uploadDelta = testSteps.find((s) => s.name === 'Upload test cache delta for next seed');
+        expect(uploadDelta).toBeDefined();
+        expect(uploadDelta.body.join('\n')).toMatch(/\(github\.event_name == 'push' \|\| github\.event_name == 'schedule'\) && github\.ref_name == 'next'/);
+
+        // Cleanup job saves turbo-test-v1 ONLY on push/schedule on next when test succeeded
+        const cleanupSteps = readJobSteps('cleanup');
+        const saveSeed = cleanupSteps.find((s) => s.name === 'Save next test cache seed');
+        expect(saveSeed).toBeDefined();
+        const saveBody = saveSeed.body.join('\n');
+        expect(saveBody).toMatch(/needs\.test\.result == 'success'/);
+        expect(saveBody).toMatch(/\(github\.event_name == 'push' \|\| github\.event_name == 'schedule'\) && github\.ref_name == 'next'/);
+        expect(saveBody).toMatch(/key: turbo-test-v1-/);
+    });
+});

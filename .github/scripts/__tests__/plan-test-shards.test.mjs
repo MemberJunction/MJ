@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import {
     extractTestPackages,
+    extractTestPackageCommands,
     planShards,
     loadWeights,
     parseArgs,
@@ -171,6 +172,76 @@ describe('planShards — balance', () => {
         const mean = shards.reduce((n, s) => n + s.weight, 0) / shards.length;
         const max = Math.max(...shards.map((s) => s.weight));
         expect(max).toBeLessThanOrEqual(mean * 1.25);
+    });
+});
+
+describe('planShards — intra-package Vitest splitting', () => {
+    it('extractTestPackageCommands preserves raw test commands for split eligibility', () => {
+        const dry = {
+            tasks: [
+                { task: 'test', package: '@mj/vitest', command: 'vitest run' },
+                { task: 'test', package: '@mj/compound', command: 'vitest run && tsc -p tsconfig.rigs.json' },
+                { task: 'build', package: '@mj/vitest', command: 'tsc' },
+                { task: 'test', package: '@mj/none', command: '<NONEXISTENT>' },
+            ],
+        };
+        const cmds = extractTestPackageCommands(dry);
+        expect(cmds.get('@mj/vitest')).toBe('vitest run');
+        expect(cmds.get('@mj/compound')).toBe('vitest run && tsc -p tsconfig.rigs.json');
+        expect(cmds.has('@mj/none')).toBe(false);
+    });
+
+    it('splits a pure vitest run package above splitThresholdSeconds across shards', () => {
+        const commands = new Map([
+            ['@mj/mega', 'vitest run'],
+            ['@mj/small', 'vitest run'],
+        ]);
+        const shards = planShards(['@mj/mega', '@mj/small'], 4, {
+            packages: { '@mj/mega': 900, '@mj/small': 10 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 420,
+            commands,
+        });
+        // 903s / 420 = ceil(2.15) = 3 sub-shards
+        const allSplits = shards
+            .flatMap((s) => (s.splitPackages ? s.splitPackages.split(',') : []))
+            .sort();
+        expect(allSplits).toEqual(['@mj/mega:1/3', '@mj/mega:2/3', '@mj/mega:3/3']);
+        // @mj/mega must NOT also run as a whole package
+        expect(allPackages(shards)).toEqual(['@mj/small']);
+        // Sub-shards land on distinct runners
+        expect(shards.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('never splits compound test scripts where forwarding --shard would hit the wrong command', () => {
+        const commands = new Map([
+            ['@mj/compound', 'vitest run && tsc -p tsconfig.rigs.json'],
+            ['@mj/small', 'vitest run'],
+        ]);
+        const shards = planShards(['@mj/compound', '@mj/small'], 4, {
+            packages: { '@mj/compound': 900, '@mj/small': 10 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 420,
+            commands,
+        });
+        expect(shards.every((s) => s.splitPackages === undefined)).toBe(true);
+        expect(allPackages(shards).sort()).toEqual(['@mj/compound', '@mj/small']);
+    });
+
+    it('fans a single mega-package out across multiple shards when splitThresholdSeconds is set', () => {
+        const commands = new Map([['@mj/mega', 'vitest run']]);
+        const shards = planShards(['@mj/mega'], 4, {
+            packages: { '@mj/mega': 850 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 420,
+            commands,
+        });
+        expect(shards).toHaveLength(3);
+        expect(shards.map((s) => s.splitPackages).sort()).toEqual([
+            '@mj/mega:1/3',
+            '@mj/mega:2/3',
+            '@mj/mega:3/3',
+        ]);
     });
 });
 

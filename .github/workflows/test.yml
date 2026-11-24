@@ -782,7 +782,9 @@ jobs:
           if-no-files-found: error
 
       # Partition the in-scope packages into balanced shards for the matrix below. Runs after
-      # the build so the turbo dry-run it uses reads a warm graph.
+      # the build so the turbo dry-run it uses reads a warm graph. `--split-above=420` splits
+      # mega-packages (>7 min, pure `vitest run`) into Vitest `--shard=j/k` sub-shards across
+      # runners so no single package caps wall time.
       - name: Plan test shards
         id: plan
         env:
@@ -791,7 +793,7 @@ jobs:
         # (`--filter=...[base]`), and in the space form the parser cannot tell that apart from
         # a valueless flag followed by the next option — it silently drops the `--filter=`
         # prefix and turbo then reports the remainder as an unknown TASK name.
-        run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --turbo-args="$TURBO_FILTER"
+        run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --split-above=420 --turbo-args="$TURBO_FILTER"
 
       # The handoff to the shards. Keyed to this RUN (not this ref or sha) so it can never be
       # read by another run, and deleted by the cleanup job at the end — the repo shares one
@@ -930,6 +932,32 @@ jobs:
         if: steps.shard_cache.outputs.cache-hit != 'true'
         run: echo "::warning::Run-scoped turbo cache miss — this shard will rebuild its own dependency subtree, which is slower but still correct."
 
+      # Option A (PR-#6817-safe): restore next's read-only test-task cache seed. Written ONLY by
+      # push/schedule backstops on `next` (see cleanup job), so PR shards replay unchanged `test`
+      # tasks from local disk with zero remote-cache credentials and zero PR writes to `next`.
+      - name: Restore next test cache seed
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/test-seed
+          key: turbo-test-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-test-v1-${{ runner.os }}-
+
+      - name: Merge next test cache seed into local turbo cache
+        run: |
+          mkdir -p .turbo/cache
+          if [ -d .turbo/test-seed ]; then
+            cp -rn .turbo/test-seed/. .turbo/cache/ 2>/dev/null || true
+            rm -rf .turbo/test-seed
+          fi
+
+      # Snapshot pre-test `.turbo/cache` entries on backstop runs so we can upload ONLY the small
+      # delta of newly produced `test` task entries (megabytes, not the 3 GB build cache).
+      - name: Record pre-test turbo cache entries
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
+        run: |
+          find .turbo/cache -maxdepth 1 -name '*.tar.zst' -printf '%f\n' 2>/dev/null | sort > /tmp/pre-test-cache.txt || true
+
       # The gitignored class-registration manifests the root postbuild writes into the SOURCE
       # tree. See the build job's packaging step for why the turbo cache cannot carry these.
       - name: Download generated host artifacts
@@ -958,6 +986,7 @@ jobs:
       - name: Run unit tests
         env:
           SHARD_PACKAGES: ${{ matrix.shard.packages }}
+          SHARD_SPLIT_PACKAGES: ${{ matrix.shard.splitPackages || '' }}
         run: |
           # Via env, never interpolated into the script: package names must not reach the shell.
           FILTER_ARGS=()
@@ -965,11 +994,16 @@ jobs:
           for p in "${PKGS[@]}"; do
             [ -n "$p" ] && FILTER_ARGS+=("--filter=$p")
           done
-          if [ ${#FILTER_ARGS[@]} -eq 0 ]; then
+          SPLIT_SPECS=()
+          IFS=',' read -ra RAW_SPLITS <<< "$SHARD_SPLIT_PACKAGES"
+          for s in "${RAW_SPLITS[@]}"; do
+            [ -n "$s" ] && SPLIT_SPECS+=("$s")
+          done
+          if [ ${#FILTER_ARGS[@]} -eq 0 ] && [ ${#SPLIT_SPECS[@]} -eq 0 ]; then
             echo "::error::Shard received no packages — the planner produced an empty shard, which it must never do."
             exit 1
           fi
-          echo "Shard ${{ matrix.shard.index }}/${{ matrix.shard.total }}: ${#FILTER_ARGS[@]} package(s)"
+          echo "Shard ${{ matrix.shard.index }}/${{ matrix.shard.total }}: ${#FILTER_ARGS[@]} whole package(s), ${#SPLIT_SPECS[@]} split sub-shard(s)"
           # --concurrency=4: Angular DOM suites each spin heavy AOT-compile + jsdom workers
           # (capped to 2/package by vitest.dom.shared.ts), so peak workers (concurrency × 2)
           # must stay well under the 16 GB runner's limit — uncapped it OOM'd with exit 137 on
@@ -979,7 +1013,45 @@ jobs:
           # A step with no `shell:` runs as `bash -e {0}`, without pipefail, so the pipeline would
           # exit with tee's status and a failed test task would leave the shard green.
           set -o pipefail
-          npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee /tmp/shard-test.log
+          : > /tmp/shard-test.log
+          if [ ${#FILTER_ARGS[@]} -gt 0 ]; then
+            npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee -a /tmp/shard-test.log
+          fi
+          for spec in "${SPLIT_SPECS[@]}"; do
+            pkg="${spec%:*}"
+            shard_arg="${spec##*:}"
+            echo "Running split package ${pkg} (--shard=${shard_arg})..."
+            npx turbo run test --filter="$pkg" -- --shard="$shard_arg" 2>&1 | tee -a /tmp/shard-test.log
+          done
+
+      # Upload only newly produced `test` task cache entries from backstop runs on `next` so the
+      # cleanup job can publish a compact `turbo-test-v1` seed for PR shards to restore read-only.
+      - name: Stage new test cache entries for next seed
+        if: success() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/turbo-test-delta
+          find .turbo/cache -maxdepth 1 -name '*.tar.zst' -printf '%f\n' 2>/dev/null | sort > /tmp/post-test-cache.txt || true
+          comm -13 /tmp/pre-test-cache.txt /tmp/post-test-cache.txt > /tmp/new-test-cache.txt || true
+          COUNT=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            cp -f ".turbo/cache/$f" "/tmp/turbo-test-delta/$f" 2>/dev/null || true
+            meta="${f%.tar.zst}-meta.json"
+            [ -f ".turbo/cache/$meta" ] && cp -f ".turbo/cache/$meta" "/tmp/turbo-test-delta/$meta" 2>/dev/null || true
+            COUNT=$((COUNT + 1))
+          done < /tmp/new-test-cache.txt
+          echo "Staged ${COUNT} new test cache entry pair(s) for next seed."
+
+      - name: Upload test cache delta for next seed
+        if: success() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: turbo-test-delta-${{ matrix.shard.index }}
+          path: /tmp/turbo-test-delta
+          retention-days: 1
+          if-no-files-found: ignore
 
       # A red shard hands you a job log tens of thousands of lines long in which the decisive
       # lines are not the ones you would grep for: a worker that loses its IPC heartbeat exits 1
@@ -996,7 +1068,7 @@ jobs:
       # real; this asserts they were not skipped, which is the one thing a green summary cannot
       # tell you by itself.
       - name: Assert the Redis-gated suites really ran
-        if: contains(matrix.shard.packages, '@memberjunction/redis-provider')
+        if: contains(matrix.shard.packages, '@memberjunction/redis-provider') || contains(matrix.shard.splitPackages || '', '@memberjunction/redis-provider')
         run: node .github/scripts/check-redis-suites-ran.mjs
 
   # ---------------------------------------------------------------------------------------
@@ -1202,6 +1274,62 @@ jobs:
     permissions:
       actions: write
     steps:
+      # Option A (PR-#6817-safe): merge per-shard test cache deltas on green backstop runs on
+      # `next` and save a bounded read-only seed (`turbo-test-v1-Linux-<sha>`) for PR shards.
+      - name: Restore previous next test cache seed
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
+        continue-on-error: true
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/test-seed
+          key: turbo-test-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-test-v1-${{ runner.os }}-
+
+      - name: Download shard test cache deltas
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: turbo-test-delta-*
+          merge-multiple: true
+          path: .turbo/test-seed
+
+      - name: Prune next test cache seed to a bounded size
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
+        continue-on-error: true
+        env:
+          CAP_MB: 512
+        run: |
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const dir = ".turbo/test-seed";
+            const capBytes = Number(process.env.CAP_MB) * 1024 * 1024;
+            if (!fs.existsSync(dir)) { console.log("No test seed dir — nothing to prune."); process.exit(0); }
+            const archives = fs.readdirSync(dir)
+              .filter((f) => f.endsWith(".tar.zst"))
+              .map((f) => { const s = fs.statSync(path.join(dir, f)); return { f, size: s.size, mtime: s.mtimeMs }; })
+              .sort((a, b) => b.mtime - a.mtime);
+            const total = archives.reduce((n, a) => n + a.size, 0);
+            console.log(`turbo test seed: ${archives.length} entries, ${(total / 1048576).toFixed(1)} MB (cap ${process.env.CAP_MB} MB)`);
+            let kept = 0, removed = 0;
+            for (const a of archives) {
+              if (kept + a.size <= capBytes) { kept += a.size; continue; }
+              fs.rmSync(path.join(dir, a.f), { force: true });
+              fs.rmSync(path.join(dir, a.f.replace(/\.tar\.zst$/, "-meta.json")), { force: true });
+              removed++;
+            }
+            console.log(`pruned ${removed} test seed entries; keeping ${(kept / 1048576).toFixed(1)} MB`);
+          '
+
+      - name: Save next test cache seed
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: .turbo/test-seed
+          key: turbo-test-v1-${{ runner.os }}-${{ github.sha }}
+
       - name: Delete the run-scoped turbo cache
         continue-on-error: true
         env:
@@ -1245,39 +1373,41 @@ jobs:
           gh api --paginate --slurp "repos/$REPO/actions/caches?per_page=100" > /tmp/caches.json
 
           TOTAL=$(jq '[.[] | .actions_caches[]] | length' /tmp/caches.json)
-          SEEDS=$(jq '[.[] | .actions_caches[] | select(.key | startswith("turbo-v1-Linux-"))] | length' /tmp/caches.json)
-          echo "caches: $TOTAL total, $SEEDS turbo-v1 seeds, keeping the newest $KEEP"
+          for PREFIX in "turbo-v1-Linux-" "turbo-test-v1-Linux-"; do
+            SEEDS=$(jq --arg p "$PREFIX" '[.[] | .actions_caches[] | select(.key | startswith($p))] | length' /tmp/caches.json)
+            echo "caches: $TOTAL total, $SEEDS ${PREFIX}* seeds, keeping the newest $KEEP"
 
-          # Guard: if the filter matched nothing, do nothing. Protects against a key-naming
-          # change silently turning this into either a no-op or, worse, a broad delete.
-          if [ "$SEEDS" -le "$KEEP" ]; then
-            echo "Nothing to prune."
-            exit 0
-          fi
-
-          jq -r --argjson keep "$KEEP" '
-            [ .[] | .actions_caches[] | select(.key | startswith("turbo-v1-Linux-")) ]
-            | sort_by(.created_at) | reverse | .[$keep:]
-            | .[] | "\(.id) \(.size_in_bytes)"
-          ' /tmp/caches.json > /tmp/prune.txt
-
-          DELETED=0; FREED=0; FAILED=0
-          # `|| [ -n "$line" ]` so a final line with no trailing newline is still processed —
-          # without it the last entry is silently skipped every time.
-          while read -r id size || [ -n "$id" ]; do
-            [ -z "$id" ] && continue
-            if gh api --method DELETE "repos/$REPO/actions/caches/$id" >/dev/null 2>&1; then
-              DELETED=$((DELETED + 1)); FREED=$((FREED + size))
-            else
-              FAILED=$((FAILED + 1))
+            # Guard: if the filter matched nothing, do nothing. Protects against a key-naming
+            # change silently turning this into either a no-op or, worse, a broad delete.
+            if [ "$SEEDS" -le "$KEEP" ]; then
+              echo "Nothing to prune for $PREFIX."
+              continue
             fi
-          done < /tmp/prune.txt
 
-          echo "Pruned $DELETED seed cache(s), freeing $((FREED / 1073741824)) GB; $FAILED failed."
-          echo "Pruned **$DELETED** turbo-v1 seed cache(s), freeing **$((FREED / 1073741824)) GB**" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$FAILED" -gt 0 ]; then
-            echo "::warning::$FAILED seed cache(s) could not be deleted — they will age out via LRU."
-          fi
+            jq -r --arg p "$PREFIX" --argjson keep "$KEEP" '
+              [ .[] | .actions_caches[] | select(.key | startswith($p)) ]
+              | sort_by(.created_at) | reverse | .[$keep:]
+              | .[] | "\(.id) \(.size_in_bytes)"
+            ' /tmp/caches.json > /tmp/prune.txt
+
+            DELETED=0; FREED=0; FAILED=0
+            # `|| [ -n "$line" ]` so a final line with no trailing newline is still processed —
+            # without it the last entry is silently skipped every time.
+            while read -r id size || [ -n "$id" ]; do
+              [ -z "$id" ] && continue
+              if gh api --method DELETE "repos/$REPO/actions/caches/$id" >/dev/null 2>&1; then
+                DELETED=$((DELETED + 1)); FREED=$((FREED + size))
+              else
+                FAILED=$((FAILED + 1))
+              fi
+            done < /tmp/prune.txt
+
+            echo "Pruned $DELETED ${PREFIX}* seed cache(s), freeing $((FREED / 1048576)) MB; $FAILED failed."
+            echo "Pruned **$DELETED** \`${PREFIX}*\` seed cache(s), freeing **$((FREED / 1048576)) MB**" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$FAILED" -gt 0 ]; then
+              echo "::warning::$FAILED ${PREFIX}* seed cache(s) could not be deleted — they will age out via LRU."
+            fi
+          done
 
   # Nightly coverage lane. Runs ONLY on the scheduled backstop (plus manual dispatch), in its
   # own job so the backstop suite above is untouched: it executes the curated node-tier

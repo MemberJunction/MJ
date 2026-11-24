@@ -5,6 +5,11 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     globals: true,
+    // Worker threads avoid full child-process fork overhead across ~300 Node packages while
+    // keeping default per-file module isolation (`isolate: true`). Packages that call
+    // `process.chdir()` (e.g. MetadataSync) or need DOM/Angular globals (vitest.dom.shared.ts)
+    // explicitly override `pool: 'forks'`.
+    pool: 'threads',
     testTimeout: 30000,
     // Match the test timeout: hooks default to 10s, but setup hooks that cold-import a
     // heavy transitive module graph (e.g. `await import(...)` in beforeEach) can exceed

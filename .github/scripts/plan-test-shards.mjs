@@ -67,60 +67,98 @@ export function loadWeights(weightsPath = DEFAULT_WEIGHTS_PATH) {
  *  - a real `command` — turbo emits entries for packages that have no `test` script; scheduling
  *    them would create shards that run nothing.
  */
-export function extractTestPackages(dryRunJson) {
+/**
+ * Extract the package names and their raw `test` commands from `turbo run test --dry=json`.
+ * Knowing the exact command lets intra-package sharding split only pure `vitest run` packages
+ * (never compound scripts like `vitest run && tsc ...` where forwarding `-- --shard=1/2`
+ * would land on the second command).
+ */
+export function extractTestPackageCommands(dryRunJson) {
     const tasks = dryRunJson?.tasks;
     if (!Array.isArray(tasks)) {
         throw new Error('plan-test-shards: turbo dry-run JSON has no `tasks` array — cannot plan shards.');
     }
-    const names = new Set();
+    const commands = new Map();
     for (const t of tasks) {
         if (t?.task !== 'test') continue;
         if (!t.command || t.command === '<NONEXISTENT>') continue;
         if (typeof t.package !== 'string' || t.package.length === 0) continue;
-        names.add(t.package);
+        commands.set(t.package, String(t.command).trim());
     }
+    return commands;
+}
+
+export function extractTestPackages(dryRunJson) {
     // Sorted so a given input always produces byte-identical shards — a re-run of the same
     // commit must not reshuffle packages between shards (it would void turbo's cache hits).
-    return [...names].sort();
+    return [...extractTestPackageCommands(dryRunJson).keys()].sort();
 }
 
 /**
  * Bin-pack `packages` into at most `shardCount` groups, heaviest-first onto the lightest bin.
  *
+ * When `splitThresholdSeconds > 0` and `shardCount >= 2`, any package whose weight exceeds the
+ * threshold (and whose test command is pure `vitest run`, when `commands` is supplied) is split
+ * into `ceil(weight / splitThresholdSeconds)` Vitest `--shard=j/k` work items so no single
+ * mega-package caps wall time.
+ *
  * Returns only NON-EMPTY shards: a matrix entry that runs zero packages still pays ~4 minutes
  * of checkout+install for nothing, so a 3-package scope produces 3 shards, not 6. The returned
  * `index`/`total` are display labels assigned after packing.
  */
-export function planShards(packages, shardCount, { packages: weights = {}, defaultSeconds = PER_TASK_OVERHEAD_SECONDS } = {}) {
+export function planShards(
+    packages,
+    shardCount,
+    { packages: weights = {}, defaultSeconds = PER_TASK_OVERHEAD_SECONDS, splitThresholdSeconds = 0, commands = null } = {},
+) {
     if (!Number.isInteger(shardCount) || shardCount < 1) {
         throw new Error(`plan-test-shards: shard count must be a positive integer, got ${shardCount}`);
     }
-    const effective = Math.min(shardCount, packages.length);
-    if (effective === 0) return [];
+    if (packages.length === 0) return [];
 
     const weightOf = (name) => (typeof weights[name] === 'number' ? weights[name] : defaultSeconds) + PER_TASK_OVERHEAD_SECONDS;
+    const canSplit = (name) => !commands || commands.get(name) === 'vitest run';
 
-    // Heaviest first; ties broken by name so the plan is deterministic for a given input.
-    const ordered = [...packages].sort((a, b) => weightOf(b) - weightOf(a) || a.localeCompare(b));
+    const workItems = [];
+    for (const name of [...packages].sort()) {
+        const w = weightOf(name);
+        if (splitThresholdSeconds > 0 && shardCount >= 2 && w > splitThresholdSeconds && canSplit(name)) {
+            const parts = Math.min(shardCount, Math.ceil(w / splitThresholdSeconds));
+            const partWeight = w / parts;
+            for (let j = 1; j <= parts; j++) {
+                workItems.push({ kind: 'split', name, spec: `${name}:${j}/${parts}`, weight: partWeight });
+            }
+        } else {
+            workItems.push({ kind: 'whole', name, spec: name, weight: w });
+        }
+    }
 
-    const bins = Array.from({ length: effective }, () => ({ packages: [], weight: 0 }));
-    for (const name of ordered) {
+    const effective = Math.min(shardCount, workItems.length);
+    if (effective === 0) return [];
+
+    // Heaviest first; ties broken by spec so the plan is deterministic for a given input.
+    workItems.sort((a, b) => b.weight - a.weight || a.spec.localeCompare(b.spec));
+
+    const bins = Array.from({ length: effective }, () => ({ packages: [], splitPackages: [], weight: 0 }));
+    for (const item of workItems) {
         // Lightest bin wins; ties go to the lowest bin index, again for determinism.
         let target = bins[0];
         for (const bin of bins) {
             if (bin.weight < target.weight) target = bin;
         }
-        target.packages.push(name);
-        target.weight += weightOf(name);
+        if (item.kind === 'split') target.splitPackages.push(item.spec);
+        else target.packages.push(item.name);
+        target.weight += item.weight;
     }
 
     return bins
-        .filter((b) => b.packages.length > 0)
+        .filter((b) => b.packages.length > 0 || b.splitPackages.length > 0)
         .map((b, i, arr) => ({
             index: i + 1,
             total: arr.length,
             // Sorted within the shard purely for readable logs; order does not affect turbo.
             packages: b.packages.slice().sort().join(','),
+            ...(b.splitPackages.length > 0 ? { splitPackages: b.splitPackages.slice().sort().join(',') } : {}),
             weight: Math.round(b.weight),
         }));
 }
@@ -156,7 +194,7 @@ function assertTurboFlags(args) {
  * the default would truncate it into a parse error — a silent "no packages" plan, which would
  * skip the entire test tier while reporting success.
  */
-export function readTurboTestPackages(filterArgs = [], { cwd = process.cwd() } = {}) {
+export function readTurboTestPackageCommands(filterArgs = [], { cwd = process.cwd() } = {}) {
     assertTurboFlags(filterArgs);
     const args = ['turbo', 'run', 'test', '--dry=json', ...filterArgs];
     const stdout = execFileSync('npx', args, {
@@ -165,7 +203,11 @@ export function readTurboTestPackages(filterArgs = [], { cwd = process.cwd() } =
         maxBuffer: 256 * 1024 * 1024,
         stdio: ['ignore', 'pipe', 'inherit'],
     });
-    return extractTestPackages(JSON.parse(stdout));
+    return extractTestPackageCommands(JSON.parse(stdout));
+}
+
+export function readTurboTestPackages(filterArgs = [], { cwd = process.cwd() } = {}) {
+    return [...readTurboTestPackageCommands(filterArgs, { cwd }).keys()].sort();
 }
 
 /**
@@ -331,9 +373,16 @@ async function main() {
     const raw = args['turbo-args'] ?? args.filter ?? '';
     const filterArgs = String(raw).trim().split(/\s+/).filter(Boolean);
 
-    const packages = readTurboTestPackages(filterArgs, { cwd: resolve(args.cwd ?? process.cwd()) });
+    const splitThresholdSeconds = Number.parseFloat(args['split-above'] ?? '0');
+    if (!Number.isFinite(splitThresholdSeconds) || splitThresholdSeconds < 0) {
+        console.error(`plan-test-shards: --split-above must be a non-negative number, got "${args['split-above']}"`);
+        process.exit(2);
+    }
+
+    const commands = readTurboTestPackageCommands(filterArgs, { cwd: resolve(args.cwd ?? process.cwd()) });
+    const packages = [...commands.keys()].sort();
     const weights = loadWeights(args.weights ? resolve(args.weights) : DEFAULT_WEIGHTS_PATH);
-    const shards = planShards(packages, shardCount, weights);
+    const shards = planShards(packages, shardCount, { ...weights, splitThresholdSeconds, commands });
 
     const unweighted = packages.filter((p) => typeof weights.packages[p] !== 'number');
     console.log(`plan-test-shards: ${packages.length} package(s) with a test task → ${shards.length} shard(s)`);
@@ -341,7 +390,10 @@ async function main() {
         console.log(`plan-test-shards: ${unweighted.length} package(s) had no recorded weight (using ${weights.defaultSeconds}s): ${unweighted.slice(0, 10).join(', ')}${unweighted.length > 10 ? ', …' : ''}`);
     }
     for (const s of shards) {
-        console.log(`  shard ${s.index}/${s.total}: ${s.packages.split(',').length} package(s), ~${s.weight}s`);
+        const wholeCount = s.packages ? s.packages.split(',').length : 0;
+        const splitCount = s.splitPackages ? s.splitPackages.split(',').length : 0;
+        const splitSuffix = splitCount > 0 ? ` + ${splitCount} split sub-shard(s)` : '';
+        console.log(`  shard ${s.index}/${s.total}: ${wholeCount} package(s)${splitSuffix}, ~${s.weight}s`);
     }
 
     writeGithubOutput('shards', JSON.stringify(shards));
