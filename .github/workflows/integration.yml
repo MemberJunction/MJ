@@ -84,6 +84,7 @@ on:
       - '.github/scripts/select-integration-tier.mjs'
       # The PostgreSQL lane's ratchet and its list: a PR that edits either must run that lane.
       - '.github/scripts/check-integration-known-failures.mjs'
+      - '.github/scripts/classify-pg-parity-gap.mjs'
       - '.github/integration-known-failures/**'
       # Root install inputs: the pnpm version pin (packageManager), the workspace globs and the
       # registry settings decide what the lane installs and builds.
@@ -195,30 +196,28 @@ jobs:
             else
               echo "cachestack=false" >> "$GITHUB_OUTPUT"
             fi
-            # The PostgreSQL lane gates the build, not each feature PR: a feature PR ships the
-            # T-SQL migration only, and the build engineer converts with /pg-migrate. So it blocks
-            # a PR that touches migrations-pg/ (the build engineer's PR), runs report-only on a PR
-            # that changes the PostgreSQL toolchain or the lane itself, and skips the rest.
+            # The PostgreSQL lane runs on the same PRs as the SQL Server lane (see its `if`). A feature
+            # PR ships the T-SQL migration only, and the build engineer converts with /pg-migrate, so
+            # a PostgreSQL database may lack the newest tables: a parity gap, which is not the PR's
+            # doing. `regressions` blocks on a regression and only warns on a parity gap; `gate`, for
+            # a PR that touches migrations-pg/ (the build engineer's PR), blocks on both.
             if echo "$CHANGED" | grep -qE '^migrations-pg/'; then
               echo "pg=gate" >> "$GITHUB_OUTPUT"
-            elif echo "$CHANGED" | grep -qE '^(packages/PostgreSQLDataProvider/|packages/SQLConverter/|packages/CodeGenLib/src/Database/providers/postgresql/|\.github/integration-known-failures/|\.github/scripts/check-integration-known-failures\.mjs|\.github/workflows/integration\.yml)'; then
-              echo "pg=report" >> "$GITHUB_OUTPUT"
             else
-              echo "pg=skip" >> "$GITHUB_OUTPUT"
+              echo "pg=regressions" >> "$GITHUB_OUTPUT"
             fi
           else
             echo "codegen=true" >> "$GITHUB_OUTPUT"
             # Off the pull-request path the rig runs on its own schedule (see cross-server-invalidation).
             echo "cachestack=false" >> "$GITHUB_OUTPUT"
             # A release (publish.yml calling this workflow with release: true) and a dispatch (the
-            # build engineer's own run) gate. The nightly reports how far next is from a PostgreSQL
-            # build without failing. A merge into next skips the lane, since next holds T-SQL
-            # migrations whose PostgreSQL twins come with the next build.
+            # build engineer's own run) gate. The nightly blocks on a regression and warns on a parity
+            # gap, as a PR does. A merge into next skips the lane: the PR that merged already ran it.
             if [ "${{ inputs.release }}" = "true" ]; then
               echo "pg=gate" >> "$GITHUB_OUTPUT"
             else case "${{ github.event_name }}" in
               workflow_dispatch) echo "pg=gate" >> "$GITHUB_OUTPUT" ;;
-              schedule) echo "pg=report" >> "$GITHUB_OUTPUT" ;;
+              schedule) echo "pg=regressions" >> "$GITHUB_OUTPUT" ;;
               *) echo "pg=skip" >> "$GITHUB_OUTPUT" ;;
             esac; fi
           fi
@@ -228,8 +227,8 @@ jobs:
       #     practice): no test can load them; or
       #   - these exact PR changes already passed it (a catch-up merge of the base branch that
       #     leaves the PR's files, migrations, metadata and test definitions alone — measured at
-      #     ~16% of this job's PR minutes): see "Record that these PR changes passed" at the end
-      #     of integration-sqlserver.
+      #     ~16% of this job's PR minutes): see the record-integration-pass job, which records a
+      #     pass only when both deterministic lanes passed.
       # The rules, and why every doubt resolves to "run", are in the script's header. Merges,
       # the nightly and dispatches always run the lane, so a wrong skip is caught by the next
       # merge's backstop.
@@ -1007,21 +1006,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      # Last, so only a fully green job records a pass. A later run of this PR with the same
-      # change fingerprint (see the `changes` job) skips the lane. A failure to save only costs
-      # that later skip, so it must not fail the job.
-      - name: Record that these PR changes passed
-        if: success() && github.event_name == 'pull_request' && needs.changes.outputs.fingerprint != ''
-        run: |
-          mkdir -p .integration-pass
-          echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > .integration-pass/run.txt
-      - name: Save the pass record
-        if: success() && github.event_name == 'pull_request' && needs.changes.outputs.fingerprint != ''
-        continue-on-error: true
-        uses: actions/cache/save@v6
-        with:
-          path: .integration-pass
-          key: integration-pass-v2-${{ github.event.pull_request.number }}-${{ github.base_ref }}-${{ needs.changes.outputs.fingerprint }}
 
   # ── Deterministic tier on PostgreSQL ────────────────────────────────────────────────
   # The same suite, the same 4-shard layout, against a PostgreSQL database built only from
@@ -1038,18 +1022,21 @@ jobs:
   # No snapshot cache: migrate + both pushes take ~2 minutes on PostgreSQL.
   integration-postgres:
     name: Integration (PostgreSQL, deterministic)
-    # A BUILD gate, not a per-PR gate, like pg-migrations.yml: feature PRs ship T-SQL migrations
-    # only, and their PostgreSQL twins arrive in the build engineer's PR (/pg-migrate). The
-    # `changes` job decides the mode: `gate` (a PR touching migrations-pg/, a dispatch, or the
-    # release gate publish.yml runs) fails
-    # the job on a regression; `report` (a PR to the PostgreSQL toolchain or this lane, or the
-    # nightly) runs it without failing; `skip` (every other PR, and merges into next) does not run.
+    # Two kinds of failure, treated differently. A REGRESSION (a check that fails and is not on the
+    # known-failures list, or a metadata push that fails for any reason but a missing entity) always
+    # blocks. A PARITY GAP (the metadata push refuses directories whose tables have no PostgreSQL
+    # migration yet) is the state of next, not the PR's doing: feature PRs ship T-SQL migrations
+    # only, and their PostgreSQL twins arrive with the build engineer's /pg-migrate PR. The
+    # `changes` job sets the mode: `regressions` (every PR the SQL Server lane runs on, and the
+    # nightly) warns on a parity gap and skips the suite; `gate` (a PR touching migrations-pg/, a
+    # dispatch, or the release gate publish.yml runs) blocks on it; `skip` (a merge into next)
+    # does not run. classify-pg-parity-gap.mjs tells the two kinds apart.
     needs: [changes, preflight]
     if: |
       !cancelled() && needs.preflight.result == 'success' &&
       (github.event_name != 'schedule' || github.event.schedule == '0 6 * * *') &&
-      needs.changes.outputs.pg != 'skip'
-    continue-on-error: ${{ needs.changes.outputs.pg == 'report' }}
+      needs.changes.outputs.pg != 'skip' &&
+      (github.event_name != 'pull_request' || needs.changes.outputs.pg == 'gate' || needs.changes.outputs.integration != 'false')
     timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
@@ -1139,13 +1126,34 @@ jobs:
       - name: Migrate — apply migrations-pg
         run: node packages/MJCLI/bin/run.js migrate
 
+      # A failed push does not fail its step: the classifier below decides whether it is a parity
+      # gap or a regression, and the steps after it run only when there is no gap.
       - name: Sync push — reconcile committed metadata
-        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+        id: sync
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci 2>&1 | tee /tmp/pg-sync-metadata.log
 
       - name: Sync push — seed the optional integration metadata + RLS fixtures
-        run: node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
+        id: sync-optional
+        if: steps.sync.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci 2>&1 | tee /tmp/pg-sync-optional.log
+
+      - name: Classify a failed metadata push (parity gap or regression)
+        id: parity
+        if: steps.sync.outcome == 'failure' || steps.sync-optional.outcome == 'failure'
+        run: |
+          LOGS=()
+          [ "${{ steps.sync.outcome }}" = "failure" ] && LOGS+=(/tmp/pg-sync-metadata.log)
+          [ "${{ steps.sync-optional.outcome }}" = "failure" ] && LOGS+=(/tmp/pg-sync-optional.log)
+          node .github/scripts/classify-pg-parity-gap.mjs --mode=${{ needs.changes.outputs.pg }} "${LOGS[@]}"
 
       - name: Verify RLS integration fixtures were seeded
+        if: steps.parity.outputs.gap != 'true'
         run: |
           COUNT=$(psql -tA -c "SELECT COUNT(*) FROM __mj.\"User\" WHERE \"Email\" LIKE '%@integration.test'")
           echo "Seeded @integration.test fixture users: ${COUNT}/3"
@@ -1155,6 +1163,7 @@ jobs:
           fi
 
       - name: Generate throwaway encryption and collaboration HMAC keys for this run
+        if: steps.parity.outputs.gap != 'true'
         run: |
           echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
           echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
@@ -1163,12 +1172,14 @@ jobs:
 
       # PostgreSQL copies a database from a template, so the worker databases cost seconds.
       - name: Clone isolated worker databases for parallel server shards
+        if: steps.parity.outputs.gap != 'true'
         run: |
           for n in 1 2 3; do
             psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE test_s${n} TEMPLATE test"
           done
 
       - name: Boot MJAPI (client-transport members)
+        if: steps.parity.outputs.gap != 'true'
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
@@ -1182,6 +1193,7 @@ jobs:
       # Same shards as the SQL Server job. A shard's exit code is not the verdict here: the
       # known-failures check below is. A shard that crashes leaves no JSON, which fails that check.
       - name: Run integration tier (mj test)
+        if: steps.parity.outputs.gap != 'true'
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
@@ -1220,11 +1232,38 @@ jobs:
           done
 
       - name: Compare with the known PostgreSQL failures
+        if: steps.parity.outputs.gap != 'true'
         run: node .github/scripts/check-integration-known-failures.mjs .github/integration-known-failures/postgresql.json /tmp/pg-shard-server-1.json /tmp/pg-shard-server-2.json /tmp/pg-shard-server-3.json /tmp/pg-shard-client.json
 
       - name: MJAPI log on failure
         if: failure()
         run: tail -300 /tmp/pg-mjapi.log || true
+
+  # A pass record lets a later run of this PR with the same change fingerprint (see the `changes`
+  # job) skip both deterministic lanes. It is written only when both passed, so a catch-up merge
+  # cannot skip past a PostgreSQL regression that the SQL Server lane did not see. A PostgreSQL
+  # lane that warned on a parity gap counts as passed: the gap is next's, not this PR's. A failure
+  # to save only costs that later skip, so it must not fail the run.
+  record-integration-pass:
+    name: Record that these PR changes passed
+    needs: [changes, integration-sqlserver, integration-postgres]
+    if: |
+      !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.fingerprint != '' &&
+      needs.integration-sqlserver.result == 'success' &&
+      (needs.integration-postgres.result == 'success' || needs.integration-postgres.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record that these PR changes passed
+        run: |
+          mkdir -p .integration-pass
+          echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > .integration-pass/run.txt
+      - name: Save the pass record
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: .integration-pass
+          key: integration-pass-v2-${{ github.event.pull_request.number }}-${{ github.base_ref }}-${{ needs.changes.outputs.fingerprint }}
 
   # ── WEEKLY live-model lane (Sunday 06:30 UTC + manual dispatch) ─────────────────────────
   # Runs "Integration Tests — Live Model" (15 tests: prompt-runner, agent-runner, shipped
@@ -2100,7 +2139,7 @@ jobs:
   # .github/scripts/backstop-alarm.mjs.
   backstop-alarm:
     name: Backstop alarm
-    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, schema-mutating-rig, codegen-drift-ai]
+    needs: [changes, preflight, integration-sqlserver, integration-postgres, integration-live-model, cross-server-invalidation, codegen-drift, schema-mutating-rig, codegen-drift-ai]
     if: always() && !inputs.release && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
     runs-on: ubuntu-latest
     timeout-minutes: 5
