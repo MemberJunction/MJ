@@ -302,9 +302,14 @@ async function checkMa3AllowedAgentIDsEnforcement(ctx: IntegrationCheckContext):
     await scopedAdapter.Initialize();
 
     AssertEqual(
-        scopedAdapter.AvailableAgentNames,
-        [cat.DefaultAgent.Name!],
-        'MA3: AllowedAgentIDs should restrict AvailableAgentNames to the allow-listed agent only'
+        scopedAdapter.AvailableAgentNames.length,
+        1,
+        'MA3: AllowedAgentIDs should restrict AvailableAgentNames to exactly one agent'
+    );
+    AssertEqual(
+        scopedAdapter.AvailableAgentNames[0],
+        cat.DefaultAgent.Name!,
+        'MA3: AllowedAgentIDs should keep the allow-listed agent in AvailableAgentNames'
     );
 
     if (cat.SecondDiscoverableAgent && cat.SecondDiscoverableAgent.Name) {

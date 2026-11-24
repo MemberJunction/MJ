@@ -1825,7 +1825,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT188 - Messaging Adapters Security & Routing",
+            "TestID": "@lookup:MJ: Tests.Name=IT188 - Messaging Adapters Security and Routing",
             "Sequence": 49,
             "Status": "Active"
           },
