@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S9.2",
+    "Description": "Gate G3.8 (owner PR 4, phase 3, dataset W1, criterion S9.2): the agent report for W1-signal s42 states the selection score and the leakage result from stored rows and contains 0 fixed \"honest holdout\" sentences and 0 cvScore values. A Pipeline Builder run on W1-signal s42 (logistic regression) delivers its report as the payload's Markdown; the gate regenerates the report from the build's model and training run rows and requires every regenerated number's token in the delivered text, every numeric token of the delivered text (outside the Rank column and the plan, candidate and feature names) among them, the selection-score number equal to the stored finalist's $.trainer.innerScores[i].inner.value, and the leakage sentence matching the stored trainer.leakageFlags. Mutation: re-add \"Trained with honest holdout evaluation.\" to the report's measurement section -> 1 fixed sentence.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G3.8\", \"owner:PR4\", \"phase:3\", \"dataset:W1\", \"criterion:S9.2\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
+    "ExpectedOutcomes": {
+      "summary": "The W1 s42 agent report states the selection score and leakage result from stored rows; 0 \"honest holdout\" sentences, 0 cvScore."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s9-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "5765A113-8788-4D1E-B846-904BC8423F81"
+  }
+}

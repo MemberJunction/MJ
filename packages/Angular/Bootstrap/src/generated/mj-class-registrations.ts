@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (529 classes)
+// @memberjunction/core-entities (534 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -394,8 +394,12 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -560,6 +564,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -931,21 +936,16 @@ import {
     WorkflowsResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
-// @memberjunction/ng-explorer-core (20 classes)
+// @memberjunction/ng-explorer-core (15 classes)
 import {
     ArtifactResource,
     ChatCollectionsResource,
     ChatConversationsResource,
-    ChatTasksResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
-    HumanHandoffConsoleResource,
     LibraryResource,
     ListDetailResource,
-    LiveKitRoomResource,
-    MeetingsResource,
-    NotificationsResource,
     OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,
@@ -1337,8 +1337,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -1364,14 +1368,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
-    MJProcessRunDetailEntity,
-    MJProcessRunEntity,
-    MJProjectEntity,
-    MJProjectEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJProcessRunDetailEntity,
+    MJProcessRunEntity,
+    MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1507,6 +1511,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -1567,15 +1572,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AgentMentionProvider,
     ArtifactWorkspaceChannel,
     ClientContextChannel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     IdentityVerificationChannel,
     InteractiveComponentChannel,
     RealtimeAvatarChannel,
     RealtimeCameraChannel,
     RealtimeMediaChannel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
@@ -1771,15 +1776,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
     SettingsExplorerComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
     TabStripLabComponent,
     TagsResourceComponent,
     TelephonyOperationsDashboardComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
     TestingDashboardTabResourceComponent,
@@ -1807,16 +1812,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ArtifactResource,
     ChatCollectionsResource,
     ChatConversationsResource,
-    ChatTasksResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
-    HumanHandoffConsoleResource,
     LibraryResource,
     ListDetailResource,
-    LiveKitRoomResource,
-    MeetingsResource,
-    NotificationsResource,
     OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,

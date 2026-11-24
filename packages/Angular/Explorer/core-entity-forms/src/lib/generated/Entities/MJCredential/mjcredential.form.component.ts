@@ -34,8 +34,8 @@ export class MJCredentialFormComponent extends BaseFormComponent {
             { sectionKey: 'mJWebSearchProviders', sectionName: 'Web Search Providers', isExpanded: false },
             { sectionKey: 'mJWorkQueueTransports', sectionName: 'Work Queue Transports', isExpanded: false },
             { sectionKey: 'mJCommunicationProviders', sectionName: 'Communication Providers', isExpanded: false },
-            { sectionKey: 'mJCommunicationSenders', sectionName: 'Communication Senders', isExpanded: false },
-            { sectionKey: 'mJCommunicationSendingDomains', sectionName: 'Communication Sending Domains', isExpanded: false }
+            { sectionKey: 'mJCommunicationSendingDomains', sectionName: 'Communication Sending Domains', isExpanded: false },
+            { sectionKey: 'mJCommunicationSenders', sectionName: 'Communication Senders', isExpanded: false }
         ]);
     }
 }

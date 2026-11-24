@@ -21,8 +21,8 @@ export class MJCommunicationLogFormComponent extends BaseFormComponent {
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false },
-            { sectionKey: 'mJCommunicationActivities', sectionName: 'Communication Activities', isExpanded: false },
             { sectionKey: 'mJCommunicationConsentAuditLogs', sectionName: 'Communication Consent Audit Logs', isExpanded: false },
+            { sectionKey: 'mJCommunicationActivities', sectionName: 'Communication Activities', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressions', sectionName: 'Communication Suppressions', isExpanded: false }
         ]);
     }

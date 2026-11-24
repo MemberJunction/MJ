@@ -1,0 +1,100 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on the Scope, ReadPolicy, RequestedBy, EntityMapping, Refusal and FirstErrors columns of",
+      "MJ: ML Scoring Runs so CodeGen emits typed ScopeObject / ReadPolicyObject / RequestedByObject / EntityMappingObject /",
+      "RefusalObject / FirstErrorsObject accessors on MJMLScoringRunEntity. Every type in the shared",
+      "JSONType-interfaces/IMLScoringRunJsonTypes.ts mirrors its @memberjunction/predictive-studio-core type field for field",
+      "(PR 4 Task M5.9). FirstErrors stores an array of ScoringRowError (JSONTypeIsArray). The EntityField rows must exist",
+      "before these @lookups resolve on push. All fields bind the one combined file, so CodeGen emits its declarations once."
+    ],
+    "fields": {
+      "Name": "MJ: ML Scoring Runs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ScoringScope",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLScoringRunJsonTypes.ts"
+          },
+          "_comments": [
+            "Scope field — which records the call scored (record ids, a view or a filter, with its entity)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=Scope"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ReadPolicy",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLScoringRunJsonTypes.ts"
+          },
+          "_comments": [
+            "ReadPolicy field — whether the scope was read complete or in pages"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=ReadPolicy"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "Actor",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLScoringRunJsonTypes.ts"
+          },
+          "_comments": [
+            "RequestedBy field — who asked for the run (a user, an agent, a scheduled job, or a Record Process run)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=RequestedBy"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "EntityRef",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLScoringRunJsonTypes.ts"
+          },
+          "_comments": [
+            "EntityMapping field — the stored row the scope entity maps to when it differs from the model grain entity"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=EntityMapping"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ScoringRefusal",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLScoringRunJsonTypes.ts"
+          },
+          "_comments": [
+            "Refusal field — why a refused run wrote nothing"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=Refusal"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ScoringRowError",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLScoringRunJsonTypes.ts"
+          },
+          "_comments": [
+            "FirstErrors field — the first records (at most 20) that failed to score, each with its message"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=FirstErrors"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: ML Scoring Runs"
+    }
+  }
+]

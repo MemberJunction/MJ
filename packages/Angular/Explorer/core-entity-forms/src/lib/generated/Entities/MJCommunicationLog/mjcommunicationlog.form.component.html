@@ -288,31 +288,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Communication Activities Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationActivities"
-        SectionName="Communication Activities"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationActivities')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Activities','CommunicationLogID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Activities','CommunicationLogID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationActivities')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationActivities', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Communication Consent Audit Logs Section -->
     <mj-collapsible-panel
         SectionKey="mJCommunicationConsentAuditLogs"
@@ -332,6 +307,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationConsentAuditLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Activities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationActivities"
+        SectionName="Communication Activities"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationActivities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Activities','CommunicationLogID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Activities','CommunicationLogID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationActivities')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationActivities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

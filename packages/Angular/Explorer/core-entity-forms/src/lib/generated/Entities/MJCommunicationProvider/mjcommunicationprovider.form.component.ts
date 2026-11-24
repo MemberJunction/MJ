@@ -28,8 +28,8 @@ export class MJCommunicationProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false },
             { sectionKey: 'mJCommunicationProviderEvents', sectionName: 'Communication Provider Events', isExpanded: false },
             { sectionKey: 'mJCommunicationActivities', sectionName: 'Communication Activities', isExpanded: false },
-            { sectionKey: 'mJCommunicationSenders', sectionName: 'Communication Senders', isExpanded: false },
-            { sectionKey: 'mJCommunicationSendingDomains', sectionName: 'Communication Sending Domains', isExpanded: false }
+            { sectionKey: 'mJCommunicationSendingDomains', sectionName: 'Communication Sending Domains', isExpanded: false },
+            { sectionKey: 'mJCommunicationSenders', sectionName: 'Communication Senders', isExpanded: false }
         ]);
     }
 }

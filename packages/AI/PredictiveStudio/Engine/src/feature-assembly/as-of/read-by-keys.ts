@@ -7,6 +7,8 @@
 import { EscapeSQLString } from '@memberjunction/global';
 import type { AssemblyRefusal } from '@memberjunction/predictive-studio-core';
 import type { ICountingDataAccess, SourceRow } from '../data-access';
+import { CompleteReader } from '../read-policy';
+import { AssemblyRefused } from './refusal';
 
 /** Keys per read: one `IN (...)` list stays well inside SQL Server's parameter and statement limits. */
 export const READ_BY_KEYS_BATCH = 500;
@@ -27,6 +29,9 @@ export class KeyedReader {
    * The rows of `keys` (deduplicated case-insensitively), keyed by lower-cased key, and the keys no row was found for.
    * The batches are independent reads and run in parallel. Keys go into SQL as given (escaped), never in their
    * lower-cased matching form.
+   *
+   * @throws AssemblyRefused `unresolved-column` when a requested field is absent from a returned row: the provider left
+   * it out because the caller may not read it, and it must not be read as a missing value
    */
   public static async ReadPresentByKeys(
     dataAccess: ICountingDataAccess, entityName: string, keyField: string, keys: readonly string[], fields: readonly string[],
@@ -45,16 +50,24 @@ export class KeyedReader {
     const out = new Map<string, SourceRow>();
     for (const res of results) {
       if (!res.Success) throw new Error(`Reading ${entityName} by key failed: ${res.ErrorMessage || 'unknown error'}`);
+      const unreturned = CompleteReader.UnreturnedField(res.Rows, fields);
+      if (unreturned !== null) throw new AssemblyRefused({ kind: 'unresolved-column', entity: entityName, field: unreturned });
       for (const row of res.Rows) out.set(String(row[keyField]).toLowerCase(), row);
     }
     return { Rows: out, MissingKeys: [...unique.keys()].filter((k) => !out.has(k)) };
   }
 
-  /** As {@link ReadPresentByKeys}, refusing `truncated-read` when any key has no row. */
+  /** As {@link ReadPresentByKeys}, refusing `truncated-read` when any key has no row, and `unresolved-column` as the refused outcome. */
   public static async ReadByKeys(
     dataAccess: ICountingDataAccess, entityName: string, keyField: string, keys: readonly string[], fields: readonly string[],
   ): Promise<ReadByKeysOutcome> {
-    const present = await KeyedReader.ReadPresentByKeys(dataAccess, entityName, keyField, keys, fields);
+    let present: PresentRowsByKey;
+    try {
+      present = await KeyedReader.ReadPresentByKeys(dataAccess, entityName, keyField, keys, fields);
+    } catch (e) {
+      if (e instanceof AssemblyRefused) return { Status: 'refused', Refusal: e.Refusal };
+      throw e;
+    }
     if (present.MissingKeys.length > 0) {
       const rowsExpected = present.Rows.size + present.MissingKeys.length;
       return { Status: 'refused', Refusal: { kind: 'truncated-read', entity: entityName, rowsExpected, rowsRead: present.Rows.size } };

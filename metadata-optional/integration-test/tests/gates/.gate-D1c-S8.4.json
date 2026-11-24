@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "D1c -> S8.4",
+    "Description": "Gate G6.3 (owner PR 4, phase 6, dataset D1c, criterion S8.4): the outcome-degradation trigger fires within 1 period of the period-3 shift, is logged on the period row and starts a challenger training run, 1 of 1.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G6.3\", \"owner:PR4\", \"phase:6\", \"dataset:D1c\", \"criterion:S8.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 3600000,
+    "ExpectedOutcomes": {
+      "summary": "The trigger fires at period 3 or 4 and the row names a challenger run."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-d1c-s8-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "3B1735EA-5556-4133-8747-9B1AA030C25B"
+  }
+}

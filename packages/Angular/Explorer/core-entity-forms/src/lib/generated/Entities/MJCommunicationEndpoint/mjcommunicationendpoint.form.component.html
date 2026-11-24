@@ -123,25 +123,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Communication Activities Section -->
+    <!-- Communication Endpoint Principals Section -->
     <mj-collapsible-panel
-        SectionKey="mJCommunicationActivities"
-        SectionName="Communication Activities"
+        SectionKey="mJCommunicationEndpointPrincipals"
+        SectionName="Communication Endpoint Principals"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationActivities')"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationEndpointPrincipals')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Activities','CommunicationEndpointID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Activities','CommunicationEndpointID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationActivities')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Endpoint Principals','CommunicationEndpointID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Endpoint Principals','CommunicationEndpointID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationEndpointPrincipals')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationActivities', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationEndpointPrincipals', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -173,25 +173,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Communication Endpoint Principals Section -->
+    <!-- Communication Activities Section -->
     <mj-collapsible-panel
-        SectionKey="mJCommunicationEndpointPrincipals"
-        SectionName="Communication Endpoint Principals"
+        SectionKey="mJCommunicationActivities"
+        SectionName="Communication Activities"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationEndpointPrincipals')"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationActivities')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Endpoint Principals','CommunicationEndpointID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Endpoint Principals','CommunicationEndpointID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationEndpointPrincipals')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Activities','CommunicationEndpointID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Activities','CommunicationEndpointID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationActivities')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationEndpointPrincipals', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationActivities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

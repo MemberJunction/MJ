@@ -1058,7 +1058,7 @@ Check these against the code before relying on the opposite; they describe the i
 
 - Unit tests: `cd packages/Communication/engine && pnpm test` (gate, rules, send service, activity worker),
   and the same in `entity-comm-server`, `providers/sendgrid`, `MJServer` and `Angular/Generic/communications`.
-- Integration bundles IT187 to IT191 (`comms-v2-core`, `-compliance`, `-send`, `-activity`, and `-wire`, which
+- Integration bundles IT188 to IT192 (`comms-v2-core`, `-compliance`, `-send`, `-activity`, and `-wire`, which
   drives the public routes over HTTP against a running MJAPI) run in the deterministic tier:
   `pnpm run test:integration`. See the
   [Integration Testing Quickstart](INTEGRATION_TESTING_QUICKSTART.md).

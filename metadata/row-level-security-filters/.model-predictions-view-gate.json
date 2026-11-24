@@ -1,0 +1,13 @@
+[
+  {
+    "fields": {
+      "Name": "Model Predictions View Gate",
+      "Description": "The view gate of Predictive Studio predictions (D-058). Attached to every role's read permission on MJ: Feature Values and MJ: Latest Feature Values: a Pipeline or Human value stays visible to every reader, and a model prediction (Source Model) is visible only to a user who holds its scoring binding's view authorization, as vwUserHeldAuthorizations states MJ's authorization rule. A binding with no view authorization is visible to no user (fail closed).",
+      "FilterText": "Source <> 'Model' OR MLModelScoringBindingID IN (SELECT b.ID FROM __mj.MLModelScoringBinding b JOIN __mj.vwUserHeldAuthorizations a ON a.AuthorizationID = b.ViewAuthorizationID WHERE a.UserID = '{{UserID}}')",
+      "PlatformVariants": "{\"FilterText\":{\"postgresql\":\"\\\"Source\\\" <> 'Model' OR \\\"MLModelScoringBindingID\\\" IN (SELECT b.\\\"ID\\\" FROM \\\"__mj\\\".\\\"MLModelScoringBinding\\\" b JOIN \\\"__mj\\\".\\\"vwUserHeldAuthorizations\\\" a ON a.\\\"AuthorizationID\\\" = b.\\\"ViewAuthorizationID\\\" WHERE a.\\\"UserID\\\" = '{{UserID}}')\"},\"_meta\":{\"translatedBy\":\"manual\",\"sourceDialect\":\"sqlserver\",\"verified\":false}}"
+    },
+    "primaryKey": {
+      "ID": "A7AAF229-B929-4A1E-9EA1-2123A0642CEA"
+    }
+  }
+]

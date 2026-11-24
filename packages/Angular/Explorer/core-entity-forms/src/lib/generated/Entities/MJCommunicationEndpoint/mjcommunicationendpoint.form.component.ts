@@ -17,9 +17,9 @@ export class MJCommunicationEndpointFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJCommunicationActivities', sectionName: 'Communication Activities', isExpanded: false },
-            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
             { sectionKey: 'mJCommunicationEndpointPrincipals', sectionName: 'Communication Endpoint Principals', isExpanded: false },
+            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
+            { sectionKey: 'mJCommunicationActivities', sectionName: 'Communication Activities', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressions', sectionName: 'Communication Suppressions', isExpanded: false }
         ]);
     }

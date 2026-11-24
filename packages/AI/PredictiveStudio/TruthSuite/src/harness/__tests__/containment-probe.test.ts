@@ -20,10 +20,11 @@ const score = (over: Partial<ScoreAttempt>): ScoreAttempt => ({
   Ok: false,
   ErrorMessage: 'x',
   RefusalCode: null,
-  Scored: 0,
+  ScoringRunID: null,
+  Status: null,
+  Total: 0,
+  Written: 0,
   Failed: 0,
-  Skipped: 0,
-  WroteBack: false,
   Predictions: [],
   DurationMs: 1,
   ...over,
@@ -34,6 +35,8 @@ const model = (over: Partial<CandidateModel>): CandidateModel => ({
   Algorithm: 'logistic_regression',
   Status: 'Draft',
   TrainingRowCount: 10,
+  ArtifactStatus: 'unverified',
+  ArtifactSha256: null,
   HoldoutRowCount: 2,
   Metrics: {},
   HoldoutMetrics: {},
@@ -42,6 +45,8 @@ const model = (over: Partial<CandidateModel>): CandidateModel => ({
   TrainingRunNotes: null,
   LineageJSON: null,
   ValidationResultsJSON: null,
+  TrainingRunID: null,
+  DeliveryJSON: null,
   ...over,
 });
 
@@ -59,8 +64,9 @@ describe('refusals are decided by code', () => {
   it('a refusal that still produced a model is not a refusal', () => {
     expect(ContainmentProbe.WasRefusedBeforeTraining(train({ RefusalCode: 'AS_OF_NO_EFFECT', ModelID: 'm1' }), 'AS_OF_NO_EFFECT')).toBe(false);
   });
-  it('a scoring refusal that still scored rows is not a refusal', () => {
-    expect(ContainmentProbe.WasScoringRefused(score({ RefusalCode: 'MODEL_NOT_SCORABLE', Scored: 5 }), 'MODEL_NOT_SCORABLE')).toBe(false);
+  it('a scoring refusal that still wrote or returned rows is not a refusal', () => {
+    expect(ContainmentProbe.WasScoringRefused(score({ RefusalCode: 'MODEL_NOT_SCORABLE', Written: 5 }), 'MODEL_NOT_SCORABLE')).toBe(false);
+    expect(ContainmentProbe.WasScoringRefused(score({ RefusalCode: 'MODEL_NOT_SCORABLE', Predictions: [{ RecordID: 'r1', Score: 0.5, Class: null }] }), 'MODEL_NOT_SCORABLE')).toBe(false);
   });
 });
 

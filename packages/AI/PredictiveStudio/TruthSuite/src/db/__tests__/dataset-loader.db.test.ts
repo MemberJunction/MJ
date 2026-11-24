@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type sql from 'mssql';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
+import { ConsoleCapture } from '../../__tests__/fixtures/console-capture';
 import { DatasetLoader, type DatasetLoadContext } from '../dataset-loader';
 import { TruthConnection } from '../connection';
 import { DatasetStamp } from '../stamp';
@@ -22,7 +23,9 @@ describe('DatasetLoader', () => {
   let ctx: DatasetLoadContext;
 
   beforeAll(async () => {
-    server = await BootstrapIntegrationServer();
+    const boot = await ConsoleCapture.During('log', () => BootstrapIntegrationServer());
+    expect(ConsoleCapture.UnexpectedBootstrapLines(boot.Lines)).toEqual([]);
+    server = boot.Result;
     pool = await TruthConnection.OpenPool();
     ctx = { Provider: server.Provider, User: server.User, Pool: pool };
   });
