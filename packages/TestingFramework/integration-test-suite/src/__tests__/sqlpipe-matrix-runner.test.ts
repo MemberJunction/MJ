@@ -49,6 +49,31 @@ describe('sqlpipe-matrix-runner concurrency helpers', () => {
         process.env.SQLPIPE_CONCURRENCY = 'invalid';
         expect(MatrixConcurrency(4)).toBe(4);
     });
+
+    it('stops pulling new items after a worker throws and waits for in-flight workers to settle before rejecting', async () => {
+        const started: number[] = [];
+        let siblingSettled = false;
+
+        await expect(
+            RunWithConcurrency([0, 1, 2, 3, 4], 2, async (item) => {
+                started.push(item);
+                if (item === 0) {
+                    await new Promise((r) => setTimeout(r, 10));
+                    throw new Error('boom-0');
+                }
+                if (item === 1) {
+                    await new Promise((r) => setTimeout(r, 50));
+                    siblingSettled = true;
+                    return item;
+                }
+                return item;
+            }),
+        ).rejects.toThrow('boom-0');
+
+        // Sibling worker (item 1) finished cleanly before rejection, and queued items (2..4) never started.
+        expect(siblingSettled).toBe(true);
+        expect(started).toEqual([0, 1]);
+    });
 });
 
 describe('OracleRunner concurrent safety', () => {

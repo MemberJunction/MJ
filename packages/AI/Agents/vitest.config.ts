@@ -12,6 +12,7 @@ export default mergeConfig(
     },
     test: {
       environment: 'node',
+      pool: 'threads',
       include: [
         'src/**/__tests__/**/*.test.ts',
         'src/**/*.test.ts',

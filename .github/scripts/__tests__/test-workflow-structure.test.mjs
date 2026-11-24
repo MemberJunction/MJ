@@ -349,13 +349,14 @@ describe('test.yml — intra-package sharding & read-only next test cache seed (
         expect(body).toMatch(/npx turbo run test --filter="\$pkg" -- --shard="\$shard_arg"/);
     });
 
-    it('restores turbo-test-v1 read-only in test shards and only publishes it from next backstops', () => {
+    it('restores turbo-test-v1 read-only in scoped test shards, skips it on full-suite PR runs, and only publishes it from next backstops', () => {
         const testSteps = readJobSteps('test');
         const restoreSeed = testSteps.find((s) => s.name === 'Restore next test cache seed');
         expect(restoreSeed).toBeDefined();
         const restoreBody = restoreSeed.body.join('\n');
+        expect(restoreBody).toMatch(/if:\s*github\.event_name != 'pull_request' \|\| needs\.build\.outputs\.is_full_suite != 'true'/);
         expect(restoreBody).toMatch(/uses: actions\/cache\/restore@/);
-        expect(restoreBody).toMatch(/key: turbo-test-v1-/);
+        expect(restoreBody).toMatch(/key: \$\{\{ needs\.build\.outputs\.test_seed_prefix \}\}\$\{\{ github\.sha \}\}/);
 
         // Test shards must NEVER directly call actions/cache/save for turbo-test-v1
         const directSave = testSteps.find((s) => /actions\/cache\/save@/.test(s.body.join('\n')));
@@ -373,6 +374,10 @@ describe('test.yml — intra-package sharding & read-only next test cache seed (
         const saveBody = saveSeed.body.join('\n');
         expect(saveBody).toMatch(/needs\.test\.result == 'success'/);
         expect(saveBody).toMatch(/\(github\.event_name == 'push' \|\| github\.event_name == 'schedule'\) && github\.ref_name == 'next'/);
-        expect(saveBody).toMatch(/key: turbo-test-v1-/);
+        expect(saveBody).toMatch(/key: \$\{\{ needs\.build\.outputs\.test_seed_prefix \}\}\$\{\{ github\.sha \}\}/);
+
+        // Guards job runs the Vitest threads safety guard
+        const guardSteps = readJobSteps('guards');
+        expect(guardSteps.some((s) => s.name === 'Vitest threads safety guard')).toBe(true);
     });
 });

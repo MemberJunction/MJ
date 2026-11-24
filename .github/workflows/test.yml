@@ -203,6 +203,8 @@ jobs:
             .github/scripts/check-turbo-cache-env.mjs
             # The turbo root-data inputs guard runs in the guards job; its suite lives in __tests__ above.
             .github/scripts/check-turbo-root-inputs.mjs
+            # The Vitest threads safety guard runs in the guards job; its suite lives in __tests__ above.
+            .github/scripts/check-vitest-threads-safety.mjs
             # Video Studio real-render workflow: an edit to it must run the workflow guard suites.
             .github/workflows/video-studio-render.yml
             # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
@@ -426,6 +428,10 @@ jobs:
           --passWithNoTests=false
           src/__tests__/PrimaryKeyCompliance.test.ts
 
+      - name: Vitest threads safety guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-vitest-threads-safety.mjs
+
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}
         run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134
@@ -589,6 +595,8 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     outputs:
       turbo_filter: ${{ steps.scope.outputs.turbo_filter }}
+      is_full_suite: ${{ steps.scope.outputs.is_full_suite }}
+      test_seed_prefix: ${{ steps.scope.outputs.test_seed_prefix }}
       shards: ${{ steps.plan.outputs.shards }}
       has_tests: ${{ steps.plan.outputs.has_tests }}
     steps:
@@ -661,6 +669,17 @@ jobs:
             echo "Event '${{ github.event_name }}' — running the FULL suite (backstop)."
           fi
           echo "turbo_filter=$FILTER" >> "$GITHUB_OUTPUT"
+          if [ -z "$FILTER" ]; then
+            echo "is_full_suite=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_full_suite=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Tie the Option A test cache seed prefix to runner OS, Node version, and mj-setup so
+          # runtime/setup changes invalidate the seed automatically (cleanup has no checkout, so
+          # computing this once here guarantees test and cleanup agree on the exact prefix).
+          SETUP_HASH="$(git rev-parse HEAD:.github/actions/mj-setup | cut -c1-12)"
+          NODE_VER="$(node -v | tr -c 'A-Za-z0-9._-' '-')"
+          echo "test_seed_prefix=turbo-test-v1-${{ runner.os }}-${NODE_VER}-${SETUP_HASH}-" >> "$GITHUB_OUTPUT"
 
       # `test:types` = the spec type-check gate (tsc --noEmit -p tsconfig.spec.json in each
       # DOM-testing package). Vitest/esbuild is transpile-only — it strips types and silently
@@ -933,15 +952,18 @@ jobs:
         run: echo "::warning::Run-scoped turbo cache miss — this shard will rebuild its own dependency subtree, which is slower but still correct."
 
       # Option A (PR-#6817-safe): restore next's read-only test-task cache seed. Written ONLY by
-      # push/schedule backstops on `next` (see cleanup job), so PR shards replay unchanged `test`
-      # tasks from local disk with zero remote-cache credentials and zero PR writes to `next`.
+      # push/schedule backstops on `next` (see cleanup job), so scoped PR shards replay unchanged
+      # dependent `test` tasks from local disk with zero remote-cache credentials and zero PR writes
+      # to `next`. Skipped on full-suite PR runs (is_full_suite == 'true') so PRs touching root
+      # config, lockfiles, vitest presets, or test.yml always execute every test fresh.
       - name: Restore next test cache seed
+        if: github.event_name != 'pull_request' || needs.build.outputs.is_full_suite != 'true'
         uses: actions/cache/restore@v6
         with:
           path: .turbo/test-seed
-          key: turbo-test-v1-${{ runner.os }}-${{ github.sha }}
+          key: ${{ needs.build.outputs.test_seed_prefix }}${{ github.sha }}
           restore-keys: |
-            turbo-test-v1-${{ runner.os }}-
+            ${{ needs.build.outputs.test_seed_prefix }}
 
       - name: Merge next test cache seed into local turbo cache
         run: |
@@ -1275,16 +1297,16 @@ jobs:
       actions: write
     steps:
       # Option A (PR-#6817-safe): merge per-shard test cache deltas on green backstop runs on
-      # `next` and save a bounded read-only seed (`turbo-test-v1-Linux-<sha>`) for PR shards.
+      # `next` and save a bounded read-only seed (`turbo-test-v1-...-<sha>`) for scoped PR shards.
       - name: Restore previous next test cache seed
         if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
         continue-on-error: true
         uses: actions/cache/restore@v6
         with:
           path: .turbo/test-seed
-          key: turbo-test-v1-${{ runner.os }}-${{ github.sha }}
+          key: ${{ needs.build.outputs.test_seed_prefix }}${{ github.sha }}
           restore-keys: |
-            turbo-test-v1-${{ runner.os }}-
+            ${{ needs.build.outputs.test_seed_prefix }}
 
       - name: Download shard test cache deltas
         if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
@@ -1328,7 +1350,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: .turbo/test-seed
-          key: turbo-test-v1-${{ runner.os }}-${{ github.sha }}
+          key: ${{ needs.build.outputs.test_seed_prefix }}${{ github.sha }}
 
       - name: Delete the run-scoped turbo cache
         continue-on-error: true

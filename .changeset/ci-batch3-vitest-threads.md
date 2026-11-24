@@ -1,5 +1,9 @@
 ---
-"@memberjunction/metadata-sync": patch
+"@memberjunction/integration-test-suite": patch
+"@memberjunction/ai-agents": patch
+"@memberjunction/generic-database-provider": patch
+"@memberjunction/codegen-lib": patch
+"@memberjunction/task-graph": patch
 ---
 
-Pin Vitest pool to `forks` in `@memberjunction/metadata-sync` so `PullService` tests using `process.chdir()` continue running in forked processes while the shared Node Vitest preset switches to worker threads.
+Parallelize SQL Pipeline Matrix (`IT143`/`IT145`/`IT146`) scenario execution with bounded concurrency and in-flight oracle coalescing, and opt verified pure-JS test packages (`ai-agents`, `generic-database-provider`, `codegen-lib`, `task-graph`) into Vitest `pool: 'threads'`.

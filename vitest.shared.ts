@@ -5,11 +5,10 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     globals: true,
-    // Worker threads avoid full child-process fork overhead across ~300 Node packages while
-    // keeping default per-file module isolation (`isolate: true`). Packages that call
-    // `process.chdir()` (e.g. MetadataSync) or need DOM/Angular globals (vitest.dom.shared.ts)
-    // explicitly override `pool: 'forks'`.
-    pool: 'threads',
+    // Keep Vitest's default `forks` pool here: some packages load Linux-unsafe native addons in
+    // worker_threads or assign `process.env.TZ` / `process.chdir()` in tests. Pure-JS heavy
+    // packages opt into `pool: 'threads'` in their own vitest.config.ts (verified by
+    // `.github/scripts/check-vitest-threads-safety.mjs`).
     testTimeout: 30000,
     // Match the test timeout: hooks default to 10s, but setup hooks that cold-import a
     // heavy transitive module graph (e.g. `await import(...)` in beforeEach) can exceed

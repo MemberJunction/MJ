@@ -380,6 +380,37 @@ describe('CLI end to end (real turbo graph)', () => {
         const out = runCli(['--turbo-args=--filter=@memberjunction/global']);
         expect(out).toMatch(/1 package\(s\) with a test task → 1 shard\(s\)/);
     });
+
+    it('Vitest --shard=1/2 and --shard=2/2 partition a real package disjointly and completely', () => {
+        const pkgDir = join(REPO_ROOT, 'packages', 'SQLDialect');
+        const vitestBin = join(REPO_ROOT, 'node_modules', '.bin', 'vitest');
+        const all = execFileSync(vitestBin, ['list', '--filesOnly'], { cwd: pkgDir, encoding: 'utf8' })
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l.endsWith('.test.ts') || l.endsWith('.spec.ts'))
+            .map((l) => join(pkgDir, l))
+            .sort();
+        const runShard = (shardSpec) => {
+            const raw = execFileSync(vitestBin, ['run', `--shard=${shardSpec}`, '--reporter=json'], {
+                cwd: pkgDir,
+                encoding: 'utf8',
+                maxBuffer: 32 * 1024 * 1024,
+            });
+            const report = JSON.parse(raw.slice(raw.indexOf('{')));
+            return report.testResults.map((r) => r.name).sort();
+        };
+
+        const half1 = runShard('1/2');
+        const half2 = runShard('2/2');
+        expect(all.length).toBeGreaterThan(5);
+        expect(half1.length).toBeGreaterThan(0);
+        expect(half2.length).toBeGreaterThan(0);
+        // Disjoint: no test file runs in both shards
+        const overlap = half1.filter((f) => half2.includes(f));
+        expect(overlap).toEqual([]);
+        // Complete: union equals the unsplit list
+        expect([...half1, ...half2].sort()).toEqual(all);
+    });
 }, 120000);
 
 // ---------------------------------------------------------------------------

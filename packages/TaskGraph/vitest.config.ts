@@ -7,6 +7,7 @@ export default mergeConfig(
     test: {
       globals: false,
       environment: 'node',
+      pool: 'threads',
       include: ['src/__tests__/**/*.test.ts'],
     },
   })

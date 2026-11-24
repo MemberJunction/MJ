@@ -90,7 +90,11 @@ export function MatrixConcurrency(defaultLimit: number): number {
     return Math.min(parsed, MAX_SQLPIPE_CONCURRENCY);
 }
 
-/** Runs `worker` across `items` with at most `limit` in-flight promises, preserving input order. */
+/**
+ * Runs `worker` across `items` with at most `limit` in-flight promises, preserving input order.
+ * If any worker throws, stops pulling new items immediately, waits for in-flight workers to
+ * settle (so teardown never races straggling DB writes), and rethrows the first error.
+ */
 export async function RunWithConcurrency<T, R>(
     items: readonly T[],
     limit: number,
@@ -99,16 +103,29 @@ export async function RunWithConcurrency<T, R>(
     if (items.length === 0) return [];
     const results = new Array<R>(items.length);
     let nextIndex = 0;
+    let aborted = false;
+    let firstError: unknown;
+    let hasError = false;
     const workerCount = Math.max(1, Math.min(limit, items.length));
 
     const runWorker = async (): Promise<void> => {
-        while (nextIndex < items.length) {
+        while (!aborted && nextIndex < items.length) {
             const current = nextIndex++;
-            results[current] = await worker(items[current], current);
+            try {
+                results[current] = await worker(items[current], current);
+            } catch (err) {
+                if (!hasError) {
+                    hasError = true;
+                    firstError = err;
+                }
+                aborted = true;
+                return;
+            }
         }
     };
 
-    await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+    await Promise.allSettled(Array.from({ length: workerCount }, () => runWorker()));
+    if (hasError) throw firstError;
     return results;
 }
 
