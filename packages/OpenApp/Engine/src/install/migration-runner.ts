@@ -196,6 +196,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // optionalDependencies guidance instead of a raw resolver error.
         const Skyway = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
         // Skyway takes the password as a string, so a token login fetches one for this run.
+        AssertPasswordSourceTransport(DatabaseConfig);
         const runDatabaseConfig = DatabaseConfig.PasswordSource
             ? { ...DatabaseConfig, Password: await DatabaseConfig.PasswordSource() }
             : DatabaseConfig;
@@ -265,6 +266,20 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             await skyway.Close().catch(() => { /* ignore close errors */ });
         }
     }
+}
+
+/**
+ * Throws when a config has a password source (a token login) but its TLS options do not verify the
+ * server certificate. A token must not go over plain TCP or unverified TLS.
+ */
+export function AssertPasswordSourceTransport(database: { PasswordSource?: () => Promise<string>; SSL?: Record<string, unknown> }): void {
+    if (!database.PasswordSource || (database.SSL && database.SSL.rejectUnauthorized !== false)) {
+        return;
+    }
+    throw new Error(
+        'A PostgreSQL password source (token login) was given, but the TLS options do not verify the server. ' +
+            'Refusing to send the token. Set PG_SSL_MODE to verify-ca or verify-full.',
+    );
 }
 
 /**

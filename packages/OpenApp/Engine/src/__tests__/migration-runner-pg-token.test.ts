@@ -45,6 +45,7 @@ vi.mock('pg', () => {
 });
 
 import { RunAppMigrations, type SkywayDatabaseConfig } from '../install/migration-runner.js';
+import { ExecuteOpenAppMetadataRefresh } from '../install/open-app-metadata-refresh.js';
 
 /** A database config whose source hands out token-1, token-2, … */
 function tokenConfig(): SkywayDatabaseConfig {
@@ -83,5 +84,37 @@ describe('RunAppMigrations — PostgreSQL token login', () => {
         await migrate(databaseConfig, 'app_one');
         expect(captured.pgClients).toHaveLength(1);
         expect(captured.pgClients[0].password).toBe(databaseConfig.PasswordSource);
+    });
+});
+
+describe('PostgreSQL token login — TLS that does not verify the server', () => {
+    const unverified: Array<[string, Record<string, unknown> | undefined]> = [
+        ['plain TCP', undefined],
+        ['TLS without certificate checks', { rejectUnauthorized: false }],
+    ];
+
+    beforeEach(() => {
+        captured.skyway.length = 0;
+        captured.pgClients.length = 0;
+    });
+
+    it.each(unverified)('the migration run asks for no token over %s', async (_label, ssl) => {
+        const source = vi.fn(async () => 'token');
+        const { SSL: _omit, ...base } = tokenConfig();
+        const databaseConfig: SkywayDatabaseConfig = { ...base, PasswordSource: source, ...(ssl ? { SSL: ssl } : {}) };
+        const result = await RunAppMigrations({ MigrationsDir: 'migrations', SchemaName: 'app_one', DatabaseConfig: databaseConfig, Platform: 'postgresql' });
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/do not verify the server/);
+        expect(source).not.toHaveBeenCalled();
+        expect(captured.skyway).toHaveLength(0);
+    });
+
+    it.each(unverified)('the metadata refresh opens no connection over %s', async (_label, ssl) => {
+        const { SSL: _omit, ...base } = tokenConfig();
+        const database: SkywayDatabaseConfig = { ...base, ...(ssl ? { SSL: ssl } : {}) };
+        await expect(
+            ExecuteOpenAppMetadataRefresh({ platform: 'postgresql', coreSchema: '__mj', appSchema: 'app_one', database }),
+        ).rejects.toThrow(/do not verify the server/);
+        expect(captured.pgClients).toHaveLength(0);
     });
 });

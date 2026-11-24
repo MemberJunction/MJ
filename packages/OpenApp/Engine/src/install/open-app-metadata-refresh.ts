@@ -17,7 +17,7 @@
  */
 
 import { GetDialect, type DatabasePlatform } from '@memberjunction/sql-dialect';
-import { IsAzureSqlHost } from './migration-runner.js';
+import { AssertPasswordSourceTransport, IsAzureSqlHost } from './migration-runner.js';
 
 export interface RefreshDatabaseConfig {
     Host: string;
@@ -223,6 +223,7 @@ interface RefreshRunner {
 
 async function openRefreshConnection(platform: DatabasePlatform, database: RefreshDatabaseConfig): Promise<RefreshRunner> {
     if (platform === 'postgresql') {
+        AssertPasswordSourceTransport(database);
         const pgMod = await import('pg');
         const pg = (pgMod as { Client?: typeof pgMod.Client }).Client ? pgMod : (pgMod as unknown as { default: typeof pgMod }).default;
         const client = new pg.Client({
