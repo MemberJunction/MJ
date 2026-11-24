@@ -495,6 +495,20 @@ function routeRateLimitSchema(name: RouteRateLimitName) {
   }).default({});
 }
 
+/**
+ * A per-route limiter whose unset fields stay unset, so `CreateCommsWebhookHandler` can fall back
+ * field by field: route group → the shared `comms` entry → the route group's default. A schema
+ * with defaults would fill every field and the fallback could never apply.
+ */
+const optionalRouteRateLimitSchema = z.object({
+    /** When false, the route has no per-route limiter. */
+    enabled: z.boolean().optional(),
+    /** Window length in milliseconds. */
+    windowMs: z.number().optional(),
+    /** Requests allowed per IP per window. */
+    maxRequests: z.number().optional(),
+}).optional();
+
 const rateLimitSchema = z.object({
   /** Master switch — when false (default), no rate limiting is applied. */
   enabled: z.boolean().default(false),
@@ -529,10 +543,11 @@ const rateLimitSchema = z.object({
     oauthAuthenticated: routeRateLimitSchema('oauthAuthenticated'),
     mediaUpload: routeRateLimitSchema('mediaUpload'),
     mediaRead: routeRateLimitSchema('mediaRead'),
-    comms: routeRateLimitSchema('comms'),
-    commsWebhooks: routeRateLimitSchema('commsWebhooks'),
-    commsTracking: routeRateLimitSchema('commsTracking'),
-    commsUnsubscribe: routeRateLimitSchema('commsUnsubscribe'),
+    /** Fallback for every `/comms` route group; a group's own entry overrides it field by field. */
+    comms: optionalRouteRateLimitSchema,
+    commsWebhooks: optionalRouteRateLimitSchema,
+    commsTracking: optionalRouteRateLimitSchema,
+    commsUnsubscribe: optionalRouteRateLimitSchema,
   }).default({}),
 });
 

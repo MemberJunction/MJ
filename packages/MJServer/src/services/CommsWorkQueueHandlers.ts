@@ -23,6 +23,7 @@ import type {
     NormalizedActivityEvent,
     ProviderCredentialsBase,
     RecipientSendTarget,
+    RunChunkPosition,
     SendingEnvelope,
 } from '@memberjunction/communication-types';
 import {
@@ -37,6 +38,7 @@ import {
     type WorkOutcome,
 } from '@memberjunction/work-queue-core';
 import { BaseWorkHandler, WorkQueueEngine } from '@memberjunction/work-queue-engine';
+import type { IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import {
     ResolveSendGridWebhookVerificationKey,
@@ -50,13 +52,43 @@ export const COMMS_RENDER_HANDLER_KEY = 'comms.render';
 /** Handler key (and topic name) for delivery and engagement activity. */
 export const COMMS_ACTIVITY_HANDLER_KEY = 'comms.activity';
 
+/**
+ * A {@link SendingEnvelope} as it arrives off the queue: the payload went through JSON, so a
+ * `ScheduledAt` that was a `Date` when published comes back as an ISO string.
+ */
+export type WireSendingEnvelope = Omit<SendingEnvelope, 'ScheduledAt'> & { ScheduledAt?: Date | string };
+
+/** A {@link RenderBatchPayload} as it arrives off the queue (see {@link WireSendingEnvelope}). */
+export type WireRenderBatchPayload = Omit<RenderBatchPayload, 'Envelope'> & { Envelope: WireSendingEnvelope };
+
+/** Turns a queued envelope back into a {@link SendingEnvelope}, reviving `ScheduledAt` as a `Date`. */
+export function ReviveSendingEnvelope(envelope: WireSendingEnvelope): SendingEnvelope {
+    const { ScheduledAt, ...rest } = envelope;
+    if (ScheduledAt == null) {
+        return rest;
+    }
+    return { ...rest, ScheduledAt: ScheduledAt instanceof Date ? ScheduledAt : new Date(ScheduledAt) };
+}
+
+/** Whether the handler's provider can also run views, which the templated render path needs. */
+function isRunViewProvider(provider: IMetadataProvider): provider is IMetadataProvider & IRunViewProvider {
+    return (
+        'RunView' in provider &&
+        typeof provider.RunView === 'function' &&
+        'RunViews' in provider &&
+        typeof provider.RunViews === 'function'
+    );
+}
+
 /** Payload of one `comms.dispatch` work item: one chunk of a V2 send. */
 export interface CommsDispatchWorkPayload {
     CommunicationRunID?: string;
-    Envelope: SendingEnvelope;
+    Envelope: WireSendingEnvelope;
     Payload?: MessagePayload;
     Recipients: RecipientSendTarget[];
     ActingUserID?: string;
+    /** This chunk's place in its run; `Send()` closes the run once every chunk has reported. */
+    RunChunk?: RunChunkPosition;
 }
 
 interface SendGridWebhookParseCredentials extends ProviderCredentialsBase {
@@ -130,16 +162,14 @@ export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkP
             }
             dispatchUser = resolvedUser;
         }
-        const envelope: SendingEnvelope =
-            typeof (payload.Envelope.ScheduledAt as unknown) === 'string'
-                ? { ...payload.Envelope, ScheduledAt: new Date(payload.Envelope.ScheduledAt as unknown as string) }
-                : payload.Envelope;
+        const envelope = ReviveSendingEnvelope(payload.Envelope);
         const result = await CommunicationEngine.Instance.Send(
             {
                 CommunicationRunID: payload.CommunicationRunID,
                 Envelope: envelope,
                 Payload: payload.Payload,
                 Recipients: payload.Recipients,
+                RunChunk: payload.RunChunk,
             },
             dispatchUser,
         );
@@ -157,34 +187,28 @@ export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkP
  * `TemplatedCommunicationService.HandleRenderBatch()`.
  */
 @RegisterClass(BaseWorkHandler, COMMS_RENDER_HANDLER_KEY)
-export class CommsRenderWorkHandler extends BaseWorkHandler<RenderBatchPayload & WorkJson> {
+export class CommsRenderWorkHandler extends BaseWorkHandler<WireRenderBatchPayload & WorkJson> {
     public async Handle(
-        message: WorkMessage<RenderBatchPayload & WorkJson>,
+        message: WorkMessage<WireRenderBatchPayload & WorkJson>,
     ): Promise<WorkOutcome> {
         const payload = message.Payload;
         if (!payload?.Envelope || !Array.isArray(payload.Recipients)) {
             return Outcome.DeadLetter('Invalid comms.render payload: missing Envelope or Recipients');
         }
         await CommunicationEngine.Instance.Config(false, this.ContextUser, this.Provider);
-        const normalizedPayload: RenderBatchPayload =
-            typeof (payload.Envelope.ScheduledAt as unknown) === 'string'
-                ? {
-                    CommunicationRunID: payload.CommunicationRunID,
-                    Envelope: {
-                        ...payload.Envelope,
-                        ScheduledAt: new Date(payload.Envelope.ScheduledAt as unknown as string),
-                    },
-                    EntityID: payload.EntityID,
-                    Templates: payload.Templates,
-                    AutoAppendComplianceFooter: payload.AutoAppendComplianceFooter,
-                    Recipients: payload.Recipients,
-                    ActingUserID: payload.ActingUserID,
-                }
-                : payload;
+        const normalizedPayload: RenderBatchPayload = {
+            CommunicationRunID: payload.CommunicationRunID,
+            Envelope: ReviveSendingEnvelope(payload.Envelope),
+            EntityID: payload.EntityID,
+            Templates: payload.Templates,
+            AutoAppendComplianceFooter: payload.AutoAppendComplianceFooter,
+            Recipients: payload.Recipients,
+            ActingUserID: payload.ActingUserID,
+        };
         const result = await TemplatedCommunicationService.Instance.HandleRenderBatch(
             normalizedPayload,
             this.ContextUser,
-            this.Provider as unknown as Parameters<typeof TemplatedCommunicationService.Instance.HandleRenderBatch>[2],
+            isRunViewProvider(this.Provider) ? this.Provider : undefined,
         );
         if (!result.Success) {
             return Outcome.Retry(result.ErrorMessage ?? 'comms.render batch failed');

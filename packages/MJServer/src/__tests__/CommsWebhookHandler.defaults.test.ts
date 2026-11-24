@@ -101,7 +101,10 @@ vi.mock('@memberjunction/work-queue-engine', () => ({
 }));
 
 import {
+  ClearSendGridWebhookKeyCache,
   CreateCommsWebhookHandler,
+  MergeRouteRateLimit,
+  ResolveSendGridWebhookVerificationKey,
   SignClickTrackingUrl,
   type CommsActivityWorkPayload,
   type CommsWebhookHandlerOptions,
@@ -218,6 +221,24 @@ class CommsDb {
     entity.ID = `supp-${this.Suppressions.length + 1}`;
     this.Suppressions.push(entity);
     return entity;
+  }
+
+  /**
+   * Captures the writable tables and the field values of every row in them, and returns what puts
+   * them back: what a rollback does to the real database.
+   */
+  public Snapshot(): () => void {
+    const counters = new Set(['SaveCalls', 'LoadCalls', 'DeleteCalls', 'LatestResult', 'Behaviour', 'ContextUser']);
+    const fieldsOf = (row: object): Record<string, unknown> =>
+      Object.fromEntries(Object.entries(row).filter(([key, value]) => typeof value !== 'function' && !counters.has(key)));
+    const tables = [this.PrincipalPreferences, this.Suppressions, this.AuditLogs] as Array<Array<object>>;
+    const saved = tables.map((rows) => rows.map((row) => ({ Row: row, Fields: fieldsOf(row) })));
+    return () => {
+      tables.forEach((rows, i) => {
+        rows.splice(0, rows.length, ...saved[i].map((s) => s.Row));
+        for (const s of saved[i]) Object.assign(s.Row, s.Fields);
+      });
+    };
   }
 
   /** Wires the tables into the view double and the provider double. */
@@ -402,6 +423,8 @@ beforeEach(() => {
   db = new CommsDb();
   provider = new FakeMetadataProvider('global-comms-provider');
   db.Install(views, provider);
+  provider.EnableTransactions(() => db.Snapshot());
+  ClearSendGridWebhookKeyCache();
   vi.spyOn(CommunicationEngineBase.Instance, 'ProviderToUse', 'get').mockReturnValue(provider.AsProvider());
   state.systemUser = SYSTEM_USER;
   state.systemUserError = undefined;
@@ -565,6 +588,75 @@ describe('POST /webhooks/sendgrid with the default key lookup and queue publish'
 
       expect(res.status).toBeGreaterThanOrEqual(500);
       expect(state.publishCalls).toHaveLength(0);
+    });
+  });
+
+  describe('before the key is read', () => {
+    const SG_CREDENTIAL = { ID: 'cred-sg', Name: 'SendGrid Events', CredentialType: 'SendGrid' };
+
+    beforeEach(() => {
+      state.credentials = [SG_CREDENTIAL];
+      state.resolveCredential = () => ({ values: { publicKey: publicKeyPem } });
+    });
+
+    it.each([
+      ['no signature or timestamp header', () => ({ 'Content-Type': 'application/json' })],
+      ['a timestamp outside the replay window', () => sign(BODY, NOW_SEC - 601)],
+      ['a timestamp that is not a number', () => ({ ...sign(BODY), 'x-twilio-email-event-webhook-timestamp': 'yesterday' })],
+    ])('refuses a request with %s without reading (or auditing) the credential', async (_label, headers) => {
+      await withWebhook(async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/webhooks/sendgrid/cred-sg`, { method: 'POST', headers: headers(), body: BODY });
+
+        expect(res.status).toBe(401);
+        expect(state.credentialRequests).toHaveLength(0);
+        expect(state.publishCalls).toHaveLength(0);
+      });
+    });
+
+    it('reads a credential once for a burst of signed requests, and again after the cache is cleared', async () => {
+      await withWebhook(async (baseUrl) => {
+        for (let i = 0; i < 3; i++) {
+          const res = await fetch(`${baseUrl}/webhooks/sendgrid/cred-sg`, { method: 'POST', headers: sign(BODY), body: BODY });
+          expect(res.status).toBe(202);
+        }
+        expect(state.credentialRequests).toHaveLength(1);
+
+        ClearSendGridWebhookKeyCache();
+        await fetch(`${baseUrl}/webhooks/sendgrid/cred-sg`, { method: 'POST', headers: sign(BODY), body: BODY });
+        expect(state.credentialRequests).toHaveLength(2);
+      });
+    });
+
+    it('shares the cached key with the activity worker', async () => {
+      await withWebhook(async (baseUrl) => {
+        await fetch(`${baseUrl}/webhooks/sendgrid/cred-sg`, { method: 'POST', headers: sign(BODY), body: BODY });
+      });
+
+      expect(await ResolveSendGridWebhookVerificationKey('cred-sg')).toBe(publicKeyPem);
+      expect(state.credentialRequests).toHaveLength(1);
+    });
+
+    it('does not cache an unknown credential ID, so random IDs cannot fill the cache', async () => {
+      await withWebhook(async (baseUrl) => {
+        await fetch(`${baseUrl}/webhooks/sendgrid/cred-nope`, { method: 'POST', headers: sign(BODY), body: BODY });
+      });
+      state.credentials = [SG_CREDENTIAL, { ...SG_CREDENTIAL, ID: 'cred-nope', Name: 'SendGrid Later' }];
+
+      expect(await ResolveSendGridWebhookVerificationKey('cred-nope')).toBe(publicKeyPem);
+    });
+
+    it('answers 503 and publishes nothing when reading the credential throws', async () => {
+      state.resolveCredential = () => {
+        throw new Error('vault unavailable');
+      };
+
+      await withWebhook(async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/webhooks/sendgrid/cred-sg`, { method: 'POST', headers: sign(BODY), body: BODY });
+
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({ error: 'Failed to load webhook verification key' });
+        expect(state.publishCalls).toHaveLength(0);
+      });
     });
   });
 
@@ -769,6 +861,35 @@ describe('default token verification and publish on the tracking and unsubscribe
 
       expect(res.status).toBe(404);
       expect(state.publishCalls).toHaveLength(0);
+    });
+  });
+
+  it('still checks tokens against the logs when a host supplies its own PublishActivity', async () => {
+    const hostPublished: CommsActivityWorkPayload[] = [];
+    await withServer({ HmacSecret: HMAC_SECRET, PublishActivity: async (p) => { hostPublished.push(p); } }, async (baseUrl) => {
+      const unknownUnsub = await fetch(`${baseUrl}/unsubscribe/${UNKNOWN_TOKEN}`, { method: 'POST' });
+      const unknownOpen = await fetch(`${baseUrl}/open/${UNKNOWN_TOKEN}.gif`);
+      const knownUnsub = await fetch(`${baseUrl}/unsubscribe/${UNSUB_TOKEN}`, { method: 'POST' });
+
+      expect(unknownUnsub.status).toBe(404);
+      expect(unknownOpen.status).toBe(200);
+      expect(knownUnsub.status).toBe(200);
+      expect(hostPublished.map((p) => p.UnsubscribeToken ?? p.TrackingToken)).toEqual([UNSUB_TOKEN]);
+    });
+  });
+
+  it.each([
+    ['a malformed unsubscribe token (400)', (b: string) => fetch(`${b}/unsubscribe/not-a-token`, { method: 'POST' }), 400],
+    ['an unknown unsubscribe token (404)', (b: string) => fetch(`${b}/unsubscribe/${UNKNOWN_TOKEN}`, { method: 'POST' }), 404],
+    ['an unknown preference token (404)', (b: string) => getJson(`${b}/preferences/${UNKNOWN_TOKEN}`), 404],
+    ['a malformed preference token (400)', (b: string) => getJson(`${b}/preferences/not-a-token`), 400],
+    ['a malformed click link (400)', (b: string) => fetch(`${b}/click/${TRACK_TOKEN}`, { redirect: 'manual' }), 400],
+  ])('marks the error response to %s no-store', async (_label, call, expectedStatus) => {
+    await withDefaults(async (baseUrl) => {
+      const res = await call(baseUrl);
+
+      expect(res.status).toBe(expectedStatus);
+      expect(res.headers.get('cache-control')).toBe('no-store');
     });
   });
 
@@ -991,6 +1112,27 @@ describe('per-route rate limiters', () => {
     );
   });
 
+  it('fills a field a route group leaves unset from the shared fallback, field by field', async () => {
+    // The route sets only its window; the request cap comes from the shared `comms` entry.
+    await withServer(
+      { HmacSecret: HMAC_SECRET, RateLimit: { maxRequests: 2 }, TrackingRateLimit: { windowMs: 60_000 } },
+      async (baseUrl) => {
+        const opens = [];
+        for (let i = 0; i < 3; i++) opens.push((await fetch(`${baseUrl}/open/${TRACK_TOKEN}.gif`)).status);
+
+        expect(opens).toEqual([200, 200, 429]);
+      },
+    );
+  });
+
+  it('merges only the fields that are set, so an unset field never masks a default', () => {
+    expect(MergeRouteRateLimit(undefined, undefined)).toBeUndefined();
+    expect(MergeRouteRateLimit({}, {})).toBeUndefined();
+    expect(MergeRouteRateLimit({ maxRequests: 5 }, undefined)).toEqual({ maxRequests: 5 });
+    expect(MergeRouteRateLimit({ maxRequests: 5, enabled: true }, { maxRequests: 9 })).toEqual({ maxRequests: 9, enabled: true });
+    expect(MergeRouteRateLimit({ enabled: true }, { enabled: false, windowMs: undefined })).toEqual({ enabled: false });
+  });
+
   it('rate-limits the preference and confirm routes on the unsubscribe budget, before any database read', async () => {
     await withServer({ UnsubscribeRateLimit: { enabled: true, windowMs: 60_000, maxRequests: 1 } }, async (baseUrl) => {
       expect((await getJson(`${baseUrl}/preferences/${UNSUB_TOKEN}`)).status).toBe(200);
@@ -1150,13 +1292,6 @@ describe('GET /preferences/:token with the default resolver', () => {
   it.each([
     ['the token is on no log', () => undefined, UNKNOWN_TOKEN],
     [
-      'the log view fails',
-      () => {
-        views.Fail('MJ: Communication Logs');
-      },
-      UNSUB_TOKEN,
-    ],
-    [
       'there is no system user',
       () => {
         state.systemUser = undefined;
@@ -1179,6 +1314,19 @@ describe('GET /preferences/:token with the default resolver', () => {
     await withDefaults(async (baseUrl) => {
       expect((await getJson(`${baseUrl}/preferences/not-a-uuid`)).status).toBe(400);
       expect(views.Calls).toHaveLength(0);
+    });
+  });
+
+  it('answers 500, not "token not found", when the log lookup itself fails', async () => {
+    views.Fail('MJ: Communication Logs', 'Timeout expired');
+
+    await withDefaults(async (baseUrl) => {
+      const res = await getJson(`${baseUrl}/preferences/${UNSUB_TOKEN}`);
+      const save = await postJson(`${baseUrl}/preferences/${UNSUB_TOKEN}`, { UnsubscribeAll: true });
+
+      expect(res.status).toBe(500);
+      expect(save.status).toBe(500);
+      expect(db.Suppressions).toHaveLength(0);
     });
   });
 
@@ -1306,13 +1454,6 @@ describe('POST /preferences/:token with the default save', () => {
 
   it.each([
     ['the token is on no log', () => undefined, UNKNOWN_TOKEN],
-    [
-      'the log view fails',
-      () => {
-        views.Fail('MJ: Communication Logs');
-      },
-      UNSUB_TOKEN,
-    ],
     [
       'there is no system user',
       () => {
@@ -1452,8 +1593,7 @@ describe('POST /preferences/:token with the default save', () => {
       });
     });
 
-    it('answers 500 when an opt-out row cannot be saved, leaving the suppression already in place', async () => {
-      // The suppression, its audit row and each opt-out are separate saves with no transaction.
+    it('answers 500 and rolls back the suppression and its audit row when an opt-out row cannot be saved', async () => {
       db.NewRowBehaviour.set('MJ: Communication Principal Preferences', { SaveSucceeds: false, SaveError: 'State is required' });
 
       await withDefaults(async (baseUrl) => {
@@ -1461,8 +1601,30 @@ describe('POST /preferences/:token with the default save', () => {
 
         expect(res.status).toBe(500);
         expect(await res.json()).toEqual({ error: 'Failed to save preferences' });
-        expect(db.Suppressions).toHaveLength(1);
+        expect(db.Suppressions).toHaveLength(0);
+        expect(db.AuditLogs).toHaveLength(0);
         expect(db.PrincipalPreferences).toHaveLength(0);
+        expect(provider.Transactions.map((t) => t.Outcome)).toEqual(['RolledBack']);
+      });
+    });
+
+    it('answers 500 and rolls back the suppression when its audit row cannot be saved', async () => {
+      db.NewRowBehaviour.set('MJ: Communication Consent Audit Logs', { SaveSucceeds: false, SaveError: 'audit insert refused' });
+
+      await withDefaults(async (baseUrl) => {
+        const res = await postJson(`${baseUrl}/preferences/${UNSUB_TOKEN}`, { UnsubscribeAll: true });
+
+        expect(res.status).toBe(500);
+        expect(db.Suppressions).toHaveLength(0);
+        expect(db.PrincipalPreferences).toHaveLength(0);
+      });
+    });
+
+    it('commits the suppression, the opt-outs and every audit row in one transaction', async () => {
+      await withDefaults(async (baseUrl) => {
+        await save(baseUrl, { UnsubscribeAll: true });
+
+        expect(provider.Transactions.map((t) => t.Outcome)).toEqual(['Committed']);
       });
     });
 
@@ -1490,20 +1652,41 @@ describe('POST /preferences/:token with the default save', () => {
       });
     });
 
-    it('answers 500 when the audit row cannot be saved, although the choice itself was already saved', async () => {
-      // The consent audit log is append-only evidence. Here the choice is persisted without
-      // it, and the caller is told the save failed: a retry then finds the choice unchanged
-      // and writes no audit row either.
+    it('answers 500 and keeps no choice without its audit row when the audit row cannot be saved', async () => {
+      // The consent audit log is the evidence for the choice, so the choice rolls back with it:
+      // a retry then writes both, rather than finding the choice already saved and auditing nothing.
       db.NewRowBehaviour.set('MJ: Communication Consent Audit Logs', { SaveSucceeds: false, SaveError: 'audit insert refused' });
 
       await withDefaults(async (baseUrl) => {
         const first = await postJson(`${baseUrl}/preferences/${UNSUB_TOKEN}`, { Preferences: [choice('pref-news', 'Opted Out')] });
-        const retry = await postJson(`${baseUrl}/preferences/${UNSUB_TOKEN}`, { Preferences: [choice('pref-news', 'Opted Out')] });
 
         expect(first.status).toBe(500);
-        expect(db.PrincipalPreferences.map((p) => p.State)).toEqual(['Opted Out']);
-        expect(retry.status).toBe(200);
+        expect(db.PrincipalPreferences).toHaveLength(0);
         expect(db.AuditLogs).toHaveLength(0);
+
+        db.NewRowBehaviour.delete('MJ: Communication Consent Audit Logs');
+        const retry = await postJson(`${baseUrl}/preferences/${UNSUB_TOKEN}`, { Preferences: [choice('pref-news', 'Opted Out')] });
+
+        expect(retry.status).toBe(200);
+        expect(db.PrincipalPreferences.map((p) => p.State)).toEqual(['Opted Out']);
+        expect(db.AuditLogs).toHaveLength(1);
+      });
+    });
+
+    it("answers 500 and writes no duplicate choice when the recipient's existing choice cannot be read", async () => {
+      db.AddPrincipalPreference({ CommunicationPreferenceID: 'pref-news', State: 'Opted In', CommunicationSenderID: 'sender-1' });
+      // The page's own read succeeds; the per-choice lookup inside the save (it names the topic) fails.
+      const serve = views.Handler('MJ: Communication Principal Preferences');
+      views.Serve('MJ: Communication Principal Preferences', (p) =>
+        FilterValue(p, 'CommunicationPreferenceID') !== undefined ? FakeViews.Failure('deadlock victim') : serve(p),
+      );
+
+      await withDefaults(async (baseUrl) => {
+        const res = await postJson(`${baseUrl}/preferences/${UNSUB_TOKEN}`, { Preferences: [choice('pref-news', 'Opted Out')] });
+
+        expect(res.status).toBe(500);
+        expect(db.PrincipalPreferences).toHaveLength(1);
+        expect(db.PrincipalPreferences[0].State).toBe('Opted In');
       });
     });
 
@@ -1517,7 +1700,7 @@ describe('POST /preferences/:token with the default save', () => {
       });
     });
 
-    it('stops at the first failed choice: earlier choices in the same request stay saved', async () => {
+    it('rolls back every choice in the request when a later one fails', async () => {
       const offers = db.AddPrincipalPreference(
         { CommunicationPreferenceID: 'pref-offers', State: 'Opted Out', CommunicationSenderID: 'sender-1' },
         { SaveSucceeds: false, SaveError: 'row is locked' },
@@ -1529,7 +1712,8 @@ describe('POST /preferences/:token with the default save', () => {
         });
 
         expect(res.status).toBe(500);
-        expect(db.PrincipalPreferences.find((p) => p.CommunicationPreferenceID === 'pref-news')?.State).toBe('Opted Out');
+        expect(db.PrincipalPreferences.find((p) => p.CommunicationPreferenceID === 'pref-news')).toBeUndefined();
+        expect(db.AuditLogs).toHaveLength(0);
         expect(offers.SaveCalls).toBe(1);
       });
     });
@@ -1545,7 +1729,13 @@ describe('POST /confirm/:token with the default confirmation', () => {
   };
   const pending = (behaviour: Partial<FakeEntityBehaviour> = {}, startState: PrincipalPreferenceRow['State'] = 'Pending') =>
     db.AddPrincipalPreference(
-      { CommunicationPreferenceID: 'pref-news', State: startState, ConfirmationToken: CONFIRM_TOKEN, CommunicationLogID: 'log-1' },
+      {
+        CommunicationPreferenceID: 'pref-news',
+        State: startState,
+        ConfirmationToken: CONFIRM_TOKEN,
+        CommunicationLogID: 'log-1',
+        ConsentAt: new Date(Date.now() - 60 * 60_000),
+      },
       behaviour,
     );
 
@@ -1606,12 +1796,6 @@ describe('POST /confirm/:token with the default confirmation', () => {
   it.each([
     ['the token matches no preference', () => undefined],
     [
-      'the preference view fails',
-      () => {
-        views.Fail('MJ: Communication Principal Preferences');
-      },
-    ],
-    [
       'there is no system user',
       () => {
         state.systemUser = undefined;
@@ -1626,6 +1810,48 @@ describe('POST /confirm/:token with the default confirmation', () => {
       const res = await postJson(`${baseUrl}/confirm/${CONFIRM_TOKEN}`, {});
 
       expect(res.status).toBe(404);
+      expect(pref.SaveCalls).toBe(0);
+    });
+  });
+
+  it('answers 500, not 404, and writes nothing when the preference view fails', async () => {
+    const pref = pending();
+    views.Fail('MJ: Communication Principal Preferences');
+
+    await withDefaults(async (baseUrl) => {
+      const res = await postJson(`${baseUrl}/confirm/${CONFIRM_TOKEN}`, {});
+
+      expect(res.status).toBe(500);
+      expect(pref.SaveCalls).toBe(0);
+    });
+  });
+
+  it('refuses a link older than seven days with 410, and writes nothing', async () => {
+    const pref = pending();
+    pref.ConsentAt = new Date(Date.now() - 8 * 24 * 60 * 60_000);
+
+    await withDefaults(async (baseUrl) => {
+      const { status, result } = await confirm(baseUrl);
+      const html = await fetch(`${baseUrl}/confirm/${CONFIRM_TOKEN}`, { method: 'POST', headers: { Accept: 'text/html' } });
+
+      expect(status).toBe(410);
+      expect(result).toMatchObject({ Found: true, Confirmed: false, Expired: true });
+      expect(html.status).toBe(410);
+      expect(await html.text()).toContain('This confirmation link has expired');
+      expect(pref).toMatchObject({ State: 'Pending', SaveCalls: 0 });
+      expect(db.AuditLogs).toHaveLength(0);
+    });
+  });
+
+  it('still reports an already-confirmed link as confirmed after it would have expired', async () => {
+    const pref = pending({}, 'Opted In');
+    pref.ConsentAt = new Date(Date.now() - 30 * 24 * 60 * 60_000);
+
+    await withDefaults(async (baseUrl) => {
+      const { status, result } = await confirm(baseUrl);
+
+      expect(status).toBe(200);
+      expect(result).toMatchObject({ Confirmed: true, AlreadyConfirmed: true });
       expect(pref.SaveCalls).toBe(0);
     });
   });
@@ -1659,17 +1885,19 @@ describe('POST /confirm/:token with the default confirmation', () => {
     });
   });
 
-  it('still confirms when only the audit row cannot be saved (the failure is logged)', async () => {
+  it('does not confirm, and rolls the preference back to Pending, when the audit row cannot be saved', async () => {
     const pref = pending();
     db.NewRowBehaviour.set('MJ: Communication Consent Audit Logs', { SaveSucceeds: false, SaveError: 'audit insert refused' });
 
     await withDefaults(async (baseUrl) => {
       const { status, result } = await confirm(baseUrl);
 
-      expect(status).toBe(200);
-      expect(result.Confirmed).toBe(true);
-      expect(pref.State).toBe('Opted In');
+      expect(status).toBe(500);
+      expect(result.Confirmed).toBe(false);
+      expect(result.ErrorMessage).toContain('audit insert refused');
+      expect(pref.State).toBe('Pending');
       expect(db.AuditLogs).toHaveLength(0);
+      expect(provider.Transactions.map((t) => t.Outcome)).toEqual(['RolledBack']);
     });
   });
 

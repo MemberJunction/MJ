@@ -25,7 +25,9 @@ async function withServer(
     fn: (baseUrl: string) => Promise<void>,
 ): Promise<void> {
     const app = express();
-    app.use('/comms', CreateCommsWebhookHandler(options));
+    // These tests stand in for a host with its own storage, so they supply its token check too:
+    // overriding PublishActivity alone no longer turns token verification off.
+    app.use('/comms', CreateCommsWebhookHandler({ VerifyToken: async () => true, ...options }));
     const server = app.listen(0, '127.0.0.1');
     try {
         await new Promise<void>((resolve) => server.once('listening', () => resolve()));

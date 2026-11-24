@@ -841,6 +841,11 @@ export class SendGridProvider extends BaseCommunicationProvider {
     /**
      * Validates a previously registered SendGrid domain (`/v3/whitelabel/domains/:id/validate`)
      * and performs a `_dmarc.<domain>` TXT DNS lookup to verify DMARC policy presence.
+     *
+     * The validate endpoint reports only a valid flag and a reason per record, so the records'
+     * real hosts and values are read from the domain itself (`GET /v3/whitelabel/domains/:id`)
+     * and annotated with the validation results. If that read fails, no SendGrid records are
+     * returned (only DMARC) — never placeholders, which a caller would store over the real ones.
      */
     public override async VerifyDomainAuthentication(
         params: VerifyDomainAuthParams,
@@ -851,8 +856,8 @@ export class SendGridProvider extends BaseCommunicationProvider {
         }
         try {
             const apiKey = this.resolveApiKey(credentials);
-            const url = `${SendGridProvider.WHITELABEL_DOMAINS_URL}/${encodeURIComponent(params.ProviderDomainID)}/validate`;
-            const resp = await fetch(url, {
+            const domainUrl = `${SendGridProvider.WHITELABEL_DOMAINS_URL}/${encodeURIComponent(params.ProviderDomainID)}`;
+            const resp = await fetch(`${domainUrl}/validate`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
             });
@@ -861,7 +866,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
                 return { Success: false, ErrorMessage: `SendGrid domain validate failed: ${resp.status} ${text}`, Verified: false, DNSRecords: [] };
             }
             const data = this.safeParseJsonObject(text) as SendGridDomainValidateResponse | undefined;
-            const records = mapSendGridValidationResults(data?.validation_results);
+            const records = await this.readDomainDnsRecords(domainUrl, apiKey, data?.validation_results);
             const dmarcRecord = await checkDmarcTxtRecord(params.Domain);
             records.push(dmarcRecord);
             const verified = Boolean(data?.valid) && dmarcRecord.Validated;
@@ -874,6 +879,27 @@ export class SendGridProvider extends BaseCommunicationProvider {
                 DNSRecords: []
             };
         }
+    }
+
+    /**
+     * Reads a registered domain's DNS records with their real hosts and values, annotated with the
+     * validation results. Returns an empty list when the domain cannot be read.
+     */
+    private async readDomainDnsRecords(
+        domainUrl: string,
+        apiKey: string,
+        validation: SendGridDomainValidateResponse['validation_results'],
+    ): Promise<DomainDNSRecord[]> {
+        const resp = await fetch(domainUrl, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (!resp.ok) {
+            await DrainResponseBody(resp);
+            return [];
+        }
+        const domain = this.safeParseJsonObject(await resp.text()) as SendGridDomainCreateResponse | undefined;
+        return mapSendGridDnsRecords(domain?.dns, validation);
     }
 
     /**
@@ -965,7 +991,30 @@ export function NormalizeSendGridWebhookEvents(items: unknown[]): NormalizedActi
     return out;
 }
 
-const REPLAY_WINDOW_SECONDS = 600; // 10 minutes
+/** How far a SendGrid webhook timestamp may be from the receiver's clock, in seconds (10 minutes). */
+export const SENDGRID_WEBHOOK_REPLAY_WINDOW_SECONDS = 600;
+
+/**
+ * Checks a SendGrid Event Webhook timestamp header: that it parses, and (unless `skipReplayWindow`)
+ * that it falls within {@link SENDGRID_WEBHOOK_REPLAY_WINDOW_SECONDS} of `nowSeconds`.
+ *
+ * Cheap and key-free, so a receiver can run it before loading a verification key and reject a
+ * stale or malformed request without touching credentials.
+ */
+export function CheckSendGridWebhookTimestamp(
+    timestampHeader: string,
+    nowSeconds: number = Math.floor(Date.now() / 1000),
+    skipReplayWindow: boolean = false,
+): { Valid: boolean; Reason?: string } {
+    const parsedTs = Number(timestampHeader);
+    if (!Number.isFinite(parsedTs) || timestampHeader.trim().length === 0) {
+        return { Valid: false, Reason: 'Invalid webhook timestamp header' };
+    }
+    if (!skipReplayWindow && Math.abs(nowSeconds - parsedTs) > SENDGRID_WEBHOOK_REPLAY_WINDOW_SECONDS) {
+        return { Valid: false, Reason: 'Webhook timestamp outside 10-minute replay window' };
+    }
+    return { Valid: true };
+}
 
 /**
  * Verifies a SendGrid Event Webhook ECDSA P-256 signature and 10-minute replay window
@@ -979,12 +1028,9 @@ export function VerifySendGridWebhookSignature(
     nowSeconds: number = Math.floor(Date.now() / 1000),
     skipReplayWindow: boolean = false,
 ): { Valid: boolean; Reason?: string } {
-    const parsedTs = Number(timestampHeader);
-    if (!Number.isFinite(parsedTs) || timestampHeader.trim().length === 0) {
-        return { Valid: false, Reason: 'Invalid webhook timestamp header' };
-    }
-    if (!skipReplayWindow && Math.abs(nowSeconds - parsedTs) > REPLAY_WINDOW_SECONDS) {
-        return { Valid: false, Reason: 'Webhook timestamp outside 10-minute replay window' };
+    const timestampCheck = CheckSendGridWebhookTimestamp(timestampHeader, nowSeconds, skipReplayWindow);
+    if (!timestampCheck.Valid) {
+        return timestampCheck;
     }
     try {
         const keyInput = publicKey.includes('-----BEGIN')
@@ -1213,51 +1259,32 @@ interface SendGridDomainValidateResponse {
     };
 }
 
-function mapSendGridDnsRecords(dnsMap: SendGridDomainCreateResponse['dns']): DomainDNSRecord[] {
+function mapSendGridDnsRecords(
+    dnsMap: SendGridDomainCreateResponse['dns'],
+    validation?: SendGridDomainValidateResponse['validation_results'],
+): DomainDNSRecord[] {
     if (!dnsMap) return [];
-    const entries: Array<[SendGridDnsEntry | undefined, DomainDNSRecord['Purpose']]> = [
-        [dnsMap.mail_cname, 'ReturnPath'],
-        [dnsMap.dkim1, 'DKIM'],
-        [dnsMap.dkim2, 'DKIM'],
-        [dnsMap.spf, 'SPF']
+    const entries: Array<[keyof NonNullable<SendGridDomainCreateResponse['dns']>, DomainDNSRecord['Purpose']]> = [
+        ['mail_cname', 'ReturnPath'],
+        ['dkim1', 'DKIM'],
+        ['dkim2', 'DKIM'],
+        ['spf', 'SPF']
     ];
     const records: DomainDNSRecord[] = [];
-    for (const [entry, purpose] of entries) {
+    for (const [key, purpose] of entries) {
+        const entry = dnsMap[key];
         if (!entry?.host || !entry?.data) continue;
         const upperType = entry.type?.toUpperCase();
         const recordType: DomainDNSRecord['Type'] =
             upperType === 'TXT' || upperType === 'MX' ? upperType : 'CNAME';
+        const result = validation?.[key];
         records.push({
             Type: recordType,
             Purpose: purpose,
             Host: entry.host,
             Value: entry.data,
-            Validated: Boolean(entry.valid)
-        });
-    }
-    return records;
-}
-
-function mapSendGridValidationResults(
-    results: SendGridDomainValidateResponse['validation_results']
-): DomainDNSRecord[] {
-    if (!results) return [];
-    const entries: Array<[string, SendGridValidationEntry | undefined, DomainDNSRecord['Purpose'], DomainDNSRecord['Type']]> = [
-        ['mail_cname', results.mail_cname, 'ReturnPath', 'CNAME'],
-        ['dkim1', results.dkim1, 'DKIM', 'CNAME'],
-        ['dkim2', results.dkim2, 'DKIM', 'CNAME'],
-        ['spf', results.spf, 'SPF', 'TXT']
-    ];
-    const records: DomainDNSRecord[] = [];
-    for (const [hostKey, entry, purpose, type] of entries) {
-        if (!entry) continue;
-        records.push({
-            Type: type,
-            Purpose: purpose,
-            Host: hostKey,
-            Value: '',
-            Validated: Boolean(entry.valid),
-            ...(entry.reason ? { LastError: entry.reason } : {})
+            Validated: result ? Boolean(result.valid) : Boolean(entry.valid),
+            ...(result?.reason ? { LastError: result.reason } : {})
         });
     }
     return records;

@@ -168,6 +168,7 @@ import {
   CommsDispatchWorkHandler,
   CommsRenderWorkHandler,
   ConfigureCommsV2WorkQueue,
+  ReviveSendingEnvelope,
   type CommsDispatchWorkPayload,
 } from '../services/CommsWorkQueueHandlers.js';
 
@@ -376,6 +377,19 @@ describe('CommsDispatchWorkHandler (comms.dispatch)', () => {
     expect(sent.Envelope.ScheduledAt).toBeInstanceOf(Date);
   });
 
+  it("passes the chunk's place in its run to Send(), so the last chunk can close the run", async () => {
+    await handle({ ...DISPATCH_PAYLOAD, RunChunk: { Index: 2, Count: 5 } });
+
+    const sent = state.sendCalls[0].Params as CommsDispatchWorkPayload;
+    expect(sent.RunChunk).toEqual({ Index: 2, Count: 5 });
+  });
+
+  it('passes no chunk position for a payload that carries none', async () => {
+    await handle(DISPATCH_PAYLOAD);
+
+    expect((state.sendCalls[0].Params as CommsDispatchWorkPayload).RunChunk).toBeUndefined();
+  });
+
   it('configures the engine on the provider the host bound to this delivery', async () => {
     await handle(DISPATCH_PAYLOAD);
 
@@ -491,6 +505,24 @@ describe('CommsRenderWorkHandler (comms.render)', () => {
     await handle(RENDER_PAYLOAD);
 
     expect(state.renderCalls[0].Extra).toEqual([deliveryProvider]);
+  });
+
+  it('passes no provider when the bound one cannot run views, rather than one the render path cannot use', async () => {
+    const metadataOnly = { Name: 'metadata-only' } as Partial<IMetadataProvider>;
+    const handler = new CommsRenderWorkHandler();
+    handler.BindExecutionContext({ ContextUser: SYSTEM_USER, Provider: metadataOnly as IMetadataProvider });
+
+    await handler.Handle(deliver<RenderMessage>(COMMS_RENDER_HANDLER_KEY, RENDER_PAYLOAD));
+
+    expect(state.renderCalls[0].Extra).toEqual([undefined]);
+  });
+
+  it('revives ScheduledAt as a Date from the ISO string the queue delivers, and leaves it out when absent', () => {
+    const when = new Date('2026-12-01T09:00:00.000Z');
+
+    expect(ReviveSendingEnvelope({ ...ENVELOPE, ScheduledAt: when.toISOString() }).ScheduledAt).toEqual(when);
+    expect(ReviveSendingEnvelope({ ...ENVELOPE, ScheduledAt: when }).ScheduledAt).toBe(when);
+    expect('ScheduledAt' in ReviveSendingEnvelope(ENVELOPE)).toBe(false);
   });
 });
 

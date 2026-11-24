@@ -12,7 +12,7 @@
 // Type-only: a `vi.mock('@memberjunction/core')` factory imports this file, so a runtime import of
 // core from here would wait on that same factory and deadlock. Builders that need core at runtime
 // live in commsTestUsers.ts.
-import type { AuthorizationInfo, AuthorizationRoleInfo, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import type { AuthorizationInfo, AuthorizationRoleInfo, EntityTransactionScope, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 
 // ─── Entities ────────────────────────────────────────────────────────────────
 
@@ -145,6 +145,11 @@ export class FakeViews {
     this.handlers.set(entityName, typeof rowsOrHandler === 'function' ? rowsOrHandler : () => rowsOrHandler);
   }
 
+  /** The handler currently serving one entity (an empty view when none is set), to wrap it. */
+  public Handler(entityName: string): FakeViewHandler {
+    return this.handlers.get(entityName) ?? (() => []);
+  }
+
   /** Makes one entity's view fail the way a real one does: `Success: false`, no throw. */
   public Fail(entityName: string, errorMessage = 'Simulated RunView failure'): void {
     this.handlers.set(entityName, () => FakeViews.Failure(errorMessage));
@@ -207,6 +212,11 @@ export function FilterValue(params: RunViewParams, field: string): string | unde
 
 // ─── Metadata provider ───────────────────────────────────────────────────────
 
+/** One transaction scope a {@link FakeMetadataProvider} handed out. */
+export interface FakeTransaction {
+  Outcome: 'Open' | 'Committed' | 'RolledBack';
+}
+
 /** One recorded `GetEntityObject` call. */
 export interface FakeEntityRequest {
   EntityName: string;
@@ -225,7 +235,40 @@ export class FakeMetadataProvider {
   public Authorizations: AuthorizationInfo[] = [];
   public AuthorizationRoles: AuthorizationRoleInfo[] = [];
   public Requests: FakeEntityRequest[] = [];
+  /** Every transaction scope handed out, with how it was settled. */
+  public Transactions: FakeTransaction[] = [];
   private factories = new Map<string, FakeEntityFactory>();
+  private transactionSnapshot: (() => () => void) | undefined;
+
+  /** Whether `RunInEntityTransaction` gets a real scope from this double. Off until enabled. */
+  public get SupportsEntityTransactions(): boolean {
+    return this.transactionSnapshot !== undefined;
+  }
+
+  /**
+   * Turns on transactions. `snapshot` is called when a scope begins and returns the function that
+   * restores the state captured then, which a rollback calls.
+   */
+  public EnableTransactions(snapshot: () => () => void): void {
+    this.transactionSnapshot = snapshot;
+  }
+
+  public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
+    const restore = this.transactionSnapshot ? this.transactionSnapshot() : () => undefined;
+    const tx: FakeTransaction = { Outcome: 'Open' };
+    this.Transactions.push(tx);
+    return {
+      IsNested: false,
+      Commit: async () => {
+        if (tx.Outcome === 'Open') tx.Outcome = 'Committed';
+      },
+      Rollback: async () => {
+        if (tx.Outcome !== 'Open') return;
+        tx.Outcome = 'RolledBack';
+        restore();
+      },
+    };
+  }
 
   constructor(name = 'fake-provider') {
     this.Name = name;
@@ -242,6 +285,15 @@ export class FakeMetadataProvider {
     entity.ContextUser = user;
     this.Requests.push({ EntityName: entityName, User: user, Entity: entity });
     return entity;
+  }
+
+  /** Runs a view on the shared view double, as a server provider that is also a run-view provider does. */
+  public async RunView(params: RunViewParams, user?: UserInfo): Promise<FakeViewResult> {
+    return CommsFakes.Views.Run(params, user, this);
+  }
+
+  public async RunViews(params: RunViewParams[], user?: UserInfo): Promise<FakeViewResult[]> {
+    return params.map((p) => CommsFakes.Views.Run(p, user, this));
   }
 
   /** Every entity handed out for one entity name, in order. */

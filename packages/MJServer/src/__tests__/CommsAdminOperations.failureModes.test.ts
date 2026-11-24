@@ -511,6 +511,27 @@ describe('Communications.VerifySendingDomain', () => {
     expect(domain.SaveCalls).toBe(1);
   });
 
+  it('pairs two DKIM records by host, not by position, when the provider lists them in another order', async () => {
+    const dkim2: DomainDNSRecord = { ...DKIM_RECORD, Host: 's2._domainkey.mail.example.com', Value: 's2.domainkey.u1.wl.sendgrid.net' };
+    const domain = makeDomain({ ProviderDomainID: 'sg-dom-42', DNSRecords: JSON.stringify([DKIM_RECORD, dkim2]) });
+    serveDomain(domain);
+    sendGrid.VerifyDomainAuthentication.mockResolvedValue({
+      Success: true,
+      Verified: false,
+      DNSRecords: [
+        { ...dkim2, Validated: false, LastError: 'CNAME missing' },
+        { ...DKIM_RECORD, Validated: true },
+      ],
+    });
+
+    const res = await verify('dom-1');
+
+    expect(JSON.parse(res.Output?.DNSRecordsJSON ?? '[]')).toEqual([
+      { ...DKIM_RECORD, Validated: true },
+      { ...dkim2, Validated: false, LastError: 'CNAME missing' },
+    ]);
+  });
+
   it('refuses a domain that was never created with the provider, without calling it', async () => {
     const domain = makeDomain({ ProviderDomainID: null });
     serveDomain(domain);
@@ -743,15 +764,26 @@ describe('Communications.RevokeSuppression', () => {
     expect(endpoint.SaveCalls).toBe(0);
   });
 
-  it('still reports success, with no warning, when the audit row cannot be saved (the failure is only logged)', async () => {
-    // FLAG CommsRevokeSuppressionServerOperation (`if (!(await audit.Save()))`): a suppression is revoked with no consent-audit row and
-    // the admin is not told.
-    seedRevoke({ auditBehaviour: { SaveSucceeds: false, SaveError: 'audit insert refused' } });
+  it('fails, rolls the revocation back, and touches neither the provider nor the endpoint when the audit row cannot be saved', async () => {
+    const { endpoint } = seedRevoke({ auditBehaviour: { SaveSucceeds: false, SaveError: 'audit insert refused' } });
+    provider.EnableTransactions(() => () => undefined);
 
     const res = await revoke('supp-1');
 
-    expect(res.Output).toEqual({ Success: true, WarningMessage: undefined });
-    expect(auditLogs()[0].SaveCalls).toBe(1);
+    expect(res.Output?.Success).toBe(false);
+    expect(res.Output?.ErrorMessage).toContain('audit insert refused');
+    expect(provider.Transactions.map((t) => t.Outcome)).toEqual(['RolledBack']);
+    expect(sendGrid.RemoveSuppression).not.toHaveBeenCalled();
+    expect(endpoint.SaveCalls).toBe(0);
+  });
+
+  it('commits the revocation and its audit row in one transaction', async () => {
+    seedRevoke();
+    provider.EnableTransactions(() => () => undefined);
+
+    await revoke('supp-1');
+
+    expect(provider.Transactions.map((t) => t.Outcome)).toEqual(['Committed']);
   });
 
   it('returns a warning, and still succeeds, when the provider refuses to clear its list', async () => {
@@ -958,13 +990,36 @@ describe('Communications.BlockEndpoint', () => {
     expect(auditLogs()).toHaveLength(0);
   });
 
-  it('still reports success when the audit row cannot be saved (the failure is only logged)', async () => {
+  it('fails and rolls the block back when the audit row cannot be saved', async () => {
     seedBlock({ auditBehaviour: { SaveSucceeds: false, SaveError: 'audit insert refused' } });
+    provider.EnableTransactions(() => () => undefined);
 
     const res = await block('ep-1');
 
-    expect(res.Output?.Success).toBe(true);
-    expect(auditLogs()[0].SaveCalls).toBe(1);
+    expect(res.Output?.Success).toBe(false);
+    expect(res.Output?.ErrorMessage).toContain('audit insert refused');
+    expect(provider.Transactions.map((t) => t.Outcome)).toEqual(['RolledBack']);
+  });
+
+  it('re-checks for an existing block inside the transaction, bypassing the cache', async () => {
+    seedBlock();
+    provider.EnableTransactions(() => () => undefined);
+
+    await block('ep-1');
+
+    const check = views.CallsFor('MJ: Communication Suppressions')[0];
+    expect(check.Params).toMatchObject({ BypassCache: true, MaxRows: 1 });
+    expect(provider.Transactions.map((t) => t.Outcome)).toEqual(['Committed']);
+  });
+
+  it('fails without creating a block when the existing-block check fails', async () => {
+    seedBlock();
+    views.Fail('MJ: Communication Suppressions', 'deadlock victim');
+
+    const res = await block('ep-1');
+
+    expect(res.Output).toEqual({ Success: false, ErrorMessage: 'deadlock victim' });
+    expect(suppressions()).toHaveLength(0);
   });
 
   it('leaves the endpoint row itself unchanged: the block is the suppression', async () => {
@@ -1011,6 +1066,39 @@ describe('Communications.SimulateComplianceGate', () => {
     expect(res.Output?.Success).toBe(true);
     expect(res.Output?.Decision).toBe('Blocked');
     expect((JSON.parse(res.Output?.ResultJSON ?? '{}') as { Reason: string }).Reason).toBe('PreferenceRequired');
+  });
+
+  it('reads only the named rows as entities, and walks the sender chain from narrow (ID, ParentSenderID) rows', async () => {
+    const child = { ...SENDER, ID: 'sender-child', ParentSenderID: 'sender-1' };
+    views.Serve('MJ: Communication Senders', (p) => {
+      if (p.ResultType === 'simple') return [{ ID: 'sender-child', ParentSenderID: 'sender-1' }, { ID: 'sender-1', ParentSenderID: null }];
+      return FilterValue(p, 'ID') === 'sender-child' ? [child] : [];
+    });
+    views.Serve('MJ: Communication Suppressions', []);
+    views.Serve('MJ: Communication Principals', [{ ID: 'principal-1', EntityID: 'entity-contacts' }]);
+
+    const res = await simulate({ SenderID: 'sender-child', MessageClass: 'Operational', PrincipalID: 'principal-1', RecordID: 'contact-7' });
+
+    expect(res.Output?.Success).toBe(true);
+    const senderReads = views.CallsFor('MJ: Communication Senders');
+    expect(senderReads.map((c) => c.Params.ResultType)).toEqual(['entity_object', 'simple']);
+    expect(senderReads[0].Params).toMatchObject({ ExtraFilter: "ID='sender-child'", MaxRows: 1 });
+    expect(senderReads[1].Params.Fields).toEqual(['ID', 'ParentSenderID']);
+    expect(views.CallsFor('MJ: Communication Principals')[0].Params).toMatchObject({ ExtraFilter: "ID='principal-1'", MaxRows: 1 });
+    expect(views.CallsFor('MJ: Communication Preferences')).toHaveLength(0);
+    expect(views.CallsFor('MJ: Communication Suppressions')[0].Params.MaxRows).toBe(500);
+  });
+
+  it('gives no decision for a sender chain deeper than it will walk', async () => {
+    const links = Array.from({ length: 20 }, (_, i) => ({ ID: `s-${i}`, ParentSenderID: `s-${i + 1}` }));
+    views.Serve('MJ: Communication Senders', (p) =>
+      p.ResultType === 'simple' ? links : [{ ...SENDER, ID: 's-0', ParentSenderID: 's-1' }],
+    );
+
+    const res = await simulate({ SenderID: 's-0', MessageClass: 'Operational' });
+
+    expect(res.Output?.Success).toBe(false);
+    expect(res.Output?.ErrorMessage).toContain('ancestors');
   });
 
   it('reports an unknown sender', async () => {

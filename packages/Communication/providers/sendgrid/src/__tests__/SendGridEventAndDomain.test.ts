@@ -74,7 +74,7 @@ vi.mock('@memberjunction/network-utils', async () => {
   };
 });
 
-import { SendGridProvider, VerifySendGridWebhookSignature } from '../SendGridProvider';
+import { CheckSendGridWebhookTimestamp, SendGridProvider, VerifySendGridWebhookSignature } from '../SendGridProvider';
 import type { ProcessedMessage } from '@memberjunction/communication-types';
 
 function createMessage(overrides: Partial<ProcessedMessage> = {}): ProcessedMessage {
@@ -325,6 +325,16 @@ describe('SendGridProvider — Event Webhook ParseNotification', () => {
     expect(check.Reason).toContain('10-minute');
   });
 
+  it('CheckSendGridWebhookTimestamp rejects a malformed or stale timestamp without any key', () => {
+    const nowSec = 1_700_000_000;
+    expect(CheckSendGridWebhookTimestamp('not-a-number', nowSec)).toEqual({ Valid: false, Reason: 'Invalid webhook timestamp header' });
+    expect(CheckSendGridWebhookTimestamp('   ', nowSec).Valid).toBe(false);
+    expect(CheckSendGridWebhookTimestamp(String(nowSec - 601), nowSec).Reason).toContain('10-minute');
+    expect(CheckSendGridWebhookTimestamp(String(nowSec + 601), nowSec).Valid).toBe(false);
+    expect(CheckSendGridWebhookTimestamp(String(nowSec - 600), nowSec)).toEqual({ Valid: true });
+    expect(CheckSendGridWebhookTimestamp(String(nowSec - 5000), nowSec, true)).toEqual({ Valid: true });
+  });
+
   it('maps all Dropped reasons accurately', async () => {
     const nowSec = Math.floor(Date.now() / 1000);
     const rawBody = JSON.stringify([
@@ -437,6 +447,72 @@ describe('SendGridProvider — Domain Authentication & Suppression Sync', () => 
     const dmarc = res.DNSRecords.find((r) => r.Purpose === 'DMARC');
     expect(dmarc?.Validated).toBe(false);
     expect(dmarc?.LastError).toContain('ENOTFOUND');
+  });
+
+  it('VerifyDomainAuthentication returns the real hosts and values from the domain, annotated with the validation result', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          valid: false,
+          validation_results: {
+            mail_cname: { valid: true, reason: null },
+            dkim1: { valid: true, reason: null },
+            dkim2: { valid: false, reason: 'Expected CNAME to match s2.domainkey.u123.wl.sendgrid.net' },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          id: 12345,
+          dns: {
+            mail_cname: { host: 'em1.example.com', type: 'cname', data: 'u123.wl.sendgrid.net', valid: true },
+            dkim1: { host: 's1._domainkey.example.com', type: 'cname', data: 's1.domainkey.u123.wl.sendgrid.net', valid: true },
+            dkim2: { host: 's2._domainkey.example.com', type: 'cname', data: 's2.domainkey.u123.wl.sendgrid.net', valid: true },
+          },
+        }),
+      });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    mockResolveTxt.mockResolvedValue([['v=DMARC1; p=none']]);
+
+    const res = await provider.VerifyDomainAuthentication({ ProviderDomainID: '12345', Domain: 'example.com' });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.sendgrid.com/v3/whitelabel/domains/12345/validate');
+    expect(fetchMock.mock.calls[1][0]).toBe('https://api.sendgrid.com/v3/whitelabel/domains/12345');
+    expect(res.Verified).toBe(false);
+    const dkim = res.DNSRecords.filter((r) => r.Purpose === 'DKIM');
+    expect(dkim).toEqual([
+      expect.objectContaining({ Host: 's1._domainkey.example.com', Value: 's1.domainkey.u123.wl.sendgrid.net', Validated: true }),
+      expect.objectContaining({
+        Host: 's2._domainkey.example.com',
+        Value: 's2.domainkey.u123.wl.sendgrid.net',
+        Validated: false,
+        LastError: 'Expected CNAME to match s2.domainkey.u123.wl.sendgrid.net',
+      }),
+    ]);
+    for (const record of res.DNSRecords) {
+      expect(['dkim1', 'dkim2', 'mail_cname', 'spf']).not.toContain(record.Host);
+      if (record.Purpose !== 'DMARC') expect(record.Value).not.toBe('');
+    }
+  });
+
+  it('VerifyDomainAuthentication returns no SendGrid records, rather than placeholders, when the domain cannot be read', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ valid: true, validation_results: { dkim1: { valid: true } } }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'boom' }) as unknown as typeof fetch;
+    mockResolveTxt.mockResolvedValue([['v=DMARC1; p=none']]);
+
+    const res = await provider.VerifyDomainAuthentication({ ProviderDomainID: '12345', Domain: 'example.com' });
+
+    expect(res.Success).toBe(true);
+    expect(res.DNSRecords.map((r) => r.Purpose)).toEqual(['DMARC']);
   });
 
   it('DeleteDomainAuthentication treats 404 as idempotent success and drains body', async () => {

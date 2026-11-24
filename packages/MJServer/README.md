@@ -778,8 +778,25 @@ each verifies its own capability.
 | `GET /comms/preferences-element.js` | none | The preference center element bundle, or `404` |
 
 Tokens are UUID v4 values stored on `MJ: Communication Logs`. Requests whose token matches no log are rejected
-(unsubscribe) or ignored (open, click) before anything is queued. HTML pages are served with a per-response CSP
-nonce, `frame-ancestors 'none'`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
+(unsubscribe) or ignored (open, click) before anything is queued. That check runs even when a host supplies its
+own `PublishActivity`; only `VerifyToken` replaces it. HTML pages are served with a per-response CSP nonce,
+`frame-ancestors 'none'` and `Referrer-Policy: no-referrer`, and every `/comms` response except the element
+bundle carries `Cache-Control: no-store`, error responses included.
+
+The webhook route checks the signature and timestamp headers and the replay window before it reads any key, so
+an unsigned or stale request never decrypts a credential or writes a credential-access audit row. A credential's
+verification key is then cached in memory for five minutes, shared with the `comms.activity` worker; after
+rotating a key, call `ClearSendGridWebhookKeyCache()` (or wait five minutes).
+
+Preference-center saves are atomic: the Unsubscribe All suppression, every topic choice and every consent-audit
+row commit in one transaction, or none do. A confirmation link works once and for seven days after the pending
+opt-in was recorded (`CONFIRMATION_TOKEN_TTL_MS`); an expired link answers `410` and changes nothing.
+
+> **`GET /comms/unsubscribe/:token` hands the token to an outside host.** When the message's sender has a
+> `PreferenceCenterURL`, the route redirects there with `?token=<UnsubscribeToken>` appended. That token is a
+> standing capability: whoever holds it can read and change that recipient's preferences through
+> `/comms/preferences/:token` for as long as the log exists. Set `PreferenceCenterURL` only to a host you
+> trust with that, over HTTPS, and make sure it does not log or forward query strings.
 
 The links placed in outgoing messages are built from `ApiRoute('/comms', { absolute: true })`, so
 `MJAPI_PUBLIC_URL` must be the address recipients can reach. See
@@ -853,7 +870,7 @@ Every operation requires the caller to be an Owner or to hold the `Communication
 | `rateLimiting.routes.commsWebhooks` | `{ enabled: true, windowMs: 60000, maxRequests: 1200 }` | Per-IP limit on `POST /comms/webhooks/*` |
 | `rateLimiting.routes.commsTracking` | `{ enabled: true, windowMs: 60000, maxRequests: 1200 }` | Per-IP limit on `/comms/open/*` and `/comms/click/*` |
 | `rateLimiting.routes.commsUnsubscribe` | `{ enabled: true, windowMs: 60000, maxRequests: 300 }` | Per-IP limit on `/comms/unsubscribe*`, `/comms/preferences/*`, `/comms/confirm/*` |
-| `rateLimiting.routes.comms` | `{ enabled: true, windowMs: 60000, maxRequests: 600 }` | Fallback passed to the handler for the three groups above |
+| `rateLimiting.routes.comms` | none | Fallback for the three groups above, field by field: a field a group sets wins, then a field set here, then the group's default |
 
 The per-route limiters apply even when the global `rateLimiting.enabled` switch is off. A request over the
 limit receives `429`.

@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import express from 'express';
 import BodyParser from 'body-parser';
-import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { IEntityDataProvider, IMetadataProvider, LogError, RunInEntityTransaction, RunView, UserInfo } from '@memberjunction/core';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import {
     ComputeTrackingSignature,
@@ -37,7 +37,7 @@ import {
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { VerifySendGridWebhookSignature } from '@memberjunction/communication-sendgrid';
+import { CheckSendGridWebhookTimestamp, VerifySendGridWebhookSignature } from '@memberjunction/communication-sendgrid';
 import { WorkQueueEngine } from '@memberjunction/work-queue-engine';
 import { CreateRouteRateLimiter } from './routeRateLimit.js';
 import type { RouteRateLimitSettings } from '../routeRateLimitConfigUnits.js';
@@ -58,6 +58,17 @@ export const TRANSPARENT_GIF_1X1 = Buffer.from(
 );
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** How long a resolved webhook verification key is reused before the credential is read again. */
+export const WEBHOOK_KEY_CACHE_TTL_MS = 5 * 60_000;
+/** Most credentials whose verification key is held in memory at once. */
+const WEBHOOK_KEY_CACHE_MAX_ENTRIES = 256;
+
+/**
+ * How long after a pending double opt-in was recorded its confirmation link still works. Measured
+ * from the principal preference's `ConsentAt`, which is when the pending request was made.
+ */
+export const CONFIRMATION_TOKEN_TTL_MS = 7 * 24 * 60 * 60_000;
 
 /**
  * Payload of one `comms.activity` work item. A `sendgrid-webhook` item carries the raw webhook
@@ -178,6 +189,8 @@ export interface ConfirmOptInResult {
     Confirmed: boolean;
     /** `true` when the preference was already `Opted In`. */
     AlreadyConfirmed?: boolean;
+    /** `true` when the link is older than {@link CONFIRMATION_TOKEN_TTL_MS}; nothing was written. */
+    Expired?: boolean;
     State?: MJCommunicationPrincipalPreferenceEntity['State'];
     ConfirmedAt?: string;
     ErrorMessage?: string;
@@ -189,7 +202,11 @@ export interface ConfirmOptInResult {
  * and for hosts with their own storage.
  */
 export interface CommsWebhookHandlerOptions {
-    /** Override for loading the SendGrid ECDSA verification public key for a credential ID. */
+    /**
+     * Override for loading the SendGrid ECDSA verification public key for a credential ID. Called
+     * only for requests that carry both signature headers and an in-window timestamp. The default
+     * caches each credential's key for {@link WEBHOOK_KEY_CACHE_TTL_MS}; an override is not cached.
+     */
     ResolveWebhookKey?: (credentialId?: string) => Promise<string | undefined>;
     /** Override for publishing onto the `comms.activity` WorkQueue topic. */
     PublishActivity?: (payload: CommsActivityWorkPayload) => Promise<void>;
@@ -203,7 +220,11 @@ export interface CommsWebhookHandlerOptions {
     TrackingRateLimit?: Partial<RouteRateLimitSettings>;
     /** Per-IP rate limit overrides for `/comms/unsubscribe*`, `/preferences*`, `/confirm*`. */
     UnsubscribeRateLimit?: Partial<RouteRateLimitSettings>;
-    /** Override for verifying whether a TrackingToken or UnsubscribeToken exists before enqueueing activity. */
+    /**
+     * Override for verifying whether a TrackingToken or UnsubscribeToken exists before enqueueing
+     * activity. Defaults to a lookup on the Communication Logs table; overriding `PublishActivity`
+     * does not change that.
+     */
     VerifyToken?: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>;
     /** Clock override (Unix seconds) for deterministic replay-window testing. */
     NowSeconds?: () => number;
@@ -226,7 +247,7 @@ export interface CommsWebhookHandlerOptions {
  */
 export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = {}): express.Router {
     const router = express.Router();
-    const resolveKey = options.ResolveWebhookKey ?? defaultResolveWebhookKey;
+    const resolveKey = options.ResolveWebhookKey ?? defaultWebhookKeyResolver;
     const publishActivity = options.PublishActivity ?? defaultPublishActivity;
     const getHmacSecret = resolveSecretAccessor(options.HmacSecret);
     const nowSeconds = options.NowSeconds ?? (() => Math.floor(Date.now() / 1000));
@@ -236,20 +257,27 @@ export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = 
     const resolveUnsubRedirect = options.ResolveUnsubscribeRedirect ?? defaultResolveUnsubscribeRedirect;
     const elementSrc = options.PreferenceElementSrc ?? process.env.MJ_COMMS_PREFERENCE_ELEMENT_SRC;
     const generateNonce = options.GenerateNonce ?? (() => crypto.randomBytes(16).toString('base64'));
-    const verifyToken = options.VerifyToken ?? (options.PublishActivity ? async () => true : defaultVerifyToken);
+    const verifyToken = options.VerifyToken ?? defaultVerifyToken;
 
     const webhookLimiter = CreateRouteRateLimiter(
         'commsWebhooks',
-        options.WebhookRateLimit ?? options.RateLimit,
+        MergeRouteRateLimit(options.RateLimit, options.WebhookRateLimit),
     );
     const trackingLimiter = CreateRouteRateLimiter(
         'commsTracking',
-        options.TrackingRateLimit ?? options.RateLimit,
+        MergeRouteRateLimit(options.RateLimit, options.TrackingRateLimit),
     );
     const unsubscribeLimiter = CreateRouteRateLimiter(
         'commsUnsubscribe',
-        options.UnsubscribeRateLimit ?? options.RateLimit,
+        MergeRouteRateLimit(options.RateLimit, options.UnsubscribeRateLimit),
     );
+
+    // Every response on these routes is either capability-bearing (tokens in the URL or body) or
+    // per-recipient, so none of it may be cached. The element bundle overrides this below.
+    router.use((_req, res, next) => {
+        res.setHeader('Cache-Control', 'no-store');
+        next();
+    });
 
     const rawBodyParser = BodyParser.raw({ type: '*/*', limit: '10mb' });
     router.post('/webhooks/sendgrid/:credentialId', webhookLimiter, rawBodyParser, async (req, res) => {
@@ -334,6 +362,25 @@ export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = 
     return router;
 }
 
+/**
+ * Combines the shared `/comms` rate-limit fallback with one route group's settings, field by field:
+ * a field the route sets wins, then a field the fallback sets, then (in `CreateRouteRateLimiter`)
+ * the route group's own default. Unset fields are left out, so they never mask a default.
+ */
+export function MergeRouteRateLimit(
+    fallback: Partial<RouteRateLimitSettings> | undefined,
+    route: Partial<RouteRateLimitSettings> | undefined,
+): Partial<RouteRateLimitSettings> | undefined {
+    const merged: Partial<RouteRateLimitSettings> = {};
+    for (const source of [fallback, route]) {
+        if (!source) continue;
+        if (source.enabled !== undefined) merged.enabled = source.enabled;
+        if (source.windowMs !== undefined) merged.windowMs = source.windowMs;
+        if (source.maxRequests !== undefined) merged.maxRequests = source.maxRequests;
+    }
+    return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 async function handleSendGridWebhook(
     req: express.Request,
     res: express.Response,
@@ -350,16 +397,30 @@ async function handleSendGridWebhook(
         return;
     }
 
-    const verificationKey = await resolveKey(credentialId);
-    if (!verificationKey) {
-        res.status(401).json({ error: 'Webhook verification key not configured' });
-        return;
-    }
-
+    // Everything that can be checked without the key is checked first, so an unsigned or stale
+    // request never reaches the credential store (each read decrypts and writes an audit row).
     const signature = getHeaderString(req, 'x-twilio-email-event-webhook-signature');
     const timestamp = getHeaderString(req, 'x-twilio-email-event-webhook-timestamp');
     if (!signature || !timestamp) {
         res.status(401).json({ error: 'Missing SendGrid signature or timestamp header' });
+        return;
+    }
+    const timestampCheck = CheckSendGridWebhookTimestamp(timestamp, nowSeconds());
+    if (!timestampCheck.Valid) {
+        res.status(401).json({ error: timestampCheck.Reason ?? 'Invalid webhook timestamp' });
+        return;
+    }
+
+    let verificationKey: string | undefined;
+    try {
+        verificationKey = await resolveKey(credentialId);
+    } catch (ex) {
+        LogError(`[CommsWebhook] Failed to load SendGrid webhook verification key: ${ex instanceof Error ? ex.message : String(ex)}`);
+        res.status(503).json({ error: 'Failed to load webhook verification key' });
+        return;
+    }
+    if (!verificationKey) {
+        res.status(401).json({ error: 'Webhook verification key not configured' });
         return;
     }
 
@@ -638,10 +699,83 @@ function resolveSecretAccessor(hmacSecret?: string | (() => string | undefined))
  * (or `verificationKey` / `publicKey`) value, or from `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID`
  * when no credential ID is given. Returns `undefined` when the credential is missing or is not a
  * SendGrid credential.
+ *
+ * A credential's key is cached in memory for {@link WEBHOOK_KEY_CACHE_TTL_MS}, shared by the
+ * webhook route and the `comms.activity` worker, so a burst of webhook batches reads (and audits)
+ * the credential once rather than once per request.
  */
 export async function ResolveSendGridWebhookVerificationKey(credentialId?: string): Promise<string | undefined> {
-    return defaultResolveWebhookKey(credentialId);
+    return defaultWebhookKeyResolver(credentialId);
 }
+
+/**
+ * Drops every cached webhook verification key, so the next request reads its credential again.
+ * Call after rotating a SendGrid verification key to make the new one take effect immediately.
+ */
+export function ClearSendGridWebhookKeyCache(): void {
+    defaultWebhookKeyResolver.Clear();
+}
+
+/** A credential-ID → key lookup with a cache that can be cleared. */
+export type CachedWebhookKeyResolver = ((credentialId?: string) => Promise<string | undefined>) & {
+    /** Drops every cached key. */
+    Clear(): void;
+};
+
+/** One cached verification-key lookup. `Key` is `undefined` for a credential that holds no key. */
+interface CachedWebhookKey {
+    Key: string | undefined;
+    ExpiresAtMs: number;
+}
+
+/**
+ * Wraps a credential-ID → key lookup in a bounded, time-limited cache. Only lookups by credential
+ * ID are cached (the environment-variable fallback is a free read); a lookup that throws is not.
+ * Unknown credential IDs are not cached either, so random IDs cannot fill the cache.
+ *
+ * @param resolve - The uncached lookup.
+ * @param isKnownCredential - Whether the ID names an existing credential (an in-memory check).
+ * @param nowMs - Clock override for tests.
+ */
+export function CreateCachedWebhookKeyResolver(
+    resolve: (credentialId?: string) => Promise<string | undefined>,
+    isKnownCredential: (credentialId: string) => boolean,
+    nowMs: () => number = () => Date.now(),
+): CachedWebhookKeyResolver {
+    const cache = new Map<string, CachedWebhookKey>();
+    const lookup = async (credentialId?: string): Promise<string | undefined> => {
+        if (!credentialId) {
+            return resolve(credentialId);
+        }
+        const cacheKey = credentialId.toLowerCase();
+        const hit = cache.get(cacheKey);
+        if (hit && hit.ExpiresAtMs > nowMs()) {
+            return hit.Key;
+        }
+        const key = await resolve(credentialId);
+        if (key !== undefined || isKnownCredential(credentialId)) {
+            cache.delete(cacheKey);
+            cache.set(cacheKey, { Key: key, ExpiresAtMs: nowMs() + WEBHOOK_KEY_CACHE_TTL_MS });
+            evictOldestWebhookKeys(cache);
+        }
+        return key;
+    };
+    return Object.assign(lookup, { Clear: () => cache.clear() });
+}
+
+function evictOldestWebhookKeys(cache: Map<string, CachedWebhookKey>): void {
+    while (cache.size > WEBHOOK_KEY_CACHE_MAX_ENTRIES) {
+        const oldest = cache.keys().next();
+        if (oldest.done) return;
+        cache.delete(oldest.value);
+    }
+}
+
+function isKnownCredentialId(credentialId: string): boolean {
+    return Boolean(CredentialEngine.Instance.getCredentialById(credentialId));
+}
+
+const defaultWebhookKeyResolver = CreateCachedWebhookKeyResolver(defaultResolveWebhookKey, isKnownCredentialId);
 
 async function defaultResolveWebhookKey(credentialId?: string): Promise<string | undefined> {
     if (credentialId) {
@@ -896,7 +1030,21 @@ async function handlePostConfirm(
             } else {
                 const nonce = generateNonce();
                 setSecurityHeaders(res, nonce);
-                res.status(404).send(RenderCommsErrorPage({ Message: 'Confirmation link not found or expired.', CspNonce: nonce }));
+                res.status(404).send(RenderCommsErrorPage({ Message: 'Confirmation link not found.', CspNonce: nonce }));
+            }
+            return;
+        }
+        if (result.Expired) {
+            if (prefersJson(req)) {
+                res.status(410).json(result);
+            } else {
+                const nonce = generateNonce();
+                setSecurityHeaders(res, nonce);
+                res.status(410).send(RenderCommsErrorPage({
+                    Message: 'This confirmation link has expired. Sign up again to receive a new one.',
+                    PageTitle: 'Confirmation Expired',
+                    CspNonce: nonce,
+                }));
             }
             return;
         }
@@ -936,6 +1084,23 @@ async function handlePostConfirm(
     }
 }
 
+/**
+ * The request's provider as one that can open entity transactions, when it is one. The transaction
+ * members live on `IEntityDataProvider`, not `IMetadataProvider`; every server database provider
+ * implements both. Without them `RunInEntityTransaction` runs the work unguarded.
+ */
+function asTransactionalProvider(
+    provider: IMetadataProvider,
+): Pick<IEntityDataProvider, 'SupportsEntityTransactions' | 'BeginEntityTransaction'> | undefined {
+    return isTransactionalProvider(provider) ? provider : undefined;
+}
+
+function isTransactionalProvider(
+    provider: object,
+): provider is Pick<IEntityDataProvider, 'SupportsEntityTransactions' | 'BeginEntityTransaction'> {
+    return 'BeginEntityTransaction' in provider && typeof provider.BeginEntityTransaction === 'function';
+}
+
 function getCommsProvider(provider?: IMetadataProvider): IMetadataProvider {
     return provider ?? CommunicationEngineBase.Instance.ProviderToUse;
 }
@@ -956,7 +1121,11 @@ async function loadLogAndSenderByToken(
         },
         systemUser,
     );
-    if (!logRes.Success || logRes.Results.length === 0) {
+    if (!logRes.Success) {
+        // A failed read is not "no such token": the caller must answer 5xx, never 404.
+        throw new Error(logRes.ErrorMessage || 'Failed to look up the communication log for this token');
+    }
+    if (logRes.Results.length === 0) {
         return null;
     }
     const log = logRes.Results[0];
@@ -1195,7 +1364,11 @@ async function upsertPrincipalPreferenceAndAudit(
         systemUser,
     );
 
-    const existing = existingRes.Success && existingRes.Results.length > 0 ? existingRes.Results[0] : null;
+    if (!existingRes.Success) {
+        // Treating a failed read as "no row" would insert a duplicate choice next to the real one.
+        throw new Error(existingRes.ErrorMessage || 'Failed to look up the existing principal preference');
+    }
+    const existing = existingRes.Results.length > 0 ? existingRes.Results[0] : null;
     const prevValue = existing ? JSON.stringify({ State: existing.State }) : null;
     const pp = existing ?? (await md.GetEntityObject<MJCommunicationPrincipalPreferenceEntity>('MJ: Communication Principal Preferences', systemUser));
 
@@ -1229,6 +1402,13 @@ async function upsertPrincipalPreferenceAndAudit(
     }
 }
 
+/**
+ * A save the recipient should be told about (answered `Success: false` with the message), as
+ * opposed to an infrastructure failure. Thrown inside the transaction so everything written so far
+ * rolls back, then turned into a result outside it.
+ */
+class PreferenceSaveRefusedError extends Error {}
+
 async function defaultSavePreferenceCenterChoices(
     input: SavePreferenceChoicesInput,
     provider?: IMetadataProvider,
@@ -1250,84 +1430,7 @@ async function defaultSavePreferenceCenterChoices(
     }
 
     const principal = await resolvePrincipalFromLog(found.log, systemUser, md);
-    const senderId = found.sender?.ID ?? null;
-    const visibleIds = new Set(data.Preferences.map((p) => p.ID.toLowerCase()));
-
-    if (input.UnsubscribeAll) {
-        const senderFilter = senderId
-            ? `CommunicationSenderID='${EscapeSQLString(senderId)}'`
-            : 'CommunicationSenderID IS NULL';
-        const existingSuppRes = found.log.CommunicationEndpointID
-            ? await RunView.FromMetadataProvider(md).RunView<MJCommunicationSuppressionEntity>(
-                {
-                    EntityName: 'MJ: Communication Suppressions',
-                    ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(found.log.CommunicationEndpointID)}' AND Status='Active' AND Reason='User Unsubscribe' AND CommunicationPreferenceID IS NULL AND ${senderFilter}`,
-                    MaxRows: 1,
-                    ResultType: 'entity_object',
-                },
-                systemUser,
-            )
-            : undefined;
-        if (existingSuppRes && !existingSuppRes.Success) {
-            throw new Error(existingSuppRes.ErrorMessage || 'Failed checking existing unsubscribe suppression');
-        }
-        if (!existingSuppRes || existingSuppRes.Results.length === 0) {
-            const supp = await md.GetEntityObject<MJCommunicationSuppressionEntity>('MJ: Communication Suppressions', systemUser);
-            supp.CommunicationEndpointID = found.log.CommunicationEndpointID;
-            supp.EntityID = principal?.EntityID ?? null;
-            supp.RecordID = principal?.RecordID ?? null;
-            supp.CommunicationSenderID = senderId;
-            supp.CommunicationPreferenceID = null;
-            supp.Reason = 'User Unsubscribe';
-            supp.Source = 'Preference Center';
-            supp.Status = 'Active';
-            supp.EffectiveAt = new Date();
-            supp.CommunicationLogID = found.log.ID;
-            if (!(await supp.Save())) {
-                return {
-                    Found: true,
-                    Success: false,
-                    UnsubscribedAll: false,
-                    Preferences: data.Preferences,
-                    ErrorMessage: supp.LatestResult?.CompleteMessage || 'Failed to save unsubscribe suppression',
-                };
-            }
-
-            const suppAudit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>(
-                'MJ: Communication Consent Audit Logs',
-                systemUser,
-            );
-            suppAudit.CommunicationSuppressionID = supp.ID;
-            suppAudit.CommunicationLogID = found.log.ID;
-            suppAudit.Action = 'Created';
-            suppAudit.PreviousValue = null;
-            suppAudit.NewValue = JSON.stringify({ Reason: 'User Unsubscribe', UnsubscribeAll: true });
-            suppAudit.Source = 'Preference Center';
-            suppAudit.IPAddress = input.IPAddress ?? null;
-            suppAudit.UserAgent = input.UserAgent ?? null;
-            if (!(await suppAudit.Save())) {
-                LogError(`[CommsWebhook] Failed to save unsubscribe-all audit log: ${suppAudit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            }
-        }
-
-        if (principal) {
-            for (const pref of data.Preferences) {
-                await upsertPrincipalPreferenceAndAudit(
-                    {
-                        EntityID: principal.EntityID,
-                        RecordID: principal.RecordID,
-                        PreferenceID: pref.ID,
-                        SenderID: senderId,
-                        State: 'Opted Out',
-                        LogID: found.log.ID,
-                        IPAddress: input.IPAddress,
-                        UserAgent: input.UserAgent,
-                    },
-                    systemUser,
-                );
-            }
-        }
-    } else if (!principal) {
+    if (!input.UnsubscribeAll && !principal) {
         return {
             Found: true,
             Success: false,
@@ -1335,37 +1438,145 @@ async function defaultSavePreferenceCenterChoices(
             Preferences: data.Preferences,
             ErrorMessage: 'Preferences could not be saved because this address does not map to a unique recipient profile. Use Unsubscribe All to suppress this address.',
         };
-    } else if (input.Preferences) {
-        const currentByPrefId = new Map(
-            data.Preferences.map((p) => [p.ID.toLowerCase(), p.State]),
-        );
-        for (const choice of input.Preferences) {
-            if (!visibleIds.has(choice.PreferenceID.toLowerCase())) continue;
-            const currentState = currentByPrefId.get(choice.PreferenceID.toLowerCase());
-            if (choice.State === currentState) continue;
-            await upsertPrincipalPreferenceAndAudit(
-                {
-                    EntityID: principal.EntityID,
-                    RecordID: principal.RecordID,
-                    PreferenceID: choice.PreferenceID,
-                    SenderID: senderId,
-                    State: choice.State,
-                    LogID: found.log.ID,
-                    IPAddress: input.IPAddress,
-                    UserAgent: input.UserAgent,
-                },
-                systemUser,
-            );
-        }
     }
 
-    const updated = await defaultResolvePreferenceCenterData(input.Token);
+    const context: PreferenceSaveContext = { Input: input, Data: data, Found: found, Principal: principal, SystemUser: systemUser, Provider: md };
+    try {
+        // All-or-nothing: the suppression, every choice and every audit row commit together, so a
+        // failure part-way never leaves the recipient half unsubscribed behind a 500.
+        await RunInEntityTransaction(asTransactionalProvider(md), async () => {
+            if (input.UnsubscribeAll) {
+                await saveUnsubscribeAll(context);
+            } else {
+                await saveTopicChoices(context);
+            }
+        });
+    } catch (ex) {
+        if (ex instanceof PreferenceSaveRefusedError) {
+            return { Found: true, Success: false, UnsubscribedAll: false, Preferences: data.Preferences, ErrorMessage: ex.message };
+        }
+        throw ex;
+    }
+
+    const updated = await defaultResolvePreferenceCenterData(input.Token, md);
     return {
         Found: true,
         Success: true,
         UnsubscribedAll: input.UnsubscribeAll,
         Preferences: updated?.Preferences ?? data.Preferences,
     };
+}
+
+/** Everything one preference-center save works from. */
+interface PreferenceSaveContext {
+    Input: SavePreferenceChoicesInput;
+    Data: PreferenceCenterData;
+    Found: { log: MJCommunicationLogEntity; sender: MJCommunicationSenderEntity | null };
+    Principal: { EntityID: string; RecordID: string } | null;
+    SystemUser: UserInfo;
+    Provider: IMetadataProvider;
+}
+
+/** Unsubscribe All: a sender-scoped suppression (once) plus an opt-out of every offered topic. */
+async function saveUnsubscribeAll(ctx: PreferenceSaveContext): Promise<void> {
+    const { Found: found, Principal: principal, Provider: md, SystemUser: systemUser } = ctx;
+    const senderId = found.sender?.ID ?? null;
+    if (!(await hasActiveUnsubscribeSuppression(ctx))) {
+        const supp = await md.GetEntityObject<MJCommunicationSuppressionEntity>('MJ: Communication Suppressions', systemUser);
+        supp.CommunicationEndpointID = found.log.CommunicationEndpointID;
+        supp.EntityID = principal?.EntityID ?? null;
+        supp.RecordID = principal?.RecordID ?? null;
+        supp.CommunicationSenderID = senderId;
+        supp.CommunicationPreferenceID = null;
+        supp.Reason = 'User Unsubscribe';
+        supp.Source = 'Preference Center';
+        supp.Status = 'Active';
+        supp.EffectiveAt = new Date();
+        supp.CommunicationLogID = found.log.ID;
+        if (!(await supp.Save())) {
+            throw new PreferenceSaveRefusedError(supp.LatestResult?.CompleteMessage || 'Failed to save unsubscribe suppression');
+        }
+        await saveSuppressionAudit(ctx, supp.ID);
+    }
+
+    if (!principal) return;
+    for (const pref of ctx.Data.Preferences) {
+        await upsertPrincipalPreferenceAndAudit(
+            {
+                EntityID: principal.EntityID,
+                RecordID: principal.RecordID,
+                PreferenceID: pref.ID,
+                SenderID: senderId,
+                State: 'Opted Out',
+                LogID: found.log.ID,
+                IPAddress: ctx.Input.IPAddress,
+                UserAgent: ctx.Input.UserAgent,
+            },
+            systemUser,
+            md,
+        );
+    }
+}
+
+async function hasActiveUnsubscribeSuppression(ctx: PreferenceSaveContext): Promise<boolean> {
+    const endpointID = ctx.Found.log.CommunicationEndpointID;
+    if (!endpointID) return false;
+    const senderId = ctx.Found.sender?.ID ?? null;
+    const senderFilter = senderId ? `CommunicationSenderID='${EscapeSQLString(senderId)}'` : 'CommunicationSenderID IS NULL';
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJCommunicationSuppressionEntity>(
+        {
+            EntityName: 'MJ: Communication Suppressions',
+            ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpointID)}' AND Status='Active' AND Reason='User Unsubscribe' AND CommunicationPreferenceID IS NULL AND ${senderFilter}`,
+            MaxRows: 1,
+            ResultType: 'entity_object',
+        },
+        ctx.SystemUser,
+    );
+    if (!res.Success) {
+        throw new Error(res.ErrorMessage || 'Failed checking existing unsubscribe suppression');
+    }
+    return res.Results.length > 0;
+}
+
+async function saveSuppressionAudit(ctx: PreferenceSaveContext, suppressionID: string): Promise<void> {
+    const audit = await ctx.Provider.GetEntityObject<MJCommunicationConsentAuditLogEntity>('MJ: Communication Consent Audit Logs', ctx.SystemUser);
+    audit.CommunicationSuppressionID = suppressionID;
+    audit.CommunicationLogID = ctx.Found.log.ID;
+    audit.Action = 'Created';
+    audit.PreviousValue = null;
+    audit.NewValue = JSON.stringify({ Reason: 'User Unsubscribe', UnsubscribeAll: true });
+    audit.Source = 'Preference Center';
+    audit.IPAddress = ctx.Input.IPAddress ?? null;
+    audit.UserAgent = ctx.Input.UserAgent ?? null;
+    if (!(await audit.Save())) {
+        throw new Error(`Failed to save unsubscribe-all audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+}
+
+/** Per-topic choices: writes only the visible topics whose state actually changes. */
+async function saveTopicChoices(ctx: PreferenceSaveContext): Promise<void> {
+    const principal = ctx.Principal;
+    if (!principal || !ctx.Input.Preferences) return;
+    const visibleIds = new Set(ctx.Data.Preferences.map((p) => p.ID.toLowerCase()));
+    const currentByPrefId = new Map(ctx.Data.Preferences.map((p) => [p.ID.toLowerCase(), p.State]));
+    for (const choice of ctx.Input.Preferences) {
+        const key = choice.PreferenceID.toLowerCase();
+        if (!visibleIds.has(key) || choice.State === currentByPrefId.get(key)) continue;
+        await upsertPrincipalPreferenceAndAudit(
+            {
+                EntityID: principal.EntityID,
+                RecordID: principal.RecordID,
+                PreferenceID: choice.PreferenceID,
+                SenderID: ctx.Found.sender?.ID ?? null,
+                State: choice.State,
+                LogID: ctx.Found.log.ID,
+                IPAddress: ctx.Input.IPAddress,
+                UserAgent: ctx.Input.UserAgent,
+            },
+            ctx.SystemUser,
+            ctx.Provider,
+        );
+    }
 }
 
 async function defaultConfirmDoubleOptIn(
@@ -1388,60 +1599,68 @@ async function defaultConfirmDoubleOptIn(
         },
         systemUser,
     );
-    if (!res.Success || res.Results.length === 0) {
+    if (!res.Success) {
+        throw new Error(res.ErrorMessage || 'Failed to look up the confirmation token');
+    }
+    if (res.Results.length === 0) {
         return { Found: false, Confirmed: false };
     }
 
     const pref = res.Results[0];
+    // Single use: once confirmed, the link only reports that, and writes nothing more.
     if (pref.State === 'Opted In') {
-        return {
-            Found: true,
-            Confirmed: true,
-            AlreadyConfirmed: true,
-            State: pref.State,
-            ConfirmedAt: pref.ConfirmedAt?.toISOString(),
-        };
+        return { Found: true, Confirmed: true, AlreadyConfirmed: true, State: pref.State, ConfirmedAt: pref.ConfirmedAt?.toISOString() };
     }
     if (pref.State === 'Opted Out') {
-        return {
-            Found: true,
-            Confirmed: false,
-            State: pref.State,
-            ErrorMessage: 'Cannot confirm an opted-out preference',
-        };
+        return { Found: true, Confirmed: false, State: pref.State, ErrorMessage: 'Cannot confirm an opted-out preference' };
     }
+    if (IsConfirmationExpired(pref.ConsentAt, new Date())) {
+        return { Found: true, Confirmed: false, Expired: true, State: pref.State, ErrorMessage: 'This confirmation link has expired' };
+    }
+    return confirmPendingPreference(pref, input, md, systemUser);
+}
 
+/** Whether a pending opt-in recorded at `consentAt` is too old to confirm at `now`. */
+export function IsConfirmationExpired(consentAt: Date | null | undefined, now: Date): boolean {
+    if (!consentAt) return true;
+    return now.getTime() - consentAt.getTime() > CONFIRMATION_TOKEN_TTL_MS;
+}
+
+/** Moves a Pending preference to Opted In and writes its audit row, atomically. */
+async function confirmPendingPreference(
+    pref: MJCommunicationPrincipalPreferenceEntity,
+    input: ConfirmOptInInput,
+    md: IMetadataProvider,
+    systemUser: UserInfo,
+): Promise<ConfirmOptInResult> {
     const prevValue = JSON.stringify({ State: pref.State, ConfirmedAt: pref.ConfirmedAt });
     const now = new Date();
-    pref.State = 'Opted In';
-    pref.ConfirmedAt = now;
-    if (!(await pref.Save())) {
-        return {
-            Found: true,
-            Confirmed: false,
-            ErrorMessage: pref.LatestResult?.CompleteMessage ?? 'Failed to save confirmation',
-        };
+    try {
+        await RunInEntityTransaction(asTransactionalProvider(md), async () => {
+            pref.State = 'Opted In';
+            pref.ConfirmedAt = now;
+            if (!(await pref.Save())) {
+                throw new Error(pref.LatestResult?.CompleteMessage ?? 'Failed to save confirmation');
+            }
+            const audit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>('MJ: Communication Consent Audit Logs', systemUser);
+            audit.CommunicationPrincipalPreferenceID = pref.ID;
+            audit.Action = 'Confirmed';
+            audit.PreviousValue = prevValue;
+            audit.NewValue = JSON.stringify({ State: 'Opted In', ConfirmedAt: now.toISOString() });
+            audit.Source = 'Preference Center';
+            audit.CommunicationLogID = pref.CommunicationLogID ?? null;
+            audit.IPAddress = input.IPAddress ?? null;
+            audit.UserAgent = input.UserAgent ?? null;
+            if (!(await audit.Save())) {
+                throw new Error(`Failed to save confirmation audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        });
+    } catch (ex) {
+        // The entity object may still say Opted In although nothing committed; this result is all
+        // the caller sees of it.
+        return { Found: true, Confirmed: false, ErrorMessage: ex instanceof Error ? ex.message : String(ex) };
     }
-
-    const audit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>('MJ: Communication Consent Audit Logs', systemUser);
-    audit.CommunicationPrincipalPreferenceID = pref.ID;
-    audit.Action = 'Confirmed';
-    audit.PreviousValue = prevValue;
-    audit.NewValue = JSON.stringify({ State: pref.State, ConfirmedAt: now.toISOString() });
-    audit.Source = 'Preference Center';
-    audit.CommunicationLogID = pref.CommunicationLogID ?? null;
-    audit.IPAddress = input.IPAddress ?? null;
-    audit.UserAgent = input.UserAgent ?? null;
-    if (!(await audit.Save())) {
-        LogError(`[CommsWebhook] Failed to save confirmation audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-    }
-
-    return {
-        Found: true,
-        Confirmed: true,
-        State: 'Opted In',
-        ConfirmedAt: now.toISOString(),
-    };
+    return { Found: true, Confirmed: true, State: 'Opted In', ConfirmedAt: now.toISOString() };
 }
 
 let cachedElementBundlePath: string | null | undefined;

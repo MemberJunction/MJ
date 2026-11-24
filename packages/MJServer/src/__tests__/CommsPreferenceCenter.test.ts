@@ -445,7 +445,7 @@ describe('CommsWebhookHandler Preference Center & Confirm Routes', () => {
                 expect(jsonRes.status).toBe(404);
                 expect(await jsonRes.json()).toEqual({ error: 'Confirmation token not found' });
                 expect(htmlRes.status).toBe(404);
-                expect(await htmlRes.text()).toContain('Confirmation link not found or expired.');
+                expect(await htmlRes.text()).toContain('Confirmation link not found.');
             });
         });
 

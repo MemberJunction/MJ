@@ -102,9 +102,11 @@ describe('CommsAdminOperations', () => {
       VerifyDomainAuthentication: vi.fn().mockResolvedValue({
         Success: true,
         Verified: true,
+        // Reverse order, a host in other case, and a blank record that must not blank anything.
         DNSRecords: [
-          { Type: 'CNAME', Host: '', Value: '', Purpose: 'SPF', Validated: true },
-          { Type: 'CNAME', Host: '', Value: '', Purpose: 'DKIM', Validated: true },
+          { Type: 'CNAME', Host: 's1._domainkey.example.com', Value: 's1.domainkey.u123.wl.sendgrid.net', Purpose: 'DKIM', Validated: true },
+          { Type: 'CNAME', Host: 'EM123.example.com', Value: 'u123.wl.sendgrid.net', Purpose: 'SPF', Validated: true },
+          { Type: 'CNAME', Host: '', Value: '', Purpose: 'DKIM', Validated: false },
         ],
       }),
     } as never);
@@ -119,6 +121,7 @@ describe('CommsAdminOperations', () => {
     const merged = JSON.parse(res.Output?.DNSRecordsJSON ?? '[]') as Array<{ Host: string; Value: string; Validated: boolean }>;
     expect(merged[0]).toMatchObject({ Host: 'em123.example.com', Value: 'u123.wl.sendgrid.net', Validated: true });
     expect(merged[1]).toMatchObject({ Host: 's1._domainkey.example.com', Value: 's1.domainkey.u123.wl.sendgrid.net', Validated: true });
+    expect(merged).toHaveLength(2);
   });
 
   it('CommsBlockEndpoint creates Admin Block suppression and append-only consent audit log server-side', async () => {

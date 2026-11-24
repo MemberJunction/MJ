@@ -13,11 +13,14 @@
 import {
   AuthorizationEvaluator,
   BaseRemotableOperation,
+  type IEntityDataProvider,
   type IMetadataProvider,
   LogError,
   RemoteOperationError,
   type RemoteOpServerContext,
+  RunInEntityTransaction,
   RunView,
+  type RunViewParams,
   type UserInfo,
 } from '@memberjunction/core';
 import {
@@ -75,16 +78,18 @@ export const COMMS_REVOKE_SUPPRESSION_KEY = 'Communications.RevokeSuppression';
 /** Operation key for blocking a communication endpoint with an Admin Block suppression. */
 export const COMMS_BLOCK_ENDPOINT_KEY = 'Communications.BlockEndpoint';
 
-export type {
-  CommsAdminMutationOutput,
-  CommsBlockEndpointInput,
-  CommsBlockEndpointOutput,
-  CommsRevokeSuppressionInput,
-  CommsSendingDomainAuthOutput,
-  CommsSendingDomainInput,
-  CommsSimulateComplianceGateInput,
-  CommsSimulateComplianceGateOutput,
-};
+// The comms admin input/output types are defined in @memberjunction/core-entities; import them from there.
+
+/** Deepest sender-parent chain the simulator walks; deeper chains are refused as a likely cycle. */
+const SIMULATION_MAX_SENDER_DEPTH = 16;
+/** Most of one recipient's active suppressions the simulator reads. */
+const SIMULATION_MAX_SUPPRESSIONS = 500;
+
+/**
+ * An admin write that failed in a way the caller should be told about. Thrown inside a
+ * transaction so the writes before it roll back, then turned into `Success: false` outside it.
+ */
+class AdminWriteFailedError extends Error {}
 
 interface SuppressionRemovableProvider {
   RemoveSuppression(
@@ -121,51 +126,53 @@ function assertCommsAdmin(user: UserInfo | undefined, provider: IMetadataProvide
   );
 }
 
-function mergeDnsValidationRecords(
+/**
+ * Applies a provider's validation result to the DNS records stored on a sending domain.
+ *
+ * Records are paired by host (case-insensitive) and type, never by position: two DKIM records share
+ * a purpose and type, so pairing by those would apply dkim2's result to dkim1 whenever the provider
+ * lists them in a different order. A stored record with no counterpart is kept as it was; a
+ * validated record with no stored counterpart is added. A validated record with an empty host or
+ * value is ignored, so a provider can never blank out what was stored.
+ */
+export function MergeDnsValidationRecords(
   existingJson: string | null | undefined,
   validated: DomainDNSRecord[],
 ): DomainDNSRecord[] {
-  if (!existingJson) {
-    return validated;
-  }
-  let existing: DomainDNSRecord[] = [];
-  try {
-    const parsed = JSON.parse(existingJson) as unknown;
-    if (Array.isArray(parsed)) {
-      existing = parsed as DomainDNSRecord[];
-    }
-  } catch {
-    return validated;
-  }
+  const usable = validated.filter((v) => Boolean(v.Host?.trim()) && (Boolean(v.Value?.trim()) || v.Purpose === 'DMARC'));
+  const existing = parseStoredDnsRecords(existingJson);
   if (existing.length === 0) {
-    return validated;
+    return usable;
   }
 
-  const remaining = [...validated];
+  const sameRecord = (a: DomainDNSRecord, b: DomainDNSRecord): boolean =>
+    a.Host.trim().toLowerCase() === b.Host.trim().toLowerCase() && a.Type === b.Type;
+  const remaining = [...usable];
   const merged = existing.map((rec) => {
-    const idx = remaining.findIndex(
-      (v) =>
-        (v.Host && rec.Host && v.Host.toLowerCase() === rec.Host.toLowerCase()) ||
-        (v.Purpose === rec.Purpose && v.Type === rec.Type),
-    );
+    const idx = remaining.findIndex((v) => sameRecord(v, rec));
     if (idx === -1) {
       return rec;
     }
     const [match] = remaining.splice(idx, 1);
+    const { LastError: _previousError, ...stored } = rec;
     return {
-      ...rec,
-      Host: match.Value ? match.Host : rec.Host,
+      ...stored,
       Value: match.Value || rec.Value,
       Validated: match.Validated,
+      ...(match.LastError ? { LastError: match.LastError } : {}),
     };
   });
+  return [...merged, ...remaining];
+}
 
-  for (const leftover of remaining) {
-    if (leftover.Value || leftover.Purpose === 'DMARC') {
-      merged.push(leftover);
-    }
+function parseStoredDnsRecords(existingJson: string | null | undefined): DomainDNSRecord[] {
+  if (!existingJson) return [];
+  try {
+    const parsed = JSON.parse(existingJson) as DomainDNSRecord[] | object;
+    return Array.isArray(parsed) ? parsed.filter((r) => typeof r?.Host === 'string') : [];
+  } catch {
+    return [];
   }
-  return merged;
 }
 
 function mapReasonToSuppressionType(reason: MJCommunicationSuppressionEntity['Reason']): string | undefined {
@@ -343,6 +350,33 @@ async function clearDownstreamSuppression(
   return warnings.length > 0 ? warnings.join('; ') : undefined;
 }
 
+/**
+ * Walks a sender's parent chain, nearest first, over the (ID, ParentSenderID) pairs of every
+ * sender. Returns an error message instead when the chain is deeper than
+ * {@link SIMULATION_MAX_SENDER_DEPTH}: a simulation that cannot see every ancestor's suppressions
+ * must not report a decision.
+ */
+function resolveSenderAncestors(
+  sender: MJCommunicationSenderEntity,
+  links: Array<{ ID: string; ParentSenderID: string | null }>,
+): string[] | string {
+  const parentOf = IndexByUUID(links, (l) => l.ID);
+  const ancestors: string[] = [];
+  const seen = new Set<string>([sender.ID.toLowerCase()]);
+  let parentID = sender.ParentSenderID;
+  while (parentID && !seen.has(parentID.toLowerCase())) {
+    if (ancestors.length >= SIMULATION_MAX_SENDER_DEPTH) {
+      return `Sender '${sender.ID}' has more than ${SIMULATION_MAX_SENDER_DEPTH} ancestors`;
+    }
+    seen.add(parentID.toLowerCase());
+    const parent = parentOf.Get(parentID);
+    if (!parent) break;
+    ancestors.push(parent.ID);
+    parentID = parent.ParentSenderID;
+  }
+  return ancestors;
+}
+
 /** Server implementation of `Communications.SimulateComplianceGate`. */
 @RegisterClass(BaseRemotableOperation, COMMS_SIMULATE_GATE_KEY)
 export class CommsSimulateComplianceGateServerOperation extends CommunicationsSimulateComplianceGateOperation {
@@ -363,63 +397,57 @@ export class CommsSimulateComplianceGateServerOperation extends CommunicationsSi
     await CommunicationEngine.Instance.Config(false, user, provider);
 
     const rv = RunView.FromMetadataProvider(provider);
-    const [
-      sendersRes,
-      prefsRes,
-      principalsRes,
-      jurRes,
-      jmRes,
-      rtRes,
-      regRes,
-      rjRes,
-      rrRes,
-    ] = await rv.RunViews([
-      { EntityName: 'MJ: Communication Senders', ResultType: 'entity_object' },
-      { EntityName: 'MJ: Communication Preferences', ResultType: 'entity_object' },
-      { EntityName: 'MJ: Communication Principals', ResultType: 'entity_object' },
+    // Only the rows this simulation names are read as entities: the sender, the preference and the
+    // principal by ID. The sender chain comes from (ID, ParentSenderID) pairs. The compliance tables
+    // are small reference data and are read whole, which the resolver needs.
+    const fixedViews: RunViewParams[] = [
+      { EntityName: 'MJ: Communication Senders', ExtraFilter: `ID='${EscapeSQLString(input.SenderID)}'`, MaxRows: 1, ResultType: 'entity_object' },
+      { EntityName: 'MJ: Communication Senders', Fields: ['ID', 'ParentSenderID'], ResultType: 'simple' },
       { EntityName: 'MJ: Jurisdictions', ResultType: 'entity_object' },
       { EntityName: 'MJ: Jurisdiction Members', ResultType: 'entity_object' },
       { EntityName: 'MJ: Communication Compliance Rule Types', ResultType: 'entity_object' },
       { EntityName: 'MJ: Communication Compliance Regimes', ResultType: 'entity_object' },
       { EntityName: 'MJ: Communication Compliance Regime Jurisdictions', ResultType: 'entity_object' },
       { EntityName: 'MJ: Communication Compliance Regime Rules', ResultType: 'entity_object' },
-    ], user);
-
-    const metadataResults = [sendersRes, prefsRes, principalsRes, jurRes, jmRes, rtRes, regRes, rjRes, rrRes];
-    const failedMeta = metadataResults.find((r) => !r.Success);
+    ];
+    const optionalViews: RunViewParams[] = [
+      ...(input.PreferenceID
+        ? [{ EntityName: 'MJ: Communication Preferences', ExtraFilter: `ID='${EscapeSQLString(input.PreferenceID)}'`, MaxRows: 1, ResultType: 'entity_object' as const }]
+        : []),
+      ...(input.PrincipalID
+        ? [{ EntityName: 'MJ: Communication Principals', ExtraFilter: `ID='${EscapeSQLString(input.PrincipalID)}'`, MaxRows: 1, ResultType: 'entity_object' as const }]
+        : []),
+    ];
+    const results = await rv.RunViews([...fixedViews, ...optionalViews], user);
+    const failedMeta = results.find((r) => !r.Success);
     if (failedMeta) {
       return { Success: false, ErrorMessage: failedMeta.ErrorMessage || 'Failed loading compliance simulation metadata' };
     }
+    const [sendersRes, senderLinksRes, jurRes, jmRes, rtRes, regRes, rjRes, rrRes] = results;
+    let next = fixedViews.length;
+    const prefsRes = input.PreferenceID ? results[next++] : undefined;
+    const principalsRes = input.PrincipalID ? results[next++] : undefined;
 
-    const senders = sendersRes.Results as MJCommunicationSenderEntity[];
-    const senderById = IndexByUUID(senders, (s) => s.ID);
-    const sender = senderById.Get(input.SenderID);
+    const sender = (sendersRes.Results as MJCommunicationSenderEntity[]).find((s) => UUIDsEqual(s.ID, input.SenderID));
     if (!sender) {
       return { Success: false, ErrorMessage: `Sender '${input.SenderID}' not found` };
     }
 
-    const senderAncestors: string[] = [];
-    const seenSenders = new Set<string>([sender.ID.toLowerCase()]);
-    let curParent = sender.ParentSenderID;
-    while (curParent && !seenSenders.has(curParent.toLowerCase())) {
-      seenSenders.add(curParent.toLowerCase());
-      const parent = senderById.Get(curParent);
-      if (!parent) break;
-      senderAncestors.push(parent.ID);
-      curParent = parent.ParentSenderID;
+    const ancestors = resolveSenderAncestors(sender, senderLinksRes.Results as Array<{ ID: string; ParentSenderID: string | null }>);
+    if (typeof ancestors === 'string') {
+      return { Success: false, ErrorMessage: ancestors };
     }
+    const senderAncestors = ancestors;
 
-    const preferences = (prefsRes.Success ? prefsRes.Results : []) as MJCommunicationPreferenceEntity[];
-    const preference = input.PreferenceID
-      ? preferences.find((p) => UUIDsEqual(p.ID, input.PreferenceID))
+    const preference = prefsRes
+      ? (prefsRes.Results as MJCommunicationPreferenceEntity[]).find((p) => UUIDsEqual(p.ID, input.PreferenceID))
       : undefined;
 
-    const principals = (principalsRes.Success ? principalsRes.Results : []) as MJCommunicationPrincipalEntity[];
-    const principal = input.PrincipalID
-      ? principals.find((p) => UUIDsEqual(p.ID, input.PrincipalID))
+    const principal = principalsRes
+      ? (principalsRes.Results as MJCommunicationPrincipalEntity[]).find((p) => UUIDsEqual(p.ID, input.PrincipalID))
       : undefined;
 
-    const jurisdictions = (jurRes.Success ? jurRes.Results : []) as MJJurisdictionEntity[];
+    const jurisdictions = jurRes.Results as MJJurisdictionEntity[];
     const recipientJurisdictionCode = input.RecipientJurisdictionID
       ? jurisdictions.find((j) => UUIDsEqual(j.ID, input.RecipientJurisdictionID))?.Code ?? null
       : null;
@@ -433,6 +461,7 @@ export class CommsSimulateComplianceGateServerOperation extends CommunicationsSi
         {
           EntityName: 'MJ: Communication Suppressions',
           ExtraFilter: `EntityID='${safeEntityId}' AND RecordID='${safeRecordId}' AND Status='Active'`,
+          MaxRows: SIMULATION_MAX_SUPPRESSIONS,
           ResultType: 'entity_object',
         },
         ...(preference
@@ -463,11 +492,11 @@ export class CommsSimulateComplianceGateServerOperation extends CommunicationsSi
 
     const resolver = new JurisdictionResolver({
       Jurisdictions: jurisdictions,
-      JurisdictionMembers: (jmRes.Success ? jmRes.Results : []) as MJJurisdictionMemberEntity[],
-      ComplianceRuleTypes: (rtRes.Success ? rtRes.Results : []) as MJCommunicationComplianceRuleTypeEntity[],
-      ComplianceRegimes: (regRes.Success ? regRes.Results : []) as MJCommunicationComplianceRegimeEntity[],
-      ComplianceRegimeJurisdictions: (rjRes.Success ? rjRes.Results : []) as MJCommunicationComplianceRegimeJurisdictionEntity[],
-      ComplianceRegimeRules: (rrRes.Success ? rrRes.Results : []) as MJCommunicationComplianceRegimeRuleEntity[],
+      JurisdictionMembers: jmRes.Results as MJJurisdictionMemberEntity[],
+      ComplianceRuleTypes: rtRes.Results as MJCommunicationComplianceRuleTypeEntity[],
+      ComplianceRegimes: regRes.Results as MJCommunicationComplianceRegimeEntity[],
+      ComplianceRegimeJurisdictions: rjRes.Results as MJCommunicationComplianceRegimeJurisdictionEntity[],
+      ComplianceRegimeRules: rrRes.Results as MJCommunicationComplianceRegimeRuleEntity[],
     });
 
     const gate = new ComplianceGate(resolver);
@@ -638,7 +667,7 @@ export class CommsVerifySendingDomainServerOperation extends CommunicationsVerif
     const now = new Date();
     domain.LastVerifiedAt = now;
     if (result.DNSRecords && result.DNSRecords.length > 0) {
-      domain.DNSRecords = JSON.stringify(mergeDnsValidationRecords(domain.DNSRecords, result.DNSRecords));
+      domain.DNSRecords = JSON.stringify(MergeDnsValidationRecords(domain.DNSRecords, result.DNSRecords));
     }
     if (result.Verified) {
       domain.Status = 'Verified';
@@ -752,27 +781,21 @@ export class CommsRevokeSuppressionServerOperation extends CommunicationsRevokeS
     }
 
     const prevStatus = supp.Status;
-    supp.Status = 'Revoked';
-    supp.RevokedAt = new Date();
-    if (!(await supp.Save())) {
-      return {
-        Success: false,
-        ErrorMessage: supp.LatestResult?.CompleteMessage || 'Failed to revoke suppression',
-      };
-    }
-
-    const audit = await provider.GetEntityObject<MJCommunicationConsentAuditLogEntity>(
-      'MJ: Communication Consent Audit Logs',
-      user,
-    );
-    audit.CommunicationSuppressionID = supp.ID;
-    audit.Action = 'Revoked';
-    audit.PreviousValue = JSON.stringify({ Status: prevStatus });
-    audit.NewValue = JSON.stringify({ Status: 'Revoked' });
-    audit.Source = 'Admin';
-    audit.ChangedByUserID = user.ID;
-    if (!(await audit.Save())) {
-      LogError(`CommsRevokeSuppressionServerOperation: failed to save audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    try {
+      // The revocation and its consent-audit row commit together, or neither does.
+      await RunInEntityTransaction(asTransactionalProvider(provider), async () => {
+        supp.Status = 'Revoked';
+        supp.RevokedAt = new Date();
+        if (!(await supp.Save())) {
+          throw new AdminWriteFailedError(supp.LatestResult?.CompleteMessage || 'Failed to revoke suppression');
+        }
+        await saveSuppressionAudit(provider, user, supp.ID, 'Revoked', { Status: prevStatus }, { Status: 'Revoked' });
+      });
+    } catch (ex) {
+      if (ex instanceof AdminWriteFailedError) {
+        return { Success: false, ErrorMessage: ex.message };
+      }
+      throw ex;
     }
 
     const warning = await clearDownstreamSuppression(provider, supp, user);
@@ -806,59 +829,97 @@ export class CommsBlockEndpointServerOperation extends CommunicationsBlockEndpoi
       return { Success: false, ErrorMessage: `Endpoint '${input.EndpointID}' not found` };
     }
 
-    const rv = RunView.FromMetadataProvider(provider);
-    const existingRes = await rv.RunView<{ ID: string }>(
-      {
-        EntityName: 'MJ: Communication Suppressions',
-        ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpoint.ID)}' AND Reason='Admin Block' AND Status='Active'`,
-        Fields: ['ID'],
-        MaxRows: 1,
-        ResultType: 'simple',
-      },
-      user,
-    );
-    if (!existingRes.Success) {
-      return {
-        Success: false,
-        ErrorMessage: existingRes.ErrorMessage || 'Failed checking existing Admin Block suppressions',
-      };
+    try {
+      // The re-check, the suppression and its audit row run in one transaction, so no block
+      // exists without its audit row. The re-check narrows, but does not close, the window for two
+      // concurrent blocks of one endpoint: that needs a filtered unique index on
+      // (CommunicationEndpointID) WHERE Reason='Admin Block' AND Status='Active'. A duplicate is
+      // harmless to sending (either one blocks) and revoking one leaves the other in force.
+      const suppressionID = await RunInEntityTransaction(asTransactionalProvider(provider), () => createAdminBlock(provider, user, endpoint));
+      return { Success: true, SuppressionID: suppressionID };
+    } catch (ex) {
+      if (ex instanceof AdminWriteFailedError) {
+        return { Success: false, ErrorMessage: ex.message };
+      }
+      throw ex;
     }
-    if (existingRes.Results.length > 0) {
-      return { Success: true, SuppressionID: existingRes.Results[0].ID };
-    }
+  }
+}
 
-    const supp = await provider.GetEntityObject<MJCommunicationSuppressionEntity>(
-      'MJ: Communication Suppressions',
-      user,
-    );
-    supp.CommunicationEndpointID = endpoint.ID;
-    supp.BaseMessageTypeID = endpoint.BaseMessageTypeID;
-    supp.Reason = 'Admin Block';
-    supp.Source = 'Admin';
-    supp.Status = 'Active';
-    supp.EffectiveAt = new Date();
-    if (!(await supp.Save())) {
-      return {
-        Success: false,
-        ErrorMessage: supp.LatestResult?.CompleteMessage || 'Failed to create Admin Block suppression',
-      };
-    }
+/**
+ * The request's provider as one that can open entity transactions, when it is one. The transaction
+ * members live on `IEntityDataProvider`, not `IMetadataProvider`; every server database provider
+ * implements both. Without them `RunInEntityTransaction` runs the work unguarded.
+ */
+function asTransactionalProvider(
+  provider: IMetadataProvider,
+): Pick<IEntityDataProvider, 'SupportsEntityTransactions' | 'BeginEntityTransaction'> | undefined {
+  return isTransactionalProvider(provider) ? provider : undefined;
+}
 
-    const audit = await provider.GetEntityObject<MJCommunicationConsentAuditLogEntity>(
-      'MJ: Communication Consent Audit Logs',
-      user,
-    );
-    audit.CommunicationSuppressionID = supp.ID;
-    audit.Action = 'Created';
-    audit.PreviousValue = null;
-    audit.NewValue = JSON.stringify({ Reason: 'Admin Block', Status: 'Active' });
-    audit.Source = 'Admin';
-    audit.ChangedByUserID = user.ID;
-    if (!(await audit.Save())) {
-      LogError(`CommsBlockEndpointServerOperation: failed to save audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-    }
+function isTransactionalProvider(
+  provider: object,
+): provider is Pick<IEntityDataProvider, 'SupportsEntityTransactions' | 'BeginEntityTransaction'> {
+  return 'BeginEntityTransaction' in provider && typeof provider.BeginEntityTransaction === 'function';
+}
 
-    return { Success: true, SuppressionID: supp.ID };
+/** Returns the endpoint's existing active Admin Block, or creates and audits one. */
+async function createAdminBlock(
+  provider: IMetadataProvider,
+  user: UserInfo,
+  endpoint: MJCommunicationEndpointEntity,
+): Promise<string> {
+  const rv = RunView.FromMetadataProvider(provider);
+  const existingRes = await rv.RunView<{ ID: string }>(
+    {
+      EntityName: 'MJ: Communication Suppressions',
+      ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpoint.ID)}' AND Reason='Admin Block' AND Status='Active'`,
+      Fields: ['ID'],
+      MaxRows: 1,
+      ResultType: 'simple',
+      BypassCache: true,
+    },
+    user,
+  );
+  if (!existingRes.Success) {
+    throw new AdminWriteFailedError(existingRes.ErrorMessage || 'Failed checking existing Admin Block suppressions');
+  }
+  if (existingRes.Results.length > 0) {
+    return existingRes.Results[0].ID;
+  }
+
+  const supp = await provider.GetEntityObject<MJCommunicationSuppressionEntity>('MJ: Communication Suppressions', user);
+  supp.CommunicationEndpointID = endpoint.ID;
+  supp.BaseMessageTypeID = endpoint.BaseMessageTypeID;
+  supp.Reason = 'Admin Block';
+  supp.Source = 'Admin';
+  supp.Status = 'Active';
+  supp.EffectiveAt = new Date();
+  if (!(await supp.Save())) {
+    throw new AdminWriteFailedError(supp.LatestResult?.CompleteMessage || 'Failed to create Admin Block suppression');
+  }
+  await saveSuppressionAudit(provider, user, supp.ID, 'Created', null, { Reason: 'Admin Block', Status: 'Active' });
+  return supp.ID;
+}
+
+/** Writes the consent-audit row for an admin change to a suppression; throws when it cannot. */
+async function saveSuppressionAudit(
+  provider: IMetadataProvider,
+  user: UserInfo,
+  suppressionID: string,
+  action: MJCommunicationConsentAuditLogEntity['Action'],
+  previous: object | null,
+  next: object,
+): Promise<void> {
+  const audit = await provider.GetEntityObject<MJCommunicationConsentAuditLogEntity>('MJ: Communication Consent Audit Logs', user);
+  audit.CommunicationSuppressionID = suppressionID;
+  audit.Action = action;
+  audit.PreviousValue = previous ? JSON.stringify(previous) : null;
+  audit.NewValue = JSON.stringify(next);
+  audit.Source = 'Admin';
+  audit.ChangedByUserID = user.ID;
+  if (!(await audit.Save())) {
+    throw new AdminWriteFailedError(`Failed to save consent audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
 }
 
