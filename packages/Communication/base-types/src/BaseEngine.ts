@@ -1,6 +1,22 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
-import { MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
+import {
+   MJCommunicationBaseMessageTypeEntity,
+   MJCommunicationComplianceRegimeEntity,
+   MJCommunicationComplianceRegimeJurisdictionEntity,
+   MJCommunicationComplianceRegimeRuleEntity,
+   MJCommunicationComplianceRuleTypeEntity,
+   MJCommunicationLogEntity,
+   MJCommunicationPrincipalEntity,
+   MJCommunicationProviderMessageTypeEntity,
+   MJCommunicationRunEntity,
+   MJCommunicationSenderTypeEntity,
+   MJCommunicationSuppressionPolicyEntity,
+   MJEntityCommunicationFieldEntity,
+   MJEntityCommunicationMessageTypeEntity,
+   MJJurisdictionEntity,
+   MJJurisdictionMemberEntity,
+} from "@memberjunction/core-entities";
 import { MJCommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
  
 
@@ -21,6 +37,15 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    private _providerMessageTypes: MJCommunicationProviderMessageTypeEntity[] = [];
    private _entityCommunicationMessageTypes: MJEntityCommunicationMessageTypeEntity[] = [];
    private _entityCommunicationFields: MJEntityCommunicationFieldEntity[] = [];
+   private _principals: MJCommunicationPrincipalEntity[] = [];
+   private _senderTypes: MJCommunicationSenderTypeEntity[] = [];
+   private _jurisdictions: MJJurisdictionEntity[] = [];
+   private _jurisdictionMembers: MJJurisdictionMemberEntity[] = [];
+   private _complianceRegimes: MJCommunicationComplianceRegimeEntity[] = [];
+   private _complianceRuleTypes: MJCommunicationComplianceRuleTypeEntity[] = [];
+   private _complianceRegimeRules: MJCommunicationComplianceRegimeRuleEntity[] = [];
+   private _complianceRegimeJurisdictions: MJCommunicationComplianceRegimeJurisdictionEntity[] = [];
+   private _suppressionPolicies: MJCommunicationSuppressionPolicyEntity[] = [];
 
    /**
     * This method is called to configure the engine. It loads the metadata and caches it in the GlobalObjectStore. You must call this method before doing anything else with the engine.
@@ -59,6 +84,60 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
             EntityName: 'MJ: Entity Communication Fields',
             PropertyName: '_entityCommunicationFields',
             CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Principals',
+            PropertyName: '_principals',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Sender Types',
+            PropertyName: '_senderTypes',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Jurisdictions',
+            PropertyName: '_jurisdictions',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Jurisdiction Members',
+            PropertyName: '_jurisdictionMembers',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Compliance Regimes',
+            PropertyName: '_complianceRegimes',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Compliance Rule Types',
+            PropertyName: '_complianceRuleTypes',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Compliance Regime Rules',
+            PropertyName: '_complianceRegimeRules',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Compliance Regime Jurisdictions',
+            PropertyName: '_complianceRegimeJurisdictions',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Suppression Policies',
+            PropertyName: '_suppressionPolicies',
+            CacheLocal: true
          }
       ];
 
@@ -80,6 +159,48 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    }
    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
       return this._providerMessageTypes;
+   }
+   /**
+    * Cached `MJ: Communication Principals` rows: the entities registered as message recipients and
+    * their driver classes.
+    */
+   public get Principals(): MJCommunicationPrincipalEntity[] {
+      return this._principals;
+   }
+   /** Cached `MJ: Communication Sender Types` rows. */
+   public get SenderTypes(): MJCommunicationSenderTypeEntity[] {
+      return this._senderTypes;
+   }
+   /** Cached `MJ: Jurisdictions` rows. */
+   public get Jurisdictions(): MJJurisdictionEntity[] {
+      return this._jurisdictions;
+   }
+   /** Cached `MJ: Jurisdiction Members` rows: which jurisdictions belong to which groups. */
+   public get JurisdictionMembers(): MJJurisdictionMemberEntity[] {
+      return this._jurisdictionMembers;
+   }
+   /** Cached `MJ: Communication Compliance Regimes` rows, including disabled ones. */
+   public get ComplianceRegimes(): MJCommunicationComplianceRegimeEntity[] {
+      return this._complianceRegimes;
+   }
+   /** Cached `MJ: Communication Compliance Rule Types` rows. */
+   public get ComplianceRuleTypes(): MJCommunicationComplianceRuleTypeEntity[] {
+      return this._complianceRuleTypes;
+   }
+   /** Cached `MJ: Communication Compliance Regime Rules` rows. */
+   public get ComplianceRegimeRules(): MJCommunicationComplianceRegimeRuleEntity[] {
+      return this._complianceRegimeRules;
+   }
+   /**
+    * Cached `MJ: Communication Compliance Regime Jurisdictions` rows: which jurisdictions each
+    * regime is attached to.
+    */
+   public get ComplianceRegimeJurisdictions(): MJCommunicationComplianceRegimeJurisdictionEntity[] {
+      return this._complianceRegimeJurisdictions;
+   }
+   /** Cached `MJ: Communication Suppression Policies` rows. */
+   public get SuppressionPolicies(): MJCommunicationSuppressionPolicyEntity[] {
+      return this._suppressionPolicies;
    }
 
    /**

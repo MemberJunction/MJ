@@ -2,7 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import { CLIPluginRegistry, ResolveOutputFormat } from '@memberjunction/cli-core';
 import { LoadAllCliPlugins } from '../lib/cli-plugins.js';
 import { EmitUsage, RenderDomainMap } from '../lib/usage-render.js';
-import type { OclifCommandShape } from '../lib/derived-usage.js';
+import { FromOclifCommands } from '../lib/derived-usage.js';
 
 /**
  * Tier-1 progressive disclosure (plan §5, the linearis model). Returns a compact
@@ -29,7 +29,7 @@ export default class Usage extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Usage);
-    await LoadAllCliPlugins(process.cwd(), this.config.commands as unknown as OclifCommandShape[]);
+    await LoadAllCliPlugins(process.cwd(), FromOclifCommands(this.config.commands));
     const map = CLIPluginRegistry.BuildDomainMap();
     const result = CLIPluginRegistry.AsResult('usage', { guidance: map.guidance, domains: map.domains });
     const { format } = ResolveOutputFormat({ formatFlag: flags.format });

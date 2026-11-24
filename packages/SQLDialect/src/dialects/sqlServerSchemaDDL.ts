@@ -151,6 +151,14 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     override get MaxColumnCount(): number { return 1024; }
 
     /**
+     * SQL Server `sp_addextendedproperty` types `@value` as `sql_variant`, which caps payloads at
+     * 7,500 bytes (3,750 UTF-16 code units for `N'...'` literals; >4,000 code units also promotes
+     * the literal to `nvarchar(max)`, which SQL Server refuses to implicitly convert to `sql_variant`).
+     * Cap at 3,700 UTF-16 code units (7,400 bytes) to stay safely under both limits.
+     */
+    override get MaxCommentLength(): number { return 3700; }
+
+    /**
      * Minimum in-row byte footprint of a column. Off-row-capable variable-length / LOB types
      * (incl. `(N)VARCHAR(MAX)`) contribute only a 24-byte in-row pointer; fixed-length types
      * contribute their full size. Unknown types are treated as off-row pointers (conservative).
@@ -360,7 +368,7 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     }
 
     CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
-        const escaped = comment.replace(/'/g, "''");
+        const escaped = this.EscapeComment(comment);
         return [
             `EXEC sp_addextendedproperty`,
             `    @name = N'MS_Description',`,
@@ -405,7 +413,7 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     }
 
     CommentOnObject(objectType: string, schema: string, name: string, comment: string): string {
-        const escapedComment = comment.replace(/'/g, "''");
+        const escapedComment = this.EscapeComment(comment);
         const level1Type = this.objectTypeToLevel1Type(objectType);
         return [
             `EXEC sp_addextendedproperty`,

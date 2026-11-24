@@ -176,6 +176,123 @@ When using related entity parameters, the engine automatically:
 3. Filters related data per recipient record
 4. Populates template context with filtered data
 
+## Communications V2
+
+This package adds two things for [Communications V2](../../../guides/COMMUNICATIONS_V2_GUIDE.md): a service for
+templated V2 sends, and a bridge that lets `RunEntityCommunication()` use the V2 pipeline.
+
+### TemplatedCommunicationService
+
+`TemplatedCommunicationService` implements `ITemplatedCommunicationService` from
+`@memberjunction/communication-types`. It evaluates compliance eligibility first, then renders MJ templates for
+the recipients that may be sent to, and dispatches them with `CommunicationEngine.Instance.Send()`.
+
+| Method | Purpose |
+|--------|---------|
+| `Instance` | The process-wide singleton |
+| `Configure(config)` | Set `BatchSize`, `EnqueueWork`, `ResolveUser` |
+| `RenderAndSend(params, contextUser?, provider?)` | Evaluate, render and send. Returns `SendV2Result`. |
+| `RenderAndPreview(params, contextUser?, provider?)` | Evaluate and render without sending. Returns `{ TotalCount, Rendered, Blocked }`. |
+| `HandleRenderBatch(payload, contextUser?, provider?)` | Render and send one `comms.render` batch. Called by the work-queue handler. |
+| `ValidateTemplateContextParamAlignment(templates)` | Throws when the subject, body and HTML templates define the same parameter differently |
+
+```typescript
+import { TemplatedCommunicationService } from '@memberjunction/entity-communications-server';
+
+const result = await TemplatedCommunicationService.Instance.RenderAndSend(
+    {
+        Envelope: { ChannelID: emailChannelID, MessageClass: 'Marketing', PreferenceID: newsletterPreferenceID },
+        EntityID: contactsEntityID,
+        Recipients: [
+            { Principal: { EntityID: contactsEntityID, RecordID: contactID }, ContextData: { Offer: 'A' } },
+        ],
+        Templates: {
+            SubjectTemplateID: subjectTemplateID,
+            HTMLBodyTemplateID: htmlTemplateID,
+            SharedContextData: { Season: 'Autumn' },
+        },
+        AutoAppendComplianceFooter: true,
+        RenderMode: 'Inline',          // or 'WorkQueue' (the default)
+    },
+    contextUser,
+);
+```
+
+Template data for each recipient is, in increasing precedence: `SharedContextData`, the recipient's
+`ContextData`, the templates' own parameters (including related-entity data, loaded once per batch), and three
+reserved keys:
+
+| Key | Content |
+|-----|---------|
+| `Sender` | The sender's merged `TemplateContext` |
+| `Recipient` | The principal's `RecordData`, its resolved attributes (`FullName`, `Timezone`, ...) and `Endpoint` |
+| `Comms.Obligations` | The gate's obligations, such as `RequireFooterUnsubscribe`, `SenderPostalAddress` and `SenderName`. `UnsubscribeURL` is empty here: the recipient's unsubscribe link is created with the log, at dispatch. |
+
+When no HTML template is given, the body template's HTML content is used for the HTML body.
+
+Templates do not need to render an unsubscribe link or postal address. When the gate requires them, the
+dispatcher appends the compliance footer (`<div data-mj-compliance-footer="true">`) to every message after
+rendering. `AutoAppendComplianceFooter` additionally appends the required postal address at render time, which
+is what a preview shows; the unsubscribe link cannot be part of it because it does not exist until dispatch.
+
+**Render modes.** `'Inline'` renders and sends in the calling process and returns per-recipient outcomes.
+`'WorkQueue'` publishes `comms.render` batches of `BatchSize` recipients when `EnqueueWork` is configured and
+returns `IsAsyncRun: true`; without a publisher it processes the batches in-process. Async batches are rendered
+as the acting user (`ActingUserID`, resolved through `ResolveUser`), so row- and field-level security apply to
+template data in the worker exactly as they would inline; a batch whose user cannot be resolved fails.
+
+**Render failures.** A recipient whose template fails to render is not sent and is reported as a `Failed`
+outcome with `Reason: 'RenderFailed'` and the template error in `Detail`; the rest of the batch still sends.
+If the related-entity rows a template needs cannot be read, every recipient in that batch fails the same way
+rather than being sent with empty merge fields. In-process batches are independent: a batch that throws fails
+its own recipients and the later batches still run.
+
+**Ending the run.** In-process, `RenderAndSend()` ends the run it started, once, when its batches finish. On the
+queued path each `comms.render` batch carries `RunChunk: { Index, Count }`, which `HandleRenderBatch` passes to
+`Send()`; the batch that completes the run ends it. A batch that sends nothing (every recipient failed to render,
+or its acting user could not be resolved) still records its chunk, so the run is never left open.
+
+#### Configuration
+
+| Setting | Default | Notes |
+|---------|---------|-------|
+| `BatchSize` | 50 | Recipients per `comms.render` item |
+| `EnqueueWork` | none | Publisher for `comms.render`. MJAPI supplies one when its work queue is enabled. |
+| `ResolveUser` | none | Maps a user ID to a `UserInfo` for async batches. MJAPI supplies `UserCache`. |
+
+The package reads no environment variables.
+
+### The V1 bridge
+
+`RunEntityCommunication()` behaves as before unless the caller opts in:
+
+```typescript
+const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication({
+    EntityID: contactsEntityID,
+    RunViewParams: { EntityName: 'Contacts', ExtraFilter: "Status = 'Active'" },
+    ProviderName: 'SendGrid',
+    ProviderMessageTypeName: 'Email',
+    Message: message,
+    UseV2: true,
+}, contextUser);
+```
+
+| | V1 path (default) | `UseV2: true` |
+|---|---|---|
+| Sender | `Message.From` | The default `MJ: Communication Senders` row |
+| Message class | `Operational` (unless `Message.MessageClass` is set) | `Operational` |
+| Checks | None by default. Endpoint status and suppressions when `Message.CheckComplianceGate` or `MJ_COMMS_V1_COMPLIANCE_GATE=true` is set | The full gate: suppressions, regimes, quiet hours |
+| Added to the message | Nothing | Compliance footer, unsubscribe headers, tracking, as the regimes require |
+| Rendering | Per recipient, in-process | `TemplatedCommunicationService` (`Inline` for `PreviewOnly` or `IncludeProcessedMessages`, else `WorkQueue`); untemplated messages go straight to `CommunicationEngine.Send()` |
+| Result | `EntityCommunicationResult` | The same shape; blocked and deferred recipients are items with `Skipped: true`. A `Failed` recipient (provider error, render failure) keeps its item, adds its error to `ErrorMessage` and makes `Success` false, as on the V1 path; `OutcomeUnknown` counts as failed. A `DryRun` recipient is reported as a success, as a V1 dry run is |
+
+`UseV2` is ignored when the message sets `From`, CC or BCC recipients, or pairs a literal `Subject` with a body
+template. Field-level security on the address field is enforced on both paths: a recipient whose address the
+acting user may not read is skipped.
+
+Both paths now stop a send to an address with a hard bounce, an invalid-address or erased status, a complaint,
+an unsubscribe, an admin block or a policy suppression.
+
 ## Dependencies
 
 | Package | Purpose |

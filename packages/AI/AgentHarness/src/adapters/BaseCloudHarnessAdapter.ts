@@ -143,12 +143,25 @@ export interface DetachedSessionState {
     DetachedAtIso: string;
 }
 
+interface TimedDetachedSessionEntry {
+    State: DetachedSessionState;
+    ExpiresAtMs: number;
+}
+
 /**
  * Process-wide registry of cloud sessions that detached in `adaptive-wake` mode and have not yet
  * been harvested by a subsequent `AgentWake`. Uses `BaseSingleton` for global object store safety.
+ *
+ * Lifecycle: entries are removed deterministically when a resumed turn reaches a terminal state or
+ * ends via `EndSession()` without re-detaching, and abandoned entries (woken on another replica or
+ * never resumed) expire after {@link DETACHED_SESSION_TTL_MS} without evicting active detached
+ * sessions under an arbitrary count cap.
  */
 export class CloudDetachedSessionRegistry extends BaseSingleton<CloudDetachedSessionRegistry> {
-    private readonly entries = new Map<string, DetachedSessionState>();
+    /** Default idle lifetime before an unresumed detached session is forgotten (24 hours). */
+    public static readonly DETACHED_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+    private readonly entries = new Map<string, TimedDetachedSessionEntry>();
 
     public constructor() {
         super();
@@ -158,16 +171,33 @@ export class CloudDetachedSessionRegistry extends BaseSingleton<CloudDetachedSes
         return CloudDetachedSessionRegistry.getInstance<CloudDetachedSessionRegistry>();
     }
 
-    public MarkDetached(sessionId: string, emittedEventKeys: ReadonlySet<string>): void {
+    public MarkDetached(
+        sessionId: string,
+        emittedEventKeys: ReadonlySet<string>,
+        ttlMs: number = CloudDetachedSessionRegistry.DETACHED_SESSION_TTL_MS
+    ): void {
+        const now = Date.now();
+        this.pruneExpired(now);
         this.entries.set(sessionId, {
-            SessionId: sessionId,
-            EmittedEventKeys: new Set(emittedEventKeys),
-            DetachedAtIso: new Date().toISOString(),
+            State: {
+                SessionId: sessionId,
+                EmittedEventKeys: new Set(emittedEventKeys),
+                DetachedAtIso: new Date(now).toISOString(),
+            },
+            ExpiresAtMs: now + ttlMs,
         });
     }
 
     public GetDetached(sessionId: string): DetachedSessionState | undefined {
-        return this.entries.get(sessionId);
+        const entry = this.entries.get(sessionId);
+        if (!entry) {
+            return undefined;
+        }
+        if (entry.ExpiresAtMs <= Date.now()) {
+            this.entries.delete(sessionId);
+            return undefined;
+        }
+        return entry.State;
     }
 
     public ClearDetached(sessionId: string): void {
@@ -176,6 +206,20 @@ export class CloudDetachedSessionRegistry extends BaseSingleton<CloudDetachedSes
 
     public ClearAll(): void {
         this.entries.clear();
+    }
+
+    /** Number of non-expired detached sessions currently tracked. Exposed for diagnostics and tests. */
+    public get DetachedSessionCount(): number {
+        this.pruneExpired(Date.now());
+        return this.entries.size;
+    }
+
+    private pruneExpired(now: number): void {
+        for (const [key, entry] of this.entries) {
+            if (entry.ExpiresAtMs <= now) {
+                this.entries.delete(key);
+            }
+        }
     }
 }
 
@@ -640,6 +684,10 @@ export abstract class BaseCloudHarnessAdapter extends BaseHarnessAdapter {
             );
             this.config = null;
             return;
+        }
+
+        if (this.sessionId) {
+            CloudDetachedSessionRegistry.Instance.ClearDetached(this.sessionId);
         }
 
         if (this.sessionId && this.lastExecutionState === 'running') {

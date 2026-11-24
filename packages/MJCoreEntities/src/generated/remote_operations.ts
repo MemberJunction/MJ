@@ -257,6 +257,65 @@ export interface AuthorizationCheckOutput {
     Results: AuthorizationCheckResultRow[];
 }
 
+/** Input for `Communications.BlockEndpoint`. */
+export interface CommsBlockEndpointInput {
+  EndpointID: string;
+}
+
+/** Output of `Communications.BlockEndpoint`. */
+export interface CommsBlockEndpointOutput {
+  Success: boolean;
+  SuppressionID?: string;
+  ErrorMessage?: string;
+}
+
+/** Input for `Communications.CreateSendingDomain` / `VerifySendingDomain` / `DeleteSendingDomain`. */
+export interface CommsSendingDomainInput {
+  DomainID: string;
+}
+
+/** Output of `Communications.CreateSendingDomain` and `Communications.VerifySendingDomain`. */
+export interface CommsSendingDomainAuthOutput {
+  Success: boolean;
+  Verified?: boolean;
+  Status?: string;
+  ProviderDomainID?: string;
+  DNSRecordsJSON?: string;
+  ErrorMessage?: string;
+}
+
+/** Output of `Communications.DeleteSendingDomain` and `Communications.RevokeSuppression`. */
+export interface CommsAdminMutationOutput {
+  Success: boolean;
+  ErrorMessage?: string;
+  WarningMessage?: string;
+}
+
+/** Input for `Communications.RevokeSuppression`. */
+export interface CommsRevokeSuppressionInput {
+  SuppressionID: string;
+}
+
+/** Input for `Communications.SimulateComplianceGate`. */
+export interface CommsSimulateComplianceGateInput {
+  SenderID: string;
+  PrincipalID?: string;
+  RecordID?: string;
+  PreferenceID?: string;
+  MessageClass: string;
+  RecipientJurisdictionID?: string;
+}
+
+/** Output of `Communications.SimulateComplianceGate`. */
+export interface CommsSimulateComplianceGateOutput {
+  Success: boolean;
+  Decision?: string;
+  Reason?: string;
+  Detail?: string;
+  ResultJSON?: string;
+  ErrorMessage?: string;
+}
+
 export interface DiagnosticsStartSessionInput {
     Name: string;
     Reason?: string;
@@ -2454,6 +2513,102 @@ export class AuthorizationCheckOperation extends BaseRemotableOperation<Authoriz
     public readonly RequiredScope = "authorization:check";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_5938f2b945c46737";
+}
+
+// ============================================================
+// Communications.BlockEndpoint — Block Communications Endpoint
+// ============================================================
+/**
+ * Block Communications Endpoint
+ * Creates an active Admin Block CommunicationSuppression for an endpoint and writes the corresponding CommunicationConsentAuditLog entry server-side.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.BlockEndpoint'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsBlockEndpointOperation extends BaseRemotableOperation<CommsBlockEndpointInput, CommsBlockEndpointOutput> {
+    public readonly OperationKey = "Communications.BlockEndpoint";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_cfc473f3744109cb";
+}
+
+// ============================================================
+// Communications.CreateSendingDomain — Create Communications Sending Domain
+// ============================================================
+/**
+ * Create Communications Sending Domain
+ * Registers a CommunicationSendingDomain with the downstream communication provider and stores returned DNS verification records.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.CreateSendingDomain'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsCreateSendingDomainOperation extends BaseRemotableOperation<CommsSendingDomainInput, CommsSendingDomainAuthOutput> {
+    public readonly OperationKey = "Communications.CreateSendingDomain";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_c340bffa4c5d9203";
+}
+
+// ============================================================
+// Communications.DeleteSendingDomain — Delete Communications Sending Domain
+// ============================================================
+/**
+ * Delete Communications Sending Domain
+ * Removes a CommunicationSendingDomain from the downstream provider and deletes the MJ record.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.DeleteSendingDomain'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsDeleteSendingDomainOperation extends BaseRemotableOperation<CommsSendingDomainInput, CommsAdminMutationOutput> {
+    public readonly OperationKey = "Communications.DeleteSendingDomain";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_e07405023031b24e";
+}
+
+// ============================================================
+// Communications.RevokeSuppression — Revoke Communications Suppression
+// ============================================================
+/**
+ * Revoke Communications Suppression
+ * Revokes an active CommunicationSuppression, writes an append-only CommunicationConsentAuditLog entry, and clears any downstream provider suppression.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.RevokeSuppression'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsRevokeSuppressionOperation extends BaseRemotableOperation<CommsRevokeSuppressionInput, CommsAdminMutationOutput> {
+    public readonly OperationKey = "Communications.RevokeSuppression";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_7353284a3a917358";
+}
+
+// ============================================================
+// Communications.SimulateComplianceGate — Simulate Communications Compliance Gate
+// ============================================================
+/**
+ * Simulate Communications Compliance Gate
+ * Runs the Communications V2 ComplianceGate in dry-run simulation mode for a sender, optional principal, preference, message class, and jurisdiction.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.SimulateComplianceGate'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsSimulateComplianceGateOperation extends BaseRemotableOperation<CommsSimulateComplianceGateInput, CommsSimulateComplianceGateOutput> {
+    public readonly OperationKey = "Communications.SimulateComplianceGate";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_8dce789f9745b4a6";
+}
+
+// ============================================================
+// Communications.VerifySendingDomain — Verify Communications Sending Domain
+// ============================================================
+/**
+ * Verify Communications Sending Domain
+ * Verifies DNS records for a CommunicationSendingDomain with the downstream provider and merges validation results into the stored DNS records.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.VerifySendingDomain'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsVerifySendingDomainOperation extends BaseRemotableOperation<CommsSendingDomainInput, CommsSendingDomainAuthOutput> {
+    public readonly OperationKey = "Communications.VerifySendingDomain";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ef30f58d04120ea0";
 }
 
 // ============================================================

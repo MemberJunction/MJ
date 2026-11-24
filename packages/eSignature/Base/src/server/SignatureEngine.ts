@@ -374,9 +374,11 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
             return { Success: false, event, ErrorMessage: 'No matching signature request for the webhook envelope.' };
         }
 
-        // Authenticity: verify on the credential-initialized driver for the owning account, under a
-        // verify-if-configured policy. A configured-but-invalid signature is rejected; an account
-        // with no HMAC secret configured is accepted (logged) so the endpoint works pre-setup.
+        // Authenticity: verify on the credential-initialized driver for the owning account.
+        // SECURITY: this endpoint is unauthenticated, so 'NotConfigured' (no HMAC key on the
+        // account) is a REFUSAL by default — accepting it would let anyone forge envelope status
+        // changes. Operators who knowingly run without a webhook secret can opt back into the old
+        // fail-open behavior with MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true.
         const verifier = await this.GetDriver(request.SignatureAccountID, contextUser);
         const verification = verifier.VerifyWebhookSignature(rawBody, headers, payload);
         if (verification === 'Failed') {
@@ -384,10 +386,20 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
             return { Success: false, event, ErrorMessage: 'Webhook signature verification failed.' };
         }
         if (verification === 'NotConfigured') {
-            LogStatus(
-                `[eSignature] Webhook for envelope '${event.externalEnvelopeId}' accepted WITHOUT signature verification ` +
-                    `(no HMAC key configured on account '${request.SignatureAccountID}'). Configure a webhook secret to enforce authenticity.`,
-            );
+            if (process.env.MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS === 'true') {
+                LogStatus(
+                    `[eSignature] SECURITY WARNING: webhook for envelope '${event.externalEnvelopeId}' accepted WITHOUT signature verification ` +
+                        `(no HMAC key configured on account '${request.SignatureAccountID}'; MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true). ` +
+                        `Configure a webhook secret to enforce authenticity.`,
+                );
+            } else {
+                const refusal =
+                    `Webhook rejected: no HMAC key is configured on account '${request.SignatureAccountID}', so authenticity cannot be verified. ` +
+                    `Configure a webhook secret, or set MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true to explicitly accept unverified webhooks.`;
+                LogError(`[eSignature] ${refusal}`);
+                await this.logOperation(request.ID, 'Webhook', false, request.Status as EnvelopeStatus, event.status, refusal, contextUser, provider);
+                return { Success: false, event, ErrorMessage: refusal };
+            }
         }
 
         const before = request.Status as EnvelopeStatus;

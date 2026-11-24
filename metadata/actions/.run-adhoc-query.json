@@ -2,6 +2,12 @@
   {
     "fields": {
       "Name": "Run Ad-hoc Query",
+      "Config": {
+        "resultExpirationMode": "Compact",
+        "resultExpirationTurns": 1,
+        "compactMode": "First N Chars",
+        "compactLength": 2000
+      },
       "Description": "Executes a read-only SQL SELECT query for ad-hoc purposes with security validation. Supports {{query:\"CategoryPath/QueryName\"}} composition macros — the composition engine resolves these into CTEs before execution, enabling reuse of saved queries. Ensures SELECT-only operations, prevents dangerous SQL operations, enforces timeouts, and logs all queries for audit trail.",
       "DriverClass": "Run Ad-hoc Query",
       "Type": "Custom",

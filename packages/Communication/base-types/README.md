@@ -261,6 +261,94 @@ All parameter and result types used across the framework:
 
 `ForwardMessageParams.ContextData` matches the other operations: MS Graph reads `ContextData.Email` as the mailbox to forward from, which a stored Azure Service Principal credential (no account email) needs.
 
+## Communications V2
+
+V2 adds a compliance-gated send pipeline to the framework. This package holds its contracts; the
+implementation is in [`@memberjunction/communication-engine`](../engine/README.md). The full picture, including
+the data flow, entities and worked examples for every extension point, is in the
+[Communications V2 Guide](../../../guides/COMMUNICATIONS_V2_GUIDE.md).
+
+### What this package adds
+
+| File | Exports |
+|------|---------|
+| `src/V2Types.ts` | The V2 DTOs. Every export and field has TSDoc; read it there rather than here. |
+| `src/V2Drivers.ts` | The driver base classes and `PrincipalMessageContext`. |
+| `src/BaseProvider.ts` | `Message.CorrelationLogID`, `Message.DisableProviderTracking`, `MessageResult.ProviderMessageID`; `NormalizedNotification.Kind = 'activity'` with `ActivityEvents`; `CreateDomainAuthentication` / `VerifyDomainAuthentication` / `DeleteDomainAuthentication` on `BaseCommunicationProvider` and the matching `ProviderOperation` values. |
+| `src/BaseEngine.ts` | `CommunicationEngineBase` now also caches `Principals`, `SenderTypes`, `Jurisdictions`, `JurisdictionMembers`, `ComplianceRegimes`, `ComplianceRuleTypes`, `ComplianceRegimeRules`, `ComplianceRegimeJurisdictions` and `SuppressionPolicies`. |
+
+### DTOs by purpose
+
+| Purpose | Types |
+|---------|-------|
+| Describing a send | `SendingEnvelope`, `MessagePayload`, `RecipientSendTarget`, `PrincipalRecordRef`, `EndpointTarget`, `SendToPrincipalsParams` |
+| Send results | `SendV2Result`, `SendV2RecipientOutcome`, `SendV2OutcomeStatus` |
+| Eligibility | `EvaluateEligibilityParams`, `EvaluateEligibilityResult`, `SendableRecipient`, `BlockedRecipient`, `ResolvedEndpoint`, `PrincipalAttributes` |
+| The gate and rule drivers | `ComplianceEvalContext`, `ComplianceRuleOutcome`, `ComplianceObligations`, `ComplianceGateResult`, `ComplianceAuditSnapshot` |
+| Delivery and engagement events | `NormalizedActivityEvent` |
+| Sending-domain authentication | `DomainDNSRecord`, `CreateDomainAuthParams`, `CreateDomainAuthResult`, `VerifyDomainAuthParams`, `VerifyDomainAuthResult`, `DeleteDomainAuthParams` |
+| Templated sends | `RenderAndSendParams`, `ITemplatedCommunicationService` |
+| Value lists derived from the generated entities | `MessageClass`, `NormalizedActivityEventType`, `SuppressionReason`, `SuppressionSource`, `ConsentSource`, `PreferenceState`, `OptInMethod`, `EnforcementMode`, `SendingDomainStatus`, `EndpointStatus` |
+
+The value-list types are indexed-access types over the generated entity classes
+(`MJCommunicationSuppressionEntity['Reason']`), so they follow the database CHECK constraints. Derive from them;
+do not copy the unions.
+
+### Driver base classes
+
+Each is registered with `@RegisterClass(<base>, '<DriverClass>')` and named in a metadata row.
+
+| Base class | Named in | Implement |
+|------------|----------|-----------|
+| `BaseComplianceRule<TMerged>` | `MJ: Communication Compliance Rule Types`.`DriverClass` | `MergeStrictest(parameterSets)`, `Evaluate(merged, ctx)` |
+| `BaseCommunicationPrincipal` | `MJ: Communication Principals`.`DriverClass` | `ResolveEndpoints`, `ResolveJurisdiction`, `ResolveAttributes`; optional `PreProcess`, `PostProcess`, `OnActivity` |
+| `BaseCommunicationSender` | `MJ: Communication Sender Types`.`DriverClass` | Optional `ResolveTemplateContext` |
+| `BaseCommunicationSuppressionPolicy` | `MJ: Communication Suppression Policies`.`DriverClass` | `Evaluate(events, parameters, contextUser)` |
+
+A minimal rule driver:
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import {
+    BaseComplianceRule,
+    ComplianceEvalContext,
+    ComplianceRuleOutcome,
+} from '@memberjunction/communication-types';
+
+interface RequireFooterMerged {
+    Required: boolean;
+}
+
+@RegisterClass(BaseComplianceRule, 'RequireFooterRuleDriver')
+export class RequireFooterRuleDriver extends BaseComplianceRule<RequireFooterMerged> {
+    public MergeStrictest(parameterSets: ReadonlyArray<Record<string, unknown>>): RequireFooterMerged {
+        return { Required: parameterSets.some((p) => p['required'] === true) };
+    }
+
+    public Evaluate(merged: RequireFooterMerged, ctx: ComplianceEvalContext): ComplianceRuleOutcome {
+        return {
+            Passed: true,
+            ObligationsPatch: {
+                RequireFooterUnsubscribe: merged.Required && ctx.MessageClass !== 'Transactional',
+            },
+        };
+    }
+}
+```
+
+### Provider contract additions
+
+A provider that wants its sends correlated with delivery events should attach `Message.CorrelationLogID` to
+the outgoing message as provider metadata, honor `Message.DisableProviderTracking`, pass `Message.Headers`
+through, and return `MessageResult.ProviderMessageID`. To support sending-domain authentication, override the
+three `*DomainAuthentication` methods and list them in `getSupportedOperations()`; the base implementations
+return `Success: false` with a "does not support" message. See section 13.5 of the guide.
+
+### Configuration
+
+This package reads no environment variables for V2. The settings that affect V2 are listed in the guide's
+[configuration reference](../../../guides/COMMUNICATIONS_V2_GUIDE.md#12-configuration-reference).
+
 ## Dependencies
 
 | Package | Purpose |

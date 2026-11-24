@@ -29,6 +29,10 @@ import { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
 import { MetadataEmitter } from './MetadataEmitter.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { SchemaEvolution } from './SchemaEvolution.js';
+import {
+    STANDARD_COLUMN_DESCRIPTIONS,
+    type StandardIntegrationColumnName,
+} from './DDLGenerator.js';
 import { IsIntegrationWriteAllowed } from './AccessControl.js';
 import { GetDialect } from '@memberjunction/sql-dialect';
 
@@ -452,49 +456,43 @@ export class SchemaBuilder {
 
     /** Integration-specific sync columns added to every integration table. */
     private integrationSyncColumns(platform: DatabasePlatform): ColumnDefinition[] {
-        return [
+        const columns: Array<ColumnDefinition & { Name: StandardIntegrationColumnName }> = [
             {
                 Name: '__mj_integration_SyncStatus',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(50)' : 'VARCHAR(50)',
                 IsNullable: false,
                 DefaultValue: "'Active'",
-                Description: 'Current sync status: Active, Archived, or Error',
             },
             {
                 Name: '__mj_integration_LastSyncedAt',
                 Type: 'datetime' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
                 IsNullable: true,
-                Description: 'Timestamp of the last successful sync for this record',
             },
             {
                 Name: '__mj_integration_LastSyncedSnapshot',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
                 IsNullable: true,
-                Description: 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
             },
             {
                 Name: '__mj_integration_SyncMessage',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
                 IsNullable: true,
-                Description: 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
             },
             {
                 Name: '__mj_integration_ContentHash',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(64)' : 'VARCHAR(64)',
                 IsNullable: true,
-                Description: 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark (e.g. YourMembership, which re-fetches every record each sync).',
             },
             {
                 Name: '__mj_integration_CustomOverflow',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
                 IsNullable: true,
-                Description: 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the extra keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
             },
             // ── Per-record sync ledger (plan §2.5) ──────────────────────────────────────
             {
@@ -502,28 +500,24 @@ export class SchemaBuilder {
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(255)' : 'VARCHAR(255)',
                 IsNullable: true,
-                Description: 'The external system’s version/etag/modified token for the last-synced state, used for optimistic-concurrency (OCC) detection on bidirectional push. Null when the source exposes no version token.',
             },
             {
                 Name: '__mj_integration_LastSeenModifiedValue',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(255)' : 'VARCHAR(255)',
                 IsNullable: true,
-                Description: 'The watermark / last-modified value observed for THIS record on the last sync (per-record, independent of the entity-map-level CompanyIntegrationSyncWatermark).',
             },
             {
                 Name: '__mj_integration_LastReconciledAt',
                 Type: 'datetime' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
                 IsNullable: true,
-                Description: 'Timestamp this record was last confirmed against the source system. Lets a reconcile find records not seen recently (delete-detection candidates).',
             },
             {
                 Name: '__mj_integration_LastWriterDirection',
                 Type: 'string' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(10)' : 'VARCHAR(10)',
                 IsNullable: true,
-                Description: 'Which side last wrote this row: "Pull" (external→MJ) or "Push" (MJ→external). Informs conflict handling and audit.',
             },
             {
                 Name: '__mj_integration_IsTombstoned',
@@ -531,16 +525,15 @@ export class SchemaBuilder {
                 RawSqlType: platform === 'sqlserver' ? 'BIT' : 'BOOLEAN',
                 IsNullable: false,
                 DefaultValue: platform === 'sqlserver' ? '0' : 'FALSE',
-                Description: 'Explicit soft-delete flag, set when the record is detected as deleted/archived upstream. A queryable tombstone, distinct from the SyncStatus="Archived" text status.',
             },
             {
                 Name: '__mj_integration_DeletedDetectedAt',
                 Type: 'datetime' as SchemaFieldType,
                 RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
                 IsNullable: true,
-                Description: 'Timestamp the upstream deletion was detected (set alongside IsTombstoned). Null while the record is live.',
             },
         ];
+        return columns.map(c => ({ ...c, Description: STANDARD_COLUMN_DESCRIPTIONS[c.Name] }));
     }
 
     /**
