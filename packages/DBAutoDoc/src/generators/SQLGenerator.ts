@@ -133,10 +133,11 @@ export class SQLGenerator {
       return `COMMENT ON SCHEMA ${this.quotePgIdentifier(schemaName)} IS '${escapedDescription}';`;
     }
 
+    const escapedSchema = this.escapeString(schemaName);
     return `
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties
-    WHERE major_id = SCHEMA_ID('${schemaName}')
+    WHERE major_id = SCHEMA_ID('${escapedSchema}')
     AND name = 'MS_Description'
     AND minor_id = 0
 )
@@ -144,14 +145,14 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'${schemaName}';
+        @level0name = N'${escapedSchema}';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'${escapedDescription}',
     @level0type = N'SCHEMA',
-    @level0name = N'${schemaName}';
+    @level0name = N'${escapedSchema}';
 `.trim();
   }
 
@@ -170,13 +171,15 @@ EXEC sp_addextendedproperty
       return `COMMENT ON TABLE ${this.quotePgIdentifier(schemaName)}.${this.quotePgIdentifier(tableName)} IS '${escapedDescription}';`;
     }
 
+    const escapedSchema = this.escapeString(schemaName);
+    const escapedTable = this.escapeString(tableName);
     return `
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    WHERE s.name = '${schemaName}'
-    AND t.name = '${tableName}'
+    WHERE s.name = '${escapedSchema}'
+    AND t.name = '${escapedTable}'
     AND ep.name = 'MS_Description'
     AND ep.minor_id = 0
 )
@@ -184,18 +187,18 @@ BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'${schemaName}',
+        @level0name = N'${escapedSchema}',
         @level1type = N'TABLE',
-        @level1name = N'${tableName}';
+        @level1name = N'${escapedTable}';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'${escapedDescription}',
     @level0type = N'SCHEMA',
-    @level0name = N'${schemaName}',
+    @level0name = N'${escapedSchema}',
     @level1type = N'TABLE',
-    @level1name = N'${tableName}';
+    @level1name = N'${escapedTable}';
 `.trim();
   }
 
@@ -215,37 +218,40 @@ EXEC sp_addextendedproperty
       return `COMMENT ON COLUMN ${this.quotePgIdentifier(schemaName)}.${this.quotePgIdentifier(tableName)}.${this.quotePgIdentifier(columnName)} IS '${escapedDescription}';`;
     }
 
+    const escapedSchema = this.escapeString(schemaName);
+    const escapedTable = this.escapeString(tableName);
+    const escapedColumn = this.escapeString(columnName);
     return `
 IF EXISTS (
     SELECT 1 FROM sys.extended_properties ep
     INNER JOIN sys.tables t ON ep.major_id = t.object_id
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
-    WHERE s.name = '${schemaName}'
-    AND t.name = '${tableName}'
-    AND c.name = '${columnName}'
+    WHERE s.name = '${escapedSchema}'
+    AND t.name = '${escapedTable}'
+    AND c.name = '${escapedColumn}'
     AND ep.name = 'MS_Description'
 )
 BEGIN
     EXEC sp_dropextendedproperty
         @name = N'MS_Description',
         @level0type = N'SCHEMA',
-        @level0name = N'${schemaName}',
+        @level0name = N'${escapedSchema}',
         @level1type = N'TABLE',
-        @level1name = N'${tableName}',
+        @level1name = N'${escapedTable}',
         @level2type = N'COLUMN',
-        @level2name = N'${columnName}';
+        @level2name = N'${escapedColumn}';
 END
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'${escapedDescription}',
     @level0type = N'SCHEMA',
-    @level0name = N'${schemaName}',
+    @level0name = N'${escapedSchema}',
     @level1type = N'TABLE',
-    @level1name = N'${tableName}',
+    @level1name = N'${escapedTable}',
     @level2type = N'COLUMN',
-    @level2name = N'${columnName}';
+    @level2name = N'${escapedColumn}';
 `.trim();
   }
 

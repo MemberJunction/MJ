@@ -1,0 +1,88 @@
+<div class="mj-comms-pc" [style.--mj-comms-brand]="PrimaryColor || null">
+  @if (IsLoading) {
+    <div class="mj-comms-pc__card">
+      <p class="mj-comms-pc__status" role="status">Loading your communication preferences…</p>
+    </div>
+  } @else if (ErrorMessage && Preferences.length === 0) {
+    <div class="mj-comms-pc__card">
+      <p class="mj-comms-pc__error" role="alert">{{ ErrorMessage }}</p>
+    </div>
+  } @else {
+    <div class="mj-comms-pc__card">
+      <header class="mj-comms-pc__header">
+        @if (LogoUrl) {
+          <img class="mj-comms-pc__logo" [src]="LogoUrl" [alt]="BrandName" />
+        }
+        <div class="mj-comms-pc__title-group">
+          <h1>{{ BrandName }}</h1>
+          <p class="mj-comms-pc__subtitle">Manage which communications you receive from us.</p>
+        </div>
+      </header>
+
+      @if (Preferences.length === 0) {
+        <p class="mj-comms-pc__empty">No user-configurable communication preferences are available.</p>
+      } @else {
+        <ul class="mj-comms-pc__list">
+          @for (pref of Preferences; track pref.ID) {
+            <li class="mj-comms-pc__item">
+              <div class="mj-comms-pc__item-info">
+                <div class="mj-comms-pc__item-head">
+                  <span class="mj-comms-pc__item-name">{{ pref.Name }}</span>
+                  <span
+                    class="mj-comms-pc__badge"
+                    [class.mj-comms-pc__badge--in]="pref.State === 'Opted In'"
+                    [class.mj-comms-pc__badge--pending]="pref.State === 'Pending'"
+                  >
+                    {{ pref.State }}
+                  </span>
+                </div>
+                @if (pref.Description) {
+                  <p class="mj-comms-pc__item-desc">{{ pref.Description }}</p>
+                }
+              </div>
+              <label class="mj-comms-pc__toggle">
+                <input
+                  type="checkbox"
+                  [checked]="pref.State === 'Opted In'"
+                  [disabled]="IsSaving"
+                  [attr.aria-label]="pref.Name"
+                  (change)="TogglePreference(pref)"
+                />
+              </label>
+            </li>
+          }
+        </ul>
+      }
+
+      <div class="mj-comms-pc__actions">
+        <button
+          type="button"
+          class="mj-comms-pc__btn mj-comms-pc__btn--primary"
+          [disabled]="IsSaving"
+          (click)="SavePreferences()"
+        >
+          {{ IsSaving ? 'Saving…' : 'Save Preferences' }}
+        </button>
+        <button
+          type="button"
+          class="mj-comms-pc__btn mj-comms-pc__btn--danger"
+          [disabled]="IsSaving"
+          (click)="UnsubscribeAll()"
+        >
+          Unsubscribe from all
+        </button>
+      </div>
+
+      @if (StatusMessage) {
+        <p class="mj-comms-pc__ok" role="status">{{ StatusMessage }}</p>
+      }
+      @if (ErrorMessage) {
+        <p class="mj-comms-pc__error" role="alert">{{ ErrorMessage }}</p>
+      }
+
+      @if (FooterText) {
+        <footer class="mj-comms-pc__footer">{{ FooterText }}</footer>
+      }
+    </div>
+  }
+</div>

@@ -1,0 +1,535 @@
+[
+  {
+    "fields": {
+      "Code": "US",
+      "Name": "United States",
+      "Description": "United States of America (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=US",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2EE3CCA9-5C8A-4E19-9A9C-B42FA48BEF98"
+    }
+  },
+  {
+    "fields": {
+      "Code": "CA",
+      "Name": "Canada",
+      "Description": "Canada (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4BE2A4F2-4269-45DE-9E2A-77704E09C69E"
+    }
+  },
+  {
+    "fields": {
+      "Code": "GB",
+      "Name": "United Kingdom",
+      "Description": "United Kingdom of Great Britain and Northern Ireland (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "231BF184-4823-4938-A67D-20D437C1F98F"
+    }
+  },
+  {
+    "fields": {
+      "Code": "AU",
+      "Name": "Australia",
+      "Description": "Commonwealth of Australia (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "77F2E068-2F32-4C60-BB97-43AE82067A07"
+    }
+  },
+  {
+    "fields": {
+      "Code": "DE",
+      "Name": "Germany",
+      "Description": "Federal Republic of Germany (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8421DDA1-77BE-4B75-B2B0-32AFA13970BB"
+    }
+  },
+  {
+    "fields": {
+      "Code": "FR",
+      "Name": "France",
+      "Description": "French Republic (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=FR",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "69B5A3F1-F9F1-42A9-A5F2-31682F3ADA53"
+    }
+  },
+  {
+    "fields": {
+      "Code": "IE",
+      "Name": "Ireland",
+      "Description": "Republic of Ireland (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B1205355-1E5D-40E9-ADC9-D096A9ACE7FC"
+    }
+  },
+  {
+    "fields": {
+      "Code": "NL",
+      "Name": "Netherlands",
+      "Description": "Kingdom of the Netherlands (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4E198425-F4A5-4F92-9C63-DD05C16F2B57"
+    }
+  },
+  {
+    "fields": {
+      "Code": "ES",
+      "Name": "Spain",
+      "Description": "Kingdom of Spain (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "1782A772-6E4C-42F2-8FC2-5020564E876F"
+    }
+  },
+  {
+    "fields": {
+      "Code": "IT",
+      "Name": "Italy",
+      "Description": "Italian Republic (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=IT",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "AD9523A5-616E-4CE1-B448-7F609C278CF3"
+    }
+  },
+  {
+    "fields": {
+      "Code": "EU",
+      "Name": "European Union",
+      "Description": "European Union member states group",
+      "Type": "Group",
+      "CountryID": null,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6277A98E-713D-4D40-B48D-F03BF3D613C4"
+    }
+  },
+  {
+    "fields": {
+      "Code": "EEA",
+      "Name": "European Economic Area",
+      "Description": "European Economic Area (EU member states and EEA EFTA states)",
+      "Type": "Group",
+      "CountryID": null,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F0D945AB-F75F-4A24-B25D-139D74D49CFE"
+    }
+  },
+  {
+    "fields": {
+      "Code": "US-CA",
+      "Name": "California",
+      "Description": "State of California, United States (ISO 3166-2)",
+      "Type": "Subdivision",
+      "CountryID": "@lookup:MJ: Countries.ISO2=US",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "027F1EC7-16F0-4966-8164-00BD54777D28"
+    }
+  },
+  {
+    "fields": {
+      "Code": "US-FL",
+      "Name": "Florida",
+      "Description": "State of Florida, United States (ISO 3166-2)",
+      "Type": "Subdivision",
+      "CountryID": "@lookup:MJ: Countries.ISO2=US",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "FF34B10D-362C-42A0-BDA8-86767D018474"
+    }
+  },
+  {
+    "fields": {
+      "Code": "US-OK",
+      "Name": "Oklahoma",
+      "Description": "State of Oklahoma, United States (ISO 3166-2)",
+      "Type": "Subdivision",
+      "CountryID": "@lookup:MJ: Countries.ISO2=US",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "941E6DD8-489C-47A6-A88E-BA7613CEAE4B"
+    }
+  },
+  {
+    "fields": {
+      "Code": "US-TX",
+      "Name": "Texas",
+      "Description": "State of Texas, United States (ISO 3166-2)",
+      "Type": "Subdivision",
+      "CountryID": "@lookup:MJ: Countries.ISO2=US",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "14FF8506-654B-465D-B230-384EEA5B3941"
+    }
+  },
+  {
+    "fields": {
+      "Code": "CA-QC",
+      "Name": "Quebec",
+      "Description": "Province of Quebec, Canada (ISO 3166-2)",
+      "Type": "Subdivision",
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0BF6BA98-CCFB-4EA0-B6EB-B01CF4A325B0"
+    }
+  },
+  {
+    "fields": {
+      "Code": "AT",
+      "Name": "Austria",
+      "Description": "Austria (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DC76CA9F-1F79-429D-A3B9-630CD427A925"
+    }
+  },
+  {
+    "fields": {
+      "Code": "BE",
+      "Name": "Belgium",
+      "Description": "Belgium (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "50F89ABA-02DC-4AC0-A403-D80518F3E067"
+    }
+  },
+  {
+    "fields": {
+      "Code": "BG",
+      "Name": "Bulgaria",
+      "Description": "Bulgaria (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "9DCAE21E-F7BC-4020-A509-2A219524565D"
+    }
+  },
+  {
+    "fields": {
+      "Code": "HR",
+      "Name": "Croatia",
+      "Description": "Croatia (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=HR",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B024FB9B-6795-4114-95F7-919683401AAF"
+    }
+  },
+  {
+    "fields": {
+      "Code": "CY",
+      "Name": "Cyprus",
+      "Description": "Cyprus (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=CY",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E78E9570-5740-40E2-8A46-932672C2DC6C"
+    }
+  },
+  {
+    "fields": {
+      "Code": "CZ",
+      "Name": "Czechia",
+      "Description": "Czechia (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "291A2FCF-1E99-48E9-896B-96927749B05C"
+    }
+  },
+  {
+    "fields": {
+      "Code": "DK",
+      "Name": "Denmark",
+      "Description": "Denmark (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "81C91DC7-12BD-40E1-AF35-ADD10547E897"
+    }
+  },
+  {
+    "fields": {
+      "Code": "EE",
+      "Name": "Estonia",
+      "Description": "Estonia (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=EE",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4AD3491D-6EC5-4CE8-AD3C-42CA4BF3CEF0"
+    }
+  },
+  {
+    "fields": {
+      "Code": "FI",
+      "Name": "Finland",
+      "Description": "Finland (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=FI",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6164ABB0-658D-4C28-BED4-BD8CA3C8CEF0"
+    }
+  },
+  {
+    "fields": {
+      "Code": "GR",
+      "Name": "Greece",
+      "Description": "Greece (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B860855C-1003-45E3-8132-5633DD40F9DC"
+    }
+  },
+  {
+    "fields": {
+      "Code": "HU",
+      "Name": "Hungary",
+      "Description": "Hungary (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=HU",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0E87B648-DE75-418D-85C9-760059E7EBB1"
+    }
+  },
+  {
+    "fields": {
+      "Code": "LV",
+      "Name": "Latvia",
+      "Description": "Latvia (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3C4C774B-20B8-471B-BC46-6AA7E04B982C"
+    }
+  },
+  {
+    "fields": {
+      "Code": "LT",
+      "Name": "Lithuania",
+      "Description": "Lithuania (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "7423451C-2644-4641-A27D-69878B99BF32"
+    }
+  },
+  {
+    "fields": {
+      "Code": "LU",
+      "Name": "Luxembourg",
+      "Description": "Luxembourg (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=LU",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2C99668A-63BA-4F3C-A9DF-96E48B65ABA5"
+    }
+  },
+  {
+    "fields": {
+      "Code": "MT",
+      "Name": "Malta",
+      "Description": "Malta (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=MT",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "AA4A0DE7-D38B-4E5A-812B-38823B98D3E1"
+    }
+  },
+  {
+    "fields": {
+      "Code": "PL",
+      "Name": "Poland",
+      "Description": "Poland (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A86D25E8-7A26-4E0E-8541-70CF22421888"
+    }
+  },
+  {
+    "fields": {
+      "Code": "PT",
+      "Name": "Portugal",
+      "Description": "Portugal (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E2C8873B-0CD4-475F-B92E-932178CAB177"
+    }
+  },
+  {
+    "fields": {
+      "Code": "RO",
+      "Name": "Romania",
+      "Description": "Romania (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "02DDEDF8-0D31-4CE2-92A4-707D2EB1CB75"
+    }
+  },
+  {
+    "fields": {
+      "Code": "SK",
+      "Name": "Slovakia",
+      "Description": "Slovakia (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "88CACEA5-9EED-49A0-982E-DDC8E6AE73F0"
+    }
+  },
+  {
+    "fields": {
+      "Code": "SI",
+      "Name": "Slovenia",
+      "Description": "Slovenia (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A7127DF7-A863-4622-B114-643654D53182"
+    }
+  },
+  {
+    "fields": {
+      "Code": "SE",
+      "Name": "Sweden",
+      "Description": "Sweden (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "BC850A5D-CD58-4C41-AD57-BEF85D0E66FC"
+    }
+  },
+  {
+    "fields": {
+      "Code": "IS",
+      "Name": "Iceland",
+      "Description": "Iceland (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2268D98D-8CC0-4D9C-BF56-A0955364F96C"
+    }
+  },
+  {
+    "fields": {
+      "Code": "LI",
+      "Name": "Liechtenstein",
+      "Description": "Liechtenstein (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=LI",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3D2EA1AB-A217-4378-9347-D91BD0763CE1"
+    }
+  },
+  {
+    "fields": {
+      "Code": "NO",
+      "Name": "Norway",
+      "Description": "Norway (ISO 3166-1 alpha-2)",
+      "Type": "Country",
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "248DE481-F887-4D38-972A-7C15BEBFA3FB"
+    }
+  }
+]

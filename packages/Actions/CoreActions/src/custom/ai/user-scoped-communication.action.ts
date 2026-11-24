@@ -1660,6 +1660,24 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                         Params: params.Params,
                     };
                 }
+                const channelID = draftMessage.MessageType?.CommunicationBaseMessageTypeID;
+                if (channelID && process.env.MJ_COMMS_V1_COMPLIANCE_GATE === 'true') {
+                    const recipientsToGate = [to, ...(cc ?? [])].filter(Boolean);
+                    const complianceCheck = await CommunicationEngine.Instance.CheckV1ComplianceGateBatch(
+                        channelID,
+                        recipientsToGate,
+                        'Transactional',
+                        params.ContextUser,
+                    );
+                    if (!complianceCheck.Allowed) {
+                        return {
+                            Success: false,
+                            ResultCode: 'COMPLIANCE_BLOCKED',
+                            Message: complianceCheck.Detail ?? complianceCheck.Reason ?? 'Recipient blocked by compliance gate.',
+                            Params: params.Params,
+                        };
+                    }
+                }
                 const sendRes = await resolved.providerInstance.SendSingleMessage(draftMessage);
                 if (!sendRes.Success) {
                     return {

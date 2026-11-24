@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CLIPluginRegistry } from '@memberjunction/cli-core';
-import { DeriveUsage, DomainOf, RegisterDerivedUsage, type OclifCommandShape } from '../lib/derived-usage';
+import { DeriveUsage, DomainOf, FromOclifCommands, RegisterDerivedUsage, type OclifCommandShape, type OclifLoadableLike } from '../lib/derived-usage';
 import { DOMAIN_PROFILES, DEFAULT_DOMAIN_PROFILE, GetDomainProfile } from '../lib/domain-profiles';
 
 /**
@@ -144,5 +144,40 @@ describe('domain profiles', () => {
         expect(profile.Runtime.note, `${domain} needs a note`).toBeTruthy();
       }
     }
+  });
+});
+
+describe('FromOclifCommands', () => {
+  it('adapts lowercase oclif Command.Loadable fields into PascalCase OclifCommandShape', () => {
+    const loadable: OclifLoadableLike = {
+      id: 'harness:account:list',
+      description: 'List CLI account slots.',
+      summary: 'List slots.',
+      hidden: false,
+      flags: {
+        vendor: {
+          name: 'vendor',
+          type: 'option',
+          description: 'Filter by vendor',
+          char: 'v',
+          options: ['claude', 'agy'],
+          required: false,
+          multiple: false,
+          input: [],
+          hasDynamicHelp: false,
+        },
+      },
+      examples: ['mj harness account list'],
+    };
+
+    const [adapted] = FromOclifCommands([loadable]);
+    expect(adapted.Id).toBe('harness:account:list');
+    expect(adapted.Description).toBe('List CLI account slots.');
+    expect(adapted.summary).toBe('List slots.');
+    expect(adapted.Hidden).toBe(false);
+    expect(adapted.Flags?.vendor?.Description).toBe('Filter by vendor');
+    expect(adapted.Flags?.vendor?.Char).toBe('v');
+    expect(adapted.Flags?.vendor?.options).toEqual(['claude', 'agy']);
+    expect(adapted.Examples).toEqual(['mj harness account list']);
   });
 });
