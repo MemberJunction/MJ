@@ -261,17 +261,32 @@ With more recipients than `AsyncThreshold` and a configured `EnqueueWork`, the s
 `ActingUserID`, so the worker sends as that user.
 
 **Runs.** A send with no `CommunicationRunID` starts a run and ends it. A send given a `CommunicationRunID`
-(a `comms.dispatch` chunk, a templated batch) adds to that run and leaves it open: whoever started the run
-ends it once every chunk has finished.
+(a `comms.dispatch` chunk, a templated batch) adds to that run and leaves it open. A chunked run stores its
+`ChunkCount`; each chunk, on every exit including refusals and errors, records a `MJ: Communication Run
+Chunks` row (unique per run and chunk index, so a redelivered chunk is not counted twice). The chunk that
+brings the count to `ChunkCount` sets the run's `Status` to `Complete`, or `Failed` if any chunk was
+refused, and sets `EndedAt`.
 
-**At most once.** A message is never sent twice for the same run and endpoint. A log is claimed with one
-conditional `UPDATE`, so the database provider must support `ExecuteSQL`; without it nothing is sent. A log
-left `In-Progress` without a `ProviderMessageID` is not resent: if it is older than 15 minutes the recipient
-is reported `Failed` with reason `OutcomeUnknown`, because the provider may already have the message. Settle
-those from the provider's delivery events. The claim SQL is written for SQL Server.
+**Delivery guarantee.** A log is claimed with one conditional `UPDATE` before the provider call, so two
+workers never send the same run and endpoint at once; the database provider must support `ExecuteSQL`, and
+without it nothing is sent. What happens when a log is found stuck `In-Progress` with no
+`ProviderMessageID` for over 15 minutes (its worker died, or saving the log failed after the provider call)
+depends on the send's `DeliveryGuarantee`:
+
+| Setting | Stuck log is... | Consequence |
+|---|---|---|
+| `At Most Once` (default) | reported `Failed` with reason `OutcomeUnknown`, never resent | The recipient may miss the message. Settle it from the provider's delivery events. |
+| `At Least Once` | reclaimed and sent again | The recipient may get the message twice. |
+
+The setting comes from the first of these that has one: `Envelope.DeliveryGuarantee`, the run's
+`DeliveryGuarantee`, the sender's, its ancestor senders' (nearest first), then the provider's (which defaults
+to `At Most Once`). If resolving it fails, `At Most Once` is used. The claim SQL is written for SQL Server.
 
 **Dry runs.** With `Envelope.DryRun`, an accepted message is reported `DryRun` and counted in `DryRunCount`,
-not `QueuedCount`. Its log is `Complete` with `"DryRun": true` in `ComplianceDecision`.
+not `QueuedCount`. Its log is `Complete` with `IsDryRun` set.
+
+**Deferred sends.** A deferred or scheduled recipient's rendered message is stored in the log's
+`DeferredPayload` and cleared once the message is dispatched. `CorrelationData` holds only the caller's data.
 
 **Preferences across senders.** A principal's choice for a preference is read for the sender, its ancestors
 and sender-less rows. An opt-out at any of those levels blocks the send; otherwise the nearest row wins.

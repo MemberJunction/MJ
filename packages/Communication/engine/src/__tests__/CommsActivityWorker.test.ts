@@ -978,7 +978,8 @@ describe('CommsActivityWorker', () => {
         ID: 'log-gdpr',
         CommunicationEndpointID: ep.ID,
         RecipientAddress: 'gdpr@example.com',
-        CorrelationData: JSON.stringify({ campaignId: 'c1', __deferredPayload: { Body: 'Secret body' } }),
+        CorrelationData: JSON.stringify({ campaignId: 'c1' }),
+        DeferredPayload: JSON.stringify({ Body: 'Secret body' }),
       },
       false,
     );
@@ -1024,12 +1025,89 @@ describe('CommsActivityWorker', () => {
     expect(store['MJ: Communication Suppressions']).toHaveLength(1);
     expect(log.RecipientAddress).toBeNull();
     expect(log.CorrelationData).toBeNull();
+    // A deferred message not yet sent holds its rendered body, which can carry personal data.
+    expect(log.DeferredPayload).toBeNull();
     expect(activity.IPAddress).toBeNull();
     expect(activity.UserAgent).toBeNull();
     expect(activity.CorrelationData).toBeNull();
     // Append-only consent audit log is never mutated by erasure
     expect(audit.IPAddress).toBe('203.0.113.42');
     expect(audit.UserAgent).toBe('CustomUA/1.0');
+  });
+
+  describe('EraseEndpointPII never reports success when it could not scrub', () => {
+    const EP_ID = '22222222-2222-2222-2222-222222222222';
+
+    function seedErasureFixture(): { log: MockRecord; activity: MockRecord } {
+      store['MJ: Communication Endpoints'].push(
+        makeRecord(
+          'MJ: Communication Endpoints',
+          store,
+          { ID: EP_ID, BaseMessageTypeID: 'chan-email', NormalizedValue: 'fail@example.com', ValueHash: 'h', Status: 'Active' },
+          false,
+        ),
+      );
+      const log = makeRecord(
+        'MJ: Communication Logs',
+        store,
+        { ID: 'log-fail', CommunicationEndpointID: EP_ID, RecipientAddress: 'fail@example.com', DeferredPayload: '{"Body":"x"}' },
+        false,
+      );
+      store['MJ: Communication Logs'].push(log);
+      const activity = makeRecord(
+        'MJ: Communication Activities',
+        store,
+        { ID: 'act-fail', CommunicationEndpointID: EP_ID, IPAddress: '198.51.100.7', UserAgent: 'UA' },
+        false,
+      );
+      store['MJ: Communication Activities'].push(activity);
+      return { log, activity };
+    }
+
+    function failRunViewFor(entityName: string): void {
+      const origFromProvider = RunView.FromMetadataProvider;
+      vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((md) => {
+        const rv = origFromProvider.call(RunView, md);
+        const origRunView = rv.RunView.bind(rv);
+        rv.RunView = vi.fn().mockImplementation(async (params: { EntityName: string }, u?: UserInfo) => {
+          if (params.EntityName === entityName) {
+            return { Success: false, Results: [], ErrorMessage: 'DB read timeout' };
+          }
+          return origRunView(params as never, u);
+        }) as typeof rv.RunView;
+        return rv;
+      });
+    }
+
+    it('throws when a log cannot be saved', async () => {
+      const { log } = seedErasureFixture();
+      log.Save = async function () {
+        this.LatestResult = { Success: false, CompleteMessage: 'deadlock victim' };
+        return false;
+      };
+      await expect(worker.EraseEndpointPII(EP_ID, 'chan-email', mockUser)).rejects.toThrow(/could not scrub communication log log-fail: deadlock victim/);
+    });
+
+    it('throws when an activity cannot be saved', async () => {
+      const { activity } = seedErasureFixture();
+      activity.Save = async function () {
+        this.LatestResult = { Success: false, CompleteMessage: 'deadlock victim' };
+        return false;
+      };
+      await expect(worker.EraseEndpointPII(EP_ID, 'chan-email', mockUser)).rejects.toThrow(/could not scrub communication activity act-fail/);
+    });
+
+    it('throws when the logs cannot be read', async () => {
+      seedErasureFixture();
+      failRunViewFor('MJ: Communication Logs');
+      await expect(worker.EraseEndpointPII(EP_ID, 'chan-email', mockUser)).rejects.toThrow(/could not read the endpoint's communication logs: DB read timeout/);
+    });
+
+    it('throws when the activities cannot be read', async () => {
+      seedErasureFixture();
+      failRunViewFor('MJ: Communication Activities');
+      await expect(worker.EraseEndpointPII(EP_ID, 'chan-email', mockUser)).rejects.toThrow(/could not read the endpoint's communication activities: DB read timeout/);
+    });
   });
 
   it('reports ErrorCount instead of dropping an event when CommunicationLog correlation RunView fails', async () => {
@@ -1095,7 +1173,7 @@ describe('CommsActivityWorker', () => {
     expect(result.ProcessedCount).toBe(0);
   });
 
-  it('deduplicates first-party events lacking ProviderEventID and strips __deferredPayload from CorrelationData', async () => {
+  it('deduplicates first-party events lacking ProviderEventID and copies only caller CorrelationData onto the activity', async () => {
     store['MJ: Communication Logs'].push(
       makeRecord(
         'MJ: Communication Logs',
@@ -1106,10 +1184,9 @@ describe('CommsActivityWorker', () => {
           CommunicationSenderID: 'sender-1',
           CommunicationEndpointID: 'ep-fp',
           TrackingToken: 'tok-fp-1',
-          CorrelationData: JSON.stringify({
-            campaignId: 'camp-fp',
-            __deferredPayload: { Subject: 'Secret', Body: 'Private body' },
-          }),
+          CorrelationData: JSON.stringify({ campaignId: 'camp-fp' }),
+          // The rendered body lives in its own column and must never reach the activity.
+          DeferredPayload: JSON.stringify({ Subject: 'Secret', Body: 'Private body' }),
         },
         false,
       ),

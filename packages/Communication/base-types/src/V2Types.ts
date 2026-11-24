@@ -3,6 +3,7 @@ import type {
   MJCommunicationEndpointEntity,
   MJCommunicationPreferenceEntity,
   MJCommunicationPrincipalPreferenceEntity,
+  MJCommunicationProviderEntity,
   MJCommunicationSenderEntity,
   MJCommunicationSendingDomainEntity,
   MJCommunicationSuppressionEntity,
@@ -11,6 +12,21 @@ import type {
 // ---------------------------------------------------------------------------
 // Entity-derived value-list unions (never hand-copied)
 // ---------------------------------------------------------------------------
+
+/**
+ * What a send does when its outcome is unknown: the provider may have accepted the message, but
+ * the result was never recorded (the worker died, or saving the log failed after the provider
+ * call). Derived from `MJ: Communication Providers`.`DeliveryGuarantee`.
+ *
+ * - `'At Most Once'` (the default): never resend. The message is reported `Failed` with reason
+ *   `OutcomeUnknown` and left for reconciliation, so **a recipient may miss it**.
+ * - `'At Least Once'`: resend once the log has been stuck for 15 minutes, so **a recipient may get
+ *   it twice**.
+ *
+ * The setting is taken from the first of these that has one: `SendingEnvelope.DeliveryGuarantee`,
+ * the run, the sender, the sender's ancestors (nearest first), then the provider.
+ */
+export type DeliveryGuarantee = MJCommunicationProviderEntity['DeliveryGuarantee'];
 
 /**
  * How a message is classified for compliance, from least to most restricted: `'Transactional'` <
@@ -166,9 +182,14 @@ export interface SendingEnvelope {
   ChannelID: string;
   /**
    * `MJ: Communication Providers` ID. Defaults to the sender's `CommunicationProviderID`; if
-   * neither is set, the first provider the engine has loaded is used.
+   * neither is set, the one active sending provider that supports the channel is used, and the
+   * send fails when there is none or more than one.
    */
   ProviderID?: string;
+  /**
+   * Overrides the run, sender and provider setting for this send. See {@link DeliveryGuarantee}.
+   */
+  DeliveryGuarantee?: DeliveryGuarantee;
   /**
    * Send no earlier than this time. A future value stores each sendable recipient as a `Pending`
    * log that the scheduled sweep dispatches later.
@@ -191,7 +212,7 @@ export interface SendingEnvelope {
   DryRun?: boolean;
   /**
    * Caller data stored as JSON on each `MJ: Communication Logs` row and merged into the activity
-   * events later correlated to that log. Only string values survive a deferred or scheduled send.
+   * events later correlated to that log.
    * Never sent to the provider.
    */
   CorrelationData?: Record<string, unknown>;
@@ -251,8 +272,9 @@ export interface SendToPrincipalsParams {
    */
   CommunicationRunID?: string;
   /**
-   * This call's place in a run split into chunks (`Index` is 0-based, `Count` the total). With it,
-   * the chunk that completes the run ends it, exactly once, however the chunks interleave or are
+   * This call's place in a run split into chunks (`Index` is 0-based, `Count` the total). Every
+   * exit of the call records a `MJ: Communication Run Chunks` row for it, and the chunk that brings
+   * the count to the run's `ChunkCount` ends the run, however the chunks interleave or are
    * redelivered. Ignored without `CommunicationRunID`.
    */
   RunChunk?: RunChunkPosition;
@@ -316,11 +338,12 @@ export interface PrincipalAttributes {
  * an obligation check stopped it. `'Deferred'`: stored as a `Pending` log to send later (quiet
  * hours or `ScheduledAt`). `'Failed'`: the provider or log bookkeeping failed. `'DryRun'`: the
  * envelope was a dry run and the provider accepted it without delivering; the log is `Complete`
- * with `"DryRun": true` in its `ComplianceDecision`. `'Queued'` is reserved; the dispatcher does
+ * with `IsDryRun` set. `'Queued'` is reserved; the dispatcher does
  * not currently return it.
  *
  * A `'Failed'` outcome with reason `OutcomeUnknown` means a previous attempt may already have
- * reached the provider. It is not resent; reconcile it from the provider's delivery events.
+ * reached the provider and the delivery guarantee is At Most Once, so it was not resent; reconcile
+ * it from the provider's delivery events. See {@link DeliveryGuarantee}.
  */
 export type SendV2OutcomeStatus = 'Queued' | 'Sent' | 'Blocked' | 'Deferred' | 'Failed' | 'DryRun';
 

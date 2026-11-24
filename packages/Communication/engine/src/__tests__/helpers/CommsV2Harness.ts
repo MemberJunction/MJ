@@ -263,6 +263,8 @@ export function MarketingCompliance(options: { AlwaysQuietHours?: boolean } = {}
 export interface InstallOptions {
   Compliance?: ComplianceMetadataSource;
   RequireVerifiedDomain?: boolean;
+  /** The provider's `DeliveryGuarantee`. Defaults to `'At Most Once'`, as the database does. */
+  ProviderDeliveryGuarantee?: 'At Most Once' | 'At Least Once';
 }
 
 export interface InstalledEngine {
@@ -297,6 +299,7 @@ export function InstallCommsEngine(db: FakeCommsDb, options: InstallOptions = {}
     ID: IDS.Provider,
     Name: PROVIDER_NAME,
     RequireVerifiedDomain: options.RequireVerifiedDomain ?? false,
+    DeliveryGuarantee: options.ProviderDeliveryGuarantee ?? 'At Most Once',
     MessageTypes: [messageType],
   } as CommunicationEngineBase['Providers'][number];
   const principal = {

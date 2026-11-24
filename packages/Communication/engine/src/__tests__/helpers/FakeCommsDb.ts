@@ -352,11 +352,22 @@ function checkRun(row: FakeRow): string | null {
   ]);
 }
 
+function checkRunChunk(row: FakeRow, others: FakeRow[]): string | null {
+  const prefix = 'The INSERT statement conflicted with the CHECK constraint';
+  return firstViolation([
+    isBlank(row.CommunicationRunID) ? 'Cannot insert the value NULL into column CommunicationRunID of CommunicationRunChunk.' : null,
+    requireOneOf(row, 'Status', ['Complete', 'Failed'], 'CK_CommunicationRunChunk_Status'),
+    typeof row.ChunkIndex === 'number' && row.ChunkIndex < 0 ? `${prefix} "CK_CommunicationRunChunk_ChunkIndex".` : null,
+    requireUnique(row, others, ['CommunicationRunID', 'ChunkIndex'], 'UQ_CommunicationRunChunk_RunIndex'),
+  ]);
+}
+
 const CONSTRAINTS: Record<string, ConstraintCheck> = {
   'MJ: Communication Suppressions': checkSuppression,
   'MJ: Communication Logs': checkLog,
   'MJ: Communication Endpoints': checkEndpoint,
   'MJ: Communication Runs': checkRun,
+  'MJ: Communication Run Chunks': checkRunChunk,
 };
 
 // ---------------------------------------------------------------------------
@@ -377,8 +388,9 @@ export class FakeCommsDb {
 
   /** The object the engine sees as `CommunicationEngineBase.Instance.ProviderToUse`. */
   public get Provider(): IMetadataProvider {
-    const runViewSide: Pick<IRunViewProvider, 'RunView'> = {
+    const runViewSide: Pick<IRunViewProvider, 'RunView' | 'RunViews'> = {
       RunView: <T>(params: RunViewParams) => Promise.resolve(this.runView<T>(params)),
+      RunViews: <T>(params: RunViewParams[]) => Promise.resolve(params.map((p) => this.runView<T>(p))),
     };
     const metadataSide: Pick<IMetadataProvider, 'GetEntityObject'> = Object.assign(runViewSide, {
       GetEntityObject: <T extends BaseEntity>(entityName: string) => Promise.resolve(this.materialize<T>(entityName, {}, true)),
@@ -406,7 +418,16 @@ export class FakeCommsDb {
     };
     if (description === 'V2SendService.tryAtomicClaimLog') {
       const row = logs.find((r) => sameText(r.ID, String(parameters[0])));
-      if (!row || (row.Status !== 'Pending' && row.Status !== 'Failed') || !claimable(row)) return [];
+      if (!row) return [];
+      const reclaimStale = Number(parameters[1]) === 1;
+      const staleBefore = Date.now() - Number(parameters[2]) * 60_000;
+      const isStale =
+        row.Status === 'In-Progress' &&
+        isBlank(row.ProviderMessageID) &&
+        row.__mj_UpdatedAt instanceof Date &&
+        row.__mj_UpdatedAt.getTime() < staleBefore;
+      const eligible = row.Status === 'Pending' || row.Status === 'Failed' || (reclaimStale && isStale);
+      if (!eligible || !claimable(row)) return [];
       row.Status = 'In-Progress';
       row.__mj_UpdatedAt = new Date();
       return [{ ID: String(row.ID) }];
@@ -422,9 +443,6 @@ export class FakeCommsDb {
         row.__mj_UpdatedAt = now;
         return { ID: String(row.ID) };
       });
-    }
-    if (description === 'V2SendService.readRunLedger' || description === 'V2SendService.advanceRunLedger') {
-      return this.executeRunLedgerSQL(description, parameters) as Array<{ ID: string }>;
     }
     throw new Error(`FakeCommsDb.ExecuteSQL does not emulate: ${description ?? sql}`);
   }
@@ -484,21 +502,6 @@ export class FakeCommsDb {
    */
   public OnceBeforeSave(entityName: string, hook: (row: FakeRow) => void): void {
     this.beforeSaveHooks.push({ EntityName: entityName, Hook: hook });
-  }
-
-  /** The run-ledger read and its compare-and-swap UPDATE (matched on Status and Comments). */
-  private executeRunLedgerSQL(description: string, parameters: FakeFieldValue[]): FakeRow[] {
-    const run = this.table('MJ: Communication Runs').find((r) => sameText(r.ID, String(parameters[0])));
-    if (!run) return [];
-    if (description === 'V2SendService.readRunLedger') {
-      return [{ Status: run.Status ?? null, Comments: run.Comments ?? null }];
-    }
-    const [, comments, status, expectedStatus, expectedComments] = parameters;
-    if (run.Status !== expectedStatus || (run.Comments ?? null) !== (expectedComments ?? null)) return [];
-    run.Comments = comments;
-    run.Status = status;
-    if (status === 'Complete') run.EndedAt = new Date();
-    return [{ ID: String(run.ID) }];
   }
 
   private table(entityName: string): FakeRow[] {

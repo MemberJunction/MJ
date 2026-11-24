@@ -207,10 +207,8 @@ export class CommsActivityWorker {
     endpoint.Status = 'Erased';
     endpoint.NormalizedValue = null;
     if (!(await endpoint.Save())) {
-      LogError(
-        `Failed to update erased endpoint ${endpoint.ID}: ${
-          endpoint.LatestResult?.CompleteMessage ?? 'unknown error'
-        }`,
+      throw new Error(
+        `Erasure could not update endpoint ${endpoint.ID}: ${endpoint.LatestResult?.CompleteMessage ?? 'unknown error'}`,
       );
     }
 
@@ -228,7 +226,7 @@ export class CommsActivityWorker {
       CommunicationEndpointID: endpoint.ID,
       ScrubbedLogs: scrubbedLogs,
       ScrubbedActivities: scrubbedActivities,
-      // CommunicationConsentAuditLog is append-only (AllowUpdateAPI=false, AllowDeleteAPI=false); never mutated on erasure.
+      // CommunicationConsentAuditLog is append-only (enforced by trgCommunicationConsentAuditLog_AppendOnly); never mutated on erasure.
       ScrubbedAuditLogs: 0,
     };
   }
@@ -523,12 +521,9 @@ export class CommsActivityWorker {
     if (log.CorrelationData) {
       try {
         const parsed = JSON.parse(log.CorrelationData) as Record<string, unknown>;
-        const sanitized = Object.fromEntries(
-          Object.entries(parsed).filter(([k]) => !k.startsWith('__')),
-        );
-        if (Object.keys(sanitized).length > 0) {
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
           event.CorrelationData = {
-            ...sanitized,
+            ...parsed,
             ...(event.CorrelationData ?? {}),
           };
         }
@@ -1340,19 +1335,23 @@ export class CommsActivityWorker {
       },
       contextUser,
     );
-    if (!res.Success || !res.Results) {
-      return { scrubbedCount: 0, logIDs: [] };
+    if (!res.Success) {
+      throw new Error(`Erasure could not read the endpoint's communication logs: ${res.ErrorMessage ?? 'RunView failed'}`);
     }
 
     let scrubbedCount = 0;
     const logIDs: string[] = [];
     for (const log of res.Results) {
       logIDs.push(log.ID);
-      if (log.RecipientAddress !== null || log.CorrelationData !== null) {
+      if (log.RecipientAddress !== null || log.CorrelationData !== null || log.DeferredPayload !== null) {
         log.RecipientAddress = null;
         log.CorrelationData = null;
+        // A deferred message not yet sent holds its rendered body, which can carry personal data.
+        log.DeferredPayload = null;
         if (await log.Save()) {
           scrubbedCount++;
+        } else {
+          throw new Error(`Erasure could not scrub communication log ${log.ID}: ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
       }
     }
@@ -1372,7 +1371,9 @@ export class CommsActivityWorker {
       },
       contextUser,
     );
-    if (!res.Success || !res.Results) return 0;
+    if (!res.Success) {
+      throw new Error(`Erasure could not read the endpoint's communication activities: ${res.ErrorMessage ?? 'RunView failed'}`);
+    }
 
     let scrubbedCount = 0;
     for (const activity of res.Results) {
@@ -1388,6 +1389,8 @@ export class CommsActivityWorker {
         activity.CorrelationData = null;
         if (await activity.Save()) {
           scrubbedCount++;
+        } else {
+          throw new Error(`Erasure could not scrub communication activity ${activity.ID}: ${activity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
       }
     }

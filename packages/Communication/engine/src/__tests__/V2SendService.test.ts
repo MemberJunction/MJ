@@ -146,7 +146,8 @@ describe('V2SendService chunk fan-out', () => {
     vi.spyOn(CommunicationEngineBase.Instance, 'Providers', 'get').mockReturnValue([
       { ID: 'prov-1', Name: 'SendGrid', RequireVerifiedDomain: false, MessageTypes: [] } as never,
     ]);
-    vi.spyOn(CommunicationEngineBase.Instance, 'StartRun').mockResolvedValue({ ID: 'run-v2-1' } as never);
+    const run = { ID: 'run-v2-1', ChunkCount: null as number | null, DeliveryGuarantee: null as string | null, Save: vi.fn().mockResolvedValue(true) };
+    vi.spyOn(CommunicationEngineBase.Instance, 'StartRun').mockResolvedValue(run as never);
 
     const result = await service.Send(
       {
@@ -171,6 +172,9 @@ describe('V2SendService chunk fan-out', () => {
       { taskType: 'comms.dispatch', count: 2 },
       { taskType: 'comms.dispatch', count: 1 },
     ]);
+    // The chunk count is saved on the run before the first chunk is queued.
+    expect(run.ChunkCount).toBe(3);
+    expect(run.Save).toHaveBeenCalledTimes(1);
   });
 
   it('fails closed on preference lookup error, enforces sender permissions, and blocks Operational on User Unsubscribe in V1 gate', async () => {
@@ -318,7 +322,7 @@ describe('V2SendService chunk fan-out', () => {
     expect(doneClaim.AlreadySent).toBe(true);
   });
 
-  it('defers sends with future Envelope.ScheduledAt to Pending logs with __deferredPayload', async () => {
+  it('defers sends with future Envelope.ScheduledAt to Pending logs', async () => {
     const svc = new V2SendService();
     const svcInternal = svc as unknown as {
       EvaluateEligibility: ReturnType<typeof vi.fn>;

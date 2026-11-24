@@ -7,6 +7,7 @@ import {
   CommunicationEngineBase,
   ComplianceGateResult,
   ComplianceObligations,
+  DeliveryGuarantee,
   EnforcementMode,
   EvaluateEligibilityParams,
   EvaluateEligibilityResult,
@@ -32,6 +33,7 @@ import type {
   MJCommunicationPreferenceEntity,
   MJCommunicationPrincipalEntity,
   MJCommunicationPrincipalPreferenceEntity,
+  MJCommunicationRunChunkEntity,
   MJCommunicationRunEntity,
   MJCommunicationSenderEntity,
   MJCommunicationSenderPermissionEntity,
@@ -456,16 +458,23 @@ export class V2SendService {
     contextUser: UserInfo,
     getProvider: (name: string) => BaseCommunicationProvider,
   ): Promise<SendV2Result> {
+    let result: SendV2Result | undefined;
+    let thrown: unknown;
     try {
-      return await this.sendUnrecorded(params, contextUser, getProvider);
+      result = await this.sendUnrecorded(params, contextUser, getProvider);
+      return result;
+    } catch (err) {
+      thrown = err;
+      throw err;
     } finally {
       // Every exit of a positioned chunk counts toward its run: early pre-send refusals and thrown
       // errors included, or one refused chunk would hold the run open forever. Recorded here and
-      // only here, so no path counts twice (the ledger also ignores a repeated index).
+      // only here; a redelivered chunk updates its existing row instead of adding one.
       if (params.CommunicationRunID && params.RunChunk) {
         await this.RecordRunChunkDone(
           params.CommunicationRunID,
           params.RunChunk,
+          DescribeChunkOutcome(params.Recipients.length, result, thrown),
           CommunicationEngineBase.Instance.ContextUser ?? contextUser,
         );
       }
@@ -632,6 +641,19 @@ export class V2SendService {
     const chunkSize = this.config.ChunkSize ?? DEFAULT_CHUNK_SIZE;
     if (!params.CommunicationRunID && this.config.EnqueueWork && params.Recipients.length > asyncThreshold) {
       const chunkCount = Math.ceil(params.Recipients.length / chunkSize);
+      const prepared = await this.prepareChunkedRun(run, chunkCount, params.Envelope.DeliveryGuarantee);
+      if (!prepared.Success) {
+        return {
+          Success: false,
+          CommunicationRunID: run.ID,
+          IsAsyncRun: false,
+          TotalCount: params.Recipients.length,
+          QueuedCount: 0,
+          BlockedCount: 0,
+          DeferredCount: 0,
+          ErrorMessage: prepared.ErrorMessage,
+        };
+      }
       for (let i = 0; i < params.Recipients.length; i += chunkSize) {
         const chunk = params.Recipients.slice(i, i + chunkSize);
         // ActingUserID makes the worker run the chunk as the caller, not as its own system user,
@@ -1003,9 +1025,7 @@ export class V2SendService {
       log.Status = sendRes.Success ? 'Complete' : 'Failed';
       log.ProviderMessageID = sendRes.ProviderMessageID ?? log.ProviderMessageID;
       log.ErrorMessage = sendRes.Error || null;
-      if (isDryRun) {
-        log.ComplianceDecision = MarkComplianceDecisionAsDryRun(log.ComplianceDecision);
-      }
+      log.IsDryRun = isDryRun;
       const saveErr = await this.saveLogAfterSend(log);
       if (saveErr) {
         // The provider has the message; the log does not say so. The log stays In-Progress, and a
@@ -1787,10 +1807,24 @@ export class V2SendService {
       if (initialStatus === 'Pending') {
         return { Log: existing };
       }
+      let reclaimStale = false;
       if (existing.Status === 'In-Progress') {
-        return this.describeInProgressLog(existing);
+        if (!IsStaleInProgressLog(existing)) {
+          return {
+            FailureReason: 'LogAlreadyInProgress',
+            FailureDetail: `CommunicationLog ${existing.ID} is already In-Progress without a ProviderMessageID`,
+          };
+        }
+        const guarantee = await this.ResolveDeliveryGuarantee(params.Envelope, runID, sender, providerID, contextUser);
+        if (guarantee !== 'At Least Once') {
+          return {
+            FailureReason: 'OutcomeUnknown',
+            FailureDetail: `CommunicationLog ${existing.ID} has been In-Progress for over ${STALE_IN_PROGRESS_MINUTES} minutes without a ProviderMessageID. The provider may already have the message, and the delivery guarantee is ${guarantee}, so it was not resent.`,
+          };
+        }
+        reclaimStale = true;
       }
-      const claimed = await this.tryAtomicClaimLog(existing.ID, contextUser);
+      const claimed = await this.tryAtomicClaimLog(existing.ID, contextUser, reclaimStale);
       if (claimed.Result === 'claimed') {
         existing.Status = 'In-Progress';
         return { Log: existing };
@@ -1843,17 +1877,9 @@ export class V2SendService {
     log.Direction = 'Sending';
     log.Status = initialStatus;
     log.MessageDate = new Date();
-    const deferredPayloadWithFlags =
-      initialStatus === 'Pending' && deferredPayload
-        ? { ...deferredPayload, ...(params.Envelope.DryRun ? { DryRun: true } : {}) }
-        : undefined;
-    const correlationPayload =
-      deferredPayloadWithFlags
-        ? { ...(params.Envelope.CorrelationData ?? {}), __deferredPayload: deferredPayloadWithFlags }
-        : params.Envelope.CorrelationData;
-    log.CorrelationData = correlationPayload
-      ? JSON.stringify(correlationPayload)
-      : null;
+    log.IsDryRun = Boolean(params.Envelope.DryRun);
+    log.DeferredPayload = initialStatus === 'Pending' && deferredPayload ? JSON.stringify(deferredPayload) : null;
+    log.CorrelationData = params.Envelope.CorrelationData ? JSON.stringify(params.Envelope.CorrelationData) : null;
     log.ComplianceDecision = JSON.stringify({
       Decision: target.Decision,
       Obligations: target.Obligations,
@@ -1875,87 +1901,187 @@ export class V2SendService {
   }
 
   /**
-   * Records that one chunk of a run has finished, and ends the run when that was the last chunk.
+   * Records that one chunk of a run has finished, as a `MJ: Communication Run Chunks` row, and ends
+   * the run when every chunk is recorded.
    *
-   * Progress lives in the run's `Comments` as a small JSON ledger of finished chunk indexes, written
-   * by a compare-and-swap UPDATE: two chunks finishing together cannot both win, so the run is ended
-   * exactly once, and a redelivered chunk is not counted twice. (Logs cannot be counted instead:
-   * blocked recipients write none, and recipients sharing an address share one.) Failures are logged
-   * and leave the run open; they never fail the chunk's send.
+   * - A redelivered chunk finds its existing row (unique on run and chunk index) and is not counted
+   *   twice. A chunk that was refused (`Failed`) and later succeeds on a retry has its row updated.
+   * - When the run's `ChunkCount` chunks are recorded, the run's `Status` becomes `Complete`, or
+   *   `Failed` if any chunk was refused, and `EndedAt` is set. Two chunks finishing together may
+   *   both write that same final state, which is harmless.
+   * - Logs cannot be counted instead: blocked recipients write none, and recipients sharing an
+   *   address share one.
+   *
+   * Failures are logged and leave the run open; they never fail the chunk's send.
    *
    * @returns `true` when this call ended the run.
    */
-  public async RecordRunChunkDone(runID: string, chunk: RunChunkPosition, contextUser: UserInfo): Promise<boolean> {
-    const provider = CommunicationEngineBase.Instance.ProviderToUse;
-    if (!isSqlCapableProvider(provider)) {
-      LogError(`V2SendService: cannot record chunk progress for run ${runID} without ExecuteSQL; the run stays open`);
+  public async RecordRunChunkDone(
+    runID: string,
+    chunk: RunChunkPosition,
+    outcome: RunChunkOutcome,
+    contextUser: UserInfo,
+  ): Promise<boolean> {
+    try {
+      const recorded = await this.upsertRunChunk(runID, chunk, outcome, contextUser);
+      if (!recorded) return false;
+      return await this.endRunIfAllChunksRecorded(runID, chunk.Count, contextUser);
+    } catch (err) {
+      LogError(`V2SendService: failed recording chunk ${chunk.Index} of run ${runID}: ${err instanceof Error ? err.message : String(err)}`);
       return false;
     }
-    const schema = provider.MJCoreSchemaName ?? '__mj';
-    for (let attempt = 1; attempt <= MAX_RUN_LEDGER_ATTEMPTS; attempt++) {
-      try {
-        const step = await this.tryAdvanceRunLedger(provider, schema, runID, chunk, contextUser);
-        if (step !== 'conflict') return step === 'ended';
-      } catch (err) {
-        LogError(`V2SendService: failed recording chunk ${chunk.Index} of run ${runID}: ${err instanceof Error ? err.message : String(err)}`);
-        return false;
-      }
+  }
+
+  /** Creates or updates the chunk's row. Returns false (already logged) when it could not be saved. */
+  private async upsertRunChunk(
+    runID: string,
+    chunk: RunChunkPosition,
+    outcome: RunChunkOutcome,
+    contextUser: UserInfo,
+  ): Promise<boolean> {
+    const existing = await this.loadRunChunk(runID, chunk.Index, contextUser);
+    if (existing) {
+      if (existing.Status === 'Complete' || outcome.Status === 'Failed') return true;
+      return this.saveRunChunk(existing, outcome, runID, chunk);
     }
-    LogError(`V2SendService: gave up recording chunk ${chunk.Index} of run ${runID} after ${MAX_RUN_LEDGER_ATTEMPTS} conflicting updates`);
+    const md = CommunicationEngineBase.Instance.ProviderToUse;
+    const row = await md.GetEntityObject<MJCommunicationRunChunkEntity>('MJ: Communication Run Chunks', contextUser);
+    row.CommunicationRunID = runID;
+    row.ChunkIndex = chunk.Index;
+    if (await this.saveRunChunk(row, outcome, runID, chunk)) return true;
+    // Lost a race with a concurrent redelivery of the same chunk: its row now exists.
+    return (await this.loadRunChunk(runID, chunk.Index, contextUser)) !== undefined;
+  }
+
+  private async saveRunChunk(
+    row: MJCommunicationRunChunkEntity,
+    outcome: RunChunkOutcome,
+    runID: string,
+    chunk: RunChunkPosition,
+  ): Promise<boolean> {
+    row.Status = outcome.Status;
+    row.RecipientCount = outcome.RecipientCount;
+    row.ErrorMessage = outcome.ErrorMessage ?? null;
+    row.CompletedAt = new Date();
+    if (await row.Save()) return true;
+    LogError(`V2SendService: failed saving chunk ${chunk.Index} of run ${runID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     return false;
   }
 
-  private async tryAdvanceRunLedger(
-    provider: SqlCapableProvider,
-    schema: string,
+  private async loadRunChunk(
     runID: string,
-    chunk: RunChunkPosition,
+    chunkIndex: number,
     contextUser: UserInfo,
-  ): Promise<'recorded' | 'ended' | 'unchanged' | 'conflict'> {
-    const rows = await provider.ExecuteSQL<{ Status: string; Comments: string | null }>(
-      `SELECT Status, Comments FROM [${schema}].[CommunicationRun] WHERE ID = @p0`,
-      [runID],
-      { description: 'V2SendService.readRunLedger' },
+  ): Promise<MJCommunicationRunChunkEntity | undefined> {
+    const res = await this.getRunView().RunView<MJCommunicationRunChunkEntity>(
+      {
+        EntityName: 'MJ: Communication Run Chunks',
+        ExtraFilter: `CommunicationRunID='${EscapeSQLString(runID)}' AND ChunkIndex=${Math.trunc(chunkIndex)}`,
+        MaxRows: 1,
+        ResultType: 'entity_object',
+        BypassCache: true,
+      },
       contextUser,
     );
-    if (rows.length === 0) throw new Error('run not found');
-    const current = rows[0];
-    if (current.Status === 'Complete' || current.Status === 'Failed') return 'unchanged';
-    const next = AdvanceRunChunkLedger(current.Comments, chunk);
-    if (!next) return 'unchanged';
-    const updated = await provider.ExecuteSQL<{ ID: string }>(
-      `UPDATE [${schema}].[CommunicationRun]
-       SET Comments = @p1, Status = @p2, EndedAt = CASE WHEN @p2 = 'Complete' THEN GETUTCDATE() ELSE EndedAt END,
-           __mj_UpdatedAt = GETUTCDATE()
-       OUTPUT INSERTED.ID
-       WHERE ID = @p0 AND Status = @p3 AND ((Comments IS NULL AND @p4 IS NULL) OR Comments = @p4)`,
-      [runID, next.Comments, next.Complete ? 'Complete' : 'In-Progress', current.Status, current.Comments],
-      { isMutation: true, description: 'V2SendService.advanceRunLedger' },
+    if (!res.Success) throw new Error(res.ErrorMessage || 'Failed loading the communication run chunk');
+    return res.Results[0];
+  }
+
+  /** Ends the run when every chunk is recorded. Returns true when this call changed the run. */
+  private async endRunIfAllChunksRecorded(runID: string, chunkCount: number, contextUser: UserInfo): Promise<boolean> {
+    const rv = this.getRunView();
+    const [runRes, chunksRes] = await rv.RunViews(
+      [
+        {
+          EntityName: 'MJ: Communication Runs',
+          ExtraFilter: `ID='${EscapeSQLString(runID)}'`,
+          MaxRows: 1,
+          ResultType: 'entity_object',
+          BypassCache: true,
+        },
+        {
+          EntityName: 'MJ: Communication Run Chunks',
+          ExtraFilter: `CommunicationRunID='${EscapeSQLString(runID)}'`,
+          Fields: ['ID', 'Status'],
+          ResultType: 'simple',
+          IgnoreMaxRows: true,
+          BypassCache: true,
+        },
+      ],
       contextUser,
     );
-    if (updated.length === 0) return 'conflict';
-    return next.Complete ? 'ended' : 'recorded';
+    if (!runRes.Success || !chunksRes.Success) {
+      throw new Error(runRes.ErrorMessage || chunksRes.ErrorMessage || 'Failed loading run progress');
+    }
+    const run = runRes.Results[0] as MJCommunicationRunEntity | undefined;
+    if (!run) throw new Error('run not found');
+    const chunks = chunksRes.Results as Array<{ ID: string; Status: MJCommunicationRunChunkEntity['Status'] }>;
+    const expected = run.ChunkCount ?? chunkCount;
+    if (chunks.length < expected) return false;
+    const finalStatus: MJCommunicationRunEntity['Status'] = chunks.some((c) => c.Status === 'Failed') ? 'Failed' : 'Complete';
+    if (run.Status === finalStatus && run.EndedAt) return false;
+    run.Status = finalStatus;
+    run.EndedAt = run.EndedAt ?? new Date();
+    if (run.ChunkCount == null) run.ChunkCount = expected;
+    if (await run.Save()) return true;
+    throw new Error(run.LatestResult?.CompleteMessage || 'Failed ending the communication run');
   }
 
   /**
-   * An In-Progress log with no ProviderMessageID is never sent again from here. If it is fresh,
-   * another worker holds it. If it is stale, the worker died or its post-send save failed: the
-   * provider may already have the message, so the outcome is unknown and resending could deliver
-   * it twice. It is left for reconciliation (a provider event carrying `mj_log_id` settles it).
+   * Stores the chunk count (and the envelope's delivery guarantee, when it sets one) on a run before
+   * its chunks are queued, so the last chunk knows when the run is finished.
    */
-  private describeInProgressLog(existing: MJCommunicationLogEntity): { FailureReason: string; FailureDetail: string } {
-    const updatedAtMs = existing.__mj_UpdatedAt ? new Date(existing.__mj_UpdatedAt).getTime() : NaN;
-    const isStale = Number.isFinite(updatedAtMs) && Date.now() - updatedAtMs > STALE_IN_PROGRESS_MS;
-    if (isStale) {
-      return {
-        FailureReason: 'OutcomeUnknown',
-        FailureDetail: `CommunicationLog ${existing.ID} has been In-Progress for over ${STALE_IN_PROGRESS_MS / 60000} minutes without a ProviderMessageID; not resent because the provider may already have it`,
-      };
-    }
+  private async prepareChunkedRun(
+    run: MJCommunicationRunEntity,
+    chunkCount: number,
+    deliveryGuarantee: DeliveryGuarantee | undefined,
+  ): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    run.ChunkCount = chunkCount;
+    if (deliveryGuarantee) run.DeliveryGuarantee = deliveryGuarantee;
+    if (await run.Save()) return { Success: true };
     return {
-      FailureReason: 'LogAlreadyInProgress',
-      FailureDetail: `CommunicationLog ${existing.ID} is already In-Progress without a ProviderMessageID`,
+      Success: false,
+      ErrorMessage: `Failed to record the chunk count on communication run ${run.ID}: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`,
     };
+  }
+
+  /**
+   * Resolves the delivery guarantee for a send: the envelope's, then the run's, then the sender's
+   * and its ancestors' (nearest first), then the provider's, then {@link DEFAULT_DELIVERY_GUARANTEE}.
+   * A lookup that fails resolves to At Most Once, the setting that never sends twice.
+   */
+  public async ResolveDeliveryGuarantee(
+    envelope: SendingEnvelope,
+    runID: string | undefined,
+    sender: MJCommunicationSenderEntity,
+    providerID: string,
+    contextUser: UserInfo,
+  ): Promise<DeliveryGuarantee> {
+    if (envelope.DeliveryGuarantee) return envelope.DeliveryGuarantee;
+    try {
+      const runGuarantee = runID ? await this.loadRunDeliveryGuarantee(runID, contextUser) : null;
+      const chain = await this.loadSenderAncestry(sender, contextUser);
+      const provider = CommunicationEngineBase.Instance.Providers.find((p) => UUIDsEqual(p.ID, providerID));
+      return PickDeliveryGuarantee([runGuarantee, ...chain.map((c) => c.DeliveryGuarantee), provider?.DeliveryGuarantee]);
+    } catch (err) {
+      LogError(`V2SendService: could not resolve the delivery guarantee; using At Most Once: ${err instanceof Error ? err.message : String(err)}`);
+      return 'At Most Once';
+    }
+  }
+
+  private async loadRunDeliveryGuarantee(runID: string, contextUser: UserInfo): Promise<DeliveryGuarantee | null> {
+    const res = await this.getRunView().RunView<{ ID: string; DeliveryGuarantee: DeliveryGuarantee | null }>(
+      {
+        EntityName: 'MJ: Communication Runs',
+        ExtraFilter: `ID='${EscapeSQLString(runID)}'`,
+        Fields: ['ID', 'DeliveryGuarantee'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (!res.Success) throw new Error(res.ErrorMessage || 'Failed loading the communication run');
+    return res.Results[0]?.DeliveryGuarantee ?? null;
   }
 
   private getRunView(): RunView {
@@ -2205,11 +2331,13 @@ export class V2SendService {
 
     for (const log of claimedLogs) {
       try {
-        const { payload, dryRun, userCorrelationData } = parseDeferredCorrelationData(log.CorrelationData);
+        const payload = parseDeferredPayload(log.DeferredPayload);
+        const dryRun = log.IsDryRun;
+        const correlationData = parseCorrelationData(log.CorrelationData);
         if (!payload || !log.CommunicationSenderID || !log.RecipientAddress) {
           log.Status = 'Failed';
           log.ErrorMessage = 'Deferred log is missing payload, sender, or recipient address';
-          log.CorrelationData = userCorrelationData ? JSON.stringify(userCorrelationData) : null;
+          log.DeferredPayload = null;
           await saveLogChecked(log, 'invalid-payload');
           failed++;
           continue;
@@ -2222,7 +2350,7 @@ export class V2SendService {
         if (!sender || !providerEntity) {
           log.Status = 'Failed';
           log.ErrorMessage = 'Deferred log sender or provider no longer exists';
-          log.CorrelationData = userCorrelationData ? JSON.stringify(userCorrelationData) : null;
+          log.DeferredPayload = null;
           await saveLogChecked(log, 'missing-sender-or-provider');
           failed++;
           continue;
@@ -2235,7 +2363,7 @@ export class V2SendService {
         if (!channelID) {
           log.Status = 'Failed';
           log.ErrorMessage = 'Unable to resolve channel for deferred communication log';
-          log.CorrelationData = userCorrelationData ? JSON.stringify(userCorrelationData) : null;
+          log.DeferredPayload = null;
           await saveLogChecked(log, 'missing-channel');
           failed++;
           continue;
@@ -2248,7 +2376,7 @@ export class V2SendService {
           PreferenceID: log.CommunicationPreferenceID ?? undefined,
           MessageClass: (log.MessageClass as MessageClass) ?? 'Operational',
           DryRun: dryRun || undefined,
-          CorrelationData: userCorrelationData,
+          CorrelationData: correlationData,
         };
         const recipient = {
           Principal: log.EntityID && log.RecordID ? { EntityID: log.EntityID, RecordID: log.RecordID } : undefined,
@@ -2263,7 +2391,7 @@ export class V2SendService {
           const block = eligibility.Blocked[0];
           log.Status = 'Failed';
           log.ErrorMessage = block?.Detail ?? block?.Reason ?? 'Blocked during scheduled dispatch';
-          log.CorrelationData = userCorrelationData ? JSON.stringify(userCorrelationData) : null;
+          log.DeferredPayload = null;
           await saveLogChecked(log, 'eligibility-blocked');
           failed++;
           continue;
@@ -2281,8 +2409,8 @@ export class V2SendService {
         const provider = getProvider(providerEntity.Name);
         const senderCredentials = await this.resolveSenderCredentials(sender, bookkeepingUser);
 
-        // Scrub internal __deferredPayload before dispatch so rendered body is not retained in CorrelationData
-        log.CorrelationData = userCorrelationData ? JSON.stringify(userCorrelationData) : null;
+        // Clear the stored body before dispatch so the rendered message is not kept on the log.
+        log.DeferredPayload = null;
 
         const outcome = await this.dispatchSingleRecipient(
           {
@@ -2326,12 +2454,15 @@ export class V2SendService {
 
   /**
    * Claims a Pending or Failed log for sending with one conditional UPDATE, so two workers cannot
-   * both win. There is no fallback: without `ExecuteSQL` a claim would be read-then-write, which
-   * cannot exclude a concurrent sender, so the claim fails and nothing is sent.
+   * both win. With `reclaimStale` (delivery guarantee At Least Once) it may also take over a log
+   * stuck In-Progress, with no ProviderMessageID, for longer than {@link STALE_IN_PROGRESS_MINUTES}.
+   * There is no fallback: without `ExecuteSQL` a claim would be read-then-write, which cannot
+   * exclude a concurrent sender, so the claim fails and nothing is sent.
    */
   private async tryAtomicClaimLog(
     logId: string,
     contextUser: UserInfo,
+    reclaimStale = false,
   ): Promise<{ Result: 'claimed' | 'already-claimed' | 'failed'; Detail?: string }> {
     const provider = CommunicationEngineBase.Instance.ProviderToUse;
     if (!isSqlCapableProvider(provider)) {
@@ -2340,11 +2471,18 @@ export class V2SendService {
     const schema = provider.MJCoreSchemaName ?? '__mj';
     try {
       const rows = await provider.ExecuteSQL<{ ID: string }>(
-        `UPDATE [${schema}].[CommunicationLog]
+        // OUTPUT goes INTO a table variable: CommunicationLog has CodeGen's update trigger, and
+        // SQL Server refuses a bare OUTPUT clause on a table with an enabled trigger.
+        `DECLARE @Claimed TABLE (ID UNIQUEIDENTIFIER);
+         UPDATE [${schema}].[CommunicationLog]
          SET Status = 'In-Progress', __mj_UpdatedAt = GETUTCDATE()
-         OUTPUT INSERTED.ID
-         WHERE ID = @p0 AND Status IN ('Pending', 'Failed')`,
-        [logId],
+         OUTPUT INSERTED.ID INTO @Claimed
+         WHERE ID = @p0
+           AND (Status IN ('Pending', 'Failed')
+                OR (@p1 = 1 AND Status = 'In-Progress' AND ProviderMessageID IS NULL
+                    AND __mj_UpdatedAt < DATEADD(MINUTE, -@p2, GETUTCDATE())));
+         SELECT ID FROM @Claimed;`,
+        [logId, reclaimStale ? 1 : 0, STALE_IN_PROGRESS_MINUTES],
         { isMutation: true, description: 'V2SendService.tryAtomicClaimLog' },
         contextUser,
       );
@@ -2363,7 +2501,9 @@ export class V2SendService {
     if (isSqlCapableProvider(provider)) {
       const schema = provider.MJCoreSchemaName ?? '__mj';
       const claimedIds = await provider.ExecuteSQL<{ ID: string }>(
-        `;WITH Due AS (
+        // OUTPUT INTO a table variable for the same trigger reason as tryAtomicClaimLog.
+        `DECLARE @Claimed TABLE (ID UNIQUEIDENTIFIER);
+         WITH Due AS (
            SELECT TOP (@p0) ID
            FROM [${schema}].[CommunicationLog]
            WHERE Status = 'Pending' AND ScheduledAt IS NOT NULL AND ScheduledAt <= GETUTCDATE() AND Direction = 'Sending'
@@ -2371,9 +2511,10 @@ export class V2SendService {
          )
          UPDATE target
          SET Status = 'In-Progress', __mj_UpdatedAt = GETUTCDATE()
-         OUTPUT INSERTED.ID
+         OUTPUT INSERTED.ID INTO @Claimed
          FROM [${schema}].[CommunicationLog] target
-         INNER JOIN Due ON target.ID = Due.ID`,
+         INNER JOIN Due ON target.ID = Due.ID;
+         SELECT ID FROM @Claimed;`,
         [batchSize],
         { isMutation: true, description: 'V2SendService.claimDueDeferredLogs' },
         bookkeepingUser,
@@ -2403,7 +2544,33 @@ export class V2SendService {
   }
 }
 
-const STALE_IN_PROGRESS_MS = 15 * 60 * 1000;
+/**
+ * Minutes a log may stay In-Progress with no ProviderMessageID before it is treated as stuck: its
+ * worker died, or saving the log failed after the provider call, so the send's outcome is unknown.
+ */
+const STALE_IN_PROGRESS_MINUTES = 15;
+
+/** Delivery guarantee used when no envelope, run, sender or provider sets one. */
+export const DEFAULT_DELIVERY_GUARANTEE: DeliveryGuarantee = 'At Most Once';
+
+/** True when an In-Progress log with no ProviderMessageID has been stuck past the stale threshold. */
+export function IsStaleInProgressLog(log: MJCommunicationLogEntity, now: number = Date.now()): boolean {
+  const updatedAtMs = log.__mj_UpdatedAt ? new Date(log.__mj_UpdatedAt).getTime() : NaN;
+  return Number.isFinite(updatedAtMs) && now - updatedAtMs > STALE_IN_PROGRESS_MINUTES * 60_000;
+}
+
+/**
+ * Returns the first delivery guarantee that is set, in precedence order (envelope, run, sender,
+ * ancestor senders nearest first, provider), or {@link DEFAULT_DELIVERY_GUARANTEE}.
+ */
+export function PickDeliveryGuarantee(
+  candidates: ReadonlyArray<DeliveryGuarantee | null | undefined>,
+): DeliveryGuarantee {
+  for (const candidate of candidates) {
+    if (candidate) return candidate;
+  }
+  return DEFAULT_DELIVERY_GUARANTEE;
+}
 /**
  * Picks the principal-preference row that governs a send, from rows for the sending sender, its
  * ancestors (`senderChainIds[0]` is the sender itself) and sender-less rows.
@@ -2433,60 +2600,40 @@ export function PickEffectivePrincipalPreference(
 
 /** Attempts to record a send's result on its log before giving up (see `saveLogAfterSend`). */
 const MAX_POST_SEND_SAVE_ATTEMPTS = 3;
-/** Compare-and-swap attempts when recording a finished chunk on its run (see `RecordRunChunkDone`). */
-const MAX_RUN_LEDGER_ATTEMPTS = 10;
-/** Key of the chunk-progress ledger inside `CommunicationRun.Comments`. */
-const RUN_LEDGER_KEY = 'ChunkProgress';
+/** What a chunk did, as recorded on its `MJ: Communication Run Chunks` row. */
+export interface RunChunkOutcome {
+  Status: MJCommunicationRunChunkEntity['Status'];
+  RecipientCount: number;
+  ErrorMessage?: string;
+}
 
 /**
- * Pure step of the run chunk ledger: adds `chunk.Index` to the finished set held in a run's
- * `Comments`. Returns `undefined` when the chunk was already recorded (a redelivery), else the new
- * `Comments` text and whether every chunk has now finished. A `Comments` value that is not the
- * ledger is kept under `Note` so nothing an operator wrote is lost.
+ * Describes a finished chunk from its send result. A chunk is `Failed` only when it was refused
+ * before any recipient was processed (a pre-send check failed, or the send threw); a chunk whose
+ * recipients were individually blocked or failed is still `Complete`.
  */
-export function AdvanceRunChunkLedger(
-  comments: string | null,
-  chunk: RunChunkPosition,
-): { Comments: string; Complete: boolean } | undefined {
-  let doc: Record<string, unknown> = {};
-  if (comments) {
-    try {
-      const parsed: unknown = JSON.parse(comments);
-      doc = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : { Note: comments };
-    } catch {
-      doc = { Note: comments };
-    }
+export function DescribeChunkOutcome(
+  recipientCount: number,
+  result: SendV2Result | undefined,
+  thrown: unknown,
+): RunChunkOutcome {
+  if (thrown !== undefined) {
+    return { Status: 'Failed', RecipientCount: recipientCount, ErrorMessage: thrown instanceof Error ? thrown.message : String(thrown) };
   }
-  const prior = doc[RUN_LEDGER_KEY] as { Count?: number; Done?: number[] } | undefined;
-  const done = new Set<number>(Array.isArray(prior?.Done) ? prior.Done : []);
-  if (done.has(chunk.Index)) return undefined;
-  done.add(chunk.Index);
-  const count = Math.max(chunk.Count, prior?.Count ?? 0);
-  const ledger = { Count: count, Done: [...done].sort((a, b) => a - b) };
-  return { Comments: JSON.stringify({ ...doc, [RUN_LEDGER_KEY]: ledger }), Complete: ledger.Done.length >= count };
+  if (!result) {
+    return { Status: 'Failed', RecipientCount: recipientCount, ErrorMessage: 'The chunk returned no result' };
+  }
+  // An inline chunk that reached its recipients always reports per-recipient Outcomes; a pre-send
+  // refusal reports none (and counts every recipient as blocked), so the counts cannot be used here.
+  const processed = (result.Outcomes?.length ?? 0) > 0;
+  if (!result.Success && !processed) {
+    return { Status: 'Failed', RecipientCount: recipientCount, ErrorMessage: result.ErrorMessage ?? 'The chunk was refused' };
+  }
+  return { Status: 'Complete', RecipientCount: recipientCount };
 }
 
 /** Endpoint IDs per `IN (...)` list when preloading a run's logs. */
 const RUN_LOG_ENDPOINT_CHUNK = 200;
-
-/**
- * Adds `DryRun: true` to a log's `ComplianceDecision` JSON. A dry run has no status of its own on
- * the log (no schema change), so this marker is how a reader tells it from a delivered message.
- */
-export function MarkComplianceDecisionAsDryRun(raw: string | null): string {
-  let parsed: Record<string, unknown> = {};
-  if (raw) {
-    try {
-      const value: unknown = JSON.parse(raw);
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        parsed = value as Record<string, unknown>;
-      }
-    } catch {
-      parsed = { Original: raw };
-    }
-  }
-  return JSON.stringify({ ...parsed, DryRun: true });
-}
 
 interface SqlCapableProvider {
   MJCoreSchemaName?: string;
@@ -2507,23 +2654,24 @@ function isSqlCapableProvider(provider: unknown): provider is SqlCapableProvider
   );
 }
 
-function parseDeferredCorrelationData(raw: string | null | undefined): {
-  payload?: MessagePayload;
-  dryRun?: boolean;
-  userCorrelationData?: Record<string, string>;
-} {
-  if (!raw) return {};
+/** Reads a deferred log's stored message. Undefined when it is missing or not valid JSON. */
+function parseDeferredPayload(raw: string | null | undefined): MessagePayload | undefined {
+  if (!raw) return undefined;
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object') return {};
-    const deferred = parsed.__deferredPayload as (MessagePayload & { DryRun?: boolean }) | undefined;
-    const userEntries = Object.entries(parsed).filter(([k, v]) => k !== '__deferredPayload' && typeof v === 'string');
-    return {
-      payload: deferred,
-      dryRun: Boolean(deferred?.DryRun),
-      userCorrelationData: userEntries.length > 0 ? (Object.fromEntries(userEntries) as Record<string, string>) : undefined,
-    };
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as MessagePayload) : undefined;
   } catch {
-    return {};
+    return undefined;
+  }
+}
+
+/** Reads a log's caller correlation data back into the object the caller passed. */
+function parseCorrelationData(raw: string | null | undefined): Record<string, unknown> | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
   }
 }

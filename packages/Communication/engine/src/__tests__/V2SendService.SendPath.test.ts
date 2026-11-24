@@ -447,7 +447,9 @@ describe('V2SendService.Send — deferral and scheduling', () => {
     expect(log?.Status).toBe('Pending');
     expect(log?.ScheduledAt).toEqual(outcome?.DeferUntil);
     expect(SameID(outcome?.CommunicationLogID, String(log?.ID))).toBe(true);
-    expect(JSON.parse(String(log?.CorrelationData)).__deferredPayload).toMatchObject({ Subject: 'Hello', Body: 'Hi there' });
+    // The rendered message waits in its own column; CorrelationData holds only the caller's data.
+    expect(JSON.parse(String(log?.DeferredPayload))).toMatchObject({ Subject: 'Hello', Body: 'Hi there' });
+    expect(log?.CorrelationData ?? null).toBeNull();
   });
 
   it('holds a future-scheduled send until it is due, then the sweep sends it exactly once', async () => {
@@ -849,16 +851,71 @@ describe('V2SendService.Send — Save() failures', () => {
     expect(logFor(alice)?.Status).toBe('Complete');
   });
 
-  it('reports a stale In-Progress log as OutcomeUnknown and never resends it', async () => {
-    const alice = SeedEndpoint(db, 'alice@example.com');
-    const run = SeedRun(db);
-    seedLog(run, alice, { Status: 'In-Progress', __mj_UpdatedAt: new Date(Date.now() - 60 * 60 * 1000) });
+  describe('delivery guarantee for a log stuck In-Progress', () => {
+    const STALE = (): Date => new Date(Date.now() - 60 * 60 * 1000);
 
-    const result = await send([toAddress('alice@example.com')], envelope('Operational'), String(run.ID));
+    it('At Most Once (the default): reports OutcomeUnknown and never calls the provider', async () => {
+      const alice = SeedEndpoint(db, 'alice@example.com');
+      const run = SeedRun(db);
+      seedLog(run, alice, { Status: 'In-Progress', __mj_UpdatedAt: STALE() });
 
-    expect(provider.Attempts).toHaveLength(0);
-    expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Failed', Reason: 'OutcomeUnknown' });
-    expect(logFor(alice)?.Status).toBe('In-Progress');
+      const result = await send([toAddress('alice@example.com')], envelope('Operational'), String(run.ID));
+
+      expect(provider.Attempts).toHaveLength(0);
+      expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Failed', Reason: 'OutcomeUnknown' });
+      expect(result.Outcomes?.[0].Detail).toContain('At Most Once');
+      expect(logFor(alice)?.Status).toBe('In-Progress');
+    });
+
+    it('At Least Once on the provider: reclaims the stale log atomically and sends it exactly once', async () => {
+      arrange({ ProviderDeliveryGuarantee: 'At Least Once' });
+      const alice = SeedEndpoint(db, 'alice@example.com');
+      const run = SeedRun(db);
+      seedLog(run, alice, { Status: 'In-Progress', __mj_UpdatedAt: STALE() });
+
+      const result = await send([toAddress('alice@example.com')], envelope('Operational'), String(run.ID));
+      const again = await send([toAddress('alice@example.com')], envelope('Operational'), String(run.ID));
+
+      expect(provider.Attempts).toHaveLength(1);
+      expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Sent' });
+      // The repeat finds the log Complete and reports it without calling the provider again.
+      expect(again.Outcomes).toHaveLength(1);
+      expect(logFor(alice)?.Status).toBe('Complete');
+      expect(db.ExecuteSQLCalls.filter((c) => c === 'V2SendService.tryAtomicClaimLog')).toHaveLength(1);
+    });
+
+    it('At Least Once on the envelope overrides an At Most Once provider', async () => {
+      const alice = SeedEndpoint(db, 'alice@example.com');
+      const run = SeedRun(db);
+      seedLog(run, alice, { Status: 'In-Progress', __mj_UpdatedAt: STALE() });
+
+      const result = await send(
+        [toAddress('alice@example.com')],
+        envelope('Operational', { DeliveryGuarantee: 'At Least Once' }),
+        String(run.ID),
+      );
+
+      expect(provider.Attempts).toHaveLength(1);
+      expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Sent' });
+    });
+
+    it.each(['At Most Once', 'At Least Once'] as const)(
+      'a fresh In-Progress log is LogAlreadyInProgress under %s',
+      async (guarantee) => {
+        const alice = SeedEndpoint(db, 'alice@example.com');
+        const run = SeedRun(db);
+        seedLog(run, alice, { Status: 'In-Progress', __mj_UpdatedAt: new Date() });
+
+        const result = await send(
+          [toAddress('alice@example.com')],
+          envelope('Operational', { DeliveryGuarantee: guarantee }),
+          String(run.ID),
+        );
+
+        expect(provider.Attempts).toHaveLength(0);
+        expect(result.Outcomes?.[0]).toMatchObject({ Status: 'Failed', Reason: 'LogAlreadyInProgress' });
+      },
+    );
   });
 
   it('reports PostSendLogSaveFailed when the result cannot be recorded, and a retry does not send twice', async () => {
@@ -936,22 +993,70 @@ describe('V2SendService.Send — runs split into chunks', () => {
     );
   }
 
+  const RUN_CHUNKS = 'MJ: Communication Run Chunks';
+  const runRow = (run: FakeRow): FakeRow | undefined => db.Rows(ENTITY.Runs).find((r) => SameID(String(r.ID), String(run.ID)));
+  const chunkRows = (run: FakeRow): FakeRow[] =>
+    db.Rows(RUN_CHUNKS).filter((r) => SameID(String(r.CommunicationRunID), String(run.ID)));
+
   it('leaves a passed-in run open until its last chunk finishes, then ends it once', async () => {
     for (const a of ['a@example.com', 'b@example.com', 'c@example.com']) SeedEndpoint(db, a);
-    const run = SeedRun(db);
-    const runRow = (): FakeRow | undefined => db.Rows(ENTITY.Runs).find((r) => SameID(String(r.ID), String(run.ID)));
+    const run = SeedRun(db, { ChunkCount: 3 });
 
     await sendChunk('c@example.com', run, 2, 3);
-    expect(runRow()?.Status).toBe('In-Progress');
+    expect(runRow(run)?.EndedAt ?? null).toBeNull();
     await sendChunk('a@example.com', run, 0, 3);
     await sendChunk('a@example.com', run, 0, 3); // redelivered chunk: not counted twice
-    expect(runRow()?.Status).toBe('In-Progress');
-    expect(runRow()?.EndedAt ?? null).toBeNull();
+    expect(chunkRows(run)).toHaveLength(2);
+    expect(runRow(run)?.Status).toBe('Pending');
+    expect(runRow(run)?.EndedAt ?? null).toBeNull();
 
     await sendChunk('b@example.com', run, 1, 3);
-    expect(runRow()?.Status).toBe('Complete');
-    expect(runRow()?.EndedAt).toBeInstanceOf(Date);
+    expect(chunkRows(run).map((c) => c.ChunkIndex).sort()).toEqual([0, 1, 2]);
+    expect(chunkRows(run).every((c) => c.Status === 'Complete')).toBe(true);
+    expect(runRow(run)?.Status).toBe('Complete');
+    expect(runRow(run)?.EndedAt).toBeInstanceOf(Date);
     expect(provider.Attempts).toHaveLength(3);
+  });
+
+  it('a chunk refused and then redelivered successfully flips its row and the run to Complete', async () => {
+    SeedEndpoint(db, 'a@example.com');
+    const run = SeedRun(db, { ChunkCount: 1 });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const chunk = (senderID: string) =>
+      service.Send(
+        {
+          Envelope: envelope('Operational', { SenderID: senderID }),
+          Payload: PAYLOAD,
+          Recipients: [toAddress('a@example.com')],
+          CommunicationRunID: String(run.ID),
+          RunChunk: { Index: 0, Count: 1 },
+        },
+        users.CallerUser,
+        () => provider.AsProvider(),
+      );
+
+    await chunk('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    expect(chunkRows(run)).toMatchObject([{ Status: 'Failed', ErrorMessage: 'Sender not found' }]);
+    expect(runRow(run)?.Status).toBe('Failed');
+
+    await chunk(IDS.Sender);
+    expect(chunkRows(run)).toHaveLength(1);
+    expect(chunkRows(run)[0].Status).toBe('Complete');
+    expect(runRow(run)?.Status).toBe('Complete');
+  });
+
+  it('counts a chunk that lost a save race to a concurrent redelivery as recorded', async () => {
+    SeedEndpoint(db, 'a@example.com');
+    const run = SeedRun(db, { ChunkCount: 1 });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    db.OnceBeforeSave(RUN_CHUNKS, () => {
+      db.Seed(RUN_CHUNKS, { CommunicationRunID: run.ID, ChunkIndex: 0, Status: 'Complete', RecipientCount: 1, CompletedAt: new Date() });
+    });
+
+    await sendChunk('a@example.com', run, 0, 1);
+
+    expect(chunkRows(run)).toHaveLength(1);
+    expect(runRow(run)?.Status).toBe('Complete');
   });
 
   it('counts a chunk that Send() refuses before sending, and one that throws, so the run still ends', async () => {
@@ -978,11 +1083,15 @@ describe('V2SendService.Send — runs split into chunks', () => {
       }),
     ).rejects.toThrow('provider unavailable');
     await chunk(0, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', () => provider.AsProvider()); // redelivered: not counted twice
-    expect(db.Rows(ENTITY.Runs)[0].Status).toBe('In-Progress');
+    expect(chunkRows(run)).toHaveLength(2);
+    expect(db.Rows(ENTITY.Runs)[0].EndedAt ?? null).toBeNull();
     await chunk(2, IDS.Sender, () => provider.AsProvider());
 
     expect(refused).toMatchObject({ Success: false, ErrorMessage: 'Sender not found' });
-    expect(db.Rows(ENTITY.Runs)[0].Status).toBe('Complete');
+    expect(chunkRows(run).find((c) => c.ChunkIndex === 1)).toMatchObject({ Status: 'Failed', ErrorMessage: 'provider unavailable' });
+    // Every chunk is recorded, but two were refused, so the run ends Failed.
+    expect(db.Rows(ENTITY.Runs)[0].Status).toBe('Failed');
+    expect(db.Rows(ENTITY.Runs)[0].EndedAt).toBeInstanceOf(Date);
     expect(provider.Attempts).toHaveLength(1);
   });
 
@@ -1004,6 +1113,30 @@ describe('V2SendService.Send — runs split into chunks', () => {
     expect(result.IsAsyncRun).toBe(true);
     expect(published.map((p) => p.RunChunk)).toEqual([{ Index: 0, Count: 3 }, { Index: 1, Count: 3 }, { Index: 2, Count: 3 }]);
     expect(published.every((p) => p.ActingUserID === users.CallerUser.ID)).toBe(true);
+    // The run knows its chunk count before any chunk can finish.
+    expect(db.Rows(ENTITY.Runs).find((r) => SameID(String(r.ID), String(result.CommunicationRunID)))?.ChunkCount).toBe(3);
+  });
+
+  it('stores an envelope delivery guarantee on a chunked run', async () => {
+    service.Configure({ AsyncThreshold: 2, ChunkSize: 2, EnqueueWork: async () => undefined });
+
+    const result = await send(
+      ['a', 'b', 'c'].map((x) => toAddress(`${x}@example.com`)),
+      envelope('Operational', { DeliveryGuarantee: 'At Least Once' }),
+    );
+
+    expect(db.Rows(ENTITY.Runs).find((r) => SameID(String(r.ID), String(result.CommunicationRunID)))?.DeliveryGuarantee).toBe('At Least Once');
+  });
+
+  it('marks a dry-run log with IsDryRun and does not count it as sent', async () => {
+    const alice = SeedEndpoint(db, 'alice@example.com');
+
+    const result = await send([toAddress('alice@example.com')], envelope('Operational', { DryRun: true }));
+
+    expect(result.Outcomes?.[0].Status).toBe('DryRun');
+    expect(result.QueuedCount).toBe(0);
+    expect(logFor(alice)?.IsDryRun).toBe(true);
+    expect(logFor(alice)?.Status).toBe('Complete');
   });
 });
 
