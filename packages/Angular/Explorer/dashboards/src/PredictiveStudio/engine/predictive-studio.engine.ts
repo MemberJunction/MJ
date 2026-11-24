@@ -75,10 +75,6 @@ export function ComputeBestLevels(rankings: RankingRow[], useCaseIds: string[]):
   return out;
 }
 
-/** @deprecated Use {@link ComputeBestLevels}. */
-export function computeBestLevels(rankings: RankingRow[], useCaseIds: string[]): UUIDMap<RecommendationLevel> {
-  return ComputeBestLevels(rankings, useCaseIds);
-}
 
 /**
  * PredictiveStudioEngine — the single, process-wide cache + domain-logic layer for the Predictive
@@ -294,6 +290,11 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
       const id = this.recordProcessModelId(rp);
       return id != null && UUIDsEqual(id, modelId);
     });
+  }
+
+  /** The cached scoring bindings of a training pipeline (a binding scores with the pipeline's Published model). */
+  public ScoringBindingsForPipeline(pipelineId: string): MJMLModelScoringBindingEntity[] {
+    return this.ScoringBindings.filter((b) => UUIDsEqual(b.MLTrainingPipelineID, pipelineId));
   }
 
   /** The cached Record-Process ids scoring with `modelId`. */

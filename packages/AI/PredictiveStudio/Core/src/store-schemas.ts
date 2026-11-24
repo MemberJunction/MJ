@@ -38,8 +38,8 @@ const SOURCE_KINDS = [
   'series',
 ] as const satisfies readonly DatedSource['kind'][];
 
-/** Every `FeatureKind`; `satisfies` refuses a value that is not one. */
-const FEATURE_KINDS = [
+/** Every `FeatureKind`; `satisfies` refuses a value that is not one, and the completeness check below a missing one. */
+export const FEATURE_KINDS = [
   'numeric',
   'categorical',
   'embedding',

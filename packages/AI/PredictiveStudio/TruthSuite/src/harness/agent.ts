@@ -1,13 +1,13 @@
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
-import { PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
+import { ExperimentReports, PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import type { RunContext } from './run-fixtures';
-import type { AgentStepResult } from './types';
+import type { AgentStepResult, BuilderRunOptions } from './types';
 
 /** The parameters of one Pipeline Builder run. */
 export type BuilderRunParams = Parameters<GraphQLAIClient['RunAIAgent']>[0];
@@ -22,28 +22,27 @@ export class HarnessAgent {
 
   /**
    * The Pipeline Builder run of a plan. The gates measure what automation publishes, so the run turns publishing on (a
-   * conversation's build leaves its model in Draft).
+   * conversation's build leaves its model in Draft). With `options.AutoPublishKeepBaseline` the run data also supplies
+   * the protocol's promotion setting (`PROTOCOL_PROMOTION_DATA_KEY`), so the build's protocol publishes a kept simple
+   * baseline automatically.
    */
-  public static BuilderRunParams(agent: MJAIAgentEntityExtended, plan: ModelingPlanSpec): BuilderRunParams {
-    return {
-      agent,
-      conversationMessages: [{ role: 'user', content: 'build it' }],
-      payload: plan,
-      data: { [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true },
-    };
+  public static BuilderRunParams(agent: MJAIAgentEntityExtended, plan: ModelingPlanSpec, options: BuilderRunOptions = {}): BuilderRunParams {
+    const data: Record<string, boolean | { readonly autoPublishKeepBaseline: boolean }> = { [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true };
+    if (options.AutoPublishKeepBaseline === true) data[PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY] = { autoPublishKeepBaseline: true };
+    return { agent, conversationMessages: [{ role: 'user', content: 'build it' }], payload: plan, data };
   }
 
   /**
    * Run the Pipeline Builder agent on `plan` and report the run, its build, and every pipeline the run created — read
    * back by the exact names the builder gives them, so a failed run's pipelines are reported too.
    */
-  public static async RunBuilderAgent(ctx: RunContext, plan: ModelingPlanSpec): Promise<AgentStepResult> {
+  public static async RunBuilderAgent(ctx: RunContext, plan: ModelingPlanSpec, options: BuilderRunOptions = {}): Promise<AgentStepResult> {
     const agent = await HarnessAgent.loadAgent(ctx, 'Pipeline Builder');
     if (agent.DriverClass !== 'PredictiveStudioPipelineBuilderAgent') {
       throw new Error(`'Pipeline Builder' agent has DriverClass '${agent.DriverClass || 'none'}'`);
     }
     const t0 = Date.now();
-    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent(HarnessAgent.BuilderRunParams(agent, plan));
+    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent(HarnessAgent.BuilderRunParams(agent, plan, options));
     const wallMs = Date.now() - t0;
     const build = result.payload?.BuildResult || null;
     const pipelineIds = await HarnessAgent.PipelineIDsNamed(ctx.Provider, ctx.User, HarnessAgent.BuilderPipelineNames(plan));
@@ -58,7 +57,13 @@ export class HarnessAgent {
       BuildErrorMessage: build?.errorMessage || null,
       PipelineIDs: pipelineIds,
       WallMs: wallMs,
+      ReportMarkdown: HarnessAgent.ReportMarkdownOf(result.payload),
     };
+  }
+
+  /** The experiment report a Pipeline Builder run delivered: its payload's `Markdown`, or null when it has none. */
+  public static ReportMarkdownOf(payload: Pick<PredictiveStudioBuilderPayload, 'Markdown'> | undefined): string | null {
+    return payload?.Markdown || null;
   }
 
   /** One Model Development Agent report for `modelId` (the user-facing text of the run's final step); null if none. */
@@ -81,10 +86,10 @@ export class HarnessAgent {
    */
   public static StoryRequest(model: MJMLModelEntity, validationResults: string | null): string {
     const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: validationResults, Lineage: model.Lineage || null });
-    const weights = Object.entries(SafeJSONParse<Record<string, number>>(model.FeatureImportance || '{}') || {})
-      .sort((a, b) => b[1] - a[1])
+    const weights = ExperimentReports.ParseFeatureImportance(model.FeatureImportance)
+      .sort((a, b) => b.importance - a.importance)
       .slice(0, 5)
-      .map(([f, w]) => `${f} (${(w * 100).toFixed(1)}%)`)
+      .map((w) => `${w.feature} (${(w.importance * 100).toFixed(1)}%)`)
       .join(', ');
     return [
       `Our model predicting ${model.TargetVariable} is already built and trained (ML Model ${model.ID}, version ${model.Version}).`,

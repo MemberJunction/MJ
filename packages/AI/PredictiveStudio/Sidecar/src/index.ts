@@ -9,5 +9,5 @@
  * The request/response types are owned by `@memberjunction/predictive-studio-core`
  * and are re-exported by consumers from there — not from this package.
  */
-export { MLSidecar, SidecarError, TrainerResultMalformedError } from './ml-sidecar.js';
+export { MLSidecar, MonitorDriftResponseMalformedError, SidecarError, TrainerResultMalformedError } from './ml-sidecar.js';
 export type { MLSidecarOptions, SidecarHealthResponse } from './ml-sidecar.js';

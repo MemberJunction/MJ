@@ -17,9 +17,9 @@ const TEST_NAME = 'W1 -> S9.3';
 
 /** The stories G0.6 judges. */
 class StorySteps {
-  /** Ten stories for the Validated W1 s42 fixture model (a story the generator returns as null is not counted). */
+  /** Ten stories for the published W1 s42 fixture model (a story the generator returns as null is not counted). */
   public static async Generate(h: TruthHarness): Promise<string[]> {
-    const model = await RunFixtures.W1S42ValidatedModel(h);
+    const model = await RunFixtures.W1S42PublishedModel(h);
     const stories: string[] = [];
     for (let i = 0; i < 10; i++) {
       const story = await h.GenerateStory(model.ModelID);

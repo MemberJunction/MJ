@@ -8,11 +8,11 @@
  */
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
-  EvaluationProtocolRules, PredictionUnit,
+  EvaluationProtocol, EvaluationProtocolRules, PredictionUnit, UtcDay,
   type ColumnEncodingKind, type DecisionDateRule, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
-  type PredictionUnitSpec, type SliceSpec, type TaskType, type UnitDraft,
+  type PredictionUnitSpec, type RetrainTrigger, type SliceSpec, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 import {
   EvaluationProtocolVersioning, ProtocolDefaults, RunViewDataAccess, RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata,
@@ -35,6 +35,31 @@ export type ProtocolChoice =
   | { readonly Kind: 'explicit'; readonly Holdout: HoldoutSplit; readonly InnerValidation?: InnerValidation; readonly Slices?: SliceSpec }
   /** No protocol: the pipeline is refused before training. */
   | { readonly Kind: 'none' };
+
+/**
+ * A monitored scenario pipeline's promotion settings beyond the defaults (D4-238): the promotion margin, and whether the
+ * base rate is the only simple baseline (so a fitted model is judged against the dummy alone and its gate outcome is
+ * `model` when it carries signal).
+ */
+export interface MonitoredPromotion {
+  readonly Margin?: number;
+  readonly DummyBaselineOnly?: boolean;
+  /**
+   * The protocol's `autoPublishKeepBaseline`; true for every fixture protocol ({@link FIXTURE_PROMOTION}). The gate
+   * harness calls MJAPI with an API key, a non-interactive credential the lifecycle gate records as a `system` initiator
+   * (D4-280), so only a protocol that sets this lets the harness publish a model whose stored decision keeps the simple
+   * baseline (D-031).
+   */
+  readonly AutoPublishKeepBaseline?: boolean;
+}
+
+/**
+ * The promotion settings every fixture protocol starts with: a kept simple baseline is published automatically, so a
+ * fixture the gate publishes reaches `Published` whatever its stored decision (the route OF4-30 gives the agent gates).
+ * A monitored pipeline moves to the product default once its incumbent is published
+ * ({@link UnitFixtures.UseProductPromotion}), so the challenger outcomes its gates measure are the product's.
+ */
+const FIXTURE_PROMOTION: MonitoredPromotion = { AutoPublishKeepBaseline: true };
 
 /** The T3 pipeline's default protocol: five one-month rolling origins after at least 24 training months, expanding window. */
 const T3_ROLLING_ORIGIN: ProtocolChoice = { Kind: 'explicit', Holdout: { kind: 'rolling-origin', origins: 5, horizonPeriods: 1, gapPeriods: 0, minTrainPeriods: 24, window: 'expanding' } };
@@ -77,6 +102,23 @@ const LATEST_TRAINING_RUN_FIELDS = ['ID', 'PipelineID', 'EvaluationProtocolID', 
 
 /** A pipeline's newest training run as `UnitFixtures.LatestRun` returns it: a plain read-only row. */
 export type LatestTrainingRun = Pick<MJMLTrainingRunEntity, (typeof LATEST_TRAINING_RUN_FIELDS)[number]>;
+
+/** What `UnitFixtures.provision` saves: the unit draft, the pipeline's features, algorithm and protocol. */
+interface ProvisionOptions {
+  readonly Draft: UnitDraft;
+  /** The feature columns (one select step over them unless `FeatureSteps` is given). */
+  readonly Features: readonly string[];
+  /** The `MJ: ML Algorithms` name. */
+  readonly Algorithm: string;
+  readonly Protocol: ProtocolChoice;
+  readonly Guard?: LeakageGuard;
+  /** The pipeline's step graph; default one select step over `Features`. */
+  readonly FeatureSteps?: FeatureStepGraph;
+  /** The protocol's retrain triggers; default none. */
+  readonly Triggers?: readonly RetrainTrigger[];
+  /** The protocol's promotion settings beyond the defaults (D4-238), over {@link FIXTURE_PROMOTION}. */
+  readonly Promotion?: MonitoredPromotion;
+}
 
 export interface ProvisionedUnitPipeline {
   readonly UnitRow: MJMLPredictionUnitEntity;
@@ -240,31 +282,39 @@ export class UnitFixtures {
    * validation and slices when given). The snapshot refuses an incumbent expression naming a column the pipeline does
    * not assemble, so the incumbent-heuristic comparator is kept only when every column it names is one of `features`.
    */
-  private static async protocolDraft(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: Exclude<ProtocolChoice, { Kind: 'none' }>, name: string): Promise<EvaluationProtocolDraft> {
+  private static async protocolDraft(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: Exclude<ProtocolChoice, { Kind: 'none' }>, name: string, triggers: readonly RetrainTrigger[] | null = null, promotion: MonitoredPromotion = {}): Promise<EvaluationProtocolDraft> {
     const base = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: await UnitFixtures.holdoutOf(h, unit, choice), Candidates: 1, Seed: ProtocolDefaults.DEFAULT_SEED, Name: name });
     const usable = unit.incumbent.kind === 'rule' && UnitFixtures.expressionColumns(unit.incumbent.scoreExpression).every((c) => features.includes(c));
-    const baselines = usable ? base.baselines : base.baselines.filter((b) => b.kind !== 'incumbent-heuristic');
+    const kept = usable ? base.baselines : base.baselines.filter((b) => b.kind !== 'incumbent-heuristic');
+    const baselines = promotion.DummyBaselineOnly === true ? kept.filter((b) => b.kind === 'dummy') : kept;
+    const margin = promotion.Margin === undefined ? base.promotion.margin : EvaluationProtocol.ToNonNegative(promotion.Margin);
+    const autoPublishKeepBaseline = promotion.AutoPublishKeepBaseline === true;
     return {
-      ...base, baselines, promotion: { ...base.promotion, comparators: baselines },
+      ...base, baselines, promotion: { ...base.promotion, comparators: baselines, margin, autoPublishKeepBaseline },
+      ...(triggers !== null ? { retrainTriggers: triggers } : {}),
       ...(choice.Kind === 'explicit' && choice.InnerValidation ? { innerValidation: choice.InnerValidation } : {}),
       ...(choice.Kind === 'explicit' && choice.Slices ? { slices: choice.Slices } : {}),
     };
   }
 
   /** Saves the chosen protocol (version 1, authored by the harness user) and records it for teardown; null for `none`. */
-  private static async bindProtocol(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: ProtocolChoice, name: string): Promise<string | null> {
+  private static async bindProtocol(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: ProtocolChoice, name: string, triggers: readonly RetrainTrigger[] | null = null, promotion: MonitoredPromotion = {}): Promise<string | null> {
     if (choice.Kind === 'none') return null;
-    const draft = await UnitFixtures.protocolDraft(h, unit, features, choice, name);
+    const draft = await UnitFixtures.protocolDraft(h, unit, features, choice, name, triggers, promotion);
     const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(draft, { kind: 'human', userId: h.User.ID }, UnitFixtures.EntityFactory(h), h.User);
     h.Created.RecordEvaluationProtocol(row.ID);
     return row.ID;
   }
 
   /**
-   * `featureSteps`, when given, is saved as the pipeline's step graph; else one select step over `features`. The
-   * pipeline is bound to the protocol `protocol` chooses (none for `{ Kind: 'none' }`).
+   * `FeatureSteps`, when given, is saved as the pipeline's step graph; else one select step over `Features`. The
+   * pipeline is bound to the protocol `Protocol` chooses (none for `{ Kind: 'none' }`), with `Triggers` as its retrain
+   * triggers and `Promotion` as its promotion settings (D4-238) when given.
    */
-  private static async provision(h: TruthHarness, draft: UnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph): Promise<ProvisionedUnitPipeline> {
+  private static async provision(h: TruthHarness, o: ProvisionOptions): Promise<ProvisionedUnitPipeline> {
+    const { Draft: draft, Features: features, Algorithm: algorithm, Protocol: protocol, Guard: guard, FeatureSteps: featureSteps } = o;
+    const triggers = o.Triggers || null;
+    const promotion: MonitoredPromotion = { ...FIXTURE_PROMOTION, ...(o.Promotion || {}) };
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -278,27 +328,27 @@ export class UnitFixtures {
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 });
     if (guard) pipeline.LeakageGuard = JSON.stringify(guard);
     RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, unitRow.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
-    pipeline.EvaluationProtocolID = await UnitFixtures.bindProtocol(h, parsed.Value, UnitFixtures.stepFeatureNames(steps), protocol, `${draft.Name} — protocol`);
+    pipeline.EvaluationProtocolID = await UnitFixtures.bindProtocol(h, parsed.Value, UnitFixtures.stepFeatureNames(steps), protocol, `${draft.Name} — protocol`, triggers, promotion);
     if (!(await pipeline.Save())) throw new Error(`Saving pipeline failed: ${pipeline.LatestResult?.CompleteMessage}`);
     h.Created.RecordPipeline(pipeline.ID);
     return { UnitRow: unitRow, Unit: parsed.Value, Pipeline: pipeline };
   }
 
   public static ProvisionC1RenewalPipeline(h: TruthHarness, protocol: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), ['PeriodIndex'], 'Logistic Regression', protocol);
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.C1RenewalUnitDraft(h), Features: ['PeriodIndex'], Algorithm: 'Logistic Regression', Protocol: protocol });
   }
 
   /** The C1 renewal unit with the reference's as-of features (`C1AssemblySteps`). */
   public static ProvisionC1AssemblyPipeline(h: TruthHarness, protocol: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), [], 'Logistic Regression', protocol, undefined, UnitFixtures.C1AssemblySteps(h));
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.C1RenewalUnitDraft(h), Features: [], Algorithm: 'Logistic Regression', Protocol: protocol, FeatureSteps: UnitFixtures.C1AssemblySteps(h) });
   }
 
   /** A world's renewal unit with the given features, algorithm and protocol (default the year cutoff). */
   public static ProvisionWorldRenewalPipeline(h: TruthHarness, world: string, o: WorldRenewalPipelineOptions): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(
-      h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), o.Features, o.Algorithm || 'Logistic Regression', o.Protocol || { Kind: 'year-cutoff' },
-      o.LeakageGuard, UnitFixtures.worldRenewalSteps(h, world, o),
-    );
+    return UnitFixtures.provision(h, {
+      Draft: UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), Features: o.Features, Algorithm: o.Algorithm || 'Logistic Regression',
+      Protocol: o.Protocol || { Kind: 'year-cutoff' }, Guard: o.LeakageGuard, FeatureSteps: UnitFixtures.worldRenewalSteps(h, world, o),
+    });
   }
 
   /**
@@ -314,13 +364,13 @@ export class UnitFixtures {
         ForeignKey: 'PersonID', OwnerKeyField: 'PersonID', DateField: 'StartDate', Aggregate: 'sum', ValueField: 'EventsAttended', WindowDays: 730,
       },
     ] };
-    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, 'W1-signal', false), features, 'Logistic Regression', protocol, undefined, steps);
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.WorldRenewalUnitDraft(h, 'W1-signal', false), Features: features, Algorithm: 'Logistic Regression', Protocol: protocol, FeatureSteps: steps });
   }
 
   /** The T3 forecast unit with one select step over the given series columns and their period offsets. */
   public static ProvisionT3Pipeline(h: TruthHarness, o: T3PipelineOptions): Promise<ProvisionedUnitPipeline> {
     const steps: FeatureStepGraph = { Steps: [{ Id: 'select', Kind: 'select', Columns: [...o.Columns], PeriodOffsets: { ...o.PeriodOffsets } }] };
-    return UnitFixtures.provision(h, UnitFixtures.T3UnitDraft(h), o.Columns, 'Ridge Regression', o.Protocol || T3_ROLLING_ORIGIN, undefined, steps);
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.T3UnitDraft(h), Features: o.Columns, Algorithm: 'Ridge Regression', Protocol: o.Protocol || T3_ROLLING_ORIGIN, FeatureSteps: steps });
   }
 
   /**
@@ -335,7 +385,7 @@ export class UnitFixtures {
 
   /** A planted scenario with one fixed decision date; its rows are held out by a seeded row hash by default. */
   public static ProvisionScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, protocol: ProtocolChoice = { Kind: 'seeded-random', Fraction: 0.25 }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.ScenarioUnitDraft(h, scenario, task), ['PastEventsZ', 'Member', 'DistanceZ'], UnitFixtures.ScenarioAlgorithm(task), protocol);
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.ScenarioUnitDraft(h, scenario, task), Features: ['PastEventsZ', 'Member', 'DistanceZ'], Algorithm: UnitFixtures.ScenarioAlgorithm(task), Protocol: protocol });
   }
 
   /** A planted scenario whose rows carry a date column: one row per scenario row, decided at that date. */
@@ -357,13 +407,101 @@ export class UnitFixtures {
 
   /** A scenario pipeline, dated (`DateColumn`) or with one fixed decision date, bound to `o.Protocol`. */
   public static ProvisionScenarioUnitPipeline(h: TruthHarness, scenario: string, task: TaskType, o: ScenarioUnitPipelineOptions): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(
-      h,
-      o.DateColumn === null ? UnitFixtures.ScenarioUnitDraft(h, scenario, task, o.GroupKey) : UnitFixtures.DatedScenarioUnitDraft(h, scenario, task, o.DateColumn, o.GroupKey),
-      UnitFixtures.ScenarioFeatureColumns(h, scenario, o.DateColumn),
-      UnitFixtures.ScenarioAlgorithm(task),
-      o.Protocol,
-    );
+    return UnitFixtures.provision(h, {
+      Draft: o.DateColumn === null ? UnitFixtures.ScenarioUnitDraft(h, scenario, task, o.GroupKey) : UnitFixtures.DatedScenarioUnitDraft(h, scenario, task, o.DateColumn, o.GroupKey),
+      Features: UnitFixtures.ScenarioFeatureColumns(h, scenario, o.DateColumn),
+      Algorithm: UnitFixtures.ScenarioAlgorithm(task),
+      Protocol: o.Protocol,
+    });
+  }
+
+  /**
+   * A monitored scenario pipeline (M6.6): the scenario's rows dated by `T` and censored at `trainThrough` (the training
+   * snapshot holds only the periods before it; monitoring reads every label known by now), bound to `holdout` (default
+   * the year cutoff) with `triggers` as its retrain triggers.
+   */
+  public static ProvisionMonitoredScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, trainThrough: string, triggers: readonly RetrainTrigger[], holdout: ProtocolChoice = { Kind: 'year-cutoff' }, promotion: MonitoredPromotion = {}): Promise<ProvisionedUnitPipeline> {
+    const draft = UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind}, monitored through ${trainThrough})`, { kind: 'column', column: 'T' }, trainThrough, null);
+    return UnitFixtures.provision(h, { Draft: draft, Features: UnitFixtures.ScenarioFeatureColumns(h, scenario, 'T'), Algorithm: UnitFixtures.ScenarioAlgorithm(task), Protocol: holdout, Triggers: triggers, Promotion: promotion });
+  }
+
+  /**
+   * Moves a pipeline's unit censoring cutoff to `through` (a fixture's clock advancing: the periods before it have
+   * arrived): the unit's next version with the fixed cutoff `through`, recorded, and the pipeline pointed at it, so the
+   * pipeline's next training (a monitoring challenger) snapshots them.
+   */
+  public static async AdvanceCensoring(h: TruthHarness, pipelineId: string, through: string): Promise<void> {
+    const factory = UnitFixtures.EntityFactory(h);
+    const pipeline = await factory.getEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', h.User);
+    if (!(await pipeline.Load(pipelineId))) throw new Error(`ML Training Pipeline ${pipelineId} not found`);
+    if (!pipeline.PredictionUnitID) throw new Error(`ML Training Pipeline ${pipelineId} has no Prediction Unit`);
+    const latest = await factory.getEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', h.User);
+    if (!(await latest.Load(pipeline.PredictionUnitID))) throw new Error(`Prediction Unit ${pipeline.PredictionUnitID} not found`);
+    const next = await PredictionUnitVersioning.CreateNextPredictionUnitVersion(
+      latest, { Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: through } } }, { kind: 'human', userId: h.User.ID }, factory, h.User);
+    h.Created.RecordPredictionUnit(next.ID);
+    const parsed = PredictionUnit.ParsePredictionUnitRow(next);
+    if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+    RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, next.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
+    if (!(await pipeline.Save())) throw new Error(`Pointing pipeline ${pipelineId} at unit v${next.Version} failed: ${pipeline.LatestResult?.CompleteMessage}`);
+  }
+
+  /**
+   * Points a pipeline at the next version of its Evaluation Protocol with the product's promotion default
+   * (`autoPublishKeepBaseline: false`), recorded for teardown: a monitored fixture calls it once its incumbent is
+   * published, so every challenger after it is judged and published by the product's rules, not the fixture's. Throws
+   * when a read or a save fails, or the pipeline is bound to no protocol.
+   */
+  public static async UseProductPromotion(h: TruthHarness, pipelineId: string): Promise<void> {
+    const factory = UnitFixtures.EntityFactory(h);
+    const pipeline = await factory.getEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', h.User);
+    if (!(await pipeline.Load(pipelineId))) throw new Error(`ML Training Pipeline ${pipelineId} not found`);
+    if (!pipeline.EvaluationProtocolID) throw new Error(`ML Training Pipeline ${pipelineId} has no Evaluation Protocol`);
+    const latest = await factory.getEntityObject<MJMLEvaluationProtocolEntity>('MJ: ML Evaluation Protocols', h.User);
+    if (!(await latest.Load(pipeline.EvaluationProtocolID))) throw new Error(`Evaluation Protocol ${pipeline.EvaluationProtocolID} not found`);
+    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(latest);
+    if (parsed.Ok === false) throw new Error(`Evaluation Protocol ${latest.ID} does not parse: ${parsed.Errors.join('; ')}`);
+    const promotion = { ...parsed.Value.promotion, autoPublishKeepBaseline: false };
+    const next = await EvaluationProtocolVersioning.CreateNextEvaluationProtocolVersion(latest, { promotion }, { kind: 'human', userId: h.User.ID }, factory, h.User);
+    h.Created.RecordEvaluationProtocol(next.ID);
+    pipeline.EvaluationProtocolID = next.ID;
+    if (!(await pipeline.Save())) throw new Error(`Pointing pipeline ${pipelineId} at Evaluation Protocol v${next.Version} failed: ${pipeline.LatestResult?.CompleteMessage}`);
+  }
+
+  /**
+   * A monitored world renewal pipeline (M6.6, G6.5): the world's renewal unit censored at `trainThrough`, the given
+   * features, the year-cutoff protocol with `triggers`.
+   */
+  public static ProvisionMonitoredWorldPipeline(h: TruthHarness, world: string, features: readonly string[], trainThrough: string, triggers: readonly RetrainTrigger[]): Promise<ProvisionedUnitPipeline> {
+    const base = UnitFixtures.WorldRenewalUnitDraft(h, world, false);
+    const draft: UnitDraft = { ...base, Name: `${base.Name} — monitored through ${trainThrough}`, Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: trainThrough } } };
+    return UnitFixtures.provision(h, { Draft: draft, Features: features, Algorithm: 'Logistic Regression', Protocol: { Kind: 'year-cutoff' }, FeatureSteps: UnitFixtures.worldRenewalSteps(h, world, { Features: features }), Triggers: triggers });
+  }
+
+  /** The C3 task (W9-multiclass s42): the three attendance outcomes in the artifact's order, `NoShow` the adverse class. */
+  public static readonly W9MulticlassTask: TaskType = { kind: 'multiclass', classOrder: ['Attended', 'Cancelled', 'NoShow'], adverseIndices: [2] };
+
+  /**
+   * The C3 attendance unit over W9's event registrations ({@link W9MulticlassTask}), labelled by `Outcome`. W9 has no
+   * change history, so the unit is decided on today (advancing each run) and an uncovered row is excluded and counted,
+   * as the pipeline migration builds a legacy unit, so features read as they stand.
+   */
+  public static W9MulticlassUnitDraft(h: TruthHarness): UnitDraft {
+    const today = UtcDay.UtcDayIso(new Date());
+    const tomorrow = UtcDay.UtcDayIso(new Date(Date.now() + 86_400_000));
+    return {
+      Name: `C3 attendance (multiclass) ${h.RunID}`, Description: null,
+      UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, 'W9_EventRegistration'), decisionDate: { kind: 'fixed', date: today, advance: 'each-run' }, filter: [] },
+      LabelRule: { kind: 'column', column: 'Outcome' }, LabelWindowDays: 1, LabelGapDays: 0, TaskType: UnitFixtures.W9MulticlassTask,
+      Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: tomorrow } },
+      ChangeHistoryPolicy: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' }, GroupKey: null, TemporalSpec: null,
+      DecisionSpec: { action: 'reminder', actorRole: 'events team', capacityPerPeriod: null, period: 'year' }, IncumbentHeuristic: { kind: 'none' },
+    };
+  }
+
+  /** The C3 pipeline: the W9 multiclass unit, logistic regression over three registration columns, a seeded 25% holdout. */
+  public static ProvisionW9MulticlassPipeline(h: TruthHarness): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.W9MulticlassUnitDraft(h), Features: ['TicketTier', 'DaysRegisteredBefore', 'PriorAttendance'], Algorithm: 'Logistic Regression', Protocol: { Kind: 'seeded-random', Fraction: 0.25 } });
   }
 
   /** The newest training run of a pipeline, read-only: the fields the gate checks read. */

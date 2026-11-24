@@ -17,6 +17,7 @@
     "truth:loom": "node scripts/fetch-loom.mjs",
     "truth:data": "tsx src/data/cli.ts",
     "truth:provision": "node scripts/provision.mjs",
+    "truth:load-c1": "tsx scripts/load-c1-corpus.ts",
     "truth:sidecar": "tsx scripts/sidecar.mts",
     "setup:python": "node scripts/setup-python.mjs"
   },
@@ -24,6 +25,8 @@
     "@memberjunction/ai-core-plus": "6.3.0-edge.1",
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/core-entities": "6.3.0-edge.1",
+    "@memberjunction/feature-pipelines": "6.3.0-edge.1",
+    "@memberjunction/generic-database-provider": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
     "@memberjunction/graphql-dataprovider": "6.3.0-edge.1",
     "@memberjunction/predictive-studio": "6.3.0-edge.1",

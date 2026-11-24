@@ -33,7 +33,8 @@ export const PsGateW1S95Checks: NamedCheck[] = [
       const all = details.map((d) => truth.Get(d.RecordID)).filter((v): v is number => v !== undefined);
       const members = ContainmentProbe.AtRiskListRecordIDs(details, model);
       // The list is every row at or above the risk floor, capped at 200: its size is fixed by the scores, not by the cap.
-      const qualifying = AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(model)).filter((r) => r.RiskPct >= AT_RISK_LIST_MIN_RISK_PCT).length;
+      // Binding null: W1 is a binary world whose default at-risk-list row equals the outcome-config rule; M4.5's gates read the rows.
+      const qualifying = AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(model, null)).filter((r) => r.RiskPct >= AT_RISK_LIST_MIN_RISK_PCT).length;
       const expectedSize = Math.min(AT_RISK_LIST_SIZE, qualifying);
       const list = members.map((id) => truth.Get(id)).filter((v): v is number => v !== undefined);
       const listMean = TruePMean.Of(list);

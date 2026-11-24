@@ -202,9 +202,8 @@ export class GateRules {
     const first = eligible[0];
     if (first !== undefined) {
       const best = eligible.reduce<string>((acc, k) => {
-        // `??` on purpose: a score of 0 is a real (perfect) loss; only a member with no score falls back to +Infinity.
-        const a = i.memberScores[acc] ?? Number.POSITIVE_INFINITY;
-        const b = i.memberScores[k] ?? Number.POSITIVE_INFINITY;
+        const a = GateRules.scoreOrWorst(i.memberScores[acc]);
+        const b = GateRules.scoreOrWorst(i.memberScores[k]);
         // The `k < acc` tie-break is kept because the reference has it, but it cannot change the result: `eligible` is
         // already in name order, so a later `k` is never below `acc` and a tie keeps the first name either way.
         return b < a || (b === a && k < acc) ? k : acc;
@@ -352,7 +351,7 @@ export class GateRules {
       case 'minority-class-below-minimum':
         return { code: refusal.kind, text: `The test set has only ${refusal.rows} rows of "${refusal.classLabel}"; at least ${refusal.minimum} are needed to tell a model from chance, so nothing ships.` };
       case 'auc-interval-contains-chance':
-        return { code: refusal.kind, text: `The model's AUC interval on the test set, [${GateRules.FormatFourDecimals(refusal.lower)}, ${GateRules.FormatFourDecimals(refusal.upper)}], contains 0.5 (a coin flip), so it does not ship.` };
+        return { code: refusal.kind, text: `The model's AUC interval on the test set, [${GateRules.FormatFourDecimals(refusal.lower)}, ${GateRules.FormatFourDecimals(refusal.upper)}], contains the coin-flip level, so it does not ship.` };
       case 'auc-interval-missing':
         return { code: refusal.kind, text: 'The trainer reported no AUC interval for the model, so it cannot be shown to beat a coin flip; nothing ships.' };
     }
@@ -385,6 +384,14 @@ export class GateRules {
       if (value !== undefined && (min === null || value < min.value)) min = { key, value };
     }
     return min;
+  }
+
+  /**
+   * A member's score, or +Infinity (the worst loss) when it has none. A score of 0 is a real (perfect) loss, so only an
+   * absent score falls back; `||` would replace the 0.
+   */
+  private static scoreOrWorst(score: number | null | undefined): number {
+    return score === null || score === undefined ? Number.POSITIVE_INFINITY : score;
   }
 
   private static formatOrUnreported(iv: StoredInterval | null | undefined): string {

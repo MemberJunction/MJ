@@ -99,14 +99,18 @@ export type IncumbentHeuristic = { readonly kind: 'none' } | { readonly kind: 'r
 /**
  * Who authored a version or started an action — data, never a permission by itself. `human` is a user; `agent`,
  * `scheduled-job` and `system` are the automated authors, and every rule accepts them unless a protocol
- * opts into `GuardFieldsEditableBy: 'human-only'`. The publish record adds the `automated-gate` approver
- * (an automatic publish).
+ * opts into `GuardFieldsEditableBy: 'human-only'`. Only a human can sign off; the gate itself can approve a publish
+ * (the publish record's `automated-gate` approver). A `system` actor started by a Record Process run (auto-train)
+ * names that run in `processRunId`.
  */
 export type Actor =
   | { readonly kind: 'human'; readonly userId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   | { readonly kind: 'agent'; readonly agentRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   | { readonly kind: 'scheduled-job'; readonly scheduledJobRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
-  | { readonly kind: 'system'; readonly component: string };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  // case-violation-ok-legacy-back-compat: stored Prediction Unit and publish-record Initiator JSON field names
+  | { readonly kind: 'system'; readonly component: string; readonly processRunId?: string };
+/** The human variant of {@link Actor}: the only actor that can be a sign-off's approver. */
+export type HumanActor = Extract<Actor, { readonly kind: 'human' }>;  // case-violation-ok-legacy-back-compat: the stored Actor JSON discriminant
 
 /** The `MJ: ML Prediction Units` columns the parser reads (the generated entity satisfies this structurally). */
 export interface PredictionUnitColumns {
@@ -491,9 +495,17 @@ export class PredictionUnit {
       if (kind === 'human' && userId) return JsonParse.ParseOk({ kind, userId });
       if (kind === 'agent' && agentRunId) return JsonParse.ParseOk({ kind, agentRunId });
       if (kind === 'scheduled-job' && scheduledJobRunId) return JsonParse.ParseOk({ kind, scheduledJobRunId });
-      if (kind === 'system' && component) return JsonParse.ParseOk({ kind, component });
+      if (kind === 'system' && component) return PredictionUnit.parseSystemActor(v, component);
     }
-    return JsonParse.ParseFail('AuthoredBy must be an Actor: {kind:"human",userId}, {kind:"agent",agentRunId}, {kind:"scheduled-job",scheduledJobRunId} or {kind:"system",component}');
+    return JsonParse.ParseFail('AuthoredBy must be an Actor: {kind:"human",userId}, {kind:"agent",agentRunId}, {kind:"scheduled-job",scheduledJobRunId} or {kind:"system",component[,processRunId]}');
+  }
+
+  /** A system actor; a `processRunId` that is present must be a non-empty string (refused, never dropped). */
+  private static parseSystemActor(v: JsonObject, component: string): ParseResult<Actor> {
+    if (!Object.prototype.hasOwnProperty.call(v, 'processRunId')) return JsonParse.ParseOk({ kind: 'system', component });
+    const processRunId = JsonParse.JsonString(v, 'processRunId');
+    if (!processRunId) return JsonParse.ParseFail('AuthoredBy must be an Actor: a system actor\'s processRunId, when present, must be a non-empty string');
+    return JsonParse.ParseOk({ kind: 'system', component, processRunId });
   }
 
   /** The unit parser's actor reader: null when the column did not parse (already reported), else {@link ParseActor}. */

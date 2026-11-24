@@ -139,7 +139,7 @@ describe('escalation-target validation', () => {
             const modified = outputs();
             modified[1] = {
                 ...modified[1],
-                Target: { Mode: 'child', EntityName: 'VIPStatus' },
+                Target: { Mode: 'child', EntityName: 'VIPStatus', ParentField: 'PersonID', Map: {} },
             };
             const spec = llmSpec({ Outputs: modified });
             expect(FindEscalationTargetSpecProblem(spec, outputs())).toBe(
@@ -160,7 +160,7 @@ describe('escalation-target validation', () => {
             expect(SameTarget({ Mode: 'field', EntityFieldName: 'Col' }, { Mode: 'field', EntityFieldName: 'col' })).toBe(true);
             expect(SameTarget({ Mode: 'field', EntityFieldName: 'Col' }, { Mode: 'field', EntityFieldName: 'Other' })).toBe(false);
             expect(SameTarget({ Mode: 'field', EntityFieldName: 'Col' }, { Mode: 'tags', RootTagID: 'tag-1' })).toBe(false);
-            expect(SameTarget(undefined, { Mode: 'field' })).toBe(false);
+            expect(SameTarget(undefined, { Mode: 'field', EntityFieldName: 'Col' })).toBe(false);
         });
 
         it('DescribeTarget formats target modes and field names', () => {
@@ -171,7 +171,7 @@ describe('escalation-target validation', () => {
 
         it('DescribeMissingOutput identifies missing and mismatched targets', () => {
             const list = outputs();
-            expect(DescribeMissingOutput({ Name: 'Absent', Ref: '$', Target: { Mode: 'field' } }, list)).toBe("it has no output named 'Absent'");
+            expect(DescribeMissingOutput({ Name: 'Absent', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'Absent' } }, list)).toBe("it has no output named 'Absent'");
             expect(DescribeMissingOutput({ Name: 'Seniority', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'Other' } }, list)).toBe(
                 "its output 'Seniority' targets field 'SeniorityLevel', not field 'Other'"
             );

@@ -5,8 +5,8 @@
  * **lower-is-better** (log loss, Brier, deviances, RMSE, MAE, MASE), **higher-is-better** (AUC, accuracy, F1,
  * precision, recall, R²) or **closer-to-one** (calibration slope, ranked by its distance from 1).
  *
- * Direction matters in two places that must agree: the experiment leaderboard normalisation and the maintenance
- * challenger-vs-incumbent comparison. Deriving the lower-is-better set from `METRIC_DIRECTION` (plus the legacy
+ * Direction matters wherever stored metrics are ranked: the experiment leaderboard normalisation and the dashboards
+ * that read stored HoldoutMetrics. Deriving the lower-is-better set from `METRIC_DIRECTION` (plus the legacy
  * spellings stored by the earlier trainer, lower- and higher-is-better) keeps them from drifting, so a Brier score or a deviance can never be
  * ranked backwards.
  */
@@ -19,8 +19,8 @@ const LEGACY_LOWER_IS_BETTER: readonly string[] = [
 ];
 
 /**
- * Higher-is-better spellings stored results carry beside the canonical keys: the maintenance comparison's 'auto'
- * defaults (`roc_auc`, `explained_variance`) and the aliases the dashboards and the TruthSuite read from HoldoutMetrics.
+ * Higher-is-better spellings stored results carry beside the canonical keys: the earlier trainer's 'auto' defaults
+ * (`roc_auc`, `explained_variance`) and the aliases the dashboards and the TruthSuite read from HoldoutMetrics.
  * Not listed, so of unknown direction: values that are not a model's score (`n`, `n_positive`, `predicted_classes`,
  * `baseline_accuracy`, the majority guess's accuracy).
  */
