@@ -316,7 +316,12 @@ describe('Loop system prompt — implicit-mode section matches the code', () => 
 });
 
 describe('Sage prompt template — Handoff teaching gated on includeResponseTypeDefinition.handoff', () => {
-    const sageTemplate = readFileSync(join(TEMPLATES_DIR, 'sage/sage.template.md'), 'utf8');
+    const sageTemplatePath = join(TEMPLATES_DIR, 'sage/sage.template.md');
+    const resolveIncludes = (filePath: string): string =>
+        readFileSync(filePath, 'utf8').replace(/\{@include\s+([^}]+)\}/g, (_match, rawRelPath: string) =>
+            resolveIncludes(join(filePath, '..', rawRelPath.trim()))
+        );
+    const sageTemplate = resolveIncludes(sageTemplatePath);
     const env = new nunjucks.Environment(null, { autoescape: false, throwOnUndefined: false, trimBlocks: false, lstripBlocks: false });
 
     it('renders Handoff teaching when includeResponseTypeDefinition.handoff is true', () => {
