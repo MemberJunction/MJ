@@ -123,6 +123,20 @@ describe('compareWithKnownFailures', () => {
         expect(report(result, () => {})).toBe(1);
     });
 
+    it('matches a missing column only as a whole word', () => {
+        const result = compareWithKnownFailures(
+            [
+                { Key: 'a.C1', Outcome: 'failed', Message: 'column "BaseAgentID" does not exist' },
+                { Key: 'a.C2', Outcome: 'failed', Message: 'column "BaseAgentIDs" does not exist' },
+            ],
+            {},
+            {},
+            ['BaseAgentID'],
+        );
+        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.C1']);
+        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.C2']);
+    });
+
     it('attributes nothing to a gap when no entity is missing', () => {
         const result = compareWithKnownFailures([{ Key: 'a.R1', Outcome: 'failed', Message: 'anything' }], {});
         expect(result.GapFailures).toEqual([]);

@@ -1028,10 +1028,10 @@ jobs:
     # feature PRs ship T-SQL migrations only, and their PostgreSQL twins arrive with the build
     # engineer's /pg-migrate PR. The gap is next's state, not the PR's doing, so it must not stop
     # the suite. prune-pg-parity-gap.mjs finds it before the push and leaves out only the records
-    # that name a missing entity (and, to a fixed point, records that look them up); everything
+    # that name a missing entity or column (and, to a fixed point, records that look them up); everything
     # else is pushed and the whole suite runs. A REGRESSION always blocks: a push of the pruned
     # metadata that fails, or a check that fails and is neither on the known-failures list nor
-    # names a missing entity in its message. The `changes` job sets the mode: `regressions` (every
+    # names a missing entity or column in its message. The `changes` job sets the mode: `regressions` (every
     # PR the SQL Server lane runs on, and the nightly) warns on a gap and prunes; `gate` (a PR
     # touching migrations-pg/, a dispatch, or the release gate publish.yml runs) fails on a gap;
     # `skip` (a merge into next) does not run.
@@ -1135,15 +1135,16 @@ jobs:
       - name: Migrate — apply migrations-pg
         run: node packages/MJCLI/bin/run.js migrate
 
-      # The entities the database has, against those the metadata names. In `regressions` mode a gap
-      # is a warning and the records that need a missing entity are removed from this (throwaway)
-      # checkout before the pushes; in `gate` mode it fails here.
+      # The entities and fields the database has, against those the metadata names. In `regressions`
+      # mode a gap is a warning and the records that need a missing entity or column are removed from
+      # this (throwaway) checkout before the pushes; in `gate` mode it fails here.
       - name: Find a parity gap and prune the metadata that needs it
         id: parity
         run: |
           psql -v ON_ERROR_STOP=1 -tA -c 'SELECT "Name" FROM __mj."Entity"' > /tmp/pg-entities.txt
+          psql -v ON_ERROR_STOP=1 -tA -F $'\t' -c 'SELECT e."Name", f."Name" FROM __mj."EntityField" f JOIN __mj."Entity" e ON e."ID" = f."EntityID"' > /tmp/pg-entity-fields.txt
           node .github/scripts/prune-pg-parity-gap.mjs --mode=${{ needs.changes.outputs.pg }} --in-place \
-            --present=/tmp/pg-entities.txt --entities-out=/tmp/pg-gap-entities.txt \
+            --present=/tmp/pg-entities.txt --present-fields=/tmp/pg-entity-fields.txt --gap-out=/tmp/pg-gap-entities.txt \
             metadata metadata-optional/integration-test
 
       - name: Sync push — reconcile committed metadata
@@ -1226,8 +1227,8 @@ jobs:
             echo "::endgroup::"
           done
 
-      # A failure that is not on the list fails here, unless its message names an entity the gap
-      # left out (reported, not gating). `complete` is written only after a pass with no gap.
+      # A failure that is not on the list fails here, unless its message names an entity or column
+      # the gap left out (reported, not gating). `complete` is written only after a pass with no gap.
       - name: Compare with the known PostgreSQL failures
         id: ratchet
         run: |

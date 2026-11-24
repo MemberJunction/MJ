@@ -1,31 +1,35 @@
 #!/usr/bin/env node
 /**
- * Finds the PostgreSQL PARITY GAP before the metadata push, and builds a copy of the metadata
- * that the PostgreSQL database can accept, so the integration suite still runs.
+ * Finds the PostgreSQL PARITY GAP before the metadata push, and removes from the metadata only what
+ * the PostgreSQL database cannot take, so the integration suite still runs.
  *
  * A feature PR ships T-SQL migrations only; their PostgreSQL twins arrive later, in the build
  * engineer's /pg-migrate PR. Until then the PostgreSQL database built from migrations-pg lacks the
- * new entities, and `mj sync push` refuses any metadata that names them. Skipping the suite on that
- * gap would leave every other PR without PostgreSQL coverage, so instead this script removes only
- * what the gap makes impossible:
+ * new entities and columns, and `mj sync push` refuses any metadata that needs them. Skipping the
+ * suite on that gap would leave every other PR without PostgreSQL coverage, so instead:
  *
- *   - a directory whose `.mj-sync.json` entity (or a `defaults` value) names a missing entity;
- *   - a record that names one: a `@lookup:<Entity>.` target, a `@lookup:MJ: Entities.Name=<Entity>`
- *     value, or a `relatedEntities` key. Prose that merely mentions the name (a Description) does not
- *     count, so an action whose description mentions a new entity is still pushed;
- *   - then, to a fixed point, a record whose `@lookup:<Entity>.Name=<Name>` points at a record removed
- *     above, since that lookup can no longer resolve.
+ *   - A MISSING ENTITY is one the metadata names that the database has no `__mj.Entity` row for: a
+ *     sync directory's entity or `defaults`, a `@lookup:<Entity>.` target, a
+ *     `@lookup:MJ: Entities.Name=<Entity>` value, or a `relatedEntities` key.
+ *   - A MISSING FIELD is a column of an entity the database does have, named by a
+ *     `@lookup:MJ: Entity Fields.` lookup (an `EntityID`/`Entity` and a `Name`), with no
+ *     `__mj.EntityField` row.
+ *   - Prose that merely mentions a name (a Description) is not a reference.
  *
- * Everything else is pushed unchanged. A push of the pruned copy that still fails is a regression,
- * and the integration-postgres job fails on it.
+ * What is removed: a directory whose entity is missing; the smallest record that needs the gap (a
+ * nested `relatedEntities` child is removed on its own, its parent kept; a `relatedEntities` key
+ * naming a missing entity is dropped); then, to a fixed point, any record whose
+ * `@lookup:<Entity>.Name=<Name>` points at a top-level record removed above. Everything else is
+ * pushed unchanged, and a push of the result that still fails is a regression.
  *
  * Modes (integration.yml's `pg` output):
- *   - `regressions`: a gap is reported as a warning; the pruned copy is written and the suite runs.
+ *   - `regressions`: a gap is reported as a warning, the metadata is pruned and the suite runs.
  *   - `gate`: the build engineer's PR, a dispatch, or a release. A gap fails (exit 1): closing it is
  *     that run's job, so nothing is pruned.
  *
- * Writes to $GITHUB_OUTPUT: `gap=true|false`, and the missing entities, one per line, to
- * --entities-out (the known-failures check reads it to attribute failures to the gap).
+ * Writes `gap=true|false` to $GITHUB_OUTPUT, and to --gap-out the missing entities and the missing
+ * fields' names, one per line: the known-failures check attributes a failure that names one of them
+ * to the gap.
  *
  * The prune EDITS THE ROOTS IN PLACE (`--in-place` is required to say so). It is meant for a CI
  * checkout that is thrown away after the job. Pruning a copy elsewhere does not work: prompt
@@ -33,8 +37,9 @@
  *
  * Usage:
  *   node .github/scripts/prune-pg-parity-gap.mjs --mode=<regressions|gate> --in-place \
- *     --present=<file of entity names in the database, one per line> \
- *     --entities-out=<file> <metadata root>...
+ *     --present=<file: one entity name per line> \
+ *     --present-fields=<file: "<entity>\t<field>" per line> \
+ *     --gap-out=<file> <metadata root>...
  */
 import { readFileSync, writeFileSync, existsSync, appendFileSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -42,8 +47,11 @@ import { fileURLToPath } from 'node:url';
 
 const SYNC_CONFIG = '.mj-sync.json';
 
-/** Lowercased, trimmed entity name: entity lookups in MJ are case-insensitive. */
-export const normalizeEntityName = (name) => String(name).trim().toLowerCase();
+/** Lowercased, trimmed name: entity and field lookups in MJ are case-insensitive. */
+export const normalizeName = (name) => String(name).trim().toLowerCase();
+
+/** The key of an (entity, field) pair. */
+export const fieldKey = (entity, field) => `${normalizeName(entity)}\u0000${normalizeName(field)}`;
 
 /** Escapes a string for use inside a RegExp. */
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -54,31 +62,70 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  */
 export function entitiesReferencedByString(value) {
     const found = [];
-    const lookup = /@lookup:([^.@]+?)\./g;
-    for (const match of value.matchAll(lookup)) found.push(match[1].trim());
-    const entityRow = /@lookup:MJ: Entities\.Name=([^&?@"]+)/g;
-    for (const match of value.matchAll(entityRow)) found.push(match[1].trim());
+    for (const match of value.matchAll(/@lookup:([^.@]+?)\./g)) found.push(match[1].trim());
+    for (const match of value.matchAll(/@lookup:MJ: Entities\.Name=([^&?@"]+)/g)) found.push(match[1].trim());
     return found;
 }
+
+/**
+ * Every (entity, field) a string value looks up in `MJ: Entity Fields`, as `{ Entity, Field }`.
+ * Reads `EntityID=@lookup:MJ: Entities.Name=<entity>` or `Entity=<entity>`, and `Name=<field>`, in
+ * either order.
+ */
+export function fieldsReferencedByString(value) {
+    const found = [];
+    const at = value.indexOf('@lookup:MJ: Entity Fields.');
+    if (at < 0) return found;
+    const params = value.slice(at + '@lookup:MJ: Entity Fields.'.length).split('?')[0];
+    let entity = null;
+    let field = null;
+    for (const part of params.split('&')) {
+        const eq = part.indexOf('=');
+        if (eq < 0) continue;
+        const key = part.slice(0, eq).trim();
+        const val = part.slice(eq + 1).trim();
+        if (key === 'Name') field = val;
+        else if (key === 'Entity') entity = val;
+        else if (key === 'EntityID') entity = /^@lookup:MJ: Entities\.Name=(.+)$/.exec(val)?.[1]?.trim() ?? null;
+    }
+    if (entity && field) found.push({ Entity: entity, Field: field });
+    return found;
+}
+
+/** Walks every string in a JSON value. */
+function eachString(node, visit) {
+    if (typeof node === 'string') visit(node);
+    else if (Array.isArray(node)) node.forEach((n) => eachString(n, visit));
+    else if (node && typeof node === 'object') Object.values(node).forEach((n) => eachString(n, visit));
+}
+
+/** A record without its `relatedEntities`: what the record itself names. */
+const ownPart = (record) => {
+    const { relatedEntities, ...own } = record;
+    return own;
+};
 
 /** Every entity a JSON value references, walking nested objects, arrays and `relatedEntities` keys. */
 export function entitiesReferencedBy(node) {
     const found = [];
     const walk = (value) => {
-        if (typeof value === 'string') {
-            found.push(...entitiesReferencedByString(value));
-        } else if (Array.isArray(value)) {
-            value.forEach(walk);
-        } else if (value && typeof value === 'object') {
+        if (typeof value === 'string') found.push(...entitiesReferencedByString(value));
+        else if (Array.isArray(value)) value.forEach(walk);
+        else if (value && typeof value === 'object') {
             for (const [key, child] of Object.entries(value)) {
-                if (key === 'relatedEntities' && child && typeof child === 'object' && !Array.isArray(child)) {
-                    found.push(...Object.keys(child));
-                }
+                if (key === 'relatedEntities' && child && typeof child === 'object' && !Array.isArray(child)) found.push(...Object.keys(child));
                 walk(child);
             }
         }
     };
     walk(node);
+    return found;
+}
+
+/** Every (entity, field) a JSON value looks up, walking it whole. */
+export function fieldsReferencedBy(node) {
+    const found = [];
+    eachString(node, (s) => found.push(...fieldsReferencedByString(s)));
     return found;
 }
 
@@ -113,24 +160,22 @@ function listFiles(dir) {
 }
 
 /**
- * Reads the metadata under the roots: each sync directory (with its entity and the entities its
- * config references) and each record file (with the entity of its nearest config).
+ * Reads the metadata under the roots: each sync directory (its entity, and the entities its config
+ * references) and each record file (with the entity of its nearest config).
  */
 export function readMetadata(roots) {
     const dirs = [];
     const files = [];
     for (const root of roots) {
         const all = listFiles(root);
-        for (const path of all.filter((f) => f.endsWith(`/${SYNC_CONFIG}`) || f === SYNC_CONFIG)) {
+        for (const path of all.filter((f) => f.endsWith(`/${SYNC_CONFIG}`))) {
             const config = JSON.parse(readFileSync(path, 'utf8'));
             if (!config.entity) continue;
-            dirs.push({ Dir: dirname(path), Entity: config.entity, References: [config.entity, ...entitiesReferencedBy(config.defaults ?? {})] });
+            dirs.push({ Dir: dirname(path), Entity: config.entity, Defaults: config.defaults ?? {} });
         }
-        const entityFor = (file) => {
+        const ownerOf = (file) => {
             let best = null;
-            for (const d of dirs) {
-                if ((file.startsWith(`${d.Dir}/`)) && (!best || d.Dir.length > best.Dir.length)) best = d;
-            }
+            for (const d of dirs) if (file.startsWith(`${d.Dir}/`) && (!best || d.Dir.length > best.Dir.length)) best = d;
             return best;
         };
         for (const path of all.filter((f) => f.endsWith('.json') && !f.endsWith(SYNC_CONFIG))) {
@@ -138,81 +183,151 @@ export function readMetadata(roots) {
             try {
                 parsed = JSON.parse(readFileSync(path, 'utf8'));
             } catch {
-                continue; // not JSON we can read; the push will report it if it matters
+                continue; // not JSON we can read; the push reports it if it matters
             }
             const records = recordsIn(parsed);
-            const owner = entityFor(path);
-            if (records && owner) files.push({ Path: path, Dir: owner.Dir, Entity: owner.Entity, Records: records, Single: !Array.isArray(parsed) });
+            const owner = ownerOf(path);
+            if (records && owner) files.push({ Path: path, Entity: owner.Entity, Records: records, Single: !Array.isArray(parsed) });
         }
     }
     return { Dirs: dirs, Files: files };
 }
 
-/** The referenced entities the database does not have, by their name as written. */
-export function findMissingEntities(metadata, presentNames) {
-    const present = new Set([...presentNames].map(normalizeEntityName));
-    const missing = new Map();
-    const consider = (name) => {
-        const key = normalizeEntityName(name);
-        if (key && !present.has(key) && !missing.has(key)) missing.set(key, name.trim());
+/**
+ * The gap: referenced entities the database lacks (by their name as written), and referenced fields
+ * of present entities that it lacks.
+ * @returns {{ Entities: string[], Fields: { Entity: string, Field: string }[] }}
+ */
+export function findGap(metadata, presentEntities, presentFields) {
+    const entities = new Set([...presentEntities].map(normalizeName));
+    const fields = new Set([...presentFields].map(([e, f]) => fieldKey(e, f)));
+    const missingEntities = new Map();
+    const missingFields = new Map();
+    const considerEntity = (name) => {
+        const key = normalizeName(name);
+        if (key && !entities.has(key) && !missingEntities.has(key)) missingEntities.set(key, name.trim());
     };
-    for (const d of metadata.Dirs) d.References.forEach(consider);
-    for (const f of metadata.Files) for (const r of f.Records) entitiesReferencedBy(r).forEach(consider);
-    return [...missing.values()].sort();
+    const considerField = ({ Entity, Field }) => {
+        if (!entities.has(normalizeName(Entity))) return; // the entity rule covers it
+        const key = fieldKey(Entity, Field);
+        if (!fields.has(key) && !missingFields.has(key)) missingFields.set(key, { Entity: Entity.trim(), Field: Field.trim() });
+    };
+    for (const d of metadata.Dirs) {
+        considerEntity(d.Entity);
+        entitiesReferencedBy(d.Defaults).forEach(considerEntity);
+        fieldsReferencedBy(d.Defaults).forEach(considerField);
+    }
+    for (const f of metadata.Files) {
+        for (const r of f.Records) {
+            entitiesReferencedBy(r).forEach(considerEntity);
+            fieldsReferencedBy(r).forEach(considerField);
+        }
+    }
+    return {
+        Entities: [...missingEntities.values()].sort(),
+        Fields: [...missingFields.values()].sort((a, b) => `${a.Entity}.${a.Field}`.localeCompare(`${b.Entity}.${b.Field}`)),
+    };
+}
+
+/** A predicate: does this part of a record need the gap, or a removed record? Returns a reason or null. */
+function makeNeedsGap(gap, removedKeys) {
+    const entities = new Set(gap.Entities.map(normalizeName));
+    const fields = new Set(gap.Fields.map((f) => fieldKey(f.Entity, f.Field)));
+    return (part) => {
+        if (entitiesReferencedBy(part).some((e) => entities.has(normalizeName(e)))) return 'names a missing entity';
+        if (fieldsReferencedBy(part).some((f) => fields.has(fieldKey(f.Entity, f.Field)))) return 'names a missing field';
+        if (referencesRemovedRecord(part, removedKeys)) return 'looks up a removed record';
+        return null;
+    };
 }
 
 /**
- * Decides what to remove for a set of missing entities: whole directories, then records, then
- * (to a fixed point) records whose Name lookup points at a removed record.
- * @returns {{ RemovedDirs: string[], RemovedRecords: Map<string, Set<number>>, Removed: string[] }}
+ * Prunes one record: null when the record itself needs the gap, otherwise a copy without the
+ * nested children (or relatedEntities keys) that do. `removed` collects a line per removal.
  */
-export function planPrune(metadata, missingEntities) {
-    const missing = new Set(missingEntities.map(normalizeEntityName));
-    const namesMissing = (refs) => refs.some((r) => missing.has(normalizeEntityName(r)));
-    const removedDirs = metadata.Dirs.filter((d) => namesMissing(d.References)).map((d) => d.Dir);
-    const inRemovedDir = (path) => removedDirs.some((d) => path === d || path.startsWith(`${d}/`));
-    const removedRecords = new Map();
-    const removedKeys = new Set();
-    const removed = [];
-    const remove = (file, index, reason) => {
-        if (!removedRecords.has(file.Path)) removedRecords.set(file.Path, new Set());
-        if (removedRecords.get(file.Path).has(index)) return false;
-        removedRecords.get(file.Path).add(index);
-        const name = file.Records[index].fields?.Name;
-        if (typeof name === 'string') removedKeys.add(`${file.Entity}\u0000${name}`);
-        removed.push(`${file.Entity}${typeof name === 'string' ? ` "${name}"` : ` #${index}`} (${reason})`);
-        return true;
-    };
-    for (const file of metadata.Files) {
-        file.Records.forEach((record, i) => {
-            if (inRemovedDir(file.Path)) remove(file, i, 'its directory');
-            else if (namesMissing(entitiesReferencedBy(record))) remove(file, i, 'names a missing entity');
-        });
+export function pruneRecord(record, entity, needsGap, missingEntities, removed) {
+    const reason = needsGap(ownPart(record));
+    const label = (e, r) => `${e}${typeof r.fields?.Name === 'string' ? ` "${r.fields.Name}"` : ''}`;
+    if (reason) {
+        removed.push(`${label(entity, record)} (${reason})`);
+        return null;
     }
-    for (let changed = true; changed; ) {
-        changed = false;
-        for (const file of metadata.Files) {
-            file.Records.forEach((record, i) => {
-                if (referencesRemovedRecord(record, removedKeys) && remove(file, i, 'looks up a removed record')) changed = true;
-            });
-        }
-    }
-    return { RemovedDirs: removedDirs, RemovedRecords: removedRecords, Removed: removed };
-}
-
-/** Applies the plan to the files themselves: removes directories, then records from the files left. */
-export function applyPrune(plan) {
-    for (const dir of plan.RemovedDirs) rmSync(dir, { recursive: true, force: true });
-    for (const [path, indexes] of plan.RemovedRecords) {
-        if (!existsSync(path)) continue; // its directory went above
-        const parsed = JSON.parse(readFileSync(path, 'utf8'));
-        if (!Array.isArray(parsed)) {
-            rmSync(path, { force: true });
+    if (!record.relatedEntities || typeof record.relatedEntities !== 'object') return record;
+    const related = {};
+    for (const [childEntity, children] of Object.entries(record.relatedEntities)) {
+        if (missingEntities.has(normalizeName(childEntity))) {
+            removed.push(`${label(entity, record)} → its ${childEntity} (names a missing entity)`);
             continue;
         }
-        const kept = parsed.filter((_, i) => !indexes.has(i));
-        if (kept.length === 0) rmSync(path, { force: true });
-        else writeFileSync(path, `${JSON.stringify(kept, null, 2)}\n`);
+        if (!Array.isArray(children)) {
+            related[childEntity] = children;
+            continue;
+        }
+        const nested = [];
+        const kept = children.map((c) => pruneRecord(c, childEntity, needsGap, missingEntities, nested)).filter((c) => c !== null);
+        removed.push(...nested.map((n) => `${label(entity, record)} → ${n}`));
+        related[childEntity] = kept;
+    }
+    return { ...record, relatedEntities: related };
+}
+
+/**
+ * The whole prune: directories whose entity is missing, then records and nested children, repeated
+ * until no record looks up one removed in an earlier pass.
+ * @returns {{ RemovedDirs: string[], Files: Map<string, object[]>, Removed: string[] }}
+ *   `Files` maps each changed file to the records it keeps (an empty array means delete the file).
+ */
+export function planPrune(metadata, gap) {
+    const missingEntities = new Set(gap.Entities.map(normalizeName));
+    const removedDirs = metadata.Dirs.filter(
+        (d) => missingEntities.has(normalizeName(d.Entity)) || entitiesReferencedBy(d.Defaults).some((e) => missingEntities.has(normalizeName(e))),
+    ).map((d) => d.Dir);
+    const inRemovedDir = (path) => removedDirs.some((d) => path.startsWith(`${d}/`));
+    const nameKey = (entity, record) => (typeof record.fields?.Name === 'string' ? `${entity}\u0000${record.fields.Name}` : null);
+    const dirKeys = new Set();
+    const dirLines = [];
+    for (const file of metadata.Files.filter((f) => inRemovedDir(f.Path))) {
+        for (const r of file.Records) {
+            const key = nameKey(file.Entity, r);
+            if (key) dirKeys.add(key);
+            dirLines.push(`${file.Entity}${typeof r.fields?.Name === 'string' ? ` "${r.fields.Name}"` : ''} (its directory)`);
+        }
+    }
+    const live = metadata.Files.filter((f) => !inRemovedDir(f.Path));
+    // Each pass prunes from the original records with every key removed so far; a larger key set
+    // only removes more, so the passes stop when one removes no new top-level record.
+    let removedKeys = dirKeys;
+    for (;;) {
+        const needsGap = makeNeedsGap(gap, removedKeys);
+        const files = new Map(metadata.Files.filter((f) => inRemovedDir(f.Path)).map((f) => [f.Path, []]));
+        const lines = [...dirLines];
+        const keys = new Set(dirKeys);
+        for (const file of live) {
+            const fileLines = [];
+            const kept = [];
+            for (const r of file.Records) {
+                const pruned = pruneRecord(r, file.Entity, needsGap, missingEntities, fileLines);
+                if (pruned) kept.push(pruned);
+                else if (nameKey(file.Entity, r)) keys.add(nameKey(file.Entity, r));
+            }
+            if (fileLines.length > 0) {
+                files.set(file.Path, kept);
+                lines.push(...fileLines);
+            }
+        }
+        if (keys.size === removedKeys.size) return { RemovedDirs: removedDirs, Files: files, Removed: lines };
+        removedKeys = keys;
+    }
+}
+
+/** Applies the plan to the files themselves. */
+export function applyPrune(plan, metadata) {
+    for (const dir of plan.RemovedDirs) rmSync(dir, { recursive: true, force: true });
+    const single = new Map(metadata.Files.map((f) => [f.Path, f.Single]));
+    for (const [path, records] of plan.Files) {
+        if (!existsSync(path)) continue; // its directory went above
+        if (records.length === 0) rmSync(path, { force: true });
+        else writeFileSync(path, `${JSON.stringify(single.get(path) ? records[0] : records, null, 2)}\n`);
     }
 }
 
@@ -220,45 +335,49 @@ function readArg(argv, name) {
     return argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 }
 
+/** Reads a file of lines, or null when it is missing. */
+function readLines(path) {
+    if (!path || !existsSync(path)) return null;
+    return readFileSync(path, 'utf8').split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
+}
+
 function main(argv) {
     const mode = readArg(argv, 'mode');
-    const presentPath = readArg(argv, 'present');
     const inPlace = argv.includes('--in-place');
-    const entitiesOut = readArg(argv, 'entities-out');
+    const gapOut = readArg(argv, 'gap-out');
     const roots = argv.filter((a) => !a.startsWith('--'));
     if (mode !== 'regressions' && mode !== 'gate') {
         console.error(`prune-pg-parity-gap: --mode must be "regressions" or "gate" (got "${mode ?? ''}").`);
         return 2;
     }
-    if (!inPlace || !presentPath || !entitiesOut || roots.length === 0) {
-        console.error('Usage: prune-pg-parity-gap.mjs --mode=<regressions|gate> --in-place --present=<file> --entities-out=<file> <root>...');
+    const present = readLines(readArg(argv, 'present'));
+    const presentFields = readLines(readArg(argv, 'present-fields'));
+    if (!inPlace || !present || !presentFields || !gapOut || roots.length === 0) {
+        console.error('Usage: prune-pg-parity-gap.mjs --mode=<regressions|gate> --in-place --present=<file> --present-fields=<file> --gap-out=<file> <root>...');
         return 2;
     }
-    if (!existsSync(presentPath)) {
-        console.error(`prune-pg-parity-gap: ${presentPath} is missing.`);
-        return 2;
-    }
-    const present = readFileSync(presentPath, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
-    if (present.length === 0) {
-        console.error('prune-pg-parity-gap: the database reported no entities; refusing to treat everything as a gap.');
+    if (present.length === 0 || presentFields.length === 0) {
+        console.error('prune-pg-parity-gap: the database reported no entities or fields; refusing to treat everything as a gap.');
         return 1;
     }
     const metadata = readMetadata(roots);
-    const missing = findMissingEntities(metadata, present);
-    writeFileSync(entitiesOut, missing.map((m) => `${m}\n`).join(''));
-    const gap = missing.length > 0;
-    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `gap=${gap}\n`);
-    if (!gap) {
-        console.log('No parity gap: every entity the metadata names exists on PostgreSQL. Pushing it unchanged.');
+    const gap = findGap(metadata, present, presentFields.map((l) => l.split('\t')));
+    const names = [...gap.Entities, ...gap.Fields.map((f) => f.Field)];
+    writeFileSync(gapOut, names.map((n) => `${n}\n`).join(''));
+    const isGap = names.length > 0;
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `gap=${isGap}\n`);
+    if (!isGap) {
+        console.log('No parity gap: every entity and field the metadata names exists on PostgreSQL. Pushing it unchanged.');
         return 0;
     }
+    const described = [...gap.Entities, ...gap.Fields.map((f) => `${f.Entity}.${f.Field}`)].join(', ');
     if (mode === 'gate') {
-        console.log(`::error title=PostgreSQL parity gap::Missing on PostgreSQL: ${missing.join(', ')}. This run gates the build, so the PostgreSQL twins of those migrations must land first (/pg-migrate).`);
+        console.log(`::error title=PostgreSQL parity gap::Missing on PostgreSQL: ${described}. This run gates the build, so the PostgreSQL twins of those migrations must land first (/pg-migrate).`);
         return 1;
     }
-    const plan = planPrune(metadata, missing);
-    applyPrune(plan);
-    const message = `Parity gap: missing on PostgreSQL: ${missing.join(', ')}. Their PostgreSQL migrations arrive with the next /pg-migrate build. The suite still runs; ${plan.Removed.length} record(s) that need them were left out of the push.`;
+    const plan = planPrune(metadata, gap);
+    applyPrune(plan, metadata);
+    const message = `Parity gap: missing on PostgreSQL: ${described}. Their PostgreSQL migrations arrive with the next /pg-migrate build. The suite still runs; ${plan.Removed.length} record(s) that need them were left out of the push.`;
     console.log(`::warning title=PostgreSQL parity gap::${message}`);
     for (const line of plan.Removed) console.log(`  - ${line}`);
     if (process.env.GITHUB_STEP_SUMMARY) {

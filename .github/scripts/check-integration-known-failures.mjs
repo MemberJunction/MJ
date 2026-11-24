@@ -20,9 +20,9 @@
  * A skip the suite's own skip gate does not allow (`details.SkipAllowed === false`) counts as a
  * failure, as it does for that gate.
  *
- * - with `--gap-entities=<file>` (the entities missing from PostgreSQL, one per line, written by
- *   prune-pg-parity-gap.mjs), an unlisted failure whose message names one of them is attributed to
- *   that parity gap and reported, not failed. Any other unlisted failure still fails the job, so a
+ * - with `--gap-entities=<file>` (the entities and column names missing from PostgreSQL, one per
+ *   line, written by prune-pg-parity-gap.mjs), an unlisted failure whose message names one of them
+ *   as a whole word is attributed to that parity gap and reported, not failed. Any other unlisted failure still fails the job, so a
  *   gap never hides a regression in the checks it does not touch.
  *
  * Input: the JSON files `mj test suite --output` writes (one per shard), or `mj test run --output`. A failure is keyed by its
@@ -85,10 +85,12 @@ export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}, ga
     const notRun = [];
     const flakyFailed = [];
     const gapFailures = [];
-    const namesGapEntity = (message) => {
-        const text = message.toLowerCase();
-        return gapEntities.some((e) => e.trim() !== '' && text.includes(e.trim().toLowerCase()));
-    };
+    // A name counts only as a whole word, so a missing field "Status" does not match "StatusID".
+    const gapPatterns = gapEntities
+        .map((e) => e.trim())
+        .filter((e) => e !== '')
+        .map((e) => new RegExp(`(^|[^A-Za-z0-9_])${e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-z0-9_])`, 'i'));
+    const namesGapEntity = (message) => gapPatterns.some((p) => p.test(message));
     for (const [key, o] of byKey) {
         if (flakyKeys.has(key)) {
             if (o.Outcome === 'failed') flakyFailed.push(key);
