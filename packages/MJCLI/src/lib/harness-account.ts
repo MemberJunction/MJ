@@ -164,5 +164,14 @@ export function FormatHarnessAccountTable(
         lines.push(formatRow(row));
     }
 
+    const missingBinaryVendors = [...new Set(slots.filter((s) => s.authStatus === 'Binary Missing').map((s) => s.vendor))];
+    if (missingBinaryVendors.length > 0) {
+        lines.push('');
+        lines.push(
+            `Note: 'Binary Missing' indicates the CLI executable failed '<binary> --version' for: ${missingBinaryVendors.join(', ')}. ` +
+                `Install or repair the CLI before dispatching turns to those slots.`,
+        );
+    }
+
     return lines.join('\n');
 }

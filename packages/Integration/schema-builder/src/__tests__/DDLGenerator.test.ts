@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DDLGenerator, ValidateIdentifier } from '../DDLGenerator.js';
+import { GetDialect } from '@memberjunction/sql-dialect';
+import { DDLGenerator, STANDARD_COLUMN_DESCRIPTIONS, ValidateIdentifier } from '../DDLGenerator.js';
 import type { TargetTableConfig, TargetColumnConfig, ColumnModification } from '../interfaces.js';
 
 function MakeColumn(overrides: Partial<TargetColumnConfig> = {}): TargetColumnConfig {
@@ -157,6 +158,47 @@ describe('DDLGenerator', () => {
             expect(sql).toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', N'COLUMN', N'__mj_integration_SyncStatus')");
             expect(sql).toContain('IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty');
         });
+
+        it('should emit COMMENT ON TABLE and COMMENT ON COLUMN statements for PostgreSQL', () => {
+            const config = MakeTableConfig({
+                Description: "HubSpot's primary contact table",
+                Columns: [
+                    MakeColumn({ TargetColumnName: 'Email', Description: "Contact's primary email" }),
+                ],
+            });
+            const sql = gen.GenerateCreateTable(config, 'postgresql');
+            expect(sql).toContain(`COMMENT ON TABLE "hubspot"."Contact" IS 'HubSpot''s primary contact table';`);
+            expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email" IS 'Contact''s primary email';`);
+            for (const colName of Object.keys(STANDARD_COLUMN_DESCRIPTIONS)) {
+                expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."${colName}" IS`);
+            }
+        });
+
+        it('should ignore whitespace-only table and column descriptions in CREATE TABLE', () => {
+            const config = MakeTableConfig({
+                Description: '   \t\n ',
+                Columns: [
+                    MakeColumn({ TargetColumnName: 'Email', Description: '   ' }),
+                ],
+            });
+            const ssSql = gen.GenerateCreateTable(config, 'sqlserver');
+            expect(ssSql).not.toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', NULL, NULL)");
+            expect(ssSql).not.toContain("@level2name = 'Email'");
+
+            const pgSql = gen.GenerateCreateTable(config, 'postgresql');
+            expect(pgSql).not.toContain('COMMENT ON TABLE');
+            expect(pgSql).not.toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email"`);
+        });
+
+        it('should validate identifiers when GenerateExtendedProperties or GenerateDescriptions is called directly', () => {
+            const badSchema = MakeTableConfig({ SchemaName: 'bad schema!' });
+            expect(() => gen.GenerateExtendedProperties(badSchema)).toThrow('Invalid schema name');
+            expect(() => gen.GenerateDescriptions(badSchema, 'postgresql')).toThrow('Invalid schema name');
+
+            const badCol = MakeTableConfig({ Columns: [MakeColumn({ TargetColumnName: 'bad col!' })] });
+            expect(() => gen.GenerateExtendedProperties(badCol)).toThrow('Invalid column name');
+            expect(() => gen.GenerateDescriptions(badCol, 'postgresql')).toThrow('Invalid column name');
+        });
     });
 
     describe('GenerateAlterTableAddColumn', () => {
@@ -170,6 +212,7 @@ describe('DDLGenerator', () => {
             expect(sql).toContain('IF NOT EXISTS (SELECT 1 FROM sys.columns');
             expect(sql).toContain("OBJECT_ID(N'[hubspot].[Contact]')");
             expect(sql).toContain("name = N'Phone'");
+            expect(sql).not.toContain('sp_addextendedproperty');
         });
 
         it('should generate PostgreSQL ADD COLUMN with native IF NOT EXISTS (idempotent re-apply)', () => {
@@ -177,6 +220,102 @@ describe('DDLGenerator', () => {
             const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'postgresql');
             expect(sql).toContain('ALTER TABLE "hubspot"."Contact"');
             expect(sql).toContain('ADD COLUMN IF NOT EXISTS "Phone" VARCHAR(50) NULL');
+            expect(sql).not.toContain('COMMENT ON');
+        });
+
+        it('should emit guarded MS_Description on SQL Server ADD column when Description is set', () => {
+            const col = MakeColumn({
+                TargetColumnName: 'Phone',
+                TargetSqlType: 'NVARCHAR(50)',
+                IsNullable: true,
+                Description: "Contact's phone number",
+            });
+            const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'sqlserver');
+            expect(sql).toContain('ADD [Phone] NVARCHAR(50) NULL');
+            expect(sql).toContain("IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', N'COLUMN', N'Phone'))");
+            expect(sql).toContain("EXEC sp_addextendedproperty");
+            expect(sql).toContain("@value = N'Contact''s phone number'");
+            expect(sql).toContain("@level2type = N'COLUMN', @level2name = 'Phone'");
+        });
+
+        it('should emit COMMENT ON COLUMN on PostgreSQL ADD column when Description is set', () => {
+            const col = MakeColumn({
+                TargetColumnName: 'Phone',
+                TargetSqlType: 'VARCHAR(50)',
+                IsNullable: true,
+                Description: "Contact's phone number",
+            });
+            const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'postgresql');
+            expect(sql).toContain('ADD COLUMN IF NOT EXISTS "Phone" VARCHAR(50) NULL');
+            expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Phone" IS 'Contact''s phone number';`);
+        });
+
+        it('should not emit description DDL on ADD column when Description is whitespace-only', () => {
+            const col = MakeColumn({
+                TargetColumnName: 'Phone',
+                TargetSqlType: 'NVARCHAR(50)',
+                IsNullable: true,
+                Description: '   \t ',
+            });
+            expect(gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'sqlserver')).not.toContain('sp_addextendedproperty');
+            expect(gen.GenerateAlterTableAddColumn('hubspot', 'Contact', { ...col, TargetSqlType: 'VARCHAR(50)' }, 'postgresql')).not.toContain('COMMENT ON');
+        });
+
+        it('should cap SQL Server MS_Description values to stay under sql_variant 7,500-byte limit while preserving full length on PostgreSQL', () => {
+            const maxChars = GetDialect('sqlserver').MaxCommentLength!;
+            const longDescription = 'X'.repeat(5000);
+            const ssCol = MakeColumn({
+                TargetColumnName: 'Notes',
+                TargetSqlType: 'NVARCHAR(MAX)',
+                Description: longDescription,
+            });
+            const ssSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', ssCol, 'sqlserver');
+            const valueMatch = ssSql.match(/@value = N'([^']*)'/);
+            expect(valueMatch).not.toBeNull();
+            expect(valueMatch![1].length).toBe(maxChars);
+            expect(valueMatch![1].endsWith('...')).toBe(true);
+
+            const pgCol = { ...ssCol, TargetSqlType: 'TEXT' };
+            const pgSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', pgCol, 'postgresql');
+            expect(pgSql).toContain(`IS '${longDescription}';`);
+        });
+
+        it('should preserve semicolon-newline and $$ sequences verbatim while SQLDialect.SplitStatements keeps statements intact', () => {
+            const trickyDescription = 'Status codes (cost in $$):\n- A: Active;\n- I: Inactive;   \r\n\n- D: Deleted;\n';
+            const ssCol = MakeColumn({
+                TargetColumnName: 'Status',
+                TargetSqlType: 'NVARCHAR(50)',
+                Description: trickyDescription,
+            });
+            const ssSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', ssCol, 'sqlserver');
+            const ssStatements = GetDialect('sqlserver').SplitStatements(ssSql);
+            // Exactly 2 statements: ALTER TABLE ADD + guarded sp_addextendedproperty.
+            expect(ssStatements).toHaveLength(2);
+            expect(ssStatements[1]).toContain(trickyDescription);
+
+            const pgCol = { ...ssCol, TargetSqlType: 'VARCHAR(50)' };
+            const pgSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', pgCol, 'postgresql');
+            const pgStatements = GetDialect('postgresql').SplitStatements(pgSql);
+            expect(pgStatements).toHaveLength(2);
+            expect(pgStatements[1]).toContain(trickyDescription);
+        });
+    });
+
+    describe('STANDARD_COLUMN_DESCRIPTIONS', () => {
+        it('should be frozen and cover every __mj_integration_* column emitted in CREATE TABLE', () => {
+            expect(Object.isFrozen(STANDARD_COLUMN_DESCRIPTIONS)).toBe(true);
+
+            const sql = gen.GenerateCreateTable(MakeTableConfig(), 'sqlserver');
+            const emittedStdCols = Array.from(
+                sql.matchAll(/^\s*\[(__mj_integration_[A-Za-z0-9_]+)\]/gm),
+                m => m[1]
+            );
+            expect(emittedStdCols.length).toBeGreaterThanOrEqual(12);
+            expect(new Set(emittedStdCols)).toEqual(new Set(Object.keys(STANDARD_COLUMN_DESCRIPTIONS)));
+
+            for (const desc of Object.values(STANDARD_COLUMN_DESCRIPTIONS)) {
+                expect(desc.trim().length).toBeGreaterThan(0);
+            }
         });
     });
 

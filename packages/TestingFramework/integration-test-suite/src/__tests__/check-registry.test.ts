@@ -127,6 +127,11 @@ import { AgentHandoffChecks } from '../checks/agent-handoff.checks';
 import { VideoDataSnapshotChecks } from '../checks/video-data-snapshot.checks';
 import { VideoGenerationCostChecks } from '../checks/video-generation-cost.checks';
 import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks';
+import { CommsV2CoreChecks } from '../checks/comms-v2-core.checks';
+import { CommsV2ComplianceChecks } from '../checks/comms-v2-compliance.checks';
+import { CommsV2SendChecks } from '../checks/comms-v2-send.checks';
+import { CommsV2ActivityChecks } from '../checks/comms-v2-activity.checks';
+import { CommsV2WireChecks } from '../checks/comms-v2-wire.checks';
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
@@ -233,6 +238,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
+        ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT187)
+        ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT188)
+        ['comms-v2-send', CommsV2SendChecks, 7], // CV2S1-CV2S7 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider, run-chunk completion, delivery guarantee on a stuck log, Admin Block uniqueness and append-only audit log on SQL Server (IT189)
+        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT190)
+        ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT191)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
@@ -339,9 +349,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['query-metadata-client', QueryMetadataClientChecks, 3], // QM1-QM3 a client leaves the saved-query metadata items unread, the server reports none of their rows, a saved query leaves the client current (IT177)
         ['metadata-payload-client', MetadataPayloadClientChecks, 3], // MP1-MP3 entity, field and application rows reach a client without nested child collections (IT176)
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
-        ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
+        ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 5], // ISP1-ISP5 live SQL native typing, key capping, Soft PK/FK/Organic Key auto-indexing, and ADD COLUMN descriptions (IT165)
         ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
-        ['messaging-adapters', MessagingAdaptersChecks, 6], // MA1-MA6 UserCache singleton integrity, fail-closed sender resolution, IsDirectlyDiscoverable, AllowedAgentIDs, and live RBAC on @mention & thread affinity (IT188)
+        ['messaging-adapters', MessagingAdaptersChecks, 6], // MA1-MA6 UserCache singleton integrity, fail-closed sender resolution, IsDirectlyDiscoverable, AllowedAgentIDs, and live RBAC on @mention & thread affinity (IT193)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -440,6 +450,11 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
+        'comms-v2-activity': 4,
+        'comms-v2-compliance': 4,
+        'comms-v2-core': 3,
+        'comms-v2-send': 7,
+        'comms-v2-wire': 5,
         'concurrency-conflict-client': 5,
         'concurrent': 2,
         'content-pipeline': 21,
@@ -477,7 +492,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-live-jobtitle': 1,
         'gemini-decisions': 8,
         'graph-runtime': 9,
-        'integration-schema-pipeline': 4,
+        'integration-schema-pipeline': 5,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'layered-base-views': 6,
@@ -699,7 +714,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(287);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(292);
     });
 });
 

@@ -402,7 +402,7 @@ describe('SendGridProvider Inbound Parse', () => {
         RawBody: '{"from":"a@b.com","to":"c@d.com"}',
       });
       expect(result.Success).toBe(false);
-      expect(result.SuggestedResponseStatus).toBe(400);
+      expect(result.SuggestedResponseStatus).toBe(401);
       expect(result.Notifications).toEqual([]);
     });
 

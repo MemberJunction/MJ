@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "CommunicationSenderID": "@lookup:MJ: Communication Senders.Name=Default Organization",
+      "Name": "General updates",
+      "Description": "General news, product updates, and announcements from the organization.",
+      "Category": "General",
+      "MessageClass": "Marketing",
+      "DefaultState": "Opted In",
+      "BaseMessageTypeID": null,
+      "IsUserVisible": true,
+      "DisplayOrder": 1,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0B5ED394-A6EA-45A4-B695-A8AE4F4AF201"
+    }
+  }
+]

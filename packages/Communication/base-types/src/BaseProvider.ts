@@ -3,6 +3,15 @@ import { RegisterClass } from "@memberjunction/global";
 import { MJCommunicationProviderEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 import { ProviderCredentialsBase } from "./CredentialUtils";
 import type {
+    CreateDomainAuthParams,
+    CreateDomainAuthResult,
+    DeleteDomainAuthParams,
+    MessageClass,
+    NormalizedActivityEvent,
+    VerifyDomainAuthParams,
+    VerifyDomainAuthResult,
+} from "./V2Types";
+import type {
     CalendarEventResult,
     CalendarTarget,
     CancelEventParams,
@@ -118,6 +127,16 @@ export class Message {
     public Headers?: Record<string, string>;
 
     /**
+     * Optional CommunicationLog ID for provider webhook correlation (e.g., SendGrid customArgs).
+     */
+    public CorrelationLogID?: string;
+
+    /**
+     * When true, disables provider-side open/click tracking because MJ first-party tracking is active.
+     */
+    public DisableProviderTracking?: boolean;
+
+    /**
      * Optional. When true, the send is a DRY RUN: the engine and the provider execute their FULL
      * pipeline — validation, credential resolution, addressing, template resolution/rendering and
      * provider-specific payload construction — but the provider MUST NOT contact its external
@@ -132,6 +151,19 @@ export class Message {
      * lifecycle, stopping only at the external transport boundary.
      */
     public DryRun?: boolean;
+
+    /**
+     * Optional compliance message class (`Transactional`, `Operational`, or `Marketing`).
+     * Used when V1 sends run through the compliance gate; defaults to `Transactional` on
+     * single sends and `Operational` on entity-communications bulk sends.
+     */
+    public MessageClass?: MessageClass;
+
+    /**
+     * Optional opt-in flag to run the V2 compliance gate on V1 `SendSingleMessage` /
+     * `SendMessages` calls. Can also be enabled globally with `MJ_COMMS_V1_COMPLIANCE_GATE=true`.
+     */
+    public CheckComplianceGate?: boolean;
 
     constructor(copyFrom?: Message) {
         // copy all properties from the message to us, used for copying a message
@@ -172,6 +204,11 @@ export class MessageResult {
     public Message: ProcessedMessage;
     public Success: boolean;
     public Error: string;
+    /**
+     * Provider-assigned message identifier (for example SendGrid X-Message-Id),
+     * persisted to CommunicationLog.ProviderMessageID for webhook correlation.
+     */
+    public ProviderMessageID?: string;
     /**
      * True when this result was produced by a dry-run send (`Message.DryRun` was true): the
      * provider ran its full preflight + payload construction and reported success WITHOUT
@@ -1253,9 +1290,10 @@ export type WebhookNotificationInput = {
 export type NormalizedNotification = {
     /**
      * `'message'` for a content-change notification, `'lifecycle'` for a subscription
-     * lifecycle event (see {@link NormalizedNotification.LifecycleEvent}).
+     * lifecycle event (see {@link NormalizedNotification.LifecycleEvent}), or `'activity'`
+     * for normalized delivery/engagement webhook events.
      */
-    Kind: 'message' | 'lifecycle';
+    Kind: 'message' | 'lifecycle' | 'activity';
     /**
      * The remote subscription ID this notification concerns, when the service includes
      * it (Graph does).
@@ -1295,6 +1333,10 @@ export type NormalizedNotification = {
      * For `Kind: 'lifecycle'`: which lifecycle event occurred.
      */
     LifecycleEvent?: 'subscriptionRemoved' | 'missed' | 'reauthorizationRequired';
+    /**
+     * For `Kind: 'activity'`: normalized delivery and engagement events extracted from the webhook payload.
+     */
+    ActivityEvents?: NormalizedActivityEvent[];
     /**
      * The raw provider payload for this item, for consumer needs beyond the normalized
      * fields above.
@@ -1372,7 +1414,10 @@ export type ProviderOperation =
     | 'UpdateCalendarEvent'
     | 'RespondToCalendarEvent'
     | 'CancelCalendarEvent'
-    | 'VerifyMailboxAccess';
+    | 'VerifyMailboxAccess'
+    | 'CreateDomainAuthentication'
+    | 'VerifyDomainAuthentication'
+    | 'DeleteDomainAuthentication';
 
 
 /**
@@ -1978,6 +2023,48 @@ export abstract class BaseCommunicationProvider {
      */
     public GetSubscriptionCapabilities(): SubscriptionCapabilities | undefined {
         return undefined;
+    }
+
+    /**
+     * Registers a sending domain with the provider and returns required SPF/DKIM DNS records.
+     */
+    public async CreateDomainAuthentication(
+        params: CreateDomainAuthParams,
+        credentials?: ProviderCredentialsBase,
+    ): Promise<CreateDomainAuthResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support CreateDomainAuthentication (Domain: ${params.Domain}, credentials provided: ${!!credentials})`,
+            DNSRecords: [],
+        };
+    }
+
+    /**
+     * Validates DNS propagation for a previously registered sending domain.
+     */
+    public async VerifyDomainAuthentication(
+        params: VerifyDomainAuthParams,
+        credentials?: ProviderCredentialsBase,
+    ): Promise<VerifyDomainAuthResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support VerifyDomainAuthentication (Domain: ${params.Domain}, credentials provided: ${!!credentials})`,
+            Verified: false,
+            DNSRecords: [],
+        };
+    }
+
+    /**
+     * Removes a sending domain authentication registration from the provider.
+     */
+    public async DeleteDomainAuthentication(
+        params: DeleteDomainAuthParams,
+        credentials?: ProviderCredentialsBase,
+    ): Promise<BaseMessageResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support DeleteDomainAuthentication (ProviderDomainID: ${params.ProviderDomainID}, credentials provided: ${!!credentials})`,
+        };
     }
 
 }

@@ -91,9 +91,17 @@ describe('SendGridProvider', () => {
   });
 
   describe('getSupportedOperations', () => {
-    it('should support SendSingleMessage plus the Inbound Parse operations', () => {
+    it('should support SendSingleMessage, Inbound Parse, and Domain Authentication operations', () => {
       const ops = provider.getSupportedOperations();
-      expect(ops).toEqual(['SendSingleMessage', 'CreateSubscription', 'DeleteSubscription', 'ParseNotification']);
+      expect(ops).toEqual([
+        'SendSingleMessage',
+        'CreateSubscription',
+        'DeleteSubscription',
+        'ParseNotification',
+        'CreateDomainAuthentication',
+        'VerifyDomainAuthentication',
+        'DeleteDomainAuthentication',
+      ]);
     });
   });
 

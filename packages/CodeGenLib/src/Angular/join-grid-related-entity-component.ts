@@ -106,6 +106,12 @@ export class JoinGridRelatedEntityGenerator extends RelatedEntityDisplayComponen
         // The join entity's FK back to the parent, and the parent key column that FK references.
         const parentFK = this.GetForeignKey(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name);
         const parentKeyField = this.GetParentKeyFieldName(input.Entity!, parentFK);
+        // The filter is sent as SQL, so a key whose type needs quotes (uniqueidentifier, strings)
+        // must be quoted there. Unquoted, a GUID is a syntax error and the grid loads nothing.
+        const parentKeyValue = `record.${parentKeyField}`;
+        const joinFilter = parentFK.NeedsQuotes
+            ? `'${parentFK.Name}=\\'' + ${parentKeyValue} + '\\''`
+            : `'${parentFK.Name}=' + ${parentKeyValue}`;
 
         const template = `<mj-join-grid
     [ShowSaveButton]="false"
@@ -120,7 +126,7 @@ export class JoinGridRelatedEntityGenerator extends RelatedEntityDisplayComponen
     ColumnsMode="Fields"
     JoinEntityName="${input.RelationshipInfo!.RelatedEntity}"
     JoinEntityRowForeignKey="${this.GetForeignKeyName(input.RelationshipInfo!.RelatedEntity, config.RowsEntityName)}"
-    [JoinEntityExtraFilter]="'${parentFK.Name}=' + record.${parentKeyField}"
+    [JoinEntityExtraFilter]="${joinFilter}"
     [JoinEntityDisplayColumns]="${config.JoinEntityDisplayColumns ? `[${config.JoinEntityDisplayColumns.map(c => `'${c}'`).join(',')}]` : '[]'}"
     [NewRecordDefaultValues]="{${parentFK.Name}: record.${parentKeyField}}"
 >

@@ -524,7 +524,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         const adminRole = await ctx.Provider.GetEntityObject<MJRoleEntity>('MJ: Roles', ctx.User);
         adminRole.NewRecord();
         adminRole.Name = `${prefix}-AdminRole`;
-        adminRole.Description = `IT188 test role ${FIXTURE_TAG}`;
+        adminRole.Description = `IT193 test role ${FIXTURE_TAG}`;
         Assert(await adminRole.Save(), `${BUNDLE} Setup: failed to create AdminRole: ${adminRole.LatestResult?.CompleteMessage}`);
         createdRoleIDs.push(adminRole.ID);
 
@@ -533,7 +533,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             u.NewRecord();
             u.Name = `${prefix}-${tag}`;
             u.FirstName = tag;
-            u.LastName = 'IT188';
+            u.LastName = 'IT193';
             u.Email = `${prefix}-${tag.toLowerCase()}@example.test`;
             u.Type = 'User';
             u.IsActive = active;
@@ -576,7 +576,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             const a = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
             a.NewRecord();
             a.Name = name;
-            a.Description = `IT188 test agent ${FIXTURE_TAG}`;
+            a.Description = `IT193 test agent ${FIXTURE_TAG}`;
             a.TypeID = loopType.ID;
             a.Status = 'Active';
             a.InvocationMode = 'Top-Level';
