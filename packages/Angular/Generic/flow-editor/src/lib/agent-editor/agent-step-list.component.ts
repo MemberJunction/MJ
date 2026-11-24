@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, IndexByUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { ReadFlowDecisionStepConfiguration } from '@memberjunction/ai-core-plus';
 import { WaitingStepSubtitle, IsWaitingStepType } from './waiting-step-config';
 
@@ -285,29 +285,29 @@ export class AgentStepListComponent {
   /** Steps ordered from StartingStep through connected paths (BFS) so the Playbook reads top-to-bottom. */
   public get OrderedSteps(): MJAIAgentStepEntity[] {
     if (this.Steps.length <= 1) return this.Steps;
+    const stepsById = IndexByUUID(this.Steps);
+    const pathsByOrigin = GroupByUUID(this.Paths, p => p.OriginStepID);
     const ordered: MJAIAgentStepEntity[] = [];
-    const visited = new Set<string>();
+    const visited = new UUIDSet();
     const roots = this.Steps.filter(s => s.StartingStep);
     const queue = roots.length > 0 ? [...roots] : [this.Steps[0]];
 
     while (queue.length > 0) {
       const curr = queue.shift()!;
-      const key = curr.ID.toLowerCase();
-      if (visited.has(key)) continue;
-      visited.add(key);
+      if (visited.Has(curr.ID)) continue;
+      visited.Add(curr.ID);
       ordered.push(curr);
 
-      const nextPaths = this.GetOutgoingPaths(curr);
-      for (const path of nextPaths) {
-        const dest = this.Steps.find(s => UUIDsEqual(s.ID, path.DestinationStepID));
-        if (dest && !visited.has(dest.ID.toLowerCase())) {
+      for (const path of pathsByOrigin.Get(curr.ID) ?? []) {
+        const dest = stepsById.Get(path.DestinationStepID);
+        if (dest && !visited.Has(dest.ID)) {
           queue.push(dest);
         }
       }
     }
 
     for (const s of this.Steps) {
-      if (!visited.has(s.ID.toLowerCase())) {
+      if (!visited.Has(s.ID)) {
         ordered.push(s);
       }
     }
