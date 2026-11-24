@@ -1,6 +1,7 @@
 import { MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
   BaseComplianceRule,
+  CommunicationEngineBase,
   ComplianceAuditSnapshot,
   ComplianceEvalContext,
   ComplianceGateResult,
@@ -13,6 +14,9 @@ import {
 import type { MJCommunicationSuppressionEntity } from '@memberjunction/core-entities';
 import { JurisdictionResolver } from './JurisdictionResolver';
 import type { QuietHoursEvalContext } from './rules/QuietHoursRuleDriver';
+
+/** `Reason` of the block returned for a `Marketing` message that names no preference. */
+export const PREFERENCE_REQUIRED_REASON = 'PreferenceRequired';
 
 /**
  * Per-recipient inputs to {@link ComplianceGate.Evaluate} that are not part of the rule context.
@@ -112,6 +116,20 @@ export class ComplianceGate {
       ExpandedSenderJurisdictions: regimeResult.ExpandedSenderJurisdictions,
       MergedRules: regimeResult.MergedRules,
     };
+
+    // A Marketing message must be sent under a preference. The preference is what the recipient's
+    // opt-out, the one-click unsubscribe header and the preference page all refer to; without one
+    // an unsubscribe has nothing specific to apply to. This is a malformed send, not a compliance
+    // finding about the recipient, so no enforcement mode waives it.
+    if (ctx.MessageClass === 'Marketing' && !ctx.Preference) {
+      return {
+        Decision: 'Blocked',
+        Reason: PREFERENCE_REQUIRED_REASON,
+        Detail: 'A Marketing message must be sent under a preference (Envelope.PreferenceID)',
+        Obligations: regimeResult.Obligations,
+        AuditSnapshot: auditSnapshot,
+      };
+    }
 
     if (endpointBlock?.IsTerminal) {
       return this.applyEnforcementMode(
@@ -311,6 +329,12 @@ export class ComplianceGate {
     }
   }
 
+  /** Whether `channelID` is the `Email` base message type. False when the channel is not known. */
+  private isEmailChannel(channelID: string): boolean {
+    const channels = CommunicationEngineBase.Instance.BaseMessageTypes ?? [];
+    return channels.some((t) => UUIDsEqual(t.ID, channelID) && t.Type?.trim().toLowerCase() === 'email');
+  }
+
   private evaluateRegimes(
     ctx: ComplianceEvalContext,
     recipientJurisdiction: string | null,
@@ -327,8 +351,14 @@ export class ComplianceGate {
       ctx.MessageClass,
     );
 
+    // Marketing email always carries the one-click unsubscribe header, whether or not a regime is
+    // enabled. It is a mailbox-provider requirement (RFC 8058), not a jurisdictional one, and the
+    // unsubscribe route works for every message. A regime can add obligations; it cannot remove
+    // this one.
+    const baselineOneClickHeader = ctx.MessageClass === 'Marketing' && this.isEmailChannel(ctx.ChannelID);
+
     const obligations: ComplianceObligations = {
-      RequireOneClickHeader: false,
+      RequireOneClickHeader: baselineOneClickHeader,
       RequireFooterUnsubscribe: false,
       RequireSenderPostalAddress: false,
       SenderPostalAddress: ctx.Sender.PostalAddress ?? undefined,
@@ -380,6 +410,7 @@ export class ComplianceGate {
       const outcome = driver.Evaluate(merged, evalCtx);
       if (outcome.ObligationsPatch) {
         Object.assign(obligations, outcome.ObligationsPatch);
+        obligations.RequireOneClickHeader = obligations.RequireOneClickHeader || baselineOneClickHeader;
       }
       if (!outcome.Passed) {
         if (outcome.Decision === 'Deferred') {

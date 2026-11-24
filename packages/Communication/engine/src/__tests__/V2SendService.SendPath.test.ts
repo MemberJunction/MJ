@@ -48,10 +48,20 @@ function arrange(options: InstallOptions & { Sender?: FakeRow } = {}): void {
   requestedProviders = [];
   users = InstallCommsEngine(db, options);
   SeedSender(db, options.Sender);
+  // Marketing mail must be sent under a preference, so every test has one to send under.
+  db.Seed(ENTITY.Preferences, {
+    ID: IDS.Preference,
+    Name: 'Newsletter',
+    Status: 'Active',
+    MessageClass: 'Marketing',
+    DefaultState: 'Opted In',
+    CommunicationSenderID: null,
+  });
 }
 
 function envelope(messageClass: SendingEnvelope['MessageClass'], overrides: Partial<SendingEnvelope> = {}): SendingEnvelope {
-  return { SenderID: IDS.Sender, ChannelID: IDS.ChannelEmail, MessageClass: messageClass, ...overrides };
+  const preference = messageClass === 'Marketing' ? { PreferenceID: IDS.Preference } : {};
+  return { SenderID: IDS.Sender, ChannelID: IDS.ChannelEmail, MessageClass: messageClass, ...preference, ...overrides };
 }
 
 function toAddress(address: string): RecipientSendTarget {
@@ -221,6 +231,29 @@ describe('V2SendService.Send — allowed recipients', () => {
 });
 
 describe('V2SendService.Send — compliance gate', () => {
+  it('refuses Marketing mail sent under no preference, for every recipient and whatever the enforcement mode', async () => {
+    // The preference is what an opt-out, the one-click header and the preference page refer to.
+    for (const mode of ['Enforce', 'Shadow', 'Off']) {
+      arrange({ Sender: { EnforcementMode: mode } });
+      SeedEndpoint(db, 'dave@example.com');
+
+      const result = await send([toAddress('dave@example.com')], envelope('Marketing', { PreferenceID: undefined }));
+
+      expect(result).toMatchObject({ TotalCount: 1, QueuedCount: 0, BlockedCount: 1 });
+      expect(outcomeFor(result, 'dave@example.com')).toMatchObject({ Status: 'Blocked', Reason: 'PreferenceRequired' });
+      expect(provider.Attempts).toEqual([]);
+    }
+  });
+
+  it('sends Operational and Transactional mail without a preference', async () => {
+    SeedEndpoint(db, 'dave@example.com');
+
+    for (const messageClass of ['Operational', 'Transactional'] as const) {
+      const result = await send([toAddress('dave@example.com')], envelope(messageClass));
+      expect(outcomeFor(result, 'dave@example.com')?.Status).toBe('Sent');
+    }
+  });
+
   it('blocks a suppressed recipient without sending or logging, and still sends to the others', async () => {
     const carol = SeedEndpoint(db, 'carol@example.com');
     const dave = SeedEndpoint(db, 'dave@example.com');
@@ -267,14 +300,6 @@ describe('V2SendService.Send — compliance gate', () => {
 
   it('blocks a principal who opted out of the envelope preference', async () => {
     const bob = SeedPrincipal(db, 'contact-1', 'bob@example.com');
-    db.Seed(ENTITY.Preferences, {
-      ID: IDS.Preference,
-      Name: 'Newsletter',
-      Status: 'Active',
-      MessageClass: 'Marketing',
-      DefaultState: 'Opted In',
-      CommunicationSenderID: null,
-    });
     db.Seed(ENTITY.PrincipalPreferences, {
       EntityID: IDS.ContactsEntity,
       RecordID: 'contact-1',
@@ -827,14 +852,6 @@ describe('V2SendService.Send — RunView failures are errors, never "no rows"', 
 
   it('principal-preference lookup failure aborts the send instead of assuming no opt-out', async () => {
     const bob = SeedPrincipal(db, 'contact-1', 'bob@example.com');
-    db.Seed(ENTITY.Preferences, {
-      ID: IDS.Preference,
-      Name: 'Newsletter',
-      Status: 'Active',
-      MessageClass: 'Marketing',
-      DefaultState: 'Opted In',
-      CommunicationSenderID: null,
-    });
     db.FailRunView(ENTITY.PrincipalPreferences);
 
     await expect(send([{ Principal: bob.Ref }], envelope('Marketing', { PreferenceID: IDS.Preference }))).rejects.toThrow(

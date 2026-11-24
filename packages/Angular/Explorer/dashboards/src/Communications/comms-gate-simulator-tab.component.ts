@@ -58,7 +58,7 @@ import {
           </div>
 
           <div class="comms-field">
-            <label for="sim-pref">Preference (optional)</label>
+            <label for="sim-pref">Preference (required for Marketing)</label>
             <select id="sim-pref" class="comms-select" [(ngModel)]="SelectedPreferenceId">
               <option value="">(No preference)</option>
               @for (pref of Metadata.Preferences; track pref.ID) {

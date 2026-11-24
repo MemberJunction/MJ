@@ -3,6 +3,7 @@ import type {
   MJCommunicationEndpointEntity,
   MJCommunicationSenderEntity,
   MJCommunicationSuppressionEntity,
+  MJCommunicationPreferenceEntity,
 } from '@memberjunction/core-entities';
 import {
   ComputeTrackingSignature,
@@ -122,10 +123,11 @@ describe('Comms V2 Security & Correctness Regression Tests', () => {
       expect(res.Decision).toBe('Blocked');
     }
 
+    const newsletter = { ID: 'pref-1', Name: 'Newsletter', MessageClass: 'Marketing', DefaultState: 'Opted In', Status: 'Active' } as unknown as MJCommunicationPreferenceEntity;
     const complainedEp = { ID: 'ep-2', NormalizedValue: 'c@example.com', Status: 'Complained' } as unknown as MJCommunicationEndpointEntity;
     const enforceSender = { ID: 'sender-2', Name: 'Default', EnforcementMode: 'Enforce' } as unknown as MJCommunicationSenderEntity;
     const complainedMkt = gate.Evaluate(
-      { Sender: enforceSender, SenderAncestors: [], Endpoint: complainedEp, MessageClass: 'Marketing', ChannelID: 'chan-email', Now: new Date() },
+      { Sender: enforceSender, SenderAncestors: [], Endpoint: complainedEp, Preference: newsletter, MessageClass: 'Marketing', ChannelID: 'chan-email', Now: new Date() },
       { Suppressions: [] },
     );
     expect(complainedMkt.Decision).toBe('Blocked');
@@ -133,7 +135,7 @@ describe('Comms V2 Security & Correctness Regression Tests', () => {
 
     const softBouncingEp = { ID: 'ep-3', NormalizedValue: 'sb@example.com', Status: 'Soft Bouncing' } as unknown as MJCommunicationEndpointEntity;
     const softRes = gate.Evaluate(
-      { Sender: enforceSender, SenderAncestors: [], Endpoint: softBouncingEp, MessageClass: 'Marketing', ChannelID: 'chan-email', Now: new Date() },
+      { Sender: enforceSender, SenderAncestors: [], Endpoint: softBouncingEp, Preference: newsletter, MessageClass: 'Marketing', ChannelID: 'chan-email', Now: new Date() },
       { Suppressions: [] },
     );
     expect(softRes.Decision).toBe('Allowed');

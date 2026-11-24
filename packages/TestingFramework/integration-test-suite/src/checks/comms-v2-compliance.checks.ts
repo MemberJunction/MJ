@@ -23,6 +23,7 @@ import type {
   MJCommunicationSuppressionEntity,
   MJJurisdictionEntity,
   MJJurisdictionMemberEntity,
+  MJCommunicationPreferenceEntity,
 } from '@memberjunction/core-entities';
 import { ComplianceGate, JurisdictionResolver } from '@memberjunction/communication-engine';
 import { UUIDSet } from '@memberjunction/global';
@@ -41,18 +42,22 @@ export const CommsV2ComplianceChecks: NamedCheck[] = [
     Name: 'CV2G1: Active suppression blocks while expired suppression allows',
     Fn: async (ctx: IntegrationCheckContext) => {
       const rv = new RunView();
-      const [senderRes, channelRes] = await rv.RunViews(
+      const [senderRes, channelRes, preferenceRes] = await rv.RunViews(
         [
           { EntityName: 'MJ: Communication Senders', ExtraFilter: "Name='Default Organization'", MaxRows: 1, ResultType: 'entity_object' },
           { EntityName: 'MJ: Communication Base Message Types', ExtraFilter: "Type='Email'", MaxRows: 1, ResultType: 'entity_object' },
+          { EntityName: 'MJ: Communication Preferences', ExtraFilter: "Name='General updates'", MaxRows: 1, ResultType: 'entity_object' },
         ],
         ctx.User,
       );
       Assert(senderRes.Success && senderRes.Results.length > 0, 'Default Organization sender missing');
       Assert(channelRes.Success && channelRes.Results.length > 0, 'Email channel missing');
+      Assert(preferenceRes.Success && preferenceRes.Results.length > 0, 'General updates preference seed missing');
 
       const sender = senderRes.Results[0] as MJCommunicationSenderEntity;
       const channel = channelRes.Results[0] as MJCommunicationBaseMessageTypeEntity;
+      // Marketing mail must be sent under a preference; the seeded one defaults to Opted In.
+      const preference = preferenceRes.Results[0] as MJCommunicationPreferenceEntity;
 
       const endpointId = randomUUID();
       const endpoint = await ctx.Provider.GetEntityObject<MJCommunicationEndpointEntity>(
@@ -90,6 +95,7 @@ export const CommsV2ComplianceChecks: NamedCheck[] = [
         Sender: sender,
         SenderAncestors: [sender.ID],
         Endpoint: endpoint,
+        Preference: preference,
         MessageClass: 'Marketing' as const,
         ChannelID: channel.ID,
         Now: new Date(),
@@ -216,17 +222,19 @@ export const CommsV2ComplianceChecks: NamedCheck[] = [
     Name: 'CV2G4: ComplianceGate Shadow mode populates AuditSnapshot and starter GDPR regime defaults to Disabled',
     Fn: async (ctx: IntegrationCheckContext) => {
       const rv = new RunView();
-      const [senderRes, channelRes, regimeRes] = await rv.RunViews(
+      const [senderRes, channelRes, regimeRes, preferenceRes] = await rv.RunViews(
         [
           { EntityName: 'MJ: Communication Senders', ExtraFilter: "Name='Default Organization'", MaxRows: 1, ResultType: 'entity_object' },
           { EntityName: 'MJ: Communication Base Message Types', ExtraFilter: "Type='Email'", MaxRows: 1, ResultType: 'entity_object' },
           { EntityName: 'MJ: Communication Compliance Regimes', ExtraFilter: "Name='GDPR'", MaxRows: 1, ResultType: 'entity_object' },
+          { EntityName: 'MJ: Communication Preferences', ExtraFilter: "Name='General updates'", MaxRows: 1, ResultType: 'entity_object' },
         ],
         ctx.User,
       );
       Assert(senderRes.Success && senderRes.Results.length > 0, 'Default Organization sender missing');
       Assert(channelRes.Success && channelRes.Results.length > 0, 'Email channel missing');
       Assert(regimeRes.Success && regimeRes.Results.length > 0, 'GDPR regime seed missing');
+      Assert(preferenceRes.Success && preferenceRes.Results.length > 0, 'General updates preference seed missing');
 
       const baseSender = senderRes.Results[0] as MJCommunicationSenderEntity;
       const channel = channelRes.Results[0] as MJCommunicationBaseMessageTypeEntity;
@@ -256,6 +264,7 @@ export const CommsV2ComplianceChecks: NamedCheck[] = [
           Sender: baseSender,
           SenderAncestors: [baseSender.ID],
           Endpoint: endpoint,
+          Preference: preferenceRes.Results[0] as MJCommunicationPreferenceEntity,
           MessageClass: 'Marketing',
           ChannelID: channel.ID,
           Now: new Date(),

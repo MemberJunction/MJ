@@ -13,7 +13,8 @@ import type {
   MJJurisdictionEntity,
   MJJurisdictionMemberEntity,
 } from '@memberjunction/core-entities';
-import { BaseComplianceRule } from '@memberjunction/communication-types';
+import { BaseComplianceRule, CommunicationEngineBase } from '@memberjunction/communication-types';
+import type { MJCommunicationBaseMessageTypeEntity } from '@memberjunction/core-entities';
 import { ComplianceGate } from '../compliance/ComplianceGate';
 import { ComplianceMetadataSource, JurisdictionResolver } from '../compliance/JurisdictionResolver';
 import {
@@ -285,6 +286,7 @@ describe('JurisdictionResolver & ComplianceGate', () => {
         Sender: ukSender,
         SenderAncestors: [],
         Endpoint: endpoint,
+        Preference: pref,
         MessageClass: 'Marketing',
         ChannelID: CHANNEL_EMAIL,
         Now: new Date('2026-06-15T14:00:00Z'),
@@ -300,6 +302,7 @@ describe('JurisdictionResolver & ComplianceGate', () => {
         Sender: sender,
         SenderAncestors: [],
         Endpoint: endpoint,
+        Preference: pref,
         MessageClass: 'Marketing',
         ChannelID: CHANNEL_EMAIL,
         Now: new Date('2026-06-15T14:00:00Z'),
@@ -548,6 +551,7 @@ describe('JurisdictionResolver & ComplianceGate', () => {
         Sender: sender,
         SenderAncestors: [],
         Endpoint: endpoint,
+        Preference: pref,
         MessageClass: 'Marketing',
         ChannelID: CHANNEL_EMAIL,
         Now: new Date('2026-06-15T14:00:00Z'),
@@ -566,6 +570,7 @@ describe('JurisdictionResolver & ComplianceGate', () => {
         Sender: sender,
         SenderAncestors: [],
         Endpoint: endpoint,
+        Preference: pref,
         MessageClass: 'Marketing',
         ChannelID: CHANNEL_EMAIL,
         Now: new Date('2026-06-15T14:00:00Z'),
@@ -574,5 +579,101 @@ describe('JurisdictionResolver & ComplianceGate', () => {
     );
     expect(badJsonRes.Decision).toBe('Blocked');
     expect(badJsonRes.Reason).toBe('ComplianceRegime');
+  });
+
+  describe('one-click unsubscribe header for Marketing email, with no regime needed', () => {
+    const CHANNEL_SMS = '22222222-2222-2222-2222-222222222222';
+    const noRegimes = (): ComplianceMetadataSource => ({ ...buildSource(), ComplianceRegimes: [] });
+
+    /** A regime whose unsubscribe rule asks for nothing: the weakest thing a regime can say. */
+    const regimeAskingForNothing = (): ComplianceMetadataSource => {
+      const source = buildSource();
+      return {
+        ...source,
+        ComplianceRegimeRules: source.ComplianceRegimeRules.map((r) =>
+          r.CommunicationComplianceRuleTypeID === RT.Unsubscribe
+            ? ({ ...r, Parameters: JSON.stringify({ oneClickHeader: 'optional', footerLink: 'optional' }) } as MJCommunicationComplianceRegimeRuleEntity)
+            : r,
+        ),
+      };
+    };
+
+    const obligationsFor = (source: ComplianceMetadataSource, messageClass: 'Marketing' | 'Operational' | 'Transactional', channelID: string) =>
+      new ComplianceGate(new JurisdictionResolver(source)).Evaluate(
+        {
+          Sender: sender,
+          SenderAncestors: [],
+          Endpoint: { ...endpoint, BaseMessageTypeID: channelID } as MJCommunicationEndpointEntity,
+          Preference: messageClass === 'Marketing' ? pref : undefined,
+          MessageClass: messageClass,
+          ChannelID: channelID,
+          Now: new Date('2026-06-15T14:00:00Z'),
+        },
+        { Suppressions: [], RecipientJurisdiction: null },
+      ).Obligations;
+
+    beforeEach(() => {
+      vi.spyOn(CommunicationEngineBase.Instance, 'BaseMessageTypes', 'get').mockReturnValue([
+        { ID: CHANNEL_EMAIL, Type: 'Email' },
+        { ID: CHANNEL_SMS, Type: 'SMS' },
+      ] as MJCommunicationBaseMessageTypeEntity[]);
+    });
+
+    it('REGRESSION: requires the header on Marketing email when no regime applies', () => {
+      // Every seeded regime ships Disabled, so a new installation used to send marketing mail with
+      // no way to unsubscribe.
+      const obligations = obligationsFor(noRegimes(), 'Marketing', CHANNEL_EMAIL);
+
+      expect(obligations.RequireOneClickHeader).toBe(true);
+      expect(obligations.RequireFooterUnsubscribe).toBe(false);
+      expect(obligations.RequireSenderPostalAddress).toBe(false);
+    });
+
+    it('does not require it on Operational or Transactional email', () => {
+      expect(obligationsFor(noRegimes(), 'Operational', CHANNEL_EMAIL).RequireOneClickHeader).toBe(false);
+      expect(obligationsFor(noRegimes(), 'Transactional', CHANNEL_EMAIL).RequireOneClickHeader).toBe(false);
+    });
+
+    it('does not require it on a channel that is not email', () => {
+      expect(obligationsFor(noRegimes(), 'Marketing', CHANNEL_SMS).RequireOneClickHeader).toBe(false);
+    });
+
+    it('keeps it when an applicable regime marks the header optional: a regime can add, not remove', () => {
+      const obligations = obligationsFor(regimeAskingForNothing(), 'Marketing', CHANNEL_EMAIL);
+
+      expect(obligations.RequireOneClickHeader).toBe(true);
+      expect(obligations.RequireFooterUnsubscribe).toBe(false);
+    });
+  });
+
+  describe('a Marketing message must name a preference', () => {
+    const evaluate = (messageClass: 'Marketing' | 'Operational' | 'Transactional', mode: 'Enforce' | 'Shadow' | 'Off', preference?: MJCommunicationPreferenceEntity) =>
+      new ComplianceGate(new JurisdictionResolver({ ...buildSource(), ComplianceRegimes: [] })).Evaluate(
+        {
+          Sender: { ...sender, EnforcementMode: mode } as MJCommunicationSenderEntity,
+          SenderAncestors: [],
+          Endpoint: endpoint,
+          Preference: preference,
+          MessageClass: messageClass,
+          ChannelID: CHANNEL_EMAIL,
+          Now: new Date('2026-06-15T14:00:00Z'),
+        },
+        { Suppressions: [], RecipientJurisdiction: null },
+      );
+
+    it('blocks Marketing with no preference, and no enforcement mode waives it', () => {
+      for (const mode of ['Enforce', 'Shadow', 'Off'] as const) {
+        expect(evaluate('Marketing', mode)).toMatchObject({ Decision: 'Blocked', Reason: 'PreferenceRequired' });
+      }
+    });
+
+    it('allows Marketing sent under a preference', () => {
+      expect(evaluate('Marketing', 'Enforce', pref).Decision).toBe('Allowed');
+    });
+
+    it('does not ask Operational or Transactional mail for a preference', () => {
+      expect(evaluate('Operational', 'Enforce').Decision).toBe('Allowed');
+      expect(evaluate('Transactional', 'Enforce').Decision).toBe('Allowed');
+    });
   });
 });

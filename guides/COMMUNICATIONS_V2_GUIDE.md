@@ -106,6 +106,12 @@ Every send declares a `MessageClass`. It is the main switch for how strictly the
 | `Operational` | Service messages that are useful but not required | Non-transactional: every suppression reason applies, and so do quiet hours, consent and sender-identification rules that match its class. |
 | `Marketing` | Promotional content | As `Operational`. The seeded regimes attach all of their rules to this class. |
 
+**A `Marketing` message must be sent under a preference** (`Envelope.PreferenceID`). The preference is the topic
+the recipient opts in to or out of, and it is what the one-click unsubscribe header and the preference page act
+on: unsubscribing from a message opts the recipient out of the preference it was sent under. A `Marketing`
+message with no preference is blocked with `PreferenceRequired`, in every enforcement mode. `Operational` and
+`Transactional` messages do not need one.
+
 The classes are ordered `Transactional` < `Operational` < `Marketing`. An envelope may not use a class less
 strict than its preference's class: sending a `Marketing` preference as `Transactional` is blocked with
 `MessageClassMismatch`.
@@ -148,6 +154,7 @@ the `Preference Center`, and is either a `Double` opt-in or linked to a log. The
 | `Hard Bounce`, `Invalid Address`, `Spam Complaint`, `Admin Block`, `User Unsubscribe`, `Policy` | The endpoint's status or a suppression with this reason. |
 | `Erased` | The endpoint was erased. |
 | `ComplianceRegime` | A rule driver failed the send; `Detail` has its explanation. Also returned when a rule's driver class cannot be loaded or its `Parameters` are not a JSON object (the gate fails closed). |
+| `PreferenceRequired` | A `Marketing` message was sent with no `Envelope.PreferenceID`. Not waived by `Shadow` or `Off`. |
 | `PreferenceDisabled`, `MessageClassMismatch`, `DoubleOptInPending`, `OptedOut` | Preference step. |
 | `QuietHours` | Deferral (any rule that returns `Decision: 'Deferred'` is reported under this reason). |
 | `ObligationValidationFailed` | The final body lacked a required unsubscribe link or postal address (dispatch-time check, `Enforce` mode only). |
@@ -163,7 +170,7 @@ value uses `V2DispatchConfig.InstanceEnforcementMode`, then `Enforce`.
 | `Shadow` | The message is sent. The gate's own result keeps the reason and a `Shadow mode: would have ...` detail, which the gate simulator shows; `Send()` and `EvaluateEligibility()` report the recipient as sendable and do not return or store that reason. |
 | `Off` | The message is sent with no reason recorded. |
 
-`Hard Bounce`, `Invalid Address` and `Erased` blocks are applied in every mode.
+`Hard Bounce`, `Invalid Address`, `Erased` and `PreferenceRequired` blocks are applied in every mode.
 
 ### What the dispatcher adds
 
@@ -172,7 +179,8 @@ Given the gate's obligations, the dispatcher:
 - appends a compliance footer (`<div data-mj-compliance-footer="true">`) containing the sender's postal address
   and an unsubscribe link, when either is required;
 - sets `List-Unsubscribe: <.../comms/unsubscribe/<token>>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
-  when the one-click header is required;
+  when the one-click header is required, which is always the case for a `Marketing` email. A recipient who uses
+  it is opted out of the preference the message was sent under;
 - rewrites `http(s)` links in the HTML body to `/comms/click/<token>?u=...&sig=...` when click tracking is
   allowed, the envelope did not set `TrackClicks: false`, and an HMAC secret is configured (the unsubscribe and
   preference-center links are never rewritten, and neither is a link whose tracked form would be longer than
@@ -205,8 +213,11 @@ These are metadata, synced from `metadata/` with `mj sync push`:
 | `metadata/authorizations`, `metadata/authorization-roles` | `Communications: Admin`, granted to the `Developer` role |
 
 **Every seeded regime ships with `Status = 'Disabled'`.** Until you enable the regimes that apply to you, the
-gate enforces endpoint status, suppressions and preferences only. No unsubscribe footer, one-click header or
-postal address is added to any message, and open and click tracking stay allowed. The seeded regimes are a starting point, not legal advice: review each rule with counsel before
+gate enforces endpoint status, suppressions and preferences only. No unsubscribe footer or postal address is
+added to any message, and open and click tracking stay allowed. The one exception is the one-click unsubscribe
+header: every `Marketing` email carries `List-Unsubscribe` and `List-Unsubscribe-Post`, with or without a
+regime, because mailbox providers require it (RFC 8058) wherever the sender and recipient are. A regime can add
+obligations to that; it cannot remove it. The seeded regimes are a starting point, not legal advice: review each rule with counsel before
 enabling it. Fill in the default sender's `FromEmail`, `PostalAddress` and `JurisdictionID` first; a regime
 that requires a postal address blocks marketing sends from a sender that has none.
 
@@ -231,7 +242,7 @@ Parameter keys are accepted in camelCase or PascalCase.
 | `RequireDoubleOptIn` | `required`: boolean | `true` wins | Blocks non-transactional sends unless the principal preference is `Opted In` with `OptInMethod = 'Double'`. |
 | `ConsentEvidence` | `requireSource`, `requireTimestamp`, `requireConsentText`: boolean | `true` wins per field | Blocks non-transactional sends when the named evidence is missing from the principal preference. |
 | `ConsentExpiry` | `maxDays`: number; `impliedOnly`: boolean | Shortest `maxDays`; `impliedOnly` only if every regime sets it | Blocks when the preference's `ExpiresAt` has passed or `ConsentAt + maxDays` has passed. |
-| `UnsubscribeMechanism` | `oneClickHeader`, `footerLink`: `required` \| `optional` \| `none` | `required` > `optional` > `none` | Sets the one-click header and footer link obligations. Never blocks. |
+| `UnsubscribeMechanism` | `oneClickHeader`, `footerLink`: `required` \| `optional` \| `none` | `required` > `optional` > `none` | Sets the one-click header and footer link obligations. Never blocks. A `Marketing` email keeps the header whatever the rule says. |
 | `UnsubscribeHonorWindow` | `maxHours`: number | Shortest | Recorded in the audit snapshot only. |
 | `SenderIdentification` | `requirePostalAddress`, `requireSenderName`: boolean | `true` wins | Blocks non-transactional sends from a sender missing the address or name; sets the postal address obligation. |
 | `QuietHours` | `windows`: `[{ startHour, endHour }]` (local hours 0-23, may wrap midnight) | Union of windows | Defers non-transactional sends to the next hour outside every window. The time zone is the principal's, else the recipient jurisdiction's, else the sender's `Configuration.timezone`, else UTC. |
@@ -496,7 +507,9 @@ They are listed in the order a send needs them.
 5. **A recipient that is a principal record**, as `{ Principal: { EntityID, RecordID } }`. Resolving a principal
    is what registers its address as an endpoint. A recipient given only as `{ Endpoint: { Address } }` is
    matched against endpoints that already exist and is blocked with `NoEndpoint` when the address is new.
-6. **Something that calls `Send`.** There is no screen for it. Call `CommunicationEngine.Instance.Send()` on the
+6. **A preference, for `Marketing`.** A `Marketing` message must name one in `Envelope.PreferenceID`.
+   `General updates` is seeded for the default sender; define your own topics alongside it.
+7. **Something that calls `Send`.** There is no screen for it. Call `CommunicationEngine.Instance.Send()` on the
    server, or use V1 `RunEntityCommunication` with `UseV2 = true`.
 
 For links in the message to work, also set `MJAPI_PUBLIC_URL` and `MJ_COMMS_HMAC_SECRET` from the table above.

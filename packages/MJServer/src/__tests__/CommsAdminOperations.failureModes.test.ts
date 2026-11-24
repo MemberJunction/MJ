@@ -994,13 +994,23 @@ describe('Communications.SimulateComplianceGate', () => {
   it('evaluates the real ComplianceGate and reads every view as the requesting user', async () => {
     views.Serve('MJ: Communication Senders', [SENDER]);
 
-    const res = await simulate({ SenderID: 'sender-1', MessageClass: 'Marketing' });
+    const res = await simulate({ SenderID: 'sender-1', MessageClass: 'Operational' });
 
     expect(res.Output?.Success).toBe(true);
     expect(res.Output?.Decision).toBe('Allowed');
     expect((JSON.parse(res.Output?.ResultJSON ?? '{}') as { Decision: string }).Decision).toBe('Allowed');
     expect(views.Calls.length).toBeGreaterThan(0);
     expect(views.Calls.every((c) => c.User === DEVELOPER && c.Provider === provider)).toBe(true);
+  });
+
+  it('reports Marketing simulated with no preference as blocked: a Marketing message must name one', async () => {
+    views.Serve('MJ: Communication Senders', [SENDER]);
+
+    const res = await simulate({ SenderID: 'sender-1', MessageClass: 'Marketing' });
+
+    expect(res.Output?.Success).toBe(true);
+    expect(res.Output?.Decision).toBe('Blocked');
+    expect((JSON.parse(res.Output?.ResultJSON ?? '{}') as { Reason: string }).Reason).toBe('PreferenceRequired');
   });
 
   it('reports an unknown sender', async () => {
