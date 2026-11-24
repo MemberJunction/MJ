@@ -183,7 +183,7 @@ describe('DDLGenerator', () => {
             });
             const ssSql = gen.GenerateCreateTable(config, 'sqlserver');
             expect(ssSql).not.toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', NULL, NULL)");
-            expect(ssSql).not.toContain("@level2name = 'Email'");
+            expect(ssSql).not.toContain("@level2name = N'Email'");
 
             const pgSql = gen.GenerateCreateTable(config, 'postgresql');
             expect(pgSql).not.toContain('COMMENT ON TABLE');
@@ -235,7 +235,7 @@ describe('DDLGenerator', () => {
             expect(sql).toContain("IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', N'COLUMN', N'Phone'))");
             expect(sql).toContain("EXEC sp_addextendedproperty");
             expect(sql).toContain("@value = N'Contact''s phone number'");
-            expect(sql).toContain("@level2type = N'COLUMN', @level2name = 'Phone'");
+            expect(sql).toContain("@level2type = N'COLUMN', @level2name = N'Phone'");
         });
 
         it('should emit COMMENT ON COLUMN on PostgreSQL ADD column when Description is set', () => {
