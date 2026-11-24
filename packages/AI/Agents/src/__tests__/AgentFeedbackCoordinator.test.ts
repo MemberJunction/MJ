@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
 import {
+    BaseHumanTaskProvider,
+    HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT,
+    HumanTaskProviderDefaults,
     ParseAssignmentStrategy,
+    type HumanTaskRaiseContext,
+    type HumanTaskRaiseResult,
     type AgentRequestAssignmentStrategy,
     type AgentResponseForm,
     type BaseAgentNextStep,
@@ -25,7 +30,21 @@ import {
     type RunViewResult,
 } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+
+const TEST_PROVIDER_KEY = 'FeedbackCoordinatorTestProvider';
+/** What the test provider was asked to raise, and what it answers next. */
+const raisedContexts: HumanTaskRaiseContext[] = [];
+let nextRaise: HumanTaskRaiseResult = { Outcome: 'raised', ExternalReference: 'TASK-1' };
+class TestHumanTaskProvider extends BaseHumanTaskProvider {
+    public async RaiseTask(context: HumanTaskRaiseContext): Promise<HumanTaskRaiseResult> {
+        raisedContexts.push(context);
+        return nextRaise;
+    }
+}
+MJGlobal.Instance.ClassFactory.Register(BaseHumanTaskProvider, TestHumanTaskProvider, TEST_PROVIDER_KEY, 0, false, false, {
+    [HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT]: true,
+});
 
 const mockRunViews = vi.fn<(views: RunViewParams[], contextUser?: UserInfo) => Promise<RunViewResult[]>>();
 const mockGetEntityObject = vi.fn<(entityName: string, contextUser?: UserInfo) => Promise<MJAIAgentRequestEntity>>();
@@ -856,6 +875,61 @@ describe('AgentFeedbackCoordinator', () => {
             expect(requestId).toBe(row.ID);
             expect(row.RequestForUserID).toBe(CALLER_ID);
             expect(saveUser).toBe(UI_CALLER);
+        });
+
+        describe('the install default human-task provider', () => {
+            afterEach(() => {
+                HumanTaskProviderDefaults.Instance.Configure(null);
+                raisedContexts.length = 0;
+                nextRaise = { Outcome: 'raised', ExternalReference: 'TASK-1' };
+            });
+
+            it('leaves a request in the inbox only when no default is configured', async () => {
+                await create(createParamsStub({ contextUser: OWNER_CALLER }));
+                const [{ Row: row }] = created;
+                expect(row.HumanTaskProvider).toBeNull();
+                expect(raisedContexts).toHaveLength(0);
+                expect(row.Save).toHaveBeenCalledOnce();
+            });
+
+            it("raises a Chat step's request through the default, naming it before the save and recording its reference", async () => {
+                HumanTaskProviderDefaults.Instance.Configure(TEST_PROVIDER_KEY);
+                const requestId = await create(createParamsStub({ contextUser: OWNER_CALLER }));
+
+                const [{ Row: row }] = created;
+                expect(row.HumanTaskProvider).toBe(TEST_PROVIDER_KEY);
+                expect(row.HumanTaskExternalReference).toBe('TASK-1');
+                expect(row.Save).toHaveBeenCalledTimes(2);
+                expect(raisedContexts).toHaveLength(1);
+                expect(raisedContexts[0].Subject).toEqual({ Kind: 'AgentRequest', AgentRequestID: requestId, AgentRunID: agentRun.ID });
+                expect(raisedContexts[0].Instructions).toBe('Please review.');
+                expect(raisedContexts[0].ContextUser).toBe(OWNER_CALLER);
+            });
+
+            it("does not route a Plan step's approval", async () => {
+                HumanTaskProviderDefaults.Instance.Configure(TEST_PROVIDER_KEY);
+                await coordinator.CreateFeedbackRequest({
+                    Params: createParamsStub({ contextUser: OWNER_CALLER }),
+                    AgentRun: agentRun as MJAIAgentRunEntityExtended,
+                    StepEntity: { ...step, StepType: 'Plan' } as MJAIAgentRunStepEntityExtended,
+                    Decision: decision,
+                    Provider: providerStub as IMetadataProvider,
+                });
+                expect(created[0].Row.HumanTaskProvider).toBeNull();
+                expect(raisedContexts).toHaveLength(0);
+            });
+
+            it('keeps the request in the inbox, with no provider named, when raising fails', async () => {
+                HumanTaskProviderDefaults.Instance.Configure(TEST_PROVIDER_KEY);
+                nextRaise = { Outcome: 'permanent-failure', Message: 'task type missing' };
+                const requestId = await create(createParamsStub({ contextUser: OWNER_CALLER }));
+
+                const [{ Row: row }] = created;
+                expect(requestId).toBe(row.ID);
+                expect(row.HumanTaskProvider).toBeNull();
+                expect(row.Save).toHaveBeenCalledTimes(2);
+                expect(LogError).toHaveBeenCalledWith(expect.stringContaining('task type missing'));
+            });
         });
     });
 

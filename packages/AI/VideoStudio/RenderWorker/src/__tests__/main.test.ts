@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +12,7 @@ import {
 } from '@memberjunction/video-studio-core';
 import {
     GetInstalledHyperFramesPackageVersion,
+    ResolveHyperFramesPackageJsonPath,
     GetInstalledHyperFramesVersion,
 } from '../hyperframes-backend.js';
 import { FakeRenderBackend, type RenderWorkerServer } from '../index.js';
@@ -110,6 +112,29 @@ describe('main CLI entrypoint and environment configuration', () => {
         expect(() => GetInstalledHyperFramesPackageVersion('does-not-exist')).toThrow(
             /Unable to resolve installed version for @hyperframes\/does-not-exist/,
         );
+    });
+
+    it('finds a hoisted @hyperframes/* package in a parent node_modules (npm layout) and prefers a nested copy when both exist', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-hf-hoisted-'));
+        try {
+            const workerDir = path.join(root, 'node_modules', '@memberjunction', 'video-studio-render-worker');
+            const hoistedPkg = path.join(root, 'node_modules', '@hyperframes', 'producer', 'package.json');
+            fs.mkdirSync(workerDir, { recursive: true });
+            fs.mkdirSync(path.dirname(hoistedPkg), { recursive: true });
+            fs.writeFileSync(hoistedPkg, JSON.stringify({ name: '@hyperframes/producer', version: '9.9.1' }));
+
+            expect(ResolveHyperFramesPackageJsonPath('producer', workerDir)).toBe(hoistedPkg);
+            expect(GetInstalledHyperFramesPackageVersion('producer', workerDir)).toBe('9.9.1');
+
+            const nestedPkg = path.join(workerDir, 'node_modules', '@hyperframes', 'producer', 'package.json');
+            fs.mkdirSync(path.dirname(nestedPkg), { recursive: true });
+            fs.writeFileSync(nestedPkg, JSON.stringify({ name: '@hyperframes/producer', version: '9.9.2' }));
+            expect(GetInstalledHyperFramesPackageVersion('producer', workerDir)).toBe('9.9.2');
+
+            expect(ResolveHyperFramesPackageJsonPath('does-not-exist', workerDir)).toBeUndefined();
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
     });
 
     it('pins every @hyperframes/* and hyperframes dependency to an identical exact semver in package.json and pnpm-lock.yaml', () => {

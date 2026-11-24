@@ -136,6 +136,21 @@ Each `pollOnce()` pass loads active graph state **once** in `propagateAndRollup`
 **A host with no runner is limited, not broken.** "Nobody here can run this" is not the same as
 "this ran and did not work", so those tasks stay visible and claimable by an instance that can.
 
+### Steps no runner executes
+
+`External`, `Wait`, and a `Human` step that names a `provider` are **waiting steps**: the dispatcher
+reaches them, marks them waiting (`Task.ClaimedBy = '__waiting__'`, with `DueAt` / `CorrelationKey` /
+the payload they were reached with), and something else finishes them.
+
+| | Finished by | API |
+|---|---|---|
+| `Wait` | the dispatcher, once `DueAt` passes | — |
+| `External` | a signal, by task ID or correlation key | `TaskGraphWaitingSteps.CompleteWaitingStep()` in-process; `TaskGraph.CompleteWaitingStep` remote operation |
+| `Human` + `provider` | the provider, with the same call | subclass `BaseHumanTaskProvider` (`@memberjunction/ai-core-plus`), `@RegisterClass(BaseHumanTaskProvider, '<key>')`; may be the install default (see the guide) |
+
+A Human step with no provider (or `'AgentRequest'`) keeps the built-in `MJ: AI Agent Requests` inbox.
+Full model, examples and troubleshooting: [Workflows and Task Graphs Guide § Waiting steps](../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md#waiting-steps-external-wait-and-human-providers).
+
 > **An Agent node starts a brand-new `AIAgentRun`** — a root run, linked from `Task.AgentRunID`
 > rather than nested under the submitting run. The relationship is expressed by the Task row.
 

@@ -4,6 +4,7 @@ import { FlowNode, FlowConnection, FlowConnectionStyle, FlowNodeTypeConfig, Flow
 import { UUIDsEqual } from '@memberjunction/global';
 import { ReadFlowDecisionStepConfiguration } from '@memberjunction/ai-core-plus';
 import { PathRunProblems, StepRunProblems, type FlowRunProblem } from './flow-run-check';
+import { WaitingStepSubtitle } from './waiting-step-config';
 
 /** Picker item shape for Actions with optional icon */
 export interface ActionPickerItem { ID: string; Name: string; IconClass?: string | null; }
@@ -52,6 +53,39 @@ export const AGENT_STEP_TYPE_CONFIGS: FlowNodeTypeConfig[] = [
     Icon: 'fa-robot',
     Color: '#10B981',
     Category: 'Steps',
+    DefaultPorts: [
+      { ID: 'input', Direction: 'input', Side: 'top', Multiple: true },
+      { ID: 'output', Direction: 'output', Side: 'bottom', Multiple: true }
+    ]
+  },
+  {
+    Type: 'Human',
+    Label: 'Person',
+    Icon: 'fa-user-check',
+    Color: '#7B1FA2',
+    Category: 'Waiting',
+    DefaultPorts: [
+      { ID: 'input', Direction: 'input', Side: 'top', Multiple: true },
+      { ID: 'output', Direction: 'output', Side: 'bottom', Multiple: true }
+    ]
+  },
+  {
+    Type: 'External',
+    Label: 'External Signal',
+    Icon: 'fa-arrow-up-right-from-square',
+    Color: '#0891B2',
+    Category: 'Waiting',
+    DefaultPorts: [
+      { ID: 'input', Direction: 'input', Side: 'top', Multiple: true },
+      { ID: 'output', Direction: 'output', Side: 'bottom', Multiple: true }
+    ]
+  },
+  {
+    Type: 'Wait',
+    Label: 'Wait',
+    Icon: 'fa-hourglass-half',
+    Color: '#64748B',
+    Category: 'Waiting',
     DefaultPorts: [
       { ID: 'input', Direction: 'input', Side: 'top', Multiple: true },
       { ID: 'output', Direction: 'output', Side: 'bottom', Multiple: true }
@@ -152,6 +186,10 @@ export class AgentFlowTransformerService {
         }
         return 'Unconfigured';
       }
+      case 'Human':
+      case 'External':
+      case 'Wait':
+        return WaitingStepSubtitle(step.StepType, step.Configuration);
       default:
         return step.StepType;
     }

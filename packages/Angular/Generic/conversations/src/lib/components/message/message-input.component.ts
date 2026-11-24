@@ -1300,6 +1300,39 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   private _cachedRouteAgentKey?: string;
   private _cachedRouteAgent: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
+  private _inThreadAgentIdsKey = '';
+  private _inThreadAgentIds: string[] = [];
+
+  /**
+   * Distinct agent IDs participating in the current conversation thread (conversation's pinned
+   * `DefaultAgentID` plus any message `AgentID`s), memoized for Smart `@Mention` ranking.
+   */
+  public get InThreadAgentIDs(): readonly string[] {
+    const history = this.ConversationHistory ?? [];
+    const lastId = history.length > 0 ? (history[history.length - 1]?.ID ?? '') : '';
+    const key = `${history.length}|${lastId}|${this.ConversationDefaultAgentId ?? ''}`;
+    if (key === this._inThreadAgentIdsKey) {
+      return this._inThreadAgentIds;
+    }
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    if (this.ConversationDefaultAgentId) {
+      seen.add(this.ConversationDefaultAgentId.toLowerCase());
+      ids.push(this.ConversationDefaultAgentId);
+    }
+    for (const msg of history) {
+      if (msg.AgentID) {
+        const lower = msg.AgentID.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          ids.push(msg.AgentID);
+        }
+      }
+    }
+    this._inThreadAgentIdsKey = key;
+    this._inThreadAgentIds = ids;
+    return ids;
+  }
 
   /**
    * Agent that will receive the next turn based on an explicit `@agent` draft chip

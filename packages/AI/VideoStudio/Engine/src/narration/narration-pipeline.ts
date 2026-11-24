@@ -25,6 +25,13 @@ import {
     FitTimelineToNarration,
     NarrationIssue,
 } from './narration-timeline.js';
+import {
+    MapWordTimingsToDisplay,
+    NormalizeNarrationText,
+    ParsePronunciationNotes,
+    type NormalizedNarrationText,
+    type PronunciationRule,
+} from './pronunciation.js';
 
 /** Default output format requested from TTS drivers (128 kbps MP3 at 44.1 kHz). */
 export const NARRATION_OUTPUT_FORMAT = 'mp3_44100_128';
@@ -61,6 +68,11 @@ export interface NarrationOptions {
     APIKeys?: AIAPIKey[];
     /** Optional credential resolution scope forwarded to `AITextToSpeechRunner`. */
     CredentialScope?: AICredentialScope;
+    /**
+     * Optional brand kit voice `PronunciationNotes` (`Written => Spoken` rules, one per line). Applied to
+     * every line before TTS on top of the built-in defaults; captions keep the original text.
+     */
+    PronunciationNotes?: string;
 }
 
 /**
@@ -230,7 +242,7 @@ function resolveClipDurationSeconds(
  */
 async function synthesizeAndStoreLine(
     line: NarrationLine,
-    spokenText: string,
+    normalized: NormalizedNarrationText,
     voiceId: string,
     modelId: string,
     runner: AITextToSpeechRunner,
@@ -239,7 +251,7 @@ async function synthesizeAndStoreLine(
     issues: NarrationIssue[],
 ): Promise<void> {
     const runResult = await runner.RunTextToSpeech({
-        text: spokenText,
+        text: normalized.SpokenText,
         voice: voiceId,
         output_format: NARRATION_OUTPUT_FORMAT,
         IncludeTimestamps: true,
@@ -265,9 +277,11 @@ async function synthesizeAndStoreLine(
 
     const speechResult = runResult.SpeechResult;
     const audioBuffer = extractAudioBuffer(speechResult);
-    const wordTimings: NarrationWordTiming[] = speechResult.Alignment
+    const spokenTimings: NarrationWordTiming[] = speechResult.Alignment
         ? DeriveWordTimings(speechResult.Alignment)
         : [];
+    // Captions and mjCue address the line's display words, not the rewritten spoken ones.
+    const wordTimings = normalized.Changed ? MapWordTimingsToDisplay(normalized, spokenTimings) : spokenTimings;
 
     if (wordTimings.length === 0) {
         issues.push({
@@ -302,6 +316,11 @@ async function synthesizeAndStoreLine(
 
     line.AudioFileID = fileId;
     line.DurationSeconds = durationSeconds;
+    if (normalized.Changed) {
+        line.SpokenText = normalized.SpokenText;
+    } else {
+        delete line.SpokenText;
+    }
     line.WordTimings = wordTimings.length > 0 ? wordTimings : undefined;
 
     clips.push({
@@ -330,7 +349,9 @@ async function resolvePinnedModelId(
 /**
  * Runs the Video Studio narration pre-production pipeline (§8):
  * 1. Resolves a provider-pinned TTS model.
- * 2. Substitutes `{BindingKey}` placeholders per narration line.
+ * 2. Substitutes `{BindingKey}` placeholders per narration line, then rewrites the text into its
+ *    spoken form ({@link NormalizeNarrationText}: built-in defaults such as `A.I.` → `AI`, plus the
+ *    brand kit's `PronunciationNotes`). Captions keep the display text; word timings map back to it.
  * 3. Synthesizes each line sequentially with timestamps and uploads clips via {@link StoreFile}.
  * 4. Re-fits storyboard beats, narration start times, shifted word timings, and audio cues.
  * 5. Builds and stores WebVTT captions when `Audio.Captions !== 'None'`.
@@ -380,6 +401,7 @@ export async function RunNarrationPipeline(
     }
 
     const spokenByLineKey = new Map<string, string>();
+    const pronunciationRules: PronunciationRule[] = ParsePronunciationNotes(options.PronunciationNotes).Rules;
 
     // ponytail: one line at a time; run a small pool if narration time matters
     for (const line of narration.Script) {
@@ -399,7 +421,7 @@ export async function RunNarrationPipeline(
 
         await synthesizeAndStoreLine(
             line,
-            spokenText,
+            NormalizeNarrationText(spokenText, pronunciationRules),
             narration.VoiceID,
             modelId,
             runner,

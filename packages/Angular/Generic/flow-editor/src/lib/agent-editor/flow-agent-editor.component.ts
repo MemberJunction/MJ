@@ -1,20 +1,21 @@
 import {
-  Component, Input, Output, EventEmitter, ViewChild, OnInit, OnChanges, OnDestroy,
-  SimpleChanges, ChangeDetectorRef, ViewEncapsulation, HostListener, HostBinding,
+  Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy,
+  ChangeDetectorRef, ViewEncapsulation, HostListener, HostBinding,
   ElementRef, Renderer2
 } from '@angular/core';
 import { RunView, CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig, PromptOption } from '../interfaces/flow-types';
+import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig, FlowLayoutDirection, PromptOption } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
+import { DefaultWaitingStepConfiguration, IsWaitingStepType } from './waiting-step-config';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ReadDecisionStepKey } from './decision-step-config';
 import { CheckFlowRun, type FlowRunProblem } from './flow-run-check';
 
-/** View mode for the agent editor */
-export type AgentEditorViewMode = 'diagram' | 'list';
+/** View mode for the agent editor: Canvas ('diagram'), synchronized Split Playbook ('split'), or Playbook ('list'). */
+export type AgentEditorViewMode = 'diagram' | 'split' | 'list';
 
 /**
  * Generates a unique Decision step key among existing flow steps.
@@ -51,14 +52,36 @@ export function GenerateUniqueDecisionKey(steps: MJAIAgentStepEntity[]): string 
   encapsulation: ViewEncapsulation.None,
   providers: [AgentFlowTransformerService]
 })
-export class FlowAgentEditorComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
+export class FlowAgentEditorComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   // ── Host Bindings ─────────────────────────────────────────────
   @HostBinding('class.mj-flow-agent-editor--fullscreen') get HostFullScreen(): boolean { return this.FullScreen; }
 
   // ── Inputs ──────────────────────────────────────────────────
-  @Input() AgentID: string | null = null;
+  private _agentID: string | null = null;
+  private isInitialized = false;
+
+  @Input()
+  public set AgentID(value: string | null) {
+    if (value !== this._agentID) {
+      this._agentID = value;
+      if (this.isInitialized && value) {
+        void this.loadAll();
+      }
+    }
+  }
+  public get AgentID(): string | null {
+    return this._agentID;
+  }
+
   @Input() EditMode = true;
   @Input() FullScreen = false;
+  /** Optional initial view lens ('diagram' | 'split' | 'list'). */
+  @Input()
+  public set DefaultViewMode(value: AgentEditorViewMode) {
+    if (!this.isInitialized) {
+      this.viewMode = value;
+    }
+  }
 
   /**
    * Whether this editor shows its own Save / Edit / Cancel controls.
@@ -131,6 +154,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   protected prefShowGrid = true;
   protected prefShowMinimap = true;
   protected prefShowLegend = true;
+  protected prefLayoutDirection: FlowLayoutDirection = 'horizontal';
 
   private static readonly PREF_KEY = 'flow-editor/view-prefs';
 
@@ -155,15 +179,10 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   // ── Lifecycle ───────────────────────────────────────────────
 
   ngOnInit(): void {
+    this.isInitialized = true;
     this.loadViewPreferences();
     this.checkUpdatePermission();
     if (this.AgentID) {
-      this.loadAll();
-    }
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['AgentID'] && !changes['AgentID'].firstChange && this.AgentID) {
       this.loadAll();
     }
   }
@@ -526,6 +545,10 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       step.PromptID = null;
       const key = GenerateUniqueDecisionKey(this.steps);
       step.Configuration = JSON.stringify({ key, state: 'payload', questions: {} }, null, 2);
+    }
+    if (IsWaitingStepType(step.StepType)) {
+      // Each starts with a shape the runtime accepts, so a just-dropped step is not already red.
+      step.Configuration = DefaultWaitingStepConfiguration(step.StepType);
     }
 
     // Add the unsaved step to the array - it already has a UUID from NewRecord()
@@ -920,8 +943,51 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
     this.selectedConnection = null;
     this.selectedPathEntity = null;
     this.showPropertiesPanel = true;
+    if (this.viewMode === 'split') {
+      this.flowEditor?.SelectNode(step.ID);
+      this.flowEditor?.CenterOnNode(step.ID);
+    }
     this.StepSelected.emit(step);
     this.cdr.detectChanges();
+  }
+
+  /** Clicking `+` on a node's output port adds a connected Action step immediately downstream. */
+  protected async onNodeQuickAddClicked(sourceNode: FlowNode): Promise<void> {
+    if (!this.AgentID || !this.IsEditingActive) return;
+    const offsetX = this.prefLayoutDirection === 'horizontal' ? 280 : 0;
+    const offsetY = this.prefLayoutDirection === 'horizontal' ? 0 : 160;
+    const pos = { X: Math.round(sourceNode.Position.X + offsetX), Y: Math.round(sourceNode.Position.Y + offsetY) };
+    const step = await this.CreateStepEntity();
+    step.NewRecord();
+    step.AgentID = this.AgentID;
+    step.Name = `Step ${this.steps.length + 1}`;
+    step.StepType = 'Action';
+    step.Status = 'Active';
+    step.StartingStep = this.steps.length === 0;
+    step.PositionX = pos.X;
+    step.PositionY = pos.Y;
+    step.OnErrorBehavior = 'fail';
+    step.RetryCount = 0;
+    step.TimeoutSeconds = 600;
+    this.steps.push(step);
+
+    const p = this.ProviderToUse;
+    const path = await p.GetEntityObject<MJAIAgentStepPathEntity>('MJ: AI Agent Step Paths', p.CurrentUser);
+    path.NewRecord();
+    path.OriginStepID = sourceNode.ID;
+    path.DestinationStepID = step.ID;
+    path.Priority = 0;
+    this.paths.push(path);
+
+    this.rebuildFlowModel();
+    this.markDirty();
+    this.selectedStep = step;
+    this.selectedConnection = null;
+    this.selectedPathEntity = null;
+    this.showPropertiesPanel = true;
+    this.StepSelected.emit(step);
+    this.cdr.detectChanges();
+    setTimeout(() => this.flowEditor?.SelectNode(step.ID), 80);
   }
 
   // ── Keyboard Shortcuts ─────────────────────────────────────
@@ -952,10 +1018,13 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
     const raw = UserInfoEngine.Instance.GetSetting(FlowAgentEditorComponent.PREF_KEY);
     if (raw) {
       try {
-        const prefs = JSON.parse(raw) as { grid?: boolean; minimap?: boolean; legend?: boolean };
+        const prefs = JSON.parse(raw) as { grid?: boolean; minimap?: boolean; legend?: boolean; layoutDirection?: FlowLayoutDirection };
         if (prefs.grid != null) this.prefShowGrid = prefs.grid;
         if (prefs.minimap != null) this.prefShowMinimap = prefs.minimap;
         if (prefs.legend != null) this.prefShowLegend = prefs.legend;
+        if (prefs.layoutDirection === 'horizontal' || prefs.layoutDirection === 'vertical') {
+          this.prefLayoutDirection = prefs.layoutDirection;
+        }
       } catch {
         // Ignore malformed preference data
       }
@@ -966,10 +1035,16 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
     const prefs = JSON.stringify({
       grid: this.prefShowGrid,
       minimap: this.prefShowMinimap,
-      legend: this.prefShowLegend
+      legend: this.prefShowLegend,
+      layoutDirection: this.prefLayoutDirection
     });
     // Fire-and-forget — preference save errors are non-critical
-    UserInfoEngine.Instance.SetSetting(FlowAgentEditorComponent.PREF_KEY, prefs);
+    UserInfoEngine.Instance.SetSettingDebounced(FlowAgentEditorComponent.PREF_KEY, prefs);
+  }
+
+  protected onLayoutDirectionPrefChanged(direction: FlowLayoutDirection): void {
+    this.prefLayoutDirection = direction;
+    this.saveViewPreferences();
   }
 
   protected onGridPrefChanged(show: boolean): void {

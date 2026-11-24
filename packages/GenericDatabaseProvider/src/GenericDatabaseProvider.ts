@@ -21,6 +21,7 @@ import {
     BaseEntityResult,
     ConcurrencyCheckMode,
     SerializeCloneChangeContext,
+    SerializeSyncChangeContext,
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
@@ -63,7 +64,6 @@ import {
     QueryCacheAuthorization,
     QueryDefinitionSignature,
     RunQueryCacheStatus,
-    QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
     CompositeKey,
@@ -145,6 +145,7 @@ import type { RecordChangePayload } from '@memberjunction/core';
 import {
     GetQueryApprovalStateAsync,
     MJEntityAIActionEntity,
+    MJQueryCategoryEntity,
     MJQueryEntityExtended,
     RenderedSQLCheckResult,
     MJQueryParameterEntity,
@@ -1461,8 +1462,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
                 undefined,
-                entity.CloneContext ? 'Clone' : 'Internal',
-                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
+                entity.CloneContext ? 'Clone' : entity.SyncContext ? 'Sync' : 'Internal',
+                entity.CloneContext
+                    ? SerializeCloneChangeContext(entity.CloneContext)
+                    : entity.SyncContext
+                      ? SerializeSyncChangeContext(entity.SyncContext)
+                      : null,
+                entity.SyncContext?.IntegrationID ?? null,
             )
             : null;
 
@@ -2464,6 +2470,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 "'",
                 entity.CloneContext,
                 snapshotFromRow,
+                entity.SyncContext,
             );
             if (payload) {
                 // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
@@ -4929,6 +4936,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
+            // The denylist alone cannot close the unquoted-format hole its own comment above
+            // describes: a term made of balanced parentheses and comparison operators carries no
+            // forbidden keyword yet still rewrites the predicate structure around `{0}`. When a
+            // format splices the term outside a string literal, refuse the characters that give
+            // SQL its STRUCTURE — parens, quotes, comparison operators, brackets, semicolons.
+            // Ordinary search text (words, numbers, emails, hyphens) is unaffected. A format that
+            // quotes its slot (` = '{0}'`) keeps the quote-doubled term inside the literal, so
+            // those characters are data there and stay allowed.
+            if (this.userSearchFieldsSpliceTermUnquoted(entityInfo, deniedSearchFields) && /[()=<>;'"[\]`]/.test(safeUserSearchString)) {
+                throw new Error(
+                    `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
+                    `which splices the term directly into SQL unquoted, so structural SQL characters ` +
+                    `(parentheses, quotes, comparison operators, brackets, semicolons) are not allowed in the term.`,
+                );
+            }
             // The built-in predicates have no phrase syntax, so they search a quoted phrase without its
             // quotes (UnwrapPhraseQuotes). A custom format is SQL, screened above as typed, so it gets
             // the term as typed.
@@ -5003,6 +5025,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                  !!f.UserSearchParamFormatAPI && f.UserSearchParamFormatAPI.length > 0 &&
                  !deniedFields?.has(f.Name.trim().toLowerCase()),
         );
+    }
+
+    /**
+     * True when a searchable field's custom format puts the term outside a string literal, as
+     * ` = {0}` does. Fields denied by field security are left out, as in
+     * {@link userSearchFieldsUseCustomFormat}.
+     */
+    protected userSearchFieldsSpliceTermUnquoted(entityInfo: EntityInfo, deniedFields?: Set<string>): boolean {
+        return entityInfo.Fields.some(
+            f => f.IncludeInUserSearchAPI &&
+                 !!f.UserSearchParamFormatAPI &&
+                 !deniedFields?.has(f.Name.trim().toLowerCase()) &&
+                 !this.customSearchFormatQuotesTerm(f.UserSearchParamFormatAPI),
+        );
+    }
+
+    /**
+     * True when the `{0}` slot of a custom search format sits inside a single-quoted SQL string
+     * literal, or the format has no slot. Only the first `{0}` is substituted, so only it is read.
+     */
+    protected customSearchFormatQuotesTerm(format: string): boolean {
+        const slot = format.indexOf('{0}');
+        if (slot < 0) return true;
+        const closers: Record<string, string> = { "'": "'", '[': ']', '"': '"' };
+        let openedBy: string | null = null;
+        for (const ch of format.slice(0, slot)) {
+            if (openedBy === null) {
+                if (ch in closers) openedBy = ch;
+            } else if (ch === closers[openedBy]) {
+                // A doubled quote inside a literal closes and reopens it, which leaves the state right.
+                openedBy = null;
+            }
+        }
+        return openedBy === "'";
     }
 
     /**
@@ -7094,17 +7150,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
-     * Resolves a category path string to a QueryCategoryInfo ID.
+     * Resolves a category path string to a query category ID, from `QueryEngine`.
      */
     protected resolveCategoryPath(categoryPath: string): string | null {
         if (!categoryPath) return null;
         const segments = categoryPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (segments.length === 0) return null;
 
-        let currentCategory: QueryCategoryInfo | null = null;
+        const categories = QueryEngine.Instance.QueryCategories;
+        let currentCategory: MJQueryCategoryEntity | null = null;
         for (const segment of segments) {
             const parentId: string | null = currentCategory !== null ? currentCategory.ID : null;
-            currentCategory = this.QueryCategories.find(cat =>
+            currentCategory = categories.find(cat =>
                 cat.Name.trim().toLowerCase() === segment.toLowerCase() && UUIDsEqual(cat.ParentID, parentId),
             ) ?? null;
             if (!currentCategory) return null;
@@ -8510,13 +8567,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // No enricher registered under this key (providing package not loaded) — no-op.
                 return rows;
             }
-            // Resolve the QueryInfo metadata for the executed query (best-effort; an enricher
-            // can use it to find the query's associated entity). Undefined is acceptable.
-            const queryInfo: QueryInfo | undefined = this.Queries.find(q => UUIDsEqual(q.ID, query.ID));
+            // The QueryInfo metadata exists only when this provider loads query metadata; the ID
+            // always reaches the enricher, which can resolve the query from QueryEngine.
+            const queryInfo: QueryInfo | undefined = this.LoadsQueryMetadata ? this.Queries.find(q => UUIDsEqual(q.ID, query.ID)) : undefined;
             return await enricher.EnrichResults({
                 rows,
                 config: enrichment.Config ?? {},
                 query: queryInfo,
+                queryID: query.ID,
                 contextUser,
                 provider: this,
             });
@@ -9699,24 +9757,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                // ProviderInternalScaffolding — for the MJ_Metadata dataset ONLY. Those rows are
-                // consumed by this provider's own assembly steps, which mutate them in place by
-                // design: PostProcessEntityMetadata sorts the entity array and attaches child
-                // collections onto each entity/field row, and GetAllMetadata's Applications
-                // assembly writes ApplicationEntities/ApplicationSettings onto Application rows.
-                // Freezing them makes metadata bootstrap throw and the process starts blind.
-                //
-                // Every OTHER dataset is served to arbitrary consumers (BaseEngine.Load hands
-                // item.Results — these very arrays — to every engine subclass), so those slots
-                // must stay under the defensive deep-freeze like any RunView result.
-                const isMetadataScaffolding = datasetName === ProviderBase._mjMetadataDatasetName;
-                const rowsForCache = isMetadataScaffolding
-                    ? itemData
-                    : provider.PrepareRowsForCacheStorage(itemData, provider.EntityByName(entityName));
+                // Every dataset's slots — MJ_Metadata's included — hold rows that later readers are
+                // served (BaseEngine.Load hands item.Results to every engine subclass; the GraphQL
+                // dataset resolver hands MJ_Metadata to every client), so they are frozen like any
+                // RunView result. The metadata assembly copies the rows it writes to.
                 await cache.SetRunViewResult(
-                    uncachedFingerprints[i], syntheticParams, rowsForCache, maxUpdatedAt,
-                    undefined, undefined, this, undefined,
-                    isMetadataScaffolding ? { ProviderInternalScaffolding: true } : undefined
+                    uncachedFingerprints[i], syntheticParams,
+                    provider.PrepareRowsForCacheStorage(itemData, provider.EntityByName(entityName)), maxUpdatedAt,
+                    undefined, undefined, this
                 );
             }
 
@@ -10242,6 +10290,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     protected override get MetadataMemberRefreshMustWait(): boolean {
         return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
+    }
+
+    /**
+     * Unlike {@link MetadataMemberRefreshMustWait} (which defers a local member-entity write until
+     * that transaction commits), a peer metadata notice comes from another server whose write has
+     * already committed and persisted its snapshot to the shared cache. Because
+     * {@link datasetReadsOnPool} runs `MJ_Metadata` status and dataset reads on the connection pool
+     * (`ignoreAmbientTransaction: true`) whenever {@link MetadataReadsJoinTransaction} is false, an
+     * unrelated local transaction on the global provider (such as a scheduled job saving
+     * `MJ: Entity Record Documents`) must not defer adopting a peer's metadata update.
+     */
+    protected override get PeerMetadataNoticeMustWait(): boolean {
+        return this.MetadataReadsJoinTransaction && this.MetadataMemberRefreshMustWait;
     }
 
     /**

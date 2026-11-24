@@ -43,6 +43,7 @@ import { DecideKeylessRefusal, DescribeKeylessRefusal, MissingKeyFieldNames, typ
 import { WithTimeout, OperationTimeoutError, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
+import { ComputeThreeWayFieldMerge, ValuesEqual } from './ThreeWayMerge.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
@@ -1977,6 +1978,30 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // another) must be what this run syncs, not whatever this process first read. Read-then-swap
         // (MJ-RUN-46), so anything else reading this connection meanwhile never sees it catalog-less.
         await RefreshCatalogScope(config.companyIntegration.ID, contextUser);
+
+        // Whole-run pipeline delegation seam (spec §4.2 / §19.7):
+        // When a connector implements RunPipeline (e.g. MemberJunctionConnector for Peer Sync),
+        // delegate the multi-entity data plane to it while IntegrationEngine owns the run row,
+        // lease heartbeat, cancellation, and telemetry.
+        if (typeof config.connector.RunPipeline === 'function') {
+            const fieldMapsByEntityMapID = new Map<string, ICompanyIntegrationFieldMap[]>();
+            for (const em of config.entityMaps) {
+                const fms = await this.loadFieldMaps(em.ID, contextUser);
+                fieldMapsByEntityMapID.set(em.ID, fms);
+            }
+            return await config.connector.RunPipeline({
+                CompanyIntegration: config.companyIntegration,
+                Run: run,
+                EntityMaps: config.entityMaps,
+                FieldMapsByEntityMapID: fieldMapsByEntityMapID,
+                SyncDirection: config.syncDirection,
+                FullSync: config.fullSync,
+                ContextUser: contextUser,
+                OnProgress: onProgress,
+                AbortSignal: abortSignal,
+            });
+        }
+
         const aggregate: SyncResult = {
             Success: true,
             RecordsProcessed: 0,
@@ -4173,9 +4198,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!latestChangeAt || at > latestChangeAt) latestChangeAt = at;
         }
 
-        // Update push watermark
+        // Update push watermark. ChangedAt reaches us at JavaScript Date precision (milliseconds) while the column holds
+        // up to seven fractional digits, so a record changed at .2666667 sits ABOVE a watermark of .266 and would be
+        // re-selected (and re-pushed) by the very next pass. Round the watermark UP to the next whole millisecond ONLY
+        // when that rounded value remains strictly below `firstErrorChangeAt`: if a success sits 1 ms before a
+        // millisecond-aligned failure (e.g. .2654 vs .2660 on PostgreSQL microsecond `now()`), rounding .265Z up to
+        // .266Z would match the failure and `ChangedAt > watermark` would never retry it.
         if (latestChangeAt) {
-            await this.watermarkService.Update(entityMapID, latestChangeAt, contextUser, 'Push');
+            const parsed = new Date(latestChangeAt);
+            let watermark = latestChangeAt;
+            if (!Number.isNaN(parsed.getTime())) {
+                const roundedUp = new Date(parsed.getTime() + 1).toISOString();
+                if (!firstErrorChangeAt || roundedUp < firstErrorChangeAt) watermark = roundedUp;
+            }
+            await this.watermarkService.Update(entityMapID, watermark, contextUser, 'Push');
         }
 
         console.log(
@@ -4201,14 +4237,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (lastPushAt) {
             filter += ` AND ChangedAt > '${lastPushAt}'`;
         }
-        // Exclude changes made by the integration engine (System user or specific source)
+        // Exclude changes made by the integration engine (System user or Peer Sync Source='Sync')
         filter += ` AND UserID != 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E'`; // System user
+        filter += ` AND (Source IS NULL OR Source <> 'Sync')`;
         filter += ` AND Type IN ('Create', 'Update', 'Delete')`;
 
         const result = await rv.RunView<{
             RecordID: string; Type: string; ChangedAt: string;
         }>({
-            EntityName: 'Record Changes',
+            EntityName: 'MJ: Record Changes',
             ExtraFilter: filter,
             OrderBy: 'ChangedAt ASC',
             Fields: ['RecordID', 'Type', 'ChangedAt'],
@@ -4223,7 +4260,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const latestByRecord = new Map<string, { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> }>();
         for (const r of result.Results) {
             const normalizedID = this.normalizeRecordChangeID(r.RecordID);
-            latestByRecord.set(normalizedID, { ...r, RecordID: normalizedID, Fields: {} });
+            // ChangedAt arrives as a Date from a 'simple' RunView; the push watermark is stored as text, and a Date
+            // assigned to it serialises JSON-quoted ("…Z") — a value the next pass's `ChangedAt > '…'` filter can never
+            // match, so every incremental push after the first selected nothing. Normalise to ISO text here.
+            const changedAt: unknown = r.ChangedAt;
+            latestByRecord.set(normalizedID, { ...r, RecordID: normalizedID, ChangedAt: changedAt instanceof Date ? changedAt.toISOString() : String(changedAt), Fields: {} });
         }
 
         // Load current field values for each changed record
@@ -4358,7 +4399,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const rv = new RunView();
         const mapResult = await rv.RunView<{ ExternalSystemRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
-            ExtraFilter: `EntityRecordID='${change.RecordID}' AND CompanyIntegrationID='${config.companyIntegration.ID}'`,
+            ExtraFilter:
+                `EntityRecordID='${EscapeSQLString(change.RecordID)}' ` +
+                `AND CompanyIntegrationID='${EscapeSQLString(String(config.companyIntegration.ID))}' ` +
+                `AND EntityID='${EscapeSQLString(entityMap.EntityID)}'`,
             Fields: ['ExternalSystemRecordID'],
             MaxRows: 1,
             SkipTotalRowCount: true,
@@ -4366,7 +4410,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             BypassCache: true, // write-back targets the committed external-id mapping
         }, contextUser);
 
-        const externalID = mapResult.Success && mapResult.Results.length > 0
+        if (!mapResult.Success) {
+            throw new Error(
+                `RECORD_MAP_UNREADABLE: could not read the record map for ${entityMap.Entity} ${change.RecordID}: ` +
+                `${mapResult.ErrorMessage ?? 'unknown error'}`
+            );
+        }
+
+        const externalID = mapResult.Results.length > 0
             ? mapResult.Results[0].ExternalSystemRecordID
             : null;
 
@@ -4375,6 +4426,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ObjectName: entityMap.ExternalObjectName,
             ContextUser: contextUser,
         };
+
+        if (change.Type === 'Delete' && (!externalID || !config.connector.SupportsDelete)) {
+            // Nothing can be deleted at the vendor: the record was never pushed (no record map) or the connector has no
+            // delete. Routing the Delete into the create/update branches with no attributes made the connector refuse it on
+            // EVERY incremental pass (errored, watermark held), permanently stalling the push for the whole entity map.
+            // A delete that cannot be performed is a documented skip (like a 403), and the watermark may advance past it.
+            const why = !externalID
+                ? 'the record was never pushed (no record map), so there is nothing to delete at the vendor'
+                : 'the connector does not support delete';
+            this.warnPushSkip(logger, entityMap, 'delete', why, { recordID: change.RecordID });
+            result.RecordsSkipped++;
+            return;
+        }
 
         if (change.Type === 'Delete' && externalID && config.connector.SupportsDelete) {
             await this.rateLimit(config);
@@ -4537,60 +4601,36 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // external record's ModifiedAt once, up front. null = indeterminate (a timestamp is
         // missing/unparseable) → the conflict falls back to DestWins so it's never dropped.
         const mostRecentWinner = policy === 'MostRecent' ? this.resolveMostRecentWinner(change.Fields, ext) : null;
-        const mjWinsConflict = policy === 'DestWins'
-            || (policy === 'MostRecent' && mostRecentWinner !== 'external');
-        const toPush: Record<string, unknown> = {};
-        const conflictFields: string[] = [];
-        let manualConflict = false;
+        const mergeResult = ComputeThreeWayFieldMerge({
+            Base: base,
+            Ours: change.Fields,
+            Theirs: ext.Fields,
+            FieldMappings: pushFieldMaps,
+            ConflictResolution: policy,
+            MostRecentWinner: mostRecentWinner,
+            OutputKeyMode: 'source',
+        });
 
-        for (const fm of pushFieldMaps) {
-            const baseVal = base[fm.DestinationFieldName];
-            const mjVal = change.Fields[fm.DestinationFieldName];
-            const extVal = ext.Fields[fm.SourceFieldName];
-            const mjChanged = !this.valuesEqual(mjVal, baseVal);
-            const extChanged = !this.valuesEqual(extVal, baseVal);
-
-            if (mjChanged && !extChanged) {
-                toPush[fm.SourceFieldName] = mjVal;                       // only we changed → push ours
-            } else if (mjChanged && extChanged && !this.valuesEqual(mjVal, extVal)) {
-                conflictFields.push(fm.DestinationFieldName);            // both changed, different → conflict
-                if (policy === 'Manual') {
-                    manualConflict = true;                               // quarantine for a human
-                } else if (mjWinsConflict) {
-                    toPush[fm.SourceFieldName] = mjVal;                  // DestWins, or MostRecent→MJ (incl. indeterminate)
-                }
-                // SourceWins, or MostRecent→external → leave external as-is (don't push this field)
-            }
-            // !mjChanged → nothing to push; both-changed-same → converged.
-        }
-
-        if (conflictFields.length > 0) {
-            const resolution = policy === 'Manual' ? 'quarantined'
-                : policy === 'SourceWins' ? 'external-wins'
-                : policy === 'MostRecent' ? (mostRecentWinner === 'external' ? 'external-wins (most-recent)' : 'mj-wins (most-recent)')
-                : 'mj-wins';
+        if (mergeResult.ConflictFields.length > 0) {
             logger?.emit('sync.record.conflict', {
                 entity: entityMap.Entity,
                 externalId: externalID,
                 mjRecordId: change.RecordID,
-                conflictFields,
+                conflictFields: mergeResult.ConflictFields,
                 policy,
-                resolution,
+                resolution: mergeResult.ResolutionSummary ?? 'mj-wins',
             });
-            if (manualConflict) {
-                await this.markConflictOnMJRecord(change.RecordID, entityMap, conflictFields, contextUser, logger);
+            if (mergeResult.ManualConflict) {
+                await this.markConflictOnMJRecord(change.RecordID, entityMap, mergeResult.ConflictFields, contextUser, logger);
                 return { action: 'skip', attributes: {} };
             }
         }
-        return { action: 'proceed', attributes: toPush };
+        return { action: mergeResult.Action, attributes: mergeResult.MergedFields };
     }
 
     /** Loose value equality for conflict comparison across JSON/string/number/bool/null shapes. */
     private valuesEqual(a: unknown, b: unknown): boolean {
-        if (a === b) return true;
-        if (a == null && b == null) return true;
-        if (a == null || b == null) return false;
-        return String(a) === String(b);
+        return ValuesEqual(a, b);
     }
 
     /**

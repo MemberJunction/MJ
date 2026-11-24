@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
-import type { AgentRunAudience } from '@memberjunction/ai-core-plus';
+import type { AgentRunAudience, AgentRunAudienceInput } from '@memberjunction/ai-core-plus';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from '../agent-audience';
 
 const CALLER = 'AAAAAAAA-0000-4000-8000-0000000000C1';
@@ -14,7 +14,7 @@ describe('AgentAudienceProblem', () => {
         expect(AgentAudienceProblem({ Mode: 'Intersection', UserIDs: [READER] })).toBeNull();
     });
 
-    it.each<[string, unknown, RegExp]>([
+    it.each<[string, AgentRunAudienceInput, RegExp]>([
         ['null', null, /expected \{ Mode, UserIDs \}, got null/],
         ['an array', [READER], /got an array/],
         ['a string', 'everyone', /got string/],

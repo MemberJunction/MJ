@@ -84,7 +84,7 @@ import { BaseRealtimeChannelClient, ChannelVideoSourceID, RealtimeChannelContext
 import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, ReadChannelSurfacePlacement, type ChannelSurfacePlacement } from '../channels/channel-surface-placement';
 import { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
 import { ChannelActionDispatcher, type DispatchableChannel } from '../channels/channel-action-dispatcher';
-import { BuildChannelCatalogNote, type ChannelCatalogEntry } from '../channels/channel-catalog-note';
+import { BuildChannelCatalogNote, type ChannelCatalogEntry, type UnavailableChannelEntry } from '../channels/channel-catalog-note';
 import type { RealtimeContextActionRequest, RealtimeContextActionResult } from '../channels/channel-contract-types';
 import { AppClientToolRegistry, DEFAULT_APP_TOOL_OWNER, type AppClientToolRegistration } from './app-client-tool-registry';
 import { UserSettingsExposurePreferences, type IChannelExposurePreferences } from './channel-exposure-preferences';
@@ -1718,7 +1718,11 @@ export class RealtimeSessionRuntime {
       // Resolve the interactive-channel plugins FIRST (constructed, not started): the tools of the
       // channels mounted with the session must be declared to the realtime model at mint, and the
       // server needs the candidates to scope them. Nothing is initialized until the policy is known.
-      const scope = await this.prepareChannelScope(options?.HostChannels);
+      const scope = await this.prepareChannelScope(
+        options?.HostChannels,
+        options?.ChannelFilter,
+        options?.ChannelFilterReason
+      );
       const allClientTools = [...(clientTools ?? []), ...scope.NativeTools];
       session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson, scope.ShowsAgentVideo, options?.ConversationBranchID ?? null);
     } catch (error) {
@@ -1970,6 +1974,7 @@ export class RealtimeSessionRuntime {
       // as soon as the control channel is usable (which may be right now, or a moment after Connect).
       this.catalogNotePending = true;
       this.flushChannelCatalogNote();
+      this.flushFocusedChannelNote();
 
       // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
       // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
@@ -3332,6 +3337,9 @@ export class RealtimeSessionRuntime {
   /** `on-demand` channels that are in the session but not opened yet (initialized only when opened). */
   private advertisedChannels: PreparedChannel[] = [];
 
+  /** Active channels omitted by the host's `ChannelFilter`, with the reason to share when the user asks for one. */
+  private hostUnavailableChannels: UnavailableChannelEntry[] = [];
+
   /** What the policy resolved for each in-session channel, keyed by normalized channel key. */
   private readonly resolvedChannels = new Map<string, ResolvedRealtimeChannel>();
 
@@ -3346,6 +3354,7 @@ export class RealtimeSessionRuntime {
     FindChannel: (key: string) => this.findDispatchableChannel(key),
     ListChannelKeys: () => this.listAddressableChannelKeys(),
     ActivateChannel: (plugin: BaseRealtimeChannelClient) => this.mountAdvertisedChannel(plugin),
+    DescribeUnavailableChannel: (key: string) => this.describeHostUnavailableChannel(key),
   });
 
   /**
@@ -3484,20 +3493,134 @@ export class RealtimeSessionRuntime {
 
   /** The channel whose surface the user is looking at, kept so it applies to an arbiter created after it was set. */
   private focusedChannelKey: string | null = null;
+  /** Normalized channel key (or `null` for Activity) last reported via a `[surface]` context note; `undefined` before first note. */
+  private lastNotedFocusedChannel: string | null | undefined = undefined;
+  /** True when focus changed before the control channel reached `listening` and should flush once live. */
+  private focusedChannelNotePending = false;
 
   /**
    * Tells the session which channel's surface the user is looking at (`null` for none, e.g. the activity tab).
    * When the model can see only one video source and several are live, the one the user is looking at is the one
-   * it sees (after an explicit pick, and after a camera or screen share the user started). Safe to call before the
-   * session is live: it applies when the connection comes up.
+   * it sees (after an explicit pick, and after a camera or screen share the user started). Also emits a compact
+   * `[surface]` context note so the live model stays aware of what the user is looking at. Safe to call before
+   * the session is live: it applies and flushes when the connection comes up.
    *
    * @param channelKey The focused channel's key, as it appears on {@link VideoSources$} entries' `ChannelKey`.
    */
   public SetFocusedChannel(channelKey: string | null): void {
-    this.focusedChannelKey = channelKey;
+    const normalizedInput = channelKey && channelKey.trim().length > 0 ? channelKey.trim() : null;
+    this.focusedChannelKey = normalizedInput;
     if (this.client) {
-      VideoSourceArbiter.ForSink(this.client).SetFocusedChannel(channelKey);
+      VideoSourceArbiter.ForSink(this.client).SetFocusedChannel(normalizedInput);
     }
+    const normalizedCompare = normalizedInput ? NormalizeChannelKey(normalizedInput) : null;
+    if (normalizedCompare === this.lastNotedFocusedChannel) {
+      return;
+    }
+    if (!this.isSessionLive()) {
+      if (normalizedInput !== null || this.lastNotedFocusedChannel !== undefined) {
+        this.focusedChannelNotePending = true;
+      }
+      return;
+    }
+    this.emitFocusedChannelNote(normalizedInput, normalizedCompare);
+  }
+
+  /** Flushes a deferred focused-surface note once the realtime control channel is live. */
+  private flushFocusedChannelNote(): void {
+    if (!this.focusedChannelNotePending || !this.isSessionLive()) {
+      return;
+    }
+    const normalizedCompare = this.focusedChannelKey ? NormalizeChannelKey(this.focusedChannelKey) : null;
+    if (normalizedCompare === this.lastNotedFocusedChannel) {
+      this.focusedChannelNotePending = false;
+      return;
+    }
+    this.emitFocusedChannelNote(this.focusedChannelKey, normalizedCompare);
+  }
+
+  /** Sends a compact `[surface]` context note describing the surface the user just focused. */
+  private emitFocusedChannelNote(channelKey: string | null, normalizedCompare: string | null): void {
+    const verb = this.lastNotedFocusedChannel === undefined ? 'is viewing' : 'switched view to';
+    this.lastNotedFocusedChannel = normalizedCompare;
+    this.focusedChannelNotePending = false;
+    if (normalizedCompare === null) {
+      this.SendContextNote(`[surface] user ${verb} Activity (transcript/activity view)`, {
+        StateKey: 'focused-surface',
+      });
+      return;
+    }
+    const channel = this._activeChannels$.value.find((c) => NormalizeChannelKey(c.ChannelName) === normalizedCompare);
+    if (!channel) {
+      this.SendContextNote(`[surface] user ${verb} ${channelKey}`, { StateKey: 'focused-surface' });
+      return;
+    }
+    const title = channel.TabTitle ?? channel.ChannelName;
+    if (channel.Exposure === 'none') {
+      this.SendContextNote(
+        `[surface] user ${verb} ${title} (${channel.ChannelName}) {"exposure":"none"}`,
+        { StateKey: 'focused-surface' },
+      );
+      return;
+    }
+    let stateSuffix = '';
+    try {
+      const state = channel.GetState();
+      if (state && Object.keys(state).length > 0) {
+        const serialized = JSON.stringify(state);
+        stateSuffix = serialized.length > 1200 ? ` ${serialized.slice(0, 1197)}...` : ` ${serialized}`;
+      }
+    } catch {
+      stateSuffix = '';
+    }
+    this.SendContextNote(
+      `[surface] user ${verb} ${title} (${channel.ChannelName})${stateSuffix}`,
+      { StateKey: 'focused-surface' },
+    );
+  }
+
+  /**
+   * Returns a read-only JSON snapshot of the user's currently focused surface and every active
+   * channel's title, exposure, and state (omitting state when `Exposure === 'none'`).
+   */
+  public GetSurfaceSnapshot(): JSONObject {
+    const focusedNormalized = this.focusedChannelKey ? NormalizeChannelKey(this.focusedChannelKey) : null;
+    const channels: JSONObject[] = [];
+    for (const plugin of this._activeChannels$.value) {
+      const isFocused =
+        focusedNormalized !== null && NormalizeChannelKey(plugin.ChannelName) === focusedNormalized;
+      const entry: JSONObject = {
+        ChannelKey: plugin.ChannelName,
+        Title: plugin.TabTitle ?? plugin.ChannelName,
+        Exposure: plugin.Exposure,
+        IsFocused: isFocused,
+      };
+      if (plugin.Exposure !== 'none') {
+        try {
+          entry.State = plugin.GetState();
+        } catch {
+          entry.StateError = 'Unable to read channel state';
+        }
+      }
+      channels.push(entry);
+    }
+    const focusedEntry = channels.find((c) => c.IsFocused === true);
+    const activeSurface =
+      focusedNormalized !== null
+        ? (typeof focusedEntry?.ChannelKey === 'string' ? focusedEntry.ChannelKey : this.focusedChannelKey)
+        : 'activity';
+    const snapshot: JSONObject = {
+      ActiveSurface: activeSurface,
+      ActiveChannels: channels,
+    };
+    if (this.hostUnavailableChannels.length > 0) {
+      snapshot.UnavailableChannels = this.hostUnavailableChannels.map<JSONObject>((u) => ({
+        ChannelKey: u.Key,
+        Title: u.DisplayName,
+        Reason: u.Reason,
+      }));
+    }
+    return snapshot;
   }
 
   /** Stops following the arbiter and clears {@link VideoSources$}. Safe to call when nothing is watched. */
@@ -3583,10 +3706,12 @@ export class RealtimeSessionRuntime {
    *   video ({@link PreparedChannelsShowAgentVideo}).
    */
   private async prepareChannelScope(
-    hostChannels?: RealtimeHostChannelDeclaration[]
+    hostChannels?: RealtimeHostChannelDeclaration[],
+    channelFilter?: (plugin: BaseRealtimeChannelClient) => boolean,
+    channelFilterReason?: string
   ): Promise<{ NativeTools: RealtimeToolDefinition[]; CandidatesJson: string | null; ShowsAgentVideo: boolean }> {
     this.discardUnmountedChannels();
-    const prepared = await this.prepareChannels(hostChannels);
+    const prepared = await this.prepareChannels(hostChannels, channelFilter, channelFilterReason);
     this.preparedChannels = prepared;
     const candidates = prepared.map((p) => BuildChannelCandidate(p, p.Plugin.GetDescriptor()));
     const local = ResolveLocalChannelScope(candidates);
@@ -3605,7 +3730,11 @@ export class RealtimeSessionRuntime {
    * INACTIVE row is constructed too — only to learn its key so the kill switch can name it — and is
    * never initialized. A plugin whose descriptor cannot be read is skipped (logged), never fatal.
    */
-  private async prepareChannels(hostChannels?: RealtimeHostChannelDeclaration[]): Promise<PreparedChannel[]> {
+  private async prepareChannels(
+    hostChannels?: RealtimeHostChannelDeclaration[],
+    channelFilter?: (plugin: BaseRealtimeChannelClient) => boolean,
+    channelFilterReason?: string
+  ): Promise<PreparedChannel[]> {
     const rows = await this.fetchChannelDefinitions();
     await this.loadChannelClasses([...rows.map((r) => r.ClientPluginClass), ...(hostChannels ?? []).map((d) => d.ClientPluginClass)]);
     const prepared: PreparedChannel[] = [];
@@ -3632,7 +3761,24 @@ export class RealtimeSessionRuntime {
         prepared.push({ Plugin: plugin, Key: plugin.ChannelName, Registry: 'none', HostDeclaration: declaration });
       }
     }
-    return prepared.filter((p) => this.canDescribe(p));
+    const reason = channelFilterReason?.trim() ?? '';
+    const kept: PreparedChannel[] = [];
+    for (const p of prepared) {
+      if (!this.canDescribe(p)) {
+        continue;
+      }
+      if (!channelFilter || channelFilter(p.Plugin)) {
+        kept.push(p);
+      } else if (p.Registry !== 'inactive' && reason.length > 0) {
+        const descriptor = p.Plugin.GetDescriptor();
+        this.hostUnavailableChannels.push({
+          Key: p.Key,
+          DisplayName: descriptor.DisplayName || p.Key,
+          Reason: reason,
+        });
+      }
+    }
+    return kept;
   }
 
   /**
@@ -3738,7 +3884,18 @@ export class RealtimeSessionRuntime {
   private discardUnmountedChannels(): void {
     this.preparedChannels = [];
     this.advertisedChannels = [];
+    this.hostUnavailableChannels = [];
     this.localChannelScope = null;
+  }
+
+  /** Returns the host's unavailability explanation for a filtered-out channel key (case-insensitive), or `null`. */
+  private describeHostUnavailableChannel(key: string): string | null {
+    const normalized = NormalizeChannelKey(key);
+    if (!normalized) {
+      return null;
+    }
+    const match = this.hostUnavailableChannels.find((u) => NormalizeChannelKey(u.Key) === normalized);
+    return match ? match.Reason : null;
   }
 
   /**
@@ -3976,7 +4133,7 @@ export class RealtimeSessionRuntime {
       ...this._activeChannels$.value.map((plugin) => this.catalogEntry(plugin, true)),
       ...this.advertisedChannels.map((p) => this.catalogEntry(p.Plugin, false)),
     ];
-    const note = BuildChannelCatalogNote(entries);
+    const note = BuildChannelCatalogNote(entries, this.hostUnavailableChannels);
     if (note) {
       this.SendContextNote(note, { StateKey: 'channel-catalog' });
     }
@@ -4010,6 +4167,7 @@ export class RealtimeSessionRuntime {
         return service.Provider;
       },
       SendContextNote: (text: string, options?: RealtimeContextNoteOptions) => this.SendContextNote(text, options),
+      GetSurfaceSnapshot: () => this.GetSurfaceSnapshot(),
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
@@ -4196,23 +4354,48 @@ export class RealtimeSessionRuntime {
       console.warn('[RealtimeSession] PriorChannelStatesJson was malformed — starting channels fresh');
       return;
     }
+    let restoredAnyActive = false;
     for (const plugin of this._activeChannels$.value) {
-      this.restorePriorChannelState(plugin);
+      if (this.restorePriorChannelState(plugin)) {
+        restoredAnyActive = true;
+      }
+    }
+    // Mount any advertised ('on-demand') channels that carry saved prior-session state so
+    // Workspace / Browser / etc. resume visibly right where the prior session left off.
+    let mountedAdvertised = false;
+    for (const prepared of [...this.advertisedChannels]) {
+      const state = this.priorChannelStates[prepared.Plugin.ChannelName];
+      if (typeof state !== 'string' || state.length === 0) {
+        continue;
+      }
+      mountedAdvertised = true;
+      this.mountAdvertisedChannel(prepared.Plugin).catch((error) => {
+        console.warn(`[RealtimeSession] Failed to mount advertised channel '${prepared.Plugin.ChannelName}' on resume:`, error);
+      });
+    }
+    // Re-publish ActiveChannels$ when already-mounted channels restored prior state without
+    // an advertised mount emitting afterward, so listeners see updated HasChannelBeenUsed().
+    if (restoredAnyActive && !mountedAdvertised) {
+      this._activeChannels$.next([...this._activeChannels$.value]);
     }
   }
 
   /** Offers one plugin its prior-session state, if there is one. Rejections and throws are logged, never fatal. */
-  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): void {
+  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): boolean {
     const state = this.priorChannelStates[plugin.ChannelName];
     if (typeof state !== 'string' || state.length === 0) {
-      return;
+      return false;
     }
     try {
-      if (!plugin.RestoreState(state)) {
-        console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+      if (plugin.RestoreState(state)) {
+        this.usedChannelNames.add(plugin.ChannelName);
+        return true;
       }
+      console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+      return false;
     } catch (error) {
       console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
+      return false;
     }
   }
 
@@ -4314,6 +4497,9 @@ export class RealtimeSessionRuntime {
     // nothing to dispose — only the bookkeeping to forget.
     this.discardUnmountedChannels();
     this.catalogNotePending = false;
+    this.focusedChannelKey = null;
+    this.lastNotedFocusedChannel = undefined;
+    this.focusedChannelNotePending = false;
     this.resolvedChannels.clear();
     this.priorChannelStates = {};
     this.sessionClientTools = null;
@@ -4628,6 +4814,7 @@ export class RealtimeSessionRuntime {
     if (mapped) {
       this.setConnectionState(mapped);
       this.flushChannelCatalogNote();
+      this.flushFocusedChannelNote();
     }
   }
 
@@ -5064,9 +5251,9 @@ export class RealtimeSessionRuntime {
           await this.mountAdvertisedChannel(plugin);
         }
         await plugin.OnDelegationArtifacts(artifacts);
-        if (!isOpen) {
-          this.noteChannelActivity(plugin); // the channel was mounted for this: reveal its tab
-        }
+        // Always reveal/mark the channel active when it took delegated artifacts, even for `open-on-start` channels
+        // (e.g. ArtifactWorkspace) whose surface tab stays hidden until first activity.
+        this.noteChannelActivity(plugin);
       } catch (error) {
         console.error(`[RealtimeSession] Channel '${plugin.ChannelName}' failed to take a delegated run's artifacts:`, error);
       }

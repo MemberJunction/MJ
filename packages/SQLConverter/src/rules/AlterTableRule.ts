@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, TransformCodeOnly, RemoveNPrefix, ConvertBooleanLiteralComparisons, CollectBooleanColumnNames, QuoteConstraintNames } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, TransformCodeOnly, RemoveNPrefix, ConvertBooleanLiteralComparisons, CollectBooleanColumnNames, QuoteConstraintNames, MakeDropDefaultConstraintIdempotent, AddNullsNotDistinct } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -105,6 +105,10 @@ export class AlterTableRule implements IConversionRule {
     // so the two sites cannot drift apart again — see QuoteConstraintNames.
     result = QuoteConstraintNames(result);
 
+    // PostgreSQL defines column defaults inline rather than as named DF_* constraints, so
+    // unconditional `DROP CONSTRAINT "DF_..."` must become `DROP CONSTRAINT IF EXISTS "DF_..."`.
+    result = MakeDropDefaultConstraintIdempotent(result);
+
     // Quote PascalCase column names inside FK/PK/UNIQUE column lists and REFERENCES(col)
     result = this.quoteConstraintColumns(result);
 
@@ -115,6 +119,9 @@ export class AlterTableRule implements IConversionRule {
 
     // Quote PascalCase column names inside CHECK constraint bodies (preserve string literals)
     result = this.quoteCheckColumns(result);
+
+    // A SQL Server UNIQUE constraint treats NULLs as equal; keep that on PostgreSQL (#5194).
+    result = AddNullsNotDistinct(result);
 
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';

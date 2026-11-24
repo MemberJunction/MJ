@@ -13,7 +13,19 @@
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage, ChatReasoningBlock, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
+import type { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
+import type { LimitsDiagnosticsSnapshot } from './limits-diagnostics';
+import type { WorkflowBudgetBreachDiagnostic } from './workflow-budget';
+import type {
+    BudgetBreachDetail,
+    FastConvergenceJudgeResult,
+    HumanResumeApproval,
+    OwnerPauseNotificationPayload,
+    ProgressEvaluationResult,
+    RunawayCheckpointState,
+    RunawayPauseReason,
+} from './runaway-governance';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
@@ -626,7 +638,12 @@ export interface AgentToolCallRequest {
  * Maximum number of agent-to-agent handoffs allowed within a single user turn.
  * Shared across `BaseAgent` handoff validation/execution and messaging adapters.
  */
-export const MAX_HANDOFF_HOPS = 3;
+export const MAX_HANDOFF_HOPS = CODE_FALLBACK_LIMITS.ResourceGuards.MaxHandoffHops;
+
+/** Resolves the effective handoff hop ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxHandoffHops(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxHandoffHops;
+}
 
 /**
  * Request emitted by an agent to transfer the conversation turn to another agent (`step === 'Handoff'`).
@@ -790,6 +807,16 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 6.1.0
      */
     artifactDirective?: ArtifactDirective;
+    /**
+     * Artifact type ID (`MJ: Artifact Types.ID`) to use when persisting this step's payload as an
+     * artifact. Propagated on `ParentID` child (and folded 1-node task-graph) `Sub-Agent` steps
+     * when terminating the parent run — preferring the child's `payloadArtifactTypeID`, else the
+     * child agent's `DefaultArtifactTypeID` (unless `ArtifactCreationMode === 'Never'`) — so a
+     * router/orchestrator whose own `DefaultArtifactTypeID` differs from the specialist's does not
+     * overwrite the specialist's artifact type. Not stamped on `AgentRelationships` related-agent
+     * merges (where the payload retains the parent's shape) or parallel `subAgents` fan-out.
+     */
+    payloadArtifactTypeID?: string;
     /** Index of the message to expand when step is 'expand-message' */
     messageIndex?: number;
     /** Reason for expanding the message when step is 'expand-message' */
@@ -1070,6 +1097,60 @@ export type ExecuteAgentResult<P = any> = {
      * Ensures `AgentRunner` and realtime delegation link these artifacts even when `payload` is empty.
      */
     touchedArtifacts?: GovernedRunArtifactSummary[];
+
+    /**
+     * Structured diagnostic snapshot of the resolved 5-tier limits and tier provenance
+     * active for this agent run.
+     */
+    limitsSnapshot?: LimitsDiagnosticsSnapshot;
+
+    /**
+     * True when the run paused non-destructively (e.g. budget exhaustion or progress stall)
+     * awaiting human approval/extension to resume.
+     */
+    paused?: boolean;
+
+    /**
+     * True when a non-destructive pause was triggered and its safe-point checkpoint is retained
+     * in memory awaiting storage recovery to persist `Status = 'Paused'`.
+     */
+    pausePersistencePending?: boolean;
+
+    /**
+     * Categorized reason the run paused non-destructively.
+     */
+    pausedReason?: RunawayPauseReason;
+
+    /**
+     * Persisted resumable checkpoint captured at pause time.
+     */
+    runawayCheckpoint?: RunawayCheckpointState;
+
+    /**
+     * Budget breach details when paused due to dollar or wall-clock budget exhaustion.
+     */
+    budgetBreach?: BudgetBreachDetail;
+
+    /**
+     * Latest deterministic progress detector (and optional fast judge) evaluation result.
+     */
+    progressEvaluation?: ProgressEvaluationResult;
+
+    /**
+     * ID of the `MJ: User Notifications` record emitted to notify the run owner of pause.
+     */
+    ownerNotificationId?: string;
+
+    /**
+     * Optional ID of the `MJ: AI Agent Requests` record created for human pause approval.
+     */
+    approvalRequestId?: string;
+
+    /**
+     * Structured whole-workflow or root-tree limit-exceeded diagnostics populated when execution
+     * halts or pauses due to a USD cost, wall-clock duration, token, or step ceiling breach.
+     */
+    limitExceeded?: WorkflowBudgetBreachDiagnostic;
 }
 
 /**
@@ -1211,29 +1292,185 @@ export interface InputArtifact {
  * How a run's audience bounds what the run may show. See {@link ExecuteAgentParams.Audience}.
  * - `'Caller'` — the caller's own reach, exactly as if no audience were set. `UserIDs` must be empty.
  * - `'Intersection'` — only what the caller **and** every user in `UserIDs` may see.
+ * - `'ScopeCommonReach'` — structural common-reach mode: the host asserts the run scope
+ *   (`PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` / `SearchScopeIDs`)
+ *   is already the common reach of all readers, enabling O(1) startup without enumerating `UserIDs`
+ *   while keeping all audience restrictions (classification, tool/artifact boundaries, policy checks)
+ *   unconditionally enforced.
  *
  * Union, anchor and narrowing modes are not offered: a run bounded by a shared record or a tenant
  * uses `PrimaryScope*` / `SecondaryScopes`.
  *
  * @since 6.2.0
  */
-export type AgentAudienceMode = 'Caller' | 'Intersection';
+export type AgentAudienceMode = 'Caller' | 'Intersection' | 'ScopeCommonReach';
+
+/**
+ * Caller-only audience (`Mode: 'Caller'`): behaves as if no audience were set.
+ */
+export interface AgentCallerAudience {
+    /** Caller-only reach. */
+    Mode: 'Caller';
+    /** Must be absent or empty for `'Caller'`. */
+    UserIDs?: string[];
+}
+
+/**
+ * Enumerated-reader audience (`Mode: 'Intersection'`): only what the caller and every user in
+ * `UserIDs` may see.
+ */
+export interface AgentIntersectionAudience {
+    /** Enumerated intersection reach. */
+    Mode: 'Intersection';
+    /**
+     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
+     * conversation, its other participants. Required and non-empty, with no blank entry, for
+     * `'Intersection'`. Listing the caller, or an ID twice, is harmless. Each ID must name an
+     * existing user: a run whose audience names an unknown ID is refused.
+     */
+    UserIDs: string[];
+}
+
+/**
+ * Structural common-reach audience (`Mode: 'ScopeCommonReach'`): the host asserts the run scope
+ * is already the common reach of every eligible reader. Starts in O(1) time without enumerating
+ * or hydrating a reader `UserIDs` list while unconditionally enforcing all audience restrictions.
+ *
+ * Explicitly distinct from `{ Mode: 'Intersection', UserIDs: [] }`, which remains fail-closed
+ * and rejected so an empty enumerated reader array can never silently imply common reach.
+ */
+export interface AgentScopeCommonReachAudience {
+    /** Structural scope common-reach assertion. */
+    Mode: 'ScopeCommonReach';
+    /**
+     * Optional explicit confirmation flag (`true` when supplied; `false` is rejected). Omitting
+     * it is valid because `Mode: 'ScopeCommonReach'` itself asserts scope common reach.
+     */
+    ScopeAsserted?: true;
+    /** Disallowed on `'ScopeCommonReach'`: structural mode never enumerates reader IDs. */
+    UserIDs?: never;
+}
 
 /**
  * The people, besides the caller, who will see a run's output. See {@link ExecuteAgentParams.Audience}.
  *
+ * Backwards-compatible discriminated union across `'Caller'`, `'Intersection'`, and `'ScopeCommonReach'`.
+ *
  * @since 6.2.0
  */
-export interface AgentRunAudience {
-    /** How the audience bounds the run. */
-    Mode: AgentAudienceMode;
-    /**
-     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
-     * conversation, its other participants. Required and non-empty, with no blank entry, for
-     * `'Intersection'`; empty for `'Caller'`. Listing the caller, or an ID twice, is harmless. Each ID
-     * must name an existing user: a run whose audience names an unknown ID is refused.
-     */
-    UserIDs: string[];
+export type AgentRunAudience =
+    | AgentCallerAudience
+    | AgentIntersectionAudience
+    | AgentScopeCommonReachAudience;
+
+/** Own-key lookup table so inherited Object.prototype names (`'toString'`, `'__proto__'`, ...) are never accepted. */
+const AGENT_AUDIENCE_MODES: Record<AgentAudienceMode, true> = {
+    Caller: true,
+    Intersection: true,
+    ScopeCommonReach: true,
+};
+
+/**
+ * Runtime value accepted by {@link ValidateAgentRunAudience} and {@link IsStructuralCommonReachAudience}
+ * when validating host-assembled audience payloads without resorting to `unknown`.
+ */
+export type AgentRunAudienceInput =
+    | AgentRunAudience
+    | object
+    | string
+    | number
+    | boolean
+    | null
+    | undefined;
+
+interface AgentAudienceCandidateShape {
+    Mode?: AgentAudienceMode | string | number | boolean | object | null;
+    UserIDs?: ReadonlyArray<string | number | boolean | object | null | undefined> | string | number | boolean | object | null;
+    ScopeAsserted?: boolean | string | number | object | null;
+}
+
+type AgentAudienceCandidateValue =
+    | ReadonlyArray<string | number | boolean | object | null | undefined>
+    | string
+    | number
+    | boolean
+    | object
+    | null
+    | undefined;
+
+/**
+ * Type guard for {@link AgentScopeCommonReachAudience} (`Mode === 'ScopeCommonReach'`).
+ */
+export function IsStructuralCommonReachAudience(audience: AgentRunAudienceInput): audience is AgentScopeCommonReachAudience {
+    if (audience === null || typeof audience !== 'object' || Array.isArray(audience)) {
+        return false;
+    }
+    const candidate = audience as AgentAudienceCandidateShape;
+    return 'Mode' in candidate && candidate.Mode === 'ScopeCommonReach';
+}
+
+/**
+ * Builds a well-formed structural common-reach audience (`Mode: 'ScopeCommonReach'`).
+ */
+export function CreateScopeCommonReachAudience(): AgentScopeCommonReachAudience {
+    return { Mode: 'ScopeCommonReach', ScopeAsserted: true };
+}
+
+/**
+ * Validates a run's audience, returning `null` when absent or well formed and a diagnostic error
+ * string otherwise. Shared single source of truth across `@memberjunction/ai-core-plus` and
+ * `@memberjunction/ai-agents`.
+ */
+export function ValidateAgentRunAudience(audience: AgentRunAudienceInput): string | null {
+    if (audience === undefined) return null;
+    if (audience === null || typeof audience !== 'object' || Array.isArray(audience)) {
+        return `expected { Mode, UserIDs }, got ${describeAudienceValue(audience)}. Omit Audience for a run with no audience.`;
+    }
+    const candidate = audience as AgentAudienceCandidateShape;
+    const mode = 'Mode' in candidate ? candidate.Mode : undefined;
+    if (typeof mode !== 'string' || !Object.prototype.hasOwnProperty.call(AGENT_AUDIENCE_MODES, mode)) {
+        return `Mode must be 'Caller' or 'Intersection', got ${typeof mode === 'string' ? `'${mode}'` : describeAudienceValue(mode)} (or use 'ScopeCommonReach').`;
+    }
+    const ids = 'UserIDs' in candidate ? candidate.UserIDs : undefined;
+    if (mode === 'Caller') {
+        return callerAudienceIDsProblem(ids);
+    }
+    if (mode === 'ScopeCommonReach') {
+        return structuralAudienceProblem(candidate, ids);
+    }
+    return intersectionAudienceIDsProblem(ids);
+}
+
+function callerAudienceIDsProblem(ids: AgentAudienceCandidateValue): string | null {
+    if (ids === undefined || (Array.isArray(ids) && ids.length === 0)) return null;
+    return `Mode 'Caller' takes no UserIDs (got ${Array.isArray(ids) ? `${ids.length} ID(s)` : describeAudienceValue(ids)}); use 'Intersection' to name readers.`;
+}
+
+function intersectionAudienceIDsProblem(ids: AgentAudienceCandidateValue): string | null {
+    if (!Array.isArray(ids)) {
+        return `Mode 'Intersection' needs UserIDs, an array of MJ: Users IDs; got ${describeAudienceValue(ids)}.`;
+    }
+    if (ids.length === 0) {
+        return "Mode 'Intersection' needs at least one ID in UserIDs; use 'Caller' (or omit Audience) for a run with no other readers.";
+    }
+    const blank = ids.findIndex(id => typeof id !== 'string' || id.trim() === '');
+    return blank === -1 ? null : `UserIDs[${blank}] is blank or not a string — every reader must be an MJ: Users ID.`;
+}
+
+function structuralAudienceProblem(audience: AgentAudienceCandidateShape, ids: AgentAudienceCandidateValue): string | null {
+    if (ids !== undefined) {
+        return "Mode 'ScopeCommonReach' takes no UserIDs; omit UserIDs when asserting structural common reach.";
+    }
+    if ('ScopeAsserted' in audience && audience.ScopeAsserted !== undefined && audience.ScopeAsserted !== true) {
+        return "Mode 'ScopeCommonReach' requires ScopeAsserted to be true when provided.";
+    }
+    return null;
+}
+
+function describeAudienceValue(value: AgentAudienceCandidateValue): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'an array';
+    return typeof value;
 }
 
 /**
@@ -1427,6 +1664,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
      */
     parentActivatedSkillIDs?: readonly string[];
+    /**
+     * Ancestor agent IDs whose narrowed `MJ: AI Agent User Policies` apply as strict policy ceilings
+     * for this sub-agent run (for example Chief of Staff delegating to `Align Strategic Planning Coach`).
+     * Set automatically by `BaseAgent.ExecuteSubAgent`; enforced by both `BaseAgent.checkUserActionPolicy`
+     * and `TypedActionPolicyGuard`.
+     */
+    policyCeilingAgentIDs?: readonly string[];
     /**
      * Set when the PARENT run was tainted (had read untrusted content) when it invoked this sub-agent and
      * runs outside any task graph. It starts this run tainted, so its memory writes land `Pending` and any
@@ -2301,6 +2545,25 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     maxTreeDurationMs?: number;
 
     /**
+     * Optional whole-workflow USD cost ceiling across the entire root agent + sub-agent
+     * execution (and parent TaskGraph when invoked from a workflow node). Synchronized
+     * with `treeBudget.workflowMaxCostUsd` / `maxTreeCost`.
+     */
+    workflowMaxCostUsd?: number;
+
+    /**
+     * Optional whole-workflow wall-clock duration cap in milliseconds measured from
+     * `workflowStartedAtMs` (or the root run's start timestamp). Synchronized with
+     * `treeBudget.workflowMaxDurationMs` / `maxTreeDurationMs`.
+     */
+    workflowMaxDurationMs?: number;
+
+    /**
+     * Optional epoch timestamp (`Date.now()`) marking when the enclosing workflow started.
+     */
+    workflowStartedAtMs?: number;
+
+    /**
      * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
      * configuration.
      *
@@ -2344,6 +2607,63 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     compactAfterRun?: boolean | AgentPostRunCompactionConfig;
 
+    /**
+     * Optional Tier 5 (`RunOverride`) limits override for this specific agent run.
+     */
+    limitsOverride?: MJLimitsOverride;
+
+    /**
+     * Optional scheduled routine / recurring workstream identifier for `PerRoutine` budget tracking.
+     */
+    routineId?: string;
+
+    /**
+     * Optional `MJ: Scheduled Job Runs.ID` associated with this run.
+     */
+    scheduledJobRunId?: string;
+
+    /**
+     * Optional user-agent policy entity contributing Tier 4 (`UserAgentPolicy`) limits.
+     */
+    userPolicy?: MJAIAgentUserPolicyEntity | null;
+
+    /**
+     * Optional structured Tier 4 (`UserAgentPolicy`) limits override.
+     */
+    userPolicyLimitsOverride?: MJLimitsOverride | null;
+
+    /**
+     * Optional ID of a paused `MJ: AI Agent Runs` record to resume non-destructively from its
+     * persisted {@link RunawayCheckpointState}.
+     */
+    resumeCheckpointRunId?: string;
+
+    /**
+     * Optional human approval & budget extension grant authorizing resumption of a paused run.
+     */
+    humanResumeApproval?: HumanResumeApproval;
+
+    /**
+     * Optional custom evaluator callback for the sub-200ms `FastConvergenceJudge` when
+     * `DeterministicProgressDetector` classifies a window as `Ambiguous`.
+     */
+    fastConvergenceJudgeEvaluator?: (input: {
+        StateSummary: string;
+        Iteration: number;
+        Signal?: AbortSignal;
+    }) => Promise<FastConvergenceJudgeResult>;
+
+    /**
+     * Optional callback invoked when a run pauses non-destructively and emits an owner notification.
+     */
+    onOwnerPauseNotification?: (payload: OwnerPauseNotificationPayload) => Promise<void> | void;
+
+    /**
+     * Explicit switch enabling or disabling Slice 3 non-destructive runaway governance pause
+     * for agent-level limits (`MaxCostPerRun`, `MaxTimePerRun`) in addition to 5-tier `Budgets`.
+     */
+    enableRunawayGovernance?: boolean;
+
 }
 
 /**
@@ -2366,16 +2686,30 @@ export interface AgentTreeBudget {
     maxTreeCost?: number;
     /** Maximum wall-clock duration (in milliseconds) allowed for the entire agent tree */
     maxTreeDurationMs?: number;
+    /** Whole-workflow USD cost ceiling propagated across root and nested sub-agent invocations */
+    workflowMaxCostUsd?: number;
+    /** Whole-workflow wall-clock duration cap in milliseconds propagated from workflow start */
+    workflowMaxDurationMs?: number;
+    /** Authoritative epoch timestamp (Date.now()) when the enclosing workflow started */
+    workflowStartedAtMs?: number;
     /** Live cumulative step counter shared by reference across the agent tree (initialized to 0) */
     totalSteps: number;
     /** Live cumulative token counter shared by reference across the agent tree (initialized to 0) */
     totalTokens: number;
     /** Live cumulative cost accumulator shared by reference across the agent tree (initialized to 0) */
     totalCost: number;
+    /** Mirror of cumulative USD cost across the workflow/tree for explicit workflow budget readers */
+    cumulativeCostUsd?: number;
     /** Epoch timestamp (Date.now()) when the root agent run started */
     startedAtMs: number;
+    /** Epoch timestamp of the latest usage update on this shared budget tracker */
+    lastUpdatedAtMs?: number;
+    /** Shared AbortController fired immediately when any concurrent branch breaches the budget */
+    abortController?: AbortController;
     /** Set to the breach reason once any tree limit is exceeded */
     breachedReason?: string;
+    /** Structured breach diagnostics stamped atomically when any workflow/tree cap is breached */
+    breachDiagnostic?: WorkflowBudgetBreachDiagnostic;
 }
 
 

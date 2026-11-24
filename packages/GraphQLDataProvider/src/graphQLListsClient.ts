@@ -2,6 +2,8 @@ import { LogError } from '@memberjunction/core';
 import type {
   AcceptInvitationResult,
   ApplyResult,
+  CreateListFromQueryRequest,
+  CreateListFromQueryResult,
   InviteResult,
   ListDelta,
   ListDeltaWarning,
@@ -148,6 +150,48 @@ export class GraphQLListsClient {
       },
     });
     return parseApplyResult(result?.MaterializeListFromView);
+  }
+
+  /**
+   * Creates a list from a saved query, or from SQL written in a conversation, linked so it refreshes.
+   * SQL gets the server's ad-hoc SQL checks and is saved as a Pending query in the caller's User
+   * Lists. When the caller can't save queries, the list is still made, with `Refreshes: false` and
+   * `StaticReason` saying why.
+   */
+  public async CreateListFromQuery(request: CreateListFromQueryRequest): Promise<CreateListFromQueryResult> {
+    const mutation = gql`
+      mutation CreateListFromQuery($input: CreateListFromQueryInput!) {
+        CreateListFromQuery(input: $input) {
+          ...CreateListFromQueryResultFields
+        }
+      }
+      ${CREATE_LIST_FROM_QUERY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, {
+      input: {
+        ListName: request.ListName,
+        Description: request.Description,
+        CategoryID: request.CategoryID,
+        QueryID: request.QueryID,
+        SQL: request.SQL,
+        EntityName: request.EntityName,
+        KeyField: request.KeyField,
+        ParametersJSON: request.Parameters ? JSON.stringify(request.Parameters) : undefined,
+        RefreshMode: request.RefreshMode,
+        AutoRefresh: request.AutoRefresh,
+      },
+    });
+    const raw = result?.CreateListFromQuery as
+      | { SourceQueryID?: string | null; SourceQueryName?: string | null; SavedNewQuery?: boolean; Refreshes?: boolean; StaticReason?: string | null }
+      | undefined;
+    return {
+      ...parseApplyResult(result?.CreateListFromQuery),
+      SourceQueryID: raw?.SourceQueryID ?? undefined,
+      SourceQueryName: raw?.SourceQueryName ?? undefined,
+      SavedNewQuery: raw?.SavedNewQuery ?? false,
+      Refreshes: raw?.Refreshes ?? false,
+      StaticReason: raw?.StaticReason ?? undefined,
+    };
   }
 
   public async AddViewResultsToList(viewId: string, listId: string): Promise<ApplyResult> {
@@ -459,8 +503,8 @@ const SOURCE_CHANGE_FRAGMENT = gql`
   }
 `;
 
-const APPLY_RESULT_FRAGMENT = gql`
-  fragment ApplyResultFields on ApplyListResultType {
+/** The fields of an apply result, shared by every result type that carries them. */
+const APPLY_RESULT_SELECTION = `
     Success
     ResultCode
     Message
@@ -473,6 +517,28 @@ const APPLY_RESULT_FRAGMENT = gql`
     SourceChange {
       ...SourceChangeFields
     }
+`;
+
+const APPLY_RESULT_FRAGMENT = gql`
+  fragment ApplyResultFields on ApplyListResultType {
+    ${APPLY_RESULT_SELECTION}
+  }
+  ${SOURCE_CHANGE_FRAGMENT}
+`;
+
+/**
+ * `CreateListFromQueryResult` is its own GraphQL type (the server class extends
+ * `ApplyListResultType`, which copies the fields, not the type), so a fragment on
+ * `ApplyListResultType` can't be spread into it.
+ */
+const CREATE_LIST_FROM_QUERY_RESULT_FRAGMENT = gql`
+  fragment CreateListFromQueryResultFields on CreateListFromQueryResult {
+    ${APPLY_RESULT_SELECTION}
+    SourceQueryID
+    SourceQueryName
+    SavedNewQuery
+    Refreshes
+    StaticReason
   }
   ${SOURCE_CHANGE_FRAGMENT}
 `;

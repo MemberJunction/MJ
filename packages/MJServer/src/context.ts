@@ -9,6 +9,14 @@ import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, 
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
+import {
+  EvaluateExternalEmailVerification,
+  IsInviteOnlyMode,
+} from './auth/inviteOnlyPolicy.js';
+import {
+  InviteOnlyAuthenticationError,
+  IsInviteOnlyAuthenticationError,
+} from './auth/inviteOnlyAuthError.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { AuthCache, HashAuthToken } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema, configInfo } from './config.js';
@@ -544,6 +552,19 @@ export const GetUserPayload = async (
       AuthCache.set(authCacheKey, payload);
     }
 
+    // Enforce invite-only / verified-email gate before user lookup/provisioning.
+    const issuer = typeof payload.iss === 'string' ? payload.iss : undefined;
+    const matchedProvider = issuer ? AuthProviderFactory.Instance.getByIssuer(issuer) : undefined;
+    const emailVerification = EvaluateExternalEmailVerification({
+      Payload: payload,
+      UserHandling: configInfo.userHandling,
+      ProviderName: matchedProvider?.name,
+      Issuer: issuer,
+    });
+    if (emailVerification.Allowed === false && 'Reason' in emailVerification) {
+      throw new InviteOnlyAuthenticationError(emailVerification.Reason);
+    }
+
     // Use provider to extract user information
     const userInfo = ExtractUserInfoFromPayload(payload);
     const loginEmail = ResolveUserLookupEmail(userInfo, userEmailMap);
@@ -558,9 +579,15 @@ export const GetUserPayload = async (
     );
 
     if (!userRecord) {
+      if (IsInviteOnlyMode(configInfo.userHandling)) {
+        throw new InviteOnlyAuthenticationError('Invite-only sign-in refused: no invited user account exists for this email.');
+      }
       console.error(`User ${email} not found`);
       throw new AuthorizationError();
     } else if (!userRecord.IsActive) {
+      if (IsInviteOnlyMode(configInfo.userHandling)) {
+        throw new InviteOnlyAuthenticationError('Invite-only sign-in refused: the invited user account is inactive.');
+      }
       console.error(`User ${email} found but inactive`);
       throw new AuthorizationError();
     }
@@ -654,8 +681,8 @@ export const GetUserPayload = async (
     }
     // Best-effort failure audit (token scanning / brute-force signal). Never blocks auth.
     void auditLoginFailure(bearerToken, error, requestContext, requestDomain);
-    if (isMissingToken) {
-      throw error; // preserve the original message — see comment above
+    if (isMissingToken || IsInviteOnlyAuthenticationError(error)) {
+      throw error; // preserve explicit missing-token and invite-only refusal messages
     }
     throw new AuthenticationError('Unable to authenticate user');
   }
@@ -804,6 +831,10 @@ export function CreateUnifiedAuthMiddleware(
         res.status(401).json({ error: 'Authentication required' });
         return;
       }
+      if (IsInviteOnlyAuthenticationError(error)) {
+        res.status(401).json({ error: error.message });
+        return;
+      }
       console.error('Auth error:', error);
       res.status(401).json({ error: 'Authentication failed' });
     }
@@ -944,6 +975,7 @@ export function TryBuildLazyPostgresProviders(
     );
     pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    pgConfig.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const pgProvider = new PostgreSQLDataProvider();
     if (!pgProvider.ConfigureFromGlobalSync(pgConfig, primaryPool!)) {
       throw new Error('PostgreSQLDataProvider.ConfigureFromGlobalSync failed after readiness check');
@@ -1024,6 +1056,7 @@ function tryBuildLazySqlServerProviders(
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const sqlProvider = new SQLServerDataProvider();
     if (!sqlProvider.ConfigureFromGlobalSync(config)) {
       return null;
@@ -1127,6 +1160,7 @@ async function createPerRequestProviders(
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const sqlProvider = new SQLServerDataProvider();
     await sqlProvider.Config(config);
     p = sqlProvider as unknown as DatabaseProviderBase;
@@ -1178,6 +1212,7 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   );
   pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
   pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+  pgConfig.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
 
   // Share the connection pool from the primary provider to avoid pool exhaustion
   const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)

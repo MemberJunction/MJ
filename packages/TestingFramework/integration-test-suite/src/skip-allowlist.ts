@@ -329,6 +329,41 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
             + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
             + 'The deterministic lane boots MJAPI without them (#6595).'
     },
+    {
+        CheckId: 'open-app-local-source.OLS1',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
+    {
+        CheckId: 'open-app-local-source.OLS2',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
+    {
+        CheckId: 'open-app-local-source.OLS3',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
+    {
+        CheckId: 'open-app-local-source.OLS4',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
+    {
+        CheckId: 'open-app-local-source.OLS5',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
+    {
+        CheckId: 'open-app-local-source.OLS9',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
+    {
+        CheckId: 'open-app-local-source.OLS11',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
 ];
 
 for (const entry of SKIP_ALLOWLIST) {

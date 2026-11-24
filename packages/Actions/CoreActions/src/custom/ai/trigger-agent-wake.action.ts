@@ -15,6 +15,7 @@ import { AgentWakeResumeState, AgentWakeTriggerService } from '@memberjunction/a
  */
 @RegisterClass(BaseAction, 'Trigger Agent Wake')
 export class TriggerAgentWakeAction extends BaseAction {
+    public static override readonly AuthorizesCaller = true;
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;
@@ -48,6 +49,7 @@ export class TriggerAgentWakeAction extends BaseAction {
             const targetAgentName = this.getStringParam(params, 'TargetAgentName') ?? this.getStringParam(params, 'AgentName') ?? undefined;
             const workstreamKey = this.getStringParam(params, 'WorkstreamKey');
             const wakeReason = this.getStringParam(params, 'WakeReason');
+            const applicationID = this.getStringParam(params, 'ApplicationID') ?? undefined;
             const resumeState = this.parseObjectParam<AgentWakeResumeState>(params, 'ResumeState') ?? undefined;
 
             if (!workstreamKey || !wakeReason) {
@@ -65,6 +67,7 @@ export class TriggerAgentWakeAction extends BaseAction {
                 targetAgentName,
                 workstreamKey,
                 wakeReason,
+                applicationID,
                 resumeState,
                 contextUser,
                 metadataProvider: params.Provider,

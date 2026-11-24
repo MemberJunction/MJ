@@ -1,5 +1,202 @@
 # @memberjunction/core-entities-server
 
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 13a71da: Actions, scheduling, notifications and work-queue fixes (minor because HubSpot and LearnWorlds actions gain a `CompanyIntegrationID` param in metadata).
+  - Business Central posts to the connection's `ExternalSystemID` only, reads its Credential through `CredentialEngine`, and takes `AuthorityHost` from the Credential within an Entra ID allow list. A connection that kept its company only on the Credential must now set `ExternalSystemID`. QuickBooks `GetGLEntries` filters by `DocumentNumber`.
+  - Dropbox `ListObjects` returns every page and `SearchFiles` pages with a real cursor (`FileSearchOptions.pageToken`); Apollo retries a 429 with `Retry-After` up to 120 s.
+  - MS Graph `ForwardMessage` reads the mailbox from `ContextData.Email`; received messages carry `Direction` and `BCCRecipients`.
+  - Notification email/SMS go through `NOTIFICATION_EMAIL_PROVIDER` / `NOTIFICATION_SMS_PROVIDER` or `notifications.emailProvider` / `smsProvider` in `mj.config.cjs`; malformed `SecondaryScopes` rows are skipped and refused at save; uncached recipients get their roles read.
+  - Engine-made action outcomes record `INPUT_VALIDATION_FAILED`, `PREVENTED_BY_FILTER`, `TIMEOUT` or `ABORTED`; Twitter delete checks ownership; Twitter and Instagram schedule actions return `NOT_SUPPORTED`; CRM, FormBuilders and LMS resolve their connection through `ResolveCompanyIntegration`.
+  - The scheduler reloads jobs written without a cache event; scheduled actions receive `Context.ScheduledJobRunID` and `Context.Heartbeat`; Feature Pipelines refuse lookup settings on a non-FK target. The Record Set Processing guide now uses the PascalCase option names (`Source`, `Processor`, `ContextUser`, `BatchSize`, `MaxConcurrency`, `TriggeredBy`, `DryRun`, `Scope`).
+  - `mj queue work` mints a provider per delivery above `--concurrency 1` and sweeps/reconciles when long-running; new `mj queue sweep`; SQS dead-letter copies carry `mj_source_message_id`.
+  - Workflow breakpoints can be remembered per user and workflow: steps carry a stable `Configuration.stepId`, `taskGraphDebug.breakpointStepIDs` seeds them on a Debug run, and the debugger's step menu offers Remember / Stop Remembering where the host stores them (the AI test harness does).
+
+- 0f4d357: Embedding attribution.
+  - A tag saved through the entity is embedded with the same model as TagEngine's tag index, under the "Tag Semantic Matching" prompt, and a stored vector is stale only when it came from another model (#4922). New `TagEngine.EmbedTagText` and `TagEngine.ResolveTagEmbeddingModelID`; the local helper is used only when TagEngine resolves no model.
+  - New carrier prompts "Vector Sync Embedding", "Duplicate Detection Embedding" and "Vector Search Embedding" (Embedding type, no model bindings). Vector sync, duplicate detection and vector search run their embeddings under them through the new `EmbeddingRunParams.PromptName`, so cost reports can tell the three apart (#4923). An embedding call that names no prompt now runs under "Content Embedding" when it exists, else the first active Embedding prompt by name, instead of whichever prompt the engine loaded first.
+
+- 44b885a: Harden governed artifacts, live collaboration, public guest sharing, and agent artifact tools (`NW-1` through `NW-6` plus adversarial security & correctness fixes):
+  - **Server & Database Read/Write Security**: Register `PostRunView`-protected artifact, collection, and anchored conversation entities at module load (`MJCoreEntitiesServer`, `MJServer`) and in `agent-data-policy-guard`; fail closed on non-system SQL `Aggregates` and smart-cache/differential/fast-path bypasses in `MJCore` (`ProviderBase`) & `GenericDatabaseProvider`; harden `MJCollectionEntityServer` reparenting (`CanDelete` + `oldParentId`/`newParentId` `CanEdit`), collection ancestry cascading, grantee self-delete ("Leave shared item"), owner-scoped `ListArtifactGuestShareLinks` query (with `artifact:read` API key scope enforcement), and `RealtimeClientSessionResolver` `AuthorizeSessionAccess` magic-link IDOR enforcement.
+  - **Public Guest Sharing & Viewer Sandboxing (`NW-1`)**: Add `MJArtifactGuestShareLink` migration (`V202611161958`) binding Frozen `ArtifactVersion` records to native anonymous `resource-share` `MagicLinkInvite` records (`MagicLinkService`, `POST /magic-link/redeem`, RS256 JWKS `#token=` + `ResolveGuestArtifactSnapshot`, with dormant `PublicLink` marked `@deprecated` via metadata), fail-closed HMAC frozen snapshot verification (`SnapshotVerified === true` required for `.pptx` export), `ComponentArtifactViewerPlugin` server + client fail-closed gates in `GuestSnapshotMode`, dual-field `EmbeddedArtifacts` inspection/scrubbing, nonce-scoped `PrintHtmlInSandboxedIframe` (`allow-modals allow-scripts` without `allow-same-origin`), raster image/whiteboard sandboxed print, URL scheme validation in `LibraryRemoteDrivePane`, and `[GuestSnapshotMode]` offline viewer isolation across Docs, Slides, and Sheets.
+  - **Agent Artifact Tools (`create_artifact` `InitialOperations` & `NW-3`–`NW-6`)**: Forward and atomically execute `initialOperations` / `InitialOperations` in `ArtifactToolManager.handleCreateArtifactTool` (both persisted and in-memory modes); enforce `ValidateEmbeddedArtifactAccess` when accepting document suggestions; wire production `RegisterServerArtifactFileBytesLoader` / `RegisterClientArtifactFileBytesLoader` and preserve `File`-mode `.xlsx` configuration metadata across suggestion/comment edits; enforce most-restrictive `ProtectedRanges` evaluation; and fix `NW-3` suggestion anchors/tabs and `NW-6` viewer initialization races (`ViewMode`, `NavigationAnchor`, Whiteboard selection/navigation).
+  - **CI, Standards, Documentation & Test Coverage**: Resolve all `check:guards`, `check:standards`, `check:dynamic-replace`, `check:codegen-tail`, `check:esm`, and `mj sync validate` checks; sync Docs/Slides/Sheets tool counts (`26 / 29 / 47`); and expand unit, HappyDOM, and live integration (`IT170`, `IT171`) coverage.
+
+- acd082e: Add collaborative MJ Documents, MJ Presentations (16:9 structured Slide Decks), MJ Spreadsheets (formulas, `=MJ.QUERY()` live governed tables, range charts, and round-trip `.xlsx` / `.csv` import & export), inline OLE Whiteboard editing, the Excel Office Add-in (`@memberjunction/excel-addin` + `@memberjunction/excel-addin-server`), and the unified **Library** application (`LibraryResource` + `<mj-library-workspace>`):
+  - **Real-time Collaboration & Governance (`@memberjunction/core-entities`, `@memberjunction/server`, `@memberjunction/ai-agents`)**: Yjs CRDT collaboration rooms over WebSocket (`ArtifactCollaborationServer`), viewer-scoped permission delegation (`ArtifactPermissionEngine` across ownership, host-entity delegates, direct grants, and cascaded collection grants), governed document blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `Artifact`, `InteractiveComponent`), `SlideDeckEngine`, and `SpreadsheetEngine`.
+  - **Collaborative Artifact Viewers (`@memberjunction/ng-artifacts`, `@memberjunction/ng-conversations`)**: Rich Markdown document editor with Suggesting mode and word-level tracked changes, `.docx` / `.pptx` / `.xlsx` import and export services, interactive 16:9 Slide Deck studio and presenter view, collaborative Spreadsheet studio, and explicit Save/Commit inline Whiteboard canvas editing.
+  - **Dedicated `Library` Application & Explorer Routing (`@memberjunction/ng-conversations`, `@memberjunction/ng-base-application`, `@memberjunction/ng-shared`, `@memberjunction/ng-explorer-core`)**: Ships a dedicated header-pinned `Library` application (`DefaultForNewUser: true`) alongside an untouched `File Browser`, preserves `Collections` and user-scoped `Agent Activity` (with an authorized `All Users` scope toggle and `Tasks` -> `Agent Activity` nav migration via `MOVED_NAV_ITEMS`) in `Chat`, removes arbitrary row caps on shared items, queries exact per-artifact latest versions, bounds remote Connected Drive text previews to 100 KB, and adds version-aware + overwrite-safe Connected Drive exports.
+
+  **Upgrade & Environment Notes:**
+  - **Required Server HMAC Secrets**: Configure dedicated `>= 32`-character secrets on `MJAPI` for collaboration WebSocket tickets (`MJ_ARTIFACT_COLLAB_HMAC_SECRET`, e.g. `openssl rand -hex 32`) and frozen live-block snapshots (`MJ_FROZEN_BLOCK_HMAC_SECRET`, e.g. `openssl rand -hex 32`). Both endpoints fail closed if their secret is unset or shorter than 32 characters; `MJServer` logs a startup warning when either secret is missing, and collaborative viewers display a live-sync unavailable notice while remaining safely read-only.
+  - **Reverse-Proxy WebSocket URLs & Multi-Node Routing (`MJAPI_PUBLIC_URL`)**: `DocumentCollaborationService` derives the Yjs WebSocket endpoint directly from the browser's configured GraphQL URL unless `MJAPI_PUBLIC_URL` (`publicUrl`) is explicitly set on `MJAPI`, preventing `ws://localhost:4000` fallbacks behind reverse proxies. Multi-node `MJAPI` clusters should configure sticky WebSocket routing unless a distributed `ITicketReplayStore` is registered via `SetTicketReplayStore`.
+  - **Existing Users & `Library` App Visibility**: New users receive the `Library` application automatically via `DefaultForNewUser: true`. Existing users who already customized their `MJ: User Applications` rows retain their existing app selections; they can enable `Library` in the Explorer App Switcher / Settings, or administrators can provision `UserApplication` rows (`ApplicationID = 'DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A'`) for pre-existing active users as a one-time post-upgrade step.
+  - **Deployment / Rolling-Upgrade Note (`@memberjunction/server` + `@memberjunction/ng-artifacts`)**: `MJAPI` (`@memberjunction/server`) and `MJExplorer` (`@memberjunction/ng-artifacts`) require an **all-at-once coordinated deployment** rather than a mixed-version rolling upgrade. The collaboration protocol introduces incremental CRDT delta payloads on `version-saved` (`prevStateVectorB64` / `savedSnapshotB64`), the JSON `PayloadBase64` WebSocket relay envelope, and the `CollaborationTicketResult.ErrorCode` GraphQL field, which must be deployed together across server and web client bundles.
+
+  Application metadata (`metadata/applications`), authorization metadata (`metadata/authorizations`, `metadata/authorization-roles`), entity metadata (`metadata/entities`), and artifact type metadata (`metadata/artifact-types`) change, so the release requires a consolidated metadata sync migration.
+
+- 880a114: Chat search panel: debounce typed queries (250 ms), keep only the newest search's results, and look up artifact collections with two batched reads instead of one query per artifact.
+
+  Conversation export: every format now writes the output artifacts of each message (name, type, version, stored text content capped at 20,000 characters; MIME type for file-backed versions), with a deep link when the host supplies one. The export button is disabled when there is no conversation to export.
+
+  Conversations: only the server changes a saved conversation's owner (`UserID`); the owner is refused too, because messages with no `UserID` follow the owner.
+
+  Folders: the UI role can create, rename, move and delete its own folders (Private or Shared), bound to the new "UI: Own Projects" row-level filter (migration + entity-permission metadata). Deleting a folder moves its subfolders and conversations out as the system user in the delete's transaction. The folder dialog offers Public, and the sidebar offers Rename/Delete, only where the user's folder writes allow it.
+
+- bc39181: Decision adoption: closed-set calls move onto decision models, each behind one switch.
+  - **`RunDecisionUse` (ai-prompts)** answers a closed-set call in one of three modes: `Prompt` (the existing path), `Shadow` (the existing path answers; the decision runs beside it and its run records the agreement) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). A use defaults to `Decision` only when it needs no threshold or ships a calibration; otherwise `Shadow`, whose runs are the data for its calibration fit.
+  - **Conversation routing is on by default.** The routing fits are shifted to a chat's 90%-continue mix, so routing leaves the last agent only when it is at least 70% likely the person moved on. `EnableDecisionRouting` defaults to `true`; `ConversationAgentService.CheckAgentContinuityIntent` is deprecated.
+  - **Rubrics** ask numeric criteria, add a `DecisionThenLLM` evaluator (alias `hybrid`) that sends the LLM only what the decision cannot settle, and calibrate per criterion. `LLM` stays the default.
+  - **Agents:** the Memory Manager's note gate is on by default; memory dedupe, contradiction detection and the realtime turn moderator run in `Shadow`; Sage turns on decision discovery.
+  - **Server:** the restricted-field classifier (`Shadow`) and `ClassifyFeedback` (`Decision`) use decisions; `decisions.restrictedFieldClassifier` and `decisions.tagMatch` configure them. Search scopes get an opt-in `DecisionReRanker`.
+  - **Tags:** a keyword just under the match threshold asks a `tag-match` decision (`Shadow`); `Decision` mode applies the tag at a calibrated 0.8.
+  - **CodeGen:** Smart Field Identification gets an opt-in decision mode (`advancedGeneration.smartFieldDecisionMode`, default `Prompt`).
+
+- a9e640a: Lists: refresh from a saved view or query, safely and on a schedule.
+  - Queries and User Views store a `DefinitionFingerprint` on every save. A list stores the fingerprint of the source it was linked against (`SourceFingerprint`); a refresh whose source changed since then applies nothing, returns `SOURCE_CHANGED` and pauses the list's routine until the owner approves the change (`ApproveListSource`). Approving, and linking a source, fill the list straight away.
+  - A list can refresh from a saved query (`SourceQueryID`, `SourceQueryParameters`, `SourceQueryKeyField`).
+  - "Refresh automatically" (`List.AutoRefresh`) creates a User Routine that runs "Refresh List From Source" on the Lists app's default schedule (application settings `Lists.Refresh.DefaultCron` and `Lists.Refresh.DefaultTimezone`). Only the list's owner can link a source or turn it on.
+  - `RefreshFromSource` (and so linking, approving and scheduled refreshes) no longer signs a delta token, so it works on a server without `MJ_LIST_DELTA_SECRET`; previews and `ApplyDelta` still need the secret.
+  - New list operations `PreviewRefreshFromSource` / `ApplyRefreshPreview` (GraphQL `PreviewListRefresh` / `ApplyListRefresh`) preview a refresh from any source before applying it. Each refresh that changes a list writes a "List Refreshed" audit row; source changes and approvals write their own.
+  - The List form gains a Source & refresh card, a source-change review with a SQL or filter diff from Record Changes, a link-source dialog and a Refresh history section. The Lists app gains refresh status on the browse page and a Refreshes page.
+  - New deterministic integration test IT175 (`list-refresh` bundle, LR1–LR7) covers the fingerprint stamp, fill on link, the routine's lifecycle, a stopped refresh on a changed source, and approval.
+
+- 687393c: Widget Guest row filters on MJ: AI Agent Requests, MJ: Conversation Skills (read and update) and MJ: Conversation Detail Artifacts (read), so a widget guest reads and updates only the rows of its own session. The existing run-entity read filters on MJ: AI Agent Runs, MJ: AI Agent Run Steps and MJ: AI Prompt Runs now also apply to updates.
+
+### Patch Changes
+
+- 4ba5642: Follow-up to the live artifact collaboration work: an agent edit that fails to commit no longer takes collaborators' work with it, and the rollback no longer needs a permission bypass.
+
+  Collaboration server (rollback):
+  - Rolling back a deferred agent edit now undoes only the agent's change. Before, it reset the room to the last saved version, which dropped unsaved edits typed before the agent call and edits made while the agent's version was being saved.
+  - On slides and spreadsheets, a slide, sheet, cell or deck field goes back to its earlier value only if it still holds the agent's value. Anything a person has since edited is kept.
+  - After a rollback the room is marked dirty when its content differs from the restored base version, so the remaining edits still get saved.
+
+  Collaboration server (reconcile):
+  - When a saved version is reconciled into a live slide deck or workbook, a slide, sheet, cell or field that the saved version left unchanged is no longer overwritten. A person's concurrent edit to it survives.
+  - If the saved version kept the original slide or sheet order, a concurrent reorder is kept as well.
+  - `ArtifactLiveMutationHookResult.rollback` is now typed with the `rolledBackVersionId` argument it already received.
+  - A failure to check for room peers is logged instead of ignored.
+
+  Agent tool manager (version rollback):
+  - The rollback loads and deletes (or reverts) the agent's version row as the system user, so a user who may edit but not delete versions no longer leaves a stray version behind.
+  - This replaces the trusted-rollback marker on `ArtifactPermissionDelegate` and `MJArtifactVersionEntityServer`, which is removed.
+  - A reused agent-run version is now always reverted, even when a newer version exists.
+
+- 804537f: Server principal lookups go through one ladder (active system user, else lowest-ID active Owner, else none) instead of "first Owner, else the first cached user" or an untrimmed `Type === 'Owner'` comparison against the padded column. New `GetServerPrincipal` / `ResolveServerPrincipalFrom` in `@memberjunction/generic-database-provider` and `ResolveServerPrincipal` in `@memberjunction/server`; in-process CodeGen and RSU processing skip with an error when there is no principal. MJAPI logs at startup when a provisioning setting resolves to a non-Owner. The `newUserRoles` templates are tested against the shipped default, and an integration check asserts `User.Email` is unique.
+- 0fdcb51: Only a conversation's owner, a user with an Owner-level grant, or a user in the Developer or Integration role can delete a conversation. The server refuses everyone else (`MJConversationEntityServer.Delete`), `ConversationEngine` refuses before removing the conversation from the list and reports refused conversations by name, and the conversation list disables Delete with the reason. Previously any user who could load a conversation could delete it for everyone.
+- 1f24d8a: Field-level security follow-ups. Related rows loaded with a record (`EntityRelationshipsToLoad`) now get the user's allowed-column list and Read row filter, and a relationship to an entity the user cannot read is skipped (#5982). A save or delete that fails on a database constraint, directly or in a transaction group, no longer returns the column values the database quoted, or the executed SQL, to a caller who is denied any field of the entity; a value list that does not close on its line is withheld with the rest of the message, and the server log keeps the full message (#5981). Turning `EnableFieldLevelSecurity` on reads the entity's existing field-permission rows from the database instead of cached metadata, so rules deleted out of band are recreated rather than leaving every field denied (#5988). The read ignores the entity's row cap, so re-enabling an entity with more rules than `UserViewMaxRows` works.
+- 2b4969f: Replace backtracking regexes (CodeQL `js/polynomial-redos`) with linear scans: new `TrimTrailingChars`, `TrimLeadingChars`, `TrimChars` and `IsEmailShaped` helpers in `@memberjunction/global`, used for URL, path and base64 trims and email-shape checks, plus index scans for Markdown fences and Slack link conversion. Results are unchanged for every input.
+- c17c7be: Editing an active scheduled job's cron or time zone now moves its `NextRunAt` to the new schedule. Before, the job kept the `NextRunAt` computed from the old schedule, so the new one took effect only after one more run. The new `MJScheduledJobEntityServer` recomputes it on save. A `NextRunAt` the caller sets on the same save still wins, and new jobs are still seeded by the scheduler. The Integration schedules screen no longer sets `NextRunAt` to now on every save, so saving a schedule no longer starts a sync right away.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [a1c367b]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [236ecf3]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [804537f]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [c67470e]
+- Updated dependencies [16a66fc]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [9532ed3]
+- Updated dependencies [a9e640a]
+- Updated dependencies [4761d50]
+- Updated dependencies [46173bd]
+- Updated dependencies [31c2439]
+- Updated dependencies [9d82caa]
+- Updated dependencies [4262206]
+- Updated dependencies [e9472ef]
+- Updated dependencies [0aff9f9]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [eb27e92]
+- Updated dependencies [cd8e5e5]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [116cb9a]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [31c2439]
+- Updated dependencies [e288291]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [687393c]
+  - @memberjunction/feature-pipelines@6.3.0-edge.1
+  - @memberjunction/actions-base@6.3.0-edge.1
+  - @memberjunction/communication-types@6.3.0-edge.1
+  - @memberjunction/scheduling-engine@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/integration-engine@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/ai@6.3.0-edge.1
+  - @memberjunction/ai-engine-base@6.3.0-edge.1
+  - @memberjunction/tag-engine@6.3.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.3.0-edge.1
+  - @memberjunction/generic-database-provider@6.3.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.1
+  - @memberjunction/lists@6.3.0-edge.1
+  - @memberjunction/sql-converter@6.3.0-edge.1
+  - @memberjunction/sql-parser@6.3.0-edge.1
+  - @memberjunction/predictive-studio-core@6.3.0-edge.1
+  - @memberjunction/templates@6.3.0-edge.1
+  - @memberjunction/communication-engine@6.3.0-edge.1
+  - @memberjunction/ai-vectordb@6.3.0-edge.1
+  - @memberjunction/doc-utils@6.3.0-edge.1
+  - @memberjunction/integration-pk-classifier@6.3.0-edge.1
+  - @memberjunction/rubrics-base@6.3.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.1
+  - @memberjunction/sql-dialect@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Minor Changes

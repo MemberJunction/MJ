@@ -27,7 +27,8 @@ export class MJAISkillFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
             { sectionKey: 'mJSearchExecutionLogs', sectionName: 'Search Execution Logs', isExpanded: false },
             { sectionKey: 'mJAISkillSearchScopes', sectionName: 'AI Skill Search Scopes', isExpanded: false },
-            { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false }
+            { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
+            { sectionKey: 'mJAIAgentRhythmTemplates', sectionName: 'AI Agent Rhythm Templates', isExpanded: false }
         ]);
     }
 }

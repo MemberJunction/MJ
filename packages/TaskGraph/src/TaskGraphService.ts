@@ -16,14 +16,20 @@
  * @module @memberjunction/task-graph
  */
 import {
+    CODE_FALLBACK_LIMITS,
     IMetadataProvider,
+    IsTaskGraphIsolationLevel,
+    LimitsConfigResolver,
     LogError,
     LogStatus,
     RunInEntityTransaction,
     RunView,
     ServerOperationScopeManager,
     UserInfo,
+    ValidateDecisionReadResult,
     type EntityTransactionScope,
+    type MJLimitsOverride,
+    type TaskGraphIsolationLevel,
 } from '@memberjunction/core';
 import {
     MJTaskEntity,
@@ -34,6 +40,7 @@ import {
     type MJActionEntity,
 } from '@memberjunction/core-entities';
 import {
+    BuildEnqueueCorrelationKey,
     FormatValidationErrors,
     NormalizeDependency,
     ParseTaskSecurityEnvelope,
@@ -43,6 +50,7 @@ import {
     TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     TASK_GRAPH_WORKFLOW_TYPE_NAME,
     ValidateTaskGraphSpec,
+    type TaskGraphDispatchMode,
     type TaskGraphFailurePolicy,
     type TaskGraphInvocationEnvelope,
     type TaskGraphSpec,
@@ -50,9 +58,22 @@ import {
     type TaskSecurityEnvelope,
     type ForEachOperation,
     type WhileOperation,
+    type WorkflowBudgetCapsConfig,
+    type WorkflowLimitsMetadataInput,
     ConfigOf,
+    IsDefaultHumanTaskProvider,
+    IsHumanTaskProviderRegistered,
+    HumanTaskProviderDefaults,
+    ResolveHumanStepProvider,
 } from '@memberjunction/ai-core-plus';
-import { EscapeSQLString, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import {
+    TaskGraphCallerNotificationService,
+    TaskGraphQueueRegistry,
+    type TaskGraphCallerNotificationRecord,
+    type TaskGraphQueuedRunEnvelope,
+    type TaskGraphQueuedSubmissionSnapshot,
+} from './queue-dispatch';
+import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
@@ -60,7 +81,13 @@ import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { CompensationFromSpec, IsCompensationTask, type SagaExecutionState } from './saga-compensation';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
-import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
+import {
+    IsGovernanceDebugPause,
+    ParseTaskGraphDebugState,
+    type EdgeOverrideVerdict,
+    type StepTarget,
+    type TaskGraphDebugState,
+} from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
 
 /**
@@ -116,6 +143,26 @@ export type TaskGraphSubmitContext = {
      * by the dispatcher on every node.
      */
     SecurityEnvelope?: TaskSecurityEnvelope;
+    /** Optional submitting agent ID used for Tier-3 `AgentOrWorkflowMetadata` and Tier-4 `UserAgentPolicy` resolution. */
+    AgentID?: string | null;
+    /** Optional routine or scheduled workstream identifier used for `PerRoutine` budget enforcement. */
+    RoutineID?: string | null;
+    /** Optional workflow metadata limits contributing to Tier-3 `AgentOrWorkflowMetadata`. */
+    WorkflowMetadata?: WorkflowLimitsMetadataInput | null;
+    /** Optional explicit Tier-4 user-agent policy limits override. */
+    UserPolicyLimitsOverride?: MJLimitsOverride;
+    /** Optional Tier-5 limits override persisted onto the parent graph for runtime budget/runaway governance. */
+    LimitsOverride?: MJLimitsOverride;
+    /** Optional whole-workflow USD cost & wall-clock duration budget enforced across all nodes and agent runs. */
+    WorkflowBudget?: WorkflowBudgetCapsConfig;
+    /** Enables (or explicitly disables when `false`) runtime budget/runaway governance evaluation on the dispatcher for this graph. */
+    EnableGovernance?: boolean;
+    /** Optional per-graph isolation level override (defaults from `spec.isolation` then `LimitsConfigResolver`). */
+    Isolation?: TaskGraphIsolationLevel;
+    /** Execution dispatch mode (`'Inline'` default, or `'Queue'` to enqueue execution onto WorkQueue). */
+    Dispatch?: TaskGraphDispatchMode;
+    /** Optional WorkQueue topic override when `Dispatch === 'Queue'`. */
+    QueueTopic?: string;
 };
 
 /**
@@ -205,6 +252,30 @@ export type TaskGraphParentMetadata = {
      * Current saga lifecycle state when `failurePolicy === 'CompensateCompleted'`.
      */
     sagaState?: SagaExecutionState;
+    /** Optional Tier-3 submitting agent ID for 5-tier limits & policy resolution. */
+    submittedByAgentID?: string | null;
+    /** Optional routine or scheduled workstream identifier for `PerRoutine` budget enforcement. */
+    routineID?: string | null;
+    /** Optional workflow metadata limits contributing to Tier-3 `AgentOrWorkflowMetadata`. */
+    workflowMetadata?: WorkflowLimitsMetadataInput;
+    /** Optional explicit Tier-4 user-agent policy limits override. */
+    userPolicyLimitsOverride?: MJLimitsOverride;
+    /** Optional Tier-5 limits override enforced by `TaskGraphGovernanceCoordinator` on the dispatcher. */
+    limitsOverride?: MJLimitsOverride;
+    /** Optional whole-workflow USD cost & wall-clock duration cap persisted on the parent graph. */
+    workflowBudget?: WorkflowBudgetCapsConfig;
+    /** Explicit governance opt-in/opt-out flag persisted onto the parent graph (`false` disables governance). */
+    governanceEnabled?: boolean;
+    /** Execution isolation mode for tasks in this graph (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
+    isolation?: TaskGraphIsolationLevel;
+    /** Dispatch mode (`'Inline'` or `'Queue'`) used when the graph was submitted. */
+    dispatchMode?: TaskGraphDispatchMode;
+    /** Destination WorkQueue topic when `dispatchMode === 'Queue'`. */
+    queuedTopic?: string;
+    /** WorkQueue work-item / message identifier returned at queue enqueue. */
+    queueMessageID?: string;
+    /** Durable caller notification record recovered across restarts when `dispatchMode === 'Queue'`. */
+    callerNotification?: TaskGraphCallerNotificationRecord;
 };
 
 /**
@@ -216,7 +287,12 @@ export type TaskGraphParentMetadata = {
  * the cap the dispatcher forces `continuation: 'message'`, which ends the chain without losing the
  * results.
  */
-export const MAX_REINVOKE_DEPTH = 5;
+export const MAX_REINVOKE_DEPTH = CODE_FALLBACK_LIMITS.ResourceGuards.MaxReinvokeDepth;
+
+/** Resolves the effective reinvoke depth cap from `LimitsConfigResolver.Instance`. */
+export function GetMaxReinvokeDepth(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxReinvokeDepth;
+}
 
 /** What a parent row means when it carries no metadata, or metadata we cannot read. */
 const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
@@ -264,6 +340,12 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
         const sagaState = VALID_SAGA_STATES.has(parsed.sagaState as string)
             ? parsed.sagaState
             : undefined;
+        const isolation = IsTaskGraphIsolationLevel(parsed.isolation)
+            ? parsed.isolation
+            : undefined;
+        const dispatchMode = parsed.dispatchMode === 'Queue' || parsed.dispatchMode === 'Inline'
+            ? parsed.dispatchMode
+            : undefined;
         const out: TaskGraphParentMetadata = {
             ...DEFAULT_PARENT_METADATA,
             ...parsed,
@@ -285,9 +367,11 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 : undefined,
             ...(failurePolicy !== undefined ? { failurePolicy } : {}),
             ...(sagaState !== undefined ? { sagaState } : {}),
+            ...(isolation !== undefined ? { isolation } : {}),
         };
         if (failurePolicy === undefined) delete out.failurePolicy;
         if (sagaState === undefined) delete out.sagaState;
+        if (isolation === undefined) delete out.isolation;
         return out;
     } catch {
         return { ...DEFAULT_PARENT_METADATA };
@@ -307,9 +391,21 @@ export function BuildTaskGraphParentInputPayload(args: {
     sagaState?: SagaExecutionState;
     submittedByAgentRunID: string | null;
     submittedByUserID: string | null;
+    submittedByAgentID?: string | null;
+    routineID?: string | null;
+    workflowMetadata?: WorkflowLimitsMetadataInput;
+    userPolicyLimitsOverride?: MJLimitsOverride;
     parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
+    limitsOverride?: MJLimitsOverride;
+    workflowBudget?: WorkflowBudgetCapsConfig;
+    governanceEnabled?: boolean;
+    isolation?: TaskGraphIsolationLevel;
+    dispatchMode?: TaskGraphDispatchMode;
+    queuedTopic?: string;
+    queueMessageID?: string;
+    callerNotification?: TaskGraphCallerNotificationRecord;
 }): Record<string, unknown> {
     const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
         ? args.parentAgentHierarchy
@@ -325,11 +421,25 @@ export function BuildTaskGraphParentInputPayload(args: {
         ...(args.sagaState ? { sagaState: args.sagaState } : {}),
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
+        ...(args.submittedByAgentID ? { submittedByAgentID: args.submittedByAgentID } : {}),
+        ...(args.routineID ? { routineID: args.routineID } : {}),
+        ...(args.workflowMetadata ? { workflowMetadata: args.workflowMetadata } : {}),
+        ...(args.userPolicyLimitsOverride ? { userPolicyLimitsOverride: args.userPolicyLimitsOverride } : {}),
         recordsTaint: true,
         ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
+        ...(args.limitsOverride ? { limitsOverride: args.limitsOverride } : {}),
+        ...(args.workflowBudget ? { workflowBudget: args.workflowBudget } : {}),
+        ...(args.governanceEnabled !== undefined
+            ? { governanceEnabled: args.governanceEnabled }
+            : ((args.limitsOverride || args.workflowBudget) ? { governanceEnabled: true } : {})),
+        ...(args.isolation ? { isolation: args.isolation } : {}),
+        ...(args.dispatchMode ? { dispatchMode: args.dispatchMode } : {}),
+        ...(args.queuedTopic ? { queuedTopic: args.queuedTopic } : {}),
+        ...(args.queueMessageID ? { queueMessageID: args.queueMessageID } : {}),
+        ...(args.callerNotification ? { callerNotification: args.callerNotification } : {}),
         ...(args.startPaused
             ? {
                 debug: {
@@ -405,6 +515,10 @@ export type TaskGraphSubmitResult = {
     ParentTaskID?: string;
     /** tempId -> persisted Task.ID, for callers that need to correlate back to their spec. */
     TaskIDMap?: Map<string, string>;
+    /** Effective dispatch mode (`'Inline'` or `'Queue'`). */
+    Dispatch?: TaskGraphDispatchMode;
+    /** WorkQueue message identifier when dispatched via queue. */
+    QueueMessageID?: string;
     ErrorMessage?: string;
 };
 
@@ -427,6 +541,9 @@ export const TASK_TYPE_NAME = TASK_GRAPH_WORKFLOW_TYPE_NAME;
  */
 const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
     'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt', 'Decision',
+    // Waiting steps: never claimed, completed by a signal (External / Enqueue) or a clock (Wait).
+    // The dispatcher reaches and settles them through WaitingStepRunner.
+    'External', 'Enqueue', 'Wait',
 ];
 
 /**
@@ -481,13 +598,33 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     // `expiresInHours` as well as instructions: dropping it here is what would leave the deadline in
     // the spec and out of the row the dispatcher actually reads, so the request would be raised with
     // no ExpiresAt and the author's timeout would silently not exist.
+    //
+    // `provider` and `providerConfiguration` for the same reason: dropped, a Human step meant for a
+    // plugged-in provider silently fell back to the built-in inbox, raised an ask nobody watches, and
+    // never reached the provider at all.
     const human = ConfigOf(node, 'Human');
-    if (human?.instructions || human?.expiresInHours) {
-        config.human = { instructions: human.instructions, expiresInHours: human.expiresInHours };
+    if (human?.instructions || human?.expiresInHours || human?.provider || human?.providerConfiguration) {
+        config.human = {
+            instructions: human.instructions,
+            expiresInHours: human.expiresInHours,
+            ...(human.provider ? { provider: human.provider } : {}),
+            ...(human.providerConfiguration ? { providerConfiguration: human.providerConfiguration } : {}),
+        };
     }
 
     const external = ConfigOf(node, 'External');
     if (external) config.external = external;
+
+    const enqueue = ConfigOf(node, 'Enqueue');
+    if (enqueue) {
+        config.stepKind = 'Enqueue';
+        config.enqueue = enqueue;
+    }
+
+    // A Wait's moment. Without it the row says "Wait" and nothing else, and the dispatcher can only
+    // fail the step — which it does, by name, rather than continue immediately.
+    const wait = ConfigOf(node, 'Wait');
+    if (wait) config.wait = wait;
 
     // The questions and state, plus the node's tempId: conditions name a decision by the tempId it
     // was submitted under (`decisions.<tempId>.<question>`), and the row keeps no other copy of it.
@@ -627,9 +764,10 @@ export function FindUnrunnableKinds(spec: TaskGraphSpec): string | null {
 
     const detail = offenders.map((t) => `"${t.name}" (${t.kind})`).join(', ');
     return (
-        `"${spec.workflowName}" cannot be run yet: ${detail}. ` +
-        `The dispatcher runs agent, action, person and loop steps. Prompt steps and steps completed ` +
-        `by an outside system are not supported yet — replace them, or split them out of this workflow.`
+        `"${spec.workflowName}" cannot be run: ${detail}. ` +
+        `The dispatcher runs ${DISPATCHABLE_KINDS.join(', ')} steps; this server does not know the ` +
+        `kind named, which usually means it was authored for a newer version. Replace the step, or ` +
+        `update this server.`
     );
 }
 
@@ -661,6 +799,60 @@ export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: s
         `workflow. Assigning a step to someone else is not available yet (#3524) — a workflow can ` +
         `only ask the person who started it. Remove assignToUserID from those steps.`
     );
+}
+
+/**
+ * The spec with every Human step that names no provider given `defaultKey`, or the spec unchanged when
+ * there is no default. A step that names a provider, the built-in `'AgentRequest'` included, keeps it.
+ * Pure; `Submit` passes `HumanTaskProviderDefaults.Instance.EffectiveKey`.
+ */
+export function ApplyDefaultHumanTaskProvider(spec: TaskGraphSpec, defaultKey: string | null): TaskGraphSpec {
+    if (!defaultKey) return spec;
+    let changed = false;
+    const tasks = spec.tasks.map((node) => {
+        if (node.kind !== 'Human') return node;
+        const human = ConfigOf(node, 'Human') ?? {};
+        const provider = ResolveHumanStepProvider(human.provider, defaultKey);
+        if (provider === human.provider) return node;
+        changed = true;
+        return { ...node, configuration: { ...human, provider } };
+    });
+    return changed ? { ...spec, tasks } : spec;
+}
+
+/**
+ * Names the Human steps whose `provider` is not registered on this server, or `null` when all are.
+ *
+ * Asked of the SUBMITTING host, which in every MJ deployment loads the same server packages as the
+ * dispatching one. The dispatcher re-checks when it reaches the step, so a host that differs still
+ * fails the step with the provider's name rather than waiting forever.
+ */
+export function FindUnregisteredHumanTaskProviders(spec: TaskGraphSpec): string | null {
+    const missing = new Map<string, string[]>();
+    for (const node of spec.tasks) {
+        const key = ConfigOf(node, 'Human')?.provider?.trim();
+        if (!key || IsDefaultHumanTaskProvider(key)) continue;
+        if (IsHumanTaskProviderRegistered(key)) continue;
+        missing.set(key, [...(missing.get(key) ?? []), `"${node.name}"`]);
+    }
+    if (missing.size === 0) return null;
+    const detail = [...missing.entries()].map(([key, steps]) => `${steps.join(', ')} → "${key}"`).join('; ');
+    return (
+        `"${spec.workflowName}" was not started: these Human steps name a provider no package on this server ` +
+        `registers: ${detail}. Load the package that registers it, or remove "provider" to use the built-in inbox.`
+    );
+}
+
+/**
+ * The correlation key an External step can be stamped with AT SUBMIT: a literal key. A payload path
+ * is resolved only when the step is reached, so it returns `null` here.
+ *
+ * Stamping a literal key up front is what lets a signal that arrives before the step is reached find
+ * it — and be held on it — rather than missing it because the key column was still empty.
+ */
+export function SubmitTimeCorrelationKey(node: TaskGraphSpecNode): string | null {
+    const key = ConfigOf(node, 'External')?.correlationKey?.trim();
+    return key && !key.startsWith('payload.') ? key : null;
 }
 
 /**
@@ -702,6 +894,7 @@ function isNameValueJson(json: string): boolean {
 export type RetryableTask = Pick<
     MJTaskEntity,
     'Status' | 'StepType' | 'ErrorMessage' | 'StartedAt' | 'CompletedAt' | 'PercentComplete' | 'ClaimedBy' | 'ClaimExpiresAt' | 'OutputPayload'
+    | 'AttemptCount' | 'NextAttemptAt'
 >;
 
 /**
@@ -724,6 +917,10 @@ export function PrepareTaskForRetry(task: RetryableTask): void {
     // Clear any stale claim so the task is immediately claimable.
     task.ClaimedBy = null;
     task.ClaimExpiresAt = null;
+    // A person retrying a step starts its retry budget over, and does not wait out a backoff the
+    // dispatcher scheduled before they stepped in.
+    task.AttemptCount = 0;
+    task.NextAttemptAt = null;
 }
 
 export class TaskGraphService {
@@ -737,13 +934,33 @@ export class TaskGraphService {
     private readonly claims = new TaskClaimStore('task-graph-service', 0);
 
     /**
-     * Saves a row of a graph inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}, bound to the caller: a workflow, its
-     * steps and its edges are written only by this service and the dispatcher (`MJTaskEntityServer`,
-     * `MJTaskDependencyEntityServer`), so a graph is created and changed through the service, never by an ordinary save.
+     * Resolves the server's System User for internal engine writes to `MJ: Task Types`, `MJ: Tasks`,
+     * and `MJ: Task Dependencies` — entities that non-Owner `UI` users deliberately hold read-only
+     * permissions on because workflows are persisted exclusively through this service (never via
+     * direct client CRUD). Falls back to `context.ContextUser` when no `UserCache` is loaded (e.g.
+     * isolated unit tests).
+     *
+     * Caller authorization (`resolveAgents`, `resolveActions`, `resolvePrompts`,
+     * `FindCrossUserAssignments`, `AuthorizeGraphControl`) and row attribution
+     * (`submittedByUserID`, `Human` step `UserID`, `SecurityEnvelope`) ALWAYS remain bound to
+     * `context.ContextUser`.
+     */
+    private servicePersistenceUser(context: TaskGraphSubmitContext): UserInfo {
+        const store = GetGlobalObjectStore() as {
+            ___SINGLETON__UserCache?: { GetSystemUser?: () => UserInfo | undefined };
+        } | null;
+        return store?.___SINGLETON__UserCache?.GetSystemUser?.() ?? context.ContextUser;
+    }
+
+    /**
+     * Saves a row of a graph inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}, bound to the
+     * persistence user that owns `row`: a workflow, its steps and its edges are written only by
+     * this service and the dispatcher (`MJTaskEntityServer`, `MJTaskDependencyEntityServer`), so a
+     * graph is created and changed through the service, never by an ordinary save.
      */
     private saveAsService(row: { Save(): Promise<boolean> }, entityName: 'MJ: Tasks' | 'MJ: Task Dependencies', context: TaskGraphSubmitContext): Promise<boolean> {
         return ServerOperationScopeManager.Instance.RunWithAuthority(
-            { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: [entityName], userId: context.ContextUser.ID },
+            { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: [entityName], userId: this.servicePersistenceUser(context).ID },
             () => row.Save(),
         );
     }
@@ -756,7 +973,11 @@ export class TaskGraphService {
      * A submitted graph therefore survives the submitting request, the submitting agent run, and
      * the submitting server — which is the entire point of Task rows over in-run state (D8).
      */
-    public async Submit(spec: TaskGraphSpec, context: TaskGraphSubmitContext): Promise<TaskGraphSubmitResult> {
+    public async Submit(submitted: TaskGraphSpec, context: TaskGraphSubmitContext): Promise<TaskGraphSubmitResult> {
+        // 0. The install's default human-task provider, stamped onto every Human step that names none.
+        //    Stamped here, once, rather than looked up when the step is reached: the row then records
+        //    which provider was used, and a later change to the setting does not reroute a run in flight.
+        const spec = ApplyDefaultHumanTaskProvider(submitted, HumanTaskProviderDefaults.Instance.EffectiveKey);
         // 1. Structural validation. Server-side is the source of truth even when a producer already
         //    validated client-side — the same function runs in both places, so they cannot disagree.
         const validation = ValidateTaskGraphSpec(spec);
@@ -786,12 +1007,21 @@ export class TaskGraphService {
             return { Success: false, ErrorMessage: misassigned };
         }
 
+        // 1b-iii. Human-task providers. A Human step handed to a provider nobody registered on this
+        //         server would be reached, fail, and stop the workflow mid-run; refused here instead,
+        //         by name, while the graph is still the author's to fix.
+        const unregistered = FindUnregisteredHumanTaskProviders(spec);
+        if (unregistered) {
+            LogError(`[TaskGraphService] ${unregistered}`);
+            return { Success: false, ErrorMessage: unregistered };
+        }
+
         // 1c. Chain depth. A flow that dispatches a graph containing itself recurses without bound,
         //     and each hop costs real money and real rows before anyone notices. The cap is checked
         //     HERE rather than at execution because refusing to write the graph is the only point at
         //     which nothing has happened yet.
         const depth = context.ReinvokeDepth ?? 0;
-        if (depth >= MAX_REINVOKE_DEPTH) {
+        if (depth >= GetMaxReinvokeDepth()) {
             const message =
                 `"${spec.workflowName}" was not started: it is ${depth} levels deep in a chain of ` +
                 `workflows starting workflows, which is the limit. A workflow that reaches this is ` +
@@ -837,6 +1067,10 @@ export class TaskGraphService {
             }
 
             const taskTypeID = await this.ensureTaskType(context);
+            const dispatchMode: TaskGraphDispatchMode = context.Dispatch ?? spec.dispatch ?? 'Inline';
+            if (dispatchMode === 'Queue') {
+                return this.submitQueuedGraph(spec, taskTypeID, context);
+            }
 
             // 3. Persist — ALL of it, or none of it.
             //
@@ -895,12 +1129,155 @@ export class TaskGraphService {
             } else {
                 KickTaskGraphDispatchers();
             }
-            return { Success: true, ParentTaskID: parentTaskID, TaskIDMap: taskIDMap };
+            return { Success: true, ParentTaskID: parentTaskID, TaskIDMap: taskIDMap, Dispatch: 'Inline' };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`[TaskGraphService] Submit failed for "${spec.workflowName}": ${message}`);
             return { Success: false, ErrorMessage: message };
         }
+    }
+
+    /**
+     * Submits a validated graph for asynchronous WorkQueue execution (`Dispatch === 'Queue'`).
+     * Persists only the parent `Pending` task row with serialized `queuedSubmission` metadata and a
+     * `Pending` durable caller notification so inline dispatchers never pick it up prematurely.
+     */
+    private async submitQueuedGraph(
+        spec: TaskGraphSpec,
+        taskTypeID: string,
+        context: TaskGraphSubmitContext,
+    ): Promise<TaskGraphSubmitResult> {
+        const limits = LimitsConfigResolver.Resolve({
+            AgentOrWorkflowMetadata: context.LimitsOverride ?? spec.limitsOverride,
+        }).Limits;
+        const topic = context.QueueTopic?.trim() || spec.queueTopic?.trim() || limits.TaskGraphQueue.GraphDispatchTopicName;
+        const isolation = context.Isolation ?? spec.isolation ?? limits.Isolation.DefaultIsolation;
+        const submittedAt = new Date().toISOString();
+
+        const parentID = await RunInEntityTransaction(
+            asTransactionCapable(context.Provider),
+            async () => this.persistQueuedParent(spec, taskTypeID, topic, isolation, submittedAt, context),
+        );
+
+        const envelope: TaskGraphQueuedRunEnvelope = {
+            Kind: 'TaskGraph.RunGraph',
+            ParentTaskID: parentID,
+            WorkflowName: spec.workflowName,
+            Isolation: isolation,
+            Topic: topic,
+            DispatchMode: 'Queue',
+            SubmittedAt: submittedAt,
+            CorrelationId: parentID,
+        };
+
+        try {
+            const pubResults = await TaskGraphQueueRegistry.Instance.PublishWithRetry(
+                [
+                    {
+                        Topic: topic,
+                        HandlerKey: 'TaskGraph.RunGraph',
+                        Payload: envelope,
+                        CorrelationId: parentID,
+                        IdempotencyKey: parentID,
+                        SubjectType: 'MJ: Tasks',
+                        SubjectId: parentID,
+                        MaxAttempts: Math.max(1, limits.TaskGraphQueue.MaxEnqueueRedeliveryAttempts + 1),
+                    },
+                ],
+                context.ContextUser,
+                context.Provider,
+            );
+            const messageID = pubResults[0]?.WorkItemId;
+            return {
+                Success: true,
+                ParentTaskID: parentID,
+                Dispatch: 'Queue',
+                QueueMessageID: messageID,
+            };
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            await TaskGraphCallerNotificationService.Instance.RecordTerminalNotification({
+                ParentTaskID: parentID,
+                WorkflowName: spec.workflowName,
+                TerminalOutcome: 'Failed',
+                ErrorMessage: `Queue publish failed: ${msg}`,
+                Provider: context.Provider,
+                ContextUser: context.ContextUser,
+            });
+            return { Success: false, ParentTaskID: parentID, Dispatch: 'Queue', ErrorMessage: msg };
+        }
+    }
+
+    /**
+     * Idempotently materializes child tasks and dependency edges for a queued graph parent when picked
+     * up by a queue worker, preserving workflow `Isolation` and parent metadata.
+     */
+    public async MaterializeQueuedGraph(
+        parentTaskID: string,
+        context: TaskGraphSubmitContext,
+    ): Promise<{ Success: boolean; AlreadyMaterialized?: boolean; Isolation?: TaskGraphIsolationLevel; ErrorMessage?: string }> {
+        const serviceUser = this.servicePersistenceUser(context);
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', serviceUser);
+        if (!(await parent.Load(parentTaskID))) {
+            return { Success: false, ErrorMessage: `Queued parent task '${parentTaskID}' not found.` };
+        }
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        const isolation = meta.isolation ?? LimitsConfigResolver.Resolve().Limits.Isolation.DefaultIsolation;
+
+        const existingChildren = await this.loadChildren(parentTaskID, context, serviceUser);
+        if (existingChildren.length > 0) {
+            return { Success: true, AlreadyMaterialized: true, Isolation: isolation };
+        }
+
+        const snapshot = readQueuedSubmissionSnapshot(parent.Configuration);
+        if (!snapshot) {
+            return { Success: false, ErrorMessage: `Parent task '${parentTaskID}' has no queuedSubmission configuration.` };
+        }
+
+        const effectiveContext: TaskGraphSubmitContext = {
+            ...context,
+            EnvironmentID: snapshot.EnvironmentID || context.EnvironmentID,
+            ConversationDetailID: snapshot.ConversationDetailID ?? context.ConversationDetailID,
+            AgentRunID: snapshot.AgentRunID ?? context.AgentRunID,
+            AgentID: snapshot.AgentID ?? context.AgentID,
+            RoutineID: snapshot.RoutineID ?? context.RoutineID,
+            ReinvokeDepth: snapshot.ReinvokeDepth,
+            Isolation: meta.isolation ?? snapshot.Isolation,
+        };
+
+        const [agentIDsByName, actionIDsByName, promptIDsByName] = await Promise.all([
+            this.resolveAgents(snapshot.Spec, effectiveContext),
+            this.resolveActions(snapshot.Spec, effectiveContext),
+            this.resolvePrompts(snapshot.Spec, effectiveContext),
+        ]);
+        if (!agentIDsByName.Success) return { Success: false, ErrorMessage: agentIDsByName.ErrorMessage };
+        if (!actionIDsByName.Success) return { Success: false, ErrorMessage: actionIDsByName.ErrorMessage };
+        if (!promptIDsByName.Success) return { Success: false, ErrorMessage: promptIDsByName.ErrorMessage };
+
+        const taskTypeID = await this.ensureTaskType(effectiveContext);
+        await RunInEntityTransaction(
+            asTransactionCapable(effectiveContext.Provider),
+            async () => {
+                const refreshedChildren = await this.loadChildren(parentTaskID, effectiveContext, serviceUser);
+                if (refreshedChildren.length > 0) return;
+                const map = await this.persistChildren(
+                    snapshot.Spec,
+                    parentTaskID,
+                    taskTypeID,
+                    agentIDsByName.Map!,
+                    actionIDsByName.Map!,
+                    promptIDsByName.Map!,
+                    effectiveContext,
+                );
+                await this.persistDependencies(snapshot.Spec, map, effectiveContext);
+                if (parent.Status === 'Pending') {
+                    parent.Status = 'In Progress';
+                    await this.saveAsService(parent, 'MJ: Tasks', effectiveContext);
+                }
+            },
+        );
+        KickTaskGraphDispatchers();
+        return { Success: true, AlreadyMaterialized: false, Isolation: isolation };
     }
 
     /**
@@ -945,6 +1322,21 @@ export class TaskGraphService {
         visited.add(parentTaskID);
         try {
             const children = await this.loadChildren(parentTaskID, context);
+            if (children.length === 0) {
+                const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.servicePersistenceUser(context));
+                if (await parent.Load(parentTaskID)) {
+                    if (parent.Status === 'Pending' || parent.Status === 'In Progress') {
+                        await TaskGraphCallerNotificationService.Instance.RecordTerminalNotification({
+                            ParentTaskID: parentTaskID,
+                            WorkflowName: parent.Name,
+                            TerminalOutcome: 'Cancelled',
+                            Provider: context.Provider,
+                            ContextUser: context.ContextUser,
+                        });
+                    }
+                }
+                return { Success: true, Cancelled: true, UncancelledTaskNames: [] };
+            }
             const uncancelled: string[] = [];
             const settledMeanwhile: string[] = [];
             for (const child of children) {
@@ -1037,7 +1429,7 @@ export class TaskGraphService {
         depth: number,
         visited: Set<string>,
     ): Promise<string[]> {
-        if (depth >= MAX_REINVOKE_DEPTH) {
+        if (depth >= GetMaxReinvokeDepth()) {
             LogError(
                 `[TaskGraphService] Nested cancel stopped at depth ${depth}; a deeper sub-graph chain ` +
                 `than the reinvoke cap allows may still be running.`,
@@ -1063,16 +1455,21 @@ export class TaskGraphService {
                 Fields: ['ID'],
                 ResultType: 'simple',
                 BypassCache: true,
+                IgnoreMaxRows: true,
             },
             context.ContextUser,
         );
-        if (!subGraphs.Success) {
-            LogError(`[TaskGraphService] Could not look for sub-graphs while cancelling: ${subGraphs.ErrorMessage}`);
+        const validatedSubGraphs = ValidateDecisionReadResult(subGraphs, {
+            EntityName: 'MJ: Tasks',
+            OperationName: 'TaskGraphService.cancelNestedGraphs',
+        });
+        if ('Error' in validatedSubGraphs) {
+            LogError(`[TaskGraphService] Could not look for sub-graphs while cancelling: ${validatedSubGraphs.ErrorMessage}`);
             return [];
         }
 
         const failures: string[] = [];
-        for (const row of subGraphs.Results ?? []) {
+        for (const row of validatedSubGraphs.Results) {
             // Through the depth-carrying overload, so the cap actually engages.
             const result = await this.cancelWithDepth(row.ID, context, depth + 1, visited);
             if (!result.Success) failures.push(...result.UncancelledTaskNames);
@@ -1102,15 +1499,20 @@ export class TaskGraphService {
                     ExtraFilter: `Status='Requested' AND OriginatingTaskID IN (${idList})`,
                     ResultType: 'entity_object',
                     BypassCache: true,
+                    IgnoreMaxRows: true,
                 },
                 context.ContextUser,
             );
-            if (!open.Success) {
-                LogError(`[TaskGraphService] Could not read open requests to cancel: ${open.ErrorMessage}`);
+            const validatedOpen = ValidateDecisionReadResult(open, {
+                EntityName: 'MJ: AI Agent Requests',
+                OperationName: 'TaskGraphService.cancelOpenRequests',
+            });
+            if ('Error' in validatedOpen) {
+                LogError(`[TaskGraphService] Could not read open requests to cancel: ${validatedOpen.ErrorMessage}`);
                 return;
             }
 
-            for (const request of open.Results ?? []) {
+            for (const request of validatedOpen.Results) {
                 request.Status = 'Canceled';
                 request.Comments = 'The workflow that asked this was cancelled.';
                 if (!(await request.Save())) {
@@ -1165,7 +1567,8 @@ export class TaskGraphService {
     /** {@link Retry}, with the reason when the retry is refused, for a caller that shows it to a person. */
     public async RetryTask(taskID: string, context: TaskGraphSubmitContext, inputPayload?: unknown): Promise<TaskGraphRetryOutcome> {
         try {
-            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+            const persistenceUser = this.servicePersistenceUser(context);
+            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', persistenceUser);
             if (!(await task.Load(taskID))) return { Success: false, ErrorMessage: 'The task could not be loaded.' };
             const editedInput = inputPayload === undefined
                 ? undefined
@@ -1175,7 +1578,7 @@ export class TaskGraphService {
                 LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${refusal}.`);
                 return { Success: false, ErrorMessage: `The task cannot be retried: ${refusal}.` };
             }
-            const siblings = task.ParentID ? await this.loadChildren(task.ParentID, context) : [];
+            const siblings = task.ParentID ? await this.loadChildren(task.ParentID, context, persistenceUser) : [];
             const rollingBack = task.ParentID ? await this.rollbackStartedRefusal(task.ParentID, siblings, context) : null;
             if (rollingBack) {
                 LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${rollingBack}`);
@@ -1326,12 +1729,43 @@ export class TaskGraphService {
         return this.controlResult(true, Next);
     }
 
+    private async ensureNotGovernancePaused(
+        parentTaskID: string,
+        context: TaskGraphSubmitContext,
+        verb: 'pause' | 'resume' | 'step',
+    ): Promise<
+        | { Blocked: true; Result: { Success: boolean; Debug?: TaskGraphDebugState; ErrorMessage?: string } }
+        | { Blocked: false; Current: TaskGraphDebugState }
+    > {
+        const parent = await this.loadWorkflowParent(parentTaskID, context);
+        if (!parent) {
+            return {
+                Blocked: true,
+                Result: this.controlResult(false, undefined, 'Not a workflow graph this control plane can act on.'),
+            };
+        }
+        const current = ParseTaskGraphDebugState(parent.inputPayload);
+        if (IsGovernanceDebugPause(current)) {
+            return {
+                Blocked: true,
+                Result: this.controlResult(
+                    false,
+                    current,
+                    `Cannot ${verb} a workflow paused by execution governance — use ApproveAndResumePausedGraph after approval.`,
+                ),
+            };
+        }
+        return { Blocked: false, Current: current };
+    }
+
     /**
      * Pauses a graph: nothing new is claimed until it is resumed. In-flight steps finish naturally
      * and their completions land — a pause gates claiming and never touches a live claim, which is
      * why there is no "what happens to the claim" question to answer.
      */
     public async PauseGraph(parentTaskID: string, context: TaskGraphSubmitContext, pausedByUserID?: string | null) {
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'pause');
+        if ('Result' in guard) return guard.Result;
         const pausedBy = pausedByUserID ?? context.ContextUser?.ID ?? null;
         return this.writeDebugFields(parentTaskID, context, (current) => ({
             // Pause owns the pause fields AND the step allowance: an allowance armed a moment ago is
@@ -1351,7 +1785,12 @@ export class TaskGraphService {
 
     /** Resumes a paused graph. Breakpoints and edge overrides survive — only the pause clears. */
     public async ResumeGraph(parentTaskID: string, context: TaskGraphSubmitContext) {
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'resume');
+        if ('Result' in guard) return guard.Result;
         return this.writeDebugFields(parentTaskID, context, (current) => {
+            if (IsGovernanceDebugPause(current)) {
+                return { Fields: [], Next: current };
+            }
             const next: TaskGraphDebugState = { ...current };
             // Continue from a breakpoint must run the stopped task. Stamping it here so the next
             // poll does not re-hit the same still-eligible breakpoint without claiming.
@@ -1385,11 +1824,10 @@ export class TaskGraphService {
      * consumes the allowance CAS-style, so two instances stepping the same graph release work once.
      */
     public async StepGraph(parentTaskID: string, target: StepTarget, context: TaskGraphSubmitContext) {
-        const parent = await this.loadWorkflowParent(parentTaskID, context);
-        if (!parent) return this.controlResult(false, undefined, 'Not a workflow graph this control plane can act on.');
-        const current = ParseTaskGraphDebugState(parent.inputPayload);
-        if (!current.paused) {
-            return this.controlResult(false, current, 'Step only applies to a paused workflow — pause it first.');
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'step');
+        if ('Result' in guard) return guard.Result;
+        if (!guard.Current.paused) {
+            return this.controlResult(false, guard.Current, 'Step only applies to a paused workflow — pause it first.');
         }
         return this.writeDebugFields(parentTaskID, context, (state) => ({
             Fields: [TaskClaimStore.DebugField('$.debug.step', { Kind: 'string', Value: target })],
@@ -1705,16 +2143,20 @@ export class TaskGraphService {
 
         const quoted = names.map((n) => `'${EscapeSQLString(n)}'`).join(',');
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: AI Prompts', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
+            { EntityName: 'MJ: AI Prompts', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple', IgnoreMaxRows: true },
             context.ContextUser,
         );
-        if (!result.Success) {
-            const reason = result.ErrorMessage || 'RunView on "MJ: AI Prompts" failed';
+        const validated = ValidateDecisionReadResult(result, {
+            EntityName: 'MJ: AI Prompts',
+            OperationName: 'TaskGraphService.resolvePrompts',
+        });
+        if ('Error' in validated) {
+            const reason = validated.ErrorMessage || 'RunView on "MJ: AI Prompts" failed';
             LogError(`[TaskGraph] Failed to resolve "MJ: AI Prompts" by name: ${reason}`);
             return { Success: false, ErrorMessage: reason };
         }
 
-        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
+        const found = new Map(validated.Results.map((r) => [r.Name, r.ID]));
         const missing = names.filter((n) => !found.has(n));
         if (missing.length > 0) {
             return {
@@ -1753,13 +2195,18 @@ export class TaskGraphService {
                 ExtraFilter: `ID IN (${ids.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
                 Fields: ['ID'],
                 ResultType: 'simple',
+                IgnoreMaxRows: true,
             },
             context.ContextUser,
         );
-        if (!result.Success) {
-            return { Success: false, ErrorMessage: `Task graph "${spec.workflowName}" was not started: its compensation actions could not be checked (${result.ErrorMessage}).` };
+        const validated = ValidateDecisionReadResult(result, {
+            EntityName: 'MJ: Actions',
+            OperationName: 'TaskGraphService.validateCompensationActionIDs',
+        });
+        if ('Error' in validated) {
+            return { Success: false, ErrorMessage: `Task graph "${spec.workflowName}" was not started: its compensation actions could not be checked (${validated.ErrorMessage}).` };
         }
-        const found = new UUIDSet((result.Results ?? []).map((row) => row.ID));
+        const found = new UUIDSet(validated.Results.map((row) => row.ID));
         const missing = ids.filter((id) => !found.Has(id));
         if (missing.length > 0) {
             return {
@@ -1816,10 +2263,11 @@ export class TaskGraphService {
      * first is what created the window, so the fix cannot be a better check.
      */
     private async ensureTaskType(context: TaskGraphSubmitContext): Promise<string> {
-        const found = await this.findTaskTypeID(context);
+        const persistenceUser = this.servicePersistenceUser(context);
+        const found = await this.findTaskTypeID(context, persistenceUser);
         if (found) return found;
 
-        const tt = await context.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', context.ContextUser);
+        const tt = await context.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', persistenceUser);
         tt.NewRecord();
         tt.Name = TASK_TYPE_NAME;
         tt.Description = 'Tasks created by agent-orchestrated workflows.';
@@ -1828,7 +2276,7 @@ export class TaskGraphService {
         // The insert lost. Almost certainly to the unique index and another process that got there
         // first — so re-read before treating it as a failure. Any other cause falls through to the
         // throw below with its own message intact.
-        const winner = await this.findTaskTypeID(context);
+        const winner = await this.findTaskTypeID(context, persistenceUser);
         if (winner) return winner;
 
         throw new Error(`Could not create task type: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -1843,7 +2291,7 @@ export class TaskGraphService {
      * the resolution deterministic on a database that still has some, and the warning makes the
      * situation visible rather than merely survivable.
      */
-    private async findTaskTypeID(context: TaskGraphSubmitContext): Promise<string | null> {
+    private async findTaskTypeID(context: TaskGraphSubmitContext, user: UserInfo = context.ContextUser): Promise<string | null> {
         const existing = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Task Types',
@@ -1853,7 +2301,7 @@ export class TaskGraphService {
                 ResultType: 'simple',
                 MaxRows: 2,
             },
-            context.ContextUser,
+            user,
         );
         const rows = existing.Results ?? [];
         if (rows.length > 1) {
@@ -1877,7 +2325,7 @@ export class TaskGraphService {
      * transaction, so a graph never becomes visible to a dispatcher without them.
      */
     private async seedBreakpoints(parentID: string, taskIDs: string[], context: TaskGraphSubmitContext): Promise<void> {
-        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.servicePersistenceUser(context));
         if (!(await parent.Load(parentID))) {
             throw new Error(`Could not load parent task ${parentID} to seed breakpoints`);
         }
@@ -1892,7 +2340,7 @@ export class TaskGraphService {
 
     /** Writes the parent task that represents the graph as a whole. */
     private async persistParent(spec: TaskGraphSpec, taskTypeID: string, context: TaskGraphSubmitContext): Promise<string> {
-        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.servicePersistenceUser(context));
         parent.NewRecord();
         parent.Name = spec.workflowName;
         parent.Description = spec.reasoning || 'Orchestrated workflow';
@@ -1927,6 +2375,19 @@ export class TaskGraphService {
         // credentials, and carrying it verbatim threw `Converting circular structure to JSON`
         // on any context with a socket in it — killing the run at submit time — while a context
         // that happened to serialize would have written its credentials to this row.
+        const requestedBudget = context.WorkflowBudget ?? spec.workflowBudget;
+        const effectiveWorkflowBudget: WorkflowBudgetCapsConfig | undefined =
+            requestedBudget && (requestedBudget.MaxCostUsd !== undefined || requestedBudget.MaxWallClockMs !== undefined)
+                ? {
+                    ...(requestedBudget.MaxCostUsd !== undefined ? { MaxCostUsd: requestedBudget.MaxCostUsd } : {}),
+                    ...(requestedBudget.MaxWallClockMs !== undefined ? { MaxWallClockMs: requestedBudget.MaxWallClockMs } : {}),
+                    StartedAtMs:
+                        typeof requestedBudget.StartedAtMs === 'number' && Number.isFinite(requestedBudget.StartedAtMs)
+                            ? requestedBudget.StartedAtMs
+                            : Date.now(),
+                }
+                : undefined;
+
         parent.InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
@@ -1934,11 +2395,24 @@ export class TaskGraphService {
             failurePolicy: spec.failurePolicy ?? 'Halt',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
+            submittedByAgentID: context.AgentID ?? null,
+            routineID: context.RoutineID ?? spec.routineId ?? null,
+            workflowMetadata: context.WorkflowMetadata ?? undefined,
+            userPolicyLimitsOverride: context.UserPolicyLimitsOverride,
             parentAgentHierarchy: context.ParentAgentHierarchy,
             invocation: sanitized.Envelope
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,
             startPaused: context.Debug?.paused === true,
+            limitsOverride: context.LimitsOverride ?? spec.limitsOverride,
+            workflowBudget: effectiveWorkflowBudget,
+            governanceEnabled: context.EnableGovernance,
+            isolation:
+                context.Isolation ??
+                spec.isolation ??
+                LimitsConfigResolver.Resolve({
+                    AgentOrWorkflowMetadata: context.LimitsOverride ?? spec.limitsOverride,
+                }).Limits.Isolation.DefaultIsolation,
         }));
         parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
         if (!(await this.saveAsService(parent, 'MJ: Tasks', context))) {
@@ -1973,9 +2447,10 @@ export class TaskGraphService {
                 (t.dependsOn ?? []).map((d) => ({ From: NormalizeDependency(d).tempId, To: t.tempId })),
             ),
         );
+        const persistenceUser = this.servicePersistenceUser(context);
         await Promise.all(
             spec.tasks.map(async (node) => {
-                const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+                const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', persistenceUser);
                 task.NewRecord();
                 if (task.ID) {
                     map.set(node.tempId, task.ID);
@@ -1991,7 +2466,7 @@ export class TaskGraphService {
 
                 // The discriminator the dispatcher routes on. Written first because everything below —
                 // and everything the dispatcher later does with this row — reads it.
-                task.StepType = node.kind;
+                task.StepType = node.kind === 'Enqueue' ? 'External' : node.kind;
 
                 // Switching on `kind` rather than on which config field happens to be populated. The
                 // old shape — "agentName? then agent; actionName? then action; ELSE human" — turned
@@ -2022,6 +2497,19 @@ export class TaskGraphService {
                         // decision runner rather than the prompt runner.
                         task.PromptID = promptIDsByName.get(DecisionPromptNameOf(node)!)!;
                         break;
+                    case 'External':
+                        // Nothing runs it, so no executor column. A literal correlation key is stamped
+                        // now so an early signal can find the step and be held on it.
+                        task.CorrelationKey = SubmitTimeCorrelationKey(node);
+                        break;
+                    case 'Enqueue':
+                        // Persisted on External Waiting Step semantics with deterministic correlation key.
+                        task.StepType = 'External';
+                        task.CorrelationKey = this.enqueueCorrelationKeyForPersist(parentTaskID, task.ID, ConfigOf(node, 'Enqueue')?.correlationKey);
+                        break;
+                    case 'Wait':
+                        // Nothing runs it either: the dispatcher stamps its DueAt when it is reached.
+                        break;
                     case 'ForEach':
                     case 'While': {
                         // A loop's key points at what it REPEATS, not at the loop itself. That keeps the
@@ -2034,10 +2522,12 @@ export class TaskGraphService {
                         else if (op?.steps?.length) task.ActionID = actionIDsByName.get(op.steps[0].name)!;
                         else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
                         else if (op?.prompt) task.PromptID = promptIDsByName.get(op.prompt.name)!;
-                        else {
+                        else if ('enqueue' in op! && op.enqueue) {
+                            task.CorrelationKey = this.enqueueCorrelationKeyForPersist(parentTaskID, task.ID, op.enqueue.correlationKey);
+                        } else {
                             throw new Error(
                                 `Task "${node.name}" is a loop with nothing to repeat. Choose an action, ` +
-                                `steps, a prompt, or a sub-agent for it to run on each pass.`,
+                                `steps, a prompt, enqueue, or a sub-agent for it to run on each pass.`,
                             );
                         }
                         break;
@@ -2134,6 +2624,7 @@ export class TaskGraphService {
         taskIDMap: Map<string, string>,
         context: TaskGraphSubmitContext,
     ): Promise<void> {
+        const persistenceUser = this.servicePersistenceUser(context);
         const edgeWrites: Promise<void>[] = [];
         for (const node of spec.tasks) {
             const taskID = taskIDMap.get(node.tempId);
@@ -2145,7 +2636,7 @@ export class TaskGraphService {
 
                 edgeWrites.push(
                     (async () => {
-                        const dep = await context.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', context.ContextUser);
+                        const dep = await context.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', persistenceUser);
                         dep.NewRecord();
                         dep.TaskID = taskID;
                         dep.DependsOnTaskID = dependsOnTaskID;
@@ -2175,7 +2666,7 @@ export class TaskGraphService {
         await Promise.all(edgeWrites);
     }
 
-    private async loadChildren(parentTaskID: string, context: TaskGraphSubmitContext): Promise<MJTaskEntity[]> {
+    private async loadChildren(parentTaskID: string, context: TaskGraphSubmitContext, user: UserInfo = context.ContextUser): Promise<MJTaskEntity[]> {
         // `BypassCache` for the reason the dispatcher documents at every one of its reads (C4): task
         // status is written by the claim protocol's direct SQL, which fires no cache invalidation.
         // A cached read here returns PRE-EXECUTION state, and both callers act on status — Cancel's
@@ -2184,7 +2675,7 @@ export class TaskGraphService {
         // exists to prevent, performed by the guard itself.
         // Type-scoped for the same reason the sub-graph walk is (R3-10): these rows are about to be
         // written, and `MJ: Tasks` holds conversation tasks and users' own to-dos too.
-        const typeID = await this.findTaskTypeID(context);
+        const typeID = await this.findTaskTypeID(context, user);
         const ofType = typeID ? `TypeID='${typeID}' AND ` : '';
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJTaskEntity>(
             {
@@ -2193,8 +2684,114 @@ export class TaskGraphService {
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
-            context.ContextUser,
+            user,
         );
         return (result.Success ? result.Results : []) ?? [];
+    }
+
+    private enqueueCorrelationKeyForPersist(parentTaskID: string, taskID: string | undefined, configured: string | undefined): string | null {
+        const key = configured?.trim();
+        if (key && key.startsWith('payload.')) {
+            return null;
+        }
+        return BuildEnqueueCorrelationKey(parentTaskID, taskID || parentTaskID, key);
+    }
+
+    private async persistQueuedParent(
+        spec: TaskGraphSpec,
+        taskTypeID: string,
+        topic: string,
+        isolation: TaskGraphIsolationLevel,
+        submittedAt: string,
+        context: TaskGraphSubmitContext,
+    ): Promise<string> {
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.servicePersistenceUser(context));
+        parent.NewRecord();
+        parent.Name = spec.workflowName;
+        parent.Description = spec.reasoning || 'Queued orchestrated workflow';
+        parent.TypeID = taskTypeID;
+        parent.EnvironmentID = context.EnvironmentID;
+        parent.ConversationDetailID = context.ConversationDetailID ?? null;
+        parent.Status = 'Pending';
+        parent.PercentComplete = 0;
+        parent.AgentRunID = context.AgentRunID ?? null;
+
+        const sanitized = SanitizeInvocationEnvelope(context.Invocation);
+        const queuedSnapshot: TaskGraphQueuedSubmissionSnapshot = {
+            Spec: spec,
+            EnvironmentID: context.EnvironmentID,
+            ConversationDetailID: context.ConversationDetailID ?? null,
+            AgentRunID: context.AgentRunID ?? null,
+            AgentID: context.AgentID ?? null,
+            RoutineID: context.RoutineID ?? spec.routineId ?? null,
+            ReinvokeDepth: context.ReinvokeDepth ?? 0,
+            SubmittedByUserID: context.ContextUser?.ID ?? '',
+            Topic: topic,
+            Isolation: isolation,
+            SubmittedAt: submittedAt,
+        };
+        parent.Configuration = JSON.stringify({ queuedSubmission: queuedSnapshot });
+
+        const requestedBudget = context.WorkflowBudget ?? spec.workflowBudget;
+        const effectiveWorkflowBudget: WorkflowBudgetCapsConfig | undefined =
+            requestedBudget && (requestedBudget.MaxCostUsd !== undefined || requestedBudget.MaxWallClockMs !== undefined)
+                ? {
+                    ...(requestedBudget.MaxCostUsd !== undefined ? { MaxCostUsd: requestedBudget.MaxCostUsd } : {}),
+                    ...(requestedBudget.MaxWallClockMs !== undefined ? { MaxWallClockMs: requestedBudget.MaxWallClockMs } : {}),
+                    StartedAtMs:
+                        typeof requestedBudget.StartedAtMs === 'number' && Number.isFinite(requestedBudget.StartedAtMs)
+                            ? requestedBudget.StartedAtMs
+                            : Date.now(),
+                }
+                : undefined;
+
+        parent.InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
+            continuation: spec.continuation ?? 'message',
+            reinvokeDepth: context.ReinvokeDepth ?? 0,
+            failureSemantics: spec.failureSemantics ?? 'block',
+            failurePolicy: spec.failurePolicy ?? 'Halt',
+            submittedByAgentRunID: context.AgentRunID ?? null,
+            submittedByUserID: context.ContextUser?.ID ?? null,
+            submittedByAgentID: context.AgentID ?? null,
+            routineID: context.RoutineID ?? spec.routineId ?? null,
+            workflowMetadata: context.WorkflowMetadata ?? undefined,
+            userPolicyLimitsOverride: context.UserPolicyLimitsOverride,
+            parentAgentHierarchy: context.ParentAgentHierarchy,
+            invocation: sanitized.Envelope
+                ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
+                : null,
+            startPaused: context.Debug?.paused === true,
+            limitsOverride: context.LimitsOverride ?? spec.limitsOverride,
+            workflowBudget: effectiveWorkflowBudget,
+            governanceEnabled: context.EnableGovernance,
+            isolation,
+            dispatchMode: 'Queue',
+            queuedTopic: topic,
+            callerNotification: {
+                NotificationID: `${parent.ID}:initial`,
+                ParentTaskID: parent.ID,
+                WorkflowName: spec.workflowName,
+                Status: 'Pending',
+                CreatedAt: submittedAt,
+            },
+        }));
+        parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
+        if (!(await this.saveAsService(parent, 'MJ: Tasks', context))) {
+            throw new Error(`Could not create queued parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return parent.ID;
+    }
+}
+
+function readQueuedSubmissionSnapshot(rawConfig: string | null | undefined): TaskGraphQueuedSubmissionSnapshot | null {
+    if (!rawConfig) return null;
+    try {
+        const parsed: unknown = JSON.parse(rawConfig);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        const snapshot = (parsed as { queuedSubmission?: unknown }).queuedSubmission;
+        if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+        return snapshot as TaskGraphQueuedSubmissionSnapshot;
+    } catch {
+        return null;
     }
 }

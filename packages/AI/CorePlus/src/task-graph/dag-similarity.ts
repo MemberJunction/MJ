@@ -259,6 +259,15 @@ function extractCoreOperatorToken(node: TaskGraphSpecNode): string {
             const cfg = node.configuration as TaskGraphNodeConfigMap['External'];
             return `External:${normalizeIdentifier(cfg.domain)}`;
         }
+        case 'Enqueue': {
+            const cfg = node.configuration as TaskGraphNodeConfigMap['Enqueue'];
+            return `Enqueue:${normalizeIdentifier(cfg.topic ?? cfg.handlerKey ?? 'default')}`;
+        }
+        case 'Wait': {
+            // Two waits are the same step when they wait the same way; the exact moment is data.
+            const cfg = node.configuration as TaskGraphNodeConfigMap['Wait'];
+            return `Wait:${cfg.durationSeconds !== undefined ? 'duration' : 'until'}`;
+        }
         case 'Human':
         default:
             return 'Human:approval_or_task';
@@ -276,6 +285,9 @@ function extractLoopBodyToken(
     }
     if ('steps' in loopCfg && Array.isArray(loopCfg.steps) && loopCfg.steps.length > 0) {
         return `Steps:${loopCfg.steps.length}`;
+    }
+    if ('enqueue' in loopCfg && loopCfg.enqueue) {
+        return `Enqueue:${normalizeIdentifier(loopCfg.enqueue.topic ?? loopCfg.enqueue.actionName ?? loopCfg.enqueue.handlerKey ?? 'default')}`;
     }
     return 'Body';
 }

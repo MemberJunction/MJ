@@ -28,6 +28,7 @@ import { MutateGovernedArtifactAction } from '@memberjunction/core-actions';
 import {
     ArtifactPermissionEngine,
     DocumentLiveBlockEngine,
+    QueryEngine,
     SpreadsheetEngine,
 } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -235,16 +236,25 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
             AppliedParameters: {},
         });
 
-        const providerStub: Partial<IMetadataProvider & IRunViewProvider & IRunQueryProvider> = {
-            Entities: [],
+        // Saved queries resolve through the provider's QueryEngine; its deprecated query list stays empty.
+        const queryEngineStub = {
+            Config: async () => undefined,
             Queries: [
                 {
                     ID: 'qry-1',
                     Name: 'Monthly Revenue',
                     CategoryPath: '',
-                    UserCanRun: () => true,
-                } as IMetadataProvider['Queries'][number],
+                    QueryParameters: [],
+                    QueryEntities: [],
+                    UserCanRun: () => ({ canRun: true, deniedEntities: [] }),
+                },
             ],
+        } as unknown as QueryEngine;
+        vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue(queryEngineStub);
+
+        const providerStub: Partial<IMetadataProvider & IRunViewProvider & IRunQueryProvider> = {
+            Entities: [],
+            Queries: [],
             EntityByName: () => undefined,
             EntityByID: () => undefined,
             RunView: runViewFn as IRunViewProvider['RunView'],

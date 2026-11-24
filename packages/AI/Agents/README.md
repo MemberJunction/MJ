@@ -6,6 +6,7 @@ It also provides two capability layers any agent can opt into:
 
 - **Skills** — reusable capability bundles (instructions + Actions + sub-agents) an agent activates mid-run via a progressive-disclosure catalog. Availability is gated per-agent (`AIAgent.AcceptsSkills`); *self*-activation additionally requires the **double activation gate** (`AISkill.ActivationMode` × `AIAgent.SkillActivationMode`, both defaulting to `RequestedOnly` so autonomous skill expansion is always a deliberate double opt-in — users can still `/skill`-request any available skill). Every activation is recorded with **provenance of authority** on `AIAgentRunStep.Skills` (activation type, gate values, agent-stated reason), and Prompt/Actions/Sub-Agent steps carry per-step skill attribution. Skills are shareable via the dedicated skill-permissions model and portable via **SKILL.md** import/export.
 - **Plan Mode** — a per-request human-in-the-loop gate (`ExecuteAgentParams.planMode`) that makes an agent present a plan and get it approved before executing any Actions or Sub-Agents, built on the existing `MJ: AI Agent Requests` pause/resume flow.
+- **Consult & Handoff** (*owner: `@AN-BC` / `@memberjunction/ai-agents` maintainers*) — **Consult** (`ChatHandlingOption = 'Consult'`, [`src/sub-agent-consult.ts`](./src/sub-agent-consult.ts)) routes a sub-agent's `Chat` step back to its parent Loop agent for up to `MaxSubAgentConsultRounds` (default 3) before escalating to the human caller via `MJ: AI Agent Requests`, and resumes the paused child run via `resumeRunId`. **Handoff** (`step = 'Handoff'`, [`src/handoff-target.ts`](./src/handoff-target.ts)) lets a general router agent (such as Sage) transfer a conversation turn to a discoverable, permitted specialist agent (up to `MAX_HANDOFF_HOPS = 3` with cycle detection and target preset resolution). See [Sub-Agents Guide](./docs/sub-agents-guide.md), [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md), and the post-release review in [`plans/video-studio-ws3-consult-handoff-review.md`](../../../plans/video-studio-ws3-consult-handoff-review.md).
 
 **See the [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** for the full architecture, the three-layer gate, the SKILL.md format, and the plan-approval flow.
 
@@ -702,7 +703,7 @@ Self-scheduling agents such as the Chief of Staff normally wake on a cron or ada
 
 Every `resumeState` also repeats the `workstreamKey`. Requests that carry `OriginatingAgentRunID` (a paused run) or `OriginatingTaskID` (a task graph) are skipped — those resume through the existing `lastRunId` path and the task dispatcher, not through a wake.
 
-**Policy checks.** `AgentUserPolicyEngine.GetPolicyForAgentAndUser` is consulted for the target user. A `Disabled` or `Paused` `MJ: AI Agent User Policies` row blocks every trigger; the incoming inter-agent trigger additionally requires an `Active` policy with `AllowInterAgentCoordination` not `false`; the mailbox trigger also refuses `EmailChannelMode = 'Disabled'`, enforces the identity's optional `Configuration.allowedUserID` / `allowedEmailDomains`, and rejects any sender that is not an active internal user.
+**Policy checks.** `AgentUserPolicyEngine.GetPolicyForAgentAndUser` is consulted for the target user. A `Disabled` or `Paused` `MJ: AI Agent User Policies` row blocks every trigger; the incoming inter-agent trigger additionally requires an `Active` policy with `AllowInterAgentCoordination` not `false`; `RouteInboundUtilityMailboxWake` enforces `identity.UserID` when populated on the bridge identity (`SENDER_NOT_AUTHORIZED_FOR_IDENTITY` if the sender does not match), requires an existing `Active` onboarding policy row (`POLICY_DENIED` if missing or not `Active`), refuses `EmailChannelMode = 'Disabled'`, enforces the identity's optional `Configuration.allowedUserID` / `allowedEmailDomains`, and rejects any sender that is not an active internal user.
 
 **Result.** Each method returns an `AgentWakeTriggerResult` — `{ triggered, resultCode, reason, routineID, targetUserID, targetAgentID, workstreamKey, nextRunAtISO }` — and never throws for business outcomes. `resultCode` is one of `WAKE_SCHEDULED`, `SKIPPED_NOT_APPLICABLE`, `POLICY_DENIED`, `IDENTITY_NOT_FOUND`, `UNVERIFIED_EXTERNAL_SENDER`, `SENDER_NOT_AUTHORIZED_FOR_IDENTITY`, `SAVE_FAILED`.
 
@@ -726,7 +727,8 @@ if (!result.triggered) {
 - Routines are private to their owner (`MJUserRoutineEntityServer.validateOwnership`, plus row-level security on the lookup). A wake for the caller's own agent is saved in the caller's scope; a wake for another user (inter-agent arrival, or a resolution that wakes the sender) is saved as the scheduler's **system user** from `UserCache`, which the ownership gate exempts. If no system user is cached (unit tests, unusual hosts) the service falls back to the caller and logs that the save may be rejected.
 - The service's `InterAgentCoordinationEnvelopeShape` accepts both the `InterAgentCoordinationEnvelope` field names the action writes (`protocolVersion`, `message`) and the older `envelopeVersion` / `messageBody` names. The two shapes are still declared separately because `@memberjunction/core-actions` depends on this package, not the reverse.
 - Wakes are keyed by `UserID` + `TargetID` + `workstreamKey`; events for the same workstream that land between sweeps are queued in `resumeState.pendingEvents` (see above). The queue is at-least-once: an event that lands between the dispatcher's claim save and the service's save can be delivered twice, so the agent should treat `requestID` as idempotent and re-check the request's current status.
-- `RouteInboundUtilityMailboxWake` has no production caller. Wiring it needs an inbound-email ingestion path (mailbox poller or provider webhook) that does not exist yet, and `resolveVerifiedInternalSender` should then resolve the sender through `UserCache` rather than building a role-less `UserInfo`. Deferred to a follow-up by decision.
+- `RouteInboundUtilityMailboxWake` is wired through `InboundUtilityMailboxIngestionService` (supporting webhook delivery via `HandleWebhookMessage` and 1-minute poll sweeps via `PollActiveUtilityMailboxes` with `messageID` deduplication), and `resolveVerifiedInternalSender` resolves active internal senders through `UserCache.Instance.FindUser({ Email })` so role-hydrated `UserInfo` objects pass entity permission checks.
+- `TriggerWakeOnAgentChannelMessage` wakes peer participants in `AGENT_CHANNEL` conversations while enforcing `ConsecutiveAgentTurns <= MaxConsecutiveAgentTurns` (default 10) and `HourlyWakeCount <= MaxHourlyWakes` (default 6), automatically pausing channels to `'Paused For Human'` when either limit is reached.
 - The wake is a `OneShot` `MJ: User Routines` row picked up by the dispatcher, not a direct `AgentRunner` call, so delivery latency is bounded by the sweep interval and the dispatcher's concurrency limit.
 
 ## Documentation
@@ -799,6 +801,20 @@ Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
 - **Agent Category** -- business-domain default (e.g., Marketing → Box, Finance → SharePoint)
 - **Agent** -- per-agent override
 - **Runtime** -- `ExecuteAgentParams.override.storageAccountId` for programmatic callers
+
+## Agent Instances, Unified Persona & Primary Routing
+
+Derived agents (`BaseAgentID != null`) execute directly through `BaseAgent` and `AgentRunner` with full live prototype inheritance, unified text + voice persona injection, isolated per-instance memory, and primary-instance wake routing.
+
+| Component / Function | Responsibility |
+| --- | --- |
+| `BaseAgent` / `AgentRunner` / `CreateAgentInstance` | Resolves effective `TypeID`, `DriverClass`, prompts, actions, sub-agents, relationships, skills, presets, run limits, and user-policy ceilings across `BaseAgentID` chains. |
+| `BuildAgentPersonaAndInstructionsBlock` (`agent-persona-prompt.ts`) | Unifies text and Realtime voice persona by injecting `ResolveAgentPersona()` (`Tone`, `SpeakingStyle`, `StyleOverrideObject`) and `GetStackedAdditionalInstructions()` alongside the **Audience-Aware Tone Guardrail** (personal wit in 1:1 owner chat; professional on external emails, invites, and peer channels). |
+| `AgentContextInjector.filterNotesByScoping` | Inherits org/agent-wide notes (`UserID == null`) from `BaseAgentID` ancestors while keeping per-user notes (`UserID != null`) strictly isolated per sibling instance (*Pepper* vs *Cato*). |
+| `AgentWakeTriggerService.ResolvePrimaryUserAgentInstance` | Routes inbound utility mailbox wakes, colleague inter-agent requests, Agent Channels, and workstreams to the recipient's active `IsPrimaryInstance = true` derived instance (with oldest-active and base-template fallback). |
+| `RealtimeClientSessionService` | Inherits persona and stacked standing instructions when opening live voice/realtime sessions on derived instances. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
 
 ## Dependencies
 

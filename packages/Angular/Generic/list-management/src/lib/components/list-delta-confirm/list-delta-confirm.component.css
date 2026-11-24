@@ -139,6 +139,21 @@
   color: var(--mj-text-secondary);
 }
 
+.delta-preview__name {
+  color: var(--mj-text-primary);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delta-preview__id--secondary {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--mj-text-muted);
+}
+
 .delta-footnote {
   font-size: 11.5px;
   color: var(--mj-text-muted);

@@ -1,0 +1,132 @@
+[
+  {
+    "fields": {
+      "EdgeTypeID": "8DB67056-D702-46E4-82ED-A7E2A11D15CA",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Alternate Base Views"
+    },
+    "primaryKey": {
+      "ID": "C4E9A342-8B65-448B-9A3C-07D8F1C1CECD"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8DB67056-D702-46E4-82ED-A7E2A11D15CA",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    },
+    "primaryKey": {
+      "ID": "308CB0FF-196C-43A9-A3FC-F71AB6F7E384"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8DB67056-D702-46E4-82ED-A7E2A11D15CA",
+      "Side": "Target",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Concepts"
+    },
+    "primaryKey": {
+      "ID": "40595AA3-D1A8-47AF-B809-1AC7F023A18E"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8FE3F834-989C-44F6-9F86-45848284CC68",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entities"
+    },
+    "primaryKey": {
+      "ID": "233C19F4-A4AD-481A-92DE-DE4A56CE4147"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8FE3F834-989C-44F6-9F86-45848284CC68",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+    },
+    "primaryKey": {
+      "ID": "348F7D6E-327F-4200-8B63-F7CC9CD7D60F"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8FE3F834-989C-44F6-9F86-45848284CC68",
+      "Side": "Target",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Concepts"
+    },
+    "primaryKey": {
+      "ID": "5AD6D404-B11B-4AC5-9AEE-AD1301714DDE"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "57EC0A4D-B9FD-4C63-ADB1-8D5C3A70A3DA",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    },
+    "primaryKey": {
+      "ID": "F44A6A33-1D03-4681-AFE2-CDEFE10031C4"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "57EC0A4D-B9FD-4C63-ADB1-8D5C3A70A3DA",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Alternate Base Views"
+    },
+    "primaryKey": {
+      "ID": "5ACF7D92-CCC9-4BD8-B72A-0D42243F4ED2"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "57EC0A4D-B9FD-4C63-ADB1-8D5C3A70A3DA",
+      "Side": "Target",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Concepts"
+    },
+    "primaryKey": {
+      "ID": "B9BCDFF8-A569-4760-99E5-49F737AA48E1"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    },
+    "primaryKey": {
+      "ID": "E0B31C96-645A-40AD-B6C4-61ED873E8D19"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Skills"
+    },
+    "primaryKey": {
+      "ID": "F4E7A2A6-7F60-4048-A94D-B011C3E5C319"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    },
+    "primaryKey": {
+      "ID": "96F6BF5B-42BC-422B-89A0-F0F218C8E26F"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069",
+      "Side": "Target",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Concepts"
+    },
+    "primaryKey": {
+      "ID": "04426A0D-07DC-485C-A60D-0479CEAB4CF8"
+    }
+  }
+]

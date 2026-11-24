@@ -16,7 +16,7 @@ export * from './lib/resource-wrappers/chat-collections-resource.component'
 export * from './lib/resource-wrappers/library-resource.component'
 export * from './lib/resource-wrappers/library-agent-context'
 export * from './lib/resource-wrappers/artifact-resource.component'
-export * from './lib/resource-wrappers/meetings-resource.component'
+export * from './lib/resource-wrappers/livekit-lazy-config'
 export * from './lib/conversation-feedback'
 
 // Command Palette (only component and service, no module)
@@ -27,6 +27,8 @@ export * from './lib/command-palette/command-palette.service';
 export * from './lib/shell/shell.module'
 export * from './lib/shell/shell.component'
 export * from './lib/shell/shell-chrome-policy'
+export * from './lib/shell/services/shell-chrome-policy.service'
+export * from './lib/shell/components/no-access/shell-no-access.component'
 export * from './lib/single-record/single-record.component'
 export * from './lib/single-search-result/single-search-result.component'
 export * from './lib/single-dashboard/single-dashboard.component'

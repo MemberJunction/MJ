@@ -1,5 +1,15 @@
 # @memberjunction/ng-gantt
 
+## 6.3.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [2d938cf]
+- Updated dependencies [2b4969f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [ce32cbf]
+  - @memberjunction/global@6.3.0-edge.1
+
 ## 6.3.0-edge.0
 
 ### Patch Changes

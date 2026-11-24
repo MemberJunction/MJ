@@ -18,7 +18,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import { IMetadataProvider, LogError, LogStatusEx, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LimitsConfigResolver, LogError, LogStatusEx, Metadata, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     ConversationContextMessage,
@@ -122,29 +122,8 @@ export interface CompactionOutcome {
 
 /** Name of the system-default cross-turn summary prompt (seeded metadata). */
 const CONVERSATION_SUMMARY_PROMPT_NAME = 'Conversation Summary';
-/** Conservative context default, mirroring BaseAgent.getModelContextLimit's fallback. */
-const DEFAULT_CONTEXT_TOKENS = 8000;
-/**
- * Safety values for the two percents. The AIAgentType columns are NOT NULL with DB
- * defaults (75/30), so these only apply on typeless programmatic runs — keep in sync
- * with the migration defaults.
- */
-const DEFAULT_TRIGGER_PERCENT = 75;
-const DEFAULT_TARGET_PERCENT = 30;
 /** Tokens reserved for the yet-unwritten new summary when choosing the boundary. */
 const SUMMARY_RESERVE_TOKENS = 1500;
-/**
- * Minimum projected token relief for a compaction pass to be worth its summary-prompt
- * LLM call. Also exceeds a typical turn's context growth, so a degenerate budget (a
- * trigger at or below the steady-state summary size) stops churning — without this,
- * such a config re-fires a wasted summary call on EVERY turn while advancing the
- * boundary one message at a time (observed live during contour testing).
- */
-const MIN_COMPACTION_GAIN_TOKENS = 500;
-/** Below this many raw messages a compaction pass is not worth a prompt run. */
-const MIN_MESSAGES_TO_COMPACT = 4;
-/** Per-message character cap when rendering the delta for the summary prompt. */
-const MAX_DELTA_MESSAGE_CHARS = 10_000;
 
 /**
  * Owns cross-turn (Tier A) conversation compaction: budget resolution, trigger math,
@@ -183,6 +162,7 @@ export class ConversationCompactionManager {
         let maxTokens: number;
         let boundedBy: EffectiveContextBudget['BoundedBy'];
 
+        const tuning = LimitsConfigResolver.Resolve().Limits.Tuning;
         if (agent.ContextWindowMaxTokens) {
             maxTokens = agent.ContextWindowMaxTokens;
             boundedBy = 'Agent';
@@ -193,7 +173,7 @@ export class ConversationCompactionManager {
             maxTokens = modelMaxInputTokens;
             boundedBy = 'Model';
         } else {
-            maxTokens = DEFAULT_CONTEXT_TOKENS;
+            maxTokens = tuning.CompactionDefaultContextTokens;
             boundedBy = 'Default';
         }
 
@@ -209,8 +189,8 @@ export class ConversationCompactionManager {
         // NOT NULL there); AIAgent's nullable inherit semantics mean the EFFECTIVE pair
         // can only be validated here, after resolution — an inverted pair would make
         // every pass select a no-progress boundary and churn.
-        const rawTriggerPercent = agent.CompactionTriggerPercent || agentType?.CompactionTriggerPercent || DEFAULT_TRIGGER_PERCENT;
-        const rawTargetPercent = agent.CompactionTargetPercent || agentType?.CompactionTargetPercent || DEFAULT_TARGET_PERCENT;
+        const rawTriggerPercent = agent.CompactionTriggerPercent || agentType?.CompactionTriggerPercent || tuning.CompactionDefaultTriggerPercent;
+        const rawTargetPercent = agent.CompactionTargetPercent || agentType?.CompactionTargetPercent || tuning.CompactionDefaultTargetPercent;
         const triggerPercent = Math.min(Math.max(rawTriggerPercent, 1), 100);
         let targetPercent = Math.min(Math.max(rawTargetPercent, 1), 100);
         if (targetPercent >= triggerPercent) {
@@ -394,11 +374,12 @@ export class ConversationCompactionManager {
         }
 
         // Minimum-gain guard: projected post-compaction size = summary reserve + retained tail.
+        const minGainTokens = LimitsConfigResolver.Resolve().Limits.Tuning.CompactionMinGainTokens;
         const projectedTokensAfter = SUMMARY_RESERVE_TOKENS + input.EstimateTokens(rawMessages.slice(boundaryIndex));
         const projectedGain = tokensBefore - projectedTokensAfter;
-        if (projectedGain < MIN_COMPACTION_GAIN_TOKENS) {
-            this.logVerbose(input, `Skipping: projected gain ~${projectedGain} tokens < minimum ${MIN_COMPACTION_GAIN_TOKENS}`);
-            return { skippedReason: `Projected gain (~${projectedGain} tokens) is under the ${MIN_COMPACTION_GAIN_TOKENS}-token minimum — not worth a summary prompt run` };
+        if (projectedGain < minGainTokens) {
+            this.logVerbose(input, `Skipping: projected gain ~${projectedGain} tokens < minimum ${minGainTokens}`);
+            return { skippedReason: `Projected gain (~${projectedGain} tokens) is under the ${minGainTokens}-token minimum — not worth a summary prompt run` };
         }
         return { index: boundaryIndex };
     }
@@ -411,7 +392,8 @@ export class ConversationCompactionManager {
      * boundary would sit at the first raw message, folding nothing).
      */
     private static selectBoundaryIndex(rawMessages: ConversationContextMessage[], input: CompactIfNeededInput): number | null {
-        if (rawMessages.length < MIN_MESSAGES_TO_COMPACT) {
+        const minMessages = LimitsConfigResolver.Resolve().Limits.Tuning.CompactionMinMessages;
+        if (rawMessages.length < minMessages) {
             return null;
         }
         const tailBudget = input.Budget.TargetTokens - SUMMARY_RESERVE_TOKENS;
@@ -492,9 +474,10 @@ export class ConversationCompactionManager {
 
     /** One delta line (shared `[seq N] Role: text` shape) with a per-message size cap. */
     private static renderDeltaMessage(message: ConversationContextMessage): string {
+        const maxDeltaChars = LimitsConfigResolver.Resolve().Limits.Tuning.CompactionMaxDeltaMessageChars;
         const text = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-        const capped = text.length > MAX_DELTA_MESSAGE_CHARS
-            ? `${text.slice(0, MAX_DELTA_MESSAGE_CHARS)}\n[truncated — ${text.length.toLocaleString()} chars total]`
+        const capped = text.length > maxDeltaChars
+            ? `${text.slice(0, maxDeltaChars)}\n[truncated — ${text.length.toLocaleString()} chars total]`
             : text;
         return FormatSequencedHistoryLine(message.metadata?.sequence, message.role, capped);
     }

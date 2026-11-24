@@ -7,6 +7,7 @@
  * @module @memberjunction/content-pipeline
  */
 
+import { createHash } from 'node:crypto';
 import { CompositeKey, EntityInfo, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     KnowledgeHubMetadataEngine,
@@ -23,10 +24,10 @@ import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
 import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
 import { ContentSourceConfigurationResolver } from './ContentSourceConfigurationResolver.js';
 import { WhereAnyOf, WhereEqual } from './Filters.js';
-import { IsCallerOwnedUploadURL, IsUploadItemURL, UPLOAD_URL_PREFIX, UploadItemURL } from './UploadLocator.js';
+import { IsCallerOwnedUploadURL, IsRecordTextItemURL, IsUploadItemURL, RECORD_TEXT_URL_PREFIX, RecordTextItemURL, UPLOAD_URL_PREFIX, UploadItemURL } from './UploadLocator.js';
 import { ResolveSourceDriver } from './stages/DiscoverStage.js';
 
-export { IsCallerOwnedUploadURL, IsUploadItemURL, UPLOAD_URL_PREFIX, UploadItemURL } from './UploadLocator.js';
+export { IsCallerOwnedUploadURL, IsRecordTextItemURL, IsUploadItemURL, RECORD_TEXT_URL_PREFIX, RecordTextItemURL, UPLOAD_URL_PREFIX, UploadItemURL } from './UploadLocator.js';
 
 /** Shipped Record Process ID for `Content Pipeline — Extract`. */
 export const CONTENT_PIPELINE_EXTRACT_PROCESS_ID = '95A91363-74BB-4532-A109-4E6F45EEC100';
@@ -80,6 +81,52 @@ export interface ContentUploadIngestRequest {
     Provider?: IMetadataProvider;
 }
 
+/** Parameters for {@link ContentUploadIngestor.IngestText}: text pushed on behalf of one entity record. */
+export interface ContentTextIngestRequest {
+    /** Target push-only `MJ: Content Sources` record ID. */
+    ContentSourceID: string;
+    /** The record the text belongs to. Linked through `MJ: Entity Record Documents`, which is what lets graph access follow the record. */
+    Origin: ContentUploadOrigin;
+    /** Display name for the `MJ: Content Items` row. */
+    Name: string;
+    /** Optional description for the `MJ: Content Items` row. */
+    Description?: string | null;
+    /** The text. Already extracted, so the Extract stage is skipped for this item. */
+    Text: string;
+    /** When true, runs Segment, Tag, Embed and (when the source enables it) Graph immediately. */
+    RunNow?: boolean;
+    /** Server-side user context. */
+    ContextUser: UserInfo;
+    /** Optional metadata provider override; defaults to `Metadata.Provider`. */
+    Provider?: IMetadataProvider;
+}
+
+/** Result returned by {@link ContentUploadIngestor.IngestText}. */
+export interface ContentTextIngestResult {
+    /** The record's current `MJ: Content Items` row. */
+    ContentItemID: string;
+    /** True when the text was identical to what is already indexed, so nothing was done. */
+    Unchanged: boolean;
+    /** The earlier Content Item replaced by this push, removed with its chunks; `null` on a first push or when unchanged. */
+    ReplacedContentItemID: string | null;
+    /** The `MJ: Entity Record Documents` row linking the item to its record. */
+    EntityRecordDocumentID: string;
+}
+
+/** Parameters for {@link ContentUploadIngestor.RemoveText}. */
+export interface ContentTextRemoveRequest {
+    /** Push-only `MJ: Content Sources` record ID the text was pushed to. */
+    ContentSourceID: string;
+    /** The record whose text should leave the index. */
+    Origin: ContentUploadOrigin;
+    /** When true, runs the Delete stages immediately. */
+    RunNow?: boolean;
+    /** Server-side user context. */
+    ContextUser: UserInfo;
+    /** Optional metadata provider override; defaults to `Metadata.Provider`. */
+    Provider?: IMetadataProvider;
+}
+
 /** Result returned by {@link ContentUploadIngestor.Ingest}. */
 export interface ContentUploadIngestResult {
     /** The new or existing `MJ: Content Items` record ID. */
@@ -121,6 +168,9 @@ export interface ContentUploadRemoveResult {
     /** `MJ: Content Item Chunks` record IDs that were not removed when `RunNow` failed. */
     FailedChunkIDs?: string[];
 }
+
+/** The live Content Item holding a record's text: enough to tell whether the text or its title changed. */
+type TextItemRow = Pick<MJContentItemEntity, 'ID' | 'Checksum' | 'Name' | 'Description'>;
 
 interface ContentSourceSummary {
     ID: string;
@@ -177,6 +227,16 @@ export class ContentUploadIngestor {
         return new ContentUploadIngestor(request.Provider, request.ContextUser).Ingest(request);
     }
 
+    /** Convenience static entry point for {@link IngestText}. */
+    public static async IngestText(request: ContentTextIngestRequest): Promise<ContentTextIngestResult> {
+        return new ContentUploadIngestor(request.Provider, request.ContextUser).IngestText(request);
+    }
+
+    /** Convenience static entry point for {@link RemoveText}. */
+    public static async RemoveText(request: ContentTextRemoveRequest): Promise<ContentUploadRemoveResult | null> {
+        return new ContentUploadIngestor(request.Provider, request.ContextUser).RemoveText(request);
+    }
+
     /** Convenience static entry point for {@link Remove}. */
     public static async Remove(request: ContentUploadRemoveRequest): Promise<ContentUploadRemoveResult> {
         return new ContentUploadIngestor(request.Provider, request.ContextUser).Remove(request);
@@ -213,6 +273,156 @@ export class ContentUploadIngestor {
             Created: true,
             EntityRecordDocumentID: entityRecordDocumentID,
         };
+    }
+
+    /**
+     * Index text that belongs to one entity record (a document, a description) without an `MJ: Files`
+     * row. There is one Content Item per record: identical text is a no-op, and changed text replaces
+     * the earlier item and its chunks, so the index always reflects the record's current text.
+     * Refuses sources whose driver is not push-only.
+     */
+    public async IngestText(request: ContentTextIngestRequest): Promise<ContentTextIngestResult> {
+        const provider = request.Provider ?? this.provider ?? Metadata.Provider;
+        const contextUser = request.ContextUser ?? this.contextUser;
+        if (!contextUser) {
+            throw new Error('ContentUploadIngestor.IngestText requires a ContextUser');
+        }
+        if (!request.Origin) {
+            throw new Error('ContentUploadIngestor.IngestText requires an Origin record');
+        }
+        const source = await this.loadAndValidatePushOnlySource(request.ContentSourceID, provider, contextUser);
+        const url = this.recordTextURL(request.Origin, provider);
+        const checksum = createHash('sha256').update(request.Text, 'utf8').digest('hex');
+        const existing = await this.queryContentItemByURL(source.ID, url, provider, contextUser);
+        const entityRecordDocumentID = await this.findOrCreateEntityRecordDocument(source, request.Origin, provider, contextUser);
+        if (existing && existing.Checksum === checksum) {
+            await this.refreshTextItemTitle(existing, request, provider, contextUser);
+            return { ContentItemID: existing.ID, Unchanged: true, ReplacedContentItemID: null, EntityRecordDocumentID: entityRecordDocumentID };
+        }
+        if (existing) {
+            await this.Remove({ ContentItemID: existing.ID, RunNow: true, ContextUser: contextUser, Provider: provider });
+        }
+        const item = await this.createTextContentItem(source, request, url, checksum, entityRecordDocumentID, provider, contextUser);
+        if (request.RunNow) {
+            await this.runStagesNow(item.ID, source, contextUser, provider);
+        }
+        return {
+            ContentItemID: item.ID,
+            Unchanged: false,
+            ReplacedContentItemID: existing?.ID ?? null,
+            EntityRecordDocumentID: entityRecordDocumentID,
+        };
+    }
+
+    /**
+     * Take a record's text out of the index: marks its Content Item and chunks for deletion (the
+     * Delete stage also retracts what the Graph stage inferred from them). Returns `null` when the
+     * record has nothing indexed in this source.
+     */
+    public async RemoveText(request: ContentTextRemoveRequest): Promise<ContentUploadRemoveResult | null> {
+        const provider = request.Provider ?? this.provider ?? Metadata.Provider;
+        const contextUser = request.ContextUser ?? this.contextUser;
+        if (!contextUser) {
+            throw new Error('ContentUploadIngestor.RemoveText requires a ContextUser');
+        }
+        const source = await this.loadAndValidatePushOnlySource(request.ContentSourceID, provider, contextUser);
+        const existing = await this.queryContentItemByURL(source.ID, this.recordTextURL(request.Origin, provider), provider, contextUser);
+        if (!existing) {
+            return null;
+        }
+        return this.Remove({ ContentItemID: existing.ID, RunNow: request.RunNow, ContextUser: contextUser, Provider: provider });
+    }
+
+    private recordTextURL(origin: ContentUploadOrigin, provider: IMetadataProvider): string {
+        const entityInfo = provider.EntityByName(origin.EntityName);
+        if (!entityInfo) {
+            throw new Error(`Origin entity '${origin.EntityName}' was not found in metadata`);
+        }
+        const compactRecordID = CompositeKey.FromURLSegment(entityInfo, origin.RecordID).ToCompactURLSegment();
+        return RecordTextItemURL(entityInfo.Name, compactRecordID);
+    }
+
+    /** The live Content Item at `url` in a source, or `null`. */
+    private async queryContentItemByURL(
+        contentSourceID: string,
+        url: string,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<TextItemRow | null> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<TextItemRow>(
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: WhereEqual({ ContentSourceID: contentSourceID, URL: url, DeleteStatus: null }),
+                Fields: ['ID', 'Checksum', 'Name', 'Description'],
+                MaxRows: 1,
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            contextUser,
+        );
+        if (!result.Success) {
+            throw new Error(`Could not query existing Content Items at '${url}': ${result.ErrorMessage}`);
+        }
+        return result.Results[0] ?? null;
+    }
+
+    /**
+     * Identical text keeps its item and chunks, but the record may have been renamed or re-described:
+     * bring the item's Name and Description up to date without re-running any stage.
+     */
+    private async refreshTextItemTitle(
+        existing: TextItemRow,
+        request: ContentTextIngestRequest,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<void> {
+        const description = request.Description ?? null;
+        if (existing.Name === request.Name && (existing.Description ?? null) === description) {
+            return;
+        }
+        const item = await provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
+        if (!(await item.InnerLoad(CompositeKey.FromID(existing.ID)))) { // first-pk-ok: MJ core content entity, single-column ID
+            throw new Error(`Could not load Content Item '${existing.ID}' to update its name`);
+        }
+        item.Name = request.Name;
+        item.Description = description;
+        if (!(await item.Save())) {
+            throw new Error(`Failed to update the name of Content Item '${existing.ID}': ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
+    /** A Content Item whose text is already extracted, so the run starts at Segment. */
+    private async createTextContentItem(
+        source: ContentSourceSummary,
+        request: ContentTextIngestRequest,
+        url: string,
+        checksum: string,
+        entityRecordDocumentID: string,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<MJContentItemEntity> {
+        const item = await provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
+        item.NewRecord();
+        item.ContentSourceID = source.ID;
+        item.ContentTypeID = source.ContentTypeID;
+        item.ContentSourceTypeID = source.ContentSourceTypeID;
+        item.ContentFileTypeID = source.ContentFileTypeID;
+        item.URL = url;
+        item.Name = request.Name;
+        item.Description = request.Description ?? null;
+        item.Text = request.Text;
+        item.Checksum = checksum;
+        item.FieldConfidence = this.callerTitleFieldConfidence();
+        item.EntityRecordDocumentID = entityRecordDocumentID;
+        item.ExtractionStatus = 'Complete';
+        item.TaggingStatus = 'Pending';
+        item.SegmentationStatus = 'Pending';
+        item.EmbeddingStatus = 'Pending';
+        if (!(await item.Save())) {
+            throw new Error(`Failed to save text Content Item '${url}': ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return item;
     }
 
     /**
@@ -735,9 +945,8 @@ export class ContentUploadIngestor {
     ): Promise<ContentItemStageRow[]> {
         const preExtractItems = await this.collectLiveTreeItems(rootItemID, provider, contextUser);
         const extractIDs = preExtractItems.filter((i) => this.isStagePending(i.ExtractionStatus)).map((i) => i.ID);
-        let extractBatchSucceeded = false;
         if (extractIDs.length > 0) {
-            extractBatchSucceeded = await this.executeProcessStage(
+            await this.executeProcessStage(
                 CONTENT_PIPELINE_EXTRACT_PROCESS_ID,
                 'Extract',
                 extractIDs,
@@ -747,7 +956,7 @@ export class ContentUploadIngestor {
             );
         }
         const postExtractItems = await this.collectLiveTreeItems(rootItemID, provider, contextUser);
-        return this.filterCompletedExtractItems(postExtractItems, extractBatchSucceeded);
+        return this.filterCompletedExtractItems(postExtractItems);
     }
 
     /** Runs Segment, then Tag (before Embed, so the vectors carry the tags), on the extracted items. */
@@ -782,19 +991,8 @@ export class ContentUploadIngestor {
         return { segmentIDs, segmentBatchSucceeded };
     }
 
-    private filterCompletedExtractItems(
-        items: readonly ContentItemStageRow[],
-        extractBatchSucceeded: boolean,
-    ): ContentItemStageRow[] {
-        return items.filter((item) => {
-            if (item.ExtractionStatus === 'Complete') {
-                return true;
-            }
-            if (item.ExtractionStatus === 'Failed' || item.ExtractionStatus === 'Skipped') {
-                return false;
-            }
-            return extractBatchSucceeded;
-        });
+    private filterCompletedExtractItems(items: readonly ContentItemStageRow[]): ContentItemStageRow[] {
+        return items.filter((item) => item.ExtractionStatus === 'Complete');
     }
 
     private async resolveCompletedSegmentItems(
@@ -890,15 +1088,33 @@ export class ContentUploadIngestor {
         contextUser: UserInfo,
     ): Promise<void> {
         for (const itemID of itemIDs) {
+            await this.markSingleItemFailed(itemID, statusField, provider, contextUser);
+        }
+    }
+
+    private async markSingleItemFailed(
+        itemID: string,
+        statusField: ItemFailureStatusField,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<void> {
+        try {
             const item = await provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
             if (await item.InnerLoad(CompositeKey.FromID(itemID))) { // first-pk-ok: MJ core content entity, single-column ID
                 this.setItemFailedStatus(item, statusField);
                 if (!(await item.Save())) {
-                    throw new Error(
-                        `Failed to mark Content Item '${itemID}' ${statusField} as Failed: ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    LogError(
+                        `ContentUploadIngestor: failed to mark Content Item '${itemID}' ${statusField} as Failed: ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                     );
                 }
+            } else {
+                LogError(
+                    `ContentUploadIngestor: failed to mark Content Item '${itemID}' ${statusField} as Failed: ${item.LatestResult?.CompleteMessage ?? 'record could not be loaded'}`,
+                );
             }
+        } catch (saveError: unknown) {
+            const saveMessage = saveError instanceof Error ? saveError.message : String(saveError);
+            LogError(`ContentUploadIngestor: failed to mark Content Item '${itemID}' ${statusField} as Failed: ${saveMessage}`);
         }
     }
 
@@ -995,9 +1211,11 @@ export class ContentUploadIngestor {
             if (!(await item.InnerLoad(CompositeKey.FromID(request.ContentItemID)))) { // first-pk-ok: MJ core content entity, single-column ID
                 throw new Error(`Content Item '${request.ContentItemID}' could not be found`);
             }
-            if (!IsUploadItemURL(item.URL)) {
+            // Only items pushed into a source (an uploaded file or a record's text) may be removed here;
+            // a discovered item belongs to its source's own sync.
+            if (!IsUploadItemURL(item.URL) && !IsRecordTextItemURL(item.URL)) {
                 throw new Error(
-                    `Content Item '${request.ContentItemID}' has URL '${item.URL ?? ''}', which is not an upload locator (${UPLOAD_URL_PREFIX}*)`,
+                    `Content Item '${request.ContentItemID}' has URL '${item.URL ?? ''}', which is not an upload locator (${UPLOAD_URL_PREFIX}*) or a record text locator (${RECORD_TEXT_URL_PREFIX}*)`,
                 );
             }
             if (item.DeleteStatus === 'Deleted') {

@@ -12,7 +12,7 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { EntityInfo, EntityPermissionType, IMetadataProvider, IRunQueryProvider, IRunViewProvider, IsVerboseLoggingEnabled, LogError, LogStatusEx, Metadata, ProjectEntityValueRowsForUser, RunQuery, RunQueryParams, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, EntityInfo, EntityPermissionType, IMetadataProvider, IRunQueryProvider, IRunViewProvider, IsVerboseLoggingEnabled, LimitsConfigResolver, LogError, LogStatusEx, Metadata, ProjectEntityValueRowsForUser, RunQuery, RunQueryParams, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, BaseSingleton, UserScopedCacheKey, MJLruCache } from '@memberjunction/global';
 import { MJAIAgentDataSourceEntity, QueryEngine } from '@memberjunction/core-entities'; 
 import _ from 'lodash';
@@ -96,11 +96,11 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
      * expired-but-never-re-read keys cannot accumulate (one entry per user x agent x source).
      */
     private _perAgentCache: MJLruCache<string, CacheEntry> = new MJLruCache<string, CacheEntry>({
-        maxSize: AgentDataPreloader.MAX_PER_AGENT_CACHE_ENTRIES
+        maxSize: LimitsConfigResolver.Resolve().Limits.Tuning.MaxPerAgentCacheEntries
     });
 
     /** Upper bound on cached per-agent datasets before least-recently-used eviction. */
-    public static readonly MAX_PER_AGENT_CACHE_ENTRIES = 200;
+    public static readonly MAX_PER_AGENT_CACHE_ENTRIES = CODE_FALLBACK_LIMITS.Tuning.MaxPerAgentCacheEntries;
 
     /**
      * Per-run cache (scoped to a single run ID)

@@ -6,7 +6,10 @@
       "IsCanon": true,
       "Rank": 10,
       "IconClass": "fa-solid fa-scale-balanced",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAuthorityTierID": "@lookup:MJ: Graph Authority Tiers.Name=Executive SOP",
+      "DefaultConceptTaxonomyMode": "Propose Only",
+      "DefaultGroundingMode": "Full Canon"
     },
     "primaryKey": {
       "ID": "FD40F8BA-B9EA-4F1F-A703-DA3737AA5224"
@@ -23,7 +26,10 @@
       "IsCanon": false,
       "Rank": 20,
       "IconClass": "fa-solid fa-book-open-reader",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAuthorityTierID": "@lookup:MJ: Graph Authority Tiers.Name=Reference",
+      "DefaultConceptTaxonomyMode": "Auto Grow",
+      "DefaultGroundingMode": "None"
     },
     "primaryKey": {
       "ID": "B3FDB086-E2C9-4C7F-987D-7DF3A727A66C"
@@ -40,7 +46,10 @@
       "IsCanon": false,
       "Rank": 30,
       "IconClass": "fa-solid fa-diagram-project",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAuthorityTierID": "@lookup:MJ: Graph Authority Tiers.Name=Reference",
+      "DefaultConceptTaxonomyMode": "Constrained",
+      "DefaultGroundingMode": "None"
     },
     "primaryKey": {
       "ID": "76A2E6A3-6B52-49C1-8784-BF1A2997ACFE"
@@ -57,7 +66,10 @@
       "IsCanon": false,
       "Rank": 100,
       "IconClass": "fa-solid fa-circle-nodes",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAuthorityTierID": "@lookup:MJ: Graph Authority Tiers.Name=Reference",
+      "DefaultConceptTaxonomyMode": "Auto Grow",
+      "DefaultGroundingMode": "None"
     },
     "primaryKey": {
       "ID": "C494A14A-055F-4327-8E26-42B3C48DF9FD"

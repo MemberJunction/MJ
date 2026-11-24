@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { ColDef } from 'ag-grid-community';
 import { FetchArrayBuffer, type SheetData } from '../previews/office-preview.logic';
@@ -228,6 +228,15 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public ShowError(message: string): void {
     this.errorMessage = message;
     this.cdr.markForCheck();
+  }
+
+  /** The original file, once it has loaded. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return this.downloadUrl ? [this.FileExportOption('Excel (.xlsx)', 'fa-solid fa-file-excel', 'The original file')] : [];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    return key === FILE_EXPORT_KEY ? this.OnDownload() : super.RunExport(key);
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

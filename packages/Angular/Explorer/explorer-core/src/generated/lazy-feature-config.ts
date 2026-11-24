@@ -17,13 +17,55 @@
  * which silently merges all chunks into one.
  */
 
+// --- @memberjunction/ng-auth-services → ./auth0 (1 entries) ---
+const loadNgAuthServicesAuth0 = {
+  chunkId: '@memberjunction/ng-auth-services/auth0',
+  load: () => import('@memberjunction/ng-auth-services/auth0').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./cognito (1 entries) ---
+const loadNgAuthServicesCognito = {
+  chunkId: '@memberjunction/ng-auth-services/cognito',
+  load: () => import('@memberjunction/ng-auth-services/cognito').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./local-dev (1 entries) ---
+const loadNgAuthServicesLocalDev = {
+  chunkId: '@memberjunction/ng-auth-services/local-dev',
+  load: () => import('@memberjunction/ng-auth-services/local-dev').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./magic-link (1 entries) ---
+const loadNgAuthServicesMagicLink = {
+  chunkId: '@memberjunction/ng-auth-services/magic-link',
+  load: () => import('@memberjunction/ng-auth-services/magic-link').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./msal (1 entries) ---
+const loadNgAuthServicesMsal = {
+  chunkId: '@memberjunction/ng-auth-services/msal',
+  load: () => import('@memberjunction/ng-auth-services/msal').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./okta (1 entries) ---
+const loadNgAuthServicesOkta = {
+  chunkId: '@memberjunction/ng-auth-services/okta',
+  load: () => import('@memberjunction/ng-auth-services/okta').then(() => {})
+};
+
+// --- @memberjunction/ng-auth-services → ./workos (1 entries) ---
+const loadNgAuthServicesWorkos = {
+  chunkId: '@memberjunction/ng-auth-services/workos',
+  load: () => import('@memberjunction/ng-auth-services/workos').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (6 entries) ---
 const loadNgDashboardsActionsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/actions-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (22 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (23 entries) ---
 const loadNgDashboardsAiDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
@@ -47,7 +89,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (42 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (43 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -154,6 +196,27 @@ const loadNgFileStorageFileStorageModule = {
  * Covers all @RegisterClass decorated classes in lazy-loaded packages.
  */
 export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {
+  // @memberjunction/ng-auth-services → ./auth0
+  'MJAuthBase::auth0': loadNgAuthServicesAuth0,
+
+  // @memberjunction/ng-auth-services → ./cognito
+  'MJAuthBase::cognito': loadNgAuthServicesCognito,
+
+  // @memberjunction/ng-auth-services → ./local-dev
+  'MJAuthBase::local': loadNgAuthServicesLocalDev,
+
+  // @memberjunction/ng-auth-services → ./magic-link
+  'MJAuthBase::magic-link': loadNgAuthServicesMagicLink,
+
+  // @memberjunction/ng-auth-services → ./msal
+  'MJAuthBase::msal': loadNgAuthServicesMsal,
+
+  // @memberjunction/ng-auth-services → ./okta
+  'MJAuthBase::okta': loadNgAuthServicesOkta,
+
+  // @memberjunction/ng-auth-services → ./workos
+  'MJAuthBase::workos': loadNgAuthServicesWorkos,
+
   // @memberjunction/ng-dashboards → ./actions-dashboards.module
   'BaseResourceComponent::ActionExplorerResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsCodeResource': loadNgDashboardsActionsDashboardsModule,
@@ -172,6 +235,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AIPromptsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AnalyticsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AutotaggingPipelineResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffAgentChannels': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffApprovals': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffDashboard': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffGovernance': loadNgDashboardsAiDashboardsModule,
@@ -214,6 +278,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AdminDataSchema': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminDeveloperTools': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminIdentityAccess': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::AdminLimitsResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminMonitoring': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AppStateInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ApplicationRolesResource': loadNgDashboardsCoreDashboardsModule,
@@ -342,4 +407,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 142;
+export const LAZY_FEATURE_CONFIG_COUNT = 151;

@@ -16,9 +16,13 @@ export * from './lib/services/document-import-export.service';
 export * from './lib/services/slide-deck-export.service';
 export * from './lib/services/artifact-version-diff.service';
 export * from './lib/services/artifact-ai-assistant-bridge';
+export * from './lib/services/live-sheet-client-tool.helper';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
+
+// Related-documents widget (semantic graph links, backlinks, shared concepts)
+export * from './lib/components/artifact-related-panel.component';
 
 // Base component
 export * from './lib/components/base-artifact-viewer.component';
@@ -97,6 +101,7 @@ export * from './lib/components/plugins/video-production/video-production-review
 export * from './lib/components/plugins/video-production/video-production-viewer.component';
 export * from './lib/components/presence/artifact-agent-presence-bar.component';
 export * from './lib/components/presence/artifact-agent-region-indicator.component';
+export * from './lib/components/plugins/artifact-command-palette.component';
 export {
   SanitizeHtmlForSandboxedFrame,
   SanitizeSvgForSandboxedFrame,

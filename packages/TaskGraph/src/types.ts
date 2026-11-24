@@ -5,9 +5,14 @@
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type {
     AgentDecisionQuestion,
+    OwnerPauseNotificationPayload,
     TaskGraphDecisionAnswer,
     TaskSecurityEnvelope,
+    WorkflowBudgetBreachDiagnostic,
 } from '@memberjunction/ai-core-plus';
+import type { FastConvergenceJudgeEvaluator } from '@memberjunction/ai-agents';
+import type { MJLimitsOverride } from '@memberjunction/core';
+import type { TaskGraphIsolationRunnerMap } from './isolation';
 
 /**
  * Mints a fresh metadata/data provider.
@@ -93,6 +98,10 @@ export type TaskActionRunResult = {
      * nodes downstream inherit it until a completed Human step reviews it.
      */
     IsOutputTainted?: boolean;
+    /** Optional USD cost incurred by executing this action node for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this action node. */
+    TokensUsed?: number;
 };
 
 /**
@@ -156,6 +165,10 @@ export type TaskPromptRunResult = {
     ChatMessage?: string;
     /** True when the prompt's own output is untrusted. The dispatcher always adds the node's input taint. */
     IsOutputTainted?: boolean;
+    /** Optional USD cost incurred by executing this prompt node for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this prompt node. */
+    TokensUsed?: number;
 };
 
 /**
@@ -201,6 +214,10 @@ export type TaskDecisionRunResult = {
      * cost reaches the graph's rollup.
      */
     PromptRunID?: string;
+    /** Optional USD cost incurred by executing this decision node for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this decision node. */
+    TokensUsed?: number;
 };
 
 /**
@@ -342,8 +359,15 @@ export type TaskGraphFrame = {
     Reason?: string;
 
     // ── ClaimChanged ────────────────────────────────────────────────────────
-    /** What happened to the claim. */
-    ClaimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    /**
+     * What happened to the claim. `retry-scheduled`: the run failed, the claim was released and the
+     * step is Pending again, to be retried no earlier than `NextAttemptAt` (`ErrorMessage` says why).
+     */
+    ClaimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed' | 'retry-scheduled';
+    /** On `retry-scheduled`: which retry is coming, counting from 1. */
+    Attempt?: number;
+    /** On `retry-scheduled`: the earliest moment the retry may run, ISO 8601. */
+    NextAttemptAt?: string;
     /** The dispatcher instance holding (or losing) the claim. */
     ClaimedBy?: string;
     /** When the claim lapses unless extended, ISO 8601. */
@@ -389,6 +413,17 @@ export type TaskGraphFrame = {
  */
 export type TaskGraphObserver = {
     OnFrame(frame: TaskGraphFrame): void;
+};
+
+/** Whole-workflow USD cost & wall-clock budget state propagated into task-graph node runners. */
+export type TaskGraphWorkflowBudgetContext = {
+    ParentTaskID: string;
+    WorkflowMaxCostUsd?: number;
+    WorkflowMaxDurationMs?: number;
+    WorkflowStartedAtMs: number;
+    CumulativeCostUsd: number;
+    RemainingCostUsd?: number;
+    RemainingWallClockMs?: number;
 };
 
 /** Everything an executor needs to run a single task node. */
@@ -438,6 +473,8 @@ export type TaskAgentRunParams = {
      * input taint). The runner starts the agent run under it; see `TaskAgentRunner.EnforcesSecurityEnvelope`.
      */
     SecurityEnvelope?: TaskSecurityEnvelope;
+    /** Whole-workflow budget ceilings & start timestamp propagated from the orchestrating TaskGraph. */
+    WorkflowBudget?: TaskGraphWorkflowBudgetContext;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };
@@ -453,6 +490,12 @@ export type TaskAgentRunResult = {
     AgentRunID?: string;
     /** True when the run ingested untrusted content (`taintedSources`), including any it started with. */
     IsOutputTainted?: boolean;
+    /** Optional USD cost incurred by executing this agent node for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this agent node. */
+    TokensUsed?: number;
+    /** Structured workflow budget breach diagnostic when execution stopped due to a whole-workflow limit. */
+    LimitExceeded?: WorkflowBudgetBreachDiagnostic;
 };
 
 /**
@@ -571,6 +614,36 @@ export type TaskGraphDispatcherConfig = {
 
     /** How often the reconciliation sweep runs. */
     ReconciliationIntervalSeconds: number;
+
+    /** Optional production budget and runaway governance configuration evaluated on node settlement. */
+    Governance?: TaskGraphGovernanceConfig;
+
+    /**
+     * Optional per-level isolation execution runners (`InProcess`, `Worker`, `Process`, `Container`)
+     * used by {@link TaskGraphDispatcher} when executing graph tasks.
+     */
+    IsolationRunners?: TaskGraphIsolationRunnerMap;
+};
+
+/** Optional production budget and runaway governance configuration for {@link TaskGraphDispatcher}. */
+export type TaskGraphGovernanceConfig = {
+    /** Enables budget/runaway evaluation across all graphs dispatched by this instance (even without per-graph LimitsOverride). */
+    Enabled?: boolean;
+    /** Default Tier-5 limits override applied when the graph itself does not specify `limitsOverride`. */
+    LimitsOverride?: MJLimitsOverride;
+    /** Default cost per settled node (USD) when a runner does not return `CostUsd`. */
+    DefaultNodeCostUsd?: number;
+    /** Default tokens per settled node when a runner does not return `TokensUsed`. */
+    DefaultNodeTokens?: number;
+    /** Enables deterministic progress stall evaluation on settled nodes. */
+    EvaluateProgress?: boolean;
+    /** Optional callback invoked when a governance pause emits an owner notification. */
+    OnOwnerNotification?: (payload: OwnerPauseNotificationPayload) => Promise<void> | void;
+    /**
+     * Optional custom evaluator callback for the sub-200ms `FastConvergenceJudge` when
+     * `DeterministicProgressDetector` classifies a window as `Ambiguous`.
+     */
+    FastConvergenceJudgeEvaluator?: FastConvergenceJudgeEvaluator;
 };
 
 /** Defaults chosen so a heartbeat has several chances to land before a claim lapses. */

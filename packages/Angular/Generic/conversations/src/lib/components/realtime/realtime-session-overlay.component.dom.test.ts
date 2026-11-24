@@ -86,6 +86,8 @@ function fakeSession() {
   const focus$ = new Subject<RealtimeChannelFocusEvent>();
   /** Channels the session marks as used, as the runtime does when the agent first uses one. */
   const activity$ = new Subject<BaseRealtimeChannelClient>();
+  const usedChannels = new Set<string>();
+  activity$.subscribe((plugin) => usedChannels.add(plugin.ChannelName));
   const captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
   const offers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
   /** The call's microphone and the ones it can move to, as the runtime lists them. */
@@ -164,7 +166,7 @@ function fakeSession() {
     },
     get IsActive(): boolean { return active$.value; },
     CurrentAgentSessionId: null,
-    HasChannelBeenUsed: (): boolean => false,
+    HasChannelBeenUsed: (channelName: string): boolean => usedChannels.has(channelName),
     SetFocusedChannel: (): void => undefined,
     GetAudioActivity: () => null,
     SetVideoSourceEnabled: (): boolean => true,
@@ -178,7 +180,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels, narration$ };
+  return { service, channels$, focus$, activity$, usedChannels, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels, narration$ };
 }
 
 /**
@@ -264,7 +266,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       autoDetect: true,
     });
     session.channels$.next([board]);
-    f.componentInstance.OnDetailsToggled();
+    session.activity$.next(board);
     await settle();
     return { f, board, ...session };
   };
@@ -1523,8 +1525,10 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
 
     it('gives the stage to a whiteboard moved there, and the avatar goes to picture-in-picture', async () => {
       const board = new TestWhiteboardChannel();
-      const { f, sendVideo } = await renderWithAvatar('console', [board]);
+      const { f, sendVideo, activity$ } = await renderWithAvatar('console', [board]);
       await sendVideo();
+      activity$.next(board);
+      await settle();
       f.componentInstance.OnMoveRequested({ Key: 'Whiteboard', Placement: 'stage' });
       await settle();
       expect(f.componentInstance.ChannelFocusMode).toBe(true);
@@ -2098,6 +2102,452 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
           Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
         }
       });
+    });
+  });
+
+  describe('channel activity auto-switching', () => {
+    class TestSurfaceChannel extends BaseRealtimeChannelClient<TestBoardComponent> {
+      public constructor(
+        private readonly channelName: string,
+        private readonly tabTitle: string,
+        private readonly prefix: string,
+      ) {
+        super();
+      }
+      public get ChannelName(): string { return this.channelName; }
+      public get ToolNamePrefix(): string { return this.prefix; }
+      public get TabTitle(): string { return this.tabTitle; }
+      public get TabIcon(): string { return 'fa-solid fa-window-maximize'; }
+      public GetToolDefinitions(): RealtimeToolDefinition[] { return []; }
+      public ApplyAgentTool(): string { return '{}'; }
+      public override GetSurfaceComponent(): Type<TestBoardComponent> { return TestBoardComponent; }
+    }
+
+    class TestHeadlessChannel extends BaseRealtimeChannelClient {
+      public get ChannelName(): string { return 'ClientContextChannel'; }
+      public get ToolNamePrefix(): string { return 'ContextTool'; }
+      public get TabTitle(): string { return 'Context'; }
+      public get TabIcon(): string { return 'fa-solid fa-code'; }
+      public GetToolDefinitions(): RealtimeToolDefinition[] { return []; }
+      public ApplyAgentTool(): string { return '{}'; }
+    }
+
+    const activeTabTitle = (f: ReturnType<typeof renderComponentFixture<RealtimeSessionOverlayComponent>>): string =>
+      query(f, '.s-tab--active')?.textContent?.trim() ?? '';
+
+    it('switches to whichever channel the agent is acting on, including returning to earlier channels', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const docs = new TestSurfaceChannel('ArtifactWorkspace', 'Workspace', 'ArtifactWorkspace_');
+      const browser = new TestSurfaceChannel('Remote Browser', 'Browser', 'browser_');
+      const media = new TestSurfaceChannel('Media', 'Media', 'Media_');
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, docs, browser, media]);
+      await settle();
+
+      expect(query(f, '.call-panel')).toBeNull();
+
+      // Unused channels (including Whiteboard) must not appear before any channel is used.
+      f.componentInstance.OnDetailsToggled();
+      await settle();
+      expect(queryAll(f, '.s-tab')).toHaveLength(0);
+
+      // First workspace doc opens/focuses directly onto Workspace (never Whiteboard)
+      session.activity$.next(docs);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Workspace');
+      expect(queryAll(f, '.s-tab').map((el) => el.textContent?.trim() ?? '')).not.toContain('Whiteboard');
+
+      // Agent switches to Remote Browser
+      session.activity$.next(browser);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Browser');
+
+      // Agent switches to Media
+      session.activity$.next(media);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // Agent switches BACK to Workspace, then BACK to Browser, then to Whiteboard (now Whiteboard joins!)
+      session.activity$.next(docs);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Workspace');
+
+      session.activity$.next(browser);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Browser');
+
+      session.activity$.next(board);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Whiteboard');
+    });
+
+    it('reopens a collapsed or hidden panel onto the channel the agent acts on', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const media = new TestSurfaceChannel('Media', 'Media', 'Media_');
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, media]);
+      await settle();
+
+      session.activity$.next(media);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // User collapses panel strip; new activity on Media must re-expand it onto Media.
+      click(f, '.surface__toggle');
+      await settle();
+      expect(f.componentInstance.PanelCollapsed).toBe(true);
+
+      session.activity$.next(media);
+      await settle();
+      expect(f.componentInstance.PanelCollapsed).toBe(false);
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // User hides the panel via Details; new activity on Media must reopen it onto Media.
+      f.componentInstance.OnDetailsToggled();
+      await settle();
+      expect(f.componentInstance.DetailsPeek).toBe(false);
+
+      session.activity$.next(media);
+      await settle();
+      expect(f.componentInstance.DetailsPeek).toBe(true);
+      expect(activeTabTitle(f)).toContain('Media');
+    });
+
+    it('ignores activity from headless channels with no surface', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const headless = new TestHeadlessChannel();
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, headless]);
+      await settle();
+
+      session.activity$.next(headless);
+      await settle();
+
+      expect(f.componentInstance.DetailsPeek).toBe(false);
+      expect(query(f, '.call-panel')).toBeNull();
+    });
+  });
+
+  describe('session review workspace tabs', () => {
+    const emptyReview = (): RealtimeSessionReview => ({
+      SessionID: 'past-ws-1',
+      AgentID: 'agent-1',
+      AgentName: 'Sage',
+      TargetAgentID: 'agent-1',
+      ConversationID: null,
+      Status: 'Closed',
+      CloseReason: null,
+      StartedAt: null,
+      LastActiveAt: null,
+      ClosedAt: null,
+      RecordingFileID: null,
+      RecordingStartedAt: null,
+      RecordingMedia: null,
+      Turns: [],
+      DelegatedRuns: [],
+      ChannelStates: [],
+      Legs: [],
+      Artifacts: [],
+    });
+
+    it('restores saved Docs (ArtifactWorkspace) and Media workspace tabs, focuses Docs, and keeps Docs read-only', async () => {
+      const savedDocs = JSON.stringify({
+        activeArtifactId: 'art-1',
+        instances: [
+          {
+            ArtifactID: 'art-1',
+            ArtifactVersionID: 'ver-1',
+            VersionNumber: 3,
+            Name: 'Canadian Maple Syrup Production',
+            ArtifactTypeName: 'Excel Spreadsheet',
+          },
+          {
+            ArtifactID: 'art-2',
+            ArtifactVersionID: 'ver-2',
+            VersionNumber: 2,
+            Name: 'Canadian Maple Syrup: Liquid Gold',
+            ArtifactTypeName: 'Presentation',
+          },
+        ],
+      });
+      const savedMedia = JSON.stringify({
+        V: 1,
+        Items: [
+          {
+            Id: 'm-1',
+            Type: 'image',
+            Url: 'https://example.com/syrup.png',
+            DisplayName: 'Syrup Chart',
+          },
+        ],
+        ActiveItemId: 'm-1',
+      });
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        ChannelStates: [
+          { ChannelName: 'ArtifactWorkspace', StateJson: savedDocs },
+          { ChannelName: 'Media', StateJson: savedMedia },
+        ],
+        Artifacts: [
+          { ArtifactID: 'art-1', ArtifactVersionID: 'ver-1', Name: 'Canadian Maple Syrup Production' },
+          { ArtifactID: 'art-2', ArtifactVersionID: 'ver-2', Name: 'Canadian Maple Syrup: Liquid Gold' },
+        ],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      const stripTitles = queryAll(f, '.s-tab').map((el) => el.textContent?.trim() ?? '');
+      expect(stripTitles.some((t) => t.includes('Workspace'))).toBe(true);
+      expect(stripTitles.some((t) => t.includes('Media'))).toBe(true);
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Workspace');
+
+      // Workspace renders both tabs with art-1 selected and no close button (read-only review).
+      const workspaceTabs = queryAll(f, '.aw-tab').map((el) => el.textContent?.trim() ?? '');
+      expect(workspaceTabs).toHaveLength(2);
+      expect(query(f, '.aw-tab--active')?.textContent?.trim()).toContain('Canadian Maple Syrup Production');
+      expect(query(f, '.aw-close')).toBeNull();
+    });
+
+    it('falls back to deduplicated non-component review.Artifacts in Workspace when no ArtifactWorkspace ChannelState was saved', async () => {
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        Artifacts: [
+          { ArtifactID: 'art-1', ArtifactVersionID: 'v1', Name: 'Draft v1' },
+          { ArtifactID: 'art-1', ArtifactVersionID: 'v2', Name: 'Draft v2' },
+          { ArtifactID: 'art-comp', ArtifactVersionID: 'c1', Name: 'Widget', ArtifactTypeName: 'Component' },
+        ],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Workspace');
+      const workspaceTabs = queryAll(f, '.aw-tab').map((el) => el.textContent?.trim() ?? '');
+      expect(workspaceTabs).toHaveLength(1);
+      expect(workspaceTabs[0]).toContain('Draft v2');
+    });
+
+    it('clears stale Workspace/Media review tabs when transitioning review → live without active live tabs', async () => {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+      try {
+        const savedDocs = JSON.stringify({
+          activeArtifactId: 'art-1',
+          instances: [{ ArtifactID: 'art-1', ArtifactVersionID: 'ver-1', VersionNumber: 1, Name: 'Plan Doc' }],
+        });
+        const review: RealtimeSessionReview = {
+          ...emptyReview(),
+          ChannelStates: [{ ChannelName: 'ArtifactWorkspace', StateJson: savedDocs }],
+        };
+
+        const session = fakeSession();
+        const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+          providers: [
+            { provide: RealtimeSessionService, useValue: session.service },
+            { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+          ],
+          inputs: { Chrome: 'console', ReviewData: review },
+          autoDetect: true,
+        });
+        await settle();
+        expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Workspace');
+
+        // Start live session and resolve empty live channel set: stale review Docs tab must not linger.
+        click(f, '.start-live-pill');
+        session.active$.next(true);
+        session.channels$.next([]);
+        f.componentRef.setInput('ReviewData', null);
+        await settle();
+
+        expect(f.componentInstance.ReviewWorkspaceEngine).toBeNull();
+        f.componentInstance.OnDetailsToggled();
+        await settle();
+        expect(queryAll(f, '.s-tab')).toHaveLength(0);
+      } finally {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      }
+    });
+
+    it('restores saved Browser tab with snapshot + visited URLs from ChannelStates', async () => {
+      const savedBrowser = JSON.stringify({
+        V: 1,
+        CurrentUrl: 'https://example.com/maple',
+        History: [{ Url: 'https://example.com/maple', VisitedAt: '2026-11-17T16:00:00Z' }],
+        ScreenshotDataUrl: 'data:image/png;base64,AAAA',
+      });
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        ChannelStates: [{ ChannelName: 'Remote Browser', StateJson: savedBrowser }],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Browser');
+      expect(query(f, '.rb-url')?.textContent?.trim()).toBe('https://example.com/maple');
+      expect(query(f, '.rb-screenshot')?.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+      expect(queryAll(f, '.rb-history__item')).toHaveLength(1);
+    });
+
+    it('reconstructs Browser tab retroactively from browser_* DirectActions when no ChannelState exists', async () => {
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        DirectActions: [
+          {
+            ID: 'act-1',
+            CallID: 'call-1',
+            ToolName: 'browser_OpenUrl',
+            ArgsJson: JSON.stringify({ url: 'https://example.com/start' }),
+            ResultJson: JSON.stringify({ success: true, currentUrl: 'https://example.com/final', detail: 'Loaded final page' }),
+            Success: true,
+            DurationMs: 250,
+            At: new Date('2026-11-17T16:01:00Z'),
+          },
+        ],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Browser');
+      expect(query(f, '.rb-url')?.textContent?.trim()).toBe('https://example.com/final');
+      expect(query(f, '.rb-iframe')).not.toBeNull();
+      expect(query(f, '.rb-open-btn')?.getAttribute('href')).toBe('https://example.com/final');
+      expect(queryAll(f, '.rb-history__item')).toHaveLength(1);
+      expect(query(f, '.rb-history__detail')?.textContent?.trim()).toBe('Loaded final page');
+    });
+
+    it('labels the review resume pill "Resume session" and auto-opens restored prior tabs on resume', async () => {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+      try {
+        const review: RealtimeSessionReview = {
+          ...emptyReview(),
+          AgentName: 'Sage',
+          ChannelStates: [{ ChannelName: 'Whiteboard', StateJson: '{}' }],
+        };
+        const session = fakeSession();
+        const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+          providers: [
+            { provide: RealtimeSessionService, useValue: session.service },
+            { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+          ],
+          inputs: { Chrome: 'console', ReviewData: review },
+          autoDetect: true,
+        });
+        await settle();
+
+        expect(query(f, '.start-live-pill')?.textContent?.trim()).toContain('Resume session');
+
+        // Transition review → resumed live call where PriorChannelStatesJson marked Whiteboard used.
+        click(f, '.start-live-pill');
+        session.active$.next(true);
+        f.componentRef.setInput('ReviewData', null);
+        const restoredBoard = new TestWhiteboardChannel();
+        session.usedChannels.add('Whiteboard');
+        session.channels$.next([restoredBoard]);
+        await settle();
+
+        expect(f.componentInstance.DetailsPeek).toBe(true);
+        expect(queryAll(f, '.s-tab').map(el => el.textContent?.trim())).toContain('Whiteboard');
+      } finally {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      }
+    });
+
+    it('hides ShowDetailsControl on narrow viewports (< 861px) while offering it on wide viewports', async () => {
+      const originalMatchMedia = window.matchMedia;
+      try {
+        let narrow = false;
+        Object.defineProperty(window, 'matchMedia', {
+          configurable: true,
+          writable: true,
+          value: (q: string): MediaQueryList =>
+            ({
+              matches: narrow && q.includes('860px'),
+              media: q,
+              onchange: null,
+              addListener: () => undefined,
+              removeListener: () => undefined,
+              addEventListener: () => undefined,
+              removeEventListener: () => undefined,
+              dispatchEvent: () => false,
+            }) as MediaQueryList,
+        });
+
+        const { f } = await renderWithBoard();
+        expect(f.componentInstance.ShowDetailsControl).toBe(true);
+
+        narrow = true;
+        expect(f.componentInstance.ShowDetailsControl).toBe(false);
+      } finally {
+        Object.defineProperty(window, 'matchMedia', {
+          configurable: true,
+          writable: true,
+          value: originalMatchMedia,
+        });
+      }
     });
   });
 });
