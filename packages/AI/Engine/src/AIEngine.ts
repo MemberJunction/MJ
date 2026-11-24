@@ -13,7 +13,7 @@ import { AIModelConfiguration, DecisionCalibrationEntry, PlattCalibration } from
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup, SharedLoad } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual, UUIDSet } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { ImportFromHost } from "@memberjunction/dynamic-packages";
 import { MJAIActionEntity, MJActionEntity,
@@ -31,7 +31,18 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
          MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
          MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
-import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions, AgentStorageAccountResolution, AgentStorageAccountSource, UserRunnableAgentSummary } from "@memberjunction/ai-engine-base";
+import {
+    AIEngineBase,
+    ResolvedModelPersona,
+    ResolvedAgentPersona,
+    EffectiveAgentPersona,
+    EffectiveAgentPermissions,
+    EffectiveAgentProperties,
+    StackedAdditionalInstruction,
+    AgentStorageAccountResolution,
+    AgentStorageAccountSource,
+    UserRunnableAgentSummary
+} from "@memberjunction/ai-engine-base";
 export type { AgentStorageAccountResolution, AgentStorageAccountSource, UserRunnableAgentSummary } from "@memberjunction/ai-engine-base";
 import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
@@ -160,6 +171,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         'mj: ai agent types',
         'mj: ai agent configurations',
         'mj: ai agent permissions',
+        'mj: ai agent personas',
+        'mj: ai agent skills',
     ]);
 
     /**
@@ -429,9 +442,52 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
     public ResolveAgentPersona(
         agentId: string,
-        options?: { modelId?: string; vendorId?: string; modalityName?: string }
+        options?: { modelId?: string; vendorId?: string; modalityName?: string; preferredPersonaId?: string | null }
     ): EffectiveAgentPersona | null {
         return this.Base.ResolveAgentPersona(agentId, options);
+    }
+
+    // Prototype inheritance, 2x2 RBAC, and user-scoped resolution delegates from AIEngineBase
+    public GetAgentInheritanceChain(agentId: string): MJAIAgentEntityExtended[] {
+        return typeof this.Base.GetAgentInheritanceChain === 'function'
+            ? this.Base.GetAgentInheritanceChain(agentId)
+            : [];
+    }
+    public GetRootAgent(agentId: string): MJAIAgentEntityExtended | undefined {
+        return this.Base.GetRootAgent(agentId);
+    }
+    public ResolveEffectiveAgentProperties(agentOrId: string | MJAIAgentEntityExtended): EffectiveAgentProperties {
+        return this.Base.ResolveEffectiveAgentProperties(agentOrId);
+    }
+    public GetEffectiveAgentPrompts(
+        agentId: string,
+        status: MJAIAgentPromptEntity['Status'] = 'Active'
+    ): MJAIAgentPromptEntity[] {
+        return this.Base.GetEffectiveAgentPrompts(agentId, status);
+    }
+    public GetEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[] {
+        return this.Base.GetEffectiveAgentActions(agentId);
+    }
+    public GetStackedAdditionalInstructions(agentId: string): StackedAdditionalInstruction[] {
+        return this.Base.GetStackedAdditionalInstructions(agentId);
+    }
+    public CanUserViewAgentSync(agent: MJAIAgentEntityExtended, user: UserInfo | undefined): boolean {
+        return this.Base.CanUserViewAgentSync(agent, user);
+    }
+    public CanUserRunAgentSync(agent: MJAIAgentEntityExtended, user: UserInfo | undefined): boolean {
+        return this.Base.CanUserRunAgentSync(agent, user);
+    }
+    public GetInstantiableAgents(user: UserInfo | undefined): MJAIAgentEntityExtended[] {
+        return this.Base.GetInstantiableAgents(user);
+    }
+    public GetUserDerivedAgents(user: UserInfo | undefined, rootOrBaseAgentId?: string): MJAIAgentEntityExtended[] {
+        return this.Base.GetUserDerivedAgents(user, rootOrBaseAgentId);
+    }
+    public ResolveAgentForUser(nameOrId: string, user: UserInfo | undefined): MJAIAgentEntityExtended | undefined {
+        return this.Base.ResolveAgentForUser(nameOrId, user);
+    }
+    public ResolvePrimaryUserAgentInstance(rootAgentIdOrName: string, userId: string): MJAIAgentEntityExtended | undefined {
+        return this.Base.ResolvePrimaryUserAgentInstance(rootAgentIdOrName, userId);
     }
 
     // Delegate AIEngineBase public methods
@@ -1454,8 +1510,17 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         companyId?: string,
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): ((metadata: NoteEmbeddingMetadata) => boolean) {
+        const ancestorIds =
+            agentId && typeof this?.GetAgentInheritanceChain === 'function'
+                ? this.GetAgentInheritanceChain(agentId).slice(0, -1).map(a => a.ID)
+                : [];
         const baseFilter = (metadata: NoteEmbeddingMetadata): boolean => {
-            if (agentId && metadata.agentId && !UUIDsEqual(metadata.agentId, agentId)) return false;
+            if (agentId && metadata.agentId) {
+                const isDirect = UUIDsEqual(metadata.agentId, agentId);
+                const isInheritedOrgNote =
+                    !metadata.userId && ancestorIds.some(aid => UUIDsEqual(metadata.agentId, aid));
+                if (!isDirect && !isInheritedOrgNote) return false;
+            }
             if (userId && metadata.userId && !UUIDsEqual(metadata.userId, userId)) return false;
             if (companyId && metadata.companyId && !UUIDsEqual(metadata.companyId, companyId)) return false;
             return true;
@@ -1479,9 +1544,19 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         topK: number = 5,
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): NoteMatchResult[] {
+        const ancestorIdSet = new UUIDSet(
+            agentId && typeof this?.GetAgentInheritanceChain === 'function'
+                ? this.GetAgentInheritanceChain(agentId).slice(0, -1).map(a => a.ID)
+                : []
+        );
         const notes = this.AgentNotes.filter(n => {
             if (!IsInjectableNoteStatus(n.Status)) return false;
-            if (agentId && !UUIDsEqual(n.AgentID, agentId) && n.AgentID !== null) return false;
+            if (agentId && n.AgentID !== null) {
+                const isDirect = UUIDsEqual(n.AgentID, agentId);
+                const isInheritedOrgNote =
+                    n.UserID === null && ancestorIdSet.Has(n.AgentID);
+                if (!isDirect && !isInheritedOrgNote) return false;
+            }
             if (userId && !UUIDsEqual(n.UserID, userId) && n.UserID !== null) return false;
             if (companyId && !UUIDsEqual(n.CompanyID, companyId) && n.CompanyID !== null) return false;
             if (additionalFilter && !additionalFilter(this.packageNoteMetadata(n))) return false;

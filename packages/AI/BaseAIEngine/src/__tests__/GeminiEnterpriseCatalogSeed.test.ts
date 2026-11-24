@@ -280,12 +280,27 @@ describe('Gemini 3.8 Live on Vertex AI — voices and the avatar', () => {
         }
     });
 
-    it('says on every Vertex AI binding that its name is unverified until the spike', () => {
-        const vertexBindings = seeds.PersonaVendors.filter((r) => resolveReference(r.fields['VendorID'], '') === VERTEX);
+    it('says on every Gemini 3.8 Live Vertex AI binding that its name is unverified until the spike, and maps cross-vendor aliases onto Gemini voices', () => {
+        const geminiLivePersonaIds = new Set([...GEMINI_VOICES, 'Ben'].map((p) => keyOf('MJ: AI Personas', p)));
+        const allVertexBindings = seeds.PersonaVendors.filter(
+            (r) => resolveReference(r.fields['VendorID'], '') === VERTEX,
+        );
+        const vertexBindings = allVertexBindings.filter((r) =>
+            geminiLivePersonaIds.has(String(resolveReference(r.fields['PersonaID'], ''))),
+        );
 
         expect(vertexBindings).toHaveLength(GEMINI_VOICES.length + 2);
         for (const binding of vertexBindings) {
-            expect((binding._comments ?? []).join(' '), String(binding.fields['PersonaID'])).toMatch(/unverified until the Vertex AI spike/);
+            expect((binding._comments ?? []).join(' '), String(binding.fields['PersonaID'])).toMatch(
+                /unverified until the Vertex AI spike/,
+            );
+        }
+
+        const crossVendorVertexBindings = allVertexBindings.filter(
+            (r) => !geminiLivePersonaIds.has(String(resolveReference(r.fields['PersonaID'], ''))),
+        );
+        for (const alias of crossVendorVertexBindings) {
+            expect(GEMINI_VOICES as readonly string[]).toContain(String(alias.fields['APIName']));
         }
     });
 });

@@ -26,6 +26,24 @@ export interface MentionSuggestionPreset {
 }
 
 /**
+ * Population filter narrowing which categories of `@` suggestions are returned.
+ * Structurally identical to `MentionPopulationFilter` in `@memberjunction/conversations-runtime`.
+ */
+export type ComposerPopulationFilter = 'all' | 'my-agents' | 'shared' | 'people';
+
+/**
+ * Field scope restricting which fields a non-empty `@` search query matches against.
+ * Structurally identical to `MentionSearchField` in `@memberjunction/conversations-runtime`.
+ */
+export type ComposerSearchField = 'all' | 'name' | 'capabilities' | 'lineage';
+
+/**
+ * Display section grouping key assigned to `@` mention suggestions.
+ * Structurally identical to `MentionGroupKey` in `@memberjunction/conversations-runtime`.
+ */
+export type ComposerGroupKey = 'frequent' | 'my-agents' | 'shared' | 'people' | 'results';
+
+/**
  * Item in the mention-autocomplete dropdown, and the payload carried by an inserted
  * mention chip. Fully generic — `type` is an open string (providers choose their own
  * vocabulary, e.g. 'agent' | 'user' | 'entity' | 'query' | 'skill'); the editor and
@@ -49,6 +67,20 @@ export interface MentionSuggestion {
   presets?: MentionSuggestionPreset[];
   /** Provider-defined extra payload; the composer never inspects it. */
   data?: Record<string, unknown>;
+  /** Section key used to group suggestions in the dropdown. */
+  group?: ComposerGroupKey;
+  /** Human-readable section heading corresponding to {@link group}. */
+  groupLabel?: string;
+  /** Provenance / inheritance label (e.g. `'Chief of Staff · My Agent'`, `'Shared'`). */
+  lineage?: string;
+  /** True when this suggestion is a personal derived agent instance owned by the current user. */
+  isMyAgent?: boolean;
+  /** True when this suggestion matches the user's default chat agent. */
+  isDefaultChatAgent?: boolean;
+  /** True when this suggestion is already active in the current conversation thread. */
+  isInCurrentThread?: boolean;
+  /** Decayed frequency + recency score for this item. */
+  frecencyScore?: number;
 }
 
 /**
@@ -64,6 +96,10 @@ export interface ComposerSuggestionRequest {
   ContextUser: UserInfo | null;
   /** The metadata provider scoping this editor instance, when the host supplied one (multi-provider support). */
   Provider: IMetadataProvider | null;
+  /** Optional population filter selected in the `@` dropdown header (`'all'` by default). */
+  PopulationFilter?: ComposerPopulationFilter;
+  /** Optional search-field scope selected in the `@` dropdown header (`'all'` by default). */
+  SearchField?: ComposerSearchField;
 }
 
 /**
@@ -114,6 +150,15 @@ export abstract class ComposerTriggerProvider {
    */
   public async Initialize(contextUser: UserInfo | null): Promise<void> {
     // default no-op — providers override to warm caches
+    void contextUser;
+  }
+
+  /**
+   * Optional selection hook invoked by the mention editor whenever the user inserts a
+   * suggestion owned by this trigger (e.g. to record frecency telemetry). Default is a no-op.
+   */
+  public OnSuggestionSelected(suggestion: MentionSuggestion, contextUser: UserInfo | null): void {
+    void suggestion;
     void contextUser;
   }
 }

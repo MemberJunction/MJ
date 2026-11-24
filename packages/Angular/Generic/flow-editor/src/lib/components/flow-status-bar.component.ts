@@ -1,7 +1,8 @@
 import { Component, Input, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 
 /**
- * Status bar at the bottom of the flow editor showing counts and state.
+ * Status bar at the bottom of the flow editor showing step/path counts and zoom state.
+ * Uses D18 end-user vocabulary ("steps" / "paths") and semantic `--mj-*` theme tokens.
  */
 @Component({
   standalone: false,
@@ -9,12 +10,12 @@ import { Component, Input, ViewEncapsulation, ChangeDetectionStrategy } from '@a
   template: `
     <div class="mj-flow-status-bar">
       <span class="mj-flow-status-item">
-        <i class="fa-solid fa-circle-nodes"></i>
-        {{ NodeCount }} {{ NodeCount === 1 ? 'node' : 'nodes' }}
+        <i class="fa-solid fa-diagram-project"></i>
+        {{ NodeCount }} {{ NodeCount === 1 ? 'step' : 'steps' }}
       </span>
       <span class="mj-flow-status-item">
-        <i class="fa-solid fa-link"></i>
-        {{ ConnectionCount }} {{ ConnectionCount === 1 ? 'connection' : 'connections' }}
+        <i class="fa-solid fa-route"></i>
+        {{ ConnectionCount }} {{ ConnectionCount === 1 ? 'path' : 'paths' }}
       </span>
       @if (SelectedCount > 0) {
         <span class="mj-flow-status-item">
@@ -32,12 +33,12 @@ import { Component, Input, ViewEncapsulation, ChangeDetectionStrategy } from '@a
     .mj-flow-status-bar {
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 4px 14px;
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
+      gap: var(--mj-space-4);
+      padding: var(--mj-space-1) var(--mj-space-3-5, 14px);
+      background: var(--mj-bg-surface-card);
+      border-top: 1px solid var(--mj-border-default);
       font-size: 11px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       flex-shrink: 0;
       min-height: 28px;
     }
@@ -46,12 +47,15 @@ import { Component, Input, ViewEncapsulation, ChangeDetectionStrategy } from '@a
       display: inline-flex;
       align-items: center;
       gap: 5px;
+    }
 
-      i { font-size: 10px; }
+    .mj-flow-status-item i {
+      font-size: 10px;
+    }
 
-      &--right {
-        margin-left: auto;
-      }
+    .mj-flow-status-item--right {
+      margin-left: auto;
+      font-family: var(--mj-font-family-mono);
     }
   `],
   encapsulation: ViewEncapsulation.None,

@@ -732,3 +732,93 @@ describe('RealtimeSessionRuntime — ChannelClassLoader (on-demand channel code)
     await runtime.EndRealtimeSession();
   });
 });
+
+describe('RealtimeSessionRuntime — ChannelFilter (viewport/host capability gating)', () => {
+  beforeEach(() => {
+    ScopedFakeClient.Notes = [];
+    ScopedFakeClient.ListenOnConnect = true;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('omits filtered-out channels from mint candidates, native tools, and mounted session channels', async () => {
+    stubRegistry([ECHO_ROW, FORM_ROW]);
+    const { runtime, provider } = build();
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Echo',
+    });
+
+    const [mint] = provider.mints();
+    const candidates = JSON.parse(String(mint.variables['channelCandidatesJson'])) as Array<{ Key: string }>;
+    expect(candidates.map((c) => c.Key)).toEqual(['Form']);
+    expect(mint.variables['clientToolsJson']).toBeNull();
+    expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual([]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Form',
+      ChannelFilterReason: 'Requires a wider desktop view and is not available on mobile or narrow screens right now.',
+    });
+    expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual(['Echo']);
+    expect(
+      ScopedFakeClient.Notes.some(
+        (n) => n.includes('Unavailable in this view') && n.includes('Form') && n.includes('Requires a wider desktop view'),
+      ),
+    ).toBe(true);
+    expect(runtime.GetSurfaceSnapshot()).toMatchObject({
+      UnavailableChannels: [
+        { ChannelKey: 'Form', Reason: 'Requires a wider desktop view and is not available on mobile or narrow screens right now.' },
+      ],
+    });
+    const echo = runtime.ActiveChannels[0] as RegisteredEcho;
+    const refusal = await echo.ContextForTest!.DispatchContextAction!({
+      Target: { Channel: 'Form' },
+      Action: 'open',
+      Params: {},
+    });
+    expect(refusal.Success).toBe(false);
+    expect(refusal.ErrorMessage).toContain('Requires a wider desktop view and is not available on mobile or narrow screens right now.');
+    await runtime.EndRealtimeSession();
+  });
+
+  it('resets hostUnavailableChannels on each start so filtered entries never accumulate across sessions', async () => {
+    stubRegistry([ECHO_ROW, FORM_ROW]);
+    const { runtime } = build();
+    const reason = 'Requires a wider desktop view.';
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Form',
+      ChannelFilterReason: reason,
+    });
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([{ ChannelKey: 'Form', Title: 'Form', Reason: reason }]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Echo',
+      ChannelFilterReason: reason,
+    });
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([{ ChannelKey: 'Echo', Title: 'Echo', Reason: reason }]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime);
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toBeUndefined();
+    await runtime.EndRealtimeSession();
+  });
+
+  it('does not advertise kill-switched (inactive) registry rows as unavailable when rejected by ChannelFilter', async () => {
+    stubRegistry([ECHO_ROW, { ...FORM_ROW, IsActive: false }]);
+    const { runtime } = build();
+
+    await start(runtime, {
+      ChannelFilter: () => false,
+      ChannelFilterReason: 'Requires a wider desktop view.',
+    });
+
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([
+      { ChannelKey: 'Echo', Title: 'Echo', Reason: 'Requires a wider desktop view.' },
+    ]);
+    expect(ScopedFakeClient.Notes.some((n) => n.includes('Echo'))).toBe(true);
+    expect(ScopedFakeClient.Notes.some((n) => n.includes('Form'))).toBe(false);
+    await runtime.EndRealtimeSession();
+  });
+});

@@ -2515,5 +2515,39 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
         Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
       }
     });
+
+    it('hides ShowDetailsControl on narrow viewports (< 861px) while offering it on wide viewports', async () => {
+      const originalMatchMedia = window.matchMedia;
+      try {
+        let narrow = false;
+        Object.defineProperty(window, 'matchMedia', {
+          configurable: true,
+          writable: true,
+          value: (q: string): MediaQueryList =>
+            ({
+              matches: narrow && q.includes('860px'),
+              media: q,
+              onchange: null,
+              addListener: () => undefined,
+              removeListener: () => undefined,
+              addEventListener: () => undefined,
+              removeEventListener: () => undefined,
+              dispatchEvent: () => false,
+            }) as MediaQueryList,
+        });
+
+        const { f } = await renderWithBoard();
+        expect(f.componentInstance.ShowDetailsControl).toBe(true);
+
+        narrow = true;
+        expect(f.componentInstance.ShowDetailsControl).toBe(false);
+      } finally {
+        Object.defineProperty(window, 'matchMedia', {
+          configurable: true,
+          writable: true,
+          value: originalMatchMedia,
+        });
+      }
+    });
   });
 });
