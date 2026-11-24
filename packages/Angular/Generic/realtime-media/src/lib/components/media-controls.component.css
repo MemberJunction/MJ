@@ -37,3 +37,12 @@
   transform: translateX(-50%);
   z-index: 5;
 }
+
+/* On phones, mj-media-controls sits on the left side of the dock, so centering .devices (-50%) pushes
+   its left edge off-screen. Anchor to the left edge of the control group instead. */
+@media (max-width: 640px) {
+  .devices {
+    left: 0;
+    transform: none;
+  }
+}

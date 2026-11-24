@@ -47,7 +47,12 @@
 @container (max-width: 480px) {
   .strip {
     flex-wrap: wrap;
-    row-gap: 12px;
+    row-gap: 10px;
+    padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+  }
+  .strip,
+  .strip__media {
+    gap: 10px;
   }
 }
 .ctrl-label--end {
@@ -92,11 +97,19 @@
 @container (max-width: 520px) {
   .dock {
     flex-wrap: wrap;
+    gap: 8px;
     row-gap: 8px;
+    padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+  }
+  .dock__hide {
+    margin-left: auto;
   }
   .dock__box {
     order: 1;
     flex-basis: 100%;
+  }
+  .dock__hint {
+    display: none;
   }
 }
 
@@ -180,10 +193,18 @@
   .dock-lean {
     gap: 6px;
     row-gap: 10px;
-    padding-inline: 12px;
+    padding: 12px 12px max(16px, env(safe-area-inset-bottom));
   }
   .lean__media {
     gap: 4px;
+  }
+  .lean-sheet {
+    left: auto;
+    right: -48px;
+    transform: translateY(8px);
+  }
+  .lean-more--open .lean-sheet {
+    transform: translateY(0);
   }
 }
 
@@ -202,6 +223,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  max-width: calc(100vw - 24px);
   padding: 10px;
   border-radius: var(--mj-radius-lg, 16px);
   background: var(--mj-bg-surface-elevated);
@@ -251,4 +273,13 @@
 }
 .lean-sheet__btn--on small {
   color: var(--mj-brand-accent, var(--mj-brand-primary));
+}
+
+/* Prevent iOS Safari auto-zoom when focusing the live-session text input on phones. */
+@media (max-width: 640px) {
+  .dock__input {
+    box-sizing: border-box;
+    font-size: 16px;
+    height: 30px;
+  }
 }
