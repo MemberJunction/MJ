@@ -36,8 +36,8 @@ import {
   NormalizeEndpointAddress,
 } from './DefaultCommunicationPrincipal';
 
-const DEFAULT_SOFT_BOUNCE_THRESHOLD = 5;
-const DEFAULT_SOFT_BOUNCE_EXPIRY_DAYS = 30;
+const DEFAULT_SOFT_BOUNCE_THRESHOLD = 5; // fallback when the Soft Bounce suppression policy sets no threshold; matches the seeded policy
+const DEFAULT_SOFT_BOUNCE_EXPIRY_DAYS = 30; // fallback suppression lifetime when the policy sets no cooldownDays; matches the seeded policy
 const MS_PER_DAY = 86_400_000;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -105,8 +105,8 @@ export interface ProtectedComplianceSnapshot {
   LogID: string;
 }
 
-const DEFAULT_CHUNK_SIZE = 50;
-const DEFAULT_ASYNC_THRESHOLD = 100;
+const DEFAULT_CHUNK_SIZE = 50; // recipients per queued comms.dispatch chunk when V2DispatchConfig.ChunkSize is unset
+const DEFAULT_ASYNC_THRESHOLD = 100; // recipient count above which a send is queued in chunks, when V2DispatchConfig.AsyncThreshold is unset
 
 /**
  * Returns the hex HMAC-SHA256 of `trackingToken + ':' + targetUrl`. This is the `sig` parameter of

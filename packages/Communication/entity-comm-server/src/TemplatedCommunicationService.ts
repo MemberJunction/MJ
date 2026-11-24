@@ -134,7 +134,7 @@ interface RelatedDataResult {
   Error?: string;
 }
 
-const DEFAULT_BATCH_SIZE = 50;
+const DEFAULT_BATCH_SIZE = 50; // recipients rendered per comms.render batch when the service config sets no BatchSize
 
 function principalKey(ref: PrincipalRecordRef): string {
   return `${ref.EntityID.trim().toLowerCase()}:${ref.RecordID}`;
