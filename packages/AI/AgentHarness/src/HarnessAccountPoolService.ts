@@ -8,6 +8,7 @@
  * @module @memberjunction/ai-agent-harness
  */
 
+import { spawnSync } from 'node:child_process';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -25,6 +26,12 @@ export const HARNESS_REAL_HOME_ENV_VAR = 'MJ_HARNESS_REAL_HOME';
 
 /** Default lease TTL when `AcquireSlotLease` does not specify one (30 minutes). */
 export const DEFAULT_HARNESS_LEASE_TTL_MS = 30 * 60 * 1000;
+
+/** Default timeout (ms) for lightweight per-vendor CLI binary availability probes (`<binary> --version`). */
+export const DEFAULT_HARNESS_BINARY_PROBE_TIMEOUT_MS = 3000;
+
+/** Default TTL (ms) for memoizing per-vendor CLI binary availability results (30 seconds). */
+export const DEFAULT_HARNESS_BINARY_PROBE_CACHE_TTL_MS = 30_000;
 
 /** Canonical list of CLI vendors supported by the multi-account pool. */
 export const HARNESS_POOL_VENDORS: readonly HarnessPoolVendor[] = ['claude', 'agy', 'codex', 'gemini'];
@@ -220,18 +227,44 @@ export interface HarnessAccountLease extends HarnessAccountLeaseRecord {
     strategyUsed: HarnessAccountSelectionStrategy;
 }
 
+/** Result of probing whether a vendor's CLI executable is installed and runnable on `PATH`. */
+export interface HarnessVendorBinaryProbeResult {
+    Available: boolean;
+    Binary: string;
+    Version?: string;
+    Error?: string;
+}
+
+/** Injectable per-vendor CLI binary executability probe signature (for deterministic unit tests). */
+export type HarnessVendorBinaryProbe = (
+    vendor: HarnessPoolVendor,
+    binary: string,
+    timeoutMs: number,
+) => HarnessVendorBinaryProbeResult;
+
+/** Display status for a slot's CLI subscription authentication and binary health. */
+export type HarnessSlotAuthDisplayStatus = 'Ready' | 'Binary Missing' | 'Needs Login';
+
 /** Result of probing whether a slot has usable CLI subscription credentials on disk or via token. */
 export interface HarnessSlotAuthStatus {
     authenticated: boolean;
     indicatorPath: string | null;
-    statusLabel: 'Ready' | 'Needs Login';
+    statusLabel: HarnessSlotAuthDisplayStatus;
+    /** Present when binary executability probing was enabled (`VerifyBinaryExecutable` or `BinaryProbe`). */
+    BinaryAvailable?: boolean;
+    /** Concise diagnostic when `BinaryAvailable` is `false`. */
+    BinaryError?: string;
 }
 
 /** Enriched slot view returned by {@link HarnessAccountPoolService.ListSlots} and {@link HarnessAccountPoolService.GetSlot}. */
 export interface HarnessAccountSlotStatus extends HarnessAccountSlotRecord {
     authenticated: boolean;
     authIndicatorPath: string | null;
-    authStatus: 'Ready' | 'Needs Login';
+    authStatus: HarnessSlotAuthDisplayStatus;
+    /** Present when binary executability probing was enabled (`VerifyBinaryExecutable` or `BinaryProbe`). */
+    BinaryAvailable?: boolean;
+    /** Concise diagnostic when `BinaryAvailable` is `false`. */
+    BinaryError?: string;
     activeLeaseCount: number;
     activeLeases: HarnessAccountLeaseRecord[];
     inCooldown: boolean;
@@ -256,6 +289,16 @@ export interface HarnessAccountPoolOptions {
     platform?: NodeJS.Platform;
     /** Custom PID liveness checker for unit tests. Defaults to `process.kill(pid, 0)`. */
     isPidAlive?: (pid: number) => boolean;
+    /**
+     * When `true`, `ProbeSlotAuthStatus`, `ListSlots`, `HasHealthySlot`, and `AcquireSlotLease`
+     * also verify that the vendor's CLI binary executes `<binary> --version` successfully.
+     * Defaults to `false` so hermetic unit tests without vendor CLIs on `PATH` stay deterministic.
+     */
+    VerifyBinaryExecutable?: boolean;
+    /** Custom per-vendor binary probe override (implicitly enables binary probing for the call). */
+    BinaryProbe?: HarnessVendorBinaryProbe;
+    /** Timeout (ms) for default `<binary> --version` probe (default: 3000ms). */
+    BinaryProbeTimeoutMs?: number;
 }
 
 /** Parameters for {@link HarnessAccountPoolService.AddSlot}. */
@@ -351,6 +394,11 @@ export function PrepareIsolatedHomeSlotDir(
  * lock-free per-lease files, N-account auto-balancing across 4 strategies, and quota cooldowns.
  */
 export class HarnessAccountPoolService extends BaseSingleton<HarnessAccountPoolService> {
+    private readonly binaryProbeCache = new Map<
+        string,
+        { Result: HarnessVendorBinaryProbeResult; ExpiresAtMs: number }
+    >();
+
     protected constructor() {
         super();
     }
@@ -532,9 +580,57 @@ export class HarnessAccountPoolService extends BaseSingleton<HarnessAccountPoolS
         }
     }
 
+    /** Returns the executable CLI binary name for a pooled vendor (`claude`, `agy`, `codex`, `gemini`). */
+    public GetVendorBinaryName(vendor: HarnessPoolVendor): string {
+        return this.GetInteractiveLoginCommand(vendor).command;
+    }
+
+    /** Clears the in-memory per-vendor CLI binary availability probe cache. */
+    public ClearBinaryProbeCache(): void {
+        this.binaryProbeCache.clear();
+    }
+
+    /**
+     * Probes whether the vendor's CLI executable is installed and runnable by invoking
+     * `<binary> --version` with a short timeout (default 3000ms). Results for the default
+     * probe are memoized per `(vendor, PATH)` for 30 seconds to keep repeated slot checks fast.
+     */
+    public ProbeVendorBinaryAvailable(
+        vendor: HarnessPoolVendor,
+        options?: HarnessAccountPoolOptions,
+    ): HarnessVendorBinaryProbeResult {
+        const binary = this.GetVendorBinaryName(vendor);
+        const timeoutMs = resolvePositiveMs(
+            options?.BinaryProbeTimeoutMs,
+            DEFAULT_HARNESS_BINARY_PROBE_TIMEOUT_MS,
+        );
+
+        if (options?.BinaryProbe) {
+            return options.BinaryProbe(vendor, binary, timeoutMs);
+        }
+
+        const env = options?.env ?? process.env;
+        const pathValue = env.PATH ?? env.Path ?? '';
+        const cacheKey = `${vendor}|${pathValue}`;
+        const nowMs = options?.nowMs ?? Date.now();
+        const cached = this.binaryProbeCache.get(cacheKey);
+        if (cached && cached.ExpiresAtMs > nowMs) {
+            return cached.Result;
+        }
+
+        const probeResult = defaultProbeVendorBinary(binary, timeoutMs, env);
+        this.binaryProbeCache.set(cacheKey, {
+            Result: probeResult,
+            ExpiresAtMs: nowMs + DEFAULT_HARNESS_BINARY_PROBE_CACHE_TTL_MS,
+        });
+        return probeResult;
+    }
+
     /**
      * Probes whether credentials actually exist for a slot by delegating to
      * {@link DetectLocalCliLoginSession} parameterized with the slot's environment overrides.
+     * When `options.VerifyBinaryExecutable` is `true` (or `options.BinaryProbe` is supplied),
+     * also verifies that the vendor's CLI executable runs `<binary> --version` cleanly.
      */
     public ProbeSlotAuthStatus(
         slot: Pick<HarnessAccountSlotRecord, 'slotId' | 'vendor' | 'slotDir' | 'oauthTokenEnvValue' | 'isOsDefault'>,
@@ -542,6 +638,9 @@ export class HarnessAccountPoolService extends BaseSingleton<HarnessAccountPoolS
     ): HarnessSlotAuthStatus {
         const driverClass = HarnessPoolVendorToDriverClass(slot.vendor);
         const isOsDefault = slot.isOsDefault === true || ParseOsDefaultSlotVendor(slot.slotId) !== null;
+
+        let hasLocalLogin: boolean;
+        let indicatorPath: string | null;
 
         if (isOsDefault) {
             const realHomeDir = this.GetRealHomeDir(options);
@@ -557,24 +656,43 @@ export class HarnessAccountPoolService extends BaseSingleton<HarnessAccountPoolS
                 env: probeEnv,
                 strictSlotIsolation: false,
             });
+            hasLocalLogin = detection.hasLocalLogin;
+            indicatorPath = detection.indicatorPath;
+        } else {
+            const envOverrides = this.BuildSlotEnvOverrides(slot, options, false);
+            const homeDir = envOverrides.HOME ?? slot.slotDir;
+            const detection = DetectLocalCliLoginSession(driverClass, {
+                homeDir,
+                env: envOverrides,
+                strictSlotIsolation: true,
+            });
+            hasLocalLogin = detection.hasLocalLogin;
+            indicatorPath = detection.indicatorPath;
+        }
+
+        const shouldVerifyBinary =
+            options?.VerifyBinaryExecutable === true || options?.BinaryProbe !== undefined;
+        if (!shouldVerifyBinary) {
             return {
-                authenticated: detection.hasLocalLogin,
-                indicatorPath: detection.indicatorPath,
-                statusLabel: detection.hasLocalLogin ? 'Ready' : 'Needs Login',
+                authenticated: hasLocalLogin,
+                indicatorPath,
+                statusLabel: hasLocalLogin ? 'Ready' : 'Needs Login',
             };
         }
 
-        const envOverrides = this.BuildSlotEnvOverrides(slot, options, false);
-        const homeDir = envOverrides.HOME ?? slot.slotDir;
-        const detection = DetectLocalCliLoginSession(driverClass, {
-            homeDir,
-            env: envOverrides,
-            strictSlotIsolation: true,
-        });
+        const binaryCheck = this.ProbeVendorBinaryAvailable(slot.vendor, options);
+        const statusLabel: HarnessSlotAuthDisplayStatus = !binaryCheck.Available
+            ? 'Binary Missing'
+            : hasLocalLogin
+              ? 'Ready'
+              : 'Needs Login';
+
         return {
-            authenticated: detection.hasLocalLogin,
-            indicatorPath: detection.indicatorPath,
-            statusLabel: detection.hasLocalLogin ? 'Ready' : 'Needs Login',
+            authenticated: hasLocalLogin,
+            indicatorPath,
+            statusLabel,
+            BinaryAvailable: binaryCheck.Available,
+            ...(binaryCheck.Error ? { BinaryError: binaryCheck.Error } : {}),
         };
     }
 
@@ -952,6 +1070,7 @@ export class HarnessAccountPoolService extends BaseSingleton<HarnessAccountPoolS
             (slot) =>
                 slot.enabled &&
                 slot.authenticated &&
+                slot.BinaryAvailable !== false &&
                 !slot.inCooldown &&
                 !excludeSet.has(slot.slotId),
         );
@@ -1014,7 +1133,7 @@ export class HarnessAccountPoolService extends BaseSingleton<HarnessAccountPoolS
                 return false;
             }
             const auth = this.ProbeSlotAuthStatus(slot, options);
-            return auth.authenticated;
+            return auth.authenticated && auth.BinaryAvailable !== false;
         });
 
         if (healthy.length === 0) {
@@ -1164,6 +1283,8 @@ export class HarnessAccountPoolService extends BaseSingleton<HarnessAccountPoolS
             authenticated: auth.authenticated,
             authIndicatorPath: auth.indicatorPath,
             authStatus: auth.statusLabel,
+            ...(auth.BinaryAvailable !== undefined ? { BinaryAvailable: auth.BinaryAvailable } : {}),
+            ...(auth.BinaryError !== undefined ? { BinaryError: auth.BinaryError } : {}),
             activeLeaseCount: slotLeases.length,
             activeLeases: slotLeases,
             inCooldown: isSlotInCooldown(slot, nowMs),
@@ -1558,5 +1679,58 @@ function defaultIsPidAlive(pid: number): boolean {
         const code = err instanceof Error && 'code' in err ? String((err as NodeJS.ErrnoException).code) : '';
         // EPERM means the process exists but belongs to another user. ESRCH means no such process.
         return code === 'EPERM';
+    }
+}
+
+function firstNonEmptyLine(text: string | null | undefined): string | undefined {
+    if (typeof text !== 'string') {
+        return undefined;
+    }
+    for (const line of text.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (trimmed.length > 0) {
+            return trimmed;
+        }
+    }
+    return undefined;
+}
+
+function defaultProbeVendorBinary(
+    binary: string,
+    timeoutMs: number,
+    env: NodeJS.ProcessEnv,
+): HarnessVendorBinaryProbeResult {
+    try {
+        const res = spawnSync(binary, ['--version'], {
+            env,
+            timeout: timeoutMs,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            shell: process.platform === 'win32',
+        });
+        if (!res.error && res.status === 0) {
+            const version = firstNonEmptyLine(res.stdout) ?? firstNonEmptyLine(res.stderr);
+            return {
+                Available: true,
+                Binary: binary,
+                ...(version ? { Version: version } : {}),
+            };
+        }
+        const errorDetail =
+            res.error?.message ??
+            firstNonEmptyLine(res.stderr) ??
+            firstNonEmptyLine(res.stdout) ??
+            (res.signal ? `terminated by signal ${res.signal}` : `exited with code ${String(res.status)}`);
+        return {
+            Available: false,
+            Binary: binary,
+            Error: errorDetail,
+        };
+    } catch (err) {
+        return {
+            Available: false,
+            Binary: binary,
+            Error: err instanceof Error ? err.message : String(err),
+        };
     }
 }
