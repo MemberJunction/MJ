@@ -297,7 +297,7 @@ DBAutoDoc should **not** become a question-answering application; that belongs t
 
 ## 12. Coordination with work already in flight
 
-Surveyed 2026-11-12 and refreshed 2026-11-23 (open issues, open PRs, and recent branches on
+Surveyed 2026-11-12 and refreshed 2026-11-24 (open issues, open PRs, and recent branches on
 MemberJunction/MJ). This plan is meant to sit alongside that work, not restate it.
 
 ### Already in progress or landed: do not duplicate
@@ -309,6 +309,7 @@ MemberJunction/MJ). This plan is meant to sit alongside that work, not restate i
 | **#6498** (MERGED 2026-11-13) | Composite FK components need a unique target; `IsUnique` means unique alone (CodeGen side of #4534). | Covers the composite half of 0.3. The single-column LLM-FK uniqueness check remains (Wave 2). |
 | **#6499** (MERGED 2026-11-18) | Discovery reuses sampling statistics via `ColumnStatsCache`; date columns described distinctly. | Covers 3.1. |
 | **#6505** (open PR) | Data-quality phase: ~20 checks from sampling and catalog, orphan anti-joins, `data-quality.md/json`, findings fed into prompts; fixes stats merge, empty tables reported as 1 row, SQL Server composite FK order; planted-defect bench. | Overlaps 0.7, 8.5 and Phase 9. Its bench is a model for Phase 1. Sequence Phase 2 after it. |
+| **#6685** (open PR) | Incremental schema-evolution analysis (`SchemaDiffer`, `IncrementalStateMerger`, `OrganicKeyCache`, and subgraph re-analysis across `AnalysisOrchestrator`, `AnalysisEngine`, `DiscoveryEngine`, and `FKDetector`). | Covers Phase 7.4 (incremental re-analysis) and pairs directly with Phase 7.1 / the connector ground-truth flywheel (re-analyzing evolved or custom subgraphs while certified standard objects stay locked). Sequence Wave 2 and Phase 7.1 after it. |
 | **#5722** (open issue) | Database-sourced text reaches prompts unsanitised; decide a trust model. | **Prerequisite for Phase 4 and for every new prompt input** (query history 2.9, module text 2.10, #5223's documents and sandbox results). |
 | **#6240** (open PR) | Moves `PromptEngine` onto `@memberjunction/nunjucks-sandbox`. | Any `PromptEngine` change here waits for it. |
 | **#5816** (open issue) | Store per-entity row counts and field statistics in MJ metadata for Skip. | Agree with #6505 on one source of statistics. DBAutoDoc can produce them; storing them in MJ is the consumer's job. |
@@ -324,10 +325,12 @@ contamination-controlled benchmarks, and the downstream text-to-SQL benchmark.
 
 ### Files open PRs still change (Phase 0 split)
 
-`core/AnalysisEngine.ts` (#6505, #6636), `discovery/ApplyPrimaryKeys.ts` (#6636),
-`discovery/ColumnStatsCache.ts` (#6505), `generators/AdditionalSchemaInfoGenerator.ts` (#6505),
-`prompts/table-analysis.md` (#6505), `types/state.ts` (#6505, #6636), `prompts/PromptEngine.ts`
-(#6240).
+`core/AnalysisEngine.ts` (#6505, #6636, #6685), `core/AnalysisOrchestrator.ts` (#6505, #6685),
+`database/Database.ts` (#6685), `discovery/ApplyPrimaryKeys.ts` (#6636),
+`discovery/ColumnStatsCache.ts` (#6505, #6685), `discovery/DiscoveryEngine.ts` (#6685),
+`discovery/FKDetector.ts` (#6685), `generators/AdditionalSchemaInfoGenerator.ts` (#6505),
+`prompts/table-analysis.md` (#6505), `types/config.ts` (#6685),
+`types/state.ts` (#6505, #6636, #6685), `prompts/PromptEngine.ts` (#6240).
 
 To keep conflicts with those open PRs minimal, Phase 0 is split into two waves:
 
@@ -339,7 +342,7 @@ To keep conflicts with those open PRs minimal, Phase 0 is split into two waves:
   dialect-aware `databaseType` and validation row limits for SQL Server, PostgreSQL, MySQL, and
   Oracle); and `research/v1/scripts/compare.py` (0.5 published `0.35 FK / 0.30 PK / 0.20 TblDesc /
   0.15 ColDesc` weights, CLI paths, schema-qualified FK keys, single-winner PK selection).
-- **Phase 0 Wave 2 (after `#6636`, `#6505`, `#6240` land):** `AnalysisEngine.ts`, drivers,
+- **Phase 0 Wave 2 (after `#6636`, `#6505`, `#6685`, `#6240` land):** `AnalysisEngine.ts`, drivers,
   `Database.ts`, `ConvergenceDetector.ts` (with `AnalysisEngine`), and `PromptEngine.ts`.
 
 ### Interface to Canon (MJ #6675, decision 7)
@@ -379,8 +382,9 @@ every other proposer. It does not keep a second store of definitions. In practic
 
 ## 13. Suggested order
 
-0. Land or close the remaining open PRs in §12 (`#6636`, `#6505`, `#6240`; `#6498`, `#6499`, `#6575`,
-   and `#6583` are already merged, and `#6675` Decision 7 is settled), and settle the `#5722` trust model.
+0. Land or close the remaining open PRs in §12 (`#6636`, `#6505`, `#6685`, `#6240`; `#6498`, `#6499`,
+   `#6575`, and `#6583` are already merged, and `#6675` Decision 7 is settled), and settle the `#5722`
+   trust model.
 1. Finish Phase 0 Wave 1 (`#6871`: generators + `compare.py`) and Phase 0 Wave 2 (what the open PRs
    leave), then Phase 1 items 1–3 and 6–7 so the next benchmark numbers are trustworthy. In
    parallel, land the `Integrations` metadata plumbing fixes (per
@@ -391,7 +395,7 @@ every other proposer. It does not keep a second store of definitions. In practic
 4. Phase 4.1–4.3 and Phase 5.1–5.2 (privacy switch and footprint), which matter to adopters
    immediately.
 5. Phase 3.1–3.5, Phase 6.1–6.2.
-6. Phase 2.9–2.11 (query history, module mining, calibration), Phase 7.2–7.4, Phase 8.1–8.4.
+6. Phase 2.9–2.11 (query history, module mining, calibration), Phase 7.2–7.3 (7.4 in `#6685`), Phase 8.1–8.4.
 7. The rest as demand appears.
 
 A second paper version (v2) naturally follows step 2: held-out results, real ablations,
