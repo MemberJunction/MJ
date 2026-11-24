@@ -143,7 +143,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-opus-4-5-20251101",
             "MaxInputTokens": 200000,
@@ -226,9 +226,10 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 4.5 Opus pricing on Anthropic as of November 2025.  Released Nov 24, 2025. API name is gemini-3-pro-preview and will be updated to gemini-3-pro when GA releases. Features 1M token input context window, 64k output capacity, and knowledge cutoff of January 2025. Achieves state-of-the-art performance across 19 of 20 major AI benchmarks including top scores in reasoning (Humanity's Last Exam: 37.5%), coding (SWE-Bench: 76.2%), and multimodal understanding (MMLU: 91.8%).",
+            "Comments": "Claude Opus 4.5 (claude-opus-4-5-20251101) pricing on Anthropic direct since its November 24, 2025 release: $5/$25 per 1M in/out, cache read $0.50, 5-minute cache write $6.25 (1-hour write $10). Re-verified against the first-party rate card on 2026-11-24. [Corrected 2026-11-24: the previous Comments text on this row described Gemini 3 Pro, a copy-paste error.] WINDOW-CLOSED 2026-11-24: on November 23, 2026 Anthropic deprecated `claude-opus-4-5-20251101` (and the undated `claude-opus-4-5`) on the Claude API with retirement on January 22, 2027; recommended replacement `claude-opus-5-5`. EndedAt is set to the retirement date so this price stops being selected automatically; Status stays Active until then because the model is still served and billed at $5/$25. The Anthropic Inference Provider route is now Deprecated. Follow-up for the first run after 2027-01-22: flip that route to Inactive and this row to Expired per the routine's deprecation recipe. Amazon Bedrock and OpenRouter set their own retirement schedules and are deliberately untouched. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations ; https://platform.claude.com/docs/en/about-claude/pricing",
             "CacheReadPricePerUnit": 0.5,
-            "CacheWritePricePerUnit": 6.25
+            "CacheWritePricePerUnit": 6.25,
+            "EndedAt": "2027-01-22T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "6A987D9F-584B-48A0-B5C2-0231AF7EF063"
