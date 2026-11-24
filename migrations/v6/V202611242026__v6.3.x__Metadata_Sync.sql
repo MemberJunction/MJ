@@ -62574,6 +62574,9 @@ SET
 EXEC [${flyway:defaultSchema}].spUpdateEntityCommunicationMessageType @CommunicationPrincipalID = @CommunicationPrincipalID_0ed4e2edf152,
   @ID = @ID_0ed4e2edf152;
 
+-- Release fix (build engineer): the parent Entity Communication Message Type (MJ: Users / Email) is created above
+-- by a ?create lookup with a database-generated ID, so resolve it by that natural key instead of the build
+-- database's ID (9B7DA204-EDD5-4EEF-A63D-3E1B6D45436C), which doesn't exist on any other database.
 -- Save MJ: Entity Communication Fields (core SP call only)
 DECLARE @ID_15d8307a4ca9 UNIQUEIDENTIFIER,
 @EntityCommunicationMessageTypeID_15d8307a4ca9 UNIQUEIDENTIFIER,
@@ -62586,11 +62589,19 @@ SET
     FROM
       [${flyway:defaultSchema}].[EntityCommunicationField]
     WHERE
-      [EntityCommunicationMessageTypeID] = '9B7DA204-EDD5-4EEF-A63D-3E1B6D45436C'
+      [EntityCommunicationMessageTypeID] = (
+        SELECT [ID] FROM [${flyway:defaultSchema}].[EntityCommunicationMessageType]
+        WHERE [EntityID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[Entity] WHERE LOWER([Name]) = LOWER(N'MJ: Users'))
+          AND [BaseMessageTypeID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[CommunicationBaseMessageType] WHERE LOWER([Type]) = LOWER(N'Email'))
+      )
       AND LOWER([FieldName]) = LOWER(N'Email')
   )
 SET
-  @EntityCommunicationMessageTypeID_15d8307a4ca9 = '9B7DA204-EDD5-4EEF-A63D-3E1B6D45436C'
+  @EntityCommunicationMessageTypeID_15d8307a4ca9 = (
+        SELECT [ID] FROM [${flyway:defaultSchema}].[EntityCommunicationMessageType]
+        WHERE [EntityID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[Entity] WHERE LOWER([Name]) = LOWER(N'MJ: Users'))
+          AND [BaseMessageTypeID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[CommunicationBaseMessageType] WHERE LOWER([Type]) = LOWER(N'Email'))
+      )
 SET
   @FieldName_15d8307a4ca9 = N'Email'
 SET
