@@ -38,6 +38,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
     AgentRunner,
+    AgentWakeTriggerService,
     BuildPolicyPairKey,
     BuildUserAppWakeKey,
     CheckActivePoliciesForBatch,
@@ -1322,6 +1323,37 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      * When no conversation can be resolved, the run falls back to standalone `RunAgent`
      * — identical outcome recording, just no conversation thread.
      */
+    /**
+     * Resolves a routine's agent `TargetID` to the user's active primary derived instance
+     * (`IsPrimaryInstance = 1`) when `TargetID` points to a root/template agent such as
+     * `Chief of Staff` (`InstantiationMode = 'Required'`). Leaves concrete derived instances
+     * and non-instantiated targets untouched.
+     */
+    private async resolveRoutineTargetAgentId(
+        targetAgentId: string,
+        userId: string | null | undefined,
+        contextUser: UserInfo
+    ): Promise<string> {
+        if (!targetAgentId || !userId) {
+            return targetAgentId;
+        }
+        try {
+            if (typeof AgentWakeTriggerService?.Instance?.ResolvePrimaryUserAgentInstance === 'function') {
+                const resolved = await AgentWakeTriggerService.Instance.ResolvePrimaryUserAgentInstance(
+                    targetAgentId,
+                    userId,
+                    contextUser
+                );
+                if (resolved?.ID) {
+                    return resolved.ID;
+                }
+            }
+        } catch {
+            // Graceful fallback to original targetAgentId when service is unavailable in isolated tests
+        }
+        return targetAgentId;
+    }
+
     private async executeAgentTarget(
         routine: MJUserRoutineEntity,
         contextUser: UserInfo,
@@ -1329,9 +1361,14 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineTargetOutcome> {
         const md = getEntityMetadataAccessor();
+        const effectiveAgentId = await this.resolveRoutineTargetAgentId(
+            routine.TargetID,
+            routine.UserID ?? contextUser.ID,
+            contextUser
+        );
         const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
-        if (!await agent.Load(routine.TargetID)) {
-            throw new Error(`Agent ${routine.TargetID} not found for routine "${routine.Name}"`);
+        if (!await agent.Load(effectiveAgentId)) {
+            throw new Error(`Agent ${effectiveAgentId} not found for routine "${routine.Name}"`);
         }
 
         const wakeConfig = routine.WakeConfigurationObject ??
@@ -1432,7 +1469,11 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             conversation.ApplicationScope = 'Application';
             conversation.ApplicationID = app.ID;
             if (routine.TargetType === 'Agent') {
-                conversation.DefaultAgentID = routine.TargetID;
+                conversation.DefaultAgentID = await this.resolveRoutineTargetAgentId(
+                    routine.TargetID,
+                    routine.UserID ?? owner.ID,
+                    owner
+                );
             }
             const routineEntity = md.EntityByName('MJ: User Routines');
             if (routineEntity) {

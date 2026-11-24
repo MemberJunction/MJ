@@ -1027,5 +1027,71 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             expect(invalid.resultCode).toBe('MISSING_REQUIRED_INPUT');
             expect(savedRoutines).toHaveLength(0);
         });
+
+        it('E1: RouteInboundUtilityMailboxWake enforces identity.UserID ownership and resolves Required template to user IsPrimaryInstance=1', async () => {
+            const PEPPER_ID = '00000000-0000-0000-0000-000000009E99';
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            const providerWithRunView = Object.assign({}, provider, { RunView: runViewMock });
+            const alice = createUser(USER_ALICE_ID, 'Alice', 'alice@company.com');
+            const bob = createUser(USER_BOB_ID, 'Bob', 'bob@company.com');
+
+            const aliceIdentity = {
+                ID: '00000000-0000-0000-0000-000000001D01',
+                AgentID: COS_AGENT_ID,
+                UserID: USER_ALICE_ID,
+                IdentityType: 'Email',
+                IdentityValue: 'alice.cos@company.com',
+                IsActive: true,
+                Configuration: null,
+            } as Partial<MJAIBridgeAgentIdentityEntity> as MJAIBridgeAgentIdentityEntity;
+
+            // 1. Bob sending to Alice's user-owned bridge identity MUST be rejected (identity.UserID check)
+            const crossUser = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'alice.cos@company.com',
+                fromAddress: 'bob@company.com',
+                subject: 'Unauthorized probe',
+                systemContextUser: systemUser,
+                metadataProvider: providerWithRunView,
+                identities: [aliceIdentity],
+                users: [alice, bob],
+                now: FIXED_NOW,
+            });
+            expect(crossUser.triggered).toBe(false);
+            expect(crossUser.resultCode).toBe('SENDER_NOT_AUTHORIZED_FOR_IDENTITY');
+
+            // 2. Alice sending to her utility mailbox targeting COS_AGENT_ID resolves to her primary instance (Pepper)
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: PEPPER_ID, UserID: USER_ALICE_ID, Status: 'Active', EmailChannelMode: 'SendAsAgent' })
+            );
+            runViewMock
+                // Primary instance DB lookup for COS_AGENT_ID + USER_ALICE_ID
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ ID: PEPPER_ID, Name: 'Pepper', IsPrimaryInstance: true }],
+                })
+                // Existing pending routine check for upsertImmediateWakeRoutine
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [],
+                });
+
+            const routed = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'alice.cos@company.com',
+                fromAddress: 'alice@company.com',
+                subject: 'Morning prep',
+                bodyPreview: 'Brief me on Q4',
+                systemContextUser: systemUser,
+                metadataProvider: providerWithRunView,
+                identities: [aliceIdentity],
+                users: [alice, bob],
+                now: FIXED_NOW,
+            });
+
+            expect(routed.triggered).toBe(true);
+            expect(routed.resultCode).toBe('WAKE_SCHEDULED');
+            expect(routed.targetAgentID).toBe(PEPPER_ID);
+            expect(savedRoutines).toHaveLength(1);
+            expect(savedRoutines[0].TargetID).toBe(PEPPER_ID);
+        });
     });
 });
