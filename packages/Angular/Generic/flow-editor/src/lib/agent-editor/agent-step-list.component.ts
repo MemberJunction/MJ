@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
-import { IndexByUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, IndexByUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { ReadFlowDecisionStepConfiguration } from '@memberjunction/ai-core-plus';
 import { WaitingStepSubtitle, IsWaitingStepType } from './waiting-step-config';
 
@@ -285,7 +285,8 @@ export class AgentStepListComponent {
   /** Steps ordered from StartingStep through connected paths (BFS) so the Playbook reads top-to-bottom. */
   public get OrderedSteps(): MJAIAgentStepEntity[] {
     if (this.Steps.length <= 1) return this.Steps;
-    const stepsById = IndexByUUID(this.Steps, s => s.ID);
+    const stepsById = IndexByUUID(this.Steps);
+    const pathsByOrigin = GroupByUUID(this.Paths, p => p.OriginStepID);
     const ordered: MJAIAgentStepEntity[] = [];
     const visited = new UUIDSet();
     const roots = this.Steps.filter(s => s.StartingStep);
@@ -297,8 +298,7 @@ export class AgentStepListComponent {
       visited.Add(curr.ID);
       ordered.push(curr);
 
-      const nextPaths = this.GetOutgoingPaths(curr);
-      for (const path of nextPaths) {
+      for (const path of pathsByOrigin.Get(curr.ID) ?? []) {
         const dest = stepsById.Get(path.DestinationStepID);
         if (dest && !visited.Has(dest.ID)) {
           queue.push(dest);

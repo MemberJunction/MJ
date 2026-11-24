@@ -194,8 +194,8 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   protected contextMenuItems: FlowContextMenuItem[] = [];
 
   private destroy$ = new Subject<void>();
+  /** Set in ngOnDestroy. The auto-fit timers are not cancelled, so one can still fire afterwards. */
   private destroyed = false;
-  private pendingZoomTimers = new Set<ReturnType<typeof setTimeout>>();
   private initialized = false;
   private lastConnectionClickTime = 0;
 
@@ -228,23 +228,8 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
-    for (const handle of this.pendingZoomTimers) {
-      clearTimeout(handle);
-    }
-    this.pendingZoomTimers.clear();
     this.destroy$.next();
     this.destroy$.complete();
-  }
-
-  private scheduleZoomToFit(persist: boolean, delayMs: number): void {
-    if (this.destroyed) {
-      return;
-    }
-    const handle = setTimeout(() => {
-      this.pendingZoomTimers.delete(handle);
-      this.ZoomToFit(persist);
-    }, delayMs);
-    this.pendingZoomTimers.add(handle);
   }
 
   // ── Public Methods ──────────────────────────────────────────
@@ -265,9 +250,10 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
    * stay crisp and centered instead of over-zooming to 200%+. Persists when triggered explicitly.
    */
   ZoomToFit(persist: boolean = true): void {
-    if (this.destroyed) {
-      return;
-    }
+    // A fit scheduled with setTimeout (a ViewportKey change, AutoArrange, a host's own timer) can
+    // land after the editor is gone. Foblex's canvas then registers a destroy hook on a destroyed
+    // view, which throws NG0911.
+    if (this.destroyed) return;
     const el = this.canvasArea?.nativeElement;
     const vw = el?.clientWidth ?? 0;
     const vh = el?.clientHeight ?? 0;
@@ -333,7 +319,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     }
     this.NodesChanged.emit(this.Nodes);
     this.cdr.detectChanges();
-    this.scheduleZoomToFit(true, 100);
+    setTimeout(() => this.ZoomToFit(), 100);
   }
 
   /** Aligns input/output port sides with LR ('left'/'right') or TB ('top'/'bottom') layout direction. */
@@ -497,7 +483,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
       return;
     }
     this.hasAutoFitted = true;
-    this.scheduleZoomToFit(false, 120);
+    setTimeout(() => this.ZoomToFit(false), 120);
   }
 
   private applyProgrammaticViewport(x: number, y: number, scale: number): void {
