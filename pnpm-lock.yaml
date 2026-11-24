@@ -12930,6 +12930,9 @@ importers:
       '@inquirer/prompts':
         specifier: ^8.2.0
         version: 8.2.0(@types/node@24.10.11)
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.3.0-edge.1
+        version: link:../AI/AgentHarness
       '@memberjunction/ai-cli':
         specifier: 6.3.0-edge.1
         version: link:../AI/AICLI
