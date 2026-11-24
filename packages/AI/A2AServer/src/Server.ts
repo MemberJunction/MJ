@@ -4,6 +4,7 @@ import { DiscoverMJConfig, LoadDynamicPackages } from "@memberjunction/dynamic-p
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import express, { Request, Response, NextFunction } from 'express';
+import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';

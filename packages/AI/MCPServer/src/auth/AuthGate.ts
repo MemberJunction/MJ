@@ -16,6 +16,7 @@
 import type { Request, Response } from 'express';
 import type * as http from 'http';
 import { RunView, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import type { MCPSessionContext, AuthMode, AuthResult } from './types.js';
 import { GetAuthMode, IsOAuthEnabled } from './OAuthConfig.js';
@@ -56,7 +57,8 @@ export interface AuthGateConfig {
 /**
  * Extracts credentials from an HTTP request.
  *
- * Checks the following sources in order:
+ * Credentials are accepted from headers ONLY — never from URL query parameters,
+ * which leak into access logs, proxies, and browser history. Checked in order:
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer header (could be API key or OAuth token)
@@ -278,9 +280,10 @@ async function handleBothMode(
  * Loads scopes for an API key from the APIKeyScope entity.
  *
  * @param apiKeyId - The ID of the API key
+ * @param contextUser - The system user to run the lookup as
  * @returns Array of scope names
  */
-async function loadApiKeyScopes(apiKeyId: string): Promise<string[]> {
+async function loadApiKeyScopes(apiKeyId: string, contextUser?: UserInfo): Promise<string[]> {
   // System API key has all scopes
   if (apiKeyId === 'system') {
     return ['*']; // Wildcard means all scopes
@@ -290,9 +293,9 @@ async function loadApiKeyScopes(apiKeyId: string): Promise<string[]> {
     const rv = new RunView();
     const result = await rv.RunView<{ Scope: string }>({
       EntityName: 'MJ: API Key Scopes',
-      ExtraFilter: `APIKeyID = '${apiKeyId}'`,
+      ExtraFilter: `APIKeyID = '${EscapeSQLString(apiKeyId)}'`,
       ResultType: 'simple',
-    });
+    }, contextUser);
 
     if (!result.Success) {
       console.warn(`[AuthGate] Failed to load scopes for API key ${apiKeyId}: ${result.ErrorMessage}`);
@@ -330,7 +333,7 @@ async function validateApiKeyCredentials(
     }
 
     // Load scopes for this API key
-    const scopes = await loadApiKeyScopes(validation.apiKeyId!);
+    const scopes = await loadApiKeyScopes(validation.apiKeyId!, config.getSystemUser());
 
     return {
       authenticated: true,

@@ -220,7 +220,8 @@ function buildPoolConfig(): sql.config {
 
 /**
  * Extracts an API key from an incoming HTTP request.
- * Checks multiple sources in order of preference:
+ * Keys are accepted from headers ONLY — never from URL query parameters, which leak
+ * into access logs, proxies, and browser history. Checked in order of preference:
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer <token> header
@@ -1095,6 +1096,17 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
 
         // Validate OAuth configuration if OAuth is enabled
         const authMode = GetAuthMode();
+
+        // SECURITY: auth mode 'none' runs every request as the system user. Refuse it
+        // outright in production (mirrors MJServer's localDevAuth fail-loud rule); outside
+        // production the server additionally binds to loopback only (see app.listen below).
+        if (authMode === 'none' && process.env.NODE_ENV === 'production') {
+            throw new Error(
+                "MCP Server auth mode 'none' is strictly forbidden when NODE_ENV=production. " +
+                "Configure apiKey or oauth authentication."
+            );
+        }
+
         let effectiveAuthMode = authMode;
         let configuredProviderNames: string[] = [];
 
@@ -1365,7 +1377,8 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                 // Store transport for message routing
                 const sessionId = transport.sessionId;
                 transports.set(sessionId, transport);
-                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId}`);
+                // Log only a truncated session ID prefix — the full ID is a credential-like token
+                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId.substring(0, 8)}…`);
 
                 // Set up keepalive ping to prevent connection timeout (every 15 seconds)
                 const keepaliveInterval = setInterval(() => {
@@ -1568,7 +1581,8 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                 if (newSessionId) {
                     streamableSessions.Add(newSessionId, { Transport: newTransport, Server: mcpServer });
                     sessionStored = true;
-                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
+                    // Log only a truncated session ID prefix — the full ID is a credential-like token
+                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId.substring(0, 8)}…`);
                 } else {
                     console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
                 }
@@ -1591,7 +1605,7 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
         });
 
         // Start the Express server
-        app.listen(mcpServerPort, () => {
+        const onListening = () => {
             console.log(`MemberJunction MCP Server running on port ${mcpServerPort}`);
             console.log(`SSE endpoint: http://localhost:${mcpServerPort}/mcp/sse`);
             console.log(`Messages endpoint: http://localhost:${mcpServerPort}/mcp/messages`);
@@ -1601,7 +1615,14 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
             if (IsOAuthEnabled()) {
                 console.log(`Protected Resource Metadata: http://localhost:${mcpServerPort}/.well-known/oauth-protected-resource`);
             }
-        });
+        };
+        if (authMode === 'none') {
+            // SECURITY: with no authentication every caller runs as the system user, so the
+            // port must never be exposed beyond loopback (mirrors MJCodeGenAPI's bind rule).
+            app.listen(mcpServerPort, '127.0.0.1', onListening);
+        } else {
+            app.listen(mcpServerPort, onListening);
+        }
 
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);
