@@ -324,8 +324,9 @@ export function planPrune(metadata, gap) {
 export function applyPrune(plan, metadata) {
     for (const dir of plan.RemovedDirs) rmSync(dir, { recursive: true, force: true });
     const single = new Map(metadata.Files.map((f) => [f.Path, f.Single]));
+    // A file in a removed directory has no records left, so it only meets the forced rmSync, which
+    // does nothing once the directory is gone. Every file written lies outside a removed directory.
     for (const [path, records] of plan.Files) {
-        if (!existsSync(path)) continue; // its directory went above
         if (records.length === 0) rmSync(path, { force: true });
         else writeFileSync(path, `${JSON.stringify(single.get(path) ? records[0] : records, null, 2)}\n`);
     }
