@@ -5,12 +5,14 @@ import {
 } from '../DefaultCommunicationPrincipal';
 import {
   ComputeProtectedElementsHash,
+  ComputeOpenPixelSignature,
   ComputeTrackingSignature,
   InjectOpenPixel,
   ProtectedComplianceSnapshot,
   MAX_TRACKED_LINK_LENGTH,
   RewriteLinksForTracking,
   V2SendService,
+  VerifyOpenPixelSignature,
   VerifyTrackingSignature,
 } from '../V2SendService';
 
@@ -91,6 +93,26 @@ describe('V2 Endpoint Normalization & Tracking Primitives', () => {
 
     const withApiPrefix = InjectOpenPixel('<p>Hi</p>', 'tok-abc', 'https://app.example.com/api/comms');
     expect(withApiPrefix).toContain('https://app.example.com/api/comms/open/tok-abc.gif');
+  });
+
+  it('signs the open pixel when a secret is given, and the signature is bound to the token', () => {
+    const secret = 'open-pixel-secret-32-characters!!';
+    const html = InjectOpenPixel('<p>Hi</p>', 'tok-abc', 'https://app.example.com', secret);
+    const signature = /\/comms\/open\/tok-abc\.gif\?sig=([0-9a-f]{64})"/.exec(html)?.[1];
+
+    expect(signature).toBe(ComputeOpenPixelSignature('tok-abc', secret));
+    expect(VerifyOpenPixelSignature('tok-abc', signature!, secret)).toBe(true);
+    expect(VerifyOpenPixelSignature('tok-other', signature!, secret)).toBe(false);
+    expect(VerifyOpenPixelSignature('tok-abc', signature!, 'wrong-secret')).toBe(false);
+  });
+
+  it('never lets an open-pixel signature pass as a click signature for the same token', () => {
+    const secret = 'open-pixel-secret-32-characters!!';
+    const openSignature = ComputeOpenPixelSignature('tok-abc', secret);
+
+    expect(VerifyTrackingSignature('tok-abc', 'https://example.com/', openSignature, secret)).toBe(false);
+    // The one "target" it does match is not an http(s) URL, which the click route refuses.
+    expect(VerifyTrackingSignature('tok-abc', 'open', openSignature, secret)).toBe(true);
   });
 
   it('detects protected-element tampering via SHA-256 hash assertion', () => {

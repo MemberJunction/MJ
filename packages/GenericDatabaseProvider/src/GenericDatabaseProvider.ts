@@ -151,6 +151,7 @@ import {
     MJQueryParameterEntity,
     MJUserViewEntityExtended,
     QueryEngine,
+    UserCanApproveQueries,
     ViewInfo,
 } from '@memberjunction/core-entities';
 
@@ -409,6 +410,12 @@ export function FormatSqlParameterTypesForError(parameters: unknown): string {
         .map(s => `${s.name}:${s.type}${s.byteLength !== undefined ? `(${s.byteLength}B)` : ''}`)
         .join(', ');
 }
+
+/** The run-time checks of a saved query for one user, and why the draft screen refused it, if it did. */
+type QueryRunCheckResult = RenderedSQLCheckResult & {
+    /** Why {@link GenericDatabaseProvider.draftScreenRefusal} refused a draft. For the operator log; never shown to the user. */
+    draftScreenRefusal?: string;
+};
 
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase implements ClientClauseScreeningProvider {
     private static readonly _sqlObserversGlobalKey = '___MJ_SQL_OBSERVERS___';
@@ -6638,7 +6645,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!item.cacheStatus || this.clientSlotDefinitionDiffers(item.cacheStatus, definition)) {
                     // No slot, or the client's slot holds rows of another definition of the query:
                     // whatever CacheValidationSQL says about the data, those rows came from other SQL.
-                    if (query.CacheValidationSQL) {
+                    if (GenericDatabaseProvider.validationSQLOf(query)) {
                         // First fetch for a validated query — run the validation status
                         // anyway so the fresh response is STAMPED with the validation
                         // SQL's maxUpdatedAt/rowCount. Slots stamped from result rows
@@ -6651,7 +6658,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
-                if (!query.CacheValidationSQL) {
+                if (!GenericDatabaseProvider.validationSQLOf(query)) {
                     itemsWithoutValidationSQL.push({ index: i, item, query });
                     continue;
                 }
@@ -6726,7 +6733,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     ): { canRun: boolean; deniedEntities: string[]; renderError?: string } {
         const mayAnswerWithoutRunning = !!item.cacheStatus
             && !this.clientSlotDefinitionDiffers(item.cacheStatus, definition)
-            && !!query.CacheValidationSQL;
+            && !!GenericDatabaseProvider.validationSQLOf(query);
         if (mayAnswerWithoutRunning) {
             return this.authorizeQueryRun(query, item.params.Parameters, user);
         }
@@ -7057,11 +7064,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     private logQueryRunRefusal(
         query: MJQueryEntityExtended,
         user: UserInfo,
-        result: { deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation },
+        result: { deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation; draftScreenRefusal?: string },
     ): void {
         const v = result.fieldSecurityViolation;
         const queryRoles = (query.QueryPermissions ?? []).map(p => p.Role).join(', ');
-        const reason = v
+        const reason = result.draftScreenRefusal
+            ? `the draft screen (status '${query.Status}', and the user does not hold Queries: Approve): ${result.draftScreenRefusal}`
+            : v
             ? `field-level security (${v.Kind}: ${v.Reference}${v.Entity ? ` on ${v.Entity.Name}` : ''})`
             : result.deniedEntities.length > 0
                 ? `unreadable entities (${result.deniedEntities.join(', ')})`
@@ -7081,13 +7090,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * projection stars are read first ({@link projectionStarOffsets}), so a plain `*` can run with
      * its denied columns dropped instead of being refused.
      */
-    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo, logRefusal = true): RenderedSQLCheckResult {
-        const stars = this.projectionStarOffsets(renderedSQL, user);
-        const result = query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey, stars ? { ProjectionStarOffsets: stars } : undefined);
+    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo, logRefusal = true): QueryRunCheckResult {
+        const draftScreenRefusal = this.draftScreenRefusal(query, renderedSQL, user);
+        const stars = draftScreenRefusal ? undefined : this.projectionStarOffsets(renderedSQL, user);
+        const result: QueryRunCheckResult = draftScreenRefusal
+            ? { canRun: false, deniedEntities: [], draftScreenRefusal }
+            : query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey, stars ? { ProjectionStarOffsets: stars } : undefined);
         if (!result.canRun && logRefusal) {
             this.logQueryRunRefusal(query, user, result);
         }
         return result;
+    }
+
+    /**
+     * SECURITY — the draft screen. A draft (any status but Approved) is SQL nobody holding
+     * `Queries: Approve` has vouched for, so for a user who does not hold that authorization it gets
+     * the screen ad-hoc SQL gets ({@link ClientClauseScreen.AssertStatementReadsUnscopedEntityViews}),
+     * on the SQL as it will run: one read statement whose every SELECT is accounted for, reading only
+     * entity base views that user reads unscoped — no row-level or API-key row filter, no denied
+     * field, not confined by RunView's server hooks. Base tables, system catalogs, table functions,
+     * and SQL the statement reader cannot fully account for are refused. Raw SQL applies none of the
+     * policy RunView applies, so a draft must not read where that policy would narrow the user.
+     *
+     * Not screened: an Approved query, which runs with its approver's trust; a query with a role list
+     * (`MJ: Query Permissions`), which authorizes on its own; and a user who holds `Queries: Approve`
+     * (or is an Owner), who could approve the draft and run anything it reads, so screening them
+     * would protect nothing, unless their session carries an API-key row filter.
+     *
+     * @returns why the screen refused the draft, for the operator log; null when it may run
+     */
+    private draftScreenRefusal(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo): string | null {
+        if (query.Status === 'Approved' || GenericDatabaseProvider.roleListGrants(query)) return null;
+        if (GenericDatabaseProvider.exemptFromDraftScreen(user, this)) return null;
+        try {
+            ClientClauseScreen.AssertStatementReadsUnscopedEntityViews(renderedSQL, this.Entities, this.Dialect, user, `draft query '${query.Name}'`);
+            return null;
+        } catch (e) {
+            return e instanceof Error ? e.message : String(e);
+        }
+    }
+
+    /**
+     * Whether a user's runs of drafts skip the screen: they hold `Queries: Approve` (or are an
+     * Owner), and the session carries no API-key row filter. A key's row filter narrows what the
+     * session may read whatever its user could approve, so such a session is screened.
+     */
+    private static exemptFromDraftScreen(user: UserInfo, provider: GenericDatabaseProvider): boolean {
+        return !user.APIKeyRowFilters?.length && UserCanApproveQueries(user, provider);
     }
 
     /** Projection-star offsets per rendered statement and dialect ({@link FindProjectionStars}). */
@@ -7141,6 +7190,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return { canRun: false, deniedEntities: [], renderError: e instanceof Error ? e.message : String(e) };
         }
         return this.checkRenderedQuery(query, renderedSQL, user, logRefusal);
+    }
+
+    /**
+     * The query's `CacheValidationSQL` when a cache check may run it: only for an Approved query.
+     * That SQL runs as written, with none of the checks the query's own SQL goes through, so a
+     * draft's is never run. A draft goes down the `no_validation` route instead, whose fresh rows
+     * come from the normal (checked) run.
+     */
+    private static validationSQLOf(query: MJQueryEntityExtended): string | null {
+        return query.Status === 'Approved' && query.CacheValidationSQL ? query.CacheValidationSQL : null;
     }
 
     /** True when the query carries a role list (`MJ: Query Permissions` rows), which authorizes a run by itself. */

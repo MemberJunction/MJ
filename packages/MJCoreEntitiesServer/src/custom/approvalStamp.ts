@@ -4,15 +4,27 @@
  * Approving is a server act. A save that moves a record's status to Approved records the context
  * user as the approver, the time, and — once the definition is stored — the fingerprint of that
  * definition (`approvals.ts` in `@memberjunction/core-entities`). Values a client sends for those
- * three columns are never stored. Who may approve is whoever may update the record today.
+ * three columns are never stored. Who may approve is whoever may update the record, unless the
+ * caller passes an {@link ApproverRule} that narrows it (queries need the `Queries: Approve`
+ * authorization).
  */
 import { BaseEntity, BaseEntityResult } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
 
 /** The approval columns every approvable entity carries. */
 export interface ApprovalColumns {
     ApprovedByUserID: string | null;
     ApprovedAt: Date | null;
     ApprovedFingerprint: string | null;
+}
+
+/**
+ * Who may approve, when that is narrower than whoever may update the record: a check of the
+ * approving user, and the refusal a save gets when the check fails.
+ */
+export interface ApproverRule {
+    CanApprove: (user: UserInfo) => boolean;
+    Refusal: string;
 }
 
 /** The status column that carries the approval: `Status` on queries, `ApprovalStatus` on the others. */
@@ -38,19 +50,28 @@ type StoredApprovalRow = Partial<Record<ApprovalStatusField, string | null>> & {
  * The stored values are read from the database rather than the record's old values, which a client
  * can supply on an update.
  *
+ * - With an `approverRule`, a save that would approve is refused unless the context user passes it.
+ *   Only approving is checked: saving a draft, or editing a record already Approved, is left to the
+ *   role permissions.
+ *
  * @returns true when this save approves the record
- * @throws when the stored row cannot be read, or when approving with no context user
+ * @throws when the stored row cannot be read, when approving with no context user, or when the
+ *   context user fails the `approverRule`
  */
 export async function ApplyApprovalRulesAsync(
     record: BaseEntity & ApprovalColumns,
     statusField: ApprovalStatusField,
-    newStatus: string | null
+    newStatus: string | null,
+    approverRule?: ApproverRule
 ): Promise<boolean> {
     const stored = record.IsSaved ? await readStoredApproval(record, statusField) : null;
     if (newStatus === 'Approved' && stored?.[statusField] !== 'Approved') {
         const user = record.ContextCurrentUser;
         if (!user?.ID) {
             throw new Error('Approving needs a context user: the approver is recorded from it.');
+        }
+        if (approverRule && !approverRule.CanApprove(user)) {
+            throw new Error(approverRule.Refusal);
         }
         record.ApprovedByUserID = user.ID;
         record.ApprovedAt = new Date();

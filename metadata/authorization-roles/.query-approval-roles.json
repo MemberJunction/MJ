@@ -1,0 +1,22 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Queries: Approve",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "34ED69FA-A189-463F-84EC-AB0E102148A5"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Queries: Approve",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "2857C0FF-167F-4A0C-8B81-09C3C3013A4D"
+    }
+  }
+]

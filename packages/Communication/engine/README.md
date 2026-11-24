@@ -358,7 +358,7 @@ CommunicationEngine.Instance.ConfigureV2Dispatch({
 | `ChunkSize` | 50 | |
 | `AsyncThreshold` | 100 | |
 | `BaseTrackingURL` | none | Base of unsubscribe, open and click links. MJAPI sets it to its public `/comms` URL. Unset, links are relative and do not work in mail. |
-| `TrackingHMACSecret` | `MJ_COMMS_HMAC_SECRET` | Signs click-tracking links. With neither set, links are not rewritten. |
+| `TrackingHMACSecret` | `MJ_COMMS_HMAC_SECRET` | Signs click-tracking links and open pixels. With neither set, links are not rewritten and the pixel is unsigned. |
 | `InstanceEnforcementMode` | `Enforce` | Used for senders with no `EnforcementMode`. |
 | `EnqueueWork` | none | Without it every send runs inline. MJAPI supplies a work-queue publisher. |
 
@@ -366,7 +366,7 @@ Each call merges into the existing configuration and clears the 60-second caches
 
 | Environment variable | Required | Purpose |
 |----------------------|----------|---------|
-| `MJ_COMMS_HMAC_SECRET` | For click tracking | Fallback for `TrackingHMACSecret`. A secret: long, random, the same on every instance. Unset, click links are left as written. |
+| `MJ_COMMS_HMAC_SECRET` | For click tracking | Fallback for `TrackingHMACSecret`. A secret: long, random, the same on every instance. Unset, click links are left as written and open pixels are unsigned. |
 
 MJAPI configures all of this at startup (`ConfigureCommsV2WorkQueue` in `@memberjunction/server`); a standalone
 host must call `ConfigureV2Dispatch()` and, if it wants deferred sends, `StartScheduledDeferralSweep()` itself.
