@@ -85,7 +85,7 @@ import { BaseRealtimeChannelClient, ChannelVideoSourceID, RealtimeChannelContext
 import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, ReadChannelSurfacePlacement, type ChannelSurfacePlacement } from '../channels/channel-surface-placement';
 import { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
 import { ChannelActionDispatcher, type DispatchableChannel } from '../channels/channel-action-dispatcher';
-import { BuildChannelCatalogNote, type ChannelCatalogEntry } from '../channels/channel-catalog-note';
+import { BuildChannelCatalogNote, type ChannelCatalogEntry, type UnavailableChannelEntry } from '../channels/channel-catalog-note';
 import type { RealtimeContextActionRequest, RealtimeContextActionResult } from '../channels/channel-contract-types';
 import { AppClientToolRegistry, DEFAULT_APP_TOOL_OWNER, type AppClientToolRegistration } from './app-client-tool-registry';
 import { UserSettingsExposurePreferences, type IChannelExposurePreferences } from './channel-exposure-preferences';
@@ -1720,7 +1720,11 @@ export class RealtimeSessionRuntime {
       // Resolve the interactive-channel plugins FIRST (constructed, not started): the tools of the
       // channels mounted with the session must be declared to the realtime model at mint, and the
       // server needs the candidates to scope them. Nothing is initialized until the policy is known.
-      const scope = await this.prepareChannelScope(options?.HostChannels);
+      const scope = await this.prepareChannelScope(
+        options?.HostChannels,
+        options?.ChannelFilter,
+        options?.ChannelFilterReason
+      );
       const allClientTools = [...(clientTools ?? []), ...scope.NativeTools];
       session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson, scope.ShowsAgentVideo, options?.ConversationBranchID ?? null);
     } catch (error) {
@@ -3335,6 +3339,9 @@ export class RealtimeSessionRuntime {
   /** `on-demand` channels that are in the session but not opened yet (initialized only when opened). */
   private advertisedChannels: PreparedChannel[] = [];
 
+  /** Active channels omitted by the host's `ChannelFilter`, with the reason to share when the user asks for one. */
+  private hostUnavailableChannels: UnavailableChannelEntry[] = [];
+
   /** What the policy resolved for each in-session channel, keyed by normalized channel key. */
   private readonly resolvedChannels = new Map<string, ResolvedRealtimeChannel>();
 
@@ -3349,6 +3356,7 @@ export class RealtimeSessionRuntime {
     FindChannel: (key: string) => this.findDispatchableChannel(key),
     ListChannelKeys: () => this.listAddressableChannelKeys(),
     ActivateChannel: (plugin: BaseRealtimeChannelClient) => this.mountAdvertisedChannel(plugin),
+    DescribeUnavailableChannel: (key: string) => this.describeHostUnavailableChannel(key),
   });
 
   /**
@@ -3603,10 +3611,18 @@ export class RealtimeSessionRuntime {
       focusedNormalized !== null
         ? (typeof focusedEntry?.ChannelKey === 'string' ? focusedEntry.ChannelKey : this.focusedChannelKey)
         : 'activity';
-    return {
+    const snapshot: JSONObject = {
       ActiveSurface: activeSurface,
       ActiveChannels: channels,
     };
+    if (this.hostUnavailableChannels.length > 0) {
+      snapshot.UnavailableChannels = this.hostUnavailableChannels.map<JSONObject>((u) => ({
+        ChannelKey: u.Key,
+        Title: u.DisplayName,
+        Reason: u.Reason,
+      }));
+    }
+    return snapshot;
   }
 
   /** Stops following the arbiter and clears {@link VideoSources$}. Safe to call when nothing is watched. */
@@ -3692,10 +3708,12 @@ export class RealtimeSessionRuntime {
    *   video ({@link PreparedChannelsShowAgentVideo}).
    */
   private async prepareChannelScope(
-    hostChannels?: RealtimeHostChannelDeclaration[]
+    hostChannels?: RealtimeHostChannelDeclaration[],
+    channelFilter?: (plugin: BaseRealtimeChannelClient) => boolean,
+    channelFilterReason?: string
   ): Promise<{ NativeTools: RealtimeToolDefinition[]; CandidatesJson: string | null; ShowsAgentVideo: boolean }> {
     this.discardUnmountedChannels();
-    const prepared = await this.prepareChannels(hostChannels);
+    const prepared = await this.prepareChannels(hostChannels, channelFilter, channelFilterReason);
     this.preparedChannels = prepared;
     const candidates = prepared.map((p) => BuildChannelCandidate(p, p.Plugin.GetDescriptor()));
     const local = ResolveLocalChannelScope(candidates);
@@ -3714,7 +3732,11 @@ export class RealtimeSessionRuntime {
    * INACTIVE row is constructed too — only to learn its key so the kill switch can name it — and is
    * never initialized. A plugin whose descriptor cannot be read is skipped (logged), never fatal.
    */
-  private async prepareChannels(hostChannels?: RealtimeHostChannelDeclaration[]): Promise<PreparedChannel[]> {
+  private async prepareChannels(
+    hostChannels?: RealtimeHostChannelDeclaration[],
+    channelFilter?: (plugin: BaseRealtimeChannelClient) => boolean,
+    channelFilterReason?: string
+  ): Promise<PreparedChannel[]> {
     const rows = await this.fetchChannelDefinitions();
     await this.loadChannelClasses([...rows.map((r) => r.ClientPluginClass), ...(hostChannels ?? []).map((d) => d.ClientPluginClass)]);
     const prepared: PreparedChannel[] = [];
@@ -3741,7 +3763,24 @@ export class RealtimeSessionRuntime {
         prepared.push({ Plugin: plugin, Key: plugin.ChannelName, Registry: 'none', HostDeclaration: declaration });
       }
     }
-    return prepared.filter((p) => this.canDescribe(p));
+    const reason = channelFilterReason?.trim() ?? '';
+    const kept: PreparedChannel[] = [];
+    for (const p of prepared) {
+      if (!this.canDescribe(p)) {
+        continue;
+      }
+      if (!channelFilter || channelFilter(p.Plugin)) {
+        kept.push(p);
+      } else if (p.Registry !== 'inactive' && reason.length > 0) {
+        const descriptor = p.Plugin.GetDescriptor();
+        this.hostUnavailableChannels.push({
+          Key: p.Key,
+          DisplayName: descriptor.DisplayName || p.Key,
+          Reason: reason,
+        });
+      }
+    }
+    return kept;
   }
 
   /**
@@ -3847,7 +3886,18 @@ export class RealtimeSessionRuntime {
   private discardUnmountedChannels(): void {
     this.preparedChannels = [];
     this.advertisedChannels = [];
+    this.hostUnavailableChannels = [];
     this.localChannelScope = null;
+  }
+
+  /** Returns the host's unavailability explanation for a filtered-out channel key (case-insensitive), or `null`. */
+  private describeHostUnavailableChannel(key: string): string | null {
+    const normalized = NormalizeChannelKey(key);
+    if (!normalized) {
+      return null;
+    }
+    const match = this.hostUnavailableChannels.find((u) => NormalizeChannelKey(u.Key) === normalized);
+    return match ? match.Reason : null;
   }
 
   /**
@@ -4085,7 +4135,7 @@ export class RealtimeSessionRuntime {
       ...this._activeChannels$.value.map((plugin) => this.catalogEntry(plugin, true)),
       ...this.advertisedChannels.map((p) => this.catalogEntry(p.Plugin, false)),
     ];
-    const note = BuildChannelCatalogNote(entries);
+    const note = BuildChannelCatalogNote(entries, this.hostUnavailableChannels);
     if (note) {
       this.SendContextNote(note, { StateKey: 'channel-catalog' });
     }

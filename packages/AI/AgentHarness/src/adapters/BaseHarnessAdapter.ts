@@ -131,4 +131,13 @@ export abstract class BaseHarnessAdapter {
     public get ReportedModel(): string | undefined {
         return undefined;
     }
+
+    /**
+     * Rolling tail of recent raw output lines (e.g. stdout/stderr) captured during the most recent
+     * turn. Adapters that stream subprocess output override this so stall diagnostics can include
+     * recent tail context without exposing adapter internals.
+     */
+    public get RecentOutputLines(): readonly string[] {
+        return [];
+    }
 }
