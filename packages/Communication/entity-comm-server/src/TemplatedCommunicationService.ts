@@ -1,4 +1,4 @@
-import { CommunicationEngine } from '@memberjunction/communication-engine';
+import { CommunicationEngine, V2SendService } from '@memberjunction/communication-engine';
 import {
   CommunicationEngineBase,
   ComplianceObligations,
@@ -8,6 +8,7 @@ import {
   PrincipalRecordRef,
   RenderAndSendParams,
   ResolvedEndpoint,
+  RunChunkPosition,
   SendableRecipient,
   SendingEnvelope,
   SendToPrincipalsParams,
@@ -82,6 +83,11 @@ export interface RenderBatchPayload {
   Recipients: RenderBatchRecipient[];
   /** Acting user ID so async `comms.render` workers enforce RLS/FLS when loading template data. */
   ActingUserID?: string;
+  /**
+   * This batch's place in a queued run. The batch that completes the run ends it, exactly once.
+   * Set only on queued (`comms.render`) batches; the in-process path ends its run itself.
+   */
+  RunChunk?: RunChunkPosition;
 }
 
 /** The rendered content for one recipient. */
@@ -90,7 +96,16 @@ export interface RenderedRecipientPayload {
   Subject?: string;
   Body?: string;
   HTMLBody?: string;
+  /**
+   * Set when this recipient's content could not be rendered (a template failed, or the related
+   * data it needs could not be read). The content fields are then empty and the recipient must
+   * not be sent; send paths report it as a `Failed` outcome with reason `RenderFailed`.
+   */
+  RenderError?: string;
 }
+
+/** `Reason` on a recipient outcome whose content could not be rendered. */
+export const RENDER_FAILED_REASON = 'RenderFailed';
 
 /** Result of {@link TemplatedCommunicationService.RenderAndPreview}. */
 export interface RenderPreviewResult {
@@ -113,6 +128,12 @@ interface RelatedEntityData {
   data: Record<string, unknown>[];
 }
 
+/** Related rows for a batch, or why they could not be read (which then fails every recipient). */
+interface RelatedDataResult {
+  Data: RelatedEntityData[];
+  Error?: string;
+}
+
 const DEFAULT_BATCH_SIZE = 50;
 
 function principalKey(ref: PrincipalRecordRef): string {
@@ -132,6 +153,11 @@ export class TemplatedCommunicationService
   implements ITemplatedCommunicationService
 {
   private config: TemplatedCommunicationConfig = {};
+  /**
+   * Records queued batches that finish without a `Send()` call. `RecordRunChunkDone` uses only the
+   * engine's provider, so a bare instance is enough; it needs none of the dispatch configuration.
+   */
+  private readonly chunkRecorder = new V2SendService();
 
   protected constructor() {
     super();
@@ -232,7 +258,8 @@ export class TemplatedCommunicationService
     const batches = this.chunkArray(sendableItems, batchSize);
 
     if (this.config.EnqueueWork) {
-      for (const batch of batches) {
+      for (let index = 0; index < batches.length; index++) {
+        const batch = batches[index];
         const sanitizedBatch = batch.map((r) =>
           r.Principal?.RecordData
             ? {
@@ -252,6 +279,8 @@ export class TemplatedCommunicationService
           AutoAppendComplianceFooter: autoAppendFooter,
           Recipients: sanitizedBatch,
           ActingUserID: user?.ID,
+          // Nothing else ends a queued run: the batch that completes it does.
+          RunChunk: { Index: index, Count: batches.length },
         };
         await this.config.EnqueueWork('comms.render', batchPayload);
       }
@@ -272,35 +301,40 @@ export class TemplatedCommunicationService
     const allOutcomes: SendV2RecipientOutcome[] = [...blockedOutcomes];
     let queuedCount = 0;
     let deferredCount = 0;
+    let dryRunCount = 0;
     let allSucceeded = true;
     const errors: string[] = [];
 
-    for (const batch of batches) {
-      const batchPayload: RenderBatchPayload = {
-        CommunicationRunID: run.ID,
-        Envelope: params.Envelope,
-        EntityID: params.EntityID,
-        Templates: params.Templates,
-        AutoAppendComplianceFooter: autoAppendFooter,
-        Recipients: batch,
-        // The render step refuses a batch that does not say who it renders as. The queued path
-        // above sets this; the in-process path has to as well.
-        ActingUserID: user?.ID,
-      };
-      const batchResult = await this.HandleRenderBatch(batchPayload, user, provider);
-      if (!batchResult.Success) {
-        allSucceeded = false;
-        if (batchResult.ErrorMessage) errors.push(batchResult.ErrorMessage);
+    // This method started the run, so it ends it exactly once, whatever happens to the batches.
+    try {
+      for (const batch of batches) {
+        const batchPayload: RenderBatchPayload = {
+          CommunicationRunID: run.ID,
+          Envelope: params.Envelope,
+          EntityID: params.EntityID,
+          Templates: params.Templates,
+          AutoAppendComplianceFooter: autoAppendFooter,
+          Recipients: batch,
+          // The render step refuses a batch that does not say who it renders as. The queued path
+          // above sets this; the in-process path has to as well.
+          ActingUserID: user?.ID,
+        };
+        const batchResult = await this.runInProcessBatch(batchPayload, user, provider);
+        if (!batchResult.Success) {
+          allSucceeded = false;
+          if (batchResult.ErrorMessage) errors.push(batchResult.ErrorMessage);
+        }
+        queuedCount += batchResult.QueuedCount;
+        deferredCount += batchResult.DeferredCount;
+        dryRunCount += batchResult.DryRunCount ?? 0;
+        if (batchResult.Outcomes) {
+          allOutcomes.push(...batchResult.Outcomes);
+        }
       }
-      queuedCount += batchResult.QueuedCount;
-      deferredCount += batchResult.DeferredCount;
-      if (batchResult.Outcomes) {
-        allOutcomes.push(...batchResult.Outcomes);
+    } finally {
+      if (!(await CommunicationEngineBase.Instance.EndRun(run))) {
+        LogError(`TemplatedCommunicationService: failed to finalize CommunicationRun ${run.ID}`);
       }
-    }
-
-    if (!(await CommunicationEngineBase.Instance.EndRun(run))) {
-      LogError(`TemplatedCommunicationService: failed to finalize CommunicationRun ${run.ID}`);
     }
 
     return {
@@ -311,6 +345,7 @@ export class TemplatedCommunicationService
       QueuedCount: queuedCount,
       BlockedCount: eligibility.Blocked.length,
       DeferredCount: deferredCount,
+      DryRunCount: dryRunCount,
       Outcomes: allOutcomes,
       ErrorMessage: errors.length > 0 ? errors.join('; ') : undefined,
     };
@@ -387,6 +422,7 @@ export class TemplatedCommunicationService
     }
 
     if (!payload.ActingUserID) {
+      await this.recordChunkWithoutSend(payload, user);
       return {
         Success: false,
         CommunicationRunID: payload.CommunicationRunID,
@@ -405,6 +441,7 @@ export class TemplatedCommunicationService
     } else {
       const resolvedActingUser = this.config.ResolveUser?.(payload.ActingUserID);
       if (!resolvedActingUser) {
+        await this.recordChunkWithoutSend(payload, user);
         return {
           Success: false,
           CommunicationRunID: payload.CommunicationRunID,
@@ -430,25 +467,7 @@ export class TemplatedCommunicationService
       provider,
     );
 
-    const sendParams: SendToPrincipalsParams = {
-      CommunicationRunID: payload.CommunicationRunID,
-      Envelope: payload.Envelope,
-      Recipients: rendered.map((item) => ({
-        Principal: item.Recipient.Principal,
-        Endpoint: {
-          CommunicationEndpointID: item.Recipient.Endpoint.CommunicationEndpointID,
-          Address: item.Recipient.Endpoint.RawValue,
-        },
-        PayloadOverride: {
-          Subject: item.Subject,
-          Body: item.Body,
-          HTMLBody: item.HTMLBody,
-        },
-        CorrelationData: item.Recipient.CorrelationData,
-      })),
-    };
-
-    return CommunicationEngine.Instance.Send(sendParams, renderUser);
+    return this.sendRendered(payload.Envelope, rendered, renderUser, payload.CommunicationRunID, payload.RunChunk);
   }
 
   /**
@@ -476,30 +495,48 @@ export class TemplatedCommunicationService
       await TemplateEngineServer.Instance.Config(false, contextUser, provider);
     }
 
-    const relatedData = hasTemplates
+    const related: RelatedDataResult = hasTemplates
       ? await this.getRelatedData(resolvedTemplates, recipients, entityID, contextUser, provider)
-      : [];
+      : { Data: [] };
+    if (related.Error) {
+      // The related rows are read once for the whole batch, so a failed read leaves every
+      // recipient without its merge data. Rendering anyway would send empty merge fields.
+      return recipients.map((recipient) => ({ Recipient: recipient, RenderError: related.Error }));
+    }
 
     const allParams = this.collectUniqueParams(resolvedTemplates);
     const results: RenderedRecipientPayload[] = [];
-
     for (const recipient of recipients) {
-      const paramContext = this.buildParamContext(recipient, relatedData, allParams);
-      const renderData: Record<string, unknown> = {
-        ...(sharedContextData ?? {}),
-        ...(recipient.ContextData ?? {}),
-        ...paramContext,
-        Sender: recipient.SenderTemplateContext ?? {},
-        Recipient: {
-          ...(recipient.Principal.RecordData ?? {}),
-          ...(recipient.PrincipalAttributes ?? {}),
-          Endpoint: recipient.Endpoint,
-        },
-        Comms: {
-          Obligations: recipient.Obligations,
-        },
-      };
+      results.push(
+        await this.renderOneRecipient(
+          recipient,
+          resolvedTemplates,
+          sharedContextData,
+          related.Data,
+          allParams,
+          autoAppendComplianceFooter,
+          contextUser,
+        ),
+      );
+    }
+    return results;
+  }
 
+  /**
+   * Renders one recipient. A failure is returned as `RenderError` rather than thrown, so one bad
+   * recipient never stops the rest of the batch.
+   */
+  private async renderOneRecipient(
+    recipient: RenderBatchRecipient,
+    resolvedTemplates: ResolvedTemplateSet,
+    sharedContextData: Record<string, unknown> | undefined,
+    relatedData: RelatedEntityData[],
+    allParams: MJTemplateParamEntity[],
+    autoAppendComplianceFooter: boolean,
+    contextUser: UserInfo,
+  ): Promise<RenderedRecipientPayload> {
+    try {
+      const renderData = this.buildRenderData(recipient, sharedContextData, relatedData, allParams);
       const subject = await this.renderSingleField(
         resolvedTemplates.SubjectTemplate,
         ['HTML', 'Text'],
@@ -525,27 +562,150 @@ export class TemplatedCommunicationService
       if (!htmlBody && body && !resolvedTemplates.HTMLBodyTemplate) {
         htmlBody = body;
       }
-
       if (autoAppendComplianceFooter) {
-        const footerHTML = this.buildComplianceFooterHTML(recipient.Obligations);
-        const footerText = this.buildComplianceFooterText(recipient.Obligations);
-        if (footerHTML && htmlBody && !htmlBody.includes('data-mj-compliance-footer')) {
-          htmlBody = `${htmlBody}${footerHTML}`;
-        }
-        if (footerText && body !== undefined && !body.includes(footerText.trim())) {
-          body = `${body}${footerText}`;
-        }
+        ({ body, htmlBody } = this.appendComplianceFooter(recipient.Obligations, body, htmlBody));
       }
-
-      results.push({
-        Recipient: recipient,
-        Subject: subject,
-        Body: body,
-        HTMLBody: htmlBody,
-      });
+      return { Recipient: recipient, Subject: subject, Body: body, HTMLBody: htmlBody };
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      LogError(
+        `TemplatedCommunicationService: render failed for ${recipient.Principal.EntityID}/${recipient.Principal.RecordID}: ${detail}`,
+      );
+      return { Recipient: recipient, RenderError: detail };
     }
+  }
 
-    return results;
+  private buildRenderData(
+    recipient: RenderBatchRecipient,
+    sharedContextData: Record<string, unknown> | undefined,
+    relatedData: RelatedEntityData[],
+    allParams: MJTemplateParamEntity[],
+  ): Record<string, unknown> {
+    const paramContext = this.buildParamContext(recipient, relatedData, allParams);
+    return {
+      ...(sharedContextData ?? {}),
+      ...(recipient.ContextData ?? {}),
+      ...paramContext,
+      Sender: recipient.SenderTemplateContext ?? {},
+      Recipient: {
+        ...(recipient.Principal.RecordData ?? {}),
+        ...(recipient.PrincipalAttributes ?? {}),
+        Endpoint: recipient.Endpoint,
+      },
+      Comms: {
+        Obligations: recipient.Obligations,
+      },
+    };
+  }
+
+  private appendComplianceFooter(
+    obligations: ComplianceObligations,
+    body: string | undefined,
+    htmlBody: string | undefined,
+  ): { body: string | undefined; htmlBody: string | undefined } {
+    const footerHTML = this.buildComplianceFooterHTML(obligations);
+    const footerText = this.buildComplianceFooterText(obligations);
+    if (footerHTML && htmlBody && !htmlBody.includes('data-mj-compliance-footer')) {
+      htmlBody = `${htmlBody}${footerHTML}`;
+    }
+    if (footerText && body !== undefined && !body.includes(footerText.trim())) {
+      body = `${body}${footerText}`;
+    }
+    return { body, htmlBody };
+  }
+
+  /**
+   * Splits rendered payloads into the ones that can be sent and `Failed` outcomes for the ones
+   * that could not be rendered.
+   */
+  private splitRendered(rendered: RenderedRecipientPayload[]): {
+    Sendable: RenderedRecipientPayload[];
+    Failed: SendV2RecipientOutcome[];
+  } {
+    const Sendable: RenderedRecipientPayload[] = [];
+    const Failed: SendV2RecipientOutcome[] = [];
+    for (const item of rendered) {
+      if (item.RenderError !== undefined) {
+        Failed.push(this.renderFailedOutcome(item.Recipient, item.RenderError));
+      } else {
+        Sendable.push(item);
+      }
+    }
+    return { Sendable, Failed };
+  }
+
+  private renderFailedOutcome(recipient: RenderBatchRecipient, detail: string): SendV2RecipientOutcome {
+    return {
+      Principal: recipient.Principal,
+      Endpoint: recipient.Endpoint,
+      Status: 'Failed',
+      Reason: RENDER_FAILED_REASON,
+      Detail: detail,
+    };
+  }
+
+  /** Builds the engine send for the rendered recipients, or nothing when none can be sent. */
+  private buildSendParams(
+    envelope: RenderAndSendParams['Envelope'],
+    rendered: RenderedRecipientPayload[],
+    communicationRunID?: string,
+  ): SendToPrincipalsParams {
+    return {
+      CommunicationRunID: communicationRunID,
+      Envelope: envelope,
+      Recipients: rendered.map((item) => ({
+        Principal: item.Recipient.Principal,
+        Endpoint: {
+          CommunicationEndpointID: item.Recipient.Endpoint.CommunicationEndpointID,
+          Address: item.Recipient.Endpoint.RawValue,
+        },
+        PayloadOverride: {
+          Subject: item.Subject,
+          Body: item.Body,
+          HTMLBody: item.HTMLBody,
+        },
+        CorrelationData: item.Recipient.CorrelationData,
+      })),
+    };
+  }
+
+  /**
+   * Sends the rendered recipients and folds the render failures into the result. Skips the
+   * engine entirely when every recipient failed to render.
+   */
+  private async sendRendered(
+    envelope: RenderAndSendParams['Envelope'],
+    rendered: RenderedRecipientPayload[],
+    user: UserInfo,
+    communicationRunID?: string,
+    runChunk?: RunChunkPosition,
+  ): Promise<SendV2Result> {
+    const { Sendable, Failed } = this.splitRendered(rendered);
+    if (Sendable.length === 0) {
+      // Send() is skipped, so it cannot record this chunk; record it here or the run never ends.
+      if (communicationRunID && runChunk) {
+        await this.chunkRecorder.RecordRunChunkDone(communicationRunID, runChunk, user);
+      }
+      return {
+        Success: true,
+        CommunicationRunID: communicationRunID,
+        IsAsyncRun: false,
+        TotalCount: rendered.length,
+        QueuedCount: 0,
+        BlockedCount: 0,
+        DeferredCount: 0,
+        Outcomes: Failed,
+      };
+    }
+    const sendResult = await CommunicationEngine.Instance.Send(
+      { ...this.buildSendParams(envelope, Sendable, communicationRunID), RunChunk: runChunk },
+      user,
+    );
+    return {
+      ...sendResult,
+      TotalCount: rendered.length,
+      Outcomes: [...Failed, ...(sendResult.Outcomes ?? [])],
+    };
   }
 
   /**
@@ -584,6 +744,45 @@ export class TemplatedCommunicationService
     return true;
   }
 
+  /**
+   * Records a queued batch as done when it ends without calling `Send()` (which is what normally
+   * records it), so the run still ends once its last batch finishes.
+   */
+  private async recordChunkWithoutSend(payload: RenderBatchPayload, user: UserInfo): Promise<void> {
+    if (!payload.RunChunk) return;
+    await this.chunkRecorder.RecordRunChunkDone(payload.CommunicationRunID, payload.RunChunk, user);
+  }
+
+  /**
+   * Runs one in-process batch. An unexpected error fails that batch's recipients and lets the
+   * remaining batches run, so batches already sent are still reported.
+   */
+  private async runInProcessBatch(
+    payload: RenderBatchPayload,
+    user: UserInfo,
+    provider?: RequestProvider,
+  ): Promise<SendV2Result> {
+    try {
+      return await this.HandleRenderBatch(payload, user, provider);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      LogError(
+        `TemplatedCommunicationService: batch in run ${payload.CommunicationRunID} failed: ${detail}`,
+      );
+      return {
+        Success: false,
+        CommunicationRunID: payload.CommunicationRunID,
+        IsAsyncRun: false,
+        TotalCount: payload.Recipients.length,
+        QueuedCount: 0,
+        BlockedCount: 0,
+        DeferredCount: 0,
+        Outcomes: payload.Recipients.map((r) => this.renderFailedOutcome(r, detail)),
+        ErrorMessage: detail,
+      };
+    }
+  }
+
   private async executeInlineRenderAndSend(
     params: RenderAndSendParams,
     sendableItems: RenderBatchRecipient[],
@@ -603,24 +802,7 @@ export class TemplatedCommunicationService
       provider,
     );
 
-    const sendParams: SendToPrincipalsParams = {
-      Envelope: params.Envelope,
-      Recipients: rendered.map((item) => ({
-        Principal: item.Recipient.Principal,
-        Endpoint: {
-          CommunicationEndpointID: item.Recipient.Endpoint.CommunicationEndpointID,
-          Address: item.Recipient.Endpoint.RawValue,
-        },
-        PayloadOverride: {
-          Subject: item.Subject,
-          Body: item.Body,
-          HTMLBody: item.HTMLBody,
-        },
-        CorrelationData: item.Recipient.CorrelationData,
-      })),
-    };
-
-    const sendResult = await CommunicationEngine.Instance.Send(sendParams, user);
+    const sendResult = await this.sendRendered(params.Envelope, rendered, user);
     return {
       ...sendResult,
       TotalCount: params.Recipients.length,
@@ -701,15 +883,15 @@ export class TemplatedCommunicationService
     entityID: string | undefined,
     contextUser: UserInfo,
     provider?: RequestProvider,
-  ): Promise<RelatedEntityData[]> {
+  ): Promise<RelatedDataResult> {
     const entityParams = this.collectUniqueParams(templates).filter((p) => p.Type === 'Entity');
     if (entityParams.length === 0 || recipients.length === 0) {
-      return [];
+      return { Data: [] };
     }
 
     const md = provider ?? Metadata.Provider;
     const targetEntityID = entityID ?? recipients[0].Principal.EntityID;
-    const entityInfo = md.Entities.find((e) => UUIDsEqual(e.ID, targetEntityID));
+    const entityInfo = md.EntityByID(targetEntityID);
     const needsQuotes = entityInfo ? entityInfo.FirstPrimaryKey.NeedsQuotes : true; // first-pk-ok: FK target of Entity-param LinkedParameterField is single-column by design
 
     const uniquePKs = Array.from(new Set(recipients.map((r) => r.Principal.RecordID)));
@@ -728,18 +910,21 @@ export class TemplatedCommunicationService
         ResultType: 'simple',
       };
       const result = await rv.RunView<Record<string, unknown>>(rvParams, contextUser);
-      if (result && result.Success) {
-        const relatedEntityInfo = md.EntityByName(param.Entity);
-        out.push({
-          paramName: param.Name,
-          data: relatedEntityInfo
-            ? this.stripDeniedReadFields(relatedEntityInfo, result.Results, contextUser)
-            : result.Results,
-        });
+      if (!result?.Success) {
+        const error = `Could not load '${param.Entity}' for template parameter '${param.Name}': ${result?.ErrorMessage ?? 'unknown error'}`;
+        LogError(`TemplatedCommunicationService: ${error}`);
+        return { Data: out, Error: error };
       }
+      const relatedEntityInfo = md.EntityByName(param.Entity);
+      out.push({
+        paramName: param.Name,
+        data: relatedEntityInfo
+          ? this.stripDeniedReadFields(relatedEntityInfo, result.Results, contextUser)
+          : result.Results,
+      });
     }
 
-    return out;
+    return { Data: out };
   }
 
   private stripDeniedReadFields(

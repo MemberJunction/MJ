@@ -14,6 +14,7 @@ const capturedRenderContexts: Record<string, unknown>[] = [];
 const capturedRunViews: Array<{ EntityName: string; ExtraFilter?: string }> = [];
 const capturedEnqueued: Array<{ taskType: string; payload: unknown }> = [];
 const capturedSendCalls: SendToPrincipalsParams[] = [];
+const recordRunChunkDone = vi.fn().mockResolvedValue(false);
 
 const MOCK_USER = { ID: 'user-1', Name: 'Tester' } as unknown as UserInfo;
 
@@ -28,12 +29,23 @@ const state: {
   preferenceRows: Array<{ ID: string }>;
   recipientRows: Array<Record<string, unknown>>;
   relatedRows: Array<Record<string, unknown>>;
+  /** When true, the related-entity (Orders) RunView fails. */
+  relatedFails: boolean;
+  /** Recipient FirstName whose template render fails. */
+  failRenderFor?: string;
+  /** Endpoint address whose send outcome is Failed. */
+  sendFailFor?: string;
+  /** Reason on that Failed outcome (default 'ProviderError'). */
+  sendFailReason?: string;
+  /** When true, every send outcome is a DryRun. */
+  dryRun?: boolean;
 } = {
   eligibilityResult: { Sendable: [], Blocked: [] },
   templates: {},
   preferenceRows: [{ ID: 'pref-general-updates' }],
   recipientRows: [{ ID: 'cust-1', Email: 'alice@example.com', FirstName: 'Alice' }],
   relatedRows: [{ ID: 'ord-1', CustomerID: 'cust-1', Total: 99 }],
+  relatedFails: false,
 };
 
 vi.mock('@memberjunction/global', () => ({
@@ -75,6 +87,7 @@ vi.mock('@memberjunction/core', () => {
       protected TryThrowIfNotLoaded() {}
     },
     LogStatus: vi.fn(),
+    LogError: vi.fn(),
     Metadata: Object.assign(
       vi.fn().mockImplementation(function () {
         return {
@@ -86,6 +99,7 @@ vi.mock('@memberjunction/core', () => {
         Provider: {
           Entities: entities,
           EntityByName: (name: string) => entities.find((e) => e.Name === name),
+          EntityByID: (id: string) => entities.find((e) => e.ID.toLowerCase() === id?.toLowerCase()),
         },
       },
     ),
@@ -98,6 +112,7 @@ vi.mock('@memberjunction/core', () => {
             return { Success: true, Results: state.preferenceRows };
           }
           if (params.EntityName === 'Orders') {
+            if (state.relatedFails) return { Success: false, Results: [], ErrorMessage: 'query timeout' };
             return { Success: true, Results: state.relatedRows };
           }
           return { Success: true, Results: state.recipientRows };
@@ -167,7 +182,8 @@ vi.mock('@memberjunction/communication-engine', () => ({
           CommunicationRunID: 'run-v2-1',
           IsAsyncRun: false,
           TotalCount: params.Recipients.length,
-          QueuedCount: params.Recipients.length,
+          QueuedCount: state.dryRun ? 0 : params.Recipients.filter((r) => !(state.sendFailFor && r.Endpoint?.Address === state.sendFailFor)).length,
+          DryRunCount: state.dryRun ? params.Recipients.length : 0,
           BlockedCount: 0,
           DeferredCount: 0,
           Outcomes: params.Recipients.map((r) => ({
@@ -179,11 +195,16 @@ vi.mock('@memberjunction/communication-engine', () => ({
               ValueHash: 'hash-1',
               RawValue: r.Endpoint?.Address ?? 'alice@example.com',
             },
-            Status: 'Sent',
+            Status: state.sendFailFor && r.Endpoint?.Address === state.sendFailFor ? 'Failed' : state.dryRun ? 'DryRun' : 'Sent',
+            Reason: state.sendFailFor && r.Endpoint?.Address === state.sendFailFor ? (state.sendFailReason ?? 'ProviderError') : undefined,
+            Detail: state.sendFailFor && r.Endpoint?.Address === state.sendFailFor ? 'mailbox full' : undefined,
           })),
         };
       }),
     },
+  },
+  V2SendService: class {
+    RecordRunChunkDone = recordRunChunkDone;
   },
   ProcessedMessageServer: class {
     To = '';
@@ -207,6 +228,14 @@ vi.mock('@memberjunction/templates', () => ({
         ) => {
           callOrder.push(`RenderTemplate:${template.Name}`);
           capturedRenderContexts.push(data);
+          const recipient = data['Recipient'] as Record<string, unknown> | undefined;
+          const fullName = String(recipient?.['FullName'] ?? '');
+          if (
+            state.failRenderFor &&
+            (recipient?.['FirstName'] === state.failRenderFor || fullName.startsWith(`${state.failRenderFor} `))
+          ) {
+            return { Success: false, Message: 'unknown filter' };
+          }
           return {
             Success: true,
             Output: `${content.TemplateText}|sender=${String((data['Sender'] as Record<string, unknown>)?.['BrandName'] ?? '')}`,
@@ -268,6 +297,11 @@ describe('TemplatedCommunicationService', () => {
     capturedRunViews.length = 0;
     capturedEnqueued.length = 0;
     capturedSendCalls.length = 0;
+    state.relatedFails = false;
+    state.failRenderFor = undefined;
+    state.sendFailFor = undefined;
+    state.sendFailReason = undefined;
+    state.dryRun = false;
 
     service = TemplatedCommunicationService.Instance;
     service.Configure({ BatchSize: 500, EnqueueWork: undefined });
@@ -417,6 +451,93 @@ describe('TemplatedCommunicationService', () => {
     expect(capturedSendCalls).toHaveLength(1);
   });
 
+  describe('render failure isolation', () => {
+    function addBob(): void {
+      const alice = state.eligibilityResult.Sendable[0];
+      state.eligibilityResult = {
+        ...state.eligibilityResult,
+        Sendable: [
+          alice,
+          {
+            ...alice,
+            Principal: { EntityID: 'ent-customers', RecordID: 'cust-2', RecordData: { FirstName: 'Bob' } },
+            Endpoint: { ...alice.Endpoint, CommunicationEndpointID: 'ep-2', NormalizedValue: 'bob@example.com', RawValue: 'bob@example.com' },
+          },
+        ],
+      };
+    }
+    const twoRecipients = [
+      { Principal: { EntityID: 'ent-customers', RecordID: 'cust-1', RecordData: { FirstName: 'Alice' } } },
+      { Principal: { EntityID: 'ent-customers', RecordID: 'cust-2', RecordData: { FirstName: 'Bob' } } },
+    ];
+
+    it('one recipient failing to render is reported Failed (RenderFailed) and the rest still send', async () => {
+      addBob();
+      state.failRenderFor = 'Bob';
+      const result = await service.RenderAndSend(
+        {
+          Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' },
+          EntityID: 'ent-customers',
+          Recipients: twoRecipients,
+          Templates: { SubjectTemplateID: 'tpl-subj' },
+        },
+        MOCK_USER,
+      );
+
+      expect(capturedSendCalls).toHaveLength(1);
+      expect(capturedSendCalls[0].Recipients.map((r) => r.Principal?.RecordID)).toEqual(['cust-1']);
+      const bob = result.Outcomes?.find((o) => o.Principal?.RecordID === 'cust-2');
+      expect(bob?.Status).toBe('Failed');
+      expect(bob?.Reason).toBe('RenderFailed');
+      expect(bob?.Detail).toContain('unknown filter');
+      expect(result.Outcomes?.find((o) => o.Principal?.RecordID === 'cust-1')?.Status).toBe('Sent');
+    });
+
+    it('ends the run exactly once even when a batch throws, and reports the later batches', async () => {
+      const { CommunicationEngineBase } = await import('@memberjunction/communication-types');
+      addBob();
+      service.Configure({ BatchSize: 1, EnqueueWork: undefined });
+      const { CommunicationEngine } = await import('@memberjunction/communication-engine');
+      vi.mocked(CommunicationEngine.Instance.Send).mockRejectedValueOnce(new Error('provider exploded'));
+
+      const result = await service.RenderAndSend(
+        {
+          Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' },
+          EntityID: 'ent-customers',
+          Recipients: twoRecipients,
+          Templates: { SubjectTemplateID: 'tpl-subj' },
+        },
+        MOCK_USER,
+      );
+
+      expect(CommunicationEngineBase.Instance.EndRun).toHaveBeenCalledTimes(1);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('provider exploded');
+      const statuses = result.Outcomes?.map((o) => `${o.Principal?.RecordID}:${o.Status}`);
+      expect(statuses).toEqual(['cust-1:Failed', 'cust-2:Sent']);
+    });
+
+    it('a failed related-data read fails every recipient in the batch instead of rendering empty merge fields', async () => {
+      state.relatedFails = true;
+      const result = await service.RenderAndSend(
+        {
+          Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' },
+          EntityID: 'ent-customers',
+          Recipients: [{ Principal: { EntityID: 'ent-customers', RecordID: 'cust-1', RecordData: { FirstName: 'Alice' } } }],
+          Templates: { BodyTemplateID: 'tpl-body' },
+        },
+        MOCK_USER,
+      );
+
+      expect(capturedSendCalls).toHaveLength(0);
+      expect(capturedRenderContexts).toHaveLength(0);
+      expect(result.QueuedCount).toBe(0);
+      expect(result.Outcomes?.[0].Status).toBe('Failed');
+      expect(result.Outcomes?.[0].Reason).toBe('RenderFailed');
+      expect(result.Outcomes?.[0].Detail).toContain('query timeout');
+    });
+  });
+
   it('throws when template parameters have mismatched types across templates', async () => {
     state.templates['tpl-html'] = makeTemplate('tpl-html', 'HtmlTpl', '<p>HTML</p>', [
       { Name: 'orders', Type: 'Record' },
@@ -491,6 +612,87 @@ describe('TemplatedCommunicationService', () => {
     expect(capturedSendCalls[0].Recipients).toHaveLength(1);
     expect(capturedSendCalls[0].Recipients[0].PayloadOverride?.Subject).toContain('Hello Subject');
   });
+
+  describe('run completion on the queued path', () => {
+    const recipients = [
+      { Principal: { EntityID: 'ent-customers', RecordID: 'cust-1' } },
+      { Principal: { EntityID: 'ent-customers', RecordID: 'cust-2' } },
+    ];
+    function queueTwoBatches(): void {
+      service.Configure({
+        BatchSize: 1,
+        EnqueueWork: async (taskType, payload) => {
+          capturedEnqueued.push({ taskType, payload });
+        },
+      });
+      const alice = state.eligibilityResult.Sendable[0];
+      state.eligibilityResult.Sendable.push({
+        ...alice,
+        Principal: { EntityID: 'ent-customers', RecordID: 'cust-2', RecordData: { FirstName: 'Bob' } },
+        Endpoint: { ...alice.Endpoint, CommunicationEndpointID: 'ep-2', NormalizedValue: 'bob@example.com', RawValue: 'bob@example.com' },
+      });
+    }
+
+    it('stamps RunChunk on every comms.render batch and does not end the run itself', async () => {
+      const { CommunicationEngineBase } = await import('@memberjunction/communication-types');
+      queueTwoBatches();
+      await service.RenderAndSend(
+        { Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' }, EntityID: 'ent-customers', Recipients: recipients, Templates: { SubjectTemplateID: 'tpl-subj' } },
+        MOCK_USER,
+      );
+      const chunks = capturedEnqueued.map((e) => (e.payload as RenderBatchPayload).RunChunk);
+      expect(chunks).toEqual([{ Index: 0, Count: 2 }, { Index: 1, Count: 2 }]);
+      expect(CommunicationEngineBase.Instance.EndRun).not.toHaveBeenCalled();
+    });
+
+    it('HandleRenderBatch passes the batch RunChunk into Send()', async () => {
+      queueTwoBatches();
+      await service.RenderAndSend(
+        { Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' }, EntityID: 'ent-customers', Recipients: recipients, Templates: { SubjectTemplateID: 'tpl-subj' } },
+        MOCK_USER,
+      );
+      await service.HandleRenderBatch(capturedEnqueued[1].payload as RenderBatchPayload, MOCK_USER);
+      expect(capturedSendCalls[0].CommunicationRunID).toBe('run-v2-1');
+      expect(capturedSendCalls[0].RunChunk).toEqual({ Index: 1, Count: 2 });
+      expect(recordRunChunkDone).not.toHaveBeenCalled();
+    });
+
+    it('a batch whose recipients all fail to render still records its chunk, so the run can end', async () => {
+      queueTwoBatches();
+      state.failRenderFor = 'Alice';
+      await service.RenderAndSend(
+        { Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' }, EntityID: 'ent-customers', Recipients: recipients, Templates: { SubjectTemplateID: 'tpl-subj' } },
+        MOCK_USER,
+      );
+      const result = await service.HandleRenderBatch(capturedEnqueued[0].payload as RenderBatchPayload, MOCK_USER);
+      expect(capturedSendCalls).toHaveLength(0);
+      expect(result.Outcomes?.[0].Reason).toBe('RenderFailed');
+      expect(recordRunChunkDone).toHaveBeenCalledWith('run-v2-1', { Index: 0, Count: 2 }, MOCK_USER);
+    });
+
+    it('a batch whose acting user cannot be resolved still records its chunk', async () => {
+      queueTwoBatches();
+      await service.RenderAndSend(
+        { Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' }, EntityID: 'ent-customers', Recipients: recipients, Templates: { SubjectTemplateID: 'tpl-subj' } },
+        MOCK_USER,
+      );
+      const payload = { ...(capturedEnqueued[1].payload as RenderBatchPayload), ActingUserID: 'someone-else' };
+      const result = await service.HandleRenderBatch(payload, MOCK_USER);
+      expect(result.Success).toBe(false);
+      expect(recordRunChunkDone).toHaveBeenCalledWith('run-v2-1', { Index: 1, Count: 2 }, MOCK_USER);
+    });
+
+    it('the in-process path sends without RunChunk and ends the run itself', async () => {
+      const { CommunicationEngineBase } = await import('@memberjunction/communication-types');
+      await service.RenderAndSend(
+        { Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' }, EntityID: 'ent-customers', Recipients: [recipients[0]], Templates: { SubjectTemplateID: 'tpl-subj' } },
+        MOCK_USER,
+      );
+      expect(capturedSendCalls[0].RunChunk).toBeUndefined();
+      expect(CommunicationEngineBase.Instance.EndRun).toHaveBeenCalledTimes(1);
+      expect(recordRunChunkDone).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () => {
@@ -499,6 +701,11 @@ describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () =
     callOrder.length = 0;
     capturedSendCalls.length = 0;
     capturedRunViews.length = 0;
+    state.relatedFails = false;
+    state.failRenderFor = undefined;
+    state.sendFailFor = undefined;
+    state.sendFailReason = undefined;
+    state.dryRun = false;
 
     TemplatedCommunicationService.Instance.Configure({ BatchSize: 500, EnqueueWork: undefined });
     state.templates = {
@@ -644,5 +851,105 @@ describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () =
 
     await engine.RunEntityCommunication(v1Params);
     expect(capturedSendCalls).toHaveLength(0);
+  });
+  it('reports a Failed V2 outcome as a V1 failure: the item is kept, the error is surfaced, Success is false', async () => {
+    state.sendFailFor = 'alice@example.com';
+    const engine = new EntityCommunicationsEngine();
+    const result = await engine.RunEntityCommunication({
+      EntityID: 'ent-customers',
+      RunViewParams: { ViewID: 'view-1' },
+      ProviderName: 'SendGrid',
+      ProviderMessageTypeName: 'Email',
+      Message: { BodyTemplate: state.templates['tpl-body'], HTMLBodyTemplate: null, SubjectTemplate: null, ContextData: {} },
+      PreviewOnly: false,
+      IncludeProcessedMessages: true,
+      UseV2: true,
+      ContextUser: MOCK_USER,
+    } as unknown as EntityCommunicationParams);
+
+    expect(result.Success).toBe(false);
+    expect(result.Results).toHaveLength(1);
+    expect(result.Results?.[0].Skipped).toBeUndefined();
+    expect(result.ErrorMessage).toContain('ProviderError');
+    expect(result.ErrorMessage).toContain('mailbox full');
+  });
+
+  it('reports a Failed V2 outcome as a failure on the non-templated path too', async () => {
+    state.sendFailFor = 'alice@example.com';
+    const { CommunicationEngine } = await import('@memberjunction/communication-engine');
+    const engine = new EntityCommunicationsEngine();
+    const result = await engine.RunEntityCommunication({
+      EntityID: 'ent-customers',
+      RunViewParams: { ViewID: 'view-1' },
+      ProviderName: 'SendGrid',
+      ProviderMessageTypeName: 'Email',
+      Message: { Subject: 'S', Body: 'B', ContextData: {} },
+      PreviewOnly: false,
+      UseV2: true,
+      ContextUser: MOCK_USER,
+    } as unknown as EntityCommunicationParams);
+
+    expect(CommunicationEngine.Instance.Send).toHaveBeenCalledTimes(1);
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain('mailbox full');
+  });
+
+  it('PreviewOnly reports a recipient whose message could not be rendered as a failure', async () => {
+    state.failRenderFor = 'Alice';
+    const engine = new EntityCommunicationsEngine();
+    const result = await engine.RunEntityCommunication({
+      EntityID: 'ent-customers',
+      RunViewParams: { ViewID: 'view-1' },
+      ProviderName: 'SendGrid',
+      ProviderMessageTypeName: 'Email',
+      Message: { BodyTemplate: state.templates['tpl-body'], HTMLBodyTemplate: null, SubjectTemplate: null, ContextData: {} },
+      PreviewOnly: true,
+      UseV2: true,
+      ContextUser: MOCK_USER,
+    } as unknown as EntityCommunicationParams);
+
+    expect(capturedSendCalls).toHaveLength(0);
+    expect(result.Success).toBe(false);
+    expect(result.Results).toHaveLength(1);
+    expect(result.Results?.[0].Message).toBeUndefined();
+    expect(result.ErrorMessage).toContain('unknown filter');
+  });
+  it('reports a DryRun V2 send as a successful V1 result, as a V1 dry run does', async () => {
+    state.dryRun = true;
+    const engine = new EntityCommunicationsEngine();
+    const result = await engine.RunEntityCommunication({
+      EntityID: 'ent-customers',
+      RunViewParams: { ViewID: 'view-1' },
+      ProviderName: 'SendGrid',
+      ProviderMessageTypeName: 'Email',
+      Message: { Subject: 'S', Body: 'B', ContextData: {}, DryRun: true },
+      PreviewOnly: false,
+      UseV2: true,
+      ContextUser: MOCK_USER,
+    } as unknown as EntityCommunicationParams);
+
+    expect(result.Success).toBe(true);
+    expect(result.Results).toHaveLength(1);
+    expect(result.Results?.[0].Skipped).toBeUndefined();
+    expect(result.Results?.[0].Message).toBeDefined();
+  });
+
+  it('reports an OutcomeUnknown V2 outcome as a V1 failure', async () => {
+    state.sendFailFor = 'alice@example.com';
+    state.sendFailReason = 'OutcomeUnknown';
+    const engine = new EntityCommunicationsEngine();
+    const result = await engine.RunEntityCommunication({
+      EntityID: 'ent-customers',
+      RunViewParams: { ViewID: 'view-1' },
+      ProviderName: 'SendGrid',
+      ProviderMessageTypeName: 'Email',
+      Message: { Subject: 'S', Body: 'B', ContextData: {} },
+      PreviewOnly: false,
+      UseV2: true,
+      ContextUser: MOCK_USER,
+    } as unknown as EntityCommunicationParams);
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain('OutcomeUnknown');
   });
 });

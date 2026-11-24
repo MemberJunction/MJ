@@ -1,5 +1,5 @@
 import { CommunicationEngine, ProcessedMessageServer } from "@memberjunction/communication-engine";
-import { MJCommunicationProviderEntityExtended, Message, MessageRecipient, RenderAndSendParams, SendingEnvelope } from "@memberjunction/communication-types";
+import { MJCommunicationProviderEntityExtended, Message, MessageRecipient, RenderAndSendParams, SendingEnvelope, SendV2Result } from "@memberjunction/communication-types";
 import { EntityInfo, IMetadataProvider, IRunViewProvider, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJListDetailEntityType, MJListEntityType, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
@@ -505,26 +505,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 },
                 contextUser,
             );
-            const outcomeItems: EntityCommunicationResultItem[] = [
-                ...skippedUnreadable,
-                ...(sendResult.Outcomes ?? []).map((o) => {
-                    const msg = new ProcessedMessageServer(params.Message);
-                    msg.To = o.Endpoint?.RawValue ?? '';
-                    const isSkipped = o.Status === 'Blocked' || o.Status === 'Deferred';
-                    return {
-                        RecipientData: { To: o.Endpoint?.RawValue, ContextData: {} },
-                        Message: isSkipped ? undefined : msg,
-                        Skipped: isSkipped ? true : undefined,
-                        SkipReason: isSkipped ? (o.Reason ?? o.Status) : undefined,
-                    };
-                }),
-            ];
-            const hasDeliverable = sendResult.QueuedCount > 0;
-            return {
-                Success: sendResult.Success && hasDeliverable,
-                ErrorMessage: sendResult.ErrorMessage ?? '',
-                Results: outcomeItems,
-            };
+            return this.MapV2SendResult(params, sendResult, skippedUnreadable);
         }
 
         const renderParams: RenderAndSendParams = {
@@ -555,7 +536,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                     Skipped: true,
                     SkipReason: b.Reason,
                 })),
-                ...preview.Rendered.map((r) => {
+                ...preview.Rendered.filter((r) => r.RenderError === undefined).map((r) => {
                     const msg = new ProcessedMessageServer(params.Message);
                     msg.To = r.Recipient.Endpoint.RawValue;
                     msg.ProcessedSubject = r.Subject ?? params.Message.Subject ?? '';
@@ -567,9 +548,22 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                     };
                 }),
             ];
+            // Mirror V1: a recipient whose message could not be built keeps its result item and its
+            // error, and fails the run; recipients that were skipped do not.
+            const renderFailures = preview.Rendered.filter((r) => r.RenderError !== undefined);
+            for (const r of renderFailures) {
+                previewItems.push({
+                    RecipientData: { To: r.Recipient.Endpoint.RawValue, ContextData: r.Recipient.ContextData ?? {} },
+                    Message: undefined,
+                });
+            }
+            const previewErrors = [
+                ...renderFailures.map((r) => `${r.Recipient.Endpoint.RawValue}: ${r.RenderError}`),
+                ...previewItems.filter((i) => i.Skipped).map((i) => i.SkipReason),
+            ];
             return {
-                Success: preview.Rendered.length > 0,
-                ErrorMessage: previewItems.filter((i) => i.Skipped).map((i) => i.SkipReason).join('; '),
+                Success: renderFailures.length === 0 && preview.Rendered.length > renderFailures.length,
+                ErrorMessage: previewErrors.join('; '),
                 Results: previewItems,
             };
         }
@@ -580,26 +574,44 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             provider,
         );
 
-        const outcomeItems: EntityCommunicationResultItem[] = [
-            ...skippedUnreadable,
-            ...(sendResult.Outcomes ?? []).map((o) => {
-                const msg = new ProcessedMessageServer(params.Message);
-                msg.To = o.Endpoint?.RawValue ?? '';
-                const isSkipped = o.Status === 'Blocked' || o.Status === 'Deferred';
-                return {
-                    RecipientData: { To: o.Endpoint?.RawValue, ContextData: {} },
-                    Message: isSkipped ? undefined : msg,
-                    Skipped: isSkipped ? true : undefined,
-                    SkipReason: isSkipped ? (o.Reason ?? o.Status) : undefined,
-                };
-            }),
-        ];
+        return this.MapV2SendResult(params, sendResult, skippedUnreadable);
+    }
 
-        const hasDeliverable = sendResult.QueuedCount > 0;
+    /**
+     * Maps a V2 send result onto V1's `EntityCommunicationResult`, with V1's failure semantics:
+     * `Blocked` and `Deferred` recipients are skipped; a `Failed` recipient keeps its result item,
+     * adds its error to `ErrorMessage` and makes the whole result unsuccessful, as a failed send
+     * does in `SendToRecipients`.
+     */
+    protected MapV2SendResult(
+        params: EntityCommunicationParams,
+        sendResult: SendV2Result,
+        skippedUnreadable: EntityCommunicationResultItem[],
+    ): EntityCommunicationResult {
+        const results: EntityCommunicationResultItem[] = [...skippedUnreadable];
+        const errors: string[] = [];
+        for (const o of sendResult.Outcomes ?? []) {
+            const to = o.Endpoint?.RawValue;
+            if (o.Status === 'Blocked' || o.Status === 'Deferred') {
+                results.push({ RecipientData: { To: to, ContextData: {} }, Message: undefined, Skipped: true, SkipReason: o.Reason ?? o.Status });
+                continue;
+            }
+            // 'Sent' and 'DryRun' are successes (a V1 dry run also reports a successful result with
+            // its message); 'Failed', including 'OutcomeUnknown', is a failure.
+            const msg = new ProcessedMessageServer(params.Message);
+            msg.To = to ?? '';
+            results.push({ RecipientData: { To: to, ContextData: {} }, Message: msg });
+            if (o.Status === 'Failed') {
+                errors.push(`${to ?? 'recipient'}: ${[o.Reason, o.Detail].filter(Boolean).join(' - ') || 'Failed'}`);
+            }
+        }
+        if (sendResult.ErrorMessage) errors.unshift(sendResult.ErrorMessage);
+        const anyFailed = (sendResult.Outcomes ?? []).some((o) => o.Status === 'Failed');
+        const skipReasons = results.filter((i) => i.Skipped).map((i) => i.SkipReason ?? '');
         return {
-            Success: sendResult.Success && hasDeliverable,
-            ErrorMessage: sendResult.ErrorMessage ?? '',
-            Results: outcomeItems,
+            Success: sendResult.Success && !anyFailed && sendResult.QueuedCount + (sendResult.DryRunCount ?? 0) > 0,
+            ErrorMessage: [...errors, ...skipReasons].filter(Boolean).join('; '),
+            Results: results,
         };
     }
 }

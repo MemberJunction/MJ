@@ -241,6 +241,17 @@ returns `IsAsyncRun: true`; without a publisher it processes the batches in-proc
 as the acting user (`ActingUserID`, resolved through `ResolveUser`), so row- and field-level security apply to
 template data in the worker exactly as they would inline; a batch whose user cannot be resolved fails.
 
+**Render failures.** A recipient whose template fails to render is not sent and is reported as a `Failed`
+outcome with `Reason: 'RenderFailed'` and the template error in `Detail`; the rest of the batch still sends.
+If the related-entity rows a template needs cannot be read, every recipient in that batch fails the same way
+rather than being sent with empty merge fields. In-process batches are independent: a batch that throws fails
+its own recipients and the later batches still run.
+
+**Ending the run.** In-process, `RenderAndSend()` ends the run it started, once, when its batches finish. On the
+queued path each `comms.render` batch carries `RunChunk: { Index, Count }`, which `HandleRenderBatch` passes to
+`Send()`; the batch that completes the run ends it. A batch that sends nothing (every recipient failed to render,
+or its acting user could not be resolved) still records its chunk, so the run is never left open.
+
 #### Configuration
 
 | Setting | Default | Notes |
@@ -273,7 +284,7 @@ const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(
 | Checks | None by default. Endpoint status and suppressions when `Message.CheckComplianceGate` or `MJ_COMMS_V1_COMPLIANCE_GATE=true` is set | The full gate: suppressions, regimes, quiet hours |
 | Added to the message | Nothing | Compliance footer, unsubscribe headers, tracking, as the regimes require |
 | Rendering | Per recipient, in-process | `TemplatedCommunicationService` (`Inline` for `PreviewOnly` or `IncludeProcessedMessages`, else `WorkQueue`); untemplated messages go straight to `CommunicationEngine.Send()` |
-| Result | `EntityCommunicationResult` | The same shape; blocked and deferred recipients are items with `Skipped: true` |
+| Result | `EntityCommunicationResult` | The same shape; blocked and deferred recipients are items with `Skipped: true`. A `Failed` recipient (provider error, render failure) keeps its item, adds its error to `ErrorMessage` and makes `Success` false, as on the V1 path; `OutcomeUnknown` counts as failed. A `DryRun` recipient is reported as a success, as a V1 dry run is |
 
 `UseV2` is ignored when the message sets `From`, CC or BCC recipients, or pairs a literal `Subject` with a body
 template. Field-level security on the address field is enforced on both paths: a recipient whose address the
