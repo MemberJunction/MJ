@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ChangeDetectionStrategy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata, CompositeKey, KeyValuePair, BaseEntity } from '@memberjunction/core';
-import { MJQueryEntity, MJQueryCategoryEntity, ParseQuerySaveMessage } from '@memberjunction/core-entities';
+import { MJQueryEntity, MJQueryCategoryEntity, ParseQuerySaveMessage, UserCanApproveQueries } from '@memberjunction/core-entities';
 import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TreeBranchConfig, TreeNode } from '@memberjunction/ng-trees';
@@ -137,6 +137,21 @@ export interface SaveQueryResult {
             placeholder="Optional description"
             rows="3">
           </textarea>
+        </div>
+
+        <!-- Approval: a draft unless the user may approve queries -->
+        <div class="sqp-field">
+          @if (CanApprove) {
+            <label class="mj-checkbox sqp-approve">
+              <input type="checkbox" [(ngModel)]="ApproveOnSave">
+              Approve it now, so agents, search and pickers can offer it
+            </label>
+          } @else {
+            <p class="sqp-hint">
+              <i class="fa-solid fa-circle-info"></i>
+              It's saved as a draft. Someone who can approve queries can make it available to agents, search and pickers.
+            </p>
+          }
         </div>
 
         @if (ErrorDiagnostics.length > 0) {
@@ -278,6 +293,18 @@ export interface SaveQueryResult {
       display: block;
       margin-bottom: 4px;
       font-weight: 500;
+      font-size: 12px;
+      color: var(--mj-text-secondary);
+    }
+    .sqp-approve {
+      font-size: 13px;
+      color: var(--mj-text-primary);
+    }
+    .sqp-hint {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      margin: 0;
       font-size: 12px;
       color: var(--mj-text-secondary);
     }
@@ -515,6 +542,8 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
   /** Why the server refused the save: one finding per rule the SQL broke, with its line, column and fix. */
   public ErrorDiagnostics: QueryDiagnosticLine[] = [];
   public IsVisible = false;
+  /** Whether to save the query as Approved. Offered only when {@link CanApprove}; otherwise it is saved as a draft. */
+  public ApproveOnSave = true;
 
   // Category selection
   private selectedCategoryId: string | null = null;
@@ -542,6 +571,17 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
 
   public get CanSave(): boolean {
     return !!this.Name?.trim();
+  }
+
+  /** Whether the user may approve queries (the `Queries: Approve` authorization). Others save drafts. */
+  public get CanApprove(): boolean {
+    const provider = this.ProviderToUse;
+    return UserCanApproveQueries(provider?.CurrentUser, provider);
+  }
+
+  /** The status the save writes: Approved only when the user may approve and chose to. */
+  private get statusToSave(): MJQueryEntity['Status'] {
+    return this.CanApprove && this.ApproveOnSave ? 'Approved' : 'Pending';
   }
 
   ngOnInit(): void {
@@ -681,7 +721,7 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
 
       query.Name = this.Name.trim();
       query.SQL = this.SQL;
-      query.Status = 'Approved';
+      query.Status = this.statusToSave;
 
       if (this.Description?.trim()) {
         query.Description = this.Description.trim();
@@ -695,7 +735,8 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
 
       const saved = await query.Save();
       if (saved) {
-        MJNotificationService.Instance.CreateSimpleNotification(`Query "${query.Name}" saved`, 'success', 2500);
+        const savedAs = query.Status === 'Approved' ? 'saved' : 'saved as a draft';
+        MJNotificationService.Instance.CreateSimpleNotification(`Query "${query.Name}" ${savedAs}`, 'success', 2500);
 
         // Animate out, then emit
         this.IsVisible = false;

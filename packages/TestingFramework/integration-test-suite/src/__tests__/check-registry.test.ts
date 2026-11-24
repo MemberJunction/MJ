@@ -243,7 +243,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT188)
         ['comms-v2-send', CommsV2SendChecks, 7], // CV2S1-CV2S7 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider, run-chunk completion, delivery guarantee on a stuck log, Admin Block uniqueness and append-only audit log on SQL Server (IT189)
         ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT190)
-        ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT191)
+        ['comms-v2-wire', CommsV2WireChecks, 6], // CV2W1-CV2W6 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT191)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
@@ -454,7 +454,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'comms-v2-compliance': 4,
         'comms-v2-core': 3,
         'comms-v2-send': 7,
-        'comms-v2-wire': 5,
+        'comms-v2-wire': 6,
         'concurrency-conflict-client': 5,
         'concurrent': 2,
         'content-pipeline': 22,
@@ -618,7 +618,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-prediction-serving': 8,
         'ps-truth-datasets': 68,
         'query-api-lifecycle': 12,
-        'query-approvals': 5,
+        'query-approvals': 8,
         'query-extraction': 15,
         'query-metadata-client': 3,
         'query-refresh': 16,

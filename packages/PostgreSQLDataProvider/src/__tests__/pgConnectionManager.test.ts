@@ -78,6 +78,24 @@ describe('PGConnectionManager', () => {
             expect(manager.Config).not.toBeNull();
         });
 
+        it('passes a PasswordSource to the pool when TLS verifies the server', async () => {
+            const source = async () => 'token';
+            await manager.Initialize({
+                Host: 'db.example.com', Database: 'testdb', User: 'user', Password: '',
+                PasswordSource: source, SSL: { rejectUnauthorized: true },
+            });
+            const lastConfig = (pg.Pool as unknown as { lastConfig: Record<string, unknown> }).lastConfig;
+            expect(lastConfig.password).toBe(source);
+        });
+
+        it('refuses a PasswordSource (token login) over plain TCP or unverified TLS', async () => {
+            const source = async () => 'token';
+            const base = { Host: 'db.example.com', Database: 'testdb', User: 'user', Password: '', PasswordSource: source };
+            await expect(manager.Initialize({ ...base, SSL: false })).rejects.toThrow(/Refusing to send the token/);
+            await expect(manager.Initialize({ ...base, SSL: { rejectUnauthorized: false } })).rejects.toThrow(/Refusing to send the token/);
+            await expect(manager.Initialize({ ...base, SSL: true })).rejects.toThrow(/Refusing to send the token/);
+        });
+
         it('listens for errors on the pool so a dropped idle connection does not exit the process', async () => {
             await manager.Initialize({ Host: 'localhost', Database: 'testdb', User: 'user', Password: 'pass' });
 

@@ -1876,3 +1876,70 @@ export function NeedsHandAuthoring(kind: string, reason: string, sql: string): s
   const commented = sql.trim().split('\n').map((l) => `-- ${l}`).join('\n');
   return `${GAP_MARKER_NEEDS_HAND_AUTHORING}: ${kind} — ${reason}\n${commented}\n`;
 }
+
+/**
+ * Add `ON TRUE` after a `LEFT JOIN LATERAL (...)` that has no join condition — PostgreSQL requires
+ * one, T-SQL's `OUTER APPLY` has none. Line-based: tracks paren depth from the LATERAL keyword to the
+ * line that closes it, then inserts `ON TRUE` unless the next line already starts with `ON`.
+ *
+ * Only a LEFT join gets one. This logic used to live in ViewRule and fired on any LATERAL, which put
+ * `ON TRUE` after `CROSS JOIN LATERAL` too — a PostgreSQL syntax error (`syntax error at or near "on"`).
+ *
+ * @param sql - SQL whose `APPLY` clauses have already been rewritten to `LATERAL`.
+ * @returns The SQL with each unconditioned LATERAL join given `ON TRUE`.
+ */
+export function AddLateralOnTrue(sql: string): string {
+  const lines = sql.split('\n');
+  const result: string[] = [];
+  let lateralDepth = 0;
+  let inLateral = false;
+  const needsOnAfter = (i: number): boolean => !(i + 1 < lines.length ? lines[i + 1].trim().toUpperCase() : '').startsWith('ON ');
+
+  for (let i = 0; i < lines.length; i++) {
+    result.push(lines[i]);
+
+    // Detect LEFT JOIN LATERAL block start
+    if (/\bLEFT\s+(?:OUTER\s+)?JOIN\s+LATERAL\b/i.test(lines[i]) && !inLateral) {
+      const rest = lines[i].slice(lines[i].search(/\bLATERAL\b/i));
+      const openCount = [...rest].filter((ch) => ch === '(').length;
+      const closeCount = [...rest].filter((ch) => ch === ')').length;
+      if (openCount > closeCount) {
+        // Multi-line LATERAL: opening paren not closed on this line
+        inLateral = true;
+        lateralDepth = openCount - closeCount;
+      } else if (openCount > 0 && openCount === closeCount && needsOnAfter(i)) {
+        // Single-line LATERAL: fully closed on this line
+        result.push('    ON TRUE');
+      }
+      continue;
+    }
+
+    // Track multi-line LATERAL depth
+    if (inLateral) {
+      for (const ch of lines[i]) {
+        if (ch === '(') lateralDepth++;
+        else if (ch === ')') lateralDepth--;
+      }
+      if (lateralDepth <= 0) {
+        inLateral = false;
+        if (needsOnAfter(i)) result.push('    ON TRUE');
+      }
+    }
+  }
+  return result.join('\n');
+}
+
+/**
+ * Rewrite T-SQL `OUTER APPLY` / `CROSS APPLY` to PostgreSQL LATERAL joins: `OUTER APPLY (...) x`
+ * becomes `LEFT JOIN LATERAL (...) x ON TRUE`, and `CROSS APPLY` becomes `CROSS JOIN LATERAL`.
+ *
+ * @param sql - T-SQL text (views, inline table-valued function bodies).
+ * @returns The rewritten SQL.
+ */
+export function ConvertApplyToLateral(sql: string): string {
+  if (!/\b(?:OUTER|CROSS)\s+APPLY\b/i.test(sql)) return sql;
+  const rewritten = sql
+    .replace(/\bCROSS\s+APPLY\b/gi, 'CROSS JOIN LATERAL')
+    .replace(/\bOUTER\s+APPLY\b/gi, 'LEFT JOIN LATERAL');
+  return AddLateralOnTrue(rewritten);
+}

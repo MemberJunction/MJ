@@ -6,6 +6,7 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { BuildPgPasswordSource, BuildPgSslConfig, ResolvePgAuthMode, type PgSslConfig } from '@memberjunction/postgresql-dataprovider';
 import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS } from './lib/migration-timeout';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
@@ -379,17 +380,19 @@ export const GetSkywayConfig = async (
 
   const dialect: DatabaseDialect = mjConfig.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver';
 
+  const pgSecurity = dialect === 'postgresql' ? await ResolvePostgresMigrationSecurity(mjConfig) : undefined;
   const dbConfig = {
     Dialect: dialect,
     Server: mjConfig.dbHost,
     Port: mjConfig.dbPort,
     Database: mjConfig.dbDatabase,
     User: mjConfig.codeGenLogin,
-    Password: mjConfig.codeGenPassword,
+    Password: pgSecurity?.Password ?? mjConfig.codeGenPassword,
     Options: {
       Encrypt: mjConfig.dbEncrypt,
       TrustServerCertificate: mjConfig.dbTrustServerCertificate,
       RequestTimeout: mjConfig.dbRequestTimeout ?? DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS,
+      ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
     },
   };
 
@@ -444,4 +447,34 @@ async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayCo
       );
     }
   }
+}
+
+/** The result of {@link ResolvePostgresMigrationSecurity}. */
+export interface PostgresMigrationSecurity {
+  SSL?: Record<string, unknown>;
+  Password?: string;
+  PasswordSource?: () => Promise<string>;
+}
+
+/**
+ * TLS and password for a PostgreSQL migration run, from the shared `PG_SSL_*` and `PG_AUTH_MODE`
+ * settings every MJ PostgreSQL client follows.
+ *
+ * For a token login, `PasswordSource` gives a token each time it is called; pass it to every client
+ * that accepts a function, so each connection asks for its own. `Password` is one token fetched now,
+ * for Skyway, whose password option is a string.
+ */
+export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Promise<PostgresMigrationSecurity> {
+  const ssl: PgSslConfig = BuildPgSslConfig(mjConfig.dbHost);
+  // BuildPgPasswordSource refuses a token login whose TLS does not verify the server.
+  const source = BuildPgPasswordSource(ResolvePgAuthMode(), {
+    Host: mjConfig.dbHost,
+    Port: mjConfig.dbPort ?? 5432,
+    User: mjConfig.codeGenLogin ?? '',
+    Database: mjConfig.dbDatabase,
+  }, ssl);
+  // Skyway types its SSL option as a plain record and treats `true` as "TLS, unverified", so pass
+  // the object as a record and leave the option out for plain TCP.
+  const sslRecord: Record<string, unknown> | undefined = typeof ssl === 'object' && ssl !== null ? Object.fromEntries(Object.entries(ssl)) : undefined;
+  return source ? { SSL: sslRecord, Password: await source(), PasswordSource: source } : { SSL: sslRecord };
 }
