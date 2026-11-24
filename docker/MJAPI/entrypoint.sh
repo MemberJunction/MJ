@@ -9,13 +9,16 @@ set -e
 # and never exposes it publicly). Outside App Service that same daemon is a remote root
 # shell for anyone who can reach port 2222, so only start it when we are actually on App
 # Service (WEBSITE_INSTANCE_ID is injected by the platform) or when explicitly opted in.
+# The root password is set here, inside the same gate, rather than baked into the image —
+# the published image carries no usable root password unless sshd is actually started.
 if [ -n "${WEBSITE_INSTANCE_ID:-}" ]; then
+  # App Service's SSH feature requires exactly root:Docker! (platform-documented).
+  echo "root:Docker!" | chpasswd
   /usr/sbin/sshd -D &
 elif [ "${ENABLE_SSH:-}" = "true" ]; then
-  # Outside App Service the baked-in "Docker!" password would be a universal, documented root
-  # credential on every deployment that maps port 2222. Replace it before sshd starts: use the
-  # operator-supplied SSH_ROOT_PASSWORD, or generate a random one-time password and print it
-  # once to the container log.
+  # Outside App Service the "Docker!" password would be a universal, documented root
+  # credential on every deployment that maps port 2222. Set a custom or random one-time
+  # password before sshd starts.
   if [ -n "${SSH_ROOT_PASSWORD:-}" ]; then
     echo "root:${SSH_ROOT_PASSWORD}" | chpasswd
   else
