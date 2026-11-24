@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 
@@ -237,19 +237,20 @@ describe('MyAgentsSectionComponent (DOM)', () => {
       UserRoles: [{ Role: 'Space Participant', RoleID: 'role-space-participant' }],
     } as Partial<UserInfo> as UserInfo;
 
+    const noCreatePerms: Partial<ReturnType<EntityInfo['GetUserPermisions']>> = {
+      CanRead: true,
+      CanCreate: false,
+      CanUpdate: false,
+      CanDelete: false,
+    };
+    const agentEntityStub = Object.create(EntityInfo.prototype) as EntityInfo;
+    agentEntityStub.GetUserPermisions = () =>
+      noCreatePerms as ReturnType<EntityInfo['GetUserPermisions']>;
+
     const restrictedProvider = {
       CurrentUser: externalParticipant,
-      EntityByName: (name: string) =>
-        name === 'MJ: AI Agents'
-          ? {
-              GetUserPermisions: () => ({
-                CanRead: true,
-                CanCreate: false,
-                CanUpdate: false,
-                CanDelete: false,
-              }),
-            }
-          : null,
+      EntityByName: (name: string): EntityInfo | undefined =>
+        name === 'MJ: AI Agents' ? agentEntityStub : undefined,
     } as Partial<IMetadataProvider> as IMetadataProvider;
 
     const fixture = renderComponentFixture(MyAgentsSectionComponent, {
