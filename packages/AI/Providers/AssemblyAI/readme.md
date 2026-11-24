@@ -1,7 +1,39 @@
 # @memberjunction/ai-assemblyai
 
-MemberJunction provider package for **AssemblyAI**, currently exposing the **Voice Agent API**
-(launched April 2026) as a realtime, full-duplex, tool-calling model.
+MemberJunction provider package for **AssemblyAI**. It has two realtime (voice) drivers:
+
+- **`AssemblyAIVoiceRealtime`**: AssemblyAI's current stack. Use this one.
+- **`AssemblyAIRealtime`**: the Voice Agent API, which AssemblyAI no longer offers to new accounts and retires on
+  February 1, 2027.
+
+## AssemblyAI voice (`AssemblyAIVoiceRealtime`)
+
+AssemblyAI sells the parts of a voice agent separately and leaves the conversation between them to the caller. This driver
+runs that conversation inside MJAPI, so it needs an AssemblyAI API key and nothing to host:
+
+```
+browser mic -> MJAPI -> STT 3.7 Realtime Agent -> LLM Gateway -> TTS-1 -> MJAPI -> browser speaker
+```
+
+| Concern | How it works |
+| --- | --- |
+| Protocol | The pipeline (`src/voice/assemblyAIVoicePipeline.ts`) speaks the OpenAI Realtime protocol, so MJ's shared OpenAI-protocol session and browser client drive it |
+| Browser sessions | A one-time ticket for MJAPI's realtime proxy, whose upstream is the pipeline in that process. The prompt, tools and key never reach the browser, and a browser `session.update` is ignored |
+| Server sessions | The shared session over an in-memory connection |
+| Turns | STT decides when the user has finished. A turn that ends in a name or a number is held open longer (up to 1.28 s in `balanced`), in case more of it follows |
+| Interruption | Words stop the reply; a listening sound ("mm-hm") does not. History keeps what was heard, estimated from when the audio plays |
+| Tools | Streamed from the gateway. A result that arrives after the conversation moved on is brought to the end of the history, marked |
+| A failed reply | Spoken about once; the next turn works. A lost voice connection is reopened for the next reply |
+| Billing | STT by open time, TTS by character, LLM by token. All are closed when the browser leaves, stops answering, or reaches the time limit. `OnUsage` reports LLM tokens only |
+
+- API key: `AI_VENDOR_API_KEY__AssemblyAIVoiceRealtime`
+- `Model` / `APIName` names the speech-to-text model (`assemblyai-stt-3-7-realtime-agent`)
+- `Config` keys: `voice` (a library voice's slug, or a voice's UUID), `llmModel` (default `gemma-4-31b`; free accounts cannot
+  use every gateway model), `keyterms`, `firstMessage`, `disableAutoResponse`, and the normalized `turnDetection`
+  (`Eagerness`, `SilenceDurationMs`, `Threshold`)
+- A long system prompt slows the first words of every reply, because the LLM reads it each turn
+
+## Voice Agent API (`AssemblyAIRealtime`)
 
 ## What this package provides
 
