@@ -279,7 +279,7 @@ export class CommunicationsAdminDashboardComponent extends BaseDashboard impleme
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
           await this.LoadMetadata();
-          return { Success: true };
+          return this.LoadError ? { Success: false, ErrorMessage: this.LoadError } : { Success: true };
         },
       },
     ]);

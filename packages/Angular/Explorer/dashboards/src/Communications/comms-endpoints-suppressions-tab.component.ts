@@ -180,8 +180,8 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
   }
 
   public async Search(): Promise<void> {
-    const query = this.SearchAddress.trim().toLowerCase();
-    if (!query) return;
+    const normalized = NormalizeSearchAddress(this.SearchAddress);
+    if (!normalized) return;
 
     this.IsLoading = true;
     this.ErrorMessage = '';
@@ -189,48 +189,68 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const safe = EscapeSQLString(query);
-      const epRes = await rv.RunView<MJCommunicationEndpointEntity>({
-        EntityName: 'MJ: Communication Endpoints',
-        ExtraFilter: `NormalizedValue LIKE '%${safe}%'`,
-        MaxRows: 25,
-        ResultType: 'entity_object',
-      });
-      this.Endpoints = epRes.Success ? epRes.Results : [];
-
-      if (this.Endpoints.length > 0) {
-        const ids = this.Endpoints.map((e) => `'${EscapeSQLString(e.ID)}'`).join(',');
-        const suppRes = await rv.RunView<MJCommunicationSuppressionEntity>({
-          EntityName: 'MJ: Communication Suppressions',
-          ExtraFilter: `CommunicationEndpointID IN (${ids})`,
-          OrderBy: 'EffectiveAt DESC',
-          ResultType: 'entity_object',
-        });
-        this.Suppressions = suppRes.Success ? suppRes.Results : [];
-
-        if (this.Suppressions.length > 0) {
-          const sIds = this.Suppressions.map((s) => `'${EscapeSQLString(s.ID)}'`).join(',');
-          const auditRes = await rv.RunView<MJCommunicationConsentAuditLogEntity>({
-            EntityName: 'MJ: Communication Consent Audit Logs',
-            ExtraFilter: `CommunicationSuppressionID IN (${sIds})`,
-            OrderBy: '__mj_CreatedAt DESC',
-            MaxRows: 50,
-            ResultType: 'entity_object',
-          });
-          this.AuditLogs = auditRes.Success ? auditRes.Results : [];
-        } else {
-          this.AuditLogs = [];
-        }
-      } else {
-        this.Suppressions = [];
-        this.AuditLogs = [];
-      }
+      this.Endpoints = await this.loadEndpoints(rv, normalized);
+      this.Suppressions = await this.loadSuppressions(rv, this.Endpoints);
+      this.AuditLogs = await this.loadAuditLogs(rv, this.Suppressions);
     } catch (err: unknown) {
+      this.Endpoints = [];
+      this.Suppressions = [];
+      this.AuditLogs = [];
       this.ErrorMessage = err instanceof Error ? err.message : 'Search failed.';
     } finally {
       this.IsLoading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Exact match on the normalized address, or on its hash so an erased endpoint (address removed,
+   * hash kept) is still found. Both columns are indexed; a substring scan is not.
+   */
+  private async loadEndpoints(rv: RunView, normalized: string): Promise<MJCommunicationEndpointEntity[]> {
+    const hash = await Sha256Hex(normalized);
+    const res = await rv.RunView<MJCommunicationEndpointEntity>({
+      EntityName: 'MJ: Communication Endpoints',
+      ExtraFilter: `NormalizedValue = '${EscapeSQLString(normalized)}' OR ValueHash = '${EscapeSQLString(hash)}'`,
+      MaxRows: 25,
+      ResultType: 'entity_object',
+    });
+    if (!res.Success) throw new Error(`Endpoint lookup failed: ${res.ErrorMessage}`);
+    return res.Results;
+  }
+
+  private async loadSuppressions(
+    rv: RunView,
+    endpoints: MJCommunicationEndpointEntity[],
+  ): Promise<MJCommunicationSuppressionEntity[]> {
+    if (endpoints.length === 0) return [];
+    const ids = endpoints.map((e) => `'${EscapeSQLString(e.ID)}'`).join(',');
+    const res = await rv.RunView<MJCommunicationSuppressionEntity>({
+      EntityName: 'MJ: Communication Suppressions',
+      ExtraFilter: `CommunicationEndpointID IN (${ids})`,
+      OrderBy: 'EffectiveAt DESC',
+      ResultType: 'entity_object',
+    });
+    // A failed read must not look like "no suppressions": the address would appear sendable.
+    if (!res.Success) throw new Error(`Suppression lookup failed: ${res.ErrorMessage}`);
+    return res.Results;
+  }
+
+  private async loadAuditLogs(
+    rv: RunView,
+    suppressions: MJCommunicationSuppressionEntity[],
+  ): Promise<MJCommunicationConsentAuditLogEntity[]> {
+    if (suppressions.length === 0) return [];
+    const ids = suppressions.map((s) => `'${EscapeSQLString(s.ID)}'`).join(',');
+    const res = await rv.RunView<MJCommunicationConsentAuditLogEntity>({
+      EntityName: 'MJ: Communication Consent Audit Logs',
+      ExtraFilter: `CommunicationSuppressionID IN (${ids})`,
+      OrderBy: '__mj_CreatedAt DESC',
+      MaxRows: 50,
+      ResultType: 'entity_object',
+    });
+    if (!res.Success) throw new Error(`Consent audit lookup failed: ${res.ErrorMessage}`);
+    return res.Results;
   }
 
   public async AddAdminBlock(endpoint: MJCommunicationEndpointEntity): Promise<void> {
@@ -271,4 +291,24 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
       this.cdr.markForCheck();
     }
   }
+}
+
+/**
+ * Normalizes a typed address the way the server stores `NormalizedValue`: an email is trimmed and
+ * lower-cased; anything else is reduced to its digits, keeping a leading `+`. This mirrors
+ * `NormalizeEndpointAddress` in `@memberjunction/communication-engine`, which is server-only.
+ */
+export function NormalizeSearchAddress(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes('@')) return trimmed.toLowerCase();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return null;
+  return trimmed.startsWith('+') ? `+${digits}` : digits;
+}
+
+/** SHA-256 hex digest, matching an endpoint's `ValueHash`. */
+export async function Sha256Hex(value: string): Promise<string> {
+  const bytes = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
 }

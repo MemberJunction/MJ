@@ -98,46 +98,20 @@ export interface PrincipalSlotMappingForm {
           <h3 class="comms-card-title">Communication Principals &amp; Slot Mapping</h3>
           <p class="comms-card-subtitle">Map entity fields to compliance principal attributes (FullName, Jurisdiction, Timezone, Language, Existing Customer).</p>
         </div>
+        @if (HighlightedPrincipal) {
+          <button mjButton variant="outline" size="sm" (click)="EditSlots(HighlightedPrincipal)">
+            Configure Slots
+          </button>
+        }
       </div>
 
-      <table class="comms-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Entity</th>
-            <th>Driver</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (principal of Metadata?.Principals ?? []; track principal.ID) {
-            <tr>
-              <td>{{ principal.Name }}</td>
-              <td>{{ principal.Entity }}</td>
-              <td><code>{{ principal.DriverClass }}</code></td>
-              <td>
-                <span
-                  class="comms-pill"
-                  [class.comms-pill--active]="principal.Status === 'Active'"
-                  [class.comms-pill--disabled]="principal.Status !== 'Active'"
-                >
-                  {{ principal.Status }}
-                </span>
-              </td>
-              <td>
-                <button mjButton variant="outline" size="sm" (click)="EditSlots(principal)">
-                  Configure Slots
-                </button>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="5">No communication principals configured.</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <ag-grid-angular
+        [theme]="GridTheme"
+        [columnDefs]="PrincipalCols"
+        [gridOptions]="GridOptions"
+        [rowData]="Metadata?.Principals ?? []"
+        (rowClicked)="OnPrincipalRowClicked($event)"
+      />
 
       @if (SelectedPrincipal) {
         <div class="comms-slot-editor" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--mj-border-default);">
@@ -196,6 +170,14 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
     { field: 'Parameters', headerName: 'Parameters', flex: 2 },
     { field: 'Status', headerName: 'Status', flex: 1 },
   ];
+  public readonly PrincipalCols: ColDef[] = [
+    { field: 'Name', headerName: 'Name', flex: 2 },
+    { field: 'Entity', headerName: 'Entity', flex: 2 },
+    { field: 'DriverClass', headerName: 'Driver', flex: 2 },
+    { field: 'Status', headerName: 'Status', flex: 1 },
+  ];
+  /** The principal row clicked in the grid; slot editing opens from the header button. */
+  public HighlightedPrincipal: MJCommunicationPrincipalEntity | null = null;
   public readonly V1TypeCols: ColDef[] = [
     { field: 'Entity', headerName: 'Entity', flex: 2 },
     { field: 'BaseMessageType', headerName: 'Message Type', flex: 2 },
@@ -203,6 +185,11 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
 
   public OnPolicyRowClicked(event: RowClickedEvent): void {
     this.SelectedPolicy = (event.data as MJCommunicationSuppressionPolicyEntity | undefined) ?? null;
+    this.cdr.markForCheck();
+  }
+
+  public OnPrincipalRowClicked(event: RowClickedEvent): void {
+    this.HighlightedPrincipal = (event.data as MJCommunicationPrincipalEntity | undefined) ?? null;
     this.cdr.markForCheck();
   }
 
@@ -281,6 +268,7 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
     this.StatusMessage = '';
     this.cdr.markForCheck();
 
+    const previousConfiguration = principal.Configuration;
     try {
       let existingConfig: Record<string, unknown> = {};
       if (principal.Configuration) {
@@ -310,6 +298,8 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
       this.SelectedPrincipal = null;
       this.RefreshRequested.emit();
     } catch (err: unknown) {
+      // Put back what is persisted so the grid does not show a mapping that was never saved.
+      principal.Configuration = previousConfiguration;
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to save slot mapping.';
     } finally {
       this.BusyId = null;
@@ -365,10 +355,14 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
       item.CommunicationPrincipalID = principal.ID;
       if (!(await item.Save())) {
         item.CommunicationPrincipalID = previousPrincipalID;
-        if (createdPrincipal) {
-          await createdPrincipal.Delete().catch(() => false);
+        const linkError = item.LatestResult?.CompleteMessage || 'Failed to link principal.';
+        if (createdPrincipal && !(await createdPrincipal.Delete())) {
+          throw new Error(
+            `${linkError} The new principal "${createdPrincipal.Name}" could not be removed ` +
+              `(${createdPrincipal.LatestResult?.CompleteMessage ?? 'unknown error'}); delete it by hand.`,
+          );
         }
-        throw new Error(item.LatestResult?.CompleteMessage || 'Failed to link principal.');
+        throw new Error(linkError);
       }
       this.RefreshRequested.emit();
     } catch (err: unknown) {

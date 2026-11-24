@@ -120,28 +120,6 @@
   min-height: 96px;
 }
 
-.comms-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.comms-table th,
-.comms-table td {
-  text-align: left;
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--mj-border-subtle);
-  color: var(--mj-text-primary);
-}
-
-.comms-table th {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--mj-text-muted);
-  background: var(--mj-bg-surface-card);
-}
-
 .comms-pill {
   display: inline-flex;
   align-items: center;

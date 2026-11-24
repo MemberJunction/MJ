@@ -1,17 +1,19 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { AgGridAngular } from 'ag-grid-angular';
+import type { ColDef, GridOptions, RowClickedEvent } from 'ag-grid-community';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type {
   MJCommunicationComplianceRegimeEntity,
   MJJurisdictionMemberEntity,
 } from '@memberjunction/core-entities';
-import { IndexByUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
-import type { CommsAdminLoadedMetadata, JurisdictionTreeNode } from './communications-admin.types';
+import { IndexByUUID, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { CommsGridTheme, type CommsAdminLoadedMetadata, type JurisdictionTreeNode } from './communications-admin.types';
 
 @Component({
   selector: 'mj-comms-regimes-jurisdictions-tab',
   standalone: true,
-  imports: [MJButtonDirective],
+  imports: [MJButtonDirective, AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./communications-admin.css'],
   template: `
@@ -21,46 +23,26 @@ import type { CommsAdminLoadedMetadata, JurisdictionTreeNode } from './communica
           <h3 class="comms-card-title">Compliance Regimes</h3>
           <p class="comms-card-subtitle">Toggle Active/Disabled status for regulatory regimes.</p>
         </div>
+        @if (SelectedRegime) {
+          <button
+            mjButton
+            variant="outline"
+            size="sm"
+            [disabled]="IsBusy(SelectedRegime.ID)"
+            (click)="ToggleRegimeStatus(SelectedRegime)"
+          >
+            {{ SelectedRegime.Status === 'Active' ? 'Disable' : 'Activate' }} {{ SelectedRegime.Name }}
+          </button>
+        }
       </div>
 
-      <table class="comms-table">
-        <thead>
-          <tr>
-            <th>Regime</th>
-            <th>Applies By</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (regime of Metadata?.Regimes ?? []; track regime.ID) {
-            <tr>
-              <td>{{ regime.Name }}</td>
-              <td>{{ regime.AppliesBy }}</td>
-              <td>
-                <span
-                  class="comms-pill"
-                  [class.comms-pill--active]="regime.Status === 'Active'"
-                  [class.comms-pill--disabled]="regime.Status !== 'Active'"
-                >
-                  {{ regime.Status }}
-                </span>
-              </td>
-              <td>
-                <button
-                  mjButton
-                  variant="outline"
-                  size="sm"
-                  [disabled]="IsBusy(regime.ID)"
-                  (click)="ToggleRegimeStatus(regime)"
-                >
-                  {{ regime.Status === 'Active' ? 'Disable' : 'Activate' }}
-                </button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <ag-grid-angular
+        [theme]="GridTheme"
+        [columnDefs]="RegimeCols"
+        [gridOptions]="GridOptions"
+        [rowData]="Metadata?.Regimes ?? []"
+        (rowClicked)="OnRegimeRowClicked($event)"
+      />
       @if (ErrorMessage) {
         <p class="comms-error-msg">{{ ErrorMessage }}</p>
       }
@@ -100,6 +82,24 @@ export class CommsRegimesJurisdictionsTabComponent extends BaseAngularComponent 
 
   @Output() public RefreshRequested = new EventEmitter<void>();
 
+  public SelectedRegime: MJCommunicationComplianceRegimeEntity | null = null;
+  public readonly GridTheme = CommsGridTheme();
+  public readonly GridOptions: GridOptions = {
+    domLayout: 'autoHeight',
+    suppressCellFocus: true,
+    rowSelection: { mode: 'singleRow' },
+  };
+  public readonly RegimeCols: ColDef[] = [
+    { field: 'Name', headerName: 'Regime', flex: 2 },
+    { field: 'AppliesBy', headerName: 'Applies By', flex: 2 },
+    { field: 'Status', headerName: 'Status', flex: 1 },
+  ];
+
+  public OnRegimeRowClicked(event: RowClickedEvent): void {
+    this.SelectedRegime = (event.data as MJCommunicationComplianceRegimeEntity | undefined) ?? null;
+    this.cdr.markForCheck();
+  }
+
   public BusyRegimeId: string | null = null;
   public ErrorMessage = '';
   public JurisdictionTree: JurisdictionTreeNode[] = [];
@@ -137,8 +137,8 @@ export class CommsRegimesJurisdictionsTabComponent extends BaseAngularComponent 
       membersByGroup.Set(m.GroupJurisdictionID, list);
     }
 
-    const childIds = new Set(members.map((m) => m.MemberJurisdictionID.toLowerCase()));
-    const roots = jurisdictions.filter((j) => !childIds.has(j.ID.toLowerCase()));
+    const childIds = new UUIDSet(members.map((m) => m.MemberJurisdictionID));
+    const roots = jurisdictions.filter((j) => !childIds.Has(j.ID));
     const out: JurisdictionTreeNode[] = [];
     const visited = new Set<string>();
 
