@@ -175,7 +175,8 @@ Given the gate's obligations, the dispatcher:
   when the one-click header is required;
 - rewrites `http(s)` links in the HTML body to `/comms/click/<token>?u=...&sig=...` when click tracking is
   allowed, the envelope did not set `TrackClicks: false`, and an HMAC secret is configured (the unsubscribe and
-  preference-center links are never rewritten);
+  preference-center links are never rewritten, and neither is a link whose tracked form would be longer than
+  2,000 characters);
 - adds a 1x1 image pointing at `/comms/open/<token>.gif` when open tracking is allowed and the envelope did not
   set `TrackOpens: false`;
 - tells the provider to turn its own open and click tracking off (`Message.DisableProviderTracking`) and passes
@@ -974,6 +975,9 @@ Check these against the code before relying on the opposite; they describe the i
 - **One provider for delivery events.** The public webhook route and the `comms.activity` handler support
   SendGrid only (13.5). Open, click and unsubscribe events from MJ's own routes are attributed to the provider
   that sent the message, taken from its log.
+- **Long links are not click-tracked.** The target travels inside the tracked link, so a link whose tracked
+  form would exceed 2,000 characters (`MAX_TRACKED_LINK_LENGTH`) is left as written. It works for the recipient;
+  its clicks are not recorded. A clicked URL reported by a provider is stored shortened to 2,000 characters.
 - **Mixed-entity sends.** Jurisdiction and attributes are resolved with the principal driver of the first
   recipient's entity. Send one entity per call when entities use different drivers.
 - **Per-recipient `CorrelationData`** on `RecipientSendTarget` is not stored; only `Envelope.CorrelationData`

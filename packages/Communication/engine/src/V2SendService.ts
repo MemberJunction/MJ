@@ -147,9 +147,19 @@ function buildCommsRouteUrl(baseUrl: string, subpath: string): string {
 }
 
 /**
+ * Longest tracked link `RewriteLinksForTracking` will produce. The target travels inside the
+ * tracked link, so the tracked link is always the longer of the two. Past this length links fail
+ * in practice: some mail clients cap links near 2,000 characters, proxies reject long request
+ * lines, and `MJ: Communication Activities.TargetURL` holds 2,000 characters.
+ */
+export const MAX_TRACKED_LINK_LENGTH = 2000;
+
+/**
  * Rewrites every absolute `http(s)` link in `<a href>` tags to
  * `<baseUrl>/comms/click/<trackingToken>?u=<target>&sig=<signature>`. Links listed in
- * `excludedUrls` (the unsubscribe and preference-center links) are left as they are.
+ * `excludedUrls` (the unsubscribe and preference-center links) are left as they are, and so is a
+ * link whose tracked form would be longer than `MAX_TRACKED_LINK_LENGTH`: it still works for the
+ * recipient, but its clicks are not recorded.
  */
 export function RewriteLinksForTracking(
   html: string,
@@ -194,6 +204,9 @@ export function RewriteLinksForTracking(
         }
         const sig = ComputeTrackingSignature(trackingToken, decodedUrl, secret);
         const tracked = `${buildCommsRouteUrl(baseUrl, `/click/${trackingToken}`)}?u=${encodeURIComponent(decodedUrl)}&sig=${sig}`;
+        if (tracked.length > MAX_TRACKED_LINK_LENGTH) {
+          return hrefMatch;
+        }
         return `href=${quote}${tracked}${quote}`;
       },
     );

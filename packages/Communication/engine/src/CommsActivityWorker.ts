@@ -78,6 +78,9 @@ interface SoftBouncePolicyConfig {
   ExpiryDays: number;
 }
 
+/** Length of `MJ: Communication Activities.TargetURL`. */
+const ACTIVITY_TARGET_URL_MAX_LENGTH = 2000;
+
 /**
  * Processes normalized provider activity events (`comms.activity` WorkQueue worker)
  * and implements GDPR endpoint PII erasure.
@@ -1109,7 +1112,9 @@ export class CommsActivityWorker {
     activity.ReceivedAt = new Date();
     activity.ProviderEventID = event.ProviderEventID ?? null;
     activity.ProviderMessageID = event.ProviderMessageID ?? null;
-    activity.TargetURL = event.TargetURL ?? null;
+    // A provider can report a clicked URL longer than the column holds. Keep the event and
+    // shorten the URL, so the save does not fail and the work item is not retried for good.
+    activity.TargetURL = event.TargetURL ? event.TargetURL.slice(0, ACTIVITY_TARGET_URL_MAX_LENGTH) : null;
     activity.BounceCode = event.BounceCode ?? null;
     activity.BounceReason = event.BounceReason ?? null;
     activity.IsMachineEvent = event.IsMachineEvent;

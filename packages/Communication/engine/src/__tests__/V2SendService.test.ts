@@ -8,6 +8,7 @@ import {
   ComputeTrackingSignature,
   InjectOpenPixel,
   ProtectedComplianceSnapshot,
+  MAX_TRACKED_LINK_LENGTH,
   RewriteLinksForTracking,
   V2SendService,
   VerifyTrackingSignature,
@@ -26,6 +27,30 @@ describe('V2 Endpoint Normalization & Tracking Primitives', () => {
     expect(phone).not.toBeNull();
     expect(phone!.NormalizedValue).toBe('+15125550199');
     expect(phone!.Domain).toBeUndefined();
+  });
+
+  it('leaves a link untracked when its tracked form would be too long, and still tracks the others', () => {
+    const base = 'https://app.example.com';
+    const shortUrl = 'https://example.com/offer';
+    const longUrl = `https://example.com/landing?data=${'a'.repeat(MAX_TRACKED_LINK_LENGTH)}`;
+    const html = `<a href="${shortUrl}">Short</a> <a href="${longUrl}">Long</a>`;
+
+    const rewritten = RewriteLinksForTracking(html, 'tok-123', 'super-secret-key', base);
+
+    expect(rewritten).toContain(`href="${longUrl}"`);
+    expect(rewritten).toContain(`${base}/comms/click/tok-123?u=${encodeURIComponent(shortUrl)}&sig=`);
+    const hrefs = [...rewritten.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+    expect(hrefs.every((h) => h === longUrl || h.length <= MAX_TRACKED_LINK_LENGTH)).toBe(true);
+  });
+
+  it('tracks a link whose tracked form is exactly at the limit, and not one character past it', () => {
+    const base = 'https://app.example.com';
+    const overhead = RewriteLinksForTracking('<a href="https://e.co/">x</a>', 'tok-123', 's', base).match(/href="([^"]+)"/)![1].length
+      - encodeURIComponent('https://e.co/').length;
+    const fits = `https://e.co/${'a'.repeat(MAX_TRACKED_LINK_LENGTH - overhead - encodeURIComponent('https://e.co/').length)}`;
+
+    expect(RewriteLinksForTracking(`<a href="${fits}">x</a>`, 'tok-123', 's', base)).toContain('/comms/click/tok-123?u=');
+    expect(RewriteLinksForTracking(`<a href="${fits}a">x</a>`, 'tok-123', 's', base)).toBe(`<a href="${fits}a">x</a>`);
   });
 
   it('rewrites HTTP/HTTPS links with valid HMAC-SHA256 signature and excludes unsubscribe URLs', () => {

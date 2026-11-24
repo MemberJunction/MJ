@@ -1028,4 +1028,30 @@ describe('CommsActivityWorker', () => {
       ['prov-local-mock', 'hit-click-1'],
     ]);
   });
+
+  it('records a click whose URL is longer than the TargetURL column, shortened to fit', async () => {
+    // A provider webhook can report any URL. Left as it is, the activity save is refused and the
+    // work item is retried until it gives up.
+    const longUrl = `https://example.com/landing?data=${'a'.repeat(3000)}`;
+
+    const result = await worker.ProcessActivityBatch(
+      [
+        {
+          CommunicationProviderID: 'prov-1',
+          ProviderEventID: 'evt-long-url',
+          NormalizedAddress: 'alice@example.com',
+          EventType: 'Clicked',
+          TargetURL: longUrl,
+          OccurredAt: new Date('2026-03-05T12:00:00Z'),
+          IsMachineEvent: false,
+        },
+      ],
+      mockUser,
+    );
+
+    expect(result).toMatchObject({ ProcessedCount: 1, ErrorCount: 0 });
+    const saved = String(store['MJ: Communication Activities'][0].TargetURL);
+    expect(saved).toHaveLength(2000);
+    expect(longUrl.startsWith(saved)).toBe(true);
+  });
 });
