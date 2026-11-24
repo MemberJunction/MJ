@@ -44,11 +44,19 @@ export type HarnessCliRawEvent = Record<string, unknown>;
  * the caller's accumulation loop needs exactly one terminal event per turn to make progress. A throw
  * from inside the async iterator would strand the run between turns with no recorded reason.
  */
+const DEFAULT_LIVENESS_HEARTBEAT_THROTTLE_MS = 1000;
+const DEFAULT_RECENT_OUTPUT_BUFFER_SIZE = 20;
+const MAX_RECENT_LINE_LENGTH = 300;
+
 export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
     protected config: HarnessSessionConfig | null = null;
     protected sessionId: string | undefined = undefined;
     protected activeProcess: HarnessProcess | null = null;
     private turnCount = 0;
+    private recentOutputLines: string[] = [];
+    private lastActivityEmitAt = 0;
+    private livenessHeartbeatThrottleMs = DEFAULT_LIVENESS_HEARTBEAT_THROTTLE_MS;
+    private recentOutputMaxLines = DEFAULT_RECENT_OUTPUT_BUFFER_SIZE;
 
     /** Absolute path or bare command name of the harness binary. */
     protected abstract get ExecutablePath(): string;
@@ -72,6 +80,33 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
     /** @inheritdoc */
     public override get SessionId(): string | undefined {
         return this.sessionId;
+    }
+
+    /** @inheritdoc */
+    public override get RecentOutputLines(): readonly string[] {
+        return [...this.recentOutputLines];
+    }
+
+    /**
+     * Configures the minimum interval in milliseconds between `liveness-heartbeat` pulses
+     * emitted for raw non-JSON stdout, unmapped JSON events, or stderr lines.
+     */
+    public SetLivenessHeartbeatThrottleMs(ms: number): void {
+        if (Number.isFinite(ms) && ms >= 0) {
+            this.livenessHeartbeatThrottleMs = ms;
+        }
+    }
+
+    /**
+     * Configures the rolling ring buffer capacity for recent stdout/stderr diagnostic lines.
+     */
+    public SetRecentOutputBufferSize(maxLines: number): void {
+        if (Number.isFinite(maxLines) && maxLines >= 0) {
+            this.recentOutputMaxLines = Math.floor(maxLines);
+            while (this.recentOutputLines.length > this.recentOutputMaxLines) {
+                this.recentOutputLines.shift();
+            }
+        }
     }
 
     /** @inheritdoc */
@@ -100,20 +135,87 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
         }
 
         this.activeProcess = proc;
+        this.recentOutputLines = [];
+        this.lastActivityEmitAt = 0;
+
+        const queue: HarnessTurnEvent[] = [];
+        let notifyNext: (() => void) | null = null;
+        let stdoutDone = false;
+        let stdoutError: Error | undefined = undefined;
+        let consumerClosed = false;
+
+        const wake = (): void => {
+            if (notifyNext) {
+                const resolve = notifyNext;
+                notifyNext = null;
+                resolve();
+            }
+        };
+
+        const enqueue = (event: HarnessTurnEvent): void => {
+            if (consumerClosed) {
+                return;
+            }
+            queue.push(event);
+            wake();
+        };
+
         const stderrChunks: string[] = [];
         const drainStderr = (async () => {
             for await (const line of proc.Stderr) {
                 stderrChunks.push(line);
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    continue;
+                }
+                this.recordRecentOutputLine('stderr', trimmed);
+                if (!stdoutDone && !consumerClosed) {
+                    const now = Date.now();
+                    if (this.shouldEmitLivenessHeartbeat(now)) {
+                        enqueue(this.buildLivenessHeartbeat('stderr', now));
+                    }
+                }
             }
         })().catch(() => undefined);
 
         let sawTerminal = false;
-        try {
-            for await (const event of this.readEvents(proc)) {
-                if (event.Type === 'turn-complete' || event.Type === 'session-error') {
-                    sawTerminal = true;
+        const pumpStdout = (async () => {
+            try {
+                for await (const event of this.readEvents(proc)) {
+                    if (consumerClosed) {
+                        break;
+                    }
+                    if (event.Type === 'turn-complete' || event.Type === 'session-error') {
+                        sawTerminal = true;
+                    }
+                    this.lastActivityEmitAt = Date.now();
+                    enqueue(event);
                 }
-                yield event;
+            } catch (err) {
+                stdoutError = err instanceof Error ? err : new Error(String(err));
+            } finally {
+                stdoutDone = true;
+                wake();
+            }
+        })();
+
+        try {
+            while (true) {
+                if (queue.length > 0) {
+                    yield queue.shift()!;
+                    continue;
+                }
+                if (stdoutDone) {
+                    break;
+                }
+                await new Promise<void>((resolve) => {
+                    notifyNext = resolve;
+                });
+            }
+
+            await pumpStdout;
+            if (stdoutError !== undefined) {
+                throw stdoutError;
             }
 
             // Exactly one terminal event per turn is the contract the accumulation loop relies on.
@@ -131,8 +233,11 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
                 };
             }
         } finally {
+            consumerClosed = true;
+            wake();
             this.activeProcess = null;
             proc.Kill();
+            void pumpStdout.catch(() => undefined);
         }
     }
 
@@ -180,14 +285,18 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
             if (!trimmed) {
                 continue;
             }
+            this.recordRecentOutputLine('stdout', trimmed);
 
             let raw: HarnessCliRawEvent;
             try {
                 raw = JSON.parse(trimmed) as HarnessCliRawEvent;
             } catch {
-                // Harness CLIs interleave human-readable banners with their JSON stream. A line that
-                // does not parse is noise, not a failure -- logging every one would bury the real
-                // events, so this is intentionally silent.
+                // Harness CLIs interleave human-readable banners/spinners with their JSON stream.
+                // Emit a throttled liveness pulse so rolling idle watchdogs recognize active progress.
+                const now = Date.now();
+                if (this.shouldEmitLivenessHeartbeat(now)) {
+                    yield this.buildLivenessHeartbeat('stdout', now);
+                }
                 continue;
             }
 
@@ -200,9 +309,51 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
             }
 
             if (mapped) {
+                this.lastActivityEmitAt = Date.now();
                 yield mapped;
+            } else {
+                const now = Date.now();
+                if (this.shouldEmitLivenessHeartbeat(now)) {
+                    yield this.buildLivenessHeartbeat('event', now);
+                }
             }
         }
+    }
+
+    /** Appends a trimmed, length-capped output line into the bounded rolling diagnostic buffer. */
+    protected recordRecentOutputLine(source: 'stdout' | 'stderr', trimmedLine: string): void {
+        if (this.recentOutputMaxLines <= 0 || !trimmedLine) {
+            return;
+        }
+        const clipped =
+            trimmedLine.length > MAX_RECENT_LINE_LENGTH
+                ? `${trimmedLine.slice(0, MAX_RECENT_LINE_LENGTH)}...`
+                : trimmedLine;
+        this.recentOutputLines.push(`[${source}] ${clipped}`);
+        while (this.recentOutputLines.length > this.recentOutputMaxLines) {
+            this.recentOutputLines.shift();
+        }
+    }
+
+    /** Returns true when enough time has elapsed since the previous activity event to emit a pulse. */
+    protected shouldEmitLivenessHeartbeat(now: number): boolean {
+        return (
+            this.lastActivityEmitAt === 0 ||
+            now - this.lastActivityEmitAt >= this.livenessHeartbeatThrottleMs
+        );
+    }
+
+    /** Records heartbeat emission timestamp and builds a typed `liveness-heartbeat` event. */
+    protected buildLivenessHeartbeat(
+        source: 'stdout' | 'stderr' | 'event',
+        now: number,
+    ): HarnessTurnEvent {
+        this.lastActivityEmitAt = now;
+        return {
+            Type: 'liveness-heartbeat',
+            Source: source,
+            Timestamp: new Date(now).toISOString(),
+        };
     }
 
     /** Narrows an unknown catch binding to a readable message without reaching for `any`. */
