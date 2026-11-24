@@ -7,7 +7,8 @@ import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ResolveChatSearchRoute } from './chat-search-routing.js';
 import { BuildExportArtifactLink } from './chat-export-artifact-link.js';
 import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest, ExportArtifactLinkTarget } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, ConversationAgentService, SearchResult, ActionableCommandRequest, ExportArtifactLinkTarget } from '@memberjunction/ng-conversations';
+import { DefaultAgentResolver } from '@memberjunction/conversations-runtime';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ComposeEmailCommand, MJAIAgentEntityExtended, OpenResourceCommand } from '@memberjunction/ai-core-plus';
@@ -507,10 +508,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // User Settings persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
-  private readonly USER_SETTING_DEFAULT_CHAT_AGENT_KEY = 'chat.defaultAgentId';
+  private readonly USER_SETTING_DEFAULT_CHAT_AGENT_KEY = DefaultAgentResolver.SETTING_NAME;
+  private readonly LEGACY_USER_SETTING_DEFAULT_CHAT_AGENT_KEY = DefaultAgentResolver.LEGACY_USER_SETTING_NAME;
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  /** Per-user preferred default chat agent ID from `UserInfoEngine` (`chat.defaultAgentId`), or null for stock Sage default. */
+  /** Per-user preferred default chat agent ID from `UserInfoEngine` (`Conversations.DefaultAgentID`), or null for org default. */
   public DefaultChatAgentId: string | null = null;
 
   private engine = ConversationEngine.Instance;
@@ -527,7 +529,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private streamingService: ConversationStreamingService,
     private activeTasksService: ActiveTasksService,
     private uiCommandHandler: UICommandHandlerService,
-    private bridge: ConversationBridgeService
+    private bridge: ConversationBridgeService,
+    private agentService: ConversationAgentService
   ) {
     super();
   }
@@ -661,15 +664,17 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Resolves the user's preferred Default Chat Agent ID from `UserInfoEngine` (`chat.defaultAgentId`),
+   * Resolves the user's preferred Default Chat Agent ID from `UserInfoEngine`
+   * (`Conversations.DefaultAgentID`, with read-only fallback to legacy `chat.defaultAgentId`),
    * validating that it points to an active, runnable top-level agent in `AIEngineBase`.
-   * Returns `null` when unset or invalid so the default `Sage` routing applies.
+   * Returns `null` when unset or invalid so `DefaultAgentResolver` falls back to primary instance / org default.
    */
   private resolveDefaultChatAgentId(explicitRawValue?: string | null): string | null {
     const raw = (
       explicitRawValue !== undefined
         ? explicitRawValue
-        : UserInfoEngine.Instance.GetSetting(this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY)
+        : (UserInfoEngine.Instance.GetSetting(this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY) ||
+            UserInfoEngine.Instance.GetSetting(this.LEGACY_USER_SETTING_DEFAULT_CHAT_AGENT_KEY))
     )?.trim() ?? '';
     if (!raw || !IsValidUUID(raw)) {
       return null;
@@ -690,14 +695,15 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     const nextId = this.resolveDefaultChatAgentId(explicitRawValue);
     if (nextId !== this.DefaultChatAgentId) {
       this.DefaultChatAgentId = nextId;
+      this.agentService.ClearConversationManagerCache();
       this.cdr.markForCheck();
     }
   }
 
   /**
    * Listens for BaseEntity save/delete/remote-invalidate events on `MJ: User Settings`
-   * (specifically `chat.defaultAgentId`) and `MJ: AI Agents` / `MJ: AI Agent Permissions`
-   * so updating Default Chat Agent in the My Agents app updates open Chat tabs live.
+   * (`Conversations.DefaultAgentID` / legacy `chat.defaultAgentId`) and `MJ: AI Agents` /
+   * `MJ: AI Agent Permissions` so updating Default Chat Agent in My Agents or Chat updates open tabs live.
    */
   private subscribeToDefaultChatAgentChanges(): void {
     MJGlobal.Instance.GetEventListener(false)
@@ -721,7 +727,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
               return true;
             }
             const settingEntity = args.baseEntity as MJUserSettingEntity | null | undefined;
-            return settingEntity?.Setting === this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY;
+            return (
+              settingEntity?.Setting === this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY ||
+              settingEntity?.Setting === this.LEGACY_USER_SETTING_DEFAULT_CHAT_AGENT_KEY
+            );
           }
           return norm === 'mj: ai agents' || norm === 'mj: ai agent permissions';
         }),
