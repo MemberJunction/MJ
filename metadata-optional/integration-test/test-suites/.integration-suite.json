@@ -175,7 +175,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT186 - List Member Mutations (client transport)",
+            "TestID": "@lookup:MJ: Tests.Name=IT187 - List Member Mutations (client transport)",
             "Sequence": 70,
             "Status": "Active"
           },
