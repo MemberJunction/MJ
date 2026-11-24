@@ -1519,6 +1519,12 @@ importers:
       '@memberjunction/record-set-processor-base':
         specifier: 6.3.0-edge.1
         version: link:../../../RecordSetProcessor/base
+      '@memberjunction/scheduling-base-types':
+        specifier: 6.3.0-edge.1
+        version: link:../../../Scheduling/base-types
+      '@memberjunction/scheduling-engine':
+        specifier: 6.3.0-edge.1
+        version: link:../../../Scheduling/engine
       '@memberjunction/storage':
         specifier: 6.3.0-edge.1
         version: link:../../../MJStorage
@@ -1526,6 +1532,9 @@ importers:
         specifier: ^7.8.2
         version: 7.8.2
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.3.0-edge.1
+        version: link:../../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -1569,6 +1578,12 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.3.0-edge.1
         version: link:../../../MJCoreEntities
+      '@memberjunction/feature-pipelines':
+        specifier: 6.3.0-edge.1
+        version: link:../../Knowledge/FeaturePipelines
+      '@memberjunction/generic-database-provider':
+        specifier: 6.3.0-edge.1
+        version: link:../../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../../MJGlobal
@@ -1713,10 +1728,22 @@ importers:
       '@memberjunction/ai':
         specifier: 6.3.0-edge.1
         version: link:../../Core
+      '@memberjunction/ai-openai':
+        specifier: 6.3.0-edge.1
+        version: link:../OpenAI
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../../MJGlobal
+      openai:
+        specifier: 6.18.0
+        version: 6.18.0(ws@8.22.0)(zod@4.6.7)
+      ws:
+        specifier: ^8.19.0
+        version: 8.22.0
     devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -4641,7 +4668,7 @@ importers:
         version: link:../Generic/artifacts
       '@memberjunction/ng-auth-services':
         specifier: 6.3.0-edge.1
-        version: link:../Explorer/auth-services
+        version: link:../Generic/auth-services
       '@memberjunction/ng-base-forms':
         specifier: 6.3.0-edge.1
         version: link:../Generic/base-forms
@@ -4763,7 +4790,7 @@ importers:
         version: link:../Generic/artifacts
       '@memberjunction/ng-auth-services':
         specifier: 6.3.0-edge.1
-        version: link:../Explorer/auth-services
+        version: link:../Generic/auth-services
       '@memberjunction/ng-base-forms':
         specifier: 6.3.0-edge.1
         version: link:../Generic/base-forms
@@ -4807,76 +4834,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-
-  packages/Angular/Explorer/auth-services:
-    dependencies:
-      '@angular/cdk':
-        specifier: ^21.2.14
-        version: 21.2.14(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
-      '@angular/common':
-        specifier: ^21.2.22
-        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
-      '@angular/core':
-        specifier: ^21.2.22
-        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
-      '@angular/forms':
-        specifier: ^21.2.22
-        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
-      '@auth0/auth0-angular':
-        specifier: ^2.6.0
-        version: 2.6.0(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/router@21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2))
-      '@auth0/auth0-spa-js':
-        specifier: ^2.14.0
-        version: 2.14.0
-      '@azure/msal-angular':
-        specifier: ^5.0.3
-        version: 5.0.3(@azure/msal-browser@5.17.0)(rxjs@7.8.2)
-      '@azure/msal-browser':
-        specifier: ^5.1.0
-        version: 5.17.0
-      '@azure/msal-common':
-        specifier: ^16.0.3
-        version: 16.11.1
-      '@memberjunction/core':
-        specifier: 6.3.0-edge.1
-        version: link:../../../MJCore
-      '@memberjunction/global':
-        specifier: 6.3.0-edge.1
-        version: link:../../../MJGlobal
-      '@memberjunction/ng-ui-components':
-        specifier: 6.3.0-edge.1
-        version: link:../../Generic/ui-components
-      '@memberjunction/realtime-runtime':
-        specifier: 6.3.0-edge.1
-        version: link:../../../RealtimeRuntime
-      '@memberjunction/theme-engine':
-        specifier: 6.3.0-edge.1
-        version: link:../../../ThemeEngine
-      '@okta/okta-auth-js':
-        specifier: ^7.14.1
-        version: 7.14.1(encoding@0.1.13)
-      '@workos-inc/authkit-js':
-        specifier: ^0.20.1
-        version: 0.20.1
-      aws-amplify:
-        specifier: ^6.0.0
-        version: 6.16.3
-      rxjs:
-        specifier: ^7.8.2
-        version: 7.8.2
-      tslib:
-        specifier: ^2.8.1
-        version: 2.8.1
-    devDependencies:
-      '@angular/compiler':
-        specifier: 21.2.22
-        version: 21.2.22
-      '@angular/compiler-cli':
-        specifier: 21.2.22
-        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
-      '@memberjunction/ng-test-utils':
-        specifier: 6.3.0-edge.1
-        version: link:../../Generic/test-utils
 
   packages/Angular/Explorer/base-application:
     dependencies:
@@ -5232,7 +5189,7 @@ importers:
         version: link:../../Generic/artifacts
       '@memberjunction/ng-auth-services':
         specifier: 6.3.0-edge.1
-        version: link:../auth-services
+        version: link:../../Generic/auth-services
       '@memberjunction/ng-base-application':
         specifier: 6.3.0-edge.1
         version: link:../base-application
@@ -5547,7 +5504,7 @@ importers:
         version: link:../../Generic/agent-client
       '@memberjunction/ng-auth-services':
         specifier: 6.3.0-edge.1
-        version: link:../auth-services
+        version: link:../../Generic/auth-services
       '@memberjunction/ng-base-application':
         specifier: 6.3.0-edge.1
         version: link:../base-application
@@ -5686,7 +5643,7 @@ importers:
         version: link:../../Generic/artifacts
       '@memberjunction/ng-auth-services':
         specifier: 6.3.0-edge.1
-        version: link:../auth-services
+        version: link:../../Generic/auth-services
       '@memberjunction/ng-base-application':
         specifier: 6.3.0-edge.1
         version: link:../base-application
@@ -6244,7 +6201,7 @@ importers:
         version: link:../../../GraphQLDataProvider
       '@memberjunction/ng-auth-services':
         specifier: 6.3.0-edge.1
-        version: link:../auth-services
+        version: link:../../Generic/auth-services
       '@memberjunction/ng-explorer-core':
         specifier: 6.3.0-edge.1
         version: link:../explorer-core
@@ -6767,6 +6724,9 @@ importers:
       '@memberjunction/actions-base':
         specifier: 6.3.0-edge.1
         version: link:../../../Actions/Base
+      '@memberjunction/ai-core-plus':
+        specifier: 6.3.0-edge.1
+        version: link:../../../AI/CorePlus
       '@memberjunction/ai-diagrams':
         specifier: 6.3.0-edge.1
         version: link:../../../AI/Diagrams
@@ -6797,6 +6757,9 @@ importers:
       '@memberjunction/ng-code-editor':
         specifier: 6.3.0-edge.1
         version: link:../code-editor
+      '@memberjunction/ng-composer':
+        specifier: 6.3.0-edge.1
+        version: link:../composer
       '@memberjunction/ng-export-service':
         specifier: 6.3.0-edge.1
         version: link:../export-service
@@ -6891,6 +6854,76 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/auth-services:
+    dependencies:
+      '@angular/cdk':
+        specifier: ^21.2.14
+        version: 21.2.14(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@auth0/auth0-angular':
+        specifier: ^2.6.0
+        version: 2.6.0(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/router@21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2))
+      '@auth0/auth0-spa-js':
+        specifier: ^2.14.0
+        version: 2.14.0
+      '@azure/msal-angular':
+        specifier: ^5.0.3
+        version: 5.0.3(@azure/msal-browser@5.17.0)(rxjs@7.8.2)
+      '@azure/msal-browser':
+        specifier: ^5.1.0
+        version: 5.17.0
+      '@azure/msal-common':
+        specifier: ^16.0.3
+        version: 16.11.1
+      '@memberjunction/core':
+        specifier: 6.3.0-edge.1
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.3.0-edge.1
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-ui-components':
+        specifier: 6.3.0-edge.1
+        version: link:../ui-components
+      '@memberjunction/realtime-runtime':
+        specifier: 6.3.0-edge.1
+        version: link:../../../RealtimeRuntime
+      '@memberjunction/theme-engine':
+        specifier: 6.3.0-edge.1
+        version: link:../../../ThemeEngine
+      '@okta/okta-auth-js':
+        specifier: ^7.14.1
+        version: 7.14.1(encoding@0.1.13)
+      '@workos-inc/authkit-js':
+        specifier: ^0.20.1
+        version: 0.20.1
+      aws-amplify:
+        specifier: ^6.0.0
+        version: 6.16.3
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.3.0-edge.1
+        version: link:../test-utils
 
   packages/Angular/Generic/base-forms:
     dependencies:
@@ -11520,9 +11553,6 @@ importers:
       '@memberjunction/document-parsing':
         specifier: 6.3.0-edge.1
         version: link:../../DocumentParsing
-      '@memberjunction/generic-database-provider':
-        specifier: 6.3.0-edge.1
-        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../MJGlobal
@@ -12921,6 +12951,9 @@ importers:
       '@inquirer/prompts':
         specifier: ^8.2.0
         version: 8.2.0(@types/node@24.10.11)
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.3.0-edge.1
+        version: link:../AI/AgentHarness
       '@memberjunction/ai-cli':
         specifier: 6.3.0-edge.1
         version: link:../AI/AICLI
@@ -13503,7 +13536,7 @@ importers:
         version: link:../GraphQLDataProvider
       '@memberjunction/ng-auth-services':
         specifier: 6.3.0-edge.1
-        version: link:../Angular/Explorer/auth-services
+        version: link:../Angular/Generic/auth-services
       '@memberjunction/ng-base-application':
         specifier: 6.3.0-edge.1
         version: link:../Angular/Explorer/base-application

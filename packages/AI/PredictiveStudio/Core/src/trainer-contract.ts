@@ -23,7 +23,7 @@ import type {
 } from './evaluation-protocol';
 import type { GateDecision, PairedComparison } from './gate';
 import type { FeatureImportance, ImportanceKind } from './sidecar-contract';
-import type { JsonValue, ParseResult } from './json-value';
+import type { JsonValue, ListsEveryMember, ParseResult } from './json-value';
 import { StoreSchemas } from './store-schemas';
 import { TaskTypeRules, type TaskType } from './task-type';
 import { TrainerResultSchemas } from './trainer-result-schemas';
@@ -140,6 +140,15 @@ export type LeakageFlag =
   | { readonly kind: 'time-shifted-label'; readonly scoreWithShiftedLabel: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
   | { readonly kind: 'drop-column'; readonly sourceColumn: string; readonly scoreDrop: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
   | { readonly kind: 'high-cardinality-id'; readonly sourceColumn: string; readonly distinctRatio: number };  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+
+/**
+ * Every leakage flag kind, in one list: what a stored `OverridesFlags` array or a sign-off's input may name. The one
+ * runtime list of the {@link LeakageFlag} kinds; read it, never copy it.
+ */
+export const LEAKAGE_FLAG_KINDS = ['single-feature-auc', 'time-shifted-label', 'drop-column', 'high-cardinality-id'] as const satisfies readonly LeakageFlag['kind'][];
+/** Compile-time completeness: a kind added to `LeakageFlag` without listing it in {@link LEAKAGE_FLAG_KINDS} breaks the build. */
+const leakageFlagKindsComplete: ListsEveryMember<LeakageFlag['kind'], (typeof LEAKAGE_FLAG_KINDS)[number]> = true;
+void leakageFlagKindsComplete;
 
 /** The primary score on one slice of the holdout rows. */
 export interface SliceResult {

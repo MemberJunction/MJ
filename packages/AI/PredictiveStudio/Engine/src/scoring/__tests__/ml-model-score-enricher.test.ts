@@ -2,24 +2,25 @@ import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
 
 import { MLModelScoreEnricher } from '../ml-model-score-enricher';
+import type { PredictiveStudioScoredPrediction } from '@memberjunction/core-entities';
 import type {
     IScoreRecordSetRunner,
+    ScoredRecordSet,
     ScoreRecordSetRequest,
-    ScoreRecordSetResult,
 } from '../../actions/score-record-set.action';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /** A test enricher whose scorer is a deterministic fake — no DB / sidecar. */
 class FakeRunnerEnricher extends MLModelScoreEnricher {
     constructor(
-        private readonly result: ScoreRecordSetResult,
+        private readonly result: ScoredRecordSet,
         public readonly captured: { request?: ScoreRecordSetRequest } = {},
     ) {
         super();
     }
     protected override createRunner(): IScoreRecordSetRunner {
         return {
-            run: async (request: ScoreRecordSetRequest): Promise<ScoreRecordSetResult> => {
+            run: async (request: ScoreRecordSetRequest): Promise<ScoredRecordSet> => {
                 this.captured.request = request;
                 return this.result;
             },
@@ -27,13 +28,11 @@ class FakeRunnerEnricher extends MLModelScoreEnricher {
     }
 }
 
-function resultWith(predictions: ScoreRecordSetResult['predictions']): ScoreRecordSetResult {
+/** A completed Predict run (nothing written) with the given predictions. */
+function resultWith(predictions: Array<Omit<PredictiveStudioScoredPrediction, 'inTraining'>>): ScoredRecordSet {
     return {
-        scoredCount: predictions?.length ?? 0,
-        failedCount: 0,
-        skippedCount: 0,
-        wroteBack: false,
-        predictions,
+        Result: { Status: 'completed', ScoringRunID: 'run-1', ModelID: 'M1', ModelVersion: 1, ArtifactSha256: 'a'.repeat(64), Total: predictions.length, Written: 0, DryRun: false },
+        Predictions: predictions.map((p) => ({ ...p, inTraining: false })),
     };
 }
 
@@ -52,12 +51,12 @@ describe('MLModelScoreEnricher', () => {
         expect(out[1].RenewalScore).toBe(0.1);
     });
 
-    it("passes the rows' primary keys as the records scope and requests NO write-back (ephemeral)", async () => {
+    it("passes the rows' primary keys as the records scope with no binding (Predict writes nothing)", async () => {
         const enricher = new FakeRunnerEnricher(resultWith([]));
         await enricher.EnrichResults({ rows: [{ ID: 'a' }, { ID: 'b' }], config: { modelId: 'M1', outputField: 'S' }, provider: PROVIDER });
         expect(enricher.captured.request?.modelId).toBe('M1');
         expect(enricher.captured.request?.scope.records).toEqual(['a', 'b']);
-        expect(enricher.captured.request?.writeBack).toBeUndefined();
+        expect(enricher.captured.request?.bindingId).toBeUndefined();
     });
 
     it('hands the caller\'s provider to the scorer', async () => {

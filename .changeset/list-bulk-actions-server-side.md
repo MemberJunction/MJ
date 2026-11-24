@@ -19,4 +19,4 @@ Server-side bulk list member operations, so a list screen sends one small reques
 - `FK_ListDetail_List` has `ON DELETE CASCADE`: deleting a list removes its members in the database.
 - After a list delete the server clears the cached `MJ: List Details` results, because the database removes the members without entity events.
 - A move (`CopyRecordsToList` with `RemoveFromSource`) that cannot remove some records from the source says so in `Message`; a move stopped by a failed add says that nothing was removed.
-- New integration check `lists-members-client.LC1` (IT187) runs add, move and remove over the API.
+- New integration check `lists-members-client.LC1` (IT188) runs add, move and remove over the API.

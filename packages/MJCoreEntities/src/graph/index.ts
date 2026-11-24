@@ -1,6 +1,7 @@
 export * from './BaseGraphEdgeProvider';
 export * from './GraphExpansion';
 export * from './GraphEngine';
+export * from './CanonDocumentRenderer';
 export * from './DomainClustering';
 export * from './DomainProposalWriter';
 export * from './GraphAccessPolicy';
