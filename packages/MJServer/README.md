@@ -768,7 +768,7 @@ each verifies its own capability.
 | Route | Capability | Behavior |
 |-------|------------|----------|
 | `POST /comms/webhooks/sendgrid[/:credentialId]` | SendGrid ECDSA signature over the raw body, 10-minute replay window | Publishes the batch to `comms.activity`; `202`, or `401` / `400` / `503` |
-| `GET /comms/open/:token.gif?sig=` | HMAC-SHA256 of `token:open` under `MJ_COMMS_HMAC_SECRET`; with no `sig`, the tracking token of an existing log | Records `Opened` through the in-memory buffer; always returns a 1x1 GIF |
+| `GET /comms/open/:token.gif?sig=` | HMAC-SHA256 of `token:open` under `MJ_COMMS_HMAC_SECRET`; without a valid `sig`, the tracking token of an existing log | Records `Opened` through the in-memory buffer; always returns a 1x1 GIF |
 | `GET /comms/click/:token?u=&sig=` | HMAC-SHA256 of `token:u` under `MJ_COMMS_HMAC_SECRET` | Records `Clicked` through the in-memory buffer; `302` to `u`, or `400` when the signature fails |
 | `POST /comms/unsubscribe[/:token]` | Unsubscribe token of an existing log | RFC 8058 one-click target; publishes `Unsubscribed` |
 | `GET /comms/unsubscribe[/:token]` | Unsubscribe token | `302` to the sender's `PreferenceCenterURL`, else to `/comms/preferences/:token` |
@@ -785,7 +785,7 @@ Open and click hits are different: they are accepted on their signature alone, w
 an in-memory buffer (`CommsTrackingEventBuffer`) and published to `comms.activity` in batches, one second later
 or when 500 are waiting. The `comms.activity` worker drops a hit whose token matches no log. A hit still in the
 buffer when the process dies is lost, and a batch the queue refuses is dropped; a graceful shutdown publishes
-what is held. An open pixel with no `sig` (mail sent before pixels were signed, or with no secret configured) is
+what is held. An open pixel with no valid `sig` (mail sent before pixels were signed, or with no secret configured) is
 still checked against the logs first. `CreateCommsWebhookHandler` takes `TrackingBuffer` (`FlushIntervalMs`,
 `MaxBatchSize`, `MaxBufferedEvents`) to tune the buffer, or `TrackingEventBuffer` to supply one.
 

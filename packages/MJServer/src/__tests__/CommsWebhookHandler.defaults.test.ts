@@ -1021,16 +1021,21 @@ describe('default token verification and publish on the tracking and unsubscribe
     });
   });
 
-  it('GET /open/:token.gif with a wrong signature serves the pixel, publishes nothing, and does not fall back to a lookup', async () => {
+  it('GET /open/:token.gif with a wrong signature is treated as unsigned: recorded only when the token is on a log', async () => {
     const sigForOtherToken = ComputeOpenPixelSignature(UNKNOWN_TOKEN, HMAC_SECRET);
 
     await withDefaults(async (baseUrl) => {
-      const res = await fetch(`${baseUrl}/open/${TRACK_TOKEN}.gif?sig=${sigForOtherToken}`);
+      const unknown = await fetch(`${baseUrl}/open/${UNKNOWN_TOKEN}.gif?sig=nope`);
+      const known = await fetch(`${baseUrl}/open/${TRACK_TOKEN}.gif?sig=${sigForOtherToken}`);
 
-      expect(res.status).toBe(200);
-      expect(res.headers.get('content-type')).toBe('image/gif');
-      expect(published()).toEqual([]);
-      expect(views.CallsFor('MJ: Communication Logs')).toEqual([]);
+      expect([unknown.status, known.status]).toEqual([200, 200]);
+      expect(known.headers.get('content-type')).toBe('image/gif');
+      // Both were looked up; a bad signature never lets a request past the lookup.
+      expect(views.CallsFor('MJ: Communication Logs').map((c) => c.Params.ExtraFilter)).toEqual([
+        `TrackingToken='${UNKNOWN_TOKEN}'`,
+        `TrackingToken='${TRACK_TOKEN}'`,
+      ]);
+      expect(published()).toEqual([expect.objectContaining({ Source: 'open-pixel', EventType: 'Opened', TrackingToken: TRACK_TOKEN })]);
     });
   });
 

@@ -343,27 +343,35 @@ describe('CommsWebhookHandler', () => {
         );
     });
 
-    it('records a signed open without calling VerifyToken, and ignores one whose signature is wrong', async () => {
+    it('records a validly signed open without calling VerifyToken, and looks up any other open', async () => {
         const validUuid = '44444444-5555-4666-8777-888888888888';
         const otherUuid = '55555555-5555-4666-8777-888888888888';
         const secret = 'verify-token-secret-32-characters!';
         const sig = ComputeOpenPixelSignature(validUuid, secret);
+        const lookedUp: string[] = [];
 
         await withServer(
             {
                 HmacSecret: secret,
                 PublishActivity: async (p) => { published.push(p); },
-                VerifyToken: async () => {
-                    throw new Error('a signed pixel must not be looked up');
+                VerifyToken: async (_kind, token) => {
+                    lookedUp.push(token);
+                    return false;
                 },
             },
             async (baseUrl) => {
                 const signed = await fetch(`${baseUrl}/open/${validUuid}.gif?sig=${sig}`);
-                const swapped = await fetch(`${baseUrl}/open/${otherUuid}.gif?sig=${sig}`);
-                const garbage = await fetch(`${baseUrl}/open/${validUuid}.gif?sig=nope`);
-                const repeated = await fetch(`${baseUrl}/open/${validUuid}.gif?sig=${sig}&sig=${sig}`);
+                expect(signed.status).toBe(200);
+                expect(lookedUp).toEqual([]);
 
-                expect([signed.status, swapped.status, garbage.status, repeated.status]).toEqual([200, 200, 200, 200]);
+                // A signature that does not verify earns nothing: the request is treated exactly
+                // like one with no signature, so it cannot be used to skip the lookup.
+                const swapped = await fetch(`${baseUrl}/open/${otherUuid}.gif?sig=${sig}`);
+                const garbage = await fetch(`${baseUrl}/open/${otherUuid}.gif?sig=nope`);
+                const repeated = await fetch(`${baseUrl}/open/${otherUuid}.gif?sig=${sig}&sig=${sig}`);
+
+                expect([swapped.status, garbage.status, repeated.status]).toEqual([200, 200, 200]);
+                expect(lookedUp).toEqual([otherUuid, otherUuid, otherUuid]);
                 expect(published).toEqual([
                     expect.objectContaining({ Source: 'open-pixel', EventType: 'Opened', TrackingToken: validUuid }),
                 ]);
@@ -371,17 +379,28 @@ describe('CommsWebhookHandler', () => {
         );
     });
 
-    it('ignores a signed open when no HMAC secret is configured', async () => {
+    it('looks a signed open up like any other when no HMAC secret is configured', async () => {
         const validUuid = '44444444-5555-4666-8777-888888888888';
         const sig = ComputeOpenPixelSignature(validUuid, 'some-other-instance-secret-32-chars');
         const previous = process.env.MJ_COMMS_HMAC_SECRET;
         delete process.env.MJ_COMMS_HMAC_SECRET;
+        const lookedUp: string[] = [];
 
         try {
-            await withServer({ PublishActivity: async (p) => { published.push(p); } }, async (baseUrl) => {
-                expect((await fetch(`${baseUrl}/open/${validUuid}.gif?sig=${sig}`)).status).toBe(200);
-                expect(published).toHaveLength(0);
-            });
+            await withServer(
+                {
+                    PublishActivity: async (p) => { published.push(p); },
+                    VerifyToken: async (_kind, token) => {
+                        lookedUp.push(token);
+                        return false;
+                    },
+                },
+                async (baseUrl) => {
+                    expect((await fetch(`${baseUrl}/open/${validUuid}.gif?sig=${sig}`)).status).toBe(200);
+                    expect(lookedUp).toEqual([validUuid]);
+                    expect(published).toHaveLength(0);
+                },
+            );
         } finally {
             if (previous !== undefined) process.env.MJ_COMMS_HMAC_SECRET = previous;
         }

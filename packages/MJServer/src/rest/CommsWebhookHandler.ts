@@ -14,8 +14,8 @@
  * The open and click routes do no database work on the request. A valid signature is all they
  * check; the hit goes into an in-memory buffer ({@link CommsTrackingEventBuffer}) that publishes
  * to the work queue in batches, and the `comms.activity` worker matches the token to a message.
- * The one exception is an open pixel with no signature (mail sent before pixels were signed, or
- * with no HMAC secret configured), which is still looked up before it is recorded.
+ * The one exception is an open pixel with no valid signature (mail sent before pixels were signed,
+ * or with no HMAC secret configured), which is still looked up before it is recorded.
  *
  * @module @memberjunction/server/rest/CommsWebhookHandler
  */
@@ -230,7 +230,7 @@ export interface CommsWebhookHandlerOptions {
     UnsubscribeRateLimit?: Partial<RouteRateLimitSettings>;
     /**
      * Override for verifying whether an UnsubscribeToken, or the TrackingToken of an open pixel
-     * that carries no signature, exists before enqueueing activity. Defaults to a lookup on the
+     * that carries no valid signature, exists before enqueueing activity. Defaults to a lookup on the
      * Communication Logs table; overriding `PublishActivity` does not change that. Signed open
      * pixels and click links are accepted on their signature and never reach it.
      */
@@ -585,9 +585,13 @@ async function handleOpenPixel(
 }
 
 /**
- * Decides whether an open-pixel request is recorded. A signed pixel is decided on its signature
- * alone, with no database work. An unsigned one comes from mail sent before pixels were signed, or
- * with no HMAC secret configured; nothing but a lookup can tell it from a guessed token.
+ * Decides whether an open-pixel request is recorded. A pixel with a valid signature is recorded on
+ * that alone, with no database work. Any other request is recorded only when its tracking token is
+ * on a message log: that covers mail sent before pixels were signed, or with no HMAC secret
+ * configured, where nothing but a lookup can tell a real pixel from a guessed token.
+ *
+ * What the caller sends never chooses which check applies. A request that fails the signature check
+ * gets the lookup, whether its `sig` is wrong or absent, so neither check can be skipped.
  */
 async function isRecordableOpen(
     req: express.Request,
@@ -595,17 +599,15 @@ async function isRecordableOpen(
     getHmacSecret: () => string | undefined,
     verifyToken: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>,
 ): Promise<boolean> {
-    if (req.query.sig !== undefined) {
-        const secret = getHmacSecret();
-        if (!secret || typeof req.query.sig !== 'string') {
-            return false;
-        }
-        return VerifyOpenPixelSignature(token, req.query.sig, secret);
+    const secret = getHmacSecret();
+    const signature = typeof req.query.sig === 'string' ? req.query.sig : '';
+    if (secret && VerifyOpenPixelSignature(token, signature, secret)) {
+        return true;
     }
     try {
         return await verifyToken('tracking', token);
     } catch (ex) {
-        LogError(`[CommsWebhook] Failed to verify an unsigned open pixel: ${ex instanceof Error ? ex.message : String(ex)}`);
+        LogError(`[CommsWebhook] Failed to verify an open pixel with no valid signature: ${ex instanceof Error ? ex.message : String(ex)}`);
         return false;
     }
 }

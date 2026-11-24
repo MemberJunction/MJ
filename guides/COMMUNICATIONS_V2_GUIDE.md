@@ -414,7 +414,7 @@ reserved root that server extensions cannot claim.
 | Route | Capability | What it does |
 |---|---|---|
 | `POST /comms/webhooks/sendgrid/:credentialId`<br/>`POST /comms/webhooks/sendgrid` | SendGrid ECDSA signature over the raw body, within a 10-minute replay window | Publishes the batch to `comms.activity`. `202` on success, `401` on a missing key or bad signature, `503` when the queue rejects it. |
-| `GET /comms/open/:token.gif?sig=<hmac>` | HMAC-SHA256 over `token:open`. With no `sig`, the `TrackingToken` of an existing log | Records an `Opened` event. Always answers with a 1x1 GIF, whatever the signature. |
+| `GET /comms/open/:token.gif?sig=<hmac>` | HMAC-SHA256 over `token:open`. Without a valid `sig`, the `TrackingToken` of an existing log | Records an `Opened` event. Always answers with a 1x1 GIF, whatever the signature. |
 | `GET /comms/click/:token?u=<url>&sig=<hmac>` | HMAC-SHA256 over `token:url` | Records a `Clicked` event and redirects to `u`. `400` when the signature does not verify, so the route cannot be used as an open redirect. |
 | `POST /comms/unsubscribe/:token`<br/>`POST /comms/unsubscribe` | `UnsubscribeToken` (UUID v4) of an existing log | RFC 8058 one-click target. Publishes an `Unsubscribed` event. |
 | `GET /comms/unsubscribe/:token` | `UnsubscribeToken` | Redirects to the sender's `PreferenceCenterURL` with `?token=`, or to `/comms/preferences/:token`. |
@@ -448,9 +448,10 @@ Two consequences to know about:
 - **Hits can be lost.** A hit still in the buffer when the process dies is gone, and a batch the queue refuses
   is dropped, not retried. A graceful shutdown publishes what is held. Open and click counts are statistics;
   unsubscribes and provider webhooks never go through the buffer and are published before the route answers.
-- **An open pixel with no signature is still looked up.** Mail sent before pixels were signed, or with no HMAC
-  secret configured, carries a bare `/comms/open/<token>.gif`. Nothing but a read of `MJ: Communication Logs`
-  can tell that from a guessed token, so that one request still costs a read.
+- **An open pixel with no valid signature is still looked up.** Mail sent before pixels were signed, or with no
+  HMAC secret configured, carries a bare `/comms/open/<token>.gif`. Nothing but a read of
+  `MJ: Communication Logs` can tell that from a guessed token, so that one request still costs a read. A
+  request whose `sig` does not verify is handled the same way: it is never an error and never a shortcut.
 
 The buffer is `CommsTrackingEventBuffer` in `@memberjunction/server`. A host that mounts
 `CreateCommsWebhookHandler` itself can tune it with `TrackingBuffer` (`FlushIntervalMs`, `MaxBatchSize`,
