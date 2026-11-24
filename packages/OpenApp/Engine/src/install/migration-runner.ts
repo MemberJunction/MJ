@@ -195,8 +195,8 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // packages are not installed — and a genuinely-missing package gets the actionable
         // optionalDependencies guidance instead of a raw resolver error.
         const Skyway = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
-        // Skyway takes the password as a string, so a token login fetches one for this run.
         AssertPasswordSourceTransport(DatabaseConfig);
+        // Skyway takes the password as a string, so a token login fetches one for this run.
         const runDatabaseConfig = DatabaseConfig.PasswordSource
             ? { ...DatabaseConfig, Password: await DatabaseConfig.PasswordSource() }
             : DatabaseConfig;
