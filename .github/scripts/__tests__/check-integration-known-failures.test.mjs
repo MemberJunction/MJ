@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { resultKey, collectOutcomes, compareWithKnownFailures, report } from '../check-integration-known-failures.mjs';
+import { resultKey, collectOutcomes, compareWithKnownFailures, report, readParityGap, parityGapPatterns } from '../check-integration-known-failures.mjs';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'check-integration-known-failures.mjs');
 
@@ -96,51 +96,67 @@ describe('compareWithKnownFailures', () => {
         expect(report(result, () => {})).toBe(0);
     });
 
-    it('attributes an unlisted failure that names a missing entity to the parity gap, and does not gate on it', () => {
+    const GAP = { Entities: ['MJ: Agent Channels'], Fields: [{ Entity: 'MJ: AI Agents', Field: 'BaseAgentID' }] };
+    const failed = (Key, Message) => ({ Key, Outcome: 'failed', Message });
+
+    it('attributes the errors a missing entity or column raises, naming one the gap holds, and does not gate on them', () => {
         const result = compareWithKnownFailures(
-            [{ Key: 'a.G1', Outcome: 'failed', Message: 'Entity "MJ: AI Agent Rhythm Templates" not found in metadata' }],
+            [
+                failed('a.E1', 'Open Agent Channel failed: Entity MJ: Agent Channels not found in metadata or could not be created'),
+                failed('a.E2', `Lookup failed: No record found in 'MJ: Entities' where Name='MJ: Agent Channels'`),
+                failed('a.F1', 'Field BaseAgentID does not exist on MJ: AI Agents'),
+                failed('a.F2', 'column a."BaseAgentID" does not exist'),
+            ],
             {},
             {},
-            ['mj: ai agent rhythm templates'],
+            GAP,
         );
         expect(result.NewFailures).toEqual([]);
-        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.G1']);
+        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.E1', 'a.E2', 'a.F1', 'a.F2']);
         expect(report(result, () => {})).toBe(0);
     });
 
-    it('still gates on an unlisted failure that names no missing entity while a gap is open', () => {
+    it('still gates on an unrelated error that mentions a missing entity or column by name', () => {
         const result = compareWithKnownFailures(
             [
-                { Key: 'a.G1', Outcome: 'failed', Message: 'needs MJ: AI Agent Rhythm Templates' },
-                { Key: 'a.R1', Outcome: 'failed', Message: 'column "Foo" does not exist' },
+                failed('a.P1', 'Permission denied: user cannot read MJ: Agent Channels'),
+                failed('a.P2', 'Save failed for MJ: AI Agents: BaseAgentID must reference an active agent'),
+                failed('a.P3', 'Entity MJ: Agent Channels could not be saved: deadlock detected'),
             ],
             {},
             {},
-            ['MJ: AI Agent Rhythm Templates'],
+            GAP,
         );
-        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.R1']);
-        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.G1']);
+        expect(result.GapFailures).toEqual([]);
+        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.P1', 'a.P2', 'a.P3']);
         expect(report(result, () => {})).toBe(1);
     });
 
-    it('matches a missing column only as a whole word', () => {
+    it('matches only the affected entity and column', () => {
         const result = compareWithKnownFailures(
             [
-                { Key: 'a.C1', Outcome: 'failed', Message: 'column "BaseAgentID" does not exist' },
-                { Key: 'a.C2', Outcome: 'failed', Message: 'column "BaseAgentIDs" does not exist' },
+                failed('a.C1', 'column "BaseAgentIDs" does not exist'),
+                failed('a.C2', 'Field BaseAgentID does not exist on MJ: Actions'),
+                failed('a.C3', 'Entity MJ: Agent Channel Participants not found in metadata'),
             ],
             {},
             {},
-            ['BaseAgentID'],
+            GAP,
         );
-        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.C1']);
-        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.C2']);
+        expect(result.GapFailures).toEqual([]);
+        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.C1', 'a.C2', 'a.C3']);
     });
 
-    it('attributes nothing to a gap when no entity is missing', () => {
-        const result = compareWithKnownFailures([{ Key: 'a.R1', Outcome: 'failed', Message: 'anything' }], {});
+    it('attributes nothing to a gap when nothing is missing', () => {
+        const result = compareWithKnownFailures([failed('a.R1', 'Entity MJ: Agent Channels not found in metadata')], {});
         expect(result.GapFailures).toEqual([]);
         expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.R1']);
+    });
+
+    it('reads a parity-gap file, and refuses a line it does not understand', () => {
+        expect(readParityGap('entity\tMJ: Agent Channels\nfield\tMJ: AI Agents\tBaseAgentID\n')).toEqual(GAP);
+        expect(() => readParityGap('MJ: Agent Channels\n')).toThrow(/Unreadable parity-gap line/);
+        expect(parityGapPatterns(null)).toEqual([]);
     });
 
     it('lets a pass in one shard outrank a skip in another', () => {
@@ -189,17 +205,28 @@ describe('CLI', () => {
         expect(spawnSync(process.execPath, [SCRIPT, both, shardPath]).status).toBe(2);
     });
 
-    it('exits 0 when the only unlisted failure names a missing entity, and 1 without the gap file', () => {
+    it('exits 0 when the only unlisted failure is a gap error, and 1 without the gap file', () => {
         const gapShard = join(dir, 'gap-shard.json');
         const gapFile = join(dir, 'gap.txt');
-        writeFileSync(gapShard, JSON.stringify(suiteRun(test('IT2', 'Failed', oracle('a.A3', false, false, 'Entity MJ: Agent Channels not found')))));
-        writeFileSync(gapFile, 'MJ: Agent Channels\n');
-        expect(spawnSync(process.execPath, [SCRIPT, `--gap-entities=${gapFile}`, listPath, gapShard]).status).toBe(0);
+        writeFileSync(gapShard, JSON.stringify(suiteRun(test('IT2', 'Failed', oracle('a.A3', false, false, 'Entity MJ: Agent Channels not found in metadata')))));
+        writeFileSync(gapFile, 'entity\tMJ: Agent Channels\n');
+        expect(spawnSync(process.execPath, [SCRIPT, `--parity-gap=${gapFile}`, listPath, gapShard]).status).toBe(0);
         expect(spawnSync(process.execPath, [SCRIPT, listPath, gapShard]).status).toBe(1);
     });
 
-    it('exits 2 when the gap entities file is missing', () => {
-        expect(spawnSync(process.execPath, [SCRIPT, `--gap-entities=${join(dir, 'nope.txt')}`, listPath, shardPath]).status).toBe(2);
+    it('exits 1 when the only unlisted failure merely mentions a missing entity', () => {
+        const shard = join(dir, 'mention-shard.json');
+        const gapFile = join(dir, 'gap-mention.txt');
+        writeFileSync(shard, JSON.stringify(suiteRun(test('IT3', 'Failed', oracle('a.A4', false, false, 'Permission denied on MJ: Agent Channels')))));
+        writeFileSync(gapFile, 'entity\tMJ: Agent Channels\n');
+        expect(spawnSync(process.execPath, [SCRIPT, `--parity-gap=${gapFile}`, listPath, shard]).status).toBe(1);
+    });
+
+    it('exits 2 when the parity-gap file is missing or unreadable', () => {
+        expect(spawnSync(process.execPath, [SCRIPT, `--parity-gap=${join(dir, 'nope.txt')}`, listPath, shardPath]).status).toBe(2);
+        const bad = join(dir, 'bad-gap.txt');
+        writeFileSync(bad, 'MJ: Agent Channels\n');
+        expect(spawnSync(process.execPath, [SCRIPT, `--parity-gap=${bad}`, listPath, shardPath]).status).toBe(2);
     });
 
     it('exits 2 without arguments', () => {

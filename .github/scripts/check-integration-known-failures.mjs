@@ -20,16 +20,22 @@
  * A skip the suite's own skip gate does not allow (`details.SkipAllowed === false`) counts as a
  * failure, as it does for that gate.
  *
- * - with `--gap-entities=<file>` (the entities and column names missing from PostgreSQL, one per
- *   line, written by prune-pg-parity-gap.mjs), an unlisted failure whose message names one of them
- *   as a whole word is attributed to that parity gap and reported, not failed. Any other unlisted failure still fails the job, so a
- *   gap never hides a regression in the checks it does not touch.
+ * - with `--parity-gap=<file>` (written by prune-pg-parity-gap.mjs: `entity\t<entity>` and
+ *   `field\t<entity>\t<column>` lines, for what is missing from PostgreSQL), an unlisted failure is
+ *   attributed to that parity gap, reported and not failed, only when its message carries one of the
+ *   errors a missing entity or column raises, naming that entity or column:
+ *     `Entity <entity> not found in metadata`,
+ *     `No record found in 'MJ: Entities' where Name='<entity>'`,
+ *     `Field <column> does not exist on <entity>`,
+ *     PostgreSQL's `column "<column>" does not exist`.
+ *   A message that only mentions a missing name (a permission error, say) still fails the job, as
+ *   does every other unlisted failure.
  *
  * Input: the JSON files `mj test suite --output` writes (one per shard), or `mj test run --output`. A failure is keyed by its
  * check ID (`bundle.CHECK`). A bundle that fails before any check runs reports one result whose ID
  * is not a check ID (`gate`, `setup`, ...); it is keyed as `<test name>#<id>` instead.
  *
- * Usage: node .github/scripts/check-integration-known-failures.mjs [--gap-entities=<file>] <known-failures.json> <shard.json>...
+ * Usage: node .github/scripts/check-integration-known-failures.mjs [--parity-gap=<file>] <known-failures.json> <shard.json>...
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -70,7 +76,44 @@ export function collectOutcomes(resultFile) {
  * Compares a run with the known-failures list. A key that fails in any shard counts as failed; one
  * that passes in some shard and fails in none counts as passed.
  */
-export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}, gapEntities = []) {
+/** Escapes a string for use inside a RegExp. */
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Reads a parity-gap file: `entity\t<entity>` and `field\t<entity>\t<column>` lines.
+ * @returns {{ Entities: string[], Fields: { Entity: string, Field: string }[] }}
+ */
+export function readParityGap(text) {
+    const gap = { Entities: [], Fields: [] };
+    for (const line of text.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '')) {
+        const [kind, ...rest] = line.split('\t');
+        if (kind === 'entity' && rest.length === 1 && rest[0].trim()) gap.Entities.push(rest[0].trim());
+        else if (kind === 'field' && rest.length === 2 && rest[0].trim() && rest[1].trim()) gap.Fields.push({ Entity: rest[0].trim(), Field: rest[1].trim() });
+        else throw new Error(`Unreadable parity-gap line: "${line}"`);
+    }
+    return gap;
+}
+
+/**
+ * The patterns of the errors a missing entity or column raises, each naming what is missing. Only
+ * these attribute a failure to the gap: a message that merely mentions a missing name does not.
+ */
+export function parityGapPatterns(gap) {
+    const quoted = (name) => `["']?${escapeRegExp(name)}["']?`;
+    const patterns = [];
+    for (const entity of gap?.Entities ?? []) {
+        patterns.push(new RegExp(`\\bEntity ${quoted(entity)} not found in metadata`, 'i'));
+        patterns.push(new RegExp(`No record found in 'MJ: Entities' where Name='${escapeRegExp(entity)}'`, 'i'));
+    }
+    for (const { Entity, Field } of gap?.Fields ?? []) {
+        patterns.push(new RegExp(`\\bField ${quoted(Field)} does not exist on ${quoted(Entity)}`, 'i'));
+        // PostgreSQL names the column (sometimes qualified by a table alias), not the entity.
+        patterns.push(new RegExp(`\\bcolumn (?:"?[A-Za-z0-9_]+"?\\.)?"${escapeRegExp(Field)}" does not exist`, 'i'));
+    }
+    return patterns;
+}
+
+export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}, gap = null) {
     const byKey = new Map();
     for (const o of outcomes) {
         const prev = byKey.get(o.Key);
@@ -85,19 +128,15 @@ export function compareWithKnownFailures(outcomes, knownFailures, flaky = {}, ga
     const notRun = [];
     const flakyFailed = [];
     const gapFailures = [];
-    // A name counts only as a whole word, so a missing field "Status" does not match "StatusID".
-    const gapPatterns = gapEntities
-        .map((e) => e.trim())
-        .filter((e) => e !== '')
-        .map((e) => new RegExp(`(^|[^A-Za-z0-9_])${e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-z0-9_])`, 'i'));
-    const namesGapEntity = (message) => gapPatterns.some((p) => p.test(message));
+    const gapPatterns = parityGapPatterns(gap);
+    const causedByGap = (message) => gapPatterns.some((p) => p.test(message));
     for (const [key, o] of byKey) {
         if (flakyKeys.has(key)) {
             if (o.Outcome === 'failed') flakyFailed.push(key);
             continue;
         }
         if (o.Outcome === 'failed' && !known.has(key)) {
-            if (namesGapEntity(o.Message)) gapFailures.push(o);
+            if (causedByGap(o.Message)) gapFailures.push(o);
             else newFailures.push(o);
         }
         if (o.Outcome === 'passed' && known.has(key)) fixed.push(key);
@@ -118,7 +157,7 @@ export function report(result, log = console.log) {
         for (const key of result.FlakyFailed) log(`  ~ ${key}`);
     }
     if ((result.GapFailures ?? []).length > 0) {
-        log(`\n${result.GapFailures.length} check(s) failed on an entity missing from PostgreSQL (the parity gap; not gating):`);
+        log(`\n${result.GapFailures.length} check(s) failed with the error of an entity or column missing from PostgreSQL (the parity gap; not gating):`);
         for (const o of result.GapFailures) log(`  ~ ${o.Key}: ${o.Message.slice(0, 300)}`);
     }
     if (result.NotRun.length > 0) {
@@ -137,17 +176,23 @@ export function report(result, log = console.log) {
 }
 
 function main(argv) {
-    const gapPath = argv.find((a) => a.startsWith('--gap-entities='))?.slice('--gap-entities='.length);
+    const gapPath = argv.find((a) => a.startsWith('--parity-gap='))?.slice('--parity-gap='.length);
     const [listPath, ...shardPaths] = argv.filter((a) => !a.startsWith('--'));
     if (!listPath || shardPaths.length === 0) {
-        console.error('Usage: check-integration-known-failures.mjs [--gap-entities=<file>] <known-failures.json> <shard.json>...');
+        console.error('Usage: check-integration-known-failures.mjs [--parity-gap=<file>] <known-failures.json> <shard.json>...');
         return 2;
     }
     if (gapPath !== undefined && !existsSync(gapPath)) {
-        console.error(`The gap entities file ${gapPath} is missing.`);
+        console.error(`The parity-gap file ${gapPath} is missing.`);
         return 2;
     }
-    const gapEntities = gapPath ? readFileSync(gapPath, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : [];
+    let gap = null;
+    try {
+        gap = gapPath ? readParityGap(readFileSync(gapPath, 'utf8')) : null;
+    } catch (e) {
+        console.error(e instanceof Error ? e.message : String(e));
+        return 2;
+    }
     const list = JSON.parse(readFileSync(listPath, 'utf8'));
     const knownFailures = list.KnownFailures ?? {};
     const flaky = list.Flaky ?? {};
@@ -164,7 +209,7 @@ function main(argv) {
         }
         outcomes.push(...collectOutcomes(JSON.parse(readFileSync(path, 'utf8'))));
     }
-    return report(compareWithKnownFailures(outcomes, knownFailures, flaky, gapEntities));
+    return report(compareWithKnownFailures(outcomes, knownFailures, flaky, gap));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

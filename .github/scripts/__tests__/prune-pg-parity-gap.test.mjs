@@ -170,7 +170,7 @@ describe('the CLI', () => {
         expect(result.status).toBe(0);
         expect(result.stdout).toMatch(/::warning title=PostgreSQL parity gap::.*MJ: AI Agents\.BaseAgentID/);
         expect(readFileSync(join(cwd, 'out.txt'), 'utf8')).toBe('gap=true\n');
-        expect(readFileSync(join(cwd, 'gap.txt'), 'utf8')).toBe(`${MISSING}\nBaseAgentID\n`);
+        expect(readFileSync(join(cwd, 'gap.txt'), 'utf8')).toBe(`entity\t${MISSING}\nfield\tMJ: AI Agents\tBaseAgentID\n`);
         expect(existsSync(join(cwd, 'metadata/rhythm-templates'))).toBe(false);
         expect(JSON.parse(readFileSync(join(cwd, 'metadata/entity-permissions/.perms.json'), 'utf8'))).toHaveLength(1);
         const entity = JSON.parse(readFileSync(join(cwd, 'metadata/entities/.hierarchy.json'), 'utf8'))[0];

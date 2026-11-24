@@ -27,9 +27,9 @@
  *   - `gate`: the build engineer's PR, a dispatch, or a release. A gap fails (exit 1): closing it is
  *     that run's job, so nothing is pruned.
  *
- * Writes `gap=true|false` to $GITHUB_OUTPUT, and to --gap-out the missing entities and the missing
- * fields' names, one per line: the known-failures check attributes a failure that names one of them
- * to the gap.
+ * Writes `gap=true|false` to $GITHUB_OUTPUT, and the gap to --gap-out as `entity\t<entity>` and
+ * `field\t<entity>\t<column>` lines. The known-failures check reads it to attribute to the gap only
+ * the failures that carry a missing-entity or missing-column error naming one of them.
  *
  * The prune EDITS THE ROOTS IN PLACE (`--in-place` is required to say so). It is meant for a CI
  * checkout that is thrown away after the job. Pruning a copy elsewhere does not work: prompt
@@ -363,9 +363,9 @@ function main(argv) {
     }
     const metadata = readMetadata(roots);
     const gap = findGap(metadata, present, presentFields.map((l) => l.split('\t')));
-    const names = [...gap.Entities, ...gap.Fields.map((f) => f.Field)];
-    writeFileSync(gapOut, names.map((n) => `${n}\n`).join(''));
-    const isGap = names.length > 0;
+    const lines = [...gap.Entities.map((e) => `entity\t${e}`), ...gap.Fields.map((f) => `field\t${f.Entity}\t${f.Field}`)];
+    writeFileSync(gapOut, lines.map((l) => `${l}\n`).join(''));
+    const isGap = lines.length > 0;
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `gap=${isGap}\n`);
     if (!isGap) {
         console.log('No parity gap: every entity and field the metadata names exists on PostgreSQL. Pushing it unchanged.');
