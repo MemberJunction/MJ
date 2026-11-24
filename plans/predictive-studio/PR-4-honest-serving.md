@@ -13852,6 +13852,9 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   `V202611231000` regenerates `spDeleteAIPrompt` (same cascades, new AI Agent columns) → the tail's copy replaced with
   it, the migration retimed to `V202611231001`; manifests regenerated; bundle count 286. The test record's Name
   (IT187) is committed with the rename in the next commit.
+- **CI at `00cff47555`:** shard 3 red on SQLParser's frozen `shipped` goldens — the IT186→IT187 rename changed the
+  fingerprint query's text — regenerated (5 snapshots, only that query) → 2175/2175; shard 6 was the runner's
+  shutdown signal (exit 143), not a test.
 
 ## 12. Refresh log (append-only)
 
