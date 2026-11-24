@@ -140,6 +140,9 @@ function createHarness(initial: TestTab, live: LiveData): Harness {
   internals['componentRefs'] = new Map();
   internals['tabsCurrentlyLoading'] = new Set<string>();
   internals['queuedTabLoads'] = new Map<string, unknown>();
+  internals['tabLoadGenerations'] = new Map<string, number>();
+  internals['mountedTabContent'] = new Map<string, unknown>();
+  internals['isDestroyed'] = false;
   internals['layoutInitialized'] = true;
   internals['layoutManager'] = {
     IsInitialized: true,
