@@ -285,6 +285,42 @@ describe('SQLServerDialect', () => {
             expect(sql).toContain('User accounts');
         });
 
+        it('should escape identifier arguments and use N-prefixed Unicode literals consistently across all comment helpers', () => {
+            const colSql = dialect.CommentOnColumn("My'S", "T'\0", "C'", "d's");
+            expect(colSql).toBe([
+                `EXEC sp_addextendedproperty`,
+                `    @name = N'MS_Description',`,
+                `    @value = N'd''s',`,
+                `    @level0type = N'SCHEMA', @level0name = N'My''S',`,
+                `    @level1type = N'TABLE', @level1name = N'T''',`,
+                `    @level2type = N'COLUMN', @level2name = N'C''';`,
+            ].join('\n'));
+
+            const colIfAbsentSql = dialect.CommentOnColumnIfAbsent("My'S", "T'", "C'", "d's");
+            expect(colIfAbsentSql).toBe([
+                `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'My''S', N'TABLE', N'T''', N'COLUMN', N'C'''))`,
+                colSql,
+            ].join('\n'));
+
+            const objSql = dialect.CommentOnObject('TABLE', "My'S", "T'", "d's");
+            expect(objSql).toBe([
+                `EXEC sp_addextendedproperty`,
+                `    @name = N'MS_Description',`,
+                `    @value = N'd''s',`,
+                `    @level0type = N'SCHEMA', @level0name = N'My''S',`,
+                `    @level1type = N'TABLE', @level1name = N'T'''`,
+            ].join('\n'));
+
+            const objIfAbsentSql = dialect.CommentOnObjectIfAbsent('TABLE', "My'S", "T'", "d's");
+            expect(objIfAbsentSql).toBe([
+                `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'My''S', N'TABLE', N'T''', NULL, NULL))`,
+                `${objSql};`,
+            ].join('\n'));
+
+            const customTypeSql = dialect.CommentOnObjectIfAbsent("TYPE'", "My'S", "T'", 'desc');
+            expect(customTypeSql).toContain("N'TYPE'''");
+        });
+
         it('should cap comments at MaxCommentLength (3,700 UTF-16 code units) without splitting surrogate pairs and strip NUL bytes', () => {
             expect(dialect.MaxCommentLength).toBe(3700);
             const longSql = dialect.CommentOnColumn('__mj', 'User', 'Bio', 'X'.repeat(5000));
