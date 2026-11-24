@@ -261,7 +261,7 @@
                 ColumnsMode="Fields"
                 JoinEntityName="MJ: Communication Provider Message Types"
                 JoinEntityRowForeignKey="CommunicationBaseMessageTypeID"
-                [JoinEntityExtraFilter]="'CommunicationProviderID=' + record.ID"
+                [JoinEntityExtraFilter]="'CommunicationProviderID=\'' + record.ID + '\''"
                 [JoinEntityDisplayColumns]="['Name','Status','AdditionalAttributes']"
                 [NewRecordDefaultValues]="{CommunicationProviderID: record.ID}"
             >
