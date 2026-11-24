@@ -29,8 +29,8 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, LogStatus, RunQuery, UserInfo } from '@memberjunction/core';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { LogStatus, RunQuery, UserInfo } from '@memberjunction/core';
+import { MJGlobal, RegisterClass, RequiresSubclass } from '@memberjunction/global';
 import { MJSearchScopeEntity } from '@memberjunction/core-entities';
 import {
     SearchContext,
@@ -89,11 +89,11 @@ const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0
 /**
  * Extension point for SearchScope dimension resolution.
  *
- * MJ's stock {@link ScopeDimensionResolver} derives `ServerDerived` dimensions from an approved
- * `MJ: Queries` row bound to `(PrimaryScopeRecordID, UserID, AgentID, SkillID)`. A host whose
- * access model carries server-trusted context beyond those four keys — such as per-tenant
- * entitlements or an evaluation audience — subclasses {@link ScopeDimensionResolver} and registers
- * against this base:
+ * Holds the invariant-enforcing {@link Resolve} pipeline (`strictValidation`, declaration checks,
+ * anti-spoof caller discard for `ServerDerived`/`restricts` dimensions, grammar validation,
+ * `narrowingOf` lattice meet, and `required` enforcement) as a template method. Subclasses extend
+ * {@link ScopeDimensionResolver} (or this base) and override {@link deriveServerValue} to supply
+ * or narrow server-derived dimension values without weakening any security invariant:
  *
  * ```ts
  * @RegisterClass(ScopeDimensionResolverBase, SCOPE_DIMENSION_RESOLVER_KEY)
@@ -109,31 +109,16 @@ const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0
  * }
  * ```
  *
+ * **Statelessness:** {@link GetScopeDimensionResolver} instantiates a fresh resolver per call so
+ * late startup registrations are always picked up. Subclasses MUST be stateless — any per-instance
+ * cache or state stored on `this` is discarded after one resolution.
+ *
  * Do NOT pass an explicit priority to `@RegisterClass`: `ClassFactory.Register` automatically
  * assigns one higher than the highest already registered for this `(base, key)`, so a consumer
  * subclassing {@link ScopeDimensionResolver} always outranks MJ's own registration.
  */
+@RequiresSubclass()
 export abstract class ScopeDimensionResolverBase {
-    /**
-     * Resolve the effective Search Context for a scope.
-     *
-     * @throws {ScopeDimensionError} when a declared dimension cannot be resolved safely —
-     *   the caller MUST fail the search rather than proceed with a partial bound.
-     */
-    public abstract Resolve(input: DimensionResolutionInput): Promise<DimensionResolutionResult>;
-}
-
-/**
- * `ClassFactory` key shared by MJ's stock dimension resolver and any consumer override registered
- * against {@link ScopeDimensionResolverBase}.
- *
- * There is one active resolver per deployment, so a single shared key avoids the keyless
- * registration warning while keeping subclass ordering deterministic.
- */
-export const SCOPE_DIMENSION_RESOLVER_KEY = 'ScopeDimensionResolver';
-
-@RegisterClass(ScopeDimensionResolverBase, SCOPE_DIMENSION_RESOLVER_KEY)
-export class ScopeDimensionResolver extends ScopeDimensionResolverBase {
     /**
      * Resolve the effective Search Context for a scope.
      *
@@ -504,8 +489,12 @@ export class ScopeDimensionResolver extends ScopeDimensionResolverBase {
             LogStatus(`ScopeDimensionResolver: ${msg}`);
             note = `a caller-supplied value was discarded (${JSON.stringify(callerScopes[dim.name]).substring(0, 80)})`;
         }
+        const rawServer = await this.deriveServerValue(dim, input);
+        const normalizedServer = rawServer === undefined || (rawServer as unknown) === null
+            ? undefined
+            : this.validateGrammar(dim, rawServer);
         return {
-            Value: await this.deriveServerValue(dim, input),
+            Value: normalizedServer,
             Provenance: note ? 'DiscardedCaller' : 'ServerDerived',
             Note: note,
         };
@@ -547,37 +536,18 @@ export class ScopeDimensionResolver extends ScopeDimensionResolverBase {
         };
     }
 
-    /** Derive a ServerDerived value: an approved `MJ: Queries` row, else nothing. */
+    /**
+     * Extension hook for deriving a `ServerDerived` dimension's value.
+     *
+     * The base implementation returns `undefined`; {@link ScopeDimensionResolver} overrides it to
+     * execute the dimension's declared `expansionQueryID`. Returned values (other than `undefined`)
+     * are validated against the dimension's declared `valueType` by {@link resolveByTrust}.
+     */
     protected async deriveServerValue(
-        dim: ScopeSecondaryDimension,
-        input: DimensionResolutionInput
+        _dim: ScopeSecondaryDimension,
+        _input: DimensionResolutionInput
     ): Promise<SecondaryScopeValue | undefined> {
-        if (!dim.expansionQueryID) return undefined;
-        const result = await new RunQuery().RunQuery({
-            QueryID: dim.expansionQueryID,
-            Parameters: {
-                PrimaryScopeRecordID: input.CallerContext?.PrimaryScopeRecordID ?? null,
-                UserID: (input.ContextUser as unknown as { ID?: string })?.ID ?? null,
-                AgentID: input.Principals?.AgentID ?? null,
-                // A skill is a principal in the same sense an agent is (Phase D), so a scope can
-                // derive a different bound depending on which skill is active — the mechanism
-                // behind "invoking this skill changes the content".
-                SkillID: input.Principals?.SkillID ?? null,
-            },
-        }, input.ContextUser);
-
-        if (!result?.Success) {
-            throw new ScopeDimensionError(
-                `Expansion query for dimension "${dim.name}" failed: ${result?.ErrorMessage ?? 'unknown error'}. ` +
-                `Refusing to search rather than proceeding without the bound.`
-            );
-        }
-        const rows = (result.Results ?? []) as Array<Record<string, unknown>>;
-        // Single-column projection convention: first column of each row.
-        const values = rows
-            .map((r) => { const v = Object.values(r)[0]; return typeof v === 'string' ? v : String(v ?? ''); })
-            .filter((v) => v.length > 0);
-        return dim.valueType === 'uuid' ? values[0] : values;
+        return undefined;
     }
 
     /**
@@ -627,7 +597,11 @@ export class ScopeDimensionResolver extends ScopeDimensionResolverBase {
                 return raw;
             case 'uuid[]': {
                 const arr = Array.isArray(raw) ? raw : fail('not an array');
-                for (const v of arr as string[]) if (!UUID_RE.test(v)) return fail(`array member is not a uuid (${String(v).substring(0, 40)})`);
+                for (const v of arr) {
+                    if (typeof v !== 'string' || !UUID_RE.test(v)) {
+                        return fail(`array member is not a uuid (${String(v).substring(0, 40)})`);
+                    }
+                }
                 return arr as string[];
             }
             case 'enum':
@@ -699,25 +673,70 @@ export class ScopeDimensionResolver extends ScopeDimensionResolverBase {
 }
 
 /**
- * The stock resolver instance.
- *
- * Prefer {@link GetScopeDimensionResolver}, which honours a consumer's registered override. This
- * constant always yields MJ's own implementation and therefore bypasses any subclass registered
+ * `ClassFactory` key shared by MJ's stock dimension resolver and any consumer override registered
  * against {@link ScopeDimensionResolverBase}.
+ *
+ * There is one active resolver per deployment, so a single shared key avoids the keyless
+ * registration warning while keeping subclass ordering deterministic.
  */
-export const DefaultScopeDimensionResolver = new ScopeDimensionResolver();
+export const SCOPE_DIMENSION_RESOLVER_KEY = 'ScopeDimensionResolver';
+
+/**
+ * Stock {@link ScopeDimensionResolverBase} implementation: derives `ServerDerived` dimensions by
+ * executing the declared `expansionQueryID` with `(PrimaryScopeRecordID, UserID, AgentID, SkillID)`.
+ */
+@RegisterClass(ScopeDimensionResolverBase, SCOPE_DIMENSION_RESOLVER_KEY)
+export class ScopeDimensionResolver extends ScopeDimensionResolverBase {
+    /** Derive a ServerDerived value: an approved `MJ: Queries` row, else nothing. */
+    protected override async deriveServerValue(
+        dim: ScopeSecondaryDimension,
+        input: DimensionResolutionInput
+    ): Promise<SecondaryScopeValue | undefined> {
+        if (!dim.expansionQueryID) return undefined;
+        const result = await new RunQuery().RunQuery({
+            QueryID: dim.expansionQueryID,
+            Parameters: {
+                PrimaryScopeRecordID: input.CallerContext?.PrimaryScopeRecordID ?? null,
+                UserID: (input.ContextUser as unknown as { ID?: string })?.ID ?? null,
+                AgentID: input.Principals?.AgentID ?? null,
+                // A skill is a principal in the same sense an agent is (Phase D), so a scope can
+                // derive a different bound depending on which skill is active — the mechanism
+                // behind "invoking this skill changes the content".
+                SkillID: input.Principals?.SkillID ?? null,
+            },
+        }, input.ContextUser);
+
+        if (!result?.Success) {
+            throw new ScopeDimensionError(
+                `Expansion query for dimension "${dim.name}" failed: ${result?.ErrorMessage ?? 'unknown error'}. ` +
+                `Refusing to search rather than proceeding without the bound.`
+            );
+        }
+        const rows = (result.Results ?? []) as Array<Record<string, unknown>>;
+        // Single-column projection convention: first column of each row.
+        const values = rows
+            .map((r) => { const v = Object.values(r)[0]; return typeof v === 'string' ? v : String(v ?? ''); })
+            .filter((v) => v.length > 0);
+        return dim.valueType === 'uuid' ? values[0] : values;
+    }
+}
+
+/** Module-private fallback so callers cannot bypass registered overrides via an exported constant. */
+const defaultScopeDimensionResolver = new ScopeDimensionResolver();
 
 /**
  * The resolver to use — a consumer's registered subclass if there is one, otherwise MJ's own.
  *
- * Resolved per call rather than cached at module load, so a registration made during application
- * startup is never missed due to import order. Construction is trivial and the class is stateless.
- *
- * Falls back to {@link DefaultScopeDimensionResolver} when nothing else is registered.
+ * Resolved per call via `TryCreateInstance` rather than cached at module load, so a registration
+ * made during application startup is never missed due to import order and an unregistered base
+ * class never yields a hollow instance. Construction is trivial and the class is stateless.
  */
 export function GetScopeDimensionResolver(): ScopeDimensionResolverBase {
-    return MJGlobal.Instance.ClassFactory.CreateInstance<ScopeDimensionResolverBase>(
+    const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<ScopeDimensionResolverBase>(
         ScopeDimensionResolverBase,
         SCOPE_DIMENSION_RESOLVER_KEY,
-    ) ?? DefaultScopeDimensionResolver;
+    );
+    return resolution.Resolved && resolution.Instance
+        ? resolution.Instance
+        : defaultScopeDimensionResolver;
 }
