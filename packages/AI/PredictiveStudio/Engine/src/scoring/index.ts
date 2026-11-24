@@ -25,8 +25,18 @@ export * from './ml-model-inference-processor';
 export * from './register';
 export * from './startup-register';
 export * from './scoring-binding';
+export * from './scoring-context';
+export * from './scoring-seams';
+export * from './scoring-run-recorder';
+export * from './scoring-checks';
+export * from './model-value-rows';
+export * from './binding-human-value-guard';
+export * from './scoring-service';
+export * from './parity-check';
 export * from './ml-model-score-enricher';
 export * from './scoring-process';
 export * from './auto-train';
 export * from './shadow-scoring';
+export * from './prediction-retention';
+export * from './prediction-retention-driver';
 

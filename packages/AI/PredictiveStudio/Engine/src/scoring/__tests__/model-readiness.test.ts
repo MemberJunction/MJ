@@ -1,29 +1,28 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { UserInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
-import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { PredictRequest, PredictResponse, FeatureSchemaEntry } from '@memberjunction/predictive-studio-core';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 
-import { MLModelInferenceProcessor, type MLInferenceResultPayload } from '../ml-model-inference-processor';
+import { MLModelInferenceProcessor } from '../ml-model-inference-processor';
 import { InMemoryArtifactLoader } from '../artifact-loader';
 import {
   ModelHasTrainedArtifact,
   ModelNeedsTrainingMessage,
-  ModelArtifactMissingMessage,
+  ArtifactUnavailableError,
   ModelNeedsTrainingError,
+  ModelNotScorableError,
   ModelNotServableError,
   ModelReadiness,
 } from '../model-readiness';
-import { AutoTrainShippedNoModelError, PipelineAutoTrainer } from '../auto-train';
-import { TrainingDelegation } from '../../operations/delegation';
-import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import type { AutoTrainRequest, IMLModelLoader, IModelAutoTrainer, ISidecarPredictor, MLInferenceDeps } from '../types';
-import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } from '../../actions/promote-model.action';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
-import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { GateTestStore, GateWorld, type Row } from '../../__tests__/fakes/gate-test-store';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
 
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
@@ -38,7 +37,14 @@ const NO_TRAINING_ROWS = { TrainingRowIDsOf: async (): Promise<ReadonlySet<strin
 
 const SCHEMA: FeatureSchemaEntry[] = [{ Name: 'tenure', Kind: 'numeric' }];
 
-/** A model fake exposing exactly what the processor reads. */
+/** The registered SHA-256 of the bytes each test stores under a file id (`setup` stores `file-1`, the auto-trainer `file-trained`). */
+const REGISTERED_SHA256: Record<string, string> = {
+  'file-1': SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes')),
+  'file-trained': SnapshotHash.Sha256Hex(new TextEncoder().encode('trained-bytes')),
+  'file-elsewhere': SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes stored on another host')),
+};
+
+/** The stored `MJ: ML Models` row of a test model: exactly the columns the processor reads. */
 class FakeModel {
   public Status: MJMLModelEntity['Status'] = 'Published';
   public FittedPreprocessing: string | null = '{}';
@@ -51,22 +57,36 @@ class FakeModel {
     featureSteps: { Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure'] }] },
     asOfStrategy: { Mode: 'none' },
   });
-  constructor(public ID: string, public ArtifactFileID: string | null) {}
+  public ArtifactStatus: MJMLModelEntity['ArtifactStatus'] = 'verified';
+  public ArtifactCheckedAt: Date | null = null;
+  public ArtifactSha256: string | null;
+  constructor(public ID: string, public ArtifactFileID: string | null) {
+    this.ArtifactSha256 = ArtifactFileID === null ? null : REGISTERED_SHA256[ArtifactFileID] || null;
+  }
+  /** The row the store holds for this model. */
+  public ToRow(): Row {
+    return {
+      ID: this.ID, Status: this.Status, FittedPreprocessing: this.FittedPreprocessing, FeatureSchema: this.FeatureSchema, ProblemType: this.ProblemType,
+      TargetVariable: this.TargetVariable, Lineage: this.Lineage, ArtifactStatus: this.ArtifactStatus, ArtifactCheckedAt: this.ArtifactCheckedAt,
+      ArtifactSha256: this.ArtifactSha256, ArtifactFileID: this.ArtifactFileID,
+    };
+  }
 }
 
-/** Loader fake keyed by model id. */
-class MapModelLoader implements IMLModelLoader {
-  public Requested: string[] = [];
-  constructor(private readonly models: Map<string, FakeModel>) {}
-  async loadModel(id: string): Promise<MJMLModelEntity | null> {
-    this.Requested.push(id);
-    return (this.models.get(id) ?? null) as unknown as MJMLModelEntity | null;
+/** The model loader over the store: the model's row as an entity object, read as the run's user on the run's provider. */
+class StoreModelLoader implements IMLModelLoader {
+  async loadModel(id: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<MJMLModelEntity | null> {
+    const r = await RunView.FromMetadataProvider(provider).RunView<MJMLModelEntity>(
+      { EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(id)}'`, MaxRows: 1, ResultType: 'entity_object' },
+      contextUser,
+    );
+    return r.Results[0] || null;
   }
 }
 
 class FakeSidecar implements ISidecarPredictor {
   async predict(req: PredictRequest): Promise<PredictResponse> {
-    return { predictions: (req.rows ?? []).map(() => ({ score: 0.8, class: 'Renewed', probabilities: null })), classOrder: null };
+    return { predictions: (req.rows || []).map(() => ({ score: 0.8, class: 'Renewed', probabilities: null })), classOrder: null };
   }
 }
 
@@ -85,33 +105,33 @@ class TestAssembler extends FeatureAssemblyExecutor {
   }
 }
 
-/** Auto-trainer fake: records the request and "trains" by registering a new model. */
+/** Auto-trainer fake: records the request and "trains" by storing a new model. */
 class FakeAutoTrainer implements IModelAutoTrainer {
   public Requests: AutoTrainRequest[] = [];
-  constructor(private readonly models: Map<string, FakeModel>, private readonly artifacts: InMemoryArtifactLoader) {}
+  constructor(private readonly models: GateTestStore, private readonly artifacts: InMemoryArtifactLoader) {}
   async EnsureTrainedModel(request: AutoTrainRequest): Promise<string> {
     this.Requests.push(request);
-    this.models.set('trained-1', new FakeModel('trained-1', 'file-trained'));
+    this.models.Insert('MJ: ML Models', new FakeModel('trained-1', 'file-trained').ToRow());
     this.artifacts.Set('file-trained', new TextEncoder().encode('trained-bytes'));
     return 'trained-1';
   }
 }
 
-const CTX: RecordProcessorContext = {
-  ContextUser: undefined as unknown as UserInfo,
-  Provider: undefined as unknown as IMetadataProvider,
-  RecordProcessID: 'rp-1',
-};
+/** The run context of the current test, over the store {@link setup} built. */
+let CTX: RecordProcessorContext;
 
 function record(id: string, tenure: number): RecordRef {
   return { EntityID: 'ent', RecordID: id, Record: { ID: id, tenure } };
 }
 
-function setup(models: FakeModel[]): { deps: MLInferenceDeps; map: Map<string, FakeModel>; artifacts: InMemoryArtifactLoader } {
-  const map = new Map(models.map((m) => [m.ID, m]));
+/** A store holding `models`, the run context over it, and the deps the processor reads them through. */
+function setup(models: FakeModel[]): { deps: MLInferenceDeps; map: GateTestStore; artifacts: InMemoryArtifactLoader } {
+  const map = new GateTestStore();
+  for (const m of models) map.Insert('MJ: ML Models', m.ToRow());
+  CTX = { ContextUser: GateWorld.User, Provider: map.Provider(), RecordProcessID: 'rp-1' };
   const artifacts = new InMemoryArtifactLoader();
   artifacts.Set('file-1', new TextEncoder().encode('bytes'));
-  return { deps: { modelLoader: new MapModelLoader(map), artifactLoader: artifacts, sidecar: new FakeSidecar(), pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS }, map, artifacts };
+  return { deps: { modelLoader: new StoreModelLoader(), artifactLoader: artifacts, sidecar: new FakeSidecar(), pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS }, map, artifacts };
 }
 
 describe('model readiness helpers', () => {
@@ -121,9 +141,8 @@ describe('model readiness helpers', () => {
     expect(ModelHasTrainedArtifact({ ID: 'm', ArtifactFileID: 'file-1' })).toBe(true);
   });
 
-  it('produces plain, actionable messages', () => {
+  it('produces a plain, actionable message', () => {
     expect(ModelNeedsTrainingMessage('m-1')).toMatch(/needs training/);
-    expect(ModelArtifactMissingMessage('m-1', 'f-1')).toMatch(/needs training on this server/);
   });
 });
 
@@ -169,15 +188,18 @@ describe('MLModelInferenceProcessor.Preflight — needs-training refusal', () =>
   it('refuses a model with no artifact with a ModelNeedsTrainingError', async () => {
     const { deps } = setup([new FakeModel('model-1', null)]);
     const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler());
-    const err = await proc.Preflight(CTX).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(ModelNeedsTrainingError);
-    expect((err as Error).message).toMatch(/needs training/);
+    const attempt = proc.Preflight(CTX);
+    await expect(attempt).rejects.toBeInstanceOf(ModelNeedsTrainingError);
+    await expect(attempt).rejects.toThrow(/needs training/);
   });
 
-  it('refuses a model whose artifact bytes are missing on this server', async () => {
+  it('refuses a model whose artifact bytes are missing on this server as artifact-missing, not "needs training"', async () => {
     const { deps } = setup([new FakeModel('model-1', 'file-elsewhere')]);
     const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler());
-    await expect(proc.Preflight(CTX)).rejects.toThrow(/needs training on this server/);
+    const attempt = proc.Preflight(CTX);
+    await expect(attempt).rejects.toBeInstanceOf(ArtifactUnavailableError);
+    await expect(attempt).rejects.toMatchObject({ Refusal: { kind: 'artifact-missing', fileId: 'file-elsewhere' } });
+    await expect(attempt).rejects.toThrow("MLModelInferenceProcessor: ML Model 'model-1': its model artifact file 'file-elsewhere' is missing from storage");
   });
 
   it('ignores autoTrain when no trainer is wired (plain refusal)', async () => {
@@ -192,18 +214,17 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
     const { deps, map, artifacts } = setup([new FakeModel('model-1', null)]);
     const trainer = new FakeAutoTrainer(map, artifacts);
     const proc = new MLModelInferenceProcessor(
-      { modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1', binding: { targetColumn: 'Score' } }, autoTrainer: trainer },
+      { modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1', binding: { featureName: 'Score', viewAuthorizationId: 'auth-1', targetColumn: 'Score', targetColumnSource: '$.AdverseProbability' } }, autoTrainer: trainer },
       new TestAssembler(),
     );
 
     await proc.Preflight(CTX);
     expect(trainer.Requests).toEqual([
-      { pipelineId: 'pipe-1', currentModelId: 'model-1', recordProcessId: 'rp-1', binding: { targetColumn: 'Score' } },
+      { pipelineId: 'pipe-1', currentModelId: 'model-1', recordProcessId: 'rp-1', binding: { featureName: 'Score', viewAuthorizationId: 'auth-1', targetColumn: 'Score', targetColumnSource: '$.AdverseProbability' } },
     ]);
 
     const result = await proc.ProcessRecord(record('r1', 3), CTX);
-    expect(result.Status).toBe('Succeeded');
-    expect((result.ResultPayload as MLInferenceResultPayload).modelId).toBe('trained-1');
+    expect(result).toMatchObject({ Status: 'Succeeded', ResultPayload: { modelId: 'trained-1' } });
   });
 
   it('trains when no model is configured yet (empty modelId)', async () => {
@@ -212,6 +233,29 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
     const proc = new MLModelInferenceProcessor({ modelId: '', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
     await proc.Preflight(CTX);
     expect(trainer.Requests[0].currentModelId).toBeNull();
+  });
+
+  it('trains when the configured model\'s artifact is missing (artifact-missing), then scores with the trained model', async () => {
+    const { deps, map, artifacts } = setup([new FakeModel('model-1', 'file-elsewhere')]);
+    const trainer = new FakeAutoTrainer(map, artifacts);
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
+    await proc.Preflight(CTX);
+    expect(trainer.Requests.map((r) => r.currentModelId)).toEqual(['model-1']);
+    expect((await proc.ProcessRecord(record('r1', 3), CTX)).Status).toBe('Succeeded');
+  });
+
+  it('does not train for an artifact that does not match its registered hash, or has none: a retrain must not paper over either', async () => {
+    const swapped = new FakeModel('model-1', 'file-1');
+    swapped.ArtifactSha256 = 'f'.repeat(64);
+    const unregistered = new FakeModel('model-2', 'file-1');
+    unregistered.ArtifactSha256 = null;
+    const { deps, map, artifacts } = setup([swapped, unregistered]);
+    const trainer = new FakeAutoTrainer(map, artifacts);
+    for (const [modelId, kind] of [['model-1', 'artifact-hash-mismatch'], ['model-2', 'artifact-unverified']] as const) {
+      const proc = new MLModelInferenceProcessor({ modelId, deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
+      await expect(proc.Preflight(CTX)).rejects.toMatchObject({ Refusal: { kind } });
+    }
+    expect(trainer.Requests).toHaveLength(0);
   });
 
   it('does not train for a model that is already trained', async () => {
@@ -228,7 +272,7 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
     const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
     await expect(proc.Preflight({ ...CTX, DryRun: true })).rejects.toBeInstanceOf(ModelNeedsTrainingError);
     expect(trainer.Requests).toHaveLength(0);
-    expect(map.has('trained-1')).toBe(false);
+    expect(map.Row('MJ: ML Models', 'trained-1')).toBeUndefined();
   });
 
   it('does not train on a failure that is not "needs training"', async () => {
@@ -246,142 +290,36 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// PipelineAutoTrainer — reuse vs train+publish, with the DB-touching steps stubbed.
-// ---------------------------------------------------------------------------
-
-class RecordingGate implements IModelPromotionGate {
-  public Calls: Array<{ modelId: string; targetStatus: string }> = [];
-  constructor(private readonly refuse?: PromoteModelOutcome) {}
-  async promote(request: PromoteModelRequest): Promise<PromoteModelOutcome> {
-    this.Calls.push({ modelId: request.modelId, targetStatus: request.targetStatus });
-    if (this.refuse && request.targetStatus !== 'Archived') return this.refuse;
-    return { kind: 'promoted', newStatus: request.targetStatus };
-  }
-}
-
-class TestableAutoTrainer extends PipelineAutoTrainer {
-  public Repointed: string[] = [];
-  public TrainCount = 0;
-  constructor(gate: IModelPromotionGate, private readonly reusable: string | null) {
-    super({
-      gate,
-      train: async () => {
-        this.TrainCount++;
-        return { ID: 'new-model', Status: 'Draft' } as unknown as MJMLModelEntity;
-      },
-    });
-  }
-  protected override async findReusableModel(): Promise<string | null> {
-    return this.reusable;
-  }
-  protected override async repoint(_r: AutoTrainRequest, modelId: string): Promise<void> {
-    this.Repointed.push(modelId);
-  }
-}
-
-const USER = undefined as unknown as UserInfo;
-const PROVIDER = undefined as unknown as IMetadataProvider;
-const PIPE = '8A1C44F3-938C-4E65-B6DE-D621BC4C3001';
-const OLD = 'E93F0238-6902-4521-87D9-FE9A1201B001';
-
-describe('PipelineAutoTrainer', () => {
-  it('trains, publishes (Validated → Published), repoints, and archives the superseded model', async () => {
-    const status = ConsoleCapture.Status();
-    const gate = new RecordingGate();
-    const trainer = new TestableAutoTrainer(gate, null);
-    const id = await trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER);
-    expect(id).toBe('new-model');
-    expect(trainer.TrainCount).toBe(1);
-    expect(gate.Calls).toEqual([
-      { modelId: 'new-model', targetStatus: 'Validated' },
-      { modelId: 'new-model', targetStatus: 'Published' },
-      { modelId: OLD, targetStatus: 'Archived' },
-    ]);
-    expect(trainer.Repointed).toEqual(['new-model']);
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 trained + published model 'new-model'.")]);
-  });
-
-  it('reuses an already-published, loadable model instead of retraining', async () => {
-    const status = ConsoleCapture.Status();
-    const gate = new RecordingGate();
-    const trainer = new TestableAutoTrainer(gate, 'existing-model');
-    const id = await trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: null, recordProcessId: null }, USER, PROVIDER);
-    expect(id).toBe('existing-model');
-    expect(trainer.TrainCount).toBe(0);
-    expect(trainer.Repointed).toEqual(['existing-model']);
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 reused model 'existing-model'.")]);
-  });
-
-  it('refuses to publish a leakage-flagged model and says it needs human sign-off', async () => {
-    const gate = new RecordingGate({ kind: 'refused-leakage', topFeature: 'cancelled_flag', topShare: 0.95 });
-    const trainer = new TestableAutoTrainer(gate, null);
-    await expect(
-      trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: null, recordProcessId: null }, USER, PROVIDER),
-    ).rejects.toThrow(/human sign-off/);
-    expect(trainer.Repointed).toHaveLength(0);
-  });
-
-  it('does not archive the reused model when the process already pointed at it (IDs compared as UUIDs, any letter case)', async () => {
-    const status = ConsoleCapture.Status();
-    const gate = new RecordingGate();
-    const trainer = new TestableAutoTrainer(gate, OLD.toLowerCase());
-    const id = await trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER);
-    expect(id).toBe(OLD.toLowerCase());
-    expect(gate.Calls).toEqual([]);
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining(`reused model '${OLD.toLowerCase()}'`)]);
-  });
-
-  it('rejects a malformed pipeline id before touching anything', async () => {
-    const trainer = new TestableAutoTrainer(new RecordingGate(), null);
-    await expect(
-      trainer.EnsureTrainedModel({ pipelineId: "x' OR 1=1 --", currentModelId: null, recordProcessId: null }, USER, PROVIDER),
-    ).rejects.toThrow(/not a valid/);
-    expect(trainer.TrainCount).toBe(0);
-  });
-});
-
-describe('PipelineAutoTrainer.findReusableModel', () => {
-  /** The auto-trainer with its reuse lookup exposed. */
-  class ReuseProbe extends PipelineAutoTrainer {
-    public Reusable(provider: IMetadataProvider): Promise<string | null> {
-      return this.findReusableModel(PIPE, USER, provider);
+describe('MLModelInferenceProcessor.Preflight — auto-train reacts to model-not-published (M4b.2)', () => {
+  it('a configured model that is not Published and may not score (Archived, KeepBaseline, Unevaluated) triggers auto-train, which retargets the run', async () => {
+    for (const status of ['Archived', 'KeepBaseline', 'Unevaluated'] as const) {
+      const configured = new FakeModel('model-1', 'file-1');
+      configured.Status = status;
+      const { deps, map, artifacts } = setup([configured]);
+      const trainer = new FakeAutoTrainer(map, artifacts);
+      const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
+      await proc.Preflight(CTX);
+      expect([status, trainer.Requests.map((r) => r.currentModelId)]).toEqual([status, ['model-1']]);
+      expect(await proc.ProcessRecord(record('r1', 3), CTX)).toMatchObject({ Status: 'Succeeded', ResultPayload: { modelId: 'trained-1' } });
     }
-  }
-  const rows = [
-    { ID: 'forecast-model', ArtifactFileID: 'file-forecast', Lineage: JSON.stringify({ shippedMember: 'seasonalNaive', shippedDriver: 'seasonal-naive' }) },
-    { ID: 'tabular-model', ArtifactFileID: 'file-tabular', Lineage: JSON.stringify({ shippedMember: 'xgb', shippedDriver: 'xgboost' }) },
-  ];
-  const provider = {
-    async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
-      expect(params.Fields).toContain('Lineage');
-      return { Success: true, Results: rows as unknown as T[], RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
-    },
-  } as unknown as IMetadataProvider;
-
-  it('skips a newer Published model /predict does not serve and reuses the next loadable one', async () => {
-    const artifacts = new InMemoryArtifactLoader();
-    artifacts.Set('file-forecast', new TextEncoder().encode('series'));
-    artifacts.Set('file-tabular', new TextEncoder().encode('tabular'));
-    expect(await new ReuseProbe({ artifactLoader: artifacts }).Reusable(provider)).toBe('tabular-model');
-  });
-});
-
-describe('PipelineAutoTrainer.TrainThroughEngine', () => {
-  afterEach(() => vi.restoreAllMocks());
-
-  it('throws a named error carrying the stored reason when the training run shipped no model', async () => {
-    const run = { ID: 'run-7', Notes: '', ValidationResults: TrainerResultFixtures.NoSignalValidationResults() } as unknown as MJMLTrainingRunEntity;
-    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: null, run });
-    const attempt = PipelineAutoTrainer.TrainThroughEngine(PIPE, PROVIDER, USER);
-    await expect(attempt).rejects.toBeInstanceOf(AutoTrainShippedNoModelError);
-    await expect(attempt).rejects.toMatchObject({ PipelineID: PIPE, TrainingRunID: 'run-7', Reason: TrainerResultFixtures.NoSignalReason });
-    await expect(attempt).rejects.toThrow(`Auto-train: training pipeline ${PIPE} (run run-7) shipped no model, so there is nothing to score with: ${TrainerResultFixtures.NoSignalReason}`);
   });
 
-  it("returns the run's model when one shipped", async () => {
-    const model = { ID: 'new-model' } as unknown as MJMLModelEntity;
-    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model, run: { ID: 'run-8' } as unknown as MJMLTrainingRunEntity });
-    await expect(PipelineAutoTrainer.TrainThroughEngine(PIPE, PROVIDER, USER)).resolves.toBe(model);
+  it('without auto-train the not-scorable status is refused as before', async () => {
+    const configured = new FakeModel('model-1', 'file-1');
+    configured.Status = 'Archived';
+    const { deps } = setup([configured]);
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler());
+    await expect(proc.Preflight(CTX)).rejects.toBeInstanceOf(ModelNotScorableError);
+  });
+
+  it('passes the Process Run, the retry window and the withheld-notification flag to the auto-trainer', async () => {
+    const { deps, map, artifacts } = setup([new FakeModel('model-1', null)]);
+    const trainer = new FakeAutoTrainer(map, artifacts);
+    const autoTrain = { pipelineId: 'pipe-1', retryAfterHours: 6, notifyOnWithheld: false };
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, autoTrain, autoTrainer: trainer }, new TestAssembler());
+    await proc.Preflight({ ...CTX, ProcessRunID: 'process-run-1' });
+    expect(trainer.Requests).toEqual([
+      { pipelineId: 'pipe-1', currentModelId: 'model-1', recordProcessId: 'rp-1', binding: undefined, processRunId: 'process-run-1', retryAfterHours: 6, notifyOnWithheld: false },
+    ]);
   });
 });

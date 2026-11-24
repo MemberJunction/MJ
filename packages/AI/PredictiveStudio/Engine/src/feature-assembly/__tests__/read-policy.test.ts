@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { OrdinalCompare } from '@memberjunction/global';
 import { CompleteReader } from '../read-policy';
+import { KeyedReader } from '../as-of/read-by-keys';
+import { AssemblyRefused } from '../as-of/refusal';
 import type { ICountingDataAccess, CountRowsResult, FetchRowsParams, FetchRowsResult, SourceRow } from '../data-access';
 
 /** Serves `rows` but stops at `cap` per read when set, like a silently capped view; counts report every row. */
@@ -50,5 +52,28 @@ describe('ReadCompletely', () => {
     const da = new FakeCountingDataAccess(rows);
     await expect(CompleteReader.ReadCompletely(da, { EntityName: 'E', KeyField: 'ID' }, { mode: 'paged', pageSize: 0 })).rejects.toThrow(/pageSize of at least 1, got 0/);
     expect(da.Reads).toHaveLength(0);
+  });
+});
+
+// A field the caller may not read comes back absent from every row (the provider narrows the SELECT list for the user,
+// GenericDatabaseProvider.getRunTimeViewFieldArray); a readable column holding NULL comes back present as null (R5).
+describe('a requested field the read did not return (field-level security)', () => {
+  const restricted: SourceRow[] = [{ ID: 'a', V: 1 }, { ID: 'b', V: null }];
+
+  it('ReadCompletely refuses unresolved-column naming the entity and the field, rather than reading it as missing', async () => {
+    const out = await CompleteReader.ReadCompletely(new FakeCountingDataAccess(restricted), { EntityName: 'E', KeyField: 'ID', Fields: ['V', 'Salary'] }, { mode: 'complete' });
+    expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'E', field: 'Salary' } });
+  });
+
+  it('ReadCompletely reads a field that is present but null on a row', async () => {
+    const out = await CompleteReader.ReadCompletely(new FakeCountingDataAccess(restricted), { EntityName: 'E', KeyField: 'ID', Fields: ['V'] }, { mode: 'complete' });
+    expect(out.Status === 'read' && out.Rows.map((r) => r.V)).toEqual([1, null]);
+  });
+
+  it('KeyedReader.ReadByKeys refuses unresolved-column, and ReadPresentByKeys throws it as an assembly refusal', async () => {
+    const da = new FakeCountingDataAccess(restricted);
+    expect(await KeyedReader.ReadByKeys(da, 'E', 'ID', ['a', 'b'], ['V', 'Salary'])).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'E', field: 'Salary' } });
+    const thrown = await KeyedReader.ReadPresentByKeys(da, 'E', 'ID', ['a'], ['Salary']).catch((e: Error) => e);
+    expect(thrown instanceof AssemblyRefused && thrown.Refusal).toEqual({ kind: 'unresolved-column', entity: 'E', field: 'Salary' });
   });
 });

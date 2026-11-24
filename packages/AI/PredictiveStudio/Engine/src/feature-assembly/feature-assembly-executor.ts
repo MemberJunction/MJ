@@ -54,6 +54,22 @@ import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
 
 /**
+ * The assembly input lacks required feature columns. The model was trained on them but they were not available — at
+ * score time, the scope's rows do not carry them (a renamed or dropped column, or a narrow projection). Scoring refuses
+ * naming them rather than produce degenerate predictions; `Columns` names each one.
+ */
+export class MissingFeatureColumnsError extends Error {
+  /** @param Columns the required columns the input lacks @param EntityName the entity the input was assembled for */
+  constructor(public readonly Columns: readonly string[], public readonly EntityName: string) {
+    super(
+      `FeatureAssembly: required feature column(s) [${Columns.join(', ')}] are absent from the assembly input for entity '${EntityName}'. ` +
+        'The model was trained on these columns but they were not available at score time. Scoring is refused to avoid silently producing degenerate predictions.',
+    );
+    this.name = 'MissingFeatureColumnsError';
+  }
+}
+
+/**
  * Resolves a {@link VisionLLMFeatureStep}'s `Prompt` (id/name/inline) into the
  * prompt entity the injected runner executes. Supplied by the caller so the
  * executor stays decoupled from `MJ: AI Prompts` loading; tests provide a stub.
@@ -64,9 +80,9 @@ import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
 export type VisionPromptResolver = (step: VisionLLMFeatureStep) => Promise<AIPromptParams['prompt']> | AIPromptParams['prompt'];
 
 /**
- * Which of the three contexts the executor is running in. The value is purely a
- * telemetry/diagnostics tag — the assembly logic is identical in all three so
- * that features never differ between train and score (§6.1).
+ * Which of the three contexts the executor is running in. The assembly logic is identical in all three so that
+ * features never differ between train and score (§6.1), with one exception: scoring (`'on-demand'`) never re-reads a
+ * column its rows lack from the training entity; it refuses with {@link MissingFeatureColumnsError}.
  */
 export type AssemblyContext = 'train' | 'materialize' | 'on-demand';
 
@@ -206,15 +222,14 @@ export class FeatureAssemblyExecutor {
     // 3. Build the ordered RAW column plan (schema) from the data-assembly steps.
     const columnPlan = await this.buildColumnPlan(dataSteps, params, guard, dataAccess);
 
-    // 3a. ANTI-SKEW (the train/serve parity guarantee). On-demand/scheduled scoring receives its
-    //     target records from an upstream scope that may have loaded them with a NARROW field
-    //     projection — dropping virtual/denormalized columns (e.g. a `MembershipType` value-list field
-    //     joined into the entity view but absent from the base table). The model trained on those
-    //     columns, so missing them at score time silently degrades every prediction toward a constant.
-    //     Re-read ONLY the absent required columns from the SAME entity view the training path reads,
-    //     then HARD-FAIL if any are still missing. This is the single seam where skew could enter, so
-    //     it's the single seam we close — symmetrically, for train / materialize / on-demand alike.
-    records = await this.hydrateMissingFeatureColumns(records, columnPlan, params, dataAccess, pkField);
+    // 3a. ANTI-SKEW (the train/serve parity guarantee). Training and materialization may receive narrow rows; the
+    //     absent required columns are re-read from the SAME entity view training reads. Scoring ('on-demand') never
+    //     re-reads: its rows come from the scope's own entity, so a column the scope lacks is refused by name
+    //     (MissingFeatureColumnsError) instead of being filled from the training entity. Then HARD-FAIL on any
+    //     required column still missing.
+    if (params.context !== 'on-demand') {
+      records = await this.hydrateMissingFeatureColumns(records, columnPlan, params, dataAccess, pkField);
+    }
     this.assertRequiredColumnsPresent(records, columnPlan, params);
 
     // 4. Pre-index dated sources by record for as-of features.
@@ -360,13 +375,7 @@ export class FeatureAssemblyExecutor {
     const required = this.requiredRowColumns(plan, params);
     const absent = required.filter((col) => records.some((r) => !(col in r)));
     if (absent.length > 0) {
-      throw new Error(
-        `FeatureAssembly: required feature column(s) [${absent.join(', ')}] are absent from the ` +
-          `assembly input for entity '${params.targetEntityName}'. The model was trained on these ` +
-          `columns but they were not available at score time — most often a narrow field projection ` +
-          `that dropped a virtual/denormalized column. Scoring is refused to avoid silently producing ` +
-          `degenerate predictions.`,
-      );
+      throw new MissingFeatureColumnsError(absent, params.targetEntityName);
     }
   }
 
@@ -420,21 +429,21 @@ export class FeatureAssemblyExecutor {
   private toPreprocessingOp(step: FeatureStep, guard: LeakageGuardEnforcer): PreprocessingOp | null {
     switch (step.Kind) {
       case 'impute':
-        if (!guard.isFieldAllowed(step.Column)) {
+        if (!guard.IsFieldAllowed(step.Column)) {
           return null;
         }
         return { op: 'impute', col: step.Column, strategy: step.Strategy, fillValue: step.FillValue };
       case 'standardize': {
-        const cols = guard.partitionColumns(step.Columns).allowed;
+        const cols = guard.PartitionColumns(step.Columns).allowed;
         return cols.length > 0 ? { op: 'standardize', cols } : null;
       }
       case 'onehot':
-        if (!guard.isFieldAllowed(step.Column)) {
+        if (!guard.IsFieldAllowed(step.Column)) {
           return null;
         }
         return { op: 'onehot', col: step.Column };
       case 'bin':
-        if (!guard.isFieldAllowed(step.Column)) {
+        if (!guard.IsFieldAllowed(step.Column)) {
           return null;
         }
         // Bin count travels in the recipe via the dedicated `bins` field; the
@@ -491,7 +500,7 @@ export class FeatureAssemblyExecutor {
     // Add as-of feature columns from dated sources (computed in the matrix builder).
     for (const ds of params.datedSources ?? []) {
       for (const f of ds.Features) {
-        if (!guard.isFieldAllowed(f.OutputColumn)) {
+        if (!guard.IsFieldAllowed(f.OutputColumn)) {
           continue;
         }
         if (plannedCols.has(f.OutputColumn)) {
@@ -515,7 +524,7 @@ export class FeatureAssemblyExecutor {
     emitters: ColumnEmitter[],
     plannedCols: Set<string>,
   ): void {
-    for (const col of guard.partitionColumns(columns).allowed) {
+    for (const col of guard.PartitionColumns(columns).allowed) {
       if (plannedCols.has(col)) {
         continue;
       }
@@ -535,7 +544,7 @@ export class FeatureAssemblyExecutor {
   ): void {
     for (let i = 0; i < step.Dims; i++) {
       const name = `emb_${i}`;
-      if (!guard.isFieldAllowed(name)) {
+      if (!guard.IsFieldAllowed(name)) {
         continue;
       }
       if (plannedCols.has(name)) {
@@ -570,7 +579,7 @@ export class FeatureAssemblyExecutor {
       return;
     }
     for (const col of cols) {
-      if (!guard.isFieldAllowed(col)) {
+      if (!guard.IsFieldAllowed(col)) {
         continue;
       }
       if (plannedCols.has(col)) {
@@ -592,7 +601,7 @@ export class FeatureAssemblyExecutor {
     plannedCols: Set<string>,
   ): void {
     for (const outName of Object.keys(step.OutputMapping)) {
-      if (!guard.isFieldAllowed(outName)) {
+      if (!guard.IsFieldAllowed(outName)) {
         continue;
       }
       if (plannedCols.has(outName)) {
@@ -626,7 +635,7 @@ export class FeatureAssemblyExecutor {
     plannedCols: Set<string>,
   ): void {
     const col = step.Output.FeatureName;
-    if (!guard.isFieldAllowed(col)) {
+    if (!guard.IsFieldAllowed(col)) {
       return;
     }
     if (plannedCols.has(col)) {
@@ -651,7 +660,7 @@ export class FeatureAssemblyExecutor {
   ): Promise<DatedIndex> {
     const index: DatedIndex = new Map();
     for (const ds of params.datedSources ?? []) {
-      if (!guard.isSourceAllowed(ds.EntityName)) {
+      if (!guard.IsSourceAllowed(ds.EntityName)) {
         continue;
       }
       const res = await dataAccess.fetchRows({ EntityName: ds.EntityName });

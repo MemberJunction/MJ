@@ -142,6 +142,8 @@ export type AsOfAssemblyResult =
       readonly Columns: readonly AssembledColumn[];
       readonly Rows: readonly AssembledRow[];
       readonly ExcludedRowIDs: ReadonlySet<string>;
+      /** Each excluded row's uncovered fields (`Entity.Field`, in the order first met): why that row was left out. */
+      readonly UncoveredFieldsByRow: ReadonlyMap<string, readonly string[]>;
       readonly UncoveredRowsExcluded: readonly UncoveredRowsCount[];
       readonly Coverage: readonly ChangeHistoryCoverage[];
       readonly Preprocessing: readonly PreprocessingOp[];
@@ -169,7 +171,7 @@ type FeatureValueSource = Extract<FeatureColumnSpec['source'], { kind: 'feature-
 type SeriesSource = Extract<FeatureColumnSpec['source'], { kind: 'series' }>;
 type DateParts = Extract<ColumnEncoding, { kind: 'date-parts' }>['parts'];
 interface UncoveredTally { readonly Entity: string; readonly Field: string; readonly HistoryStart: string | null; Rows: number }
-interface AssembledRows { readonly Rows: AssembledRow[]; readonly Excluded: Set<string>; readonly Uncovered: UncoveredTally[] }
+interface AssembledRows { readonly Rows: AssembledRow[]; readonly Excluded: Set<string>; readonly UncoveredFields: Map<string, string[]>; readonly Uncovered: UncoveredTally[] }
 /** One stored record the stable-value rule judges, with the unit rows whose values its stored fields stand for. */
 interface StableRead { readonly Key: string; readonly Rows: readonly AssemblyRowRef[] }
 /** A windowed aggregate's child rows as read (see `childIndex`); `DeletedAt` holds each hard-deleted child's Delete instant. */
@@ -282,6 +284,7 @@ export class AsOfFeatureAssembler {
       Columns: columns,
       Rows: folded.Rows,
       ExcludedRowIDs: assembled.Excluded,
+      UncoveredFieldsByRow: assembled.UncoveredFields,
       UncoveredRowsExcluded: assembled.Uncovered.map((u) => ({ entity: u.Entity, field: u.Field, rows: u.Rows })),
       Coverage: [...state.Coverage.values()],
       Preprocessing: AsOfFeatureAssembler.BuildPreprocessingOps(columns, input.Features, input.ExplicitOps || []),
@@ -384,7 +387,7 @@ export class AsOfFeatureAssembler {
    * name the first one with its row count. An excluded row's other values are not encoded.
    */
   private assembleRows(input: AsOfAssemblyInput, readers: readonly ColumnReader[]): AssembledRows {
-    const out: AssembledRows = { Rows: [], Excluded: new Set<string>(), Uncovered: [] };
+    const out: AssembledRows = { Rows: [], Excluded: new Set<string>(), UncoveredFields: new Map<string, string[]>(), Uncovered: [] };
     const tallies = new Map<string, UncoveredTally>();
     for (const row of input.Rows) {
       const values: MatrixCell[] = [];
@@ -405,6 +408,7 @@ export class AsOfFeatureAssembler {
         continue;
       }
       out.Excluded.add(row.RowID);
+      out.UncoveredFields.set(row.RowID, uncovered.map((u) => `${u.Entity}.${u.Field}`));
       for (const u of uncovered) AsOfFeatureAssembler.tally(tallies, out.Uncovered, u);
     }
     return out;

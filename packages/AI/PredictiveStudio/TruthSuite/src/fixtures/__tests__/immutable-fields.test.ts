@@ -34,12 +34,18 @@ describe('ImmutableFieldDeclarations.AppliesTo', () => {
 });
 
 describe('TRUTH_IMMUTABLE_FIELDS scenario tables', () => {
-  it('declares every Scn_T3, Scn_R3, Scn_C2 and Scn_T2p column except the key', () => {
+  it('declares every Scn_T3, Scn_R3, Scn_C2, Scn_T2p and Scn_R1 column except the key', () => {
     const fieldsOf = (table: string) => TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, table)).flatMap((d) => d.Fields);
     expect(fieldsOf('Scn_T3')).toEqual(['EntityKey', 'T', 'LagTarget', 'SamePeriodTarget', 'Target', 'TruthScore']);
     expect(fieldsOf('Scn_R3')).toEqual(['EntityKey', 'T', 'PastEventsZ', 'Member', 'DistanceZ', 'Target', 'TruthScore']);
     expect(fieldsOf('Scn_C2')).toEqual(['EntityKey', 'T', 'ClaimAmountZ', 'PriorClaims', 'NewPolicy', 'ReportDelayZ', 'NoiseZ', 'Target', 'TruthScore']);
     expect(fieldsOf('Scn_T2p')).toEqual(['EntityKey', 'T', 'UsageZ', 'Discount', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_R1')).toEqual(['EntityKey', 'T', 'DistanceZ', 'ItemsZ', 'TrafficZ', 'Target', 'TruthScore']);
     expect(fieldsOf('Scn_T3lag')).toEqual([]);
+  });
+  it('declares every Scn_D1c, Scn_D1r, Scn_D2 and Scn_T4 column except the key (the monitoring gates train on them as of T, M6.6)', () => {
+    const fieldsOf = (table: string) => TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, table)).flatMap((d) => d.Fields);
+    for (const table of ['Scn_D1c', 'Scn_D1r', 'Scn_D2']) expect(fieldsOf(table)).toEqual(['EntityKey', 'T', 'EngagementZ', 'TenureZ', 'AutoRenew', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_T4')).toEqual(['EntityKey', 'T', 'LagTarget', 'Target', 'TruthScore']);
   });
 });
