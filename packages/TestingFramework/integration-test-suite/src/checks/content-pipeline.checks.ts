@@ -1240,24 +1240,30 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const page =
                 '<!doctype html><html><body><nav>Home | Members</nav>' +
                 `<div class="article-body"><p>${SENTENCE.trim()}</p></div><footer>Copyright</footer></body></html>`;
-            Documents.set(urls.Page, { Text: page, ModifiedAt: new Date() });
-            Documents.set(urls.Notes, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
-            Documents.set(urls.Readme, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
-
             const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
             const contentType = (await rows<MJContentTypeEntity>(ctx, 'MJ: Content Types', `ID='${source.ContentTypeID}'`))[0];
             const original = { SourceConfiguration: source.Configuration, SourceCleanerKey: source.CleanerKey, TypeConfiguration: contentType.Configuration };
-            // The content type's standard cleaners; the source overrides txt and names its own default.
-            contentType.Configuration = JSON.stringify({ Cleaners: { html: 'Html', txt: 'PlainText' } });
-            source.Configuration = JSON.stringify({
-                ...(original.SourceConfiguration ? JSON.parse(original.SourceConfiguration) : {}),
-                Cleaners: { txt: SOURCE_FILE_TYPE_CLEANER_KEY },
-            });
-            source.CleanerKey = SOURCE_DEFAULT_CLEANER_KEY;
-            await save(contentType, 'content type with standard cleaners');
-            await save(source, 'source with a file-type cleaner and a default');
-            await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+            let failure: unknown = null;
             try {
+                // After the source's last discovery, so these documents count as changed since it.
+                await new Promise((r) => setTimeout(r, 5));
+                Documents.set(urls.Page, { Text: page, ModifiedAt: new Date() });
+                Documents.set(urls.Notes, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+                Documents.set(urls.Readme, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+                // The content type's standard cleaners; the source overrides txt and names its own default.
+                contentType.Configuration = JSON.stringify({
+                    ...(original.TypeConfiguration ? JSON.parse(original.TypeConfiguration) : {}),
+                    Cleaners: { html: 'Html', txt: 'PlainText' },
+                });
+                source.Configuration = JSON.stringify({
+                    ...(original.SourceConfiguration ? JSON.parse(original.SourceConfiguration) : {}),
+                    Cleaners: { txt: SOURCE_FILE_TYPE_CLEANER_KEY },
+                });
+                source.CleanerKey = SOURCE_DEFAULT_CLEANER_KEY;
+                await save(contentType, 'content type with standard cleaners');
+                await save(source, 'source with a file-type cleaner and a default');
+                await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+
                 await run(ctx, ['Discover'], [S.SourceID]);
                 const ids = { Page: (await itemByURL(ctx, urls.Page)).ID, Notes: (await itemByURL(ctx, urls.Notes)).ID, Readme: (await itemByURL(ctx, urls.Readme)).ID };
                 await run(ctx, ['Extract'], Object.values(ids));
@@ -1274,14 +1280,38 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 Assert((await textOf(ids.Notes)).startsWith(SOURCE_FILE_TYPE_MARK), "txt: the source's own entry for the file type beats the content type's");
                 Assert((await textOf(ids.Readme)).startsWith(SOURCE_DEFAULT_MARK), "md: no map names it, so the source's default ran");
                 console.log('      → CP23: html → Html (content type), txt → source entry, md → source default');
+            } catch (error) {
+                failure = error;
+                throw error;
             } finally {
-                contentType.Configuration = original.TypeConfiguration;
-                source.Configuration = original.SourceConfiguration;
-                source.CleanerKey = original.SourceCleanerKey;
-                await save(contentType, 'restore content type Configuration');
-                await save(source, 'restore source cleaner settings');
-                await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+                // Each step on its own, so one failing does not leave the others dirty.
+                const problems: string[] = [];
+                const restore = async (what: string, step: () => Promise<void> | void): Promise<void> => {
+                    try {
+                        await step();
+                    } catch (error) {
+                        problems.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                };
                 Object.values(urls).forEach((u) => Documents.delete(u));
+                await restore('content type Configuration', async () => {
+                    contentType.Configuration = original.TypeConfiguration;
+                    await save(contentType, 'restore content type Configuration');
+                });
+                await restore('source cleaner settings', async () => {
+                    source.Configuration = original.SourceConfiguration;
+                    source.CleanerKey = original.SourceCleanerKey;
+                    await save(source, 'restore source cleaner settings');
+                });
+                await restore('metadata cache', () => KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider));
+                if (problems.length > 0) {
+                    const message = `CP23 could not restore ${problems.join('; ')}`;
+                    if (failure) {
+                        console.warn(`      ⚠ ${message}`);
+                    } else {
+                        throw new Error(message);
+                    }
+                }
             }
         },
     },
