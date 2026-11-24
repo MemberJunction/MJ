@@ -286,39 +286,43 @@ describe('SQLServerDialect', () => {
         });
 
         it('should escape identifier arguments and use N-prefixed Unicode literals consistently across all comment helpers', () => {
-            const colSql = dialect.CommentOnColumn("My'S", "T'\0", "C'", "d's");
-            expect(colSql).toBe([
+            const expectedColSql = [
                 `EXEC sp_addextendedproperty`,
                 `    @name = N'MS_Description',`,
                 `    @value = N'd''s',`,
                 `    @level0type = N'SCHEMA', @level0name = N'My''S',`,
                 `    @level1type = N'TABLE', @level1name = N'T''',`,
                 `    @level2type = N'COLUMN', @level2name = N'C''';`,
-            ].join('\n'));
+            ].join('\n');
+            expect(dialect.CommentOnColumn("My'S", "T'\0", "C'", "d's")).toBe(expectedColSql);
 
-            const colIfAbsentSql = dialect.CommentOnColumnIfAbsent("My'S", "T'", "C'", "d's");
-            expect(colIfAbsentSql).toBe([
+            expect(dialect.CommentOnColumnIfAbsent("My'S", "T'\0", "C'", "d's")).toBe([
                 `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'My''S', N'TABLE', N'T''', N'COLUMN', N'C'''))`,
-                colSql,
+                expectedColSql,
             ].join('\n'));
 
-            const objSql = dialect.CommentOnObject('TABLE', "My'S", "T'", "d's");
-            expect(objSql).toBe([
+            const expectedObjSql = [
                 `EXEC sp_addextendedproperty`,
                 `    @name = N'MS_Description',`,
                 `    @value = N'd''s',`,
                 `    @level0type = N'SCHEMA', @level0name = N'My''S',`,
                 `    @level1type = N'TABLE', @level1name = N'T'''`,
-            ].join('\n'));
+            ].join('\n');
+            expect(dialect.CommentOnObject('TABLE', "My'S", "T'\0", "d's")).toBe(expectedObjSql);
 
-            const objIfAbsentSql = dialect.CommentOnObjectIfAbsent('TABLE', "My'S", "T'", "d's");
-            expect(objIfAbsentSql).toBe([
+            expect(dialect.CommentOnObjectIfAbsent('TABLE', "My'S", "T'\0", "d's")).toBe([
                 `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'My''S', N'TABLE', N'T''', NULL, NULL))`,
-                `${objSql};`,
+                `${expectedObjSql};`,
             ].join('\n'));
 
-            const customTypeSql = dialect.CommentOnObjectIfAbsent("TYPE'", "My'S", "T'", 'desc');
-            expect(customTypeSql).toContain("N'TYPE'''");
+            expect(dialect.CommentOnObjectIfAbsent("TYPE'", "My'S", "T'", 'desc')).toBe([
+                `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'My''S', N'TYPE''', N'T''', NULL, NULL))`,
+                `EXEC sp_addextendedproperty`,
+                `    @name = N'MS_Description',`,
+                `    @value = N'desc',`,
+                `    @level0type = N'SCHEMA', @level0name = N'My''S',`,
+                `    @level1type = N'TYPE''', @level1name = N'T''';`,
+            ].join('\n'));
         });
 
         it('should cap comments at MaxCommentLength (3,700 UTF-16 code units) without splitting surrogate pairs and strip NUL bytes', () => {
