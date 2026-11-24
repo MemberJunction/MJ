@@ -47,6 +47,28 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { ComputeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
 import { BuildCatalogUniqueKeyColumnsSQL, BuildStoredUniqueKeySetsSQL, BuildUniqueKeySetSyncSQL, DiffUniqueKeySets, GroupUniqueKeyColumns, StoredUniqueKeySet } from "./unique-key-sets";
 import {
+   BuildEntitiesForIndexSyncSQL,
+   BuildEntityFieldsForIndexSyncSQL,
+   BuildEntityIndexSyncSQL,
+   BuildStoredEntityIndexFieldsSQL,
+   BuildStoredEntityIndexesSQL,
+   DiffEntityIndexes,
+   ResolveDesiredEntityIndexes,
+   type IndexSyncEntityFieldRef,
+   type IndexSyncEntityRef,
+   type StoredEntityIndex,
+   type StoredEntityIndexField,
+} from "./entity-index-sync";
+import {
+   BuildPostgreSQLIndexCatalogQuery,
+   BuildSQLServerIndexCatalogQuery,
+   MapPostgreSQLIndexCatalogRows,
+   MapSQLServerIndexCatalogRows,
+   type CatalogIndex,
+   type PostgreSQLIndexCatalogRow,
+   type SQLServerIndexCatalogRow,
+} from "@memberjunction/sql-dialect";
+import {
    ConfigEntityRef,
    DecideConfigValueListAction,
    DeclaredOrganicKey,
@@ -5859,6 +5881,14 @@ export class ManageMetadataBase {
       }
       logStatus(`      Synced entity unique keys from schema in ${(new Date().getTime() - stepUniqueKeysStartTime.getTime()) / 1000} seconds`);
 
+      // Database indexes in entity metadata (#6801). Unscoped for the same reason as unique keys.
+      const stepIndexesStartTime: Date = new Date();
+      if (! await this.syncEntityIndexes(pool, excludeSchemas)) {
+         logError('Error syncing entity indexes from schema');
+         bSuccess = false;
+      }
+      logStatus(`      Synced entity indexes from schema in ${(new Date().getTime() - stepIndexesStartTime.getTime()) / 1000} seconds`);
+
       // Apply soft PK/FK configuration if config file exists
       const stepConfigStartTime: Date = new Date();
       if (! await this.applySoftPKFKConfig(pool)) {
@@ -7232,6 +7262,91 @@ export class ManageMetadataBase {
       }
       catch (e) {
          logError(`Error syncing entity unique keys: ${e}`);
+         return false;
+      }
+   }
+
+   /**
+    * Reads the database index catalog using the shared `@memberjunction/sql-dialect` catalog
+    * queries for the active platform (SQL Server or PostgreSQL).
+    */
+   private async readCatalogIndexes(pool: CodeGenConnection, excludeSchemas: string[]): Promise<CatalogIndex[]> {
+      if (this.dialect.PlatformKey === 'postgresql') {
+         const res = await this.runQuery(pool, BuildPostgreSQLIndexCatalogQuery({ ExcludeSchemas: excludeSchemas }));
+         return MapPostgreSQLIndexCatalogRows(res.recordset as unknown as PostgreSQLIndexCatalogRow[]);
+      }
+      const res = await this.runQuery(pool, BuildSQLServerIndexCatalogQuery({ ExcludeSchemas: excludeSchemas }));
+      return MapSQLServerIndexCatalogRows(res.recordset as unknown as SQLServerIndexCatalogRow[]);
+   }
+
+   /**
+    * Makes `EntityIndex` and `EntityIndexField` match the database catalog (#6801) for every
+    * non-virtual entity outside `excludeSchemas`. Preserves `Proposed` and `Rejected` rows,
+    * promotes `Proposed` rows to `Active` when they appear in the database, and tags
+    * `IDX_AUTO_MJ_FKEY_*` indexes with `Source = 'CodeGen'`. See entity-index-sync.ts.
+    */
+   protected async syncEntityIndexes(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const schema = MjCoreSchema();
+         const [catalogIndexes, entitiesRes, fieldsRes, storedIdxRes, storedFldRes] = await Promise.all([
+            this.readCatalogIndexes(pool, excludeSchemas),
+            this.runQuery(pool, BuildEntitiesForIndexSyncSQL(this.dialect, schema, excludeSchemas)),
+            this.runQuery(pool, BuildEntityFieldsForIndexSyncSQL(this.dialect, schema, excludeSchemas)),
+            this.runQuery(pool, BuildStoredEntityIndexesSQL(this.dialect, schema, excludeSchemas)),
+            this.runQuery(pool, BuildStoredEntityIndexFieldsSQL(this.dialect, schema, excludeSchemas)),
+         ]);
+
+         const entities: IndexSyncEntityRef[] = entitiesRes.recordset.map((r: CodeGenQueryRow) => ({
+            ID: String(r.ID),
+            SchemaName: String(r.SchemaName),
+            BaseTable: String(r.BaseTable),
+            VirtualEntity: Boolean(r.VirtualEntity),
+         }));
+         const entityFields: IndexSyncEntityFieldRef[] = fieldsRes.recordset.map((r: CodeGenQueryRow) => ({
+            ID: String(r.ID),
+            EntityID: String(r.EntityID),
+            Name: String(r.Name),
+         }));
+         const storedIndexes: StoredEntityIndex[] = storedIdxRes.recordset.map((r: CodeGenQueryRow) => ({
+            ID: String(r.ID),
+            EntityID: String(r.EntityID),
+            Name: String(r.Name),
+            IndexType: String(r.IndexType),
+            NativeType: String(r.NativeType ?? ''),
+            IsUnique: Boolean(r.IsUnique),
+            IsPrimaryKey: Boolean(r.IsPrimaryKey),
+            IsClustered: Boolean(r.IsClustered),
+            FilterDefinition: r.FilterDefinition == null ? null : String(r.FilterDefinition),
+            HasExpressions: Boolean(r.HasExpressions),
+            Source: String(r.Source) as StoredEntityIndex['Source'],
+            Status: String(r.Status) as StoredEntityIndex['Status'],
+            Description: r.Description == null ? null : String(r.Description),
+         }));
+         const storedFields: StoredEntityIndexField[] = storedFldRes.recordset.map((r: CodeGenQueryRow) => ({
+            ID: String(r.ID),
+            EntityIndexID: String(r.EntityIndexID),
+            EntityFieldID: r.EntityFieldID == null ? null : String(r.EntityFieldID),
+            Expression: r.Expression == null ? null : String(r.Expression),
+            Sequence: Number(r.Sequence),
+            Role: String(r.Role) as StoredEntityIndexField['Role'],
+            SortDirection: String(r.SortDirection) as StoredEntityIndexField['SortDirection'],
+         }));
+
+         const desired = ResolveDesiredEntityIndexes(catalogIndexes, entities, entityFields);
+         const changes = DiffEntityIndexes(desired, storedIndexes, storedFields);
+         const statements = BuildEntityIndexSyncSQL(this.dialect, schema, changes, () => uuidv4());
+         if (statements.length > 0) {
+            const promotedCount = changes.Updates.filter((u) => u.PromotedFromProposed).length;
+            const summary = `${changes.Inserts.length} added, ${changes.Updates.length} updated` +
+               (promotedCount > 0 ? ` (${promotedCount} promoted from Proposed)` : '') +
+               `, ${changes.Deletes.length} removed`;
+            await this.logSQLBatchAndExecute(pool, statements, `SQL text to sync entity indexes (${summary})`);
+            logStatus(`   > Entity indexes: ${summary}`);
+         }
+         return true;
+      }
+      catch (e) {
+         logError(`Error syncing entity indexes: ${e}`);
          return false;
       }
    }

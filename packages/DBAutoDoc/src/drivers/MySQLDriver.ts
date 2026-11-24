@@ -7,7 +7,12 @@ import mysql from 'mysql2/promise';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
 import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
-import { MYSQL_INDEX_QUERY, MySQLIndexRow, MapMySQLIndexRows } from './IndexCatalog.js';
+import {
+  MYSQL_INDEX_CATALOG_QUERY,
+  MapMySQLIndexCatalogRows,
+  type MySQLIndexCatalogRow,
+} from '@memberjunction/sql-dialect';
+import { CatalogIndexesToAutoDocIndexes } from './IndexCatalog.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -279,11 +284,11 @@ export class MySQLDriver extends BaseAutoDocDriver {
    * Get every existing index on the tables of one schema (primary-key indexes included).
    */
   public async GetIndexes(schemaName: string): Promise<AutoDocIndex[]> {
-    const result = await this.executeQuery<MySQLIndexRow>(MYSQL_INDEX_QUERY, 3, [schemaName]);
+    const result = await this.executeQuery<MySQLIndexCatalogRow>(MYSQL_INDEX_CATALOG_QUERY, 3, [schemaName]);
     if (!result.success) {
       throw new Error(`Failed to read indexes for schema ${schemaName}: ${result.errorMessage}`);
     }
-    return MapMySQLIndexRows(result.data ?? []);
+    return CatalogIndexesToAutoDocIndexes(MapMySQLIndexCatalogRows(result.data ?? []));
   }
 
   public async getExistingDescriptions(

@@ -503,6 +503,32 @@
             "lastModified": "2026-10-27T19:47:29.544Z",
             "checksum": "436ce0029e2221338e3376093ed1086833bfe96a0c6ee3accbe51946767f7e0c"
           }
+        },
+        {
+          "fields": {
+            "Code": "EntityIndexes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 35,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Indexes",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Database indexes and advisor proposals for each entity's base table, linked to their entities during metadata post-processing"
+          },
+          "primaryKey": {
+            "ID": "C07954A3-81F3-4A9B-BB42-8E43941891C0"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityIndexFields",
+            "DatasetID": "@parent:ID",
+            "Sequence": 36,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Index Fields",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Ordered key and INCLUDE field entries for each EntityIndex, linked to their parent EntityIndex during metadata post-processing"
+          },
+          "primaryKey": {
+            "ID": "6C34EFCE-47CA-4C37-9673-6D13EC1C5801"
+          }
         }
       ]
     },

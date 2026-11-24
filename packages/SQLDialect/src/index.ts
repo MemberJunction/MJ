@@ -79,3 +79,25 @@ export {
     IsNetworkSQLType,
     IsNumericSQLType,
 } from './typeClassification.js';
+export {
+    EXPRESSION_KEY_PART,
+    NormalizeIndexType,
+    BuildSQLServerIndexCatalogQuery,
+    MapSQLServerIndexCatalogRows,
+    POSTGRESQL_INDEX_CATALOG_QUERY,
+    BuildPostgreSQLIndexCatalogQuery,
+    MapPostgreSQLIndexCatalogRows,
+    MYSQL_INDEX_CATALOG_QUERY,
+    MapMySQLIndexCatalogRows,
+} from './indexCatalog.js';
+export type {
+    NormalizedIndexType,
+    IndexFieldRole,
+    IndexSortDirection,
+    CatalogIndexField,
+    CatalogIndex,
+    IndexCatalogQueryOptions,
+    SQLServerIndexCatalogRow,
+    PostgreSQLIndexCatalogRow,
+    MySQLIndexCatalogRow,
+} from './indexCatalog.js';

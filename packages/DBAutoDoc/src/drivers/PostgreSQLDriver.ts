@@ -7,7 +7,12 @@ import { Pool, PoolClient, PoolConfig } from 'pg';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
 import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
-import { POSTGRESQL_INDEX_QUERY, PostgreSQLIndexRow, MapPostgreSQLIndexRows } from './IndexCatalog.js';
+import {
+  POSTGRESQL_INDEX_CATALOG_QUERY,
+  MapPostgreSQLIndexCatalogRows,
+  type PostgreSQLIndexCatalogRow,
+} from '@memberjunction/sql-dialect';
+import { CatalogIndexesToAutoDocIndexes } from './IndexCatalog.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -305,11 +310,11 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
    * Get every existing index on the tables of one schema (primary-key indexes included).
    */
   public async GetIndexes(schemaName: string): Promise<AutoDocIndex[]> {
-    const result = await this.executeQuery<PostgreSQLIndexRow>(POSTGRESQL_INDEX_QUERY, 3, [schemaName]);
+    const result = await this.executeQuery<PostgreSQLIndexCatalogRow>(POSTGRESQL_INDEX_CATALOG_QUERY, 3, [schemaName]);
     if (!result.success) {
       throw new Error(`Failed to read indexes for schema ${schemaName}: ${result.errorMessage}`);
     }
-    return MapPostgreSQLIndexRows(result.data ?? []);
+    return CatalogIndexesToAutoDocIndexes(MapPostgreSQLIndexCatalogRows(result.data ?? []));
   }
 
   public async getExistingDescriptions(

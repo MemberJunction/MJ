@@ -17,6 +17,7 @@ import type { IndexAdvisorData, IndexAdvisorOptions } from './IndexAdvisorTypes.
 import { ProposeIndexes, FindRedundantIndexes } from './IndexRules.js';
 import { IndexMigrationGenerator } from './IndexMigrationGenerator.js';
 import { IndexLLMReviewer } from './IndexLLMReview.js';
+import { PersistIndexProposalsToMJMetadata } from './IndexProposalPersister.js';
 
 export const INDEX_ADVISOR_PLUGIN_NAME = 'IndexAdvisor';
 
@@ -27,7 +28,8 @@ export const DEFAULT_INDEX_ADVISOR_OPTIONS: IndexAdvisorOptions = {
   LLMReview: true,
   MaxLLMTables: 40,
   // PostgreSQL: build indexes without locking writes on a live database (Craig, 2026-10-08)
-  Concurrently: true
+  Concurrently: true,
+  PersistToMJMetadata: true
 };
 
 @RegisterClass(BaseAutoDocPlugin, INDEX_ADVISOR_PLUGIN_NAME)
@@ -48,6 +50,16 @@ export class IndexAdvisorPlugin extends BaseAutoDocPlugin {
     };
     if (options.LLMReview) {
       await runLLMReview(context, data);
+    }
+    if (options.PersistToMJMetadata !== false && data.Proposed.length > 0) {
+      const persisted = await PersistIndexProposalsToMJMetadata(data.Proposed, { Log: context.Log });
+      if (persisted.Persisted > 0 || persisted.Errors.length > 0) {
+        context.Log(
+          `Index Advisor: persisted ${persisted.Persisted} proposed index(es) to MJ metadata` +
+            (persisted.Skipped > 0 ? `, ${persisted.Skipped} skipped` : '') +
+            (persisted.Errors.length > 0 ? `, ${persisted.Errors.length} error(s)` : '')
+        );
+      }
     }
     this.SetData(context, INDEX_ADVISOR_PLUGIN_NAME, data);
     context.Log(
@@ -85,7 +97,8 @@ export function ResolveIndexAdvisorOptions(raw: { [key: string]: AutoDocPluginJS
     KeyMinConfidence: num(raw['KeyMinConfidence'], d.KeyMinConfidence),
     LLMReview: bool(raw['LLMReview'], d.LLMReview),
     MaxLLMTables: num(raw['MaxLLMTables'], d.MaxLLMTables),
-    Concurrently: bool(raw['Concurrently'], d.Concurrently)
+    Concurrently: bool(raw['Concurrently'], d.Concurrently),
+    PersistToMJMetadata: bool(raw['PersistToMJMetadata'], d.PersistToMJMetadata ?? true)
   };
 }
 

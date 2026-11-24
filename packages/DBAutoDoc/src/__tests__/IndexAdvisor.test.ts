@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { MapPostgreSQLIndexRows, MapSQLServerIndexRows, MapMySQLIndexRows, BuildSQLServerIndexQuery } from '../drivers/IndexCatalog';
+import {
+  MapPostgreSQLIndexCatalogRows,
+  MapSQLServerIndexCatalogRows,
+  MapMySQLIndexCatalogRows,
+  BuildSQLServerIndexCatalogQuery,
+} from '@memberjunction/sql-dialect';
+import { CatalogIndexesToAutoDocIndexes } from '../drivers/IndexCatalog';
 import { ProposeIndexes, FindRedundantIndexes, IsCovered } from '../plugins/index-advisor/IndexRules';
 import { IndexMigrationGenerator } from '../plugins/index-advisor/IndexMigrationGenerator';
 import { ResolveIndexAdvisorOptions, DEFAULT_INDEX_ADVISOR_OPTIONS } from '../plugins/index-advisor/IndexAdvisorPlugin';
@@ -53,32 +59,42 @@ const ORDERS = table('Orders', 50_000, [col('OrderID'), col('CustomerID', 'int',
 
 describe('IndexCatalog row mapping', () => {
   it('maps PostgreSQL rows, including INCLUDE columns and partial/expression flags', () => {
-    const [ix] = MapPostgreSQLIndexRows([{
-      SchemaName: 's', TableName: 't', IndexName: 'ix', IsUnique: true, IsPrimary: false, Method: 'btree',
-      FilterDef: '(active = true)', HasExpr: false, KeyColumns: ['a', 'b'], IncludeColumns: ['c']
-    }]);
+    const [ix] = CatalogIndexesToAutoDocIndexes(MapPostgreSQLIndexCatalogRows([
+      {
+        SchemaName: 's', TableName: 't', IndexName: 'ix', IsUnique: true, IsPrimaryKey: false, IsClustered: false, NativeType: 'btree',
+        FilterDefinition: '(active = true)', HasExpressions: false, ColumnName: 'a', Expression: null, Sequence: 1, IsIncluded: false, IsDescending: false
+      },
+      {
+        SchemaName: 's', TableName: 't', IndexName: 'ix', IsUnique: true, IsPrimaryKey: false, IsClustered: false, NativeType: 'btree',
+        FilterDefinition: '(active = true)', HasExpressions: false, ColumnName: 'b', Expression: null, Sequence: 2, IsIncluded: false, IsDescending: false
+      },
+      {
+        SchemaName: 's', TableName: 't', IndexName: 'ix', IsUnique: true, IsPrimaryKey: false, IsClustered: false, NativeType: 'btree',
+        FilterDefinition: '(active = true)', HasExpressions: false, ColumnName: 'c', Expression: null, Sequence: 3, IsIncluded: true, IsDescending: false
+      }
+    ]));
     expect(ix).toMatchObject({ Columns: ['a', 'b'], IncludeColumns: ['c'], IsUnique: true, FilterDefinition: '(active = true)' });
   });
 
-  it('maps SQL Server rows with |-delimited column lists', () => {
-    const [ix] = MapSQLServerIndexRows([{
-      SchemaName: 'dbo', TableName: 't', IndexName: 'PK_t', IsUnique: true, IsPrimaryKey: true, Method: 'CLUSTERED',
-      FilterDefinition: null, KeyColumns: 'ID', IncludeColumns: null
-    }]);
+  it('maps SQL Server per-column rows into AutoDocIndex', () => {
+    const [ix] = CatalogIndexesToAutoDocIndexes(MapSQLServerIndexCatalogRows([{
+      SchemaName: 'dbo', TableName: 't', IndexName: 'PK_t', IsUnique: true, IsPrimaryKey: true, IsClustered: true, NativeType: 'CLUSTERED',
+      FilterDefinition: null, ColumnName: 'ID', IsIncludedColumn: false, IsDescendingKey: false, KeyOrdinal: 1, IndexColumnID: 1
+    }]));
     expect(ix).toMatchObject({ Columns: ['ID'], IncludeColumns: [], IsPrimaryKey: true, Method: 'CLUSTERED' });
   });
 
   it('escapes the schema name in the SQL Server catalog query', () => {
-    expect(BuildSQLServerIndexQuery("o'brien")).toContain("s.name = N'o''brien'");
+    expect(BuildSQLServerIndexCatalogQuery({ SchemaName: "o'brien" })).toContain("s.name = N'o''brien'");
   });
 
   it('groups MySQL per-column rows into indexes in sequence order and flags expression parts', () => {
-    const indexes = MapMySQLIndexRows([
-      { SchemaName: 's', TableName: 't', IndexName: 'ix_ab', NonUnique: 1, Method: 'BTREE', ColumnName: 'b', Seq: 2 },
-      { SchemaName: 's', TableName: 't', IndexName: 'ix_ab', NonUnique: 1, Method: 'BTREE', ColumnName: 'a', Seq: 1 },
-      { SchemaName: 's', TableName: 't', IndexName: 'PRIMARY', NonUnique: '0', Method: 'BTREE', ColumnName: 'id', Seq: 1 },
-      { SchemaName: 's', TableName: 't', IndexName: 'ix_fn', NonUnique: 1, Method: 'BTREE', ColumnName: null, Seq: 1 }
-    ]);
+    const indexes = CatalogIndexesToAutoDocIndexes(MapMySQLIndexCatalogRows([
+      { SchemaName: 's', TableName: 't', IndexName: 'ix_ab', NonUnique: 1, NativeType: 'BTREE', ColumnName: 'b', Sequence: 2 },
+      { SchemaName: 's', TableName: 't', IndexName: 'ix_ab', NonUnique: 1, NativeType: 'BTREE', ColumnName: 'a', Sequence: 1 },
+      { SchemaName: 's', TableName: 't', IndexName: 'PRIMARY', NonUnique: '0', NativeType: 'BTREE', ColumnName: 'id', Sequence: 1 },
+      { SchemaName: 's', TableName: 't', IndexName: 'ix_fn', NonUnique: 1, NativeType: 'BTREE', ColumnName: null, Sequence: 1 }
+    ]));
     const byName = Object.fromEntries(indexes.map((i) => [i.IndexName, i]));
     expect(byName['ix_ab'].Columns).toEqual(['a', 'b']);
     expect(byName['PRIMARY']).toMatchObject({ IsPrimaryKey: true, IsUnique: true });
@@ -176,14 +192,17 @@ describe('Expression key parts and FK coverage', () => {
   const ORDERS_FK = table('Orders', 50_000, [col('OrderID'), col('Code', 'varchar(20)', 900), col('CustomerID', 'int', 4000)], [
     { schema: 'dbo', table: 'Customers', column: 'CustomerID', referencedColumn: 'CustomerID' }
   ]);
-  const mysqlRows = (first: string | null, second: string | null) => MapMySQLIndexRows([
-    { SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', NonUnique: 1, Method: 'BTREE', ColumnName: second, Seq: 2 },
-    { SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', NonUnique: 1, Method: 'BTREE', ColumnName: first, Seq: 1 }
-  ]);
-  const pgRows = (keyColumns: (string | null)[]) => MapPostgreSQLIndexRows([{
-    SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', IsUnique: false, IsPrimary: false, Method: 'btree',
-    FilterDef: null, HasExpr: true, KeyColumns: keyColumns, IncludeColumns: []
-  }]);
+  const mysqlRows = (first: string | null, second: string | null) => CatalogIndexesToAutoDocIndexes(MapMySQLIndexCatalogRows([
+    { SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', NonUnique: 1, NativeType: 'BTREE', ColumnName: second, Sequence: 2 },
+    { SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', NonUnique: 1, NativeType: 'BTREE', ColumnName: first, Sequence: 1 }
+  ]));
+  const pgRows = (keyColumns: (string | null)[]) => CatalogIndexesToAutoDocIndexes(MapPostgreSQLIndexCatalogRows(
+    keyColumns.map((colName, idx) => ({
+      SchemaName: 'dbo', TableName: 'Orders', IndexName: 'ix_mixed', IsUnique: false, IsPrimaryKey: false, IsClustered: false, NativeType: 'btree',
+      FilterDefinition: null, HasExpressions: true, ColumnName: colName, Expression: colName === null ? 'lower(code)' : null,
+      Sequence: idx + 1, IsIncluded: false, IsDescending: false
+    }))
+  ));
   const proposedColumns = (existing: AutoDocIndex[]) =>
     ProposeIndexes(stateWith([ORDERS_FK]), existing, DEFAULT_INDEX_ADVISOR_OPTIONS).map((p) => p.Columns);
 

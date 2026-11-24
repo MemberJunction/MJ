@@ -7,7 +7,12 @@ import sql from 'mssql';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
 import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
-import { BuildSQLServerIndexQuery, SQLServerIndexRow, MapSQLServerIndexRows } from './IndexCatalog.js';
+import {
+  BuildSQLServerIndexCatalogQuery,
+  MapSQLServerIndexCatalogRows,
+  type SQLServerIndexCatalogRow,
+} from '@memberjunction/sql-dialect';
+import { CatalogIndexesToAutoDocIndexes } from './IndexCatalog.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -314,11 +319,11 @@ export class SQLServerDriver extends BaseAutoDocDriver {
    * Get every existing index on the tables of one schema (primary-key indexes included).
    */
   public async GetIndexes(schemaName: string): Promise<AutoDocIndex[]> {
-    const result = await this.executeQuery<SQLServerIndexRow>(BuildSQLServerIndexQuery(schemaName));
+    const result = await this.executeQuery<SQLServerIndexCatalogRow>(BuildSQLServerIndexCatalogQuery({ SchemaName: schemaName }));
     if (!result.success) {
       throw new Error(`Failed to read indexes for schema ${schemaName}: ${result.errorMessage}`);
     }
-    return MapSQLServerIndexRows(result.data ?? []);
+    return CatalogIndexesToAutoDocIndexes(MapSQLServerIndexCatalogRows(result.data ?? []));
   }
 
   public async getExistingDescriptions(

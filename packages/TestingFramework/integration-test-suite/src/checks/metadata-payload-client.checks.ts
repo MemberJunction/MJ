@@ -66,7 +66,7 @@ function assertNoNestedKeys(code: string, keys: string[], label: string): void {
 }
 
 async function checkMp1EntityRowsFlat(): Promise<void> {
-    assertNoNestedKeys('Entities', ['EntityFields', 'EntityPermissions', 'EntityRelationships', 'EntitySettings', 'EntityOrganicKeys', 'EntityAlternateBaseViews', 'EntityUniqueKeys'], 'MP1');
+    assertNoNestedKeys('Entities', ['EntityFields', 'EntityPermissions', 'EntityRelationships', 'EntitySettings', 'EntityOrganicKeys', 'EntityAlternateBaseViews', 'EntityUniqueKeys', 'EntityIndexes'], 'MP1');
 }
 
 async function checkMp2FieldRowsFlat(): Promise<void> {

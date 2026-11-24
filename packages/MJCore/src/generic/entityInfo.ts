@@ -423,6 +423,151 @@ export class EntityUniqueKeyInfo extends BaseInfo {
     }
 }
 
+/** Normalized cross-database index type (matches `EntityIndex.IndexType` CHECK constraint). */
+export type EntityIndexType =
+    | 'BTree'
+    | 'Hash'
+    | 'FullText'
+    | 'Columnstore'
+    | 'GIN'
+    | 'GiST'
+    | 'BRIN'
+    | 'Spatial'
+    | 'XML'
+    | 'Other';
+
+/** Origin of an entity index row (matches `EntityIndex.Source` CHECK constraint). */
+export type EntityIndexSource = 'Database' | 'CodeGen' | 'DBAutoDoc';
+
+/** Lifecycle status of an entity index row (matches `EntityIndex.Status` CHECK constraint). */
+export type EntityIndexStatus = 'Active' | 'Proposed' | 'Rejected';
+
+/** Role of a column/expression within an index (matches `EntityIndexField.Role` CHECK constraint). */
+export type EntityIndexFieldRole = 'Key' | 'Include';
+
+/** Sort direction of an index key field (matches `EntityIndexField.SortDirection` CHECK constraint). */
+export type EntityIndexSortDirection = 'ASC' | 'DESC';
+
+/**
+ * One ordered column or expression entry belonging to an {@link EntityIndexInfo}.
+ * Maps to the `MJ: Entity Index Fields` metadata entity.
+ */
+export class EntityIndexFieldInfo extends BaseInfo {
+    ID: string = null;
+    EntityIndexID: string = null;
+    /** Foreign key to `MJ: Entity Fields`, or null when this key position is an expression. */
+    EntityFieldID: string | null = null;
+    /** Expression text when `EntityFieldID` is null (for example `lower(email)`). */
+    Expression: string | null = null;
+    /** 1-based ordinal position within the index (key parts first, then INCLUDE columns). */
+    Sequence: number = 0;
+    /** Whether this entry is a key column/expression or a non-key INCLUDE column. */
+    Role: EntityIndexFieldRole = 'Key';
+    /** Sort direction (`ASC` or `DESC`). INCLUDE columns default to `ASC`. */
+    SortDirection: EntityIndexSortDirection = 'ASC';
+    __mj_CreatedAt: Date = null;
+    __mj_UpdatedAt: Date = null;
+
+    // Virtual fields from vwEntityIndexFields
+    EntityIndex: string | null = null;
+    EntityField: string | null = null;
+
+    /** True when this key position is an expression rather than a plain base-table column. */
+    get IsExpression(): boolean {
+        return this.EntityFieldID == null;
+    }
+
+    /** True when this entry is a key part (not an INCLUDE column). */
+    get IsKey(): boolean {
+        return this.Role === 'Key';
+    }
+
+    /** True when this entry is a non-key INCLUDE column. */
+    get IsInclude(): boolean {
+        return this.Role === 'Include';
+    }
+
+    constructor(initData: Record<string, unknown> | null = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+}
+
+/**
+ * A database index (or advisor proposal) on an entity's base table.
+ * CodeGen keeps `Active` rows in sync with the database catalog while preserving
+ * `Proposed` and `Rejected` rows from advisors such as DBAutoDoc.
+ * Maps to the `MJ: Entity Indexes` metadata entity.
+ */
+export class EntityIndexInfo extends BaseInfo {
+    ID: string = null;
+    EntityID: string = null;
+    Name: string = null;
+    IndexType: EntityIndexType = 'BTree';
+    NativeType: string = '';
+    IsUnique: boolean = false;
+    IsPrimaryKey: boolean = false;
+    IsClustered: boolean = false;
+    FilterDefinition: string | null = null;
+    HasExpressions: boolean = false;
+    Source: EntityIndexSource = 'Database';
+    Status: EntityIndexStatus = 'Active';
+    Description: string | null = null;
+    __mj_CreatedAt: Date = null;
+    __mj_UpdatedAt: Date = null;
+
+    // Virtual field from vwEntityIndexes
+    Entity: string | null = null;
+
+    private _fields: EntityIndexFieldInfo[] = [];
+
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityIndexFields', '_Fields', 'Fields',
+    ]);
+
+    /** All key and INCLUDE entries of this index, sorted by `Sequence`. */
+    get Fields(): EntityIndexFieldInfo[] {
+        return this._fields;
+    }
+
+    /** Ordered key entries of this index (including expression key parts), sorted by `Sequence`. */
+    get KeyFields(): EntityIndexFieldInfo[] {
+        return this._fields.filter(f => f.Role === 'Key');
+    }
+
+    /** Ordered non-key INCLUDE entries of this index, sorted by `Sequence`. */
+    get IncludeFields(): EntityIndexFieldInfo[] {
+        return this._fields.filter(f => f.Role === 'Include');
+    }
+
+    /** True when the index has a non-empty filter/partial predicate. */
+    get IsFiltered(): boolean {
+        return this.FilterDefinition != null && this.FilterDefinition.trim().length > 0;
+    }
+
+    /** True when the index exists in the database (`Status === 'Active'`). */
+    get IsActive(): boolean {
+        return this.Status === 'Active';
+    }
+
+    constructor(initData: Record<string, unknown> | null = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData, EntityIndexInfo.CHILD_INIT_KEYS);
+            const rawFields = initData.EntityIndexFields || initData._Fields || initData.Fields;
+            if (Array.isArray(rawFields)) {
+                this._fields = rawFields
+                    .map(item => item instanceof EntityIndexFieldInfo
+                        ? item
+                        : new EntityIndexFieldInfo(item as Record<string, unknown>))
+                    .sort((a, b) => (a.Sequence - b.Sequence) || ordinalCompare(a.ID, b.ID));
+            }
+        }
+    }
+}
+
 /**
  * Metadata describing a governed alternate SQL view on an entity that maintains 100% column
  * parity with the entity's canonical `BaseView` while applying a curated canonical filter
@@ -2550,6 +2695,62 @@ export class EntityFieldInfo extends BaseInfo {
         return this._fixedWidthColumnCache;
     }
 
+    private _owningEntity: EntityInfo | null = null;
+
+    /**
+     * Records the owning {@link EntityInfo} so field-level index helpers
+     * ({@link IsIndexed}, {@link IsLeadingIndexColumn}) can inspect `EntityInfo.Indexes`
+     * without consulting a global provider.
+     */
+    public SetOwningEntity(entity: EntityInfo): void {
+        this._owningEntity = entity;
+    }
+
+    private matchesIndexField(indexField: EntityIndexFieldInfo): boolean {
+        if (indexField.IsExpression) {
+            return false;
+        }
+        if (this.ID && indexField.EntityFieldID) {
+            return UUIDsEqual(this.ID, indexField.EntityFieldID);
+        }
+        if (this.Name && indexField.EntityField) {
+            return this.Name.trim().toLowerCase() === indexField.EntityField.trim().toLowerCase();
+        }
+        return false;
+    }
+
+    /**
+     * True when this field appears as a `Key` column in at least one `Active` database index
+     * on the owning entity. `Include`-only columns, `Proposed`/`Rejected` indexes, and
+     * expression key parts do not count.
+     */
+    get IsIndexed(): boolean {
+        if (!this._owningEntity) {
+            return false;
+        }
+        return this._owningEntity.Indexes.some(
+            (idx) => idx.IsActive && idx.KeyFields.some((f) => this.matchesIndexField(f)),
+        );
+    }
+
+    /**
+     * True when this field is the leading (first `Key`) column of at least one `Active`
+     * database index on the owning entity. An index whose first key part is an expression
+     * does not make a subsequent column the leading column.
+     */
+    get IsLeadingIndexColumn(): boolean {
+        if (!this._owningEntity) {
+            return false;
+        }
+        return this._owningEntity.Indexes.some((idx) => {
+            if (!idx.IsActive) {
+                return false;
+            }
+            const leading = idx.KeyFields[0];
+            return leading != null && this.matchesIndexField(leading);
+        });
+    }
+
     /**
      * Returns true if the field has a default value set
      */
@@ -4043,6 +4244,7 @@ export class EntityInfo extends BaseInfo {
     private _fieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _organicKeys: EntityOrganicKeyInfo[] = []
     private _uniqueKeySets: EntityUniqueKeyInfo[] = []
+    private _indexes: EntityIndexInfo[] = []
     private _alternateBaseViews: EntityAlternateBaseViewInfo[] = []
 
     /**
@@ -4096,6 +4298,7 @@ export class EntityInfo extends BaseInfo {
                 if (md) {
                     field.SetOwningProvider(md);
                 }
+                field.SetOwningEntity(this);
                 fields.push(field);
             }
             this._fields = fields;
@@ -4847,6 +5050,23 @@ export class EntityInfo extends BaseInfo {
      */
     get UniqueKeySets(): EntityUniqueKeyInfo[] {
         return this._uniqueKeySets;
+    }
+
+    /**
+     * All database indexes and advisor proposals registered for this entity's base table,
+     * sorted by name. Maintained by CodeGen from the database catalog.
+     * @returns {EntityIndexInfo[]} Array of index definitions
+     */
+    get Indexes(): EntityIndexInfo[] {
+        return this._indexes;
+    }
+
+    /**
+     * Active database indexes currently present on this entity's base table (`Status === 'Active'`).
+     * @returns {EntityIndexInfo[]} Array of active index definitions
+     */
+    get ActiveIndexes(): EntityIndexInfo[] {
+        return this._indexes.filter(idx => idx.IsActive);
     }
 
     /**
@@ -6072,6 +6292,7 @@ export class EntityInfo extends BaseInfo {
         'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
         'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
         'EntityUniqueKeys', '_UniqueKeySets', 'UniqueKeySets',
+        'EntityIndexes', '_Indexes', 'Indexes',
         'EntityAlternateBaseViews', '_AlternateBaseViews', 'AlternateBaseViews',
     ]);
 
@@ -6196,6 +6417,18 @@ export class EntityInfo extends BaseInfo {
                     this._uniqueKeySets.push(new EntityUniqueKeyInfo(item as Record<string, unknown>));
                 }
                 this._uniqueKeySets.sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
+            }
+
+            // copy the Entity Indexes, sorted by name so consumers see a stable order
+            this._indexes = [];
+            const idx = initData.EntityIndexes || initData._Indexes || initData.Indexes;
+            if (idx && Array.isArray(idx)) {
+                for (const item of idx) {
+                    this._indexes.push(item instanceof EntityIndexInfo
+                        ? item
+                        : new EntityIndexInfo(item as Record<string, unknown>));
+                }
+                this._indexes.sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
             }
 
             // copy the Alternate Base Views (sorted by Sequence, Name, ID, then linked via ParentID)
