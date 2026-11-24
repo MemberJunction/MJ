@@ -4082,9 +4082,13 @@ export class RealtimeClientSessionService {
      */
     protected resolveCoAgentSystemPrompt(coAgent: MJAIAgentEntityExtended): CoAgentSystemPromptResolution {
         const engine = AIEngine.Instance;
-        const agentPrompt = (engine.AgentPrompts ?? [])
-            .filter(ap => UUIDsEqual(ap.AgentID, coAgent.ID) && ap.Status === 'Active')
-            .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+        const effectivePrompts =
+            typeof engine.GetEffectiveAgentPrompts === 'function'
+                ? engine.GetEffectiveAgentPrompts(coAgent.ID, 'Active')
+                : (engine.AgentPrompts ?? [])
+                      .filter(ap => UUIDsEqual(ap.AgentID, coAgent.ID) && ap.Status === 'Active')
+                      .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
+        const agentPrompt = effectivePrompts[0];
         if (!agentPrompt) {
             return { Text: '', PromptID: null };
         }
@@ -4723,8 +4727,14 @@ export class RealtimeClientSessionService {
      */
     protected getTargetAgentActions(targetAgentID: string): MJActionEntityExtended[] {
         const activeActionIds = new Set<string>();
-        for (const aa of AIEngine.Instance.AgentActions ?? []) {
-            if (aa.Status === 'Active' && UUIDsEqual(aa.AgentID, targetAgentID) && aa.ActionID) {
+        const effectiveAgentActions =
+            typeof AIEngine.Instance.GetEffectiveAgentActions === 'function'
+                ? AIEngine.Instance.GetEffectiveAgentActions(targetAgentID)
+                : (AIEngine.Instance.AgentActions ?? []).filter(
+                      aa => aa.Status === 'Active' && UUIDsEqual(aa.AgentID, targetAgentID)
+                  );
+        for (const aa of effectiveAgentActions) {
+            if (aa.Status === 'Active' && aa.ActionID) {
                 activeActionIds.add(NormalizeUUID(aa.ActionID));
             }
         }

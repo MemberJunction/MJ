@@ -7,3 +7,4 @@ export * from './DefaultCommunicationPrincipal';
 export * from './V2SendService';
 export * from './CommsActivityWorker';
 export * from './compliance';
+export * from './LocalJsonCommunicationProvider';

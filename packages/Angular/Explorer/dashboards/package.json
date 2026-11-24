@@ -171,6 +171,7 @@
     "@memberjunction/ng-explorer-settings": "6.3.0-edge.1",
     "@memberjunction/ng-export-service": "6.3.0-edge.1",
     "@memberjunction/ng-filter-builder": "6.3.0-edge.1",
+    "@memberjunction/ng-flow-editor": "6.3.0-edge.1",
     "@memberjunction/ng-graph-view": "6.3.0-edge.1",
     "@memberjunction/ng-list-management": "6.3.0-edge.1",
     "@memberjunction/ng-map-view": "6.3.0-edge.1",

@@ -137,6 +137,10 @@ concurrency:
 # is only sound while it describes exactly what the lane builds.
 env:
   INTEGRATION_BUILD_FILTERS: --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+  # Where turbo keeps its local cache, and the directory the "Restore the turbo build seed from
+  # next" steps restore into. This is turbo's default; it is pinned, as in test.yml, so the
+  # restore and the build cannot come to disagree about it.
+  TURBO_CACHE_DIR: .turbo/cache
 
 jobs:
   changes:
@@ -385,6 +389,34 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # ── next's turbo build seed (PR runs only) ─────────────────────────────────────────
+      # A PR run receives no remote-cache credentials (see this job's env block), so without
+      # this step the build below compiles every task from source: 0 of 237 cached, 6.5-9.5
+      # minutes, against 235 of 235 in about 10 seconds while PR runs still had the remote
+      # cache (measured 2026-11-23). The Unit Tests backstop saves its `.turbo/cache` on every
+      # merge to next (test.yml, "Save turbo build cache"), and that build runs every task this
+      # workflow builds under the same hashes: 237 of 237 for this job and 177 of 177 for the
+      # drift gate on 3f239f5dd3. A task the PR changed, or that depends on one, still misses
+      # and compiles.
+      #
+      # Restore-only, the split test.yml's own Build job uses: the entry is written by
+      # push/schedule runs on next alone, and an Actions cache lets a PR read next's entries
+      # but never another PR's. Entries are content-hashed, so a PR into a release line can
+      # read next's seed too; whatever does not match is a miss.
+      #
+      # Push, schedule, dispatch and release-gate runs keep the remote cache and skip this.
+      # Every job here that builds with turbo carries the step, including the lanes no PR
+      # reaches today, so a lane that later gains a PR trigger is already covered.
+      # integration-turbo-seed.test.mjs holds that, and the key prefix, to test.yml's save key.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       # Build the graph the aggregator imports: testing-integration (+ its deps, which cover
       # core/core-entities/sqlserver-dataprovider/graphql-dataprovider/predictive-studio/
@@ -1082,6 +1114,16 @@ jobs:
         if: steps.prereq.outputs.READY == 'true'
         run: pnpm install --frozen-lockfile
 
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
       - name: Build integration graph + CLI + MJAPI
         if: steps.prereq.outputs.READY == 'true'
         run: |
@@ -1253,6 +1295,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build integration graph + CLI + MJAPI
         run: |
@@ -1434,6 +1486,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
       - name: Build CLI + CodeGen graph
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
 
@@ -1591,6 +1653,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
       - name: Build CLI + CodeGen + test framework
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib --filter=@memberjunction/testing-integration
 
@@ -1687,6 +1759,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build CLI + CodeGen graph
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib

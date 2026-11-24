@@ -11,6 +11,7 @@ export * from './lib/interfaces/flow-types';
 // Services
 export * from './lib/services/flow-state.service';
 export * from './lib/services/flow-layout.service';
+export * from './lib/services/flow-viewport.util';
 
 // Generic Components
 export * from './lib/components/flow-editor.component';

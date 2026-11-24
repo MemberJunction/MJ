@@ -1,8 +1,8 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT188 - Comms V2 Send Pipeline and Templated Delivery",
-    "Description": "Exercises V2SendService.Send (DryRun, tracking tokens, HMAC signatures, chunked comms.dispatch, a suppressed recipient) and TemplatedCommunicationService.RenderAndSend against the live database. In-process by design: V2 Send has no wire of its own, and these checks need a stand-in provider or an injected enqueue hook. CV2S4 sends to a recipient with an active Hard Bounce suppression and asserts the outcome is Blocked, no Communication Log is written and the provider is never called; the same block is asserted over GraphQL by IT190.",
+    "Name": "IT189 - Comms V2 Send Pipeline and Templated Delivery",
+    "Description": "Exercises V2SendService.Send (DryRun, tracking tokens, HMAC signatures, chunked comms.dispatch, a suppressed recipient) and TemplatedCommunicationService.RenderAndSend against the live database. In-process by design: V2 Send has no wire of its own, and these checks need a stand-in provider or an injected enqueue hook. CV2S4 sends to a recipient with an active Hard Bounce suppression and asserts the outcome is Blocked, no Communication Log is written and the provider is never called; the same block is asserted over GraphQL by IT191.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
       "summary": "V2SendService.Send persists runs/logs with tracking tokens, chunks above AsyncThreshold, blocks a suppressed recipient without calling the provider, and TemplatedCommunicationService renders and sends DryRun."

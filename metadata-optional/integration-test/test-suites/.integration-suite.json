@@ -219,7 +219,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT186 - Comms V2 Schema, Seeds and Endpoint Resolution",
+            "TestID": "@lookup:MJ: Tests.Name=IT187 - Comms V2 Schema, Seeds and Endpoint Resolution",
             "Sequence": 15,
             "Status": "Active"
           },
@@ -230,7 +230,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT187 - Comms V2 Compliance Gate and Jurisdiction Rollup",
+            "TestID": "@lookup:MJ: Tests.Name=IT188 - Comms V2 Compliance Gate and Jurisdiction Rollup",
             "Sequence": 15,
             "Status": "Active"
           },
@@ -241,7 +241,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT188 - Comms V2 Send Pipeline and Templated Delivery",
+            "TestID": "@lookup:MJ: Tests.Name=IT189 - Comms V2 Send Pipeline and Templated Delivery",
             "Sequence": 15,
             "Status": "Active"
           },
@@ -252,7 +252,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT189 - Comms V2 Activity Worker and GDPR Erasure",
+            "TestID": "@lookup:MJ: Tests.Name=IT190 - Comms V2 Activity Worker and GDPR Erasure",
             "Sequence": 15,
             "Status": "Active"
           },
@@ -263,7 +263,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT190 - Comms V2 Public Routes and Sends over the Wire (client transport)",
+            "TestID": "@lookup:MJ: Tests.Name=IT191 - Comms V2 Public Routes and Sends over the Wire (client transport)",
             "Sequence": 87,
             "Status": "Active"
           },
@@ -1853,6 +1853,17 @@
           },
           "primaryKey": {
             "ID": "AA08B116-DF0B-4FE8-9D7E-E4C1461639CC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT186 - Agent Instances and Multi-Level Prototype Inheritance",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D8863BF3-A892-4B2B-A758-B909350DE35D"
           }
         }
       ]

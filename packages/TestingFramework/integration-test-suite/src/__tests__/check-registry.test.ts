@@ -220,11 +220,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
-        ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT186)
-        ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT187)
-        ['comms-v2-send', CommsV2SendChecks, 4], // CV2S1-CV2S4 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider (IT188)
-        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT189)
-        ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT190)
+        ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT187)
+        ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT188)
+        ['comms-v2-send', CommsV2SendChecks, 4], // CV2S1-CV2S4 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider (IT189)
+        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT190)
+        ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT191)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
@@ -390,6 +390,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-execution-primitives-live': 4,
         'agent-external-harness': 7,
         'agent-handoff': 6,
+        'agent-instances-and-inheritance': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 14,
         'agent-memory-guards': 5,
@@ -663,7 +664,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(260);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(261);
     });
 });
 
@@ -702,6 +703,13 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     // Checks skipped in the deterministic lane unless RUN_MUTATION_TESTS=1 arms the nightly mutation rig.
     const EXPECTED_MUTATION_GATED: string[] = [
         'actions-pipeline.AP2',
+        'agent-instances-and-inheritance.AII1',
+        'agent-instances-and-inheritance.AII2',
+        'agent-instances-and-inheritance.AII3',
+        'agent-instances-and-inheritance.AII4',
+        'agent-instances-and-inheritance.AII5',
+        'agent-instances-and-inheritance.AII6',
+        'agent-instances-and-inheritance.AII7',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
         'archive-paging.ARP1',

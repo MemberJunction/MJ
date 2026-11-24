@@ -21,6 +21,45 @@ export const REALTIME_CAMERA_CHANNEL_CLASS = 'RealtimeCameraChannel';
 export const REALTIME_SCREEN_SHARE_CHANNEL_CLASS = 'RealtimeScreenShareChannel';
 
 /**
+ * Viewport width (px) at and above which the call overlay renders its side-panel surface tabs
+ * (matches the `max-width: 860px` breakpoint in `realtime-surface-tabs.component.css` and
+ * `realtime-session-overlay.component.css`).
+ */
+export const REALTIME_SIDE_PANEL_MIN_WIDTH_PX = 861;
+
+/**
+ * True when the browser viewport is narrower than {@link REALTIME_SIDE_PANEL_MIN_WIDTH_PX}, where
+ * side-panel tabs are hidden and mobile browsers do not offer `getDisplayMedia` screen capture.
+ */
+export function IsNarrowRealtimeViewport(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia(`(max-width: ${REALTIME_SIDE_PANEL_MIN_WIDTH_PX - 1}px)`).matches;
+}
+
+/**
+ * Decides whether a channel plugin can participate in a narrow/mobile call where the side panel is hidden:
+ * headless channels (`ClientContext`), inline stage avatar video (`Avatar`), and camera PiP stay active,
+ * while side-panel tab surfaces (`Whiteboard`, `ArtifactWorkspace`, `RemoteBrowser`, `Media`,
+ * `InteractiveComponent`, `IdentityVerification`, etc.) and desktop screen share are omitted so the agent
+ * never acts on a surface the user cannot see.
+ */
+export function IsMobileCallChannelAllowed(plugin: BaseRealtimeChannelClient): boolean {
+  const descriptor = plugin.GetDescriptor();
+  if (descriptor.DisplayPolicy === 'headless') {
+    return true;
+  }
+  if (plugin.ShowsAgentVideo) {
+    return true;
+  }
+  if (plugin.CaptureKind != null) {
+    return plugin.CaptureKind !== 'screen';
+  }
+  return plugin.SurfacePlacement.Default !== 'tab';
+}
+
+/**
  * The channels the conversations UI brings to its calls: the Camera and Screen Share channels are opt-in, so a call has
  * them only when its host (or the agent's or app's configuration) asks. An agent or app can still exclude them.
  */
@@ -30,10 +69,28 @@ export const CONVERSATION_CALL_HOST_CHANNELS: readonly RealtimeHostChannelDeclar
 ]);
 
 /**
+ * Reason surfaced to the voice co-agent when side-panel channels (Whiteboard, Workspace, etc.) are
+ * omitted below {@link REALTIME_SIDE_PANEL_MIN_WIDTH_PX}, so it explains why the surface cannot be
+ * shown on mobile or in a narrow window rather than claiming a permissions/access issue.
+ */
+export const MOBILE_DESKTOP_ONLY_CHANNEL_REASON =
+  'Requires a wider desktop view and is not available on mobile or narrow screens right now.';
+
+/**
  * The start options the conversations UI passes with every call it starts: the channels it brings, and the camera check
- * its call overlay shows the first time the user turns the camera on in a call.
+ * its call overlay shows the first time the user turns the camera on in a call. Evaluated once at call start: when the
+ * viewport is narrower than {@link REALTIME_SIDE_PANEL_MIN_WIDTH_PX} (where the side panel is hidden), screen share and
+ * side-panel tab channels are omitted at mint so the agent shares common ground with what the user can actually see.
  */
 export function ConversationCallStartOptions(): RealtimeSessionStartOptions {
+  if (IsNarrowRealtimeViewport()) {
+    return {
+      HostChannels: [{ ClientPluginClass: REALTIME_CAMERA_CHANNEL_CLASS }],
+      ChannelFilter: IsMobileCallChannelAllowed,
+      ChannelFilterReason: MOBILE_DESKTOP_ONLY_CHANNEL_REASON,
+      CameraCheck: true,
+    };
+  }
   return { HostChannels: [...CONVERSATION_CALL_HOST_CHANNELS], CameraCheck: true };
 }
 
