@@ -131,6 +131,10 @@ Gemini Live on **Gemini Enterprise** (Vertex AI), minted by the server driver `G
 - **Barge-in**: `input.speech.started` while output is active is the snappy flush point (~300 ms faster than waiting per the provider's guidance); `reply.done` `status: 'interrupted'` is the authoritative verdict / fallback flush. A speech start while idle is a normal turn, NOT an interruption.
 - **Teardown**: `Disconnect()` sends `session.end` before closing — skipping it leaves a billable 30-second resume hold.
 
+### `AssemblyAIVoiceRealtimeClient` — `@RegisterClass(BaseRealtimeClient, 'assemblyai-voice')`
+
+A thin subclass of the OpenAI-protocol websocket layer for `AssemblyAIVoiceRealtime`. The `EphemeralToken` is a one-time `wss://…/realtime-proxy?ticket=…` URL and the agent runs inside MJAPI, so the `SessionConfig` pact is only `{ sampleRate }` and the client sends no `session.update`. A connection the server closes at the call's time limit ends the call; any other lost connection is recovered.
+
 `xAIRealtimeClient` (`'xai'`) and `HuggingFaceRealtimeClient` (`'huggingface'`) are thin subclasses of the OpenAI-protocol websocket layer; see [the OpenAI-protocol client family](#openai-protocol-client-family-architecture) below. No driver but the two Gemini clients hands over agent video; `realtime-video-driver-audit.test.ts` keeps that true for every registered driver.
 
 ### Shared audio plane (`src/audio/`)
