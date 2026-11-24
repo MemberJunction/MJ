@@ -9,6 +9,7 @@ import {
 import {
   IMetadataProvider,
   LogError,
+  LogStatus,
   RunView,
   UserInfo,
 } from '@memberjunction/core';
@@ -279,12 +280,19 @@ export class CommsActivityWorker {
     if (!token) {
       return event;
     }
-    const occurredIso =
-      event.OccurredAt instanceof Date
-        ? event.OccurredAt.toISOString()
-        : String(event.OccurredAt ?? '');
+    // An unsubscribe is a state change, not an engagement: every click of the same token
+    // means the same thing, so its identity is token + event type only. Opens and clicks
+    // keep the timestamp so each engagement is recorded.
+    const identity =
+      event.EventType === 'Unsubscribed'
+        ? `${event.EventType}:${token}`
+        : `${event.EventType}:${token}:${event.TargetURL ?? ''}:${
+            event.OccurredAt instanceof Date
+              ? event.OccurredAt.toISOString()
+              : String(event.OccurredAt ?? '')
+          }`;
     const digest = createHash('sha256')
-      .update(`${event.EventType}:${token}:${event.TargetURL ?? ''}:${occurredIso}`)
+      .update(identity)
       .digest('hex')
       .slice(0, 32);
     event.ProviderEventID = `firstparty:${event.EventType.toLowerCase()}:${digest}`;
@@ -497,8 +505,12 @@ export class CommsActivityWorker {
     log: MJCommunicationLogEntity,
   ): void {
     event.CommunicationLogID = event.CommunicationLogID ?? log.ID;
-    event.CommunicationProviderID =
-      event.CommunicationProviderID || log.CommunicationProviderID || undefined!;
+    // CommunicationProviderID is required on the event type; only overwrite it when the log
+    // has a value, so a missing provider stays falsy and is skipped downstream.
+    const providerID = event.CommunicationProviderID || log.CommunicationProviderID;
+    if (providerID) {
+      event.CommunicationProviderID = providerID;
+    }
     event.CommunicationSenderID =
       event.CommunicationSenderID ?? log.CommunicationSenderID ?? undefined;
     event.CommunicationEndpointID =
@@ -816,7 +828,7 @@ export class CommsActivityWorker {
         senderID,
         contextUser,
       );
-      await this.createSuppression(
+      await this.createSuppressionIfAbsent(
         {
           CommunicationEndpointID: endpoint?.ID ?? null,
           EntityID: event.Principal.EntityID,
@@ -838,7 +850,7 @@ export class CommsActivityWorker {
 
     if (event.Principal) {
       // Rule 2: Principal + No Preference -> sender-scoped unsubscribe-all
-      await this.createSuppression(
+      await this.createSuppressionIfAbsent(
         {
           CommunicationEndpointID: endpoint?.ID ?? null,
           EntityID: event.Principal.EntityID,
@@ -860,7 +872,7 @@ export class CommsActivityWorker {
 
     // Rule 3: No Principal -> endpoint suppression only
     if (endpoint) {
-      await this.createSuppression(
+      await this.createSuppressionIfAbsent(
         {
           CommunicationEndpointID: endpoint.ID,
           EntityID: null,
@@ -1008,18 +1020,72 @@ export class CommsActivityWorker {
   }
 
   /**
-   * Creates an active suppression and its consent audit entry. For use by suppression policy
-   * drivers.
+   * Creates an active suppression and its consent audit entry, unless an Active suppression with
+   * the same scope, reason and policy already exists (then that one is returned and nothing is
+   * written). For use by suppression policy drivers, which re-evaluate on every batch.
    *
    * @param fields - The suppression's scope (endpoint and/or principal, sender, preference,
    *   channel), reason, source and dates.
-   * @returns The saved suppression. Throws when the save fails.
+   * @returns The saved or existing suppression. Throws when the lookup or the save fails.
    */
   public async CreatePolicySuppression(
     fields: Parameters<CommsActivityWorker['createSuppression']>[0],
     contextUser: UserInfo,
   ): Promise<MJCommunicationSuppressionEntity | undefined> {
+    return this.createSuppressionIfAbsent(fields, contextUser);
+  }
+
+  /**
+   * Creates a suppression unless an Active one with exactly the same scope and reason already
+   * exists. Used for state-change events (unsubscribe, policy cooldown) that can arrive more than
+   * once for the same recipient, so repeats add no suppression or consent-audit row. A failed
+   * lookup throws: the batch is retried rather than guessing.
+   */
+  private async createSuppressionIfAbsent(
+    fields: Parameters<CommsActivityWorker['createSuppression']>[0],
+    contextUser: UserInfo,
+  ): Promise<MJCommunicationSuppressionEntity | undefined> {
+    const existing = await this.findActiveSuppression(fields, contextUser);
+    if (existing) {
+      return existing;
+    }
     return this.createSuppression(fields, contextUser);
+  }
+
+  private async findActiveSuppression(
+    fields: Parameters<CommsActivityWorker['createSuppression']>[0],
+    contextUser: UserInfo,
+  ): Promise<MJCommunicationSuppressionEntity | undefined> {
+    const eq = (column: string, value: string | null | undefined): string =>
+      value ? `${column}='${EscapeSQLString(value)}'` : `${column} IS NULL`;
+    const filter = [
+      `Status='Active'`,
+      `Reason='${EscapeSQLString(fields.Reason)}'`,
+      eq('CommunicationEndpointID', fields.CommunicationEndpointID),
+      eq('EntityID', fields.EntityID),
+      eq('RecordID', fields.RecordID),
+      eq('CommunicationSenderID', fields.CommunicationSenderID),
+      eq('CommunicationPreferenceID', fields.CommunicationPreferenceID),
+      eq('CommunicationSuppressionPolicyID', fields.CommunicationSuppressionPolicyID),
+    ].join(' AND ');
+    const res = await this.getRunView().RunView<MJCommunicationSuppressionEntity>(
+      {
+        EntityName: 'MJ: Communication Suppressions',
+        ExtraFilter: filter,
+        // Exact-scope matches are a handful of rows at most; expiry is checked below.
+        MaxRows: 50,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!res.Success) {
+      throw new Error(
+        `Failed to check for an existing Communication Suppression: ${res.ErrorMessage ?? 'unknown error'}`,
+      );
+    }
+    // An expired suppression no longer blocks, so it does not count as existing.
+    const now = Date.now();
+    return (res.Results ?? []).find((r) => !r.ExpiresAt || r.ExpiresAt.getTime() > now);
   }
 
   private async createSuppression(
@@ -1381,7 +1447,14 @@ export class SoftBounceThresholdPolicy extends BaseCommunicationSuppressionPolic
           (p.DriverClass === 'SoftBounceThresholdPolicy' || p.Name === 'SoftBounceThresholdPolicy'),
       )?.ID ?? null;
     if (!policyId) {
-      // CK_CommunicationSuppression_PolicyLink requires a PolicyID when Reason = 'Policy'
+      // CK_CommunicationSuppression_PolicyLink requires a PolicyID when Reason = 'Policy', so
+      // without an Active policy row there is nothing to link to. Say so once per batch rather
+      // than dropping the cooldown silently.
+      LogStatus(
+        `SoftBounceThresholdPolicy: ${softBounces.length} soft bounce(s) in this batch, but no Active ` +
+          `'SoftBounceThresholdPolicy' row exists in MJ: Communication Suppression Policies, so ` +
+          `soft-bounce cooldown suppression is disabled.`,
+      );
       return;
     }
 
@@ -1398,7 +1471,11 @@ export class SoftBounceThresholdPolicy extends BaseCommunicationSuppressionPolic
       },
       contextUser,
     );
-    if (!epRes.Success || !epRes.Results) return;
+    if (!epRes.Success) {
+      throw new Error(
+        `SoftBounceThresholdPolicy could not load endpoints: ${epRes.ErrorMessage ?? 'unknown error'}`,
+      );
+    }
 
     const epMap = new UUIDMap<MJCommunicationEndpointEntity>();
     for (const ep of epRes.Results) {

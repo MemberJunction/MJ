@@ -6,6 +6,12 @@ import {
   NormalizedActivityEvent,
 } from '@memberjunction/communication-types';
 import { IMetadataProvider, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
+import { LogStatus } from '@memberjunction/core';
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/core')>();
+  return { ...actual, LogStatus: vi.fn() };
+});
 import type { MJCommunicationSuppressionPolicyEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { CommsActivityWorker } from '../CommsActivityWorker';
@@ -448,6 +454,186 @@ describe('CommsActivityWorker', () => {
 
     expect(ep.SoftBounceCount).toBe(5);
     expect(rejectedSaves).toEqual([]);
+  });
+
+  it('does not add a second Policy suppression when the endpoint already has an Active one', async () => {
+    vi.spyOn(CommunicationEngineBase.Instance, 'SuppressionPolicies', 'get').mockReturnValue([
+      SOFT_BOUNCE_POLICY,
+    ]);
+    const ep = seedSoftBouncingEndpoint(4);
+
+    // Two separate batches past the threshold: the policy re-evaluates on each one.
+    // Use current dates: the 30-day cooldown must still be running at the second batch.
+    const now = Date.now();
+    await worker.ProcessActivityBatch([softBounceEvent('ep-soft', new Date(now - 60_000))], mockUser);
+    await worker.ProcessActivityBatch([softBounceEvent('ep-soft', new Date(now))], mockUser);
+
+    expect(ep.SoftBounceCount).toBe(6);
+    expect(store['MJ: Communication Suppressions']).toHaveLength(1);
+    expect(store['MJ: Communication Consent Audit Logs']).toHaveLength(1);
+  });
+
+  it('adds a new Policy suppression once the previous one has expired', async () => {
+    vi.spyOn(CommunicationEngineBase.Instance, 'SuppressionPolicies', 'get').mockReturnValue([
+      SOFT_BOUNCE_POLICY,
+    ]);
+    seedSoftBouncingEndpoint(4);
+    store['MJ: Communication Suppressions'].push(
+      makeRecord(
+        'MJ: Communication Suppressions',
+        store,
+        {
+          ID: 'supp-expired',
+          Status: 'Active',
+          Reason: 'Policy',
+          CommunicationEndpointID: 'ep-soft',
+          EntityID: null,
+          RecordID: null,
+          CommunicationSenderID: null,
+          CommunicationPreferenceID: null,
+          CommunicationSuppressionPolicyID: SOFT_BOUNCE_POLICY.ID,
+          ExpiresAt: new Date(Date.now() - 86_400_000),
+        },
+        false,
+      ),
+    );
+
+    await worker.ProcessActivityBatch([softBounceEvent('ep-soft', new Date())], mockUser);
+
+    expect(store['MJ: Communication Suppressions']).toHaveLength(2);
+  });
+
+  it('says once per batch that soft-bounce suppression is disabled when no policy row exists', async () => {
+    vi.mocked(LogStatus).mockClear();
+    seedSoftBouncingEndpoint(4);
+
+    await worker.ProcessActivityBatch(
+      [
+        softBounceEvent('ep-soft', new Date('2026-02-01T00:00:00Z')),
+        softBounceEvent('ep-soft', new Date('2026-02-01T01:00:00Z')),
+      ],
+      mockUser,
+    );
+
+    const disabledMessages = vi
+      .mocked(LogStatus)
+      .mock.calls.filter(([msg]) => String(msg).includes('soft-bounce cooldown suppression is disabled'));
+    expect(disabledMessages).toHaveLength(1);
+    expect(store['MJ: Communication Suppressions']).toHaveLength(0);
+  });
+
+  it('treats repeated one-click unsubscribes for the same token as one event', async () => {
+    store['MJ: Communication Endpoints'].push(
+      makeRecord(
+        'MJ: Communication Endpoints',
+        store,
+        { ID: 'ep-rep', BaseMessageTypeID: 'chan-email', Status: 'Active' },
+        false,
+      ),
+    );
+    store['MJ: Communication Logs'].push(
+      makeRecord(
+        'MJ: Communication Logs',
+        store,
+        {
+          ID: 'log-rep',
+          CommunicationProviderID: 'prov-1',
+          CommunicationSenderID: 'sender-1',
+          CommunicationEndpointID: 'ep-rep',
+          UnsubscribeToken: 'unsub-tok-1',
+          CommunicationPreferenceID: null,
+        },
+        false,
+      ),
+    );
+    const click = (at: string): NormalizedActivityEvent => ({
+      CommunicationProviderID: 'prov-1',
+      UnsubscribeToken: 'unsub-tok-1',
+      NormalizedAddress: '',
+      EventType: 'Unsubscribed',
+      OccurredAt: new Date(at),
+      IsMachineEvent: false,
+    });
+
+    const first = await worker.ProcessActivityBatch([click('2026-02-03T10:00:00Z')], mockUser);
+    const second = await worker.ProcessActivityBatch([click('2026-02-03T10:05:00Z')], mockUser);
+
+    expect(first).toMatchObject({ ProcessedCount: 1, ErrorCount: 0 });
+    expect(second).toMatchObject({ ProcessedCount: 0, DuplicateCount: 1 });
+    expect(store['MJ: Communication Suppressions']).toHaveLength(1);
+    expect(store['MJ: Communication Consent Audit Logs']).toHaveLength(1);
+  });
+
+  it('adds no second suppression when a provider reports an unsubscribe the recipient already made', async () => {
+    store['MJ: Communication Endpoints'].push(
+      makeRecord(
+        'MJ: Communication Endpoints',
+        store,
+        { ID: 'ep-prov', BaseMessageTypeID: 'chan-email', Status: 'Active' },
+        false,
+      ),
+    );
+    const providerUnsub = (eventId: string, at: string): NormalizedActivityEvent => ({
+      CommunicationProviderID: 'prov-1',
+      ProviderEventID: eventId,
+      CommunicationEndpointID: 'ep-prov',
+      CommunicationSenderID: 'sender-1',
+      NormalizedAddress: 'p@example.com',
+      EventType: 'Unsubscribed',
+      OccurredAt: new Date(at),
+      IsMachineEvent: false,
+    });
+
+    await worker.ProcessActivityBatch([providerUnsub('sg-evt-1', '2026-02-03T10:00:00Z')], mockUser);
+    const second = await worker.ProcessActivityBatch([providerUnsub('sg-evt-2', '2026-02-04T10:00:00Z')], mockUser);
+
+    expect(second).toMatchObject({ ProcessedCount: 1, ErrorCount: 0 });
+    expect(store['MJ: Communication Suppressions']).toHaveLength(1);
+    expect(store['MJ: Communication Consent Audit Logs']).toHaveLength(1);
+  });
+
+  it('fails the event rather than guessing when the existing-suppression lookup fails', async () => {
+    store['MJ: Communication Endpoints'].push(
+      makeRecord(
+        'MJ: Communication Endpoints',
+        store,
+        { ID: 'ep-fail', BaseMessageTypeID: 'chan-email', Status: 'Active' },
+        false,
+      ),
+    );
+    const provider = CommunicationEngineBase.Instance.ProviderToUse;
+    const runView = provider.RunView.bind(provider);
+    vi.spyOn(provider, 'RunView').mockImplementation(async (params: RunViewParams, user?: UserInfo) => {
+      if (params.EntityName === 'MJ: Communication Suppressions') {
+        return {
+          Success: false,
+          Results: [],
+          RowCount: 0,
+          TotalRowCount: 0,
+          ErrorMessage: 'timeout',
+        } as unknown as Awaited<ReturnType<typeof runView>>;
+      }
+      return runView(params, user);
+    });
+
+    const result = await worker.ProcessActivityBatch(
+      [
+        {
+          CommunicationProviderID: 'prov-1',
+          ProviderEventID: 'sg-evt-fail',
+          CommunicationEndpointID: 'ep-fail',
+          CommunicationSenderID: 'sender-1',
+          NormalizedAddress: 'f@example.com',
+          EventType: 'Unsubscribed',
+          OccurredAt: new Date('2026-02-03T10:00:00Z'),
+          IsMachineEvent: false,
+        },
+      ],
+      mockUser,
+    );
+
+    expect(result.ErrorCount).toBe(1);
+    expect(store['MJ: Communication Suppressions']).toHaveLength(0);
   });
 
   it('maps Dropped reasons to global vs sender-scoped suppressions', async () => {
