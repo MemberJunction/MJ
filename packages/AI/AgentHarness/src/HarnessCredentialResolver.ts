@@ -15,6 +15,10 @@
  */
 
 import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import type { HarnessAuthMode } from './types.js';
 
 /** Priority-ordered scalar keys inspected when extracting a single secret from `MJ: Credentials.Values`. */
 const SCALAR_SECRET_KEYS: readonly string[] = [
@@ -350,6 +354,312 @@ export function ResolveDriverVendorFallbackEnvironment(
 }
 
 /**
+ * Local CLI harness driver classes that support subscription login (`cli-login`) via the user's
+ * local CLI session files under `HOME` / `XDG_CONFIG_HOME`.
+ * Cloud adapters (`AntigravityCloudAdapter`, `ClaudeCodeCloudAdapter`, `CodexCloudAdapter`) always
+ * require API keys or bearer tokens and are intentionally excluded.
+ */
+export const LOCAL_CLI_LOGIN_DRIVER_CLASSES: ReadonlySet<string> = new Set([
+    'AntigravityCliAdapter',
+    'ClaudeCodeCliAdapter',
+    'CodexAdapter',
+    'GeminiCliAdapter',
+]);
+
+/**
+ * Provider API-key environment variable names stripped from the subprocess environment when
+ * running in `cli-login` mode so the CLI authenticates strictly via its logged-in subscription
+ * rather than billing pay-as-you-go API keys.
+ */
+export const HARNESS_STRIPPED_API_KEY_VARS: readonly string[] = [
+    'GEMINI_API_KEY',
+    'GOOGLE_API_KEY',
+    'ANTIGRAVITY_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'OPENAI_API_KEY',
+    'CODEX_API_KEY',
+];
+
+const HARNESS_STRIPPED_API_KEY_SET: ReadonlySet<string> = new Set(HARNESS_STRIPPED_API_KEY_VARS);
+
+/** Returns true when `driverClass` is one of the 4 local CLI adapters supporting `cli-login`. */
+export function IsLocalCliLoginDriver(driverClass: string | null | undefined): boolean {
+    return typeof driverClass === 'string' && LOCAL_CLI_LOGIN_DRIVER_CLASSES.has(driverClass);
+}
+
+/** Returns true when `envVarName` is a pay-as-you-go LLM API key variable stripped in `cli-login` mode. */
+export function IsHarnessApiKeyEnvVar(envVarName: string): boolean {
+    const normalized = envVarName.trim();
+    if (!normalized) {
+        return false;
+    }
+    const upper = normalized.toUpperCase();
+    return HARNESS_STRIPPED_API_KEY_SET.has(upper) || upper.startsWith('AI_VENDOR_API_KEY__');
+}
+
+/**
+ * Removes all provider API-key variables (`GEMINI_API_KEY`, `GOOGLE_API_KEY`, `ANTIGRAVITY_API_KEY`,
+ * `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CODEX_API_KEY`, and any `AI_VENDOR_API_KEY__*` keys)
+ * from `environment` in-place so local CLI harnesses use subscription login with zero key leakage.
+ */
+export function StripHarnessApiKeyEnvironment(
+    environment: Record<string, string>,
+): Record<string, string> {
+    for (const key of Object.keys(environment)) {
+        if (IsHarnessApiKeyEnvVar(key)) {
+            delete environment[key];
+        }
+    }
+    return environment;
+}
+
+/** Parses and validates a raw auth mode string into a {@link HarnessAuthMode}, or `undefined`. */
+export function ParseHarnessAuthMode(value: string | null | undefined): HarnessAuthMode | undefined {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'auto' || normalized === 'cli-login' || normalized === 'api-key') {
+        return normalized;
+    }
+    return undefined;
+}
+
+interface HarnessAuthModeConfigJson {
+    authMode?: string;
+    AuthMode?: string;
+}
+
+/** Extracts an optional `authMode` setting from a harness configuration JSON string. */
+export function ExtractAuthModeFromConfigJson(
+    configJson: string | null | undefined,
+): HarnessAuthMode | undefined {
+    if (!configJson || !configJson.trim().startsWith('{')) {
+        return undefined;
+    }
+    try {
+        const parsed: HarnessAuthModeConfigJson = JSON.parse(configJson);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return undefined;
+        }
+        return ParseHarnessAuthMode(parsed.authMode ?? parsed.AuthMode);
+    } catch {
+        return undefined;
+    }
+}
+
+/** Result of inspecting the local filesystem for an active CLI subscription login session. */
+export interface LocalCliLoginDetectionResult {
+    hasLocalLogin: boolean;
+    indicatorPath: string | null;
+}
+
+/** Options for {@link DetectLocalCliLoginSession}. */
+export interface DetectLocalCliLoginOptions {
+    homeDir?: string;
+    env?: NodeJS.ProcessEnv;
+    /**
+     * When true and a vendor-specific override directory (`CLAUDE_CONFIG_DIR` or `CODEX_HOME`) is
+     * present in `env`, checks ONLY that isolated directory and does not fall back to `homeDir`.
+     */
+    strictSlotIsolation?: boolean;
+}
+
+/**
+ * Inspects standard local CLI credential/session paths for the given `driverClass` to determine
+ * whether the user has an active local CLI login session.
+ */
+export function DetectLocalCliLoginSession(
+    driverClass: string,
+    options?: DetectLocalCliLoginOptions,
+): LocalCliLoginDetectionResult {
+    if (!IsLocalCliLoginDriver(driverClass)) {
+        return { hasLocalLogin: false, indicatorPath: null };
+    }
+
+    const env = options?.env ?? process.env;
+    const strictIsolation = options?.strictSlotIsolation === true;
+    const resolvedHome =
+        nonEmptyEnvValue(options?.homeDir) ??
+        nonEmptyEnvValue(env.HOME) ??
+        nonEmptyEnvValue(os.homedir());
+    if (!resolvedHome) {
+        return { hasLocalLogin: false, indicatorPath: null };
+    }
+
+    const xdgConfigHome = nonEmptyEnvValue(env.XDG_CONFIG_HOME);
+    const candidates: string[] = [];
+
+    switch (driverClass) {
+        case 'AntigravityCliAdapter':
+            candidates.push(path.join(resolvedHome, '.gemini', 'antigravity'));
+            if (xdgConfigHome) {
+                candidates.push(path.join(xdgConfigHome, 'antigravity'));
+            }
+            candidates.push(path.join(resolvedHome, '.config', 'antigravity'));
+            break;
+        case 'ClaudeCodeCliAdapter': {
+            const oauthToken = nonEmptyEnvValue(env.CLAUDE_CODE_OAUTH_TOKEN);
+            if (oauthToken) {
+                return { hasLocalLogin: true, indicatorPath: 'env:CLAUDE_CODE_OAUTH_TOKEN' };
+            }
+            const claudeConfigDir = nonEmptyEnvValue(env.CLAUDE_CONFIG_DIR);
+            if (claudeConfigDir) {
+                candidates.push(
+                    path.join(claudeConfigDir, '.credentials.json'),
+                    path.join(claudeConfigDir, '.claude.json'),
+                );
+            }
+            if (!claudeConfigDir || !strictIsolation) {
+                candidates.push(
+                    path.join(resolvedHome, '.claude', '.credentials.json'),
+                    path.join(resolvedHome, '.claude.json'),
+                );
+            }
+            break;
+        }
+        case 'CodexAdapter': {
+            const codexHome = nonEmptyEnvValue(env.CODEX_HOME);
+            if (codexHome) {
+                candidates.push(path.join(codexHome, 'auth.json'));
+            }
+            if (!codexHome || !strictIsolation) {
+                candidates.push(path.join(resolvedHome, '.codex', 'auth.json'));
+            }
+            break;
+        }
+        case 'GeminiCliAdapter':
+            candidates.push(
+                path.join(resolvedHome, '.gemini', 'oauth_creds.json'),
+                path.join(resolvedHome, '.gemini', 'google_accounts.json'),
+            );
+            break;
+        default:
+            return { hasLocalLogin: false, indicatorPath: null };
+    }
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return { hasLocalLogin: true, indicatorPath: candidate };
+        }
+    }
+
+    return { hasLocalLogin: false, indicatorPath: null };
+}
+
+/** Returns the human-readable CLI login command for a local CLI harness driver. */
+export function GetLocalCliLoginCommand(driverClass: string): string {
+    switch (driverClass) {
+        case 'AntigravityCliAdapter':
+            return 'agy auth login';
+        case 'ClaudeCodeCliAdapter':
+            return 'claude login';
+        case 'CodexAdapter':
+            return 'codex login';
+        case 'GeminiCliAdapter':
+            return 'gemini';
+        default:
+            return 'your local CLI login command';
+    }
+}
+
+/** Inputs for {@link ResolveEffectiveHarnessAuthMode}. */
+export interface ResolveHarnessAuthModeOptions {
+    /** Explicit auth mode from `HarnessSessionConfig.AuthMode` or `AIAgent.TypeConfiguration.authMode`. */
+    configuredAuthMode?: HarnessAuthMode | string | null;
+    /** Optional JSON string from `AIAgentHarness.Configuration` / `CapabilitySettings`. */
+    harnessConfigurationJson?: string | null;
+    /** True when the agent has an explicit active `MJ: AI Agent Credentials` API-key grant. */
+    hasExplicitApiKeyGrant?: boolean;
+    /** Override home directory for testing local CLI login detection. */
+    homeDir?: string;
+    /** Override process environment for testing `MJ_HARNESS_AUTH_MODE` / `MJ_HARNESS_PREFER_CLI_LOGIN`. */
+    env?: NodeJS.ProcessEnv;
+}
+
+/** Resolved effective authentication mode and detection details for a harness session. */
+export interface ResolvedHarnessAuthMode {
+    effectiveMode: 'cli-login' | 'api-key';
+    requestedMode: HarnessAuthMode;
+    isLocalCliDriver: boolean;
+    hasLocalLogin: boolean;
+    indicatorPath: string | null;
+}
+
+/**
+ * Resolves the effective authentication mode (`'cli-login'` vs `'api-key'`) for a harness driver.
+ *
+ * Precedence for requested mode:
+ * 1. `options.configuredAuthMode` (`HarnessSessionConfig.AuthMode` / `AIAgent.TypeConfiguration.authMode`)
+ * 2. `options.harnessConfigurationJson` (`authMode` field)
+ * 3. `env.MJ_HARNESS_AUTH_MODE`
+ * 4. Default `'auto'`
+ *
+ * Cloud adapters always resolve to `'api-key'`. On local CLI adapters, `'auto'` resolves to
+ * `'cli-login'` when no explicit API-key grant is bound, `MJ_HARNESS_PREFER_CLI_LOGIN !== '0'`,
+ * and {@link DetectLocalCliLoginSession} detects an active local login session.
+ */
+export function ResolveEffectiveHarnessAuthMode(
+    driverClass: string,
+    options: ResolveHarnessAuthModeOptions = {},
+): ResolvedHarnessAuthMode {
+    const env = options.env ?? process.env;
+    const requestedMode: HarnessAuthMode =
+        ParseHarnessAuthMode(options.configuredAuthMode) ??
+        ExtractAuthModeFromConfigJson(options.harnessConfigurationJson) ??
+        ParseHarnessAuthMode(env.MJ_HARNESS_AUTH_MODE) ??
+        'auto';
+
+    const isLocalCliDriver = IsLocalCliLoginDriver(driverClass);
+    if (!isLocalCliDriver) {
+        return {
+            effectiveMode: 'api-key',
+            requestedMode,
+            isLocalCliDriver: false,
+            hasLocalLogin: false,
+            indicatorPath: null,
+        };
+    }
+
+    const detection = DetectLocalCliLoginSession(driverClass, {
+        homeDir: options.homeDir,
+        env,
+    });
+
+    if (requestedMode === 'cli-login') {
+        return {
+            effectiveMode: 'cli-login',
+            requestedMode,
+            isLocalCliDriver: true,
+            hasLocalLogin: detection.hasLocalLogin,
+            indicatorPath: detection.indicatorPath,
+        };
+    }
+
+    if (requestedMode === 'api-key') {
+        return {
+            effectiveMode: 'api-key',
+            requestedMode,
+            isLocalCliDriver: true,
+            hasLocalLogin: detection.hasLocalLogin,
+            indicatorPath: detection.indicatorPath,
+        };
+    }
+
+    const preferCliLogin = env.MJ_HARNESS_PREFER_CLI_LOGIN !== '0';
+    const useCliLogin =
+        !options.hasExplicitApiKeyGrant && preferCliLogin && detection.hasLocalLogin;
+
+    return {
+        effectiveMode: useCliLogin ? 'cli-login' : 'api-key',
+        requestedMode,
+        isLocalCliDriver: true,
+        hasLocalLogin: detection.hasLocalLogin,
+        indicatorPath: detection.indicatorPath,
+    };
+}
+
+/**
  * Resolves the effective API key or Bearer token for a cloud harness provider (`antigravity`,
  * `anthropic`, or `openai`), preferring secrets injected via `MJ: AI Agent Credentials` in
  * `environment` and falling back to `fallbackEnv` (`process.env`) when omitted.
@@ -614,6 +924,10 @@ const NON_SECRET_ENV_KEYS: ReadonlySet<string> = new Set([
     'TMPDIR',
     'LANG',
     'TERM',
+    'XDG_CONFIG_HOME',
+    'CLAUDE_CONFIG_DIR',
+    'CODEX_HOME',
+    'MJ_HARNESS_REAL_HOME',
     'GH_PROMPT_DISABLED',
     'GIT_TERMINAL_PROMPT',
     'GIT_AUTHOR_NAME',

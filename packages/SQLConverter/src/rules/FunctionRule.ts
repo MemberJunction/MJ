@@ -3,7 +3,7 @@ import {
   ConvertIdentifiers, ConvertDateFunctions, ConvertCharIndex,
   ConvertStringConcat, ConvertTopToLimit, ConvertIIF,
   RemoveNPrefix, ConvertCommonFunctions, EmitDropOverloadsBlock,
-  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema,
+  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema, ConvertApplyToLateral, AddRecursiveToSelfReferencingCtes,
 } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
 
@@ -67,6 +67,10 @@ export class FunctionRule implements IConversionRule {
 
     // Common functions
     result = ConvertCommonFunctions(result);
+    // MJ 6.3 CodeGen's hierarchy TVFs (fn<Table><Field>_GetHierarchyMeta) count children with
+    // `OUTER APPLY (...) ch`; only ViewRule rewrote APPLY, so the function body reached PG as T-SQL
+    // (`syntax error at or near "OUTER"`, V202611170731).
+    result = ConvertApplyToLateral(result);
     result = ConvertTopToLimit(result);
     result = ConvertStringConcat(result, context.TableColumns);
     result = ConvertDateFunctions(result);
@@ -97,10 +101,8 @@ export class FunctionRule implements IConversionRule {
       const params = m[2];
       let query = m[3].trim().replace(/;$/, '');
 
-      // Add WITH RECURSIVE if recursive CTE
-      if (/\bWITH\s+\w+\s+AS\s*\(/i.test(query) && query.toUpperCase().includes('UNION ALL')) {
-        query = query.replace(/\bWITH\b/i, 'WITH RECURSIVE');
-      }
+      // Add WITH RECURSIVE when a CTE reads itself (a UNION ALL alone is not recursion)
+      query = AddRecursiveToSelfReferencingCtes(query);
 
       // Determine return type
       let returnsClause = 'RETURNS SETOF RECORD';

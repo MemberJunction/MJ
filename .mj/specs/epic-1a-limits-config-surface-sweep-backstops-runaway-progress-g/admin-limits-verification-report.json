@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "sf-readiness/v3",
+  "repositoryFullName": "MemberJunction/MJ",
+  "targetPackage": "packages/Angular/Explorer/dashboards",
+  "evaluatedAtIso": "2026-11-22T17:32:14.352Z",
+  "overallPassed": true,
+  "violationCount": 0,
+  "pillars": {
+    "formParity": {
+      "pillar": "formParity",
+      "applicable": false,
+      "passed": true,
+      "checkedCount": 1,
+      "violationCount": 0,
+      "violations": [],
+      "summary": "Verified slice adds a BaseResourceComponent dashboard view (AdminLimitsResource) with 0 metadata/entities changes and core entity form registrations intact."
+    },
+    "navParity": {
+      "pillar": "navParity",
+      "applicable": true,
+      "passed": true,
+      "checkedCount": 5,
+      "violationCount": 0,
+      "violations": [],
+      "summary": "Verified @RegisterClass(BaseResourceComponent, \"AdminLimitsResource\"), <mj-page-layout>, NotifyLoadComplete(), public-api.ts & lazy-feature-config.ts exports, and DefaultNavItems wiring in metadata/applications/.admin-application.json."
+    },
+    "designTokens": {
+      "pillar": "designTokens",
+      "applicable": true,
+      "passed": true,
+      "checkedCount": 5,
+      "violationCount": 0,
+      "violations": [],
+      "summary": "Verified 0 raw hex/rgb/rgba/hsl literals in CSS/HTML, 82 --mj-* CSS custom property usages, ChangeDetectionStrategy.OnPush, UserInfoEngine.Instance preference persistence, and 0 window.print() calls."
+    },
+    "browserSmoke": {
+      "pillar": "browserSmoke",
+      "applicable": true,
+      "passed": true,
+      "checkedCount": 5,
+      "violationCount": 0,
+      "violations": [],
+      "summary": "Headless Chromium Playwright smoke across overview, runs-drawer, and resume-modal passed with realComponentMounted=true, 0 pageErrors, 0 consoleErrors, 0 brokenImages, and rawMarkdownLeaks=false."
+    },
+    "seedDensity": {
+      "pillar": "seedDensity",
+      "applicable": true,
+      "passed": true,
+      "checkedCount": 17,
+      "violationCount": 0,
+      "violations": [],
+      "summary": "Verified 5 precedence tier cards, 9 approved backstop cards, 3 budget scope cards, diagnostic run drawer records, and DefaultNavItems metadata."
+    },
+    "uxFidelity": {
+      "pillar": "uxFidelity",
+      "applicable": true,
+      "passed": true,
+      "checkedCount": 3,
+      "violationCount": 0,
+      "violations": [],
+      "summary": "Verified all 3 Playwright PNG screenshots (245823B, 159646B, 164183B) and layout sections across overview, runs-drawer, and resume-modal."
+    }
+  },
+  "verifiedAtISO": "2026-11-22T17:32:14.352Z",
+  "revisionIdentity": {
+    "branch": "factory/bac5fc6c-8417-4c82-a5d0-28742cbeff8f-epic-1a-limits-config",
+    "compiledComponentJsSha256": {
+      "path": "packages/Angular/Explorer/dashboards/dist/AdminLimits/admin-limits-resource.component.js",
+      "sha256": "3f4d448b4627b76e9d41e2bd3c482ad14506dbd7f198d6cffde839800554cc17"
+    },
+    "componentTsSha256": {
+      "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts",
+      "sha256": "7c10e629c8e3e5ef1b2b1f1b6bacc92f75676ec87d9d0ca0495bbb017a88978b"
+    },
+    "componentHtmlSha256": {
+      "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.html",
+      "sha256": "8a4c7ec5d6daf02fcafc88b4e722e9f8ba8a6a6f4c33004d8f98ee5d11bc4ebb"
+    },
+    "componentCssSha256": {
+      "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.css",
+      "sha256": "c218cb71c90210093dcc399eeafb07b7ef9b110b96901c1e9d779bc7802500ac"
+    },
+    "serviceTsSha256": {
+      "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/services/admin-limits.service.ts",
+      "sha256": "c088ac81fca1cc8c7adaf31d34b50ae4981010614dceefee544469bcdf3f5d94"
+    },
+    "adminLimitsServiceTsSha256": {
+      "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/services/admin-limits.service.ts",
+      "sha256": "c088ac81fca1cc8c7adaf31d34b50ae4981010614dceefee544469bcdf3f5d94"
+    },
+    "limitsOperationsTsSha256": {
+      "path": "packages/AI/Agents/src/operations/LimitsOperations.ts",
+      "sha256": "6eaa7df8b13839557e93c13c5b9a182ec02887aae51dbffadfc3fbf4142e4b5a"
+    },
+    "adminAppMetadataSha256": {
+      "path": "metadata/applications/.admin-application.json",
+      "sha256": "9eab7f62208613e74a7e22665b9b358e26ef513277f13539f2dd9883c277a63c"
+    },
+    "publicApiTsSha256": {
+      "path": "packages/Angular/Explorer/dashboards/src/public-api.ts",
+      "sha256": "df78fc7f9ba5e8325a3b20ac305619ed0ddea3a414414e551e9780bb1c0ac55d"
+    },
+    "lazyFeatureConfigTsSha256": {
+      "path": "packages/Angular/Explorer/explorer-core/src/generated/lazy-feature-config.ts",
+      "sha256": "b7af639e41a5c915fe13b9c8da4c51d7c85f06dd1cd1dd9238d25693d3235408"
+    }
+  },
+  "renderedMode": "Real Angular AdminLimitsResourceComponent + ExplorerAdminShell via Vite",
+  "chromiumVersion": "145.0.7632.6",
+  "baseUrl": "http://127.0.0.1:56060/",
+  "pageErrorsCount": 0,
+  "consoleErrorsCount": 0,
+  "brokenImagesCount": 0,
+  "rawMarkdownLeaks": false,
+  "computedTokens": {
+    "bodyBg": "rgb(248, 250, 252)",
+    "brandPrimary": "#0076b6"
+  },
+  "assertions": {
+    "explorerDefaultNavItemsCount": 5,
+    "shellRouteBadge": "AdminLimitsResource",
+    "realComponentMounted": true,
+    "tierCardsRendered": 5,
+    "backstopCardsRendered": 9,
+    "clampedBudgetRowsFiltered": 2,
+    "overriddenBudgetContainsUserPolicyTier": true,
+    "drawerContainsClampedPolicy": true,
+    "budgetScopeCardsRendered": 3,
+    "drawerContainsFastJudgeVerdict": true,
+    "resumeSuccessBanner": "Run 33333333-3333-4333-8333-333333333333 approved and transitioned back to Running preserving 0 completed step(s). Fresh worker (ResearchPlanner) dispatched for run 33333333-3333-4333-8333-333333333333.",
+    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint e76c85de-762e-4d55-bb03-5ade3e5361c4)."
+  },
+  "screenshots": [
+    "admin-limits-overview.png",
+    "admin-limits-runs-drawer.png",
+    "admin-limits-resume-modal.png"
+  ]
+}

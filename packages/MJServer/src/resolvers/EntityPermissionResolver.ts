@@ -2,6 +2,7 @@ import { Arg, Ctx, Field, ObjectType, Query, Resolver } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
@@ -29,6 +30,7 @@ class CheckEntityPermissionsResult {
 @Resolver()
 export class EntityPermissionResolver extends ResolverBase {
 
+    @RequireSystemUser()
     @Query(() => CheckEntityPermissionsResult)
     async CheckEntityPermissionsSystemUser(
         @Arg('EntityNames', () => [String]) entityNames: string[],

@@ -13,14 +13,18 @@ export type {
   BoundaryMethod,
   FileRouting,
 } from './MigrationSplitter.js';
-export { ConvertMigration, convertMigration, ExtractKeptTSQL, extractKeptTSQL } from './MigrationConverter.js';
-export { IncrementalBaker, StripVolatileHeaders, stripVolatileHeaders, BakeApplyError, SelectBakeableEntities } from './IncrementalBaker.js';
+export { ConvertMigration, convertMigration, ExtractKeptTSQL, extractKeptTSQL, RefreshViewWarnings, ViewsAreHandWritten, ExtractCatalogViews, IsMetadataSyncLog } from './MigrationConverter.js';
+export { IncrementalBaker, StripVolatileHeaders, stripVolatileHeaders, BakeApplyError, SelectBakeableEntities, DiffFieldDefaults, FieldDefaultUpdatesSQL, SplitBakedFile, CaptureOnlyResumeCommand } from './IncrementalBaker.js';
 export type {
   BakerWorkingDB,
   CapturedEntitySQL,
   IncrementalBakerOptions,
+  BakeMigrationOptions,
+  BakedFileRegions,
   BakedMigrationResult,
   BakeableEntityCandidate,
+  EntityFieldDefault,
+  FieldDefaultChange,
 } from './IncrementalBaker.js';
 export type {
   MigrationConversionResult,
@@ -30,6 +34,7 @@ export type {
   MJTranspileResult,
   TSQLToPGTranspiler,
   UnhandledStatement,
+  CatalogViewExtraction,
 } from './MigrationConverter.js';
 export { SplitByStatement, splitByStatement, SummarizeStatements, summarizeStatements } from './MigrationStatementSplitter.js';
 export type { StatementBatch, StatementKind } from './MigrationStatementSplitter.js';
@@ -58,7 +63,13 @@ export {
   PostgreSQLHeaderBuilder,
   getHeaderBuilder,
   registerHeaderBuilder,
+  PG_EXTENSION_REQUIREMENTS,
+  RequiredPgExtensions,
+  BuildPgExtensionStatements,
   convertFile,
+  GetPGCatalogViewDefinition,
+  CollectTSQLBitColumns,
+  MergeTableColumns,
   printReport,
   postProcess,
   convertIdentifiers,
@@ -81,6 +92,7 @@ export {
   GAP_MARKER_BATCH_ERROR,
   GAP_MARKER_NEEDS_HAND_AUTHORING,
   GAP_MARKER_EXEC_SKIPPED,
+  GAP_MARKER_MISSING_SAVES,
   CreateTableRule,
   ViewRule,
   ProcedureToFunctionRule,
@@ -104,8 +116,10 @@ export type {
   StatementType,
   BatchConverterConfig,
   BatchConverterResult,
+  TableColumnRegistry,
   DialectCombination,
   DialectHeaderBuilder,
+  PgExtensionRequirement,
   ParsedType,
 } from './rules/index.js';
 

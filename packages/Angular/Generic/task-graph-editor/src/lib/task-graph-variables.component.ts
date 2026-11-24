@@ -1,11 +1,11 @@
 /**
- * VS Code VARIABLES pane for a selected workflow step.
+ * VS Code VARIABLES pane + Before ⇄ After Payload Diff for a selected workflow step.
  *
- * Paint only. Expanding a row is local UI state. The host owns which step is selected.
+ * Paint only. Expanding a row, filtering, or toggling Tree/Diff is local UI state.
  * Preserves expanded variable tree nodes across live poll refreshes of the same step while
  * resetting to top-level scopes when the operator switches to a different step.
  */
-import { ChangeDetectionStrategy, Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import {
     BuildVariableScopes,
@@ -22,6 +22,53 @@ export interface TaskGraphVariableTaskInput {
     OutputPayload?: string | null;
 }
 
+/** One row of the Before ⇄ After payload diff comparing Input vs Output keys. */
+export interface PayloadDiffEntry {
+    Key: string;
+    Before: string;
+    After: string;
+    Kind: 'added' | 'changed' | 'removed' | 'unchanged';
+}
+
+export type VariablesViewMode = 'tree' | 'diff';
+
+/** Computes a shallow key-by-key Before ⇄ After payload diff between decoded Input and Output objects. */
+export function ComputePayloadDiff(inputVal: unknown, outputVal: unknown): PayloadDiffEntry[] {
+    const beforeObj = toPlainRecord(inputVal);
+    const afterObj = toPlainRecord(outputVal);
+    const keys = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)])).sort();
+    return keys.map((key) => {
+        const hasBefore = Object.prototype.hasOwnProperty.call(beforeObj, key);
+        const hasAfter = Object.prototype.hasOwnProperty.call(afterObj, key);
+        const beforeStr = hasBefore ? formatDiffValue(beforeObj[key]) : '—';
+        const afterStr = hasAfter ? formatDiffValue(afterObj[key]) : '—';
+        let kind: PayloadDiffEntry['Kind'] = 'unchanged';
+        if (!hasBefore && hasAfter) kind = 'added';
+        else if (hasBefore && !hasAfter) kind = 'removed';
+        else if (beforeStr !== afterStr) kind = 'changed';
+        return { Key: key, Before: beforeStr, After: afterStr, Kind: kind };
+    });
+}
+
+function toPlainRecord(value: unknown): Record<string, unknown> {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+    }
+    if (value !== undefined && value !== null) {
+        return { value };
+    }
+    return {};
+}
+
+function formatDiffValue(value: unknown): string {
+    if (value === undefined) return 'undefined';
+    if (value === null) return 'null';
+    if (typeof value === 'string') return value.length > 80 ? `"${value.slice(0, 77)}…"` : `"${value}"`;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    const json = JSON.stringify(value);
+    return json && json.length > 80 ? `${json.slice(0, 77)}…` : (json ?? String(value));
+}
+
 @Component({
     standalone: true,
     selector: 'mj-task-graph-variables',
@@ -30,11 +77,7 @@ export interface TaskGraphVariableTaskInput {
     styleUrls: ['./task-graph-variables.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TaskGraphVariablesComponent implements OnChanges {
-    /**
-     * Optional task step entity/snapshot. Supplies `ID`, `Status`, `InputPayload`, and
-     * `OutputPayload` when those granular inputs are not bound separately.
-     */
+export class TaskGraphVariablesComponent {
     @Input()
     public set Task(value: TaskGraphVariableTaskInput | null | undefined) {
         this.task = value ?? null;
@@ -44,7 +87,6 @@ export class TaskGraphVariablesComponent implements OnChanges {
         return this.task;
     }
 
-    /** Identifier of the currently selected task step, used to preserve expansion across live polls. */
     @Input()
     public set TaskID(value: string | null | undefined) {
         this.taskID = value ?? null;
@@ -82,23 +124,71 @@ export class TaskGraphVariablesComponent implements OnChanges {
     }
 
     public Scopes: DebugVariableScope[] = [];
+    public DiffEntries: PayloadDiffEntry[] = [];
     public Expanded = new Set<string>();
+    public ViewMode: VariablesViewMode = 'tree';
+    public SearchQuery = '';
+    public CopiedFeedback = false;
 
     private task: TaskGraphVariableTaskInput | null = null;
     private taskID: string | null = null;
     private inputRaw: string | null | undefined = undefined;
     private outputRaw: string | null | undefined = undefined;
     private invocation: { data?: unknown; context?: unknown } | null = null;
+    private decodedInput: unknown = undefined;
+    private decodedOutput: unknown = undefined;
 
     private _lastTaskID: string | null | undefined = undefined;
-    private _lastTaskStatus: string | null | undefined = undefined;
     private _lastInputPayload: string | null | undefined = undefined;
     private _lastOutputPayload: string | null | undefined = undefined;
     private _lastInvocation: { data?: unknown; context?: unknown } | null | undefined = undefined;
     private _knownScopeNames = new Set<string>();
 
-    public ngOnChanges(_changes?: SimpleChanges): void {
-        this.rebuild();
+    public get FilteredScopes(): DebugVariableScope[] {
+        const q = this.SearchQuery.trim().toLowerCase();
+        if (!q) return this.Scopes;
+        return this.Scopes
+            .map((scope) => ({
+                ...scope,
+                Variables: scope.Variables.filter((v) => this.matchesVariable(v, q)),
+            }))
+            .filter((scope) => scope.Variables.length > 0);
+    }
+
+    public get FilteredDiffEntries(): PayloadDiffEntry[] {
+        const q = this.SearchQuery.trim().toLowerCase();
+        if (!q) return this.DiffEntries;
+        return this.DiffEntries.filter(
+            (e) =>
+                e.Key.toLowerCase().includes(q) ||
+                e.Before.toLowerCase().includes(q) ||
+                e.After.toLowerCase().includes(q),
+        );
+    }
+
+    public OnSearchInput(event: Event): void {
+        const target = event.target;
+        this.SearchQuery = target instanceof HTMLInputElement ? target.value : '';
+    }
+
+    public SetViewMode(mode: VariablesViewMode): void {
+        this.ViewMode = mode;
+    }
+
+    public CopyJson(): void {
+        const payload = {
+            input: this.decodedInput ?? null,
+            output: this.decodedOutput ?? null,
+            ...(this.invocation ? { invocation: this.invocation } : {}),
+        };
+        const text = JSON.stringify(payload, null, 2);
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            void navigator.clipboard.writeText(text);
+        }
+        this.CopiedFeedback = true;
+        setTimeout(() => {
+            this.CopiedFeedback = false;
+        }, 1500);
     }
 
     public Toggle(path: string): void {
@@ -119,9 +209,13 @@ export class TaskGraphVariablesComponent implements OnChanges {
         return variable.Children.length > 0;
     }
 
+    private matchesVariable(v: DebugVariable, q: string): boolean {
+        if (v.Name.toLowerCase().includes(q) || v.Preview.toLowerCase().includes(q)) return true;
+        return v.Children.some((c) => this.matchesVariable(c, q));
+    }
+
     private rebuild(): void {
         const effectiveTaskID = this.taskID ?? this.task?.ID ?? null;
-        const effectiveTaskStatus = this.task?.Status ?? null;
         const effectiveInput = this.inputRaw !== undefined ? this.inputRaw : this.task?.InputPayload;
         const effectiveOutput = this.outputRaw !== undefined ? this.outputRaw : this.task?.OutputPayload;
 
@@ -140,7 +234,6 @@ export class TaskGraphVariablesComponent implements OnChanges {
             this.invocation !== this._lastInvocation;
 
         this._lastTaskID = effectiveTaskID;
-        this._lastTaskStatus = effectiveTaskStatus;
 
         if (!isFirstBuild && !taskSwitched && !payloadsChanged) {
             return;
@@ -150,9 +243,13 @@ export class TaskGraphVariablesComponent implements OnChanges {
         this._lastOutputPayload = effectiveOutput;
         this._lastInvocation = this.invocation;
 
+        this.decodedInput = DecodePayload(effectiveInput);
+        this.decodedOutput = DecodePayload(effectiveOutput);
+        this.DiffEntries = ComputePayloadDiff(this.decodedInput, this.decodedOutput);
+
         this.Scopes = BuildVariableScopes({
-            input: DecodePayload(effectiveInput),
-            output: DecodePayload(effectiveOutput),
+            input: this.decodedInput,
+            output: this.decodedOutput,
             invocation: this.invocation,
         });
 

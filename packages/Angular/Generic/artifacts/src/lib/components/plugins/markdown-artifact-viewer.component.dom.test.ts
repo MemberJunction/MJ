@@ -1,6 +1,8 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ComposerModule } from '@memberjunction/ng-composer';
+import { ConversationUtility } from '@memberjunction/ai-core-plus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EntityInfo,
@@ -11,11 +13,12 @@ import {
   type UserInfo,
 } from '@memberjunction/core';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
-import { DocumentLiveBlockEngine, UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine, DocumentLiveBlockEngine, UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJ_EMBEDDED_ARTIFACT_ANCESTORS, MJ_MAX_EMBED_DEPTH } from '../artifact-type-plugin-viewer.component';
 import { MarkdownArtifactViewerComponent } from './markdown-artifact-viewer.component';
 import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
 import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
+import { ArtifactCommandPaletteComponent } from './artifact-command-palette.component';
 import { ArtifactAgentRegionIndicatorComponent } from '../presence/artifact-agent-region-indicator.component';
 import { DocumentCollaborationService } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
@@ -234,7 +237,8 @@ function createDocsMockProvider(opts: MockDocsProviderOptions = {}) {
     RunView: async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
       const extraFilter = String(params.ExtraFilter ?? '');
       if (params.EntityName === 'MJ: Artifacts') {
-        return okResult([{ ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', UserID: artifactOwnerId, EnvironmentID: 'env-doc-1' }]) as RunViewResult<T>;
+        const matchedId = /ID\s*=\s*'([^']+)'/i.exec(extraFilter)?.[1] ?? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        return okResult([{ ID: matchedId, UserID: artifactOwnerId, EnvironmentID: 'env-doc-1' }]) as RunViewResult<T>;
       }
       if (params.EntityName === 'MJ: Artifact Permissions') {
         return okResult(permissionGrants) as RunViewResult<T>;
@@ -321,9 +325,11 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -925,13 +931,14 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       const rightBar = root.querySelector('.mj-docs-toolbar__right')!;
       const moreMenu = root.querySelector<HTMLElement>('[data-testid="docs-more-tools-menu"]')!;
 
-      // Calm default toolbar buttons
+      // Calm Option A default toolbar buttons (format & comments pinned; outline & insert-block stay inside More / Cmd+K)
       expect(leftBar.querySelector('[data-testid="mode-preview-btn"]')).not.toBeNull();
       expect(leftBar.querySelector('[data-testid="mode-edit-btn"]')).not.toBeNull();
-      expect(leftBar.querySelector('[data-testid="toggle-outline-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="toggle-outline-btn"]')).toBeNull();
       expect(leftBar.querySelector('[data-testid="toggle-format-ribbon-btn"]')).not.toBeNull();
-      expect(leftBar.querySelector('[data-testid="open-slash-menu-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="open-slash-menu-btn"]')).toBeNull();
       expect(rightBar.querySelector('[data-testid="toggle-comments-btn"]')).not.toBeNull();
+      expect(rightBar.querySelector('[data-testid="docs-cmdk-btn"]')).not.toBeNull();
       expect(rightBar.querySelector('[data-testid="save-doc-version-btn"]')).not.toBeNull();
       expect(rightBar.querySelector('[data-testid="toggle-more-tools-btn"]')).not.toBeNull();
 
@@ -1533,9 +1540,11 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -1865,9 +1874,11 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -1908,9 +1919,11 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -1943,9 +1956,11 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
@@ -1988,5 +2003,271 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       Status: 'Pending',
     });
     expect(f.componentInstance.MarkdownContent).toContain('Targeted paragraph updated.');
+  });
+
+  it('renders readable vs unreadable durable doc-link chips, round-trips editable chips, and exports stored labels as plain text', async () => {
+    const readableId = '11111111-1111-4111-8111-111111111111';
+    const unreadableId = '22222222-2222-4222-8222-222222222222';
+    const readableToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Pricing Policy', { ID: readableId });
+    const unreadableToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Executive Memo', { ID: unreadableId });
+    const content = `See ${readableToken} and ${unreadableToken}.`;
+
+    const permSpy = vi
+      .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissionsBatch')
+      .mockImplementation(async (_provider, artifactIds) => {
+        const map = new Map();
+        for (const artifactId of artifactIds) {
+          const isHostDoc = artifactId !== readableId && artifactId !== unreadableId;
+          map.set(artifactId, {
+            ArtifactID: artifactId,
+            CanRead: isHostDoc || artifactId === readableId,
+            CanEdit: isHostDoc,
+            CanDelete: isHostDoc,
+            CanShare: isHostDoc,
+            Source: isHostDoc ? 'Owner' : artifactId === readableId ? 'ArtifactPermission' : 'Denied',
+            Reason: isHostDoc ? 'Owner' : artifactId === readableId ? 'Shared' : 'Denied',
+          });
+        }
+        return map;
+      });
+
+    try {
+      const f = await renderDocsViewer(content, false);
+      const comp = f.componentInstance;
+      comp.SetViewMode('preview');
+      // Trigger access checks for both tokens and let them settle.
+      comp.RenderPreviewMarkdown(content);
+      await new Promise((r) => setTimeout(r, 20));
+      f.detectChanges();
+
+      const previewMd = comp.RenderPreviewMarkdown(content);
+      const linkBatchCalls = permSpy.mock.calls.filter(
+        (c) => c[1].includes(readableId) || c[1].includes(unreadableId),
+      );
+      expect(linkBatchCalls).toHaveLength(1);
+      expect(linkBatchCalls[0][1]).toEqual([readableId, unreadableId]);
+      expect(previewMd).toContain('#mj-doc-link-readable/');
+      expect(previewMd).toContain('#mj-doc-link-unreadable/');
+      expect(previewMd).toContain('[Pricing Policy](');
+      expect(previewMd).toContain('[Executive Memo](');
+      expect(previewMd).toContain("You don't have access");
+
+      // Clicking readable preview link emits OpenEntityRecord; clicking unreadable preview link does nothing.
+      const opened: Array<{ entityName: string; id: string }> = [];
+      comp.OpenEntityRecord.subscribe((evt) => {
+        opened.push({ entityName: evt.entityName, id: String(evt.compositeKey.GetValueByFieldName('ID') ?? '') });
+      });
+
+      const readableHrefMatch = /\((#mj-doc-link-readable\/[^\s)]+)/.exec(previewMd);
+      const unreadableHrefMatch = /\((#mj-doc-link-unreadable\/[^\s)]+)/.exec(previewMd);
+      expect(readableHrefMatch).not.toBeNull();
+      expect(unreadableHrefMatch).not.toBeNull();
+
+      const previewReadableAnchor = document.createElement('a');
+      previewReadableAnchor.setAttribute('href', readableHrefMatch![1]);
+      const previewUnreadableAnchor = document.createElement('a');
+      previewUnreadableAnchor.setAttribute('href', unreadableHrefMatch![1]);
+
+      comp.OnDocRecordLinkClick({ target: previewUnreadableAnchor, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      expect(opened).toHaveLength(0);
+
+      comp.OnDocRecordLinkClick({ target: previewReadableAnchor, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      expect(opened).toEqual([{ entityName: 'MJ: Artifacts', id: readableId }]);
+
+      // Real Angular-rendered Edit mode DOM ([innerHTML]="RenderInlineEditableSafeHtml(...)") preserves
+      // data-doc-link-* attributes and contenteditable="false" through Angular binding and round-trips losslessly.
+      comp.SetViewMode('edit');
+      f.detectChanges();
+      const renderedEditableBlock = (f.nativeElement as HTMLElement).querySelector('.mj-docs-editable-paragraph') as HTMLElement | null;
+      expect(renderedEditableBlock).not.toBeNull();
+      const renderedChips = Array.from(
+        renderedEditableBlock!.querySelectorAll('[data-doc-record-link="true"]'),
+      ) as HTMLElement[];
+      expect(renderedChips.length).toBe(2);
+      expect(renderedChips[0].getAttribute('data-doc-link-access')).toBe('readable');
+      expect(renderedChips[0].getAttribute('contenteditable')).toBe('false');
+      expect(renderedChips[0].getAttribute('data-doc-link-raw')).toBe(readableToken);
+      expect(renderedChips[1].getAttribute('data-doc-link-access')).toBe('unreadable');
+      expect(renderedChips[1].getAttribute('data-doc-link-raw')).toBe(unreadableToken);
+      expect(comp.ExtractMarkdownFromEditableElement(renderedEditableBlock!)).toBe(content);
+
+      // Clicking the real Angular-rendered readable Edit chip emits OpenEntityRecord; unreadable chip does not.
+      comp.OnDocRecordLinkClick({ target: renderedChips[1], preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      expect(opened).toHaveLength(1);
+      comp.OnDocRecordLinkClick({ target: renderedChips[0], preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      expect(opened).toHaveLength(2);
+
+      // Markdown export and PDF export emit stored plain-text labels; Source mode retains raw tokens.
+      const importExport = f.debugElement.injector.get(DocumentImportExportService);
+      const mdDownload = vi.spyOn(importExport, 'DownloadMarkdownFile').mockImplementation(() => undefined);
+      const pdfExport = vi.spyOn(importExport, 'ExportPrintablePdf').mockImplementation(() => undefined);
+
+      comp.OnExportMarkdown();
+      expect(mdDownload).toHaveBeenCalledWith('See Pricing Policy and Executive Memo.', expect.any(String));
+
+      await comp.ExportPDF();
+      expect(pdfExport).toHaveBeenCalledWith(expect.stringContaining('See Pricing Policy and Executive Memo.'), expect.any(String), 'portrait');
+      expect(pdfExport.mock.calls[0][0]).not.toContain('"_mode":"mention"');
+      expect(comp.MarkdownContent).toBe(content);
+    } finally {
+      permSpy.mockRestore();
+    }
+  });
+
+  it('opens [[ autocomplete as the current user in edit and suggest modes and inserts a durable record-link token on selection', async () => {
+    const targetId = '33333333-3333-4333-8333-333333333333';
+    const privateId = '44444444-4444-4444-8444-444444444444';
+    const baseMock = createDocsMockProvider();
+    const currentUser = baseMock.provider.CurrentUser;
+    const originalRunView = baseMock.provider.RunView;
+    const artifactSearchUsers: Array<UserInfo | undefined> = [];
+    const customProvider = {
+      ...baseMock.provider,
+      RunView: async (params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> => {
+        if (params.EntityName === 'MJ: Artifacts' && String(params.ExtraFilter ?? '').includes('LIKE')) {
+          artifactSearchUsers.push(contextUser);
+          // Simulates server read hook: privateId is NOT readable by currentUser.
+          return {
+            Success: true,
+            Results: [
+              { ID: targetId, Name: 'Discount Rules', Description: null, Type: 'Markdown Document' },
+            ],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            UserViewRunID: '',
+          };
+        }
+        return originalRunView(params, contextUser);
+      },
+    } as unknown as IMetadataProvider;
+
+    const f = await renderDocsViewer('Initial paragraph.', false, customProvider);
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const paraSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown');
+    expect(paraSeg).toBeDefined();
+
+    // Simulate typing "See [[Disc" in Edit mode
+    const fakeEl = document.createElement('div');
+    fakeEl.textContent = 'See [[Disc';
+    comp.OnEditableBlockInput(paraSeg!, { target: fakeEl } as unknown as Event);
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+
+    expect(comp.ShowDocLinkMenu).toBe(true);
+    expect(artifactSearchUsers).toEqual([currentUser]);
+    expect(comp.DocLinkSuggestions.map((s) => s.id)).toEqual([targetId]);
+    expect(comp.DocLinkSuggestions.some((s) => s.id === privateId)).toBe(false);
+
+    // Selecting inserts ConversationUtility.CreateRecordLink token in Edit mode
+    comp.OnDocLinkSuggestionSelected(comp.DocLinkSuggestions[0]);
+    const expectedToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Discount Rules', { ID: targetId });
+    expect(comp.ShowDocLinkMenu).toBe(false);
+    expect(comp.MarkdownContent).toContain(`See ${expectedToken}`);
+
+    // Suggest mode also opens [[ autocomplete and creates a pending suggestion with the token
+    comp.SetViewMode('suggest');
+    f.detectChanges();
+    const suggestSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown')!;
+    const suggestEl = document.createElement('div');
+    suggestEl.textContent = 'Also [[Disc';
+    comp.OnEditableBlockInput(suggestSeg, { target: suggestEl } as unknown as Event);
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+    expect(comp.ShowDocLinkMenu).toBe(true);
+    comp.OnDocLinkSuggestionSelected(comp.DocLinkSuggestions[0]);
+    expect(comp.Suggestions.some((s) => s.ProposedMarkdown.includes(expectedToken))).toBe(true);
+  });
+
+  it('batches all non-artifact doc-link access checks across a document into one RunViews call (one query per entity)', async () => {
+    const acct1 = 'aaaa1111-1111-4111-8111-111111111111';
+    const acct2 = 'bbbb2222-2222-4222-8222-222222222222';
+    const acct3 = 'cccc3333-3333-4333-8333-333333333333';
+    const content = [
+      `Accounts: ${ConversationUtility.CreateRecordLink('Accounts', 'Acme', { ID: acct1 })}, ${ConversationUtility.CreateRecordLink('Accounts', 'Beta', { ID: acct2 })}, ${ConversationUtility.CreateRecordLink('Accounts', 'Gamma', { ID: acct3 })}.`,
+      '',
+      `Orders: ${ConversationUtility.CreateRecordLink('Order Lines', 'Order 7 Line 2', { OrderID: '7', LineNumber: 2 })} and ${ConversationUtility.CreateRecordLink('Order Lines', 'Order 9 Line 1', { OrderID: '9', LineNumber: 1 })}.`,
+    ].join('\n');
+
+    const baseMock = createDocsMockProvider();
+    const originalEntityByName = baseMock.provider.EntityByName.bind(baseMock.provider);
+    const originalRunView = baseMock.provider.RunView.bind(baseMock.provider);
+    const nonArtifactSingleQueries: RunViewParams[] = [];
+    const nonArtifactBatchQueries: RunViewParams[][] = [];
+
+    const accountsPk = { Name: 'ID', NeedsQuotes: true };
+    const orderLinesPks = [
+      { Name: 'OrderID', NeedsQuotes: true },
+      { Name: 'LineNumber', NeedsQuotes: false },
+    ];
+    const extraEntities: Record<string, unknown> = {
+      Accounts: {
+        ID: 'ent-accounts',
+        Name: 'Accounts',
+        PrimaryKeys: [accountsPk],
+        FirstPrimaryKey: accountsPk,
+        GetUserPermisions: () => ({ CanRead: true }),
+      },
+      'Order Lines': {
+        ID: 'ent-order-lines',
+        Name: 'Order Lines',
+        PrimaryKeys: orderLinesPks,
+        FirstPrimaryKey: orderLinesPks[0],
+        GetUserPermisions: () => ({ CanRead: true }),
+      },
+    };
+
+    const customProvider = {
+      ...baseMock.provider,
+      EntityByName: (name: string) => extraEntities[name] ?? originalEntityByName(name),
+      RunView: async (params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> => {
+        if (params.EntityName === 'Accounts' || params.EntityName === 'Order Lines') {
+          nonArtifactSingleQueries.push(params);
+        }
+        return originalRunView(params, contextUser);
+      },
+      RunViews: async (paramsList: RunViewParams[]): Promise<RunViewResult[]> => {
+        if (paramsList.some((p) => p.EntityName === 'Accounts' || p.EntityName === 'Order Lines')) {
+          nonArtifactBatchQueries.push(paramsList);
+        }
+        return paramsList.map((p) => {
+          if (p.EntityName === 'Accounts') {
+            return { Success: true, Results: [{ ID: acct1 }, { ID: acct3 }], RowCount: 2, TotalRowCount: 2, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+          }
+          if (p.EntityName === 'Order Lines') {
+            return { Success: true, Results: [{ OrderID: '7', LineNumber: 2 }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+          }
+          return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+        });
+      },
+    } as unknown as IMetadataProvider;
+
+    const f = await renderDocsViewer(content, true, customProvider);
+    const comp = f.componentInstance;
+    comp.SetViewMode('preview');
+    comp.RenderPreviewMarkdown(content);
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+
+    // 5 distinct chips across 2 entities must execute as ONE RunViews call with 2 entity queries (0 per-chip RunView calls).
+    expect(nonArtifactSingleQueries).toHaveLength(0);
+    expect(nonArtifactBatchQueries).toHaveLength(1);
+    expect(nonArtifactBatchQueries[0]).toHaveLength(2);
+    expect(nonArtifactBatchQueries[0].map((p) => p.EntityName)).toEqual(['Accounts', 'Order Lines']);
+    expect(nonArtifactBatchQueries[0][0].Fields).toEqual(['ID']);
+    expect(nonArtifactBatchQueries[0][1].Fields).toEqual(['OrderID', 'LineNumber']);
+
+    const rendered = comp.RenderPreviewMarkdown(content);
+    expect(rendered).toContain('#mj-doc-link-readable/');
+    expect(rendered).toContain('#mj-doc-link-unreadable/');
+    expect(rendered).toContain('"Open Acme"');
+    expect(rendered).toContain('"Open Gamma"');
+    expect(rendered).toContain('"Open Order 7 Line 2"');
+    expect(rendered).toContain('[Beta](#mj-doc-link-unreadable/');
+    expect(rendered).toContain('[Order 9 Line 1](#mj-doc-link-unreadable/');
   });
 });

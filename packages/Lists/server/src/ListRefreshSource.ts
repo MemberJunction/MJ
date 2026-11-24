@@ -12,10 +12,11 @@ import {
   ComputeUserViewFingerprintAsync,
   MJListEntity,
   MJQueryEntity,
+  MJQueryFieldEntity,
   MJUserViewEntityExtended,
   QueryDefinitionRows,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { ListSourceChange, ResolvedRecordSet } from '@memberjunction/lists-base';
 
 /**
@@ -29,6 +30,13 @@ export interface ListSourceDefinition {
   /** When the source record was last saved. */
   UpdatedAt: Date | null;
   Fingerprint: string;
+}
+
+/** The `MJ: Query Fields` columns used to find a query's key column. */
+type QueryKeyCandidateRow = Pick<MJQueryFieldEntity, 'Name' | 'SourceEntityID' | 'SourceFieldName'>;
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function isRunQueryProvider(provider: IMetadataProvider | undefined): provider is IMetadataProvider & IRunQueryProvider {
@@ -69,17 +77,78 @@ export class ListRefreshSource {
     if (!list.SourceQueryID || !keyField) {
       throw new Error(`List '${list.ID}' has a source query but no SourceQueryKeyField naming its key column.`);
     }
-    if (entityInfo.PrimaryKeys.length !== 1) {
-      throw new Error(`List '${list.ID}' is on ${entityInfo.Name}, which has a composite key. A query source needs a single-column key.`);
+    return this.RunQueryRecordsAsync({
+      QueryID: list.SourceQueryID,
+      Parameters: this.parseParameters(list),
+      KeyField: keyField,
+      EntityInfo: entityInfo,
+      Label: `list '${list.ID}'`,
+    });
+  }
+
+  /**
+   * Runs a saved query as the acting user and returns the distinct values of its key column, in
+   * `MJ: List Details.RecordID` form. `Label` names what the records are for, in error messages.
+   */
+  public async RunQueryRecordsAsync(args: {
+    QueryID: string;
+    Parameters: Record<string, unknown> | undefined;
+    KeyField: string;
+    EntityInfo: EntityInfo;
+    Label: string;
+  }): Promise<ResolvedRecordSet> {
+    if (args.EntityInfo.PrimaryKeys.length !== 1) {
+      throw new Error(`${capitalize(args.Label)} is on ${args.EntityInfo.Name}, which has a composite key. A query source needs a single-column key.`);
     }
-    const result = await this.runQuery().RunQuery(
-      { QueryID: list.SourceQueryID, Parameters: this.parseParameters(list) },
-      this.contextUser,
-    );
+    const result = await this.runQuery().RunQuery({ QueryID: args.QueryID, Parameters: args.Parameters }, this.contextUser);
     if (!result.Success) {
-      throw new Error(`Source query for list '${list.ID}' failed: ${result.ErrorMessage}`);
+      throw new Error(`Source query for ${args.Label} failed: ${result.ErrorMessage}`);
     }
-    return { EntityName: entityInfo.Name, RecordIds: this.keyValues(result.Results, keyField) };
+    return { EntityName: args.EntityInfo.Name, RecordIds: this.keyValues(result.Results, args.KeyField) };
+  }
+
+  /** The query and the fingerprint of its current definition. */
+  public async QueryDefinitionAsync(queryID: string): Promise<ListSourceDefinition> {
+    return this.queryDefinitionAsync(queryID);
+  }
+
+  /**
+   * Works out which entity a query's rows belong to and which column holds that entity's key, from
+   * the query's field metadata (`MJ: Query Fields`). A candidate is a column traced to the primary
+   * key of an entity with a single-column key. Given an entity, the candidate must be on it; given
+   * a key column, it must be that column. Returns null unless exactly one candidate remains.
+   */
+  public async InferQueryKeyAsync(
+    queryID: string,
+    hint: { EntityName?: string; KeyField?: string },
+  ): Promise<{ EntityInfo: EntityInfo; KeyField: string } | null> {
+    const result = await this.rv.RunView<QueryKeyCandidateRow>({
+      EntityName: 'MJ: Query Fields',
+      ExtraFilter: `QueryID='${EscapeSQLString(queryID)}'`,
+      Fields: ['Name', 'SourceEntityID', 'SourceFieldName'],
+      ResultType: 'simple',
+      BypassCache: true,
+    }, this.contextUser);
+    if (!result.Success) {
+      throw new Error(`Could not read the fields of query '${queryID}': ${result.ErrorMessage}`);
+    }
+    const wantedEntity = hint.EntityName ? this.md.EntityByName(hint.EntityName) : undefined;
+    const wantedKey = hint.KeyField?.trim().toLowerCase();
+    const candidates = (result.Results ?? [])
+      .map((row) => this.keyCandidate(row))
+      .filter((c): c is { EntityInfo: EntityInfo; KeyField: string } => !!c)
+      .filter((c) => !wantedEntity || UUIDsEqual(c.EntityInfo.ID, wantedEntity.ID))
+      .filter((c) => !wantedKey || c.KeyField.toLowerCase() === wantedKey);
+    return candidates.length === 1 ? candidates[0] : null;
+  }
+
+  /** The row as a key candidate, when it traces to the primary key of a single-key entity. */
+  private keyCandidate(row: QueryKeyCandidateRow): { EntityInfo: EntityInfo; KeyField: string } | null {
+    if (!row.SourceEntityID || !row.SourceFieldName) return null;
+    const entity = this.md.EntityByID(row.SourceEntityID);
+    if (!entity || entity.PrimaryKeys.length !== 1) return null;
+    const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: single-column key, checked above
+    return pkName.toLowerCase() === row.SourceFieldName.toLowerCase() ? { EntityInfo: entity, KeyField: row.Name } : null;
   }
 
   private async queryDefinitionAsync(queryID: string): Promise<ListSourceDefinition> {

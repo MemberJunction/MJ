@@ -658,6 +658,7 @@ export class AgentSpecSync {
             DefaultPromptEffortLevel: agent.DefaultPromptEffortLevel || undefined,
             ChatHandlingOption: agent.ChatHandlingOption || undefined,
             MaxSubAgentConsultRounds: agent.MaxSubAgentConsultRounds ?? undefined,
+            Isolation: agent.Isolation ?? 'InProcess',
             DefaultArtifactTypeID: agent.DefaultArtifactTypeID || undefined,
             OwnerUserID: agent.OwnerUserID || undefined,
             InvocationMode: agent.InvocationMode,
@@ -1021,6 +1022,9 @@ export class AgentSpecSync {
         agentEntity.DefaultPromptEffortLevel = this.Spec.DefaultPromptEffortLevel || null;
         agentEntity.ChatHandlingOption = this.Spec.ChatHandlingOption || null;
         agentEntity.MaxSubAgentConsultRounds = this.Spec.MaxSubAgentConsultRounds ?? null;
+        if (this.Spec.Isolation !== undefined) {
+            agentEntity.Isolation = this.Spec.Isolation;
+        }
         agentEntity.DefaultArtifactTypeID = this.Spec.DefaultArtifactTypeID || null;
 
         // Set OwnerUserID - always use contextUser if available (user creating/modifying the agent)
@@ -1871,6 +1875,7 @@ export class AgentSpecSync {
             DefaultPromptEffortLevel: partial.DefaultPromptEffortLevel,
             ChatHandlingOption: partial.ChatHandlingOption,
             MaxSubAgentConsultRounds: partial.MaxSubAgentConsultRounds,
+            Isolation: partial.Isolation,
             DefaultArtifactTypeID: partial.DefaultArtifactTypeID,
             OwnerUserID: partial.OwnerUserID,
             InvocationMode: partial.InvocationMode || 'Any',

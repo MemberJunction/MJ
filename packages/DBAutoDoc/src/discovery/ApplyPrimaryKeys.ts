@@ -62,7 +62,11 @@ function survives(candidate: PKCandidate, minimumConfidence: number): boolean {
   return candidate.status === 'confirmed' || candidate.confidence >= minimumConfidence;
 }
 
-function pickBest(eligible: PKCandidate[]): PKCandidate | undefined {
+/**
+ * Picks the single best PK candidate from an eligible set: confirmed before unconfirmed,
+ * then highest confidence; ties keep the earlier candidate.
+ */
+export function PickBestPKCandidate(eligible: PKCandidate[]): PKCandidate | undefined {
   const rank = (c: PKCandidate): [number, number] => [c.status === 'confirmed' ? 1 : 0, c.confidence];
   return eligible.reduce<PKCandidate | undefined>((top, c) => {
     if (!top) return c;
@@ -70,4 +74,9 @@ function pickBest(eligible: PKCandidate[]): PKCandidate | undefined {
     const [tConfirmed, tConfidence] = rank(top);
     return cConfirmed > tConfirmed || (cConfirmed === tConfirmed && cConfidence > tConfidence) ? c : top;
   }, undefined);
+}
+
+// Keep internal alias so ApplyBestPrimaryKeys above stays disjoint from open PR #6636.
+function pickBest(eligible: PKCandidate[]): PKCandidate | undefined {
+  return PickBestPKCandidate(eligible);
 }

@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W3 -> C1.1",
-    "Description": "Gate G0.3 (owner PR 4, phase 0, dataset W3, criterion C1.1): with automated publishing on, 0 of 2 builder-agent runs on W3-leak-row s42 (lr-first and lr-last plan orders) reach Published: the automation itself refuses the leak. Pending until PR 4 activates it.",
-    "Status": "Pending",
+    "Description": "Gate G0.3 (owner PR 4, phase 0, dataset W3, criterion C1.1): with automated publishing on, 0 of 2 builder-agent runs on W3-leak-row s42 (lr-first and lr-last plan orders) reach Published: the automation itself refuses the leak. W3 s42 keeps the simple baseline, so both runs build under a supplied protocol with autoPublishKeepBaseline true (owner ruling 2026-11-16, OF4-30) and every training run's deciding refusal must be unacknowledged-leakage-flags. Mutation: delete that refusal in LifecycleGate.CheckLeakageFlags -> a model Published or the refusal missing.",
+    "Status": "Active",
     "Tags": "[\"gate\",\"G0.3\",\"owner:PR4\",\"phase:0\",\"dataset:W3\",\"criterion:C1.1\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {

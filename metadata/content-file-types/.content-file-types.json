@@ -563,5 +563,34 @@
       "lastModified": "2026-10-28T00:36:09.991Z",
       "checksum": "fa71555805f06bd4673f699cc6c564434330d4616b71cc15ccbe968d909d360a"
     }
+  },
+  {
+    "fields": {
+      "Name": "VTT",
+      "FileExtension": ".vtt",
+      "ByteSignature": "{\"TextPrefix\":[\"webvtt\"]}",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "4A11298C-1891-4157-9FF9-EEE728B4E589"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:46.394Z",
+      "checksum": "30ccc01dc60402793657c1cfa3034fd9a6f55a37596825c2dadbd1d378d69a36"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SRT",
+      "FileExtension": ".srt",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "E88C949A-E9E9-42F1-B3F0-220134483D38"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:46.402Z",
+      "checksum": "ca1fffa23d7561ccf13cd65acc8b5f1e1284a11864fbea85d4aa9dc97eb747a1"
+    }
   }
 ]

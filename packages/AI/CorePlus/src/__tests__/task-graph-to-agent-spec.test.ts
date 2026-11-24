@@ -107,17 +107,36 @@ describe('ConvertTaskGraphToAgentSpec', () => {
 });
 
 describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', () => {
-    it('reports a human task rather than emitting an unattended step', () => {
+    it('saves a Human step as a Human step, keeping its instructions, deadline and provider', () => {
         const g = graph({
             tasks: [
                 { tempId: 'a', name: 'Draft', description: 'draft', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
-                { tempId: 'b', name: 'Approve', description: 'approve', kind: 'Human' as const, configuration: {}, dependsOn: ['a'] },
+                {
+                    tempId: 'b', name: 'Approve', description: 'approve', kind: 'Human' as const,
+                    configuration: { instructions: 'Approve the draft', expiresInHours: 24, provider: 'BizAppsTasks', providerConfiguration: { taskTypeCode: 'APPROVAL' } },
+                    dependsOn: ['a'],
+                },
             ],
         });
         const result = ConvertTaskGraphToAgentSpec(g, optionsOf());
-        expect(result.Success).toBe(true);
-        expect(result.Spec!.Steps).toHaveLength(1);
-        expect(result.Losses.find((l) => l.Kind === 'HumanTask')).toMatchObject({ TempId: 'b' });
+        expect(result.Losses).toEqual([]);
+        const human = result.Spec!.Steps!.find((s) => s.Name === 'Approve')!;
+        expect(human.StepType).toBe('Human');
+        expect(human.Description).toBe('Approve the draft');
+        expect(JSON.parse(human.Configuration!)).toEqual({ expiresInHours: 24, provider: 'BizAppsTasks', providerConfiguration: { taskTypeCode: 'APPROVAL' } });
+    });
+
+    it('saves External and Wait steps with their configuration', () => {
+        const g = graph({
+            tasks: [
+                { tempId: 'a', name: 'Await payment', description: 'p', kind: 'External' as const, configuration: { domain: 'stripe', correlationKey: 'payload.invoiceId' }, dependsOn: [] },
+                { tempId: 'b', name: 'Cool off', description: 'c', kind: 'Wait' as const, configuration: { durationSeconds: 86400 }, dependsOn: ['a'] },
+            ],
+        });
+        const steps = ConvertTaskGraphToAgentSpec(g, optionsOf()).Spec!.Steps!;
+        expect(steps.map((s) => s.StepType)).toEqual(['External', 'Wait']);
+        expect(JSON.parse(steps[0].Configuration!)).toEqual({ domain: 'stripe', correlationKey: 'payload.invoiceId' });
+        expect(JSON.parse(steps[1].Configuration!)).toEqual({ durationSeconds: 86400 });
     });
 
     it('drops edges that pointed at a dropped node, rather than dangling them', () => {
@@ -125,7 +144,7 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
         const g = graph({
             tasks: [
                 { tempId: 'a', name: 'Draft', description: 'draft', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
-                { tempId: 'b', name: 'Approve', description: 'approve', kind: 'Human' as const, configuration: {}, dependsOn: ['a'] },
+                { tempId: 'b', name: 'Approve', description: 'approve', kind: 'Agent' as const, configuration: { agentName: 'Missing Agent' }, dependsOn: ['a'] },
                 { tempId: 'c', name: 'Publish', description: 'publish', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['b'] },
             ],
         });
@@ -190,7 +209,7 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
     it('refuses rather than saving an empty workflow when every node is unrepresentable', () => {
         // Returning a stepless "success" would hand the user a workflow that does nothing.
         const g = graph({
-            tasks: [{ tempId: 'a', name: 'Approve', description: 'approve', kind: 'Human' as const, configuration: {}, dependsOn: [] }],
+            tasks: [{ tempId: 'a', name: 'Approve', description: 'approve', kind: 'Agent' as const, configuration: { agentName: 'Missing Agent' }, dependsOn: [] }],
         });
         const result = ConvertTaskGraphToAgentSpec(g, optionsOf());
         expect(result.Success).toBe(false);
@@ -203,11 +222,11 @@ describe('FormatSaveAsWorkflowLosses', () => {
         const g = graph({
             tasks: [
                 { tempId: 'a', name: 'Draft', description: 'd', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [], inputPayload: { x: 1 } },
-                { tempId: 'b', name: 'Approve', description: 'a', kind: 'Human' as const, configuration: {}, dependsOn: ['a'] },
+                { tempId: 'b', name: 'Approve', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Missing Agent' }, dependsOn: ['a'] },
             ],
         });
         const text = FormatSaveAsWorkflowLosses(ConvertTaskGraphToAgentSpec(g, optionsOf()).Losses);
-        expect(text).toContain('[HumanTask]');
+        expect(text).toContain('[UnknownAgent]');
         expect(text).toContain('[InputPayload]');
         expect(text.split('\n')).toHaveLength(2);
     });

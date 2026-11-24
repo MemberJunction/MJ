@@ -179,14 +179,14 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
    * Atomically consumes and evicts a staged upload token.
    *
    * @param token The staged upload token.
-   * @param claimingUserId The user ID claiming this token. If provided, must match the user who uploaded it.
+   * @param claimingUserId The authenticated user ID claiming this token (must match the uploader).
    * @returns The staged buffer and metadata, or null if the token is invalid, expired, or claimed by the wrong user.
    */
   public Consume(
     token: string,
-    claimingUserId?: string
+    claimingUserId: string
   ): { buffer: Buffer; fileName: string; mimeType: string; contentLength: number } | null {
-    if (!token || !this._staged.has(token)) {
+    if (!token || !claimingUserId || !this._staged.has(token)) {
       return null;
     }
 

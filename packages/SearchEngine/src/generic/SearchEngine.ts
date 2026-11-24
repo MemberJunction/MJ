@@ -54,7 +54,7 @@ import {
     SearchAudience,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
-import { SearchFusion, LabeledResultList, ApplySemanticFloor } from './SearchFusion';
+import { SearchFusion, LabeledResultList, ApplySemanticFloor, StampOriginatingScope } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
 import { ProjectSearchResultForReader } from './ResultFieldProjection';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
@@ -66,7 +66,7 @@ import { RerankerBudgetGuard } from '../rerankers/RerankerBudgetGuard';
 import { RenderScopeTemplate, RenderScopeJsonTemplate } from './ScopeTemplateRenderer';
 import { LaneKindForIndexType } from './ScopeValueEscaper';
 import { CheckRenderedFolderPath, CheckRenderedTemplate, CheckRequiredMetadataKeys, ParseRequiredMetadataKeys } from './ScopeFilterGuard';
-import { ScopeDimensionResolver } from './ScopeDimensionResolver';
+import { ScopeDimensionResolverBase, GetScopeDimensionResolver } from './ScopeDimensionResolver';
 import {
     ScopeExplanation,
     ExplainScopeInput,
@@ -176,6 +176,18 @@ function refusedLanesDiagnostic(skipped: LaneExplanation[]): string {
 // Keep the default re-ranker and graph search provider registrations alive under tree-shaking
 LoadNoopReRanker();
 LoadGraphSearchProvider();
+
+/**
+ * Non-serializable stamp placed on hits already verified by `hitsInsideLaneFilter`
+ * against both the entity's lane `ExtraFilter` AND the reader's effective RLS clause.
+ * Own enumerable Symbol properties survive `{ ...r }` shallow copies during fusion/dedup,
+ * are omitted from `JSON.stringify`/`Object.keys`, and cannot be forged via JSON metadata.
+ */
+const VERIFIED_OWNER_STAMP = Symbol('mjSearchVerifiedOwner');
+
+interface StampedSearchResultItem extends SearchResultItem {
+    [VERIFIED_OWNER_STAMP]?: string;
+}
 
 /** Where a content entity sits in the derived-content family (see `SearchEngine.VerifyOriginRecords`). */
 type ContentFamilyLevel = 'chunk' | 'item';
@@ -355,14 +367,14 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
     private _cache: Map<string, { result: SearchResult; expires: number }> = new Map();
 
-    private _dimensionResolver = new ScopeDimensionResolver();
-
     /**
-     * Resolver for a scope's declared Search Context dimensions. Overridable so a host can
-     * supply additional derivation sources (e.g. an external signal) without forking the engine.
+     * Resolver for a scope's declared Search Context dimensions. Defaults to the `ClassFactory`
+     * registration for {@link ScopeDimensionResolverBase} (via {@link GetScopeDimensionResolver}),
+     * and stays overridable on subclasses so a host can supply additional derivation sources
+     * without forking the engine.
      */
-    protected get dimensionResolver(): ScopeDimensionResolver {
-        return this._dimensionResolver;
+    protected get dimensionResolver(): ScopeDimensionResolverBase {
+        return GetScopeDimensionResolver();
     }
 
     /** Access the cached provider metadata from SearchEngineBase */
@@ -570,6 +582,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 sourceCounts = this.countSources(labeledLists);
                 const defaultFusionWeights = params.FusionWeightsOverride;
                 fusedResults = this._fusion.Fuse(labeledLists, providerTopK, defaultFusionWeights);
+                if (resolvedScopes.length === 1) {
+                    const explicitScope = resolvedScopes[0].Scope;
+                    fusedResults = fusedResults.map(r => StampOriginatingScope(r, explicitScope.ID, explicitScope.Name));
+                }
             } else {
                 // Run each scope independently, then cross-scope RRF
                 const perScopeRunResults = await Promise.all(resolvedScopes.map(bundle =>
@@ -666,10 +682,12 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // Trim to caller's requested topK (we overfetched earlier)
             if (results.length > topK) results = results.slice(0, topK);
 
-            // Always run enrichment (entity icons, entity display names, record names) on the final topK results,
-            // including preview searches (where topK <= 8, resolving names in a single fast batched query).
+            // Run enrichment (entity icons, entity display names, and optionally batched record names)
+            // on the final topK results.
             this._enricher.Provider = this.ProviderToUse;
-            await this._enricher.Enrich(results, contextUser);
+            await this._enricher.Enrich(results, contextUser, {
+                SkipNameEnrichment: params.SkipNameEnrichment,
+            });
 
             LogStatus(`SearchEngine: Search complete in ${Date.now() - startTime}ms - ${results.length} result(s)${resolvedScopes.length ? ` across ${resolvedScopes.length} scope(s)` : ''}`);
 
@@ -942,6 +960,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             MaxResults: params.MaxResults ?? this._defaultMaxResults,
             MinScore: params.MinScore ?? 0,
             Mode: params.Mode ?? undefined,
+            SkipNameEnrichment: params.SkipNameEnrichment ?? undefined,
             // Order-SENSITIVE — do not sort (see doc comment).
             ScopeIDs: params.ScopeIDs ?? undefined,
             SearchContext: params.SearchContext
@@ -1887,17 +1906,18 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     ),
                     minScore,
                 );
-                // Stamp provider metadata onto each result
-                for (const r of providerResults) {
+                // Stamp provider metadata and originating scope attribution onto each result
+                const attributedResults = providerResults.map(r => {
                     r.ProviderId = entry.ID;
                     r.ProviderLabel = entry.DisplayName;
                     r.ProviderIcon = entry.Icon;
-                }
+                    return StampOriginatingScope(r, scope.ID, scope.Name);
+                });
                 if (onProviderResolved) {
                     try {
                         onProviderResolved({
                             sourceType: entry.Provider.SourceType,
-                            results: providerResults,
+                            results: attributedResults,
                             durationMs: Date.now() - providerStart,
                             scopeID: scope.ID,
                         });
@@ -1906,7 +1926,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         LogError(`SearchEngine: onProviderResolved callback threw for "${entry.Provider.SourceType}" in scope "${scope.Name}": ${cbMsg}`);
                     }
                 }
-                return { Source: entry.Provider.SourceType, Results: providerResults };
+                return { Source: entry.Provider.SourceType, Results: attributedResults };
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 LogError(`SearchEngine: Provider "${entry.Provider.SourceType}" failed in scope "${scope.Name}": ${msg}`);
@@ -2075,7 +2095,17 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         return kept;
     }
 
-    /** `hits` (all of `bound`'s entity) whose record satisfies the lane filter, read as the user; none when the read fails. */
+    /**
+     * Builds the verification stamp binding a hit to `(entity, reader, rlsClause)` so `admitOwnRows`
+     * can avoid repeating an identical ownership + RLS RunView after `hitsInsideLaneFilter`.
+     * Returns `null` when `contextUser.ID` is absent so anonymous/incomplete contexts always re-verify.
+     */
+    private buildVerifiedOwnerStamp(entity: EntityInfo, contextUser: UserInfo, rlsClause: string): string | null {
+        if (!contextUser?.ID) return null;
+        return `${entity.Name.toLowerCase()}|${NormalizeUUID(contextUser.ID)}|${rlsClause}`;
+    }
+
+    /** `hits` (all of `bound`'s entity) whose record satisfies the lane filter AND the reader's RLS, read as the user; none when the read fails. */
     private async hitsInsideLaneFilter(
         bound: LaneEntityBound,
         hits: SearchResultItem[],
@@ -2085,13 +2115,29 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         try {
             const entity = this.ProviderToUse.EntityByName(bound.EntityName);
             if (!entity) throw new Error('the entity is not in metadata');
+            const perms = entity.GetUserPermisions(contextUser);
+            if (!perms || !perms.CanRead) return [];
+            const rlsClause = entity.GetEffectiveRowFilterWhereClause(
+                contextUser,
+                EntityPermissionType.Read,
+                ''
+            );
+            const effectiveClause = rlsClause ? `(${bound.Clause}) AND (${rlsClause})` : bound.Clause;
             const recordIDs = Array.from(new Set(hits.map(h => h.RecordID)));
-            const keys = await this.readableRecordKeys(entity, recordIDs, bound.Clause, contextUser);
+            const keys = await this.readableRecordKeys(entity, recordIDs, effectiveClause, contextUser);
             if (!keys) throw new Error('the read failed');
-            return hits.filter(h => {
+            const stamp = this.buildVerifiedOwnerStamp(entity, contextUser, rlsClause);
+            const matched: SearchResultItem[] = [];
+            for (const h of hits) {
                 const key = this.recordMatchKey(entity, h.RecordID);
-                return key !== null && keys.has(key);
-            });
+                if (key !== null && keys.has(key)) {
+                    if (stamp !== null && !h.PromotedFromContentItemID) {
+                        (h as StampedSearchResultItem)[VERIFIED_OWNER_STAMP] = stamp;
+                    }
+                    matched.push(h);
+                }
+            }
+            return matched;
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             LogError(`SearchEngine: scope "${scopeName}" — ${hits.length} hit(s) of "${bound.EntityName}" ` +
@@ -2951,13 +2997,25 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         const ownRows: SearchResultItem[] = [];
+        const expectedStamp = this.buildVerifiedOwnerStamp(entity, contextUser, rlsClause);
+        const alreadyVerifiedForReader = (item: SearchResultItem): boolean => {
+            if (expectedStamp === null || item.PromotedFromContentItemID) return false;
+            return (item as StampedSearchResultItem)[VERIFIED_OWNER_STAMP] === expectedStamp;
+        };
+
         if (rlsClause) {
-            await this.verifyOwnershipAndRowFilters(entity, entityResults, rlsClause, contextUser, ownRows);
+            const unverified: SearchResultItem[] = [];
+            for (const item of entityResults) {
+                (alreadyVerifiedForReader(item) ? ownRows : unverified).push(item);
+            }
+            if (unverified.length > 0) {
+                await this.verifyOwnershipAndRowFilters(entity, unverified, rlsClause, contextUser, ownRows);
+            }
             return ownRows;
         }
         const unverified: SearchResultItem[] = [];
         for (const item of entityResults) {
-            (this.isSelfEvidentRow(item) ? ownRows : unverified).push(item);
+            ((this.isSelfEvidentRow(item) || alreadyVerifiedForReader(item)) ? ownRows : unverified).push(item);
         }
         if (unverified.length > 0) {
             await this.verifyOwnershipAndRowFilters(entity, unverified, undefined, contextUser, ownRows);

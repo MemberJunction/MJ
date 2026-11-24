@@ -28,6 +28,7 @@ from xgboost import XGBClassifier, XGBRegressor
 
 from app import artifacts, preprocessing
 from app.algorithms import AlgorithmNotSupportedError
+from app.array_types import FArr
 from app.missing_values import is_missing
 from app.preprocessing import FittedPreprocessing
 
@@ -122,6 +123,7 @@ def _fit_impute(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
     col = op["col"]
     strategy = op.get("strategy", "mean")
     series = df[col]
+    fill: Any
     if strategy == "mean":
         fill = float(pd.to_numeric(series, errors="coerce").mean())
     elif strategy == "median":
@@ -237,7 +239,7 @@ def fit_transform(
     rows: Sequence[Sequence[Any]],
     ops_spec: List[Dict[str, Any]],
     feature_columns: Sequence[str],
-) -> Tuple[np.ndarray, List[str], FittedPreprocessing]:
+) -> Tuple[FArr, List[str], FittedPreprocessing]:
     """Fit the stateful transforms on the rows, then transform them with ``preprocessing.transform`` (the ``/predict``
     path). ``feature_columns`` excludes the target. Returns ``(matrix, output_columns, fitted_preprocessing)``.
 
@@ -253,7 +255,8 @@ def fit_transform(
         fitted_ops.append(fitter(df, op))
     output_columns = _output_columns(fitted_ops, feature_columns)
     fitted: FittedPreprocessing = {"ops": fitted_ops, "output_columns": output_columns}
-    matrix = preprocessing.transform(df.to_dict("records"), fitted, feature_columns)
+    records: List[Dict[str, Any]] = [{str(k): v for k, v in r.items()} for r in df.to_dict("records")]
+    matrix = preprocessing.transform(records, fitted, feature_columns)
     return matrix, output_columns, fitted
 
 
@@ -299,5 +302,7 @@ def legacy_envelope(
         estimator.fit(X, np.array([float(str(v)) for v in y_raw], dtype=float))
     estimator.mj_driver_baseline_ = np.asarray(X, dtype=float).mean(axis=0)
     artifact_b64, model_id = serialize_envelope(estimator, fitted, [dict(fs) for fs in feature_schema])
-    artifacts.MODEL_CACHE.put(model_id, (estimator, {"fitted_preprocessing": fitted}))
+    # cached as the route caches a decoded artifact: the estimator with the whole envelope (schema and preprocessing)
+    envelope: Dict[str, Any] = json.loads(base64.b64decode(artifact_b64.encode("ascii")).decode("utf-8"))
+    artifacts.MODEL_CACHE.put(model_id, (estimator, envelope))
     return artifact_b64, model_id, fitted

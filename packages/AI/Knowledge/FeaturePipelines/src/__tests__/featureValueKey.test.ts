@@ -142,13 +142,25 @@ describe('the pipeline pin', () => {
         expect(await FeatureValueKey.ComputeHash(composite))
             .not.toBe(await FeatureValueKey.ComputeHash({ ...composite, RecordID: 'orderid|abc-1' }));
     });
-    it('normalises MLModelID case-insensitively when present in key, and produces a different hash than when null/omitted', async () => {
-        const k = { EntityID: 'aaaa-1', RecordID: 'r1', FeatureName: 'SeniorityLevel', PipelineVersion: null,
-            PromptVersionHash: null, AIModelID: null, ParametersHash: null, InputHash: null, Source: 'Pipeline' as const };
-        const kWithML = { ...k, MLModelID: 'b1b2c3d4-e5f6-7890-abcd-ef1234567890' };
-        expect(await FeatureValueKey.ComputeHash(kWithML))
-            .toBe(await FeatureValueKey.ComputeHash({ ...k, MLModelID: 'B1B2C3D4-E5F6-7890-ABCD-EF1234567890' }));
-        expect(await FeatureValueKey.ComputeHash(kWithML))
-            .not.toBe(await FeatureValueKey.ComputeHash(k));
+    describe('a Human row keyed by its scoring binding (no Record Process)', () => {
+        const human = { EntityID: 'ent-1', RecordID: 'person-1', FeatureName: 'SeniorityLevel', PipelineVersion: null,
+            PromptVersionHash: null, AIModelID: null, ParametersHash: null, InputHash: null, Source: 'Human' as const };
+        const pipeline = { ...human, PipelineVersion: 3, PromptVersionHash: 'pv', AIModelID: 'm-1', ParametersHash: 'ph', InputHash: 'in-1', Source: 'Pipeline' as const };
+        const BIND_A = '9f1c2a7e-0b4d-4c55-8e21-3a6f0d9b7c11';
+        const BIND_B = '2b7e1f40-6c3a-4d8e-9a15-7f0e4c2b9d33';
+
+        it('leaves every Record-Process-scoped key hash byte-identical to the hash before bindings existed', async () => {
+            // the hashes these keys had at f39236c9a6, before MLModelScoringBindingID joined the key input
+            expect(await FeatureValueKey.ComputeHash(human)).toBe('432abf11ab465b58bfc828b6684884355d7682ce77e83d319c1a2d4212bb7c6f');
+            expect(await FeatureValueKey.ComputeHash({ ...human, MLModelScoringBindingID: null })).toBe('432abf11ab465b58bfc828b6684884355d7682ce77e83d319c1a2d4212bb7c6f');
+            expect(await FeatureValueKey.ComputeHash(pipeline)).toBe('23e1c699450bf6c8f89bed967437d445a1f854c5fe170e5da22fe6289f9a5c50');
+        });
+
+        it('gives two bindings with the same entity, record and feature different hashes, case-insensitively on the binding ID', async () => {
+            const a = await FeatureValueKey.ComputeHash({ ...human, MLModelScoringBindingID: BIND_A });
+            expect(a).not.toBe(await FeatureValueKey.ComputeHash({ ...human, MLModelScoringBindingID: BIND_B }));
+            expect(a).not.toBe(await FeatureValueKey.ComputeHash(human));
+            expect(a).toBe(await FeatureValueKey.ComputeHash({ ...human, MLModelScoringBindingID: BIND_A.toUpperCase() }));
+        });
     });
 });

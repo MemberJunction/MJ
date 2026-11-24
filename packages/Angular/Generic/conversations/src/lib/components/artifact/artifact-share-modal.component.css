@@ -433,3 +433,15 @@
   align-items: center;
   gap: 6px;
 }
+
+.owner-only-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  font-size: 13px;
+}

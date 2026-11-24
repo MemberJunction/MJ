@@ -19,7 +19,7 @@ The role lists are short because they follow how a person sees the screen, not h
 Every public name is `--mj-` + full words, kebab-case, general to specific, property before state. If you know one name you can guess the next one without opening a file.
 
 ```
---mj-<component>[-<variant>][-<part>]-<property>[-<state>]
+--mj-<component>[-<variant>][-<part>]-<property>[-<condition>][-<interaction>]
 ```
 
 Three tiers, each defaulting to the one above it. A component token points at a role token, a role token points at a scale token. Override at whichever tier matches how wide you want the change.
@@ -98,12 +98,13 @@ Roles for other families get added the same way, when the first component that n
 - `--mj-shadow-<role>`: surface, overlay, raised (the elevation ramp).
 - `--mj-space-<role>`: control-padding, surface-padding, stack-gap, inline-gap. Only if the space scale alone proves too loose in practice.
 
-Surfaces are roles too, not components. A surface level is a context content sits on, not a thing you place, so surface tokens live in this tier: `--mj-surface[-<level>]-<role>[-<state>]`. The role slot is the tier 2 token tail the surface re-points for its children, and state is last, same as everywhere else. Leave the level out when the token applies to every level.
+Surfaces are roles too, not components. A surface level is a context content sits on, not a thing you place, so surface level tokens live in this tier: `--mj-surface[-<level>]-<role>[-<state>]`. The role slot is the tier 2 token tail the surface re-points for its children, and state is last, same as everywhere else. Exactly three surface role defaults leave the level out, because they apply across levels: `--mj-surface-border-width`, `--mj-surface-border-style` and `--mj-surface-text-muted-selected`. Every other level-less surface name is Tier 3: `--mj-surface-bg`, `--mj-surface-border`, `--mj-surface-radius`, `--mj-surface-padding` and `--mj-surface-shadow`, with their `-hover` and `-selected` variants, are `<mj-surface>` instance overrides, and `.mj-surface` resets all of them in `@layer primitives` so an override on an outer surface does not cascade into a nested `<mj-surface>`. So a surface token's shape tells you its tier: a level word means tier 2, no level word means tier 3 unless it is one of those three.
 
 | Token | What it does |
 | --- | --- |
 | `--mj-surface-elevated-bg-hover` | background of an elevated surface on hover |
-| `--mj-surface-base-border-selected` | border of a selected base surface |
+| `--mj-surface-base-border-selected` | border color of a selected base surface |
+| `--mj-surface-border-width` / `--mj-surface-border-style` | default surface stroke (`1px` / `solid`), overridable per level via `--mj-surface-<level>-border-{width,style}` |
 | `--mj-surface-elevated-text-muted` | what `--mj-text-muted` resolves to inside an elevated surface |
 | `--mj-surface-text-muted-selected` | muted text inside a selected surface at any level |
 
@@ -125,6 +126,11 @@ There are four levels. Each has a background token that defaults to an existing 
 - **Sunken has no state tokens.** A sunken surface is a well, something content sits in, and a well is not something you click. Hover, active and selected exist for base, elevated and overlay only. If a thing in a well is interactive it is a control or a base surface sitting in the well, and it brings its own hover. A state token with no level, such as `--mj-surface-text-muted-selected`, covers those three. This also closes a real hole: in the light theme `--mj-bg-surface-sunken` and `--mj-bg-surface-hover` are the same gray, so a shared hover on a sunken surface would not show at all.
 - **Card is not a level.** `--mj-bg-surface-card` keeps its name and its value. It is a fill, not a context: today it paints cards and also chips, tab bars, the view toggle, stat badges, and dialog and window title bars. `--mj-card-bg` defaults to it. For token re-pointing a card sits at the base level.
 
+Open-axis families in wave 0 (D2 in [UNIFIED_PLAN.md](UNIFIED_PLAN.md) and PR [#5911](https://github.com/MemberJunction/MJ/pull/5911)):
+
+- `--mj-tone-<name>-{bg,text,border}`: open semantic tone axis. Shipped names `success`, `warning`, `error` and `info` default to the matching `--mj-status-<name>-bg`, `-text` and `-border`; `neutral` defaults to the active surface and text roles. A tone has no selected state: selection is the component's own state (`--mj-row-bg-selected`, `--mj-surface-<level>-bg-selected`), so a selected row looks selected whatever its tone, and the tone stays visible through its text and border. Brands add custom tones (`--mj-tone-plum-text`, `--mj-tone-plum-bg`) on `:root` without touching component CSS.
+- `--mj-visual-role-<name>-{bg,text,border,shadow}`: open visual-treatment axis used by `VisualRole` (`visual-role` on Custom Elements). Spelled `visual-role` so it never collides with HTML's ARIA `role` attribute or overloads the word "role" with Tier 2 itself.
+
 Rules for the role tier:
 
 - A role defaults to a scale step, never to a literal value.
@@ -133,7 +139,7 @@ Rules for the role tier:
 
 ## Tier 3: component tokens
 
-Shape: `--mj-<component>[-<variant>][-<part>]-<property>[-<state>]`. The component word is the component's own name without the prefix, whether it ships as a tag, a directive or a class (`mj-dialog` → `dialog`, `[mjButton]` → `button`, `.mj-input` → `input`, `mj-bottom-sheet` → `bottom-sheet`). Unset by default; each one falls back to a role token, or to a scale step where the family has no roles yet.
+Shape: `--mj-<component>[-<variant>][-<part>]-<property>[-<condition>][-<interaction>]`. The component word is the component's own name without the prefix, whether it ships as a tag, a directive or a class (`mj-dialog` → `dialog`, `[mjButton]` → `button`, `.mj-input` → `input`, `mj-bottom-sheet` → `bottom-sheet`). Unset by default; each one falls back to a role token, or to a scale step where the family has no roles yet.
 
 The slots, in order:
 
@@ -143,7 +149,8 @@ The slots, in order:
 | variant | no | `primary secondary outline flat danger success warning icon` and sizes `sm md lg` | `--mj-button-primary-bg` |
 | part | no | from the parts vocabulary (next section) | `--mj-card-header-padding` |
 | property | yes | from the fixed list below | `bg`, `radius` |
-| state | no | `hover active focus disabled selected checked error` | `--mj-button-primary-bg-hover` |
+| condition | no | `selected checked error` (persistent value or validation state) | `--mj-button-bg-selected` |
+| interaction | no | `hover active focus disabled` (transient pointer/focus or availability state) | `--mj-button-primary-bg-hover`, `--mj-button-bg-selected-hover` |
 
 Property vocabulary. Fixed list; a new word needs a reason and goes in the index first.
 
@@ -153,15 +160,18 @@ Property vocabulary. Fixed list; a new word needs a reason and goes in the index
 | `text` | color (of text) | matches `--mj-text-*` roles; never a size in tier 3 |
 | `border` | border-color | matches `--mj-border-*` |
 | `border-width` | border-width | so nobody invents `border-size` or crams `1px solid` into `border`; needed for 2px active indicators and borderless card modes |
+| `border-style` | border-style | completes the border split: `border` is the color, `border-width` the stroke, `border-style` solid or dashed. Agreed with Colin when the surface border stopped being a `1px solid` shorthand (`--mj-surface-border-style`) |
 | `radius` | border-radius | matches `--mj-radius-*` |
 | `shadow` | box-shadow | matches `--mj-shadow-*`; a custom focus ring is `-shadow-focus`, no separate `ring` word |
-| `height` | height / min-height | controls only |
-| `width` | width / max-width |  |
-| `padding` | padding (all sides, or -x / -y) | `--mj-card-body-padding-x` |
+| `height` / `min-height` | height / min-height | `height` on fixed controls (`--mj-button-height`), `min-height` on content-growing rows (`--mj-row-min-height`) |
+| `width` / `max-width` | width / max-width | `max-width` on bounded containers and overlays (`--mj-layer-max-width`) |
+| `padding` | padding (all sides, or `-x` / `-y` / `-inline` / `-block`) | `--mj-card-body-padding-x`, `--mj-row-padding-inline` |
 | `gap` | gap | between children |
 | `font-size` | font-size | `--mj-chart-font-size` is the one existing precedent |
 | `font-weight` | font-weight |  |
-| `icon-size` | icon width/height |  |
+| `icon-size` | icon width/height / font-size | never stack the `icon` variant or `icon` part with `icon-size` (`--mj-button-icon-icon-size` is disallowed; scale by size variant such as `--mj-button-sm-icon-size`) |
+| `opacity` | opacity | disabled controls (`--mj-button-opacity-disabled`) and state attenuation where a color swap does not apply |
+| `transform` | transform | micro-interaction motion such as hover lift and press (`--mj-button-transform-hover`, `--mj-button-transform-active`), gated by `prefers-reduced-motion: no-preference` |
 
 Worked examples, with the default chain each one ships with:
 
@@ -170,7 +180,7 @@ Worked examples, with the default chain each one ships with:
 | `--mj-button-radius` | `--mj-radius-control` | `--mj-radius-md` |
 | `--mj-button-primary-bg` | `--mj-brand-primary` | palette |
 | `--mj-button-primary-bg-hover` | `--mj-brand-primary-hover` | palette |
-| `--mj-button-height` | `--mj-control-height-md` | 40px |
+| `--mj-button-height` | `--mj-control-height-md` | 40px (`44px` literal in `button.scss` until Wave 1's height shift) |
 | `--mj-button-sm-height` | `--mj-control-height-sm` | 32px |
 | `--mj-input-border-focus` | `--mj-border-focus` | palette |
 | `--mj-card-radius` | `--mj-radius-surface` | `--mj-radius-lg` |
@@ -180,7 +190,8 @@ Worked examples, with the default chain each one ships with:
 | `--mj-filter-chip-radius` | `--mj-radius-pill` | `--mj-radius-full` |
 
 ```css
-/* inside the primitive: every value exposed, defaulting to today */
+/* inside the primitive: every value exposed, defaulting to today
+   (button.scss temporarily uses 44px until Wave 1's 44 -> 40 shift) */
 .mj-btn {
   border-radius: var(--mj-button-radius, var(--mj-radius-control));
   min-height: var(--mj-button-height, var(--mj-control-height-md));
@@ -201,8 +212,9 @@ Rules for the component tier:
 - Deviate to a token, never a number. `--mj-filter-chip-radius` → `--mj-radius-pill` is fine. `→ 17px` is not. The gate catches literals in a default chain.
 - One token sets one CSS property. No `--mj-button-style` that bundles three things.
 - A variant or part is only in the name when the token differs by it. `--mj-button-radius` applies to all variants; there is no `--mj-button-primary-radius` unless primary buttons genuinely round differently.
-- State is always last. `-bg-hover`, never `-hover-bg`. Matches `--mj-brand-primary-hover`, `--mj-bg-surface-hover`.
-- States are a closed list of seven, and three are easy to mix up. `selected` is an item picked from a set (a tab, a row, a card). `checked` is a control's own on or off value (a switch, a checkbox). `error` is failed validation. So `--mj-switch-bg-checked` falls back to `--mj-brand-primary`, and `--mj-input-border-error` falls back to `--mj-border-error`.
+- State is always last, and when orthogonal states combine, condition precedes interaction (`[-<condition>][-<interaction>]`). `-bg-hover`, never `-hover-bg`; `-bg-selected-hover`, never `-bg-hover-selected`. Matches `--mj-brand-primary-hover`, `--mj-bg-surface-hover`, and produces `--mj-row-bg-selected-hover`, `--mj-switch-bg-checked-hover`, and `--mj-input-border-error-focus` deterministically.
+- States are a closed list of seven split across two disjoint slots: three conditions (`selected`, `checked`, `error`) and four interactions (`hover`, `active`, `focus`, `disabled`). Three are easy to mix up: `selected` is an item picked from a set (a tab, a row, a card, a toggle button); `checked` is a control's own on or off value (a switch, a checkbox); `error` is failed validation. So `--mj-switch-bg-checked` falls back to `--mj-brand-primary`, and `--mj-input-border-error` falls back to `--mj-border-error`.
+- Never stack the `icon` variant or `icon` part with `icon-size` (`--mj-button-icon-icon-size` and `--mj-card-icon-icon-size` are invalid). Use `--mj-<component>-icon-size` (and size variants such as `--mj-button-sm-icon-size`) instead.
 - A square control reads one token on both axes. An icon or circle button sets width and height from the same resolved height, so it stays square at every size and under any density setting. No compound `--mj-button-icon-sm-width`, no `calc()`. The primitive resolves the height once into a private token (`--_mj-button-height`, from `--mj-button-height` or, on a small button, `--mj-button-sm-height`) and uses that for width and height. It never declares the public token itself, so the unset rule above still holds.
 - A focus token on a surface that already has a resting shadow composes, it does not replace. `--mj-card-shadow-focus` defaults to `var(--mj-card-shadow), var(--mj-focus-ring)` so the card does not go flat the moment it takes focus. The name fits the grammar; only the default value is layered.
 

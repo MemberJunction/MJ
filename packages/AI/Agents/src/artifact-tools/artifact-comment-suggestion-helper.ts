@@ -75,18 +75,46 @@ export interface EmbeddedArtifactAccessResult {
 
 const ARTIFACT_SUGGESTIONS_STORE_KEY = '___MJ_ARTIFACT_SUGGESTIONS_STORE___';
 
-function getSuggestionStore(): Map<string, ArtifactSuggestionRecord[]> {
+/**
+ * How long an untouched fallback key stays in the in-process suggestion store.
+ * The live collaboration room and persisted `MJ: Artifact Versions.Configuration` are authoritative
+ * whenever an artifact ID is present; idle expiry clears abandoned standalone/fallback keys without
+ * evicting active artifacts under an arbitrary count cap.
+ */
+export const STORED_SUGGESTIONS_TTL_MS = 2 * 60 * 60 * 1000;
+
+interface TimedSuggestionStoreEntry {
+    Suggestions: ArtifactSuggestionRecord[];
+    ExpiresAtMs: number;
+}
+
+type ArtifactSuggestionStore = Map<string, TimedSuggestionStoreEntry>;
+
+let fallbackLocalStore: ArtifactSuggestionStore | null = null;
+
+function getSuggestionStore(): ArtifactSuggestionStore {
     const globalStore = GetGlobalObjectStore();
     if (!globalStore) {
-        return new Map<string, ArtifactSuggestionRecord[]>();
+        if (!fallbackLocalStore) {
+            fallbackLocalStore = new Map<string, TimedSuggestionStoreEntry>();
+        }
+        return fallbackLocalStore;
     }
     const existing = globalStore[ARTIFACT_SUGGESTIONS_STORE_KEY];
     if (existing instanceof Map) {
-        return existing as Map<string, ArtifactSuggestionRecord[]>;
+        return existing as ArtifactSuggestionStore;
     }
-    const created = new Map<string, ArtifactSuggestionRecord[]>();
+    const created: ArtifactSuggestionStore = new Map<string, TimedSuggestionStoreEntry>();
     globalStore[ARTIFACT_SUGGESTIONS_STORE_KEY] = created;
     return created;
+}
+
+function pruneExpiredSuggestions(store: ArtifactSuggestionStore, now: number): void {
+    for (const [key, entry] of store) {
+        if (entry.ExpiresAtMs <= now) {
+            store.delete(key);
+        }
+    }
 }
 
 export function ComputeArtifactSuggestionStoreKey(
@@ -105,15 +133,44 @@ export function ComputeArtifactSuggestionStoreKey(
 }
 
 export function GetStoredArtifactSuggestions(key: string): ArtifactSuggestionRecord[] {
-    const list = getSuggestionStore().get(key);
-    return list ? list.map((s) => ({ ...s, Anchor: { ...s.Anchor } })) : [];
+    const store = getSuggestionStore();
+    const entry = store.get(key);
+    if (!entry) {
+        return [];
+    }
+    const now = Date.now();
+    if (entry.ExpiresAtMs <= now) {
+        store.delete(key);
+        return [];
+    }
+    entry.ExpiresAtMs = now + STORED_SUGGESTIONS_TTL_MS;
+    return entry.Suggestions.map((s) => ({ ...s, Anchor: { ...s.Anchor } }));
 }
 
 export function SetStoredArtifactSuggestions(key: string, suggestions: ArtifactSuggestionRecord[]): void {
-    getSuggestionStore().set(
-        key,
-        suggestions.map((s) => ({ ...s, Anchor: { ...s.Anchor } }))
-    );
+    const store = getSuggestionStore();
+    const now = Date.now();
+    pruneExpiredSuggestions(store, now);
+    store.set(key, {
+        Suggestions: suggestions.map((s) => ({ ...s, Anchor: { ...s.Anchor } })),
+        ExpiresAtMs: now + STORED_SUGGESTIONS_TTL_MS,
+    });
+}
+
+export function DeleteStoredArtifactSuggestions(key: string): boolean {
+    return getSuggestionStore().delete(key);
+}
+
+/** Number of non-expired keys currently held by the in-process suggestion store. Exposed for diagnostics and tests. */
+export function GetStoredArtifactSuggestionKeyCount(): number {
+    const store = getSuggestionStore();
+    pruneExpiredSuggestions(store, Date.now());
+    return store.size;
+}
+
+/** Empties the in-process suggestion store. The live room and persisted `Configuration` are unaffected. */
+export function ClearStoredArtifactSuggestions(): void {
+    getSuggestionStore().clear();
 }
 
 /**
@@ -1040,12 +1097,16 @@ export async function ExecuteReviewSuggestionTool(params: {
     };
     const updatedList = [...list];
     updatedList[idx] = updatedRecord;
-    SetStoredArtifactSuggestions(storeKey, updatedList);
-
-    // If the store key was content-hashed (ephemeral standalone test), keep a mirror under the new content hash
+    // If the store key was content-hashed (ephemeral standalone mode), hand off to the new content
+    // hash and delete the superseded pre-edit content hash so old revision hashes never accumulate.
     if (!params.context?.artifactId?.trim()) {
         const nextKey = ComputeArtifactSuggestionStoreKey(params.domain, applied.updatedContent, params.context);
         SetStoredArtifactSuggestions(nextKey, updatedList);
+        if (nextKey !== storeKey) {
+            DeleteStoredArtifactSuggestions(storeKey);
+        }
+    } else {
+        SetStoredArtifactSuggestions(storeKey, updatedList);
     }
 
     return {

@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S7.5 #3",
+    "Description": "Gate G5.5 (owner PR 4, phase 5, dataset W1, criterion S7.5): with an all-null feature column injected into W1-signal s42 scoring input, the run ends Failed with a failure count and message, 1 of 1, and writes 0 scores. The column is injected into the scoring input, not the stored data: the check runs ScoringService.Predict in its own process on its client provider with the production model runtime wrapped so the assembled IncomeK column is null on every row of 200 sampled W1 rows. The service refuses the run nan-or-empty-feature-column naming IncomeK (check 6, decided before any batch): the stored run row must read refused with that refusal and Written 0, with no Feature Value and no prediction.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G5.5\", \"owner:PR4\", \"phase:5\", \"dataset:W1\", \"criterion:S7.5\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "The run with an all-null IncomeK column is refused naming the column, with 0 scores written, 1 of 1."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s7-5-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "D071EC99-2D4E-4354-B91E-1AC0D98A514E"
+  }
+}

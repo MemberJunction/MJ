@@ -16,6 +16,7 @@
 import type { Request, Response } from 'express';
 import type * as http from 'http';
 import { RunView, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import type { MCPSessionContext, AuthMode, AuthResult } from './types.js';
 import { GetAuthMode, IsOAuthEnabled } from './OAuthConfig.js';
@@ -31,7 +32,7 @@ interface ExtractedCredentials {
   /** Bearer token from Authorization header */
   bearerToken?: string;
   /** Source of API key if found */
-  apiKeySource?: 'x-api-key' | 'x-mj-api-key' | 'authorization' | 'query';
+  apiKeySource?: 'x-api-key' | 'x-mj-api-key' | 'authorization';
 }
 
 /**
@@ -56,11 +57,14 @@ export interface AuthGateConfig {
 /**
  * Extracts credentials from an HTTP request.
  *
- * Checks the following sources in order:
+ * Credentials are accepted from headers ONLY — never from URL query parameters,
+ * which leak into access logs, proxies, and browser history. Checked in order:
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer header (could be API key or OAuth token)
- * 4. Query parameters (apiKey, api_key)
+ *
+ * SECURITY: query-parameter API keys (?apiKey=/api_key=) are deliberately NOT accepted —
+ * URLs land in access logs, proxy logs, and browser history, leaking the credential.
  *
  * @param request - The incoming HTTP request
  * @returns Extracted credentials
@@ -100,14 +104,14 @@ export function ExtractCredentials(request: Request | http.IncomingMessage): Ext
     }
   }
 
-  // Check query parameters as fallback for API key
+  // SECURITY: API keys in query parameters are no longer accepted — they leak into logs, proxies,
+  // browser history and Referer headers, and the key this gate accepts can be the system key. If
+  // one is present, warn so callers know to move the key into a header.
   if (!result.apiKey && request.url) {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
-      const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
-      if (queryKey) {
-        result.apiKey = queryKey;
-        result.apiKeySource = 'query';
+      if (url.searchParams.has('apiKey') || url.searchParams.has('api_key')) {
+        console.warn('[AuthGate] API keys in query parameters are no longer accepted; provide the key via the x-api-key header instead.');
       }
     } catch {
       // URL parsing failed, skip query params
@@ -286,9 +290,10 @@ async function handleBothMode(
  * Loads scopes for an API key from the APIKeyScope entity.
  *
  * @param apiKeyId - The ID of the API key
+ * @param contextUser - The system user to run the lookup as
  * @returns Array of scope names
  */
-async function loadApiKeyScopes(apiKeyId: string): Promise<string[]> {
+async function loadApiKeyScopes(apiKeyId: string, contextUser?: UserInfo): Promise<string[]> {
   // System API key has all scopes
   if (apiKeyId === 'system') {
     return ['*']; // Wildcard means all scopes
@@ -298,9 +303,9 @@ async function loadApiKeyScopes(apiKeyId: string): Promise<string[]> {
     const rv = new RunView();
     const result = await rv.RunView<{ Scope: string }>({
       EntityName: 'MJ: API Key Scopes',
-      ExtraFilter: `APIKeyID = '${apiKeyId}'`,
+      ExtraFilter: `APIKeyID = '${EscapeSQLString(apiKeyId)}'`,
       ResultType: 'simple',
-    });
+    }, contextUser);
 
     if (!result.Success) {
       console.warn(`[AuthGate] Failed to load scopes for API key ${apiKeyId}: ${result.ErrorMessage}`);
@@ -338,7 +343,7 @@ async function validateApiKeyCredentials(
     }
 
     // Load scopes for this API key
-    const scopes = await loadApiKeyScopes(validation.apiKeyId!);
+    const scopes = await loadApiKeyScopes(validation.apiKeyId!, config.getSystemUser());
 
     return {
       authenticated: true,
@@ -410,11 +415,26 @@ async function validateOAuthCredentials(token: string): Promise<AuthResult> {
 
   if (userResult.error) {
     const is403 = userResult.error.code === 'user_not_found' || userResult.error.code === 'user_inactive';
+    if (is403) {
+      // SECURITY: keep the detailed reason (which includes the probed email) server-side only.
+      // Returning distinct "user not found" vs. signature-failure responses lets any IdP token
+      // holder enumerate which emails exist in MemberJunction.
+      console.warn(`[AuthGate] OAuth user resolution denied (${userResult.error.code}): ${userResult.error.message}`);
+      return {
+        authenticated: false,
+        method: 'oauth',
+        error: {
+          status: 403,
+          code: 'access_denied',
+          message: 'Access denied',
+        },
+      };
+    }
     return {
       authenticated: false,
       method: 'oauth',
       error: {
-        status: is403 ? 403 : 401,
+        status: 401,
         code: userResult.error.code,
         message: userResult.error.message,
       },

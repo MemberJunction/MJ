@@ -6,14 +6,17 @@
       "IsCanon": true,
       "Rank": 10,
       "IconClass": "fa-solid fa-scale-balanced",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAuthorityTierID": "@lookup:MJ: Graph Authority Tiers.Name=Executive SOP",
+      "DefaultConceptTaxonomyMode": "Propose Only",
+      "DefaultGroundingMode": "Full Canon"
     },
     "primaryKey": {
       "ID": "FD40F8BA-B9EA-4F1F-A703-DA3737AA5224"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.080Z",
-      "checksum": "2e53177140debc851f5fdd0a56f0d311691584f2ca11e53bba2718b9f48190aa"
+      "lastModified": "2026-11-24T20:26:47.559Z",
+      "checksum": "5ad96401e9755f5923e61a7a8b4675f61aac4f171f6501b2e6ee7113aaeb7b87"
     }
   },
   {
@@ -23,14 +26,17 @@
       "IsCanon": false,
       "Rank": 20,
       "IconClass": "fa-solid fa-book-open-reader",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAuthorityTierID": "@lookup:MJ: Graph Authority Tiers.Name=Reference",
+      "DefaultConceptTaxonomyMode": "Auto Grow",
+      "DefaultGroundingMode": "None"
     },
     "primaryKey": {
       "ID": "B3FDB086-E2C9-4C7F-987D-7DF3A727A66C"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.094Z",
-      "checksum": "f3d0ea1f68ffab9b08de88912f0e93cb7dc1dacbe78dd9b6f1afb2c513ee989d"
+      "lastModified": "2026-11-24T20:26:47.576Z",
+      "checksum": "24accdf325d287bd9fd0320d17348057c538133672f6d8055971f8bdd05a656f"
     }
   },
   {
@@ -40,14 +46,17 @@
       "IsCanon": false,
       "Rank": 30,
       "IconClass": "fa-solid fa-diagram-project",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAuthorityTierID": "@lookup:MJ: Graph Authority Tiers.Name=Reference",
+      "DefaultConceptTaxonomyMode": "Constrained",
+      "DefaultGroundingMode": "None"
     },
     "primaryKey": {
       "ID": "76A2E6A3-6B52-49C1-8784-BF1A2997ACFE"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.104Z",
-      "checksum": "6858c31a57c3f90a4132e58d0ac7225e25d003e20af3d56ba94e03b692893739"
+      "lastModified": "2026-11-24T20:26:47.594Z",
+      "checksum": "ab1bec56aa3bb809f7fd2cd5868994a2d29f4e1bfc6de446a6faf43c48aa83e9"
     }
   },
   {
@@ -57,14 +66,17 @@
       "IsCanon": false,
       "Rank": 100,
       "IconClass": "fa-solid fa-circle-nodes",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAuthorityTierID": "@lookup:MJ: Graph Authority Tiers.Name=Reference",
+      "DefaultConceptTaxonomyMode": "Auto Grow",
+      "DefaultGroundingMode": "None"
     },
     "primaryKey": {
       "ID": "C494A14A-055F-4327-8E26-42B3C48DF9FD"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.115Z",
-      "checksum": "822fd86738fa981259c14dc44ac7a33ff93c03c554af83443af8721657d1e1ef"
+      "lastModified": "2026-11-24T20:26:47.601Z",
+      "checksum": "6c5295ed14c4fe39e30b7f7bfabb7ce91d74f4393a585b59a558c65363fe6038"
     }
   }
 ]

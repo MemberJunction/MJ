@@ -55,6 +55,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
+    "@memberjunction/ai-agent-harness": "6.3.0-edge.1",
     "@memberjunction/ai-cli": "6.3.0-edge.1",
     "@memberjunction/cli-core": "6.3.0-edge.1",
     "@memberjunction/codegen-lib": "6.3.0-edge.1",
@@ -66,6 +67,7 @@
     "@memberjunction/dynamic-packages": "6.3.0-edge.1",
     "@memberjunction/db-auto-doc": "6.3.0-edge.1",
     "@memberjunction/metadata-sync": "6.3.0-edge.1",
+    "@memberjunction/postgresql-dataprovider": "6.3.0-edge.1",
     "@memberjunction/record-cloning": "6.3.0-edge.1",
     "@memberjunction/open-app-engine": "6.3.0-edge.1",
     "@memberjunction/query-gen": "6.3.0-edge.1",
@@ -95,6 +97,7 @@
     "fs-extra": "^11.3.3",
     "mssql": "^11.0.1",
     "ora-classic": "^5.4.2",
+    "parse5": "^8.0.0",
     "pg": "^8.13.1",
     "pg-query-stream": "~4.8.0",
     "recast": "^0.23.11",

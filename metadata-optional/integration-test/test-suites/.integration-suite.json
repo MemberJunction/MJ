@@ -186,6 +186,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT179 - List From Query",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AC5EA8D1-270C-4C0E-8B2B-6693566F18C4"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT21 - Open-App Metadata Teardown",
             "Sequence": 15,
             "Status": "Active"
@@ -203,6 +214,61 @@
           },
           "primaryKey": {
             "ID": "AE89BD61-438C-4D5B-AE9A-62E6BF8DA7BC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT188 - Comms V2 Schema, Seeds and Endpoint Resolution",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C7010AE1-872E-4A24-A5B4-4E69FC625466"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT189 - Comms V2 Compliance Gate and Jurisdiction Rollup",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9F5E95A1-6883-4FE4-A569-62E245D3FB3D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT190 - Comms V2 Send Pipeline and Templated Delivery",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "25202F2D-5B25-45DF-818F-9EBC60C44F71"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT191 - Comms V2 Activity Worker and GDPR Erasure",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6E581282-6ABB-4741-8502-F947BBF7B02E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT192 - Comms V2 Public Routes and Sends over the Wire (client transport)",
+            "Sequence": 87,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E74B8956-FFF5-47FF-B7B2-60EC4CDF3BE7"
           }
         },
         {
@@ -478,6 +544,28 @@
           },
           "primaryKey": {
             "ID": "CA15CEC9-DB0B-45D2-917D-E83589CB32FC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT180 - Task Graph Waiting Steps",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D7751D35-421F-4F49-B2E4-42AC69FAA51B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT181 - Task Graph Durable Retry",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DBBEF0C4-628A-4310-AFDF-EE86D80AF6D1"
           }
         },
         {
@@ -1407,6 +1495,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT183 - Chief of Staff World Seed",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "94286E34-FA78-43FF-AB6B-9DFD04AC9ED6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT134 - FLS Close-out Over-The-Wire (client transport)",
             "Sequence": 77,
             "Status": "Active"
@@ -1544,7 +1643,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "48e68478-dd3b-4be1-ab4f-7e5f974372e0"
+            "ID": "48E68478-DD3B-4BE1-AB4F-7E5F974372E0"
           }
         },
         {
@@ -1732,6 +1831,50 @@
           },
           "primaryKey": {
             "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5941BA01-ECFA-40CF-8B53-4D817EBAC6C2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT185 - MJ Docs in the Semantic Graph",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AA08B116-DF0B-4FE8-9D7E-E4C1461639CC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT186 - Agent Instances and Multi-Level Prototype Inheritance",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D8863BF3-A892-4B2B-A758-B909350DE35D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT187 - PS Prediction Serving — Zero Schema Change",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AB9A7DFE-F06B-4759-81F9-5E56175234E6"
           }
         }
       ]
@@ -1978,6 +2121,17 @@
           },
           "primaryKey": {
             "ID": "A75E0239-7423-476F-B9C1-24F44E373ED7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT184 - Chief of Staff Live Agent Execution",
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E5058DEF-D4C4-4C13-86C5-4364E862EDAF"
           }
         }
       ]

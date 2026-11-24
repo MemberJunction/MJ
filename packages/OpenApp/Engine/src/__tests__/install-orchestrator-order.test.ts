@@ -68,6 +68,8 @@ vi.mock('../install/config-manager.js', () => ({
     AddClientDynamicPackages: vi.fn(),
     RemoveServerDynamicPackages: vi.fn(),
     PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
+    AddPublicPages: vi.fn(() => ({ Success: true })),
+    CheckPublicPageSlugConflicts: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
@@ -88,11 +90,12 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp, UpgradeApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
+import type { InstalledAppInfo } from '../types/open-app-types.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest, AddExcludeSchema } from '../install/config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest, AddExcludeSchema, AddPublicPages, CheckPublicPageSlugConflicts } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -102,6 +105,7 @@ import {
     ListInstalledApps,
     CheckSchemaSharedByOtherApps,
     UpdateAppRecord,
+    ReplaceAppDependenciesAtomically,
 } from '../install/history-recorder.js';
 
 /** Records the name of each app as it reaches the "record installation" step. */
@@ -159,7 +163,7 @@ describe('InstallApp dependency orchestration', () => {
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -340,7 +344,7 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true, MigrationsApplied: 1, AppliedFiles: ['V1__x.sql'] });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true } as never);
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] } as never);
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true } as never);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
@@ -736,7 +740,7 @@ describe('InstallApp — post-install summary (#4238: no CodeGen step for a sche
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -782,7 +786,7 @@ describe('InstallApp — reinstall over a prior install (B17: Error apps are rei
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -840,7 +844,7 @@ describe('InstallApp — npm-install failure disables the app AND its dynamicPac
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         // npm install fails AFTER package.json was updated → app finalizes Disabled.
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: false, ErrorMessage: 'peer dep conflict' });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
@@ -891,7 +895,7 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
         installSequence.length = 0;
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(DropAppSchema).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1233,7 +1237,7 @@ describe('UpgradeApp — repairs a drifted OpenApp.SchemaName', () => {
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -1307,7 +1311,7 @@ describe('reserved-schema guard on the adopt-an-existing-schema path', () => {
         // would succeed if the reserved-name guard under test did not stop it first.
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1424,7 +1428,7 @@ describe('reserved-schema guard on the UPGRADE path', () => {
         installSequence.length = 0;
         vi.mocked(SchemaExists).mockResolvedValue(true);
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1521,7 +1525,7 @@ describe('adopting a schema another installed app already owns', () => {
         vi.mocked(SchemaExists).mockResolvedValue(true);   // the schema is live — adopt path
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1580,7 +1584,7 @@ describe('creating the app schema — core schema owner (#4756)', () => {
         vi.mocked(SchemaExists).mockResolvedValue(false);   // schema absent → CreateAppSchema runs
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1707,5 +1711,239 @@ describe('npm registry preflight runs before any database or file change (#3796,
         expect(vi.mocked(SetAppStatus)).not.toHaveBeenCalled();
         expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
         expect(vi.mocked(AddAppPackages)).not.toHaveBeenCalled();
+    });
+});
+
+describe('InstallApp — public page slug owned by another app', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+    });
+
+    it('fails with the conflict message before any database or config change', async () => {
+        const message = "Public page slug 'lumen' is already used by installed app 'other-app', so app 'schema-app' cannot use it.";
+        vi.mocked(CheckPublicPageSlugConflicts).mockReturnValueOnce({ Success: false, ErrorMessage: message });
+        serveManifests({ 'https://github.com/test/schema-app': manifestJSON('schema-app', {}) });
+
+        const result = await InstallApp({ Source: 'https://github.com/test/schema-app' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain(message);
+        expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
+        expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
+        expect(vi.mocked(AddPublicPages)).not.toHaveBeenCalled();
+    });
+});
+
+describe('Requirements of an already-installed dependency (#6877)', () => {
+    const repoUrl = (name: string) => `https://github.com/test/${name}`;
+    const needs = (name: string, version: string) => ({ [name]: { version, repository: repoUrl(name) } });
+    const warnings: string[] = [];
+    const ctx = { ...context, Callbacks: { OnWarn: (_phase: string, message: string) => { warnings.push(message); } } } as OrchestratorContext;
+
+    /** An installed app row; `manifestText` is its persisted ManifestJSON. */
+    function installedRow(name: string, manifestText: string, version = '1.0.0'): InstalledAppInfo {
+        return { ID: `id-${name}`, Name: name, Version: version, RepositoryURL: repoUrl(name), Status: 'Active', ManifestJSON: manifestText } as InstalledAppInfo;
+    }
+
+    /** Manifests by `repoUrl` (default branch) or `repoUrl@version`. A missing key fails the fetch. */
+    function serveRefs(byRef: Record<string, string>): void {
+        vi.mocked(FetchManifestFromGitHub).mockImplementation(async (url, version) => {
+            const json = byRef[version ? `${url}@${version}` : url];
+            return json ? { Success: true, ManifestJSON: json } : { Success: false, ErrorMessage: `no manifest for ${url} at ${version ?? 'HEAD'}` };
+        });
+    }
+
+    const root = manifestJSON('app-root', { ...needs('app-tasks', '^1.0.0'), ...needs('app-common', '^1.0.0') });
+    /** app-tasks as it is on its default branch: it needs an app-common that is not released. */
+    const tasksOnDefaultBranch = manifestJSON('app-tasks', needs('app-common', '>=1.5.0 <2.0.0'));
+    const tasksAtInstalledVersion = manifestJSON('app-tasks', needs('app-common', '^1.0.0'));
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        warnings.length = 0;
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(ReplaceAppDependenciesAtomically).mockResolvedValue(true);
+        vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
+        vi.mocked(FindInstalledApp).mockResolvedValue(null);
+        vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
+            installSequence.push(manifest.name);
+            return `id-${manifest.name}`;
+        });
+    });
+
+    it('installs when the recorded manifest is satisfied, whatever the default branch asks for', async () => {
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            installedRow('app-tasks', tasksAtInstalledVersion),
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch });
+
+        const result = await InstallApp({ Source: repoUrl('app-root') }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(installSequence).toEqual(['app-root']);
+        // Only the app being installed is read from GitHub.
+        expect(vi.mocked(FetchManifestFromGitHub).mock.calls.map(([url]) => url)).toEqual([repoUrl('app-root')]);
+    });
+
+    it('upgrades when the recorded manifest is satisfied, whatever the default branch asks for', async () => {
+        const rootRow = installedRow('app-root', root, '0.9.0');
+        vi.mocked(FindInstalledApp).mockResolvedValue(rootRow);
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            rootRow,
+            installedRow('app-tasks', tasksAtInstalledVersion),
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch });
+
+        const result = await UpgradeApp({ AppName: 'app-root', Version: '1.0.0' }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(result.Success).toBe(true);
+        expect(vi.mocked(FetchManifestFromGitHub).mock.calls.map(([url]) => url)).toEqual([repoUrl('app-root')]);
+    });
+
+    it('warns and reads the manifest at the installed version when the recorded manifest is not valid JSON', async () => {
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            installedRow('app-tasks', '{not json'),
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({
+            [repoUrl('app-root')]: root,
+            [repoUrl('app-tasks')]: tasksOnDefaultBranch,
+            [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion,
+        });
+
+        const result = await InstallApp({ Source: repoUrl('app-root') }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(installSequence).toEqual(['app-root']);
+        expect(warnings.some((w) => w.includes("'app-tasks'") && w.includes('1.0.0'))).toBe(true);
+    });
+
+    /** An install of app-root where app-tasks has `record` as its ManifestJSON and app-common is at 1.0.0. */
+    async function installOver(record: string, refs: Record<string, string> = {}) {
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            installedRow('app-tasks', record),
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [repoUrl('app-root')]: root, ...refs });
+        return InstallApp({ Source: repoUrl('app-root') }, ctx);
+    }
+    const recordWith = (changes: Record<string, unknown>) => JSON.stringify({ ...JSON.parse(manifestJSON('app-tasks', {})), ...changes });
+    const tasksWarnings = () => warnings.filter((w) => w.includes("'app-tasks'"));
+    const fetchedVersions = (url: string) => vi.mocked(FetchManifestFromGitHub).mock.calls.filter(([u]) => u === url).map(([, version]) => version);
+
+    it('refuses on an array-form record that is not satisfied', async () => {
+        const result = await installOver(recordWith({
+            dependencies: [{ name: 'app-common', repository: repoUrl('app-common'), versionRange: '>=1.5.0 <2.0.0' }],
+        }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("Dependency 'app-common' is installed (v1.0.0) but does not satisfy required range '>=1.5.0 <2.0.0'");
+        expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+    });
+
+    it.each([
+        ['dependencies that are not a map', recordWith({ dependencies: 'bad' })],
+        ['a dependency without a range', recordWith({ dependencies: { 'app-common': { repository: repoUrl('app-common') } } })],
+        ['a record that is not an object', 'null'],
+    ])('warns and reads the installed version for %s', async (_name, record) => {
+        const result = await installOver(record, { [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion });
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(installSequence).toEqual(['app-root']);
+        expect(fetchedVersions(repoUrl('app-tasks'))).toEqual(['1.0.0']);
+        expect(tasksWarnings()).toHaveLength(1);
+        expect(tasksWarnings()[0]).toContain('they are read from');
+        expect(tasksWarnings()[0]).not.toContain('Cannot read properties');
+    });
+
+    it('uses the recorded dependencies when another field no longer passes validation', async () => {
+        const result = await installOver(recordWith({ tags: ['Not A Valid Tag'], dependencies: needs('app-common', '>=1.5.0 <2.0.0') }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("does not satisfy required range '>=1.5.0 <2.0.0'");
+        expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+    });
+
+    it('ignores only the file: dependency recorded for an app installed from GitHub', async () => {
+        const fileDependency = { 'app-local': { version: '^1.0.0', repository: 'file:apps/app-local' } };
+        const result = await installOver(
+            manifestJSON('app-tasks', { ...fileDependency, ...needs('app-common', '>=1.5.0 <2.0.0') }),
+            { [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion },
+        );
+
+        // The rest of the record is still checked, and the source is not asked instead.
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("does not satisfy required range '>=1.5.0 <2.0.0'");
+        expect(result.ErrorMessage).not.toContain('app-local');
+        expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+        expect(tasksWarnings()).toHaveLength(1);
+        expect(tasksWarnings()[0]).toContain('file:apps/app-local');
+    });
+
+    it('reads an unreadable record from the folder and by the name the app was installed with', async () => {
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            { ...installedRow('app-tasks', '{not json'), Subpath: 'apps/tasks' },
+            installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [repoUrl('app-root')]: root, [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion });
+
+        await InstallApp({ Source: repoUrl('app-root') }, ctx);
+
+        const call = vi.mocked(FetchManifestFromGitHub).mock.calls.find(([url]) => url === repoUrl('app-tasks'));
+        expect(call?.slice(3)).toEqual(['apps/tasks', 'app-tasks']);
+    });
+
+    it('warns that requirements are unchecked when neither the record nor the source can be read', async () => {
+        const result = await installOver('{not json');
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(warnings.some((w) => w.includes("'app-tasks'") && w.includes('not checked') && w.includes('no manifest for'))).toBe(true);
+    });
+
+    it('does not mark the app being upgraded as Error when reading a dependency is rate limited', async () => {
+        const rootRow = installedRow('app-root', root, '0.9.0');
+        vi.mocked(FindInstalledApp).mockResolvedValue(rootRow);
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            rootRow, installedRow('app-tasks', '{not json'), installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        vi.mocked(FetchManifestFromGitHub).mockImplementation(async (url) => {
+            if (url === repoUrl('app-tasks')) throw new Error('GitHub rate limit hit');
+            return { Success: true, ManifestJSON: root };
+        });
+
+        const result = await UpgradeApp({ AppName: 'app-root', Version: '1.0.0' }, ctx);
+
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(result.Success).toBe(true);
+        expect(warnings.some((w) => w.includes('not checked') && w.includes('GitHub rate limit hit'))).toBe(true);
+    });
+
+    it('does not read the record of the app being upgraded', async () => {
+        const rootRow = installedRow('app-root', '{not json', '0.9.0');
+        vi.mocked(FindInstalledApp).mockResolvedValue(rootRow);
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            rootRow, installedRow('app-tasks', tasksAtInstalledVersion), installedRow('app-common', manifestJSON('app-common', {})),
+        ]);
+        serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root });
+
+        const result = await UpgradeApp({ AppName: 'app-root', Version: '1.0.0' }, ctx);
+
+        expect(result.Success).toBe(true);
+        expect(warnings.filter((w) => w.includes("installed app 'app-root'"))).toEqual([]);
     });
 });

@@ -11,9 +11,25 @@ ENV PATH=/opt/mssql-tools/bin:$PATH
 # Install required packages (build-essential needed for native addons like isolated-vm)
 RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server apt-transport-https locales gnupg2 build-essential
 
-# Install Node
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
-RUN apt-get install -y nodejs
+# Install Node from the official dist tarball, pinned and checksum-verified — no piping a
+# mutable remote script to a root shell (supply-chain integrity; same pattern as the ffmpeg
+# install below). Bump NODE_VERSION and both sha256s together from
+# https://nodejs.org/dist/v<version>/SHASUMS256.txt.
+ARG NODE_VERSION=24.22.3
+ARG NODE_SHA256_AMD64=4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb
+ARG NODE_SHA256_ARM64=6e51a2ada00f0011cc266f65d98922b403d7ad88f809ca2aa615a5fe1ce6e86c
+RUN set -e; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) node_arch="x64"; node_sha="$NODE_SHA256_AMD64" ;; \
+      arm64) node_arch="arm64"; node_sha="$NODE_SHA256_ARM64" ;; \
+      *) echo "No pinned Node build for ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    apt-get install -y --no-install-recommends xz-utils; \
+    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" -o /tmp/node.tar.xz; \
+    echo "${node_sha}  /tmp/node.tar.xz" | sha256sum -c -; \
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 --no-same-owner; \
+    rm -f /tmp/node.tar.xz; \
+    node --version && npm --version
 
 # ffmpeg for meeting avatars: an agent's bot decodes its live avatar (H.264 video, AAC voice) with it, found on the PATH
 # (or at MJ_FFMPEG_PATH). Off by default: without it, meetings stay audio only, and the room says why. To turn it on,
@@ -58,9 +74,9 @@ RUN locale-gen "en_US.UTF-8" \
   && rm -f /etc/apt/sources.list.d/msprod.list \
   && rm -rf /var/lib/apt/lists/*
 
-# Set up SSH configuration
-RUN mkdir /var/run/sshd \
-  && echo "root:Docker!" | chpasswd
+# Set up SSH configuration. The root password Azure App Service's SSH requires is NOT
+# baked into the image — entrypoint.sh sets it only when it actually starts sshd.
+RUN mkdir /var/run/sshd
 
 COPY docker/MJAPI/sshd_config /etc/ssh/
 EXPOSE 2222

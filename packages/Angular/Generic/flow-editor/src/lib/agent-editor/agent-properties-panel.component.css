@@ -137,11 +137,46 @@
   align-items: center;
   font-size: 10px;
   font-weight: 600;
-  color: #059669;
-  background: #ecfdf5;
+  color: var(--mj-status-success-text);
+  background: var(--mj-status-success-bg);
   padding: 1px 6px;
   border-radius: var(--mj-radius-sm);
   letter-spacing: 0.2px;
+}
+
+.mj-agent-props-picker-search {
+  margin-bottom: 5px;
+  font-size: var(--mj-text-xs);
+  padding: 5px 8px;
+}
+
+.mj-agent-props-loop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mj-agent-props-var-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mj-agent-props-var-pill {
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 32%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border-radius: var(--mj-radius-sm);
+  padding: 2px 7px;
+  font-family: var(--mj-font-family-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color var(--mj-transition-fast), color var(--mj-transition-fast);
+}
+
+.mj-agent-props-var-pill:hover {
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
 }
 
 .mj-agent-props-priority-badge {

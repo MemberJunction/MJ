@@ -20,6 +20,7 @@ import {
     RunQuerySQLFilterManager,
     RestoreContext,
     CloneContext,
+    SyncContext,
     RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
@@ -44,6 +45,7 @@ import {
     ExecuteSQLBatchOptions,
     NamedQueryParameter,
     RecordChangeSnapshotColumnKindOf,
+    DoomedTransactionError,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import {
@@ -99,13 +101,30 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
 /**
- * The `ChangeContext` column and its `$n` placeholder for a Record Change insert, or nothing when
- * there is no context. Only clones set it, so every other tracked write keeps working on a database
- * whose RecordChange table doesn't have the column yet (the PostgreSQL migration ships at release).
+ * Optional `ChangeContext` and `IntegrationID` columns and their `$n` placeholders for a Record Change
+ * insert, or nothing when neither is set. Only clones and sync operations set them, so every other
+ * tracked write keeps working on a database whose RecordChange table doesn't have the columns yet.
  */
-function changeContextSQL(changeContext: string | null | undefined, placeholder: number): { column: string; value: string; parameters: string[] } {
-    if (!changeContext) return { column: '', value: '', parameters: [] };
-    return { column: ', "ChangeContext"', value: `, $${placeholder}::text`, parameters: [changeContext] };
+function changeContextSQL(
+    changeContext: string | null | undefined,
+    placeholder: number,
+    integrationID?: string | null,
+): { column: string; value: string; parameters: string[] } {
+    let column = '';
+    let value = '';
+    const parameters: string[] = [];
+    let nextPlaceholder = placeholder;
+    if (changeContext) {
+        column += ', "ChangeContext"';
+        value += `, $${nextPlaceholder++}::text`;
+        parameters.push(changeContext);
+    }
+    if (integrationID) {
+        column += ', "IntegrationID"';
+        value += `, $${nextPlaceholder++}::uuid`;
+        parameters.push(integrationID);
+    }
+    return { column, value, parameters };
 }
 
 export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
@@ -1088,9 +1107,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         }
         const client = this._transaction;
         // On COMMIT failure leave the client published so AbandonPhysicalTransaction can ROLLBACK then release.
-        await client.query('COMMIT');
+        const result = await client.query('COMMIT');
         this._transaction = null;
         client.release();
+        // COMMIT on a transaction an earlier statement aborted does not fail: PostgreSQL rolls it back
+        // and answers ROLLBACK. Reporting that as a commit would tell the caller its writes persisted.
+        if (result?.command === 'ROLLBACK') {
+            throw new DoomedTransactionError(
+                'PostgreSQL rolled the transaction back instead of committing it: an earlier statement in it failed, so none of its writes persisted',
+            );
+        }
     }
 
     protected override async RollbackPhysicalTransaction(): Promise<void> {
@@ -1166,6 +1192,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * keyword, producing `syntax error at or near "ESCAPE"`). PostgreSQL's default
      * backslash-escape behavior in LIKE makes the explicit ESCAPE clause unnecessary,
      * so we emit plain quoted literals with no `N` prefix and no `ESCAPE`.
+     *
+     * Matching is case-insensitive (`ILIKE`), as it is on SQL Server under its default
+     * case-insensitive collation: a user searching for "acme" must find "Acme Corp" on both
+     * platforms. `Exact` uses `ILIKE` without wildcards for the same reason, with the term's
+     * LIKE metacharacters escaped so they match literally.
      */
     protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
@@ -1177,14 +1208,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
         switch (pred) {
             case 'Exact':
-                return ` = '${rawSafeTerm}'`;
+                return ` ILIKE '${escapedTerm}'`;
             case 'BeginsWith':
-                return ` LIKE '${escapedTerm}%'`;
+                return ` ILIKE '${escapedTerm}%'`;
             case 'EndsWith':
-                return ` LIKE '%${escapedTerm}'`;
+                return ` ILIKE '%${escapedTerm}'`;
             case 'Contains':
             default:
-                return ` LIKE '%${escapedTerm}%'`;
+                return ` ILIKE '%${escapedTerm}%'`;
         }
     }
 
@@ -1599,7 +1630,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             : bind(payload.fullRecordJSON, 'text');
         const restoredFromIDSQL = bind(payload.restoredFromID, 'uuid');
         const restoreReasonSQL = bind(payload.restoreReason, 'text');
-        const cc = changeContextSQL(payload.changeContext, parameters.length + 1);
+        const cc = changeContextSQL(payload.changeContext, parameters.length + 1, payload.integrationID);
         parameters.push(...cc.parameters);
         const fullSQL = `WITH save_result AS (
     ${saveSQL.sql}
@@ -1696,10 +1727,13 @@ SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
+                false,
+                entity.SyncContext,
             );
             if (payload) {
                 const s = paramValues.length + 1;
-                const cc = changeContextSQL(payload.changeContext, s + 7);
+                const cc = changeContextSQL(payload.changeContext, s + 7, payload.integrationID);
                 paramValues.push(
                     payload.entityID,
                     payload.recordID,
@@ -2041,6 +2075,7 @@ SELECT * FROM delete_result`;
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ): { sql: string; parameters?: unknown[] } | null {
         const payload = this.BuildRecordChangePayload(
             newData,
@@ -2052,10 +2087,12 @@ SELECT * FROM delete_result`;
             restoreContext,
             "'",
             cloneContext,
+            false,
+            syncContext,
         );
         if (!payload) return null;
 
-        const cc = changeContextSQL(payload.changeContext, 11);
+        const cc = changeContextSQL(payload.changeContext, 11, payload.integrationID);
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
             ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
             VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text${cc.value})
@@ -2091,6 +2128,7 @@ SELECT * FROM delete_result`;
         safeUserId: string,
         source?: RecordChangeSource,
         changeContext?: string | null,
+        integrationID?: string | null,
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
@@ -2103,8 +2141,10 @@ SELECT * FROM delete_result`;
 
         const sourceVal = source ?? 'Internal';
         // Named only when set, like the other sites: see changeContextSQL.
-        const changeContextColumn = changeContext ? ', "ChangeContext"' : '';
-        const changeContextValue = changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : '';
+        const changeContextColumn = `${changeContext ? ', "ChangeContext"' : ''}${integrationID ? ', "IntegrationID"' : ''}`;
+        const changeContextValue =
+            `${changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : ''}` +
+            `${integrationID ? `,\n    '${EscapeSQLString(integrationID)}'::uuid` : ''}`;
 
         return `
 INSERT INTO ${this._schemaName}."RecordChange"

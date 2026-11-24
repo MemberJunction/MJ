@@ -26,7 +26,7 @@ Components attach styles one of three ways, and one of them needs host cooperati
 
 1. **Inline `styles` in the component** (most components) — nothing to do.
 2. **`styleUrls` compiled into the component** (`page-header`, `slide-panel`) — nothing to do.
-3. **Global stylesheets shipped as assets** — the form controls and overlay chrome (`button`, `dialog`, `dropdown`, `combobox`, `input`, `datepicker`, `splitter`, `accordion`, `window`, `chip`, `switch`/`progress`, `tabs`) ship their `.scss` to `dist` and expect the **host application** to import them globally.
+3. **Global stylesheets shipped as assets** — the form controls, card-grid, and overlay chrome (`button`, `dialog`, `dropdown`, `combobox`, `input`, `datepicker`, `splitter`, `accordion`, `window`, `chip`, `switch`/`progress`, `tabs`, `card-grid`) ship their `.scss` to `dist` and expect the **host application** to import them globally.
 
 **If your app runs inside MJ Explorer (`explorer-app`), category 3 is already handled** — the shell imports all of them. A standalone host must add these to its global stylesheet:
 
@@ -43,6 +43,7 @@ Components attach styles one of three ways, and one of them needs host cooperati
 @import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
 @import '@memberjunction/ng-ui-components/dist/lib/window/window';
 @import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
+@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';
 ```
 
 `tabs` is the shared `.mj-tabs*` chrome consumed by BOTH `mj-workspace-tab-strip` (this package) and `mj-tabstrip` (`@memberjunction/ng-tabstrip`) — without it either strip renders as unstyled divs, so a standalone host using tab strips must include it.
@@ -79,12 +80,13 @@ Three things hold across all six:
 ## Controls
 
 ### `button[mjButton]` / `a[mjButton]` — MJButtonDirective
-Attribute directive that styles a **native** button or anchor. Variants: `primary | secondary (default) | outline | flat | danger | icon | success | warning`. Sizes: `sm | md (default) | lg`. Toggle mode via `[toggleable]` + `[(selected)]` (sets `aria-pressed`). Dev-mode warns when an `icon` button lacks an accessible name — pass `ariaLabel`.
+Attribute directive that styles a **native** button or anchor. Variants: `primary | secondary (default) | outline | flat | danger | icon | success | warning`. Sizes: `sm | md (default) | lg`. Shapes: `default | circle`. Layout & state: `[FullWidth]` (`width: 100%`), `[Disabled]` (sets `aria-disabled="true"`, `tabindex="-1"`, and blocks pointer/keyboard activation on `a[mjButton]`; forwards to `disabled` on `<button>` without clobbering native `[disabled]`), `[Toggleable]` + `[(Selected)]` (sets `aria-pressed`). Dev-mode warns when an `icon` or `circle` button lacks an accessible name; pass `AriaLabel`. Themeable via Tier 3 `--mj-button-*` CSS custom properties (`button.scss`, unset on `:root` per `plans/ui-foundation/NAMING.md`).
 
 ```html
-<button mjButton variant="primary" (click)="save()">Save</button>
-<button mjButton variant="icon" ariaLabel="Remove" (click)="remove()"><i class="fa-solid fa-xmark"></i></button>
-<button mjButton variant="flat" [toggleable]="true" [(selected)]="isActive">Toggle</button>
+<button mjButton Variant="primary" (click)="save()">Save</button>
+<button mjButton Variant="icon" AriaLabel="Remove" (click)="remove()"><i class="fa-solid fa-xmark"></i></button>
+<button mjButton Variant="flat" [Toggleable]="true" [(Selected)]="isActive">Toggle</button>
+<a mjButton Variant="outline" [href]="reportUrl" [Disabled]="!canExport" FullWidth>Export report</a>
 ```
 
 ### `mj-combobox` — MJComboboxComponent

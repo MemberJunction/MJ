@@ -118,6 +118,7 @@
     "@memberjunction/lists-base": "6.3.0-edge.1",
     "@memberjunction/livekit-room-server": "6.3.0-edge.1",
     "@memberjunction/network-utils": "6.3.0-edge.1",
+    "@memberjunction/ng-communications": "6.3.0-edge.1",
     "@memberjunction/notifications": "6.3.0-edge.1",
     "@memberjunction/postgresql-dataprovider": "6.3.0-edge.1",
     "@memberjunction/queue": "6.3.0-edge.1",
@@ -146,6 +147,7 @@
     "@memberjunction/testing-engine": "6.3.0-edge.1",
     "@memberjunction/testing-engine-base": "6.3.0-edge.1",
     "@memberjunction/version-history": "6.3.0-edge.1",
+    "@memberjunction/work-queue-core": "6.3.0-edge.1",
     "@memberjunction/work-queue-engine": "6.3.0-edge.1",
     "@octokit/auth-app": "^7.1.5",
     "@octokit/rest": "^21.1.1",
@@ -190,6 +192,7 @@
   },
   "devDependencies": {
     "@memberjunction/conversations-runtime": "6.3.0-edge.1",
+    "@memberjunction/work-queue-aws": "6.3.0-edge.1",
     "@types/express": "^5.0.6",
     "pkgroll": "2.23.0",
     "rimraf": "6.1.2",

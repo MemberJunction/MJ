@@ -1,0 +1,34 @@
+[
+  {
+    "fields": {
+      "Name": "Communications: Admin",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to manage Communications V2 sending domains, compliance gate simulations, and suppression revocations."
+    },
+    "primaryKey": {
+      "ID": "59024F63-B735-4A03-A904-47BC46A9BC5E"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.850Z",
+      "checksum": "369a3a4acc067a2720d07971163cf22841d1ec396053ec081e0eb741108c56ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Communications: Send Transactional",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Communications: Admin",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to send Transactional communications that bypass marketing opt-in, unsubscribe, and quiet-hours compliance rules."
+    },
+    "primaryKey": {
+      "ID": "D7A661FD-9F5B-4071-B0EA-EA51C84810BA"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.889Z",
+      "checksum": "fb550ae524546e244ceac9439fb2174cbe3e40a791c1310bd770bd8937f56f1e"
+    }
+  }
+]

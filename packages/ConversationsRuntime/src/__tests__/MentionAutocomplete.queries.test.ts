@@ -3,8 +3,8 @@
  *
  * The query list is read from the QueryEngine, never from the metadata provider's deprecated
  * query lists (left empty here, as they are once the provider stops loading queries). A query is
- * offered only when its UserCanRun check says canRun; one whose check denies it, or throws, is
- * left out. A host that passes its own provider gets that provider's engine.
+ * offered only when it is Approved and its UserCanRun check says canRun; a Pending draft, or one
+ * whose check denies it or throws, is left out. A host that passes its own provider gets that provider's engine.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -32,11 +32,12 @@ import { MentionAutocomplete } from '../mentions/MentionAutocomplete';
 
 const CURRENT_USER = { ID: 'user-me', Name: 'Me Myself', Email: 'me@example.com' } as never;
 
-function query(id: string, name: string, canRun: boolean | 'throws') {
+function query(id: string, name: string, canRun: boolean | 'throws', status = 'Approved') {
     return {
         ID: id,
         Name: name,
         Description: null,
+        Status: status,
         UserCanRun: vi.fn(() => {
             if (canRun === 'throws') throw new Error('permission check failed');
             return { canRun, deniedEntities: canRun ? [] : ['Members'] };
@@ -66,6 +67,17 @@ describe('MentionAutocomplete — query candidates from the QueryEngine', () => 
 
     it('leaves out a query whose UserCanRun denies the user, and one whose check throws', async () => {
         globalEngine.Queries = [query('Q1', 'Open', true), query('Q2', 'Denied', false), query('Q3', 'Broken', 'throws')];
+        await engine.initialize(CURRENT_USER);
+        expect(engine.GetAvailableQueries().map((q) => q.ID)).toEqual(['Q1']);
+    });
+
+    it('leaves out Pending, Rejected and Expired queries the user could run', async () => {
+        globalEngine.Queries = [
+            query('Q1', 'Approved', true),
+            query('Q2', 'Draft from a chat list', true, 'Pending'),
+            query('Q3', 'Rejected', true, 'Rejected'),
+            query('Q4', 'Expired', true, 'Expired'),
+        ];
         await engine.initialize(CURRENT_USER);
         expect(engine.GetAvailableQueries().map((q) => q.ID)).toEqual(['Q1']);
     });

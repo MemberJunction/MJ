@@ -207,6 +207,7 @@
 
   <!-- Refresh-from-source delta-confirm dialog -->
   <mj-list-delta-confirm
+    [Provider]="Provider"
     [Visible]="refreshConfirmVisible && !!refreshDelta"
     [Delta]="refreshDelta"
     [TargetListName]="listRecord?.Name ?? null"
@@ -219,6 +220,7 @@
        never for Copy. Drops on the source side require the user to
        acknowledge before Confirm enables. -->
   <mj-list-delta-confirm
+    [Provider]="Provider"
     [Visible]="moveDeltaConfirmVisible && !!moveDelta"
     [Delta]="moveDelta"
     [TargetListName]="listRecord?.Name ?? null"

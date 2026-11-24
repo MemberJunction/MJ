@@ -544,7 +544,9 @@ export interface PersistedRealtimeMintSnapshot {
     connectionMaxSeconds?: number;
     /** `'relay'` for a relay session: its session params stay on the instance that minted it. */
     transport?: 'relay';
-    /** The params a re-mint needs. Absent from a relay session's persisted copy. */
+    /** The session's config stays on the instance that minted it ({@link ClientRealtimeSessionConfig.ServerHeldConfig}). */
+    serverHeld?: true;
+    /** The params a re-mint needs. Absent from the persisted copy of a relay or server-held session. */
     sessionParams?: RealtimeSessionParams;
     /** The minted provider config. Persisted only for a driver whose refresh reads it. */
     existingSessionConfig?: JSONObject;
@@ -650,6 +652,7 @@ export class RealtimeMintSnapshotRegistry extends BaseSingleton<RealtimeMintSnap
  *   prompt, tools or upstream configuration, so the owner must not read them from the row either. Its relay lives in
  *   this process: another instance could only open a new relay and re-seed the call, from exactly those params, so a
  *   refresh there fails and says why.
+ * - A server-held session is treated the same way, for the same reason: its browser was given no prompt or tools.
  * - A direct session keeps its params: its browser was handed the prompt and tools in the provider config it applies,
  *   and another instance needs them to mint an equivalent credential. The minted provider config is kept only when the
  *   driver's refresh reads it (ElevenLabs reuses its managed agent); the base refresh ignores it.
@@ -668,6 +671,9 @@ function toPersistedMintSnapshot(snapshot: InMemoryRealtimeMintSnapshot, model: 
     if (snapshot.transport === 'relay') {
         return { ...routing, transport: 'relay' };
     }
+    if (snapshot.serverHeld) {
+        return { ...routing, serverHeld: true };
+    }
     const refreshReadsSessionConfig = model.RefreshClientSessionCredential !== BaseRealtimeModel.prototype.RefreshClientSessionCredential;
     return {
         ...routing,
@@ -676,9 +682,16 @@ function toPersistedMintSnapshot(snapshot: InMemoryRealtimeMintSnapshot, model: 
     };
 }
 
-/** Whether a persisted mint snapshot is a relay session's, whose session params only its minting instance holds. */
-function isRelayMintSnapshot(candidate: PersistedRealtimeMintSnapshot | RealtimeJsonValue | object | undefined): boolean {
-    return typeof candidate === 'object' && candidate !== null && (candidate as Partial<PersistedRealtimeMintSnapshot>).transport === 'relay';
+/** What kind of session a persisted mint snapshot describes, when only its minting instance holds its params; else null. */
+function instanceBoundKind(candidate: PersistedRealtimeMintSnapshot | RealtimeJsonValue | object | undefined): 'relay' | 'server-held' | null {
+    if (typeof candidate !== 'object' || candidate === null) {
+        return null;
+    }
+    const snapshot = candidate as Partial<PersistedRealtimeMintSnapshot>;
+    if (snapshot.transport === 'relay') {
+        return 'relay';
+    }
+    return snapshot.serverHeld === true ? 'server-held' : null;
 }
 
 function extractRelayTicketId(relayUrl: string | undefined): string | undefined {
@@ -1362,6 +1375,7 @@ export class RealtimeClientSessionService {
             credentialScope: input.CredentialScope ?? 'Any',
             ...(clientConfig.ConnectionMaxSeconds !== undefined ? { connectionMaxSeconds: clientConfig.ConnectionMaxSeconds } : {}),
             ...(clientConfig.Transport === 'relay' ? { transport: 'relay' as const } : {}),
+            ...(clientConfig.ServerHeldConfig === true ? { serverHeld: true as const } : {}),
             sessionParams,
             ...(sessionConfig && typeof sessionConfig === 'object' && !Array.isArray(sessionConfig)
                 ? { existingSessionConfig: { ...sessionConfig } }
@@ -1680,16 +1694,16 @@ export class RealtimeClientSessionService {
             return { Snapshot: cached };
         }
         let snapshot = this.validatePersistedMintSnapshot(input.PersistedMintSnapshot, input.CoAgentID);
-        let relayCopy = isRelayMintSnapshot(input.PersistedMintSnapshot);
-        if (!snapshot && !relayCopy) {
+        let boundKind = instanceBoundKind(input.PersistedMintSnapshot);
+        if (!snapshot && !boundKind) {
             const stored = await this.loadPersistedMintSnapshot(sessionID, contextUser, provider);
-            relayCopy = isRelayMintSnapshot(stored?.Snapshot);
+            boundKind = instanceBoundKind(stored?.Snapshot);
             snapshot = stored ? this.validatePersistedMintSnapshot(stored.Snapshot, input.CoAgentID ?? stored.AgentID) : null;
         }
         if (!snapshot) {
             return {
-                ErrorMessage: relayCopy
-                    ? `Realtime session '${sessionID}' is a relay session: only the MJAPI instance that minted it can refresh its credential.`
+                ErrorMessage: boundKind
+                    ? `Realtime session '${sessionID}' is a ${boundKind} session: only the MJAPI instance that minted it can refresh its credential.`
                     : `No valid mint snapshot found for realtime session '${sessionID}'.`,
             };
         }
@@ -4039,7 +4053,10 @@ export class RealtimeClientSessionService {
         }
         return (
             'Earlier in this conversation (a previous live session that you are now resuming), ' +
-            'you and the user discussed the following. Treat it as shared context you both remember:\n' +
+            'you and the user discussed the following. Treat it as shared context you both remember — ' +
+            'pick up naturally mid-conversation without giving a fresh cold introduction or asking the ' +
+            'user to repeat what was already covered, and refer to restored Workspace/Whiteboard/Browser/Media ' +
+            'surfaces when helpful:\n' +
             text
         );
     }
@@ -4079,9 +4096,13 @@ export class RealtimeClientSessionService {
      */
     protected resolveCoAgentSystemPrompt(coAgent: MJAIAgentEntityExtended): CoAgentSystemPromptResolution {
         const engine = AIEngine.Instance;
-        const agentPrompt = (engine.AgentPrompts ?? [])
-            .filter(ap => UUIDsEqual(ap.AgentID, coAgent.ID) && ap.Status === 'Active')
-            .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+        const effectivePrompts =
+            typeof engine.GetEffectiveAgentPrompts === 'function'
+                ? engine.GetEffectiveAgentPrompts(coAgent.ID, 'Active')
+                : (engine.AgentPrompts ?? [])
+                      .filter(ap => UUIDsEqual(ap.AgentID, coAgent.ID) && ap.Status === 'Active')
+                      .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
+        const agentPrompt = effectivePrompts[0];
         if (!agentPrompt) {
             return { Text: '', PromptID: null };
         }
@@ -4720,8 +4741,14 @@ export class RealtimeClientSessionService {
      */
     protected getTargetAgentActions(targetAgentID: string): MJActionEntityExtended[] {
         const activeActionIds = new Set<string>();
-        for (const aa of AIEngine.Instance.AgentActions ?? []) {
-            if (aa.Status === 'Active' && UUIDsEqual(aa.AgentID, targetAgentID) && aa.ActionID) {
+        const effectiveAgentActions =
+            typeof AIEngine.Instance.GetEffectiveAgentActions === 'function'
+                ? AIEngine.Instance.GetEffectiveAgentActions(targetAgentID)
+                : (AIEngine.Instance.AgentActions ?? []).filter(
+                      aa => aa.Status === 'Active' && UUIDsEqual(aa.AgentID, targetAgentID)
+                  );
+        for (const aa of effectiveAgentActions) {
+            if (aa.Status === 'Active' && aa.ActionID) {
                 activeActionIds.add(NormalizeUUID(aa.ActionID));
             }
         }

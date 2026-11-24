@@ -44,6 +44,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
+import { BaseContentCleaner, type ContentCleaningParams } from '@memberjunction/ai-segmentation';
 import {
     BaseResponse,
     IndexList,
@@ -430,21 +431,50 @@ async function buildFixture(ctx: IntegrationCheckContext): Promise<void> {
 
 function installEmbeddingStub(): void {
     S.OrigRunEmbedding = AIEmbeddingRunner.prototype.RunEmbedding;
-    AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => ({
-        Success: true,
-        Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]),
-        PromptRunID: null,
-        TokensUsed: 0,
-        Cost: 0,
-        ErrorMessage: null,
-        ExecutionTimeMs: 0,
-    });
+    AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => {
+        const count = params.Texts?.length ?? params.Contents?.length ?? 0;
+        return {
+            Success: true,
+            Vectors: Array.from({ length: count }, () => [0.1, 0.2, 0.3]),
+            PromptRunID: null,
+            TokensUsed: 0,
+            Cost: 0,
+            ErrorMessage: null,
+            ExecutionTimeMs: 0,
+        };
+    };
 }
 
 function resetStore(): void {
     Store.Upserts.length = 0;
     Store.Updates.length = 0;
     Store.Deletes.length = 0;
+}
+
+/** CP23's cleaners. Each marks what it returns, so a chunk shows which cleaner Segment chose for its item. */
+const SOURCE_FILE_TYPE_CLEANER_KEY = 'IT-SourceFileTypeCleaner';
+const SOURCE_DEFAULT_CLEANER_KEY = 'IT-SourceDefaultCleaner';
+const SOURCE_FILE_TYPE_MARK = '[source file-type cleaner]';
+const SOURCE_DEFAULT_MARK = '[source default cleaner]';
+
+@RegisterClass(BaseContentCleaner, SOURCE_FILE_TYPE_CLEANER_KEY)
+export class SourceFileTypeCleaner extends BaseContentCleaner {
+    public get Key(): string {
+        return SOURCE_FILE_TYPE_CLEANER_KEY;
+    }
+    protected CleanCore(params: ContentCleaningParams): string {
+        return `${SOURCE_FILE_TYPE_MARK} ${params.Content}`;
+    }
+}
+
+@RegisterClass(BaseContentCleaner, SOURCE_DEFAULT_CLEANER_KEY)
+export class SourceDefaultCleaner extends BaseContentCleaner {
+    public get Key(): string {
+        return SOURCE_DEFAULT_CLEANER_KEY;
+    }
+    protected CleanCore(params: ContentCleaningParams): string {
+        return `${SOURCE_DEFAULT_MARK} ${params.Content}`;
+    }
 }
 
 export const ContentPipelineChecks: NamedCheck[] = [
@@ -1193,6 +1223,95 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 await save(source, 'restore source Configuration');
                 await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
                 Documents.delete(url);
+            }
+        },
+    },
+    {
+        Id: 'content-pipeline.CP23',
+        Name: "CP23: Segment cleans each item of one source by its detected file type — the source's entry for the type, then the content type's, then the source's default",
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const urls = {
+                Page: 'it-pipeline://mixed/page.html',
+                Notes: 'it-pipeline://mixed/notes.txt',
+                Readme: 'it-pipeline://mixed/readme.md',
+            };
+            const page =
+                '<!doctype html><html><body><nav>Home | Members</nav>' +
+                `<div class="article-body"><p>${SENTENCE.trim()}</p></div><footer>Copyright</footer></body></html>`;
+            const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            const contentType = (await rows<MJContentTypeEntity>(ctx, 'MJ: Content Types', `ID='${source.ContentTypeID}'`))[0];
+            const original = { SourceConfiguration: source.Configuration, SourceCleanerKey: source.CleanerKey, TypeConfiguration: contentType.Configuration };
+            let failure: unknown = null;
+            try {
+                // After the source's last discovery, so these documents count as changed since it.
+                await new Promise((r) => setTimeout(r, 5));
+                Documents.set(urls.Page, { Text: page, ModifiedAt: new Date() });
+                Documents.set(urls.Notes, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+                Documents.set(urls.Readme, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+                // The content type's standard cleaners; the source overrides txt and names its own default.
+                contentType.Configuration = JSON.stringify({
+                    ...(original.TypeConfiguration ? JSON.parse(original.TypeConfiguration) : {}),
+                    Cleaners: { html: 'Html', txt: 'PlainText' },
+                });
+                source.Configuration = JSON.stringify({
+                    ...(original.SourceConfiguration ? JSON.parse(original.SourceConfiguration) : {}),
+                    Cleaners: { txt: SOURCE_FILE_TYPE_CLEANER_KEY },
+                });
+                source.CleanerKey = SOURCE_DEFAULT_CLEANER_KEY;
+                await save(contentType, 'content type with standard cleaners');
+                await save(source, 'source with a file-type cleaner and a default');
+                await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const ids = { Page: (await itemByURL(ctx, urls.Page)).ID, Notes: (await itemByURL(ctx, urls.Notes)).ID, Readme: (await itemByURL(ctx, urls.Readme)).ID };
+                await run(ctx, ['Extract'], Object.values(ids));
+                // Segment runs on items loaded back from the database, whose file type is the Content File Type's NAME.
+                for (const [key, fileType] of [['Page', 'HTML'], ['Notes', 'TXT'], ['Readme', 'MD']] as const) {
+                    AssertEqual((await itemByURL(ctx, urls[key])).ContentFileType, fileType, `Extract detected ${urls[key]} as ${fileType}`);
+                }
+                await run(ctx, ['Segment'], Object.values(ids));
+
+                const textOf = async (id: string) => (await liveChunks(ctx, id)).map((c) => c.Text ?? '').join(' ');
+                const pageText = await textOf(ids.Page);
+                Assert(pageText.includes('quarterly report') && !pageText.includes('<') && !pageText.includes('Home | Members'), "html: the content type's Html cleaner ran");
+                Assert(!pageText.includes(SOURCE_DEFAULT_MARK), "html: the content type's entry for the file type beats the source's default");
+                Assert((await textOf(ids.Notes)).startsWith(SOURCE_FILE_TYPE_MARK), "txt: the source's own entry for the file type beats the content type's");
+                Assert((await textOf(ids.Readme)).startsWith(SOURCE_DEFAULT_MARK), "md: no map names it, so the source's default ran");
+                console.log('      → CP23: html → Html (content type), txt → source entry, md → source default');
+            } catch (error) {
+                failure = error;
+                throw error;
+            } finally {
+                // Each step on its own, so one failing does not leave the others dirty.
+                const problems: string[] = [];
+                const restore = async (what: string, step: () => Promise<void> | void): Promise<void> => {
+                    try {
+                        await step();
+                    } catch (error) {
+                        problems.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                };
+                Object.values(urls).forEach((u) => Documents.delete(u));
+                await restore('content type Configuration', async () => {
+                    contentType.Configuration = original.TypeConfiguration;
+                    await save(contentType, 'restore content type Configuration');
+                });
+                await restore('source cleaner settings', async () => {
+                    source.Configuration = original.SourceConfiguration;
+                    source.CleanerKey = original.SourceCleanerKey;
+                    await save(source, 'restore source cleaner settings');
+                });
+                await restore('metadata cache', () => KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider));
+                if (problems.length > 0) {
+                    const message = `CP23 could not restore ${problems.join('; ')}`;
+                    if (failure) {
+                        console.warn(`      ⚠ ${message}`);
+                    } else {
+                        throw new Error(message);
+                    }
+                }
             }
         },
     },

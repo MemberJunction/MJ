@@ -54,7 +54,9 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
     ports:
-      - "11433:1433"
+      # Bind to loopback only — this is an SA-enabled test SQL Server, not something
+      # to expose on every interface of the host machine.
+      - "127.0.0.1:11433:1433"
     healthcheck:
       test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
       interval: 10s
@@ -227,6 +229,9 @@ services:
       # entrypoint; overridden by `mj test regression remote` via the target
       # profile's "suite" field. Used by the BYO overlay too.
       TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
+      # Comma-separated exact test names. When set, only those suite tests run
+      # (`mj test regression up --test`).
+      TEST_NAMES: "${TEST_NAMES:-}"
       EXTRA_METADATA_DIRS: "${EXTRA_METADATA_DIRS:-}"
       # Variable-substitution payload for `{{baseUrl}}`, `{{authUsername}}`,
       # etc. inside test JSONs. Mode A leaves these empty; the entrypoint

@@ -298,12 +298,39 @@ describe('PostgreSQLDataProvider', () => {
             expect(client.queries).toContain('ROLLBACK');
         });
 
+        it('COMMIT that PostgreSQL turned into ROLLBACK rejects instead of reporting success', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                // What PostgreSQL answers to COMMIT once an earlier statement aborted the transaction.
+                return sql === 'COMMIT' ? { rows: [], command: 'ROLLBACK' } : { rows: [], command: sql };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            expect(provider.TransactionDepth).toBe(0);
+            expect(client.released).toBe(true);
+        });
+
+        it('a nested begin on a transaction that is gone (25P01) also dooms it', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('SAVEPOINT')) {
+                    throw Object.assign(new Error('there is no transaction in progress'), { code: '25P01' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            await provider.RollbackTransaction();
+        });
+
         it('ExecuteSQL without connectionSource throws while doomed (H6)', async () => {
             const client = installFakeClient(provider);
             client.query = vi.fn(async (sql: string) => {
                 client.queries.push(sql);
                 if (sql.startsWith('SAVEPOINT')) {
-                    throw Object.assign(new Error('current transaction is aborted'), { code: '25P01' });
+                    throw Object.assign(new Error('current transaction is aborted, commands ignored until end of transaction block'), { code: '25P02' });
                 }
                 return { rows: [] };
             }) as unknown as typeof client.query;
@@ -321,7 +348,7 @@ describe('PostgreSQLDataProvider', () => {
             client.query = vi.fn(async (sql: string) => {
                 client.queries.push(sql);
                 if (sql.startsWith('RELEASE')) {
-                    throw Object.assign(new Error('current transaction is aborted'), { code: '25P01' });
+                    throw Object.assign(new Error('current transaction is aborted, commands ignored until end of transaction block'), { code: '25P02' });
                 }
                 return { rows: [] };
             }) as unknown as typeof client.query;

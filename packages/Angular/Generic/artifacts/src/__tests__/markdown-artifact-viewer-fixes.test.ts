@@ -12,7 +12,10 @@ import {
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { DocumentCollaborationService } from '../lib/services/document-collaboration.service';
 import { DocumentImportExportService } from '../lib/services/document-import-export.service';
-import { MarkdownArtifactViewerComponent } from '../lib/components/plugins/markdown-artifact-viewer.component';
+import {
+  MarkdownArtifactViewerComponent,
+  ParseMarkdownFrontmatterHeader,
+} from '../lib/components/plugins/markdown-artifact-viewer.component';
 
 interface MockDocProviderOptions {
   currentUserId: string;
@@ -577,6 +580,56 @@ describe('MarkdownArtifactViewerComponent R3 Fixes', () => {
       } finally {
         collabService.ngOnDestroy();
       }
+    });
+
+    it('parses YAML frontmatter header metadata safely and computes EstimatedReadingMinutes', () => {
+      const md = [
+        '---',
+        'title: "Q4 Enterprise Roadmap"',
+        'subtitle: "Executive Summary & Delivery Milestones"',
+        'author: "Amith Nair"',
+        'date: "2026-11-17"',
+        'category: "Strategy"',
+        'tags: [roadmap, enterprise, ai]',
+        'accent: "#4f46e5"',
+        '---',
+        '',
+        '# Section 1',
+        'word '.repeat(410),
+      ].join('\n');
+
+      const parsed = ParseMarkdownFrontmatterHeader(md);
+      expect(parsed).toEqual({
+        Title: 'Q4 Enterprise Roadmap',
+        Subtitle: 'Executive Summary & Delivery Milestones',
+        Author: 'Amith Nair',
+        Date: '2026-11-17',
+        Category: 'Strategy',
+        Tags: ['roadmap', 'enterprise', 'ai'],
+        Accent: '#4f46e5',
+      });
+
+      // Unsafe CSS accent is ignored
+      const badAccent = ParseMarkdownFrontmatterHeader('---\ntitle: Safe\naccent: url(https://evil)\n---\nBody');
+      expect(badAccent?.Title).toBe('Safe');
+      expect(badAccent?.Accent).toBeUndefined();
+
+      const collabService = new DocumentCollaborationService();
+      const injector = Injector.create({
+        providers: [
+          { provide: ChangeDetectorRef, useValue: { detectChanges: () => {}, markForCheck: () => {} } },
+          { provide: DocumentCollaborationService, useValue: collabService },
+          { provide: DocumentImportExportService, useValue: { ParseDocumentHtml: () => '' } },
+          { provide: MJNotificationService, useValue: null },
+        ],
+      });
+      const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+      viewer.MarkdownContent = md;
+      (viewer as unknown as { refreshParsedStructure: () => void }).refreshParsedStructure();
+      expect(viewer.FrontmatterHeader?.Title).toBe('Q4 Enterprise Roadmap');
+      expect(viewer.EstimatedReadingMinutes).toBeGreaterThanOrEqual(2);
+      viewer.ngOnDestroy();
+      collabService.ngOnDestroy();
     });
   });
 });

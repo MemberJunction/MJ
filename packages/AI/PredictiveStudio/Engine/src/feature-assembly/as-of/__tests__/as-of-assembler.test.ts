@@ -125,6 +125,23 @@ describe('AsOfFeatureAssembler', () => {
     const features: FeatureColumnSpec[] = [{ name: 'Region', source: { kind: 'immutable-field', entity: 'Years', field: 'Region', keyField: null }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } }];
     expect(await new AsOfFeatureAssembler().Assemble(input(features))).toEqual({ Status: 'refused', Refusal: { kind: 'non-numeric-in-numeric-column', column: 'Region', sampleValue: 'EU' } });
   });
+  it('refuses a stored field the caller may not read by name (unresolved-column), never imputing it as missing (R5)', async () => {
+    /** The provider's field-level security for a restricted caller: Years.Region is left out of every row it returns. */
+    class RegionDeniedDataAccess extends TableDataAccess {
+      public override async fetchRows(p: Parameters<TableDataAccess['fetchRows']>[0]): ReturnType<TableDataAccess['fetchRows']> {
+        const res = await super.fetchRows(p);
+        if (p.EntityName !== 'Years') return res;
+        return { ...res, Rows: res.Rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'Region'))) };
+      }
+    }
+    const features: FeatureColumnSpec[] = [{ name: 'Region', source: { kind: 'immutable-field', entity: 'Years', field: 'Region', keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } }];
+    const denied = new RegionDeniedDataAccess({ ...tables, 'MJ: Record Changes': recordChangeRows(changes) });
+    const base = input(features);
+    for (const context of ['train', 'score'] as const) {
+      const out = await new AsOfFeatureAssembler().Assemble({ ...base, Context: context, DataAccess: denied, History: new RunViewRecordHistoryReader(denied, { mode: 'complete' }) });
+      expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'Region' } });
+    }
+  });
   it('emits an imputer with a missing indicator for every column, and one-hot for categoricals', async () => {
     const features: FeatureColumnSpec[] = [
       { name: 'EventsAttended', source: { kind: 'immutable-field', entity: 'Years', field: 'EventsAttended', keyField: null }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } },
@@ -303,6 +320,7 @@ describe('AsOfFeatureAssembler current-value reads', () => {
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
     expect([...out.ExcludedRowIDs]).toEqual(['y1', 'y2']);
+    expect(out.UncoveredFieldsByRow).toEqual(new Map([['y1', ['Years.PersonStatusNow', 'Years.Region']], ['y2', ['Years.PersonStatusNow', 'Years.Region']]]));
     expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'Years', field: 'PersonStatusNow', rows: 2 }, { entity: 'Years', field: 'Region', rows: 2 }]);
     expect(out.Coverage.map((c) => [c.entity, c.field])).toEqual([['Years', 'PersonStatusNow'], ['Years', 'Region']]);
   });

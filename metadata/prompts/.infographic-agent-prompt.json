@@ -15,7 +15,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 5.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1
           },
@@ -23,8 +23,8 @@
             "ID": "FFE8F664-8CAA-44EA-A5D5-3909148AF361"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:56.954Z",
-            "checksum": "888a1042e910c9f502887d46024d39d3169c4c6d58ac51dc058896b8bdfc4909"
+            "lastModified": "2026-11-24T20:27:12.788Z",
+            "checksum": "2785205a59649e75314ce780857c918294d4fd9e70e939074b9dc88952cc4748"
           }
         },
         {
@@ -60,7 +60,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Luna",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -68,18 +68,14 @@
             "ID": "48E70C10-8859-46B0-82A0-9239F20F5F9B"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:49:10.659Z",
-            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
+            "lastModified": "2026-11-24T20:27:12.798Z",
+            "checksum": "678044bc528794ef1fbe0c708b488d8a5f0583e4ea828d9e33f0c7a66cd1757a"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "FB0EBBA3-857F-4E02-B12C-22F82B6D52BF"
-    },
-    "sync": {
-      "lastModified": "2026-09-13T20:06:51.139Z",
-      "checksum": "f32283013f5b937f4f957e84bc997a868d48e6eaadc04c3e7c3218d694090418"
     }
   }
 ]

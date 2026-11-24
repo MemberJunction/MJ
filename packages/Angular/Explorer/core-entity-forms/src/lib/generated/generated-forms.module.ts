@@ -39,6 +39,7 @@ import { MJAIAgentPromptFormComponent } from "./Entities/MJAIAgentPrompt/mjaiage
 import { MJAIAgentRelationshipFormComponent } from "./Entities/MJAIAgentRelationship/mjaiagentrelationship.form.component";
 import { MJAIAgentRequestFormComponent } from "./Entities/MJAIAgentRequest/mjaiagentrequest.form.component";
 import { MJAIAgentRequestTypeFormComponent } from "./Entities/MJAIAgentRequestType/mjaiagentrequesttype.form.component";
+import { MJAIAgentRhythmTemplateFormComponent } from "./Entities/MJAIAgentRhythmTemplate/mjaiagentrhythmtemplate.form.component";
 import { MJAIAgentRubricFormComponent } from "./Entities/MJAIAgentRubric/mjaiagentrubric.form.component";
 import { MJAIAgentRunFormComponent } from "./Entities/MJAIAgentRun/mjaiagentrun.form.component";
 import { MJAIAgentRunMediaFormComponent } from "./Entities/MJAIAgentRunMedia/mjaiagentrunmedia.form.component";
@@ -52,6 +53,7 @@ import { MJAIAgentSessionRecordingShardFormComponent } from "./Entities/MJAIAgen
 import { MJAIAgentSkillFormComponent } from "./Entities/MJAIAgentSkill/mjaiagentskill.form.component";
 import { MJAIAgentStepFormComponent } from "./Entities/MJAIAgentStep/mjaiagentstep.form.component";
 import { MJAIAgentStepPathFormComponent } from "./Entities/MJAIAgentStepPath/mjaiagentsteppath.form.component";
+import { MJAIAgentSuggestionFormComponent } from "./Entities/MJAIAgentSuggestion/mjaiagentsuggestion.form.component";
 import { MJAIAgentTypeFormComponent } from "./Entities/MJAIAgentType/mjaiagenttype.form.component";
 import { MJAIAgentUserPolicyFormComponent } from "./Entities/MJAIAgentUserPolicy/mjaiagentuserpolicy.form.component";
 import { MJAIArchitectureFormComponent } from "./Entities/MJAIArchitecture/mjaiarchitecture.form.component";
@@ -110,6 +112,8 @@ import { MJActionFormComponent } from "./Entities/MJAction/mjaction.form.compone
 import { MJActionLibraryFormComponent } from "./Entities/MJActionLibrary/mjactionlibrary.form.component";
 import { MJActionParamFormComponent } from "./Entities/MJActionParam/mjactionparam.form.component";
 import { MJActionResultCodeFormComponent } from "./Entities/MJActionResultCode/mjactionresultcode.form.component";
+import { MJAgentChannelFormComponent } from "./Entities/MJAgentChannel/mjagentchannel.form.component";
+import { MJAgentChannelParticipantFormComponent } from "./Entities/MJAgentChannelParticipant/mjagentchannelparticipant.form.component";
 import { MJApplicationEntityFormComponent } from "./Entities/MJApplicationEntity/mjapplicationentity.form.component";
 import { MJApplicationFormComponent } from "./Entities/MJApplication/mjapplication.form.component";
 import { MJApplicationRoleFormComponent } from "./Entities/MJApplicationRole/mjapplicationrole.form.component";
@@ -142,11 +146,30 @@ import { MJCollectionFormComponent } from "./Entities/MJCollection/mjcollection.
 import { MJCollectionPermissionFormComponent } from "./Entities/MJCollectionPermission/mjcollectionpermission.form.component";
 import { MJCommentFormComponent } from "./Entities/MJComment/mjcomment.form.component";
 import { MJCommentTypeFormComponent } from "./Entities/MJCommentType/mjcommenttype.form.component";
+import { MJCommunicationActivityFormComponent } from "./Entities/MJCommunicationActivity/mjcommunicationactivity.form.component";
 import { MJCommunicationBaseMessageTypeFormComponent } from "./Entities/MJCommunicationBaseMessageType/mjcommunicationbasemessagetype.form.component";
+import { MJCommunicationComplianceRegimeFormComponent } from "./Entities/MJCommunicationComplianceRegime/mjcommunicationcomplianceregime.form.component";
+import { MJCommunicationComplianceRegimeJurisdictionFormComponent } from "./Entities/MJCommunicationComplianceRegimeJurisdiction/mjcommunicationcomplianceregimejurisdiction.form.component";
+import { MJCommunicationComplianceRegimeRuleFormComponent } from "./Entities/MJCommunicationComplianceRegimeRule/mjcommunicationcomplianceregimerule.form.component";
+import { MJCommunicationComplianceRuleTypeFormComponent } from "./Entities/MJCommunicationComplianceRuleType/mjcommunicationcomplianceruletype.form.component";
+import { MJCommunicationConsentAuditLogFormComponent } from "./Entities/MJCommunicationConsentAuditLog/mjcommunicationconsentauditlog.form.component";
+import { MJCommunicationEndpointFormComponent } from "./Entities/MJCommunicationEndpoint/mjcommunicationendpoint.form.component";
+import { MJCommunicationEndpointPrincipalFormComponent } from "./Entities/MJCommunicationEndpointPrincipal/mjcommunicationendpointprincipal.form.component";
 import { MJCommunicationLogFormComponent } from "./Entities/MJCommunicationLog/mjcommunicationlog.form.component";
+import { MJCommunicationPreferenceFormComponent } from "./Entities/MJCommunicationPreference/mjcommunicationpreference.form.component";
+import { MJCommunicationPrincipalFormComponent } from "./Entities/MJCommunicationPrincipal/mjcommunicationprincipal.form.component";
+import { MJCommunicationPrincipalPreferenceFormComponent } from "./Entities/MJCommunicationPrincipalPreference/mjcommunicationprincipalpreference.form.component";
+import { MJCommunicationProviderEventFormComponent } from "./Entities/MJCommunicationProviderEvent/mjcommunicationproviderevent.form.component";
 import { MJCommunicationProviderFormComponent } from "./Entities/MJCommunicationProvider/mjcommunicationprovider.form.component";
 import { MJCommunicationProviderMessageTypeFormComponent } from "./Entities/MJCommunicationProviderMessageType/mjcommunicationprovidermessagetype.form.component";
+import { MJCommunicationRunChunkFormComponent } from "./Entities/MJCommunicationRunChunk/mjcommunicationrunchunk.form.component";
 import { MJCommunicationRunFormComponent } from "./Entities/MJCommunicationRun/mjcommunicationrun.form.component";
+import { MJCommunicationSenderFormComponent } from "./Entities/MJCommunicationSender/mjcommunicationsender.form.component";
+import { MJCommunicationSenderPermissionFormComponent } from "./Entities/MJCommunicationSenderPermission/mjcommunicationsenderpermission.form.component";
+import { MJCommunicationSenderTypeFormComponent } from "./Entities/MJCommunicationSenderType/mjcommunicationsendertype.form.component";
+import { MJCommunicationSendingDomainFormComponent } from "./Entities/MJCommunicationSendingDomain/mjcommunicationsendingdomain.form.component";
+import { MJCommunicationSuppressionFormComponent } from "./Entities/MJCommunicationSuppression/mjcommunicationsuppression.form.component";
+import { MJCommunicationSuppressionPolicyFormComponent } from "./Entities/MJCommunicationSuppressionPolicy/mjcommunicationsuppressionpolicy.form.component";
 import { MJCompanyFormComponent } from "./Entities/MJCompany/mjcompany.form.component";
 import { MJCompanyIntegrationEntityMapFormComponent } from "./Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component";
 import { MJCompanyIntegrationFieldMapFormComponent } from "./Entities/MJCompanyIntegrationFieldMap/mjcompanyintegrationfieldmap.form.component";
@@ -292,6 +315,8 @@ import { MJInteractionEventFormComponent } from "./Entities/MJInteractionEvent/m
 import { MJInteractionFormComponent } from "./Entities/MJInteraction/mjinteraction.form.component";
 import { MJInteractionLinkFormComponent } from "./Entities/MJInteractionLink/mjinteractionlink.form.component";
 import { MJInteractionOfferFormComponent } from "./Entities/MJInteractionOffer/mjinteractionoffer.form.component";
+import { MJJurisdictionFormComponent } from "./Entities/MJJurisdiction/mjjurisdiction.form.component";
+import { MJJurisdictionMemberFormComponent } from "./Entities/MJJurisdictionMember/mjjurisdictionmember.form.component";
 import { MJKnowledgeHubSavedSearchFormComponent } from "./Entities/MJKnowledgeHubSavedSearch/mjknowledgehubsavedsearch.form.component";
 import { MJLibraryFormComponent } from "./Entities/MJLibrary/mjlibrary.form.component";
 import { MJLibraryItemFormComponent } from "./Entities/MJLibraryItem/mjlibraryitem.form.component";
@@ -312,8 +337,12 @@ import { MJMLAlgorithmUseCaseFormComponent } from "./Entities/MJMLAlgorithmUseCa
 import { MJMLAlgorithmUseCaseRankingFormComponent } from "./Entities/MJMLAlgorithmUseCaseRanking/mjmlalgorithmusecaseranking.form.component";
 import { MJMLEvaluationProtocolFormComponent } from "./Entities/MJMLEvaluationProtocol/mjmlevaluationprotocol.form.component";
 import { MJMLModelFormComponent } from "./Entities/MJMLModel/mjmlmodel.form.component";
+import { MJMLModelPublishRecordFormComponent } from "./Entities/MJMLModelPublishRecord/mjmlmodelpublishrecord.form.component";
 import { MJMLModelScoringBindingFormComponent } from "./Entities/MJMLModelScoringBinding/mjmlmodelscoringbinding.form.component";
+import { MJMLMonitoringResultFormComponent } from "./Entities/MJMLMonitoringResult/mjmlmonitoringresult.form.component";
+import { MJMLOutputBindingFormComponent } from "./Entities/MJMLOutputBinding/mjmloutputbinding.form.component";
 import { MJMLPredictionUnitFormComponent } from "./Entities/MJMLPredictionUnit/mjmlpredictionunit.form.component";
+import { MJMLScoringRunFormComponent } from "./Entities/MJMLScoringRun/mjmlscoringrun.form.component";
 import { MJMLTrainingPipelineFormComponent } from "./Entities/MJMLTrainingPipeline/mjmltrainingpipeline.form.component";
 import { MJMLTrainingRunFormComponent } from "./Entities/MJMLTrainingRun/mjmltrainingrun.form.component";
 import { MJMLTrainingSnapshotFormComponent } from "./Entities/MJMLTrainingSnapshot/mjmltrainingsnapshot.form.component";
@@ -472,14 +501,17 @@ import { MJWorkQueueTopicFormComponent } from "./Entities/MJWorkQueueTopic/mjwor
 import { MJWorkQueueTransportFormComponent } from "./Entities/MJWorkQueueTransport/mjworkqueuetransport.form.component";
 import { MJWorkspaceFormComponent } from "./Entities/MJWorkspace/mjworkspace.form.component";
 import { MJWorkspaceItemFormComponent } from "./Entities/MJWorkspaceItem/mjworkspaceitem.form.component";
+import { MJvwLatestFeatureValuesFormComponent } from "./Entities/MJvwLatestFeatureValues/mjvwlatestfeaturevalues.form.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid"   
 
 @NgModule({
 declarations: [
+    MJAIAgentRhythmTemplateFormComponent,
     MJAIAgentSessionFormComponent,
     MJAIConfigurationParamFormComponent,
     MJAIPromptModelFormComponent,
     MJActionContextFormComponent,
+    MJCommunicationEndpointPrincipalFormComponent,
     MJEncryptionKeySourceFormComponent,
     MJEntityActionFormComponent,
     MJGraphAuthorityTierFormComponent,
@@ -535,6 +567,7 @@ export class GeneratedForms_SubModule_1 { }
 @NgModule({
 declarations: [
     MJAIAgentNoteFormComponent,
+    MJAIAgentSuggestionFormComponent,
     MJAIAgentTypeFormComponent,
     MJAuditLogTypeFormComponent,
     MJComponentFormComponent,
@@ -604,6 +637,9 @@ declarations: [
     MJAISkillActionFormComponent,
     MJArtifactPermissionFormComponent,
     MJCommentFormComponent,
+    MJCommunicationComplianceRegimeJurisdictionFormComponent,
+    MJCommunicationEndpointFormComponent,
+    MJCommunicationSenderFormComponent,
     MJCredentialTypeFormComponent,
     MJDiagnosticSessionFormComponent,
     MJEntityRelationshipFormComponent,
@@ -633,6 +669,7 @@ declarations: [
     MJAPIApplicationFormComponent,
     MJArchiveRunDetailFormComponent,
     MJCalendarEventLinkFormComponent,
+    MJCommunicationPrincipalFormComponent,
     MJComponentLibraryFormComponent,
     MJContentItemAttributeFormComponent,
     MJContentItemFormComponent,
@@ -670,10 +707,12 @@ declarations: [
     MJAIModelFormComponent,
     MJArchiveRunFormComponent,
     MJCollectionPermissionFormComponent,
+    MJCommunicationProviderEventFormComponent,
     MJContentFileTypeFormComponent,
     MJContentProcessRunFormComponent,
     MJDataContextFormComponent,
     MJEntityAlternateBaseViewFormComponent,
+    MJJurisdictionMemberFormComponent,
     MJOAuthAuthServerMetadataCacheFormComponent,
     MJResourcePermissionFormComponent,
     MJRubricVersionFormComponent
@@ -698,6 +737,7 @@ declarations: [
     MJAIAgentSkillFormComponent,
     MJArchiveConfigurationFormComponent,
     MJCollectionFormComponent,
+    MJCommunicationComplianceRegimeFormComponent,
     MJComponentRegistryFormComponent,
     MJDatasetFormComponent,
     MJGeneratedCodeCategoryFormComponent,
@@ -725,9 +765,11 @@ declarations: [
     MJActionContextTypeFormComponent,
     MJActionLibraryFormComponent,
     MJAuthenticationProviderFormComponent,
+    MJCommunicationPreferenceFormComponent,
     MJCredentialCategoryFormComponent,
     MJDashboardPartTypeFormComponent,
     MJEntityFieldFormComponent,
+    MJMLOutputBindingFormComponent,
     MJOAuthClientRegistrationFormComponent,
     MJOutputDeliveryTypeFormComponent,
     MJProjectFormComponent
@@ -751,6 +793,7 @@ declarations: [
     MJApplicationFormComponent,
     MJArtifactTypeFormComponent,
     MJCollectionArtifactFormComponent,
+    MJCommunicationSenderPermissionFormComponent,
     MJConversationDetailFormComponent,
     MJEntityActionParamFormComponent,
     MJMagicLinkInviteRoleFormComponent,
@@ -848,8 +891,10 @@ declarations: [
     MJAccessControlRuleFormComponent,
     MJAuthorizationRoleFormComponent,
     MJCommentTypeFormComponent,
+    MJCommunicationSenderTypeFormComponent,
     MJContentSourceTypeParamFormComponent,
     MJCredentialFormComponent,
+    MJJurisdictionFormComponent,
     MJMLAlgorithmUseCaseFormComponent,
     MJOAuthAuthorizationStateFormComponent,
     MJScopedNotificationConfigFormComponent,
@@ -877,6 +922,8 @@ declarations: [
     MJApplicationSettingFormComponent,
     MJArtifactVersionAttributeFormComponent,
     MJArtifactVersionFormComponent,
+    MJCommunicationComplianceRegimeRuleFormComponent,
+    MJCommunicationSendingDomainFormComponent,
     MJEncryptionAlgorithmFormComponent,
     MJEntityFieldPermissionFormComponent,
     MJFileStorageProviderFormComponent,
@@ -913,6 +960,7 @@ declarations: [
     MJFeatureValueCacheFormComponent,
     MJLibraryFormComponent,
     MJMCPServerConnectionFormComponent,
+    MJMLScoringRunFormComponent,
     MJQueryEntityFormComponent,
     MJRemoteOperationCategoryFormComponent,
     MJSchemaInfoFormComponent,
@@ -970,6 +1018,7 @@ export class GeneratedForms_SubModule_15 { }
 declarations: [
     MJAIAgentSearchScopeFormComponent,
     MJAIModelPersonaFormComponent,
+    MJAgentChannelParticipantFormComponent,
     MJArtifactUseFormComponent,
     MJCommunicationRunFormComponent,
     MJContentTypeFormComponent,
@@ -1003,6 +1052,7 @@ declarations: [
     MJActionCategoryFormComponent,
     MJActionResultCodeFormComponent,
     MJApplicationRoleFormComponent,
+    MJCommunicationRunChunkFormComponent,
     MJCompanyIntegrationEntityMapFormComponent,
     MJCompanyIntegrationRunAPILogFormComponent,
     MJComponentDependencyFormComponent,
@@ -1096,6 +1146,7 @@ declarations: [
     MJAIModalityFormComponent,
     MJAISkillSearchScopeFormComponent,
     MJArtifactGuestShareLinkFormComponent,
+    MJCommunicationActivityFormComponent,
     MJCompanyIntegrationRunDetailFormComponent,
     MJConversationArtifactFormComponent,
     MJEntityOrganicKeyRelatedEntityFormComponent,
@@ -1130,6 +1181,7 @@ declarations: [
     MJComponentLibraryLinkFormComponent,
     MJExternalDataSourceTypeFormComponent,
     MJMCPToolFavoriteFormComponent,
+    MJMLMonitoringResultFormComponent,
     MJMLPredictionUnitFormComponent,
     MJMaterializedResultQueryFormComponent,
     MJOutputFormatTypeFormComponent,
@@ -1204,6 +1256,7 @@ declarations: [
     MJGraphFormComponent,
     MJGraphTypeFormComponent,
     MJInteractionFormComponent,
+    MJMLModelPublishRecordFormComponent,
     MJMLModelScoringBindingFormComponent,
     MJRoleFormComponent,
     MJScopedPromptConfigFormComponent,
@@ -1211,7 +1264,8 @@ declarations: [
     MJSearchScopeTestQueryFormComponent,
     MJTaskDependencyFormComponent,
     MJTestFormComponent,
-    MJTestTypeFormComponent
+    MJTestTypeFormComponent,
+    MJvwLatestFeatureValuesFormComponent
 ],
 imports: [
     CommonModule,
@@ -1235,6 +1289,8 @@ declarations: [
     MJAPIKeyScopeFormComponent,
     MJApplicationEntityFormComponent,
     MJAuthorizationFormComponent,
+    MJCommunicationComplianceRuleTypeFormComponent,
+    MJCommunicationConsentAuditLogFormComponent,
     MJCompanyIntegrationFieldMapFormComponent,
     MJEntityFormOverrideFormComponent,
     MJFileStorageAccountPermissionFormComponent,
@@ -1295,6 +1351,7 @@ export class GeneratedForms_SubModule_25 { }
 @NgModule({
 declarations: [
     MJActionParamFormComponent,
+    MJCommunicationPrincipalPreferenceFormComponent,
     MJConversationBranchFormComponent,
     MJConversationFormComponent,
     MJEntityActionInvocationTypeFormComponent,
@@ -1330,6 +1387,7 @@ export class GeneratedForms_SubModule_26 { }
 declarations: [
     MJAIAgentRequestFormComponent,
     MJAIAgentRequestTypeFormComponent,
+    MJAgentChannelFormComponent,
     MJCompanyIntegrationObjectFormComponent,
     MJConversationWidgetInstanceFormComponent,
     MJDuplicateRunDetailMatchFormComponent,
@@ -1364,6 +1422,7 @@ declarations: [
     MJAIRemoteBrowserProviderFormComponent,
     MJBrandKitAssetFormComponent,
     MJCommunicationProviderFormComponent,
+    MJCommunicationSuppressionPolicyFormComponent,
     MJContentSourceParamFormComponent,
     MJEmployeeSkillFormComponent,
     MJEnvironmentFormComponent,
@@ -1422,6 +1481,7 @@ export class GeneratedForms_SubModule_29 { }
 declarations: [
     MJAIAgentCategoryFormComponent,
     MJAISkillFormComponent,
+    MJCommunicationSuppressionFormComponent,
     MJEntityActionFilterFormComponent,
     MJExperimentFormComponent,
     MJFeatureValueFormComponent,

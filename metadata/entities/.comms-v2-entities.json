@@ -1,0 +1,85 @@
+[
+  {
+    "_comments": [
+      "Append-only compliance consent audit log: no update/delete API or record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Consent Audit Logs"
+    },
+    "fields": {
+      "Name": "MJ: Communication Consent Audit Logs",
+      "TrackRecordChanges": false,
+      "AllowCreateAPI": true,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:31.235Z",
+      "checksum": "47dc7bc1c22b722ebdeb2e7959408c7f812fbb9e47c2bf21346e040003862d52"
+    }
+  },
+  {
+    "_comments": [
+      "High-volume activity event table: disable record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Activities"
+    },
+    "fields": {
+      "Name": "MJ: Communication Activities",
+      "TrackRecordChanges": false
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:31.267Z",
+      "checksum": "36b0d68e31ef86d76734018488b69eb5c0c8e049441ee29f102b38e1e9450463"
+    }
+  },
+  {
+    "_comments": [
+      "High-volume provider webhook idempotency ledger: disable record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Provider Events"
+    },
+    "fields": {
+      "Name": "MJ: Communication Provider Events",
+      "TrackRecordChanges": false
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:31.283Z",
+      "checksum": "011384003ff12c851e9fcee6f540858216728002da1f543031557cce5b32c6f2"
+    }
+  },
+  {
+    "_comments": [
+      "Endpoints hold PII erased under GDPR: disable record-change tracking so erased addresses are not retained in RecordChange history"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Endpoints"
+    },
+    "fields": {
+      "Name": "MJ: Communication Endpoints",
+      "TrackRecordChanges": false
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:31.297Z",
+      "checksum": "ecad19847768f55f13296b1a0984920e335b543f342ba7af1f58abac90691e09"
+    }
+  },
+  {
+    "_comments": [
+      "Per-chunk bookkeeping for chunked communication runs: high volume and written by the system, so no record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Run Chunks"
+    },
+    "fields": {
+      "Name": "MJ: Communication Run Chunks",
+      "TrackRecordChanges": false
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:31.321Z",
+      "checksum": "ed0dd65350baf5f9bc7f443855202d170e76abd1ff561ac43737b2a4a9f67189"
+    }
+  }
+]

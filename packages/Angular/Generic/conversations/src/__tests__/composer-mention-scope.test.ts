@@ -97,4 +97,27 @@ describe("mj-ai-composer — each composer keeps its own '@' scope", () => {
 
         expect(await atList(composer)).toEqual({ agents: ['Coder', 'Research', 'Writer'], people: ['Me Myself'] });
     });
+
+    it('forwards DefaultChatAgentID, InThreadAgentIDs, PopulationFilter, SearchField, and calls RecordMentionUse on selection', async () => {
+        const composer = new AiComposerComponent();
+        composer.DefaultChatAgentID = WRITER.ID;
+        composer.InThreadAgentIDs = [RESEARCH.ID];
+
+        const provider = atProvider(composer);
+        const suggestions = await provider.GetSuggestions({
+            ...REQUEST,
+            PopulationFilter: 'shared',
+            SearchField: 'all',
+        });
+
+        const writerSuggestion = suggestions.find((s) => s.id === WRITER.ID);
+        const researchSuggestion = suggestions.find((s) => s.id === RESEARCH.ID);
+        expect(writerSuggestion?.isDefaultChatAgent).toBe(true);
+        expect(researchSuggestion?.isInCurrentThread).toBe(true);
+        expect(suggestions.every((s) => s.type === 'agent')).toBe(true);
+
+        const recordSpy = vi.spyOn(MentionAutocompleteService.Instance, 'RecordMentionUse');
+        provider.OnSuggestionSelected(writerSuggestion!, REQUEST.ContextUser);
+        expect(recordSpy).toHaveBeenCalledWith(WRITER.ID, 'agent', REQUEST.ContextUser);
+    });
 });

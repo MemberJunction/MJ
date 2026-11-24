@@ -149,11 +149,17 @@
               <div class="mj-agent-props-field">
                 <label>Action</label>
                 @if (!ReadOnly) {
+                  <input type="search"
+                    class="mj-agent-props-input mj-agent-props-picker-search"
+                    [value]="ActionSearchQuery"
+                    (input)="ActionSearchQuery = InputValue($event)"
+                    placeholder="Filter actions..."
+                    aria-label="Filter actions">
                   <select [value]="Step!.ActionID || ''"
                     (change)="OnActionChange(InputValue($event))"
                     class="mj-agent-props-input">
                     <option value="">-- Select Action --</option>
-                    @for (action of Actions; track action) {
+                    @for (action of FilteredActions; track action.ID) {
                       <option [value]="action.ID">{{ action.Name }}</option>
                     }
                   </select>
@@ -168,11 +174,17 @@
               <div class="mj-agent-props-field">
                 <label>Prompt</label>
                 @if (!ReadOnly) {
+                  <input type="search"
+                    class="mj-agent-props-input mj-agent-props-picker-search"
+                    [value]="PromptSearchQuery"
+                    (input)="PromptSearchQuery = InputValue($event)"
+                    placeholder="Filter prompts..."
+                    aria-label="Filter prompts">
                   <select [value]="Step!.PromptID || ''"
                     (change)="OnPromptChange(InputValue($event))"
                     class="mj-agent-props-input">
                     <option value="">-- Select Prompt --</option>
-                    @for (prompt of Prompts; track prompt) {
+                    @for (prompt of FilteredPrompts; track prompt.ID) {
                       <option [value]="prompt.ID">{{ prompt.Name }}</option>
                     }
                   </select>
@@ -187,11 +199,17 @@
               <div class="mj-agent-props-field">
                 <label>Sub-Agent</label>
                 @if (!ReadOnly) {
+                  <input type="search"
+                    class="mj-agent-props-input mj-agent-props-picker-search"
+                    [value]="AgentSearchQuery"
+                    (input)="AgentSearchQuery = InputValue($event)"
+                    placeholder="Filter agents..."
+                    aria-label="Filter agents">
                   <select [value]="Step!.SubAgentID || ''"
                     (change)="OnSubAgentChange(InputValue($event))"
                     class="mj-agent-props-input">
                     <option value="">-- Select Agent --</option>
-                    @for (agent of Agents; track agent) {
+                    @for (agent of FilteredAgents; track agent.ID) {
                       <option [value]="agent.ID">{{ agent.Name }}</option>
                     }
                   </select>
@@ -201,18 +219,207 @@
                 }
               </div>
             }
-            <!-- Loop Configuration (JSON) -->
-            @if (showLoopConfig) {
+            <!-- Person (Human) step -->
+            @if (ShowHumanConfig) {
               <div class="mj-agent-props-field">
-                <label>Loop Configuration</label>
-                <mj-code-editor
-                  [value]="FormatJsonDisplay(Step!.Configuration)"
-                  language="json"
-                  [readonly]="ReadOnly"
-                  setup="minimal"
-                  [lineWrapping]="true"
-                  (change)="OnConfigurationChange($any($event))">
-                </mj-code-editor>
+                <label>Asks</label>
+                <div class="mj-agent-props-hint">What the person is asked is this step's description.</div>
+              </div>
+              <div class="mj-agent-props-field">
+                <label>Provider</label>
+                @if (!ReadOnly) {
+                  <input type="text" class="mj-agent-props-input" placeholder="Built-in inbox"
+                    [value]="ConfigText('provider')"
+                    (change)="OnConfigTextChange('provider', InputValue($event))">
+                  <div class="mj-agent-props-hint">Leave empty for MemberJunction's own inbox, or name the app that should put this in front of someone.</div>
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('provider') || 'Built-in inbox' }}</div>
+                }
+              </div>
+              @if (ConfigText('provider')) {
+                <div class="mj-agent-props-field">
+                  <label>Provider settings (JSON)</label>
+                  <mj-code-editor
+                    [value]="ConfigText('providerConfiguration')"
+                    language="json"
+                    [readonly]="ReadOnly"
+                    setup="minimal"
+                    [lineWrapping]="true"
+                    (change)="OnProviderConfigurationChange($any($event))">
+                  </mj-code-editor>
+                </div>
+              }
+              <div class="mj-agent-props-field">
+                <label>Expires after (hours)</label>
+                @if (!ReadOnly) {
+                  <input type="number" min="0" step="1" class="mj-agent-props-input" placeholder="Never"
+                    [value]="ConfigText('expiresInHours')"
+                    (change)="OnConfigNumberChange('expiresInHours', InputValue($event))">
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('expiresInHours') || 'Never' }}</div>
+                }
+              </div>
+            }
+            <!-- External signal step -->
+            @if (ShowExternalConfig) {
+              <div class="mj-agent-props-field">
+                <label>Waits on</label>
+                @if (!ReadOnly) {
+                  <input type="text" class="mj-agent-props-input" placeholder="external"
+                    [value]="ConfigText('domain')"
+                    (change)="OnConfigTextChange('domain', InputValue($event))">
+                  <div class="mj-agent-props-hint">A label for what sends the signal, such as "stripe" or "hr-system".</div>
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('domain') || 'external' }}</div>
+                }
+              </div>
+              <div class="mj-agent-props-field">
+                <label>Correlation key</label>
+                @if (!ReadOnly) {
+                  <input type="text" class="mj-agent-props-input" placeholder="Signalled by task ID"
+                    [value]="ConfigText('correlationKey')"
+                    (change)="OnConfigTextChange('correlationKey', InputValue($event))">
+                  <div class="mj-agent-props-hint">A fixed key, or <code>payload.&lt;path&gt;</code> read when the step is reached. One signal completes every step waiting on its key.</div>
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('correlationKey') || 'Signalled by task ID' }}</div>
+                }
+              </div>
+              <div class="mj-agent-props-field">
+                <label>Expires after (hours)</label>
+                @if (!ReadOnly) {
+                  <input type="number" min="0" step="1" class="mj-agent-props-input" placeholder="Never"
+                    [value]="ConfigText('expiresInHours')"
+                    (change)="OnConfigNumberChange('expiresInHours', InputValue($event))">
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('expiresInHours') || 'Never' }}</div>
+                }
+              </div>
+            }
+            <!-- Wait step -->
+            @if (ShowWaitConfig) {
+              <div class="mj-agent-props-field">
+                <label>Wait</label>
+                @if (!ReadOnly) {
+                  <select class="mj-agent-props-input" [value]="WaitFields.Mode"
+                    (change)="OnWaitModeChange($any(InputValue($event)))">
+                    <option value="duration">For a length of time</option>
+                    <option value="until">Until a moment</option>
+                  </select>
+                }
+              </div>
+              @if (WaitFields.Mode === 'duration') {
+                <div class="mj-agent-props-field">
+                  <label>Seconds</label>
+                  @if (!ReadOnly) {
+                    <input type="number" min="0" step="1" class="mj-agent-props-input"
+                      [value]="WaitFields.DurationSeconds ?? ''"
+                      (change)="OnConfigNumberChange('durationSeconds', InputValue($event))">
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ WaitFields.DurationSeconds ?? '—' }}</div>
+                  }
+                </div>
+              } @else {
+                <div class="mj-agent-props-field">
+                  <label>Until</label>
+                  @if (!ReadOnly) {
+                    <input type="text" class="mj-agent-props-input" placeholder="payload.renewal.chargeOn"
+                      [value]="WaitFields.Until"
+                      (change)="OnConfigTextChange('until', InputValue($event))">
+                    <div class="mj-agent-props-hint">An ISO date and time, or <code>payload.&lt;path&gt;</code> holding one. A moment already past continues at once.</div>
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ WaitFields.Until || '—' }}</div>
+                  }
+                </div>
+              }
+            }
+            <!-- Structured Loop Configuration + Raw JSON Toggle -->
+            @if (showLoopConfig) {
+              @if (Step!.StepType === 'ForEach') {
+                <div class="mj-agent-props-field">
+                  <label>Collection Path</label>
+                  @if (!ReadOnly) {
+                    <input type="text" class="mj-agent-props-input" placeholder="e.g. payload.items"
+                      [value]="ConfigText('collectionPath')"
+                      (change)="OnConfigTextChange('collectionPath', InputValue($event))">
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ ConfigText('collectionPath') || '—' }}</div>
+                  }
+                </div>
+                <div class="mj-agent-props-field">
+                  <label>Item Variable</label>
+                  @if (!ReadOnly) {
+                    <input type="text" class="mj-agent-props-input" placeholder="e.g. item"
+                      [value]="ConfigText('itemVariable')"
+                      (change)="OnConfigTextChange('itemVariable', InputValue($event))">
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ ConfigText('itemVariable') || 'item' }}</div>
+                  }
+                </div>
+              } @else {
+                <div class="mj-agent-props-field">
+                  <label>While Condition</label>
+                  @if (!ReadOnly) {
+                    <input type="text" class="mj-agent-props-input" placeholder="e.g. payload.approved !== true"
+                      [value]="ConfigText('condition')"
+                      (change)="OnConfigTextChange('condition', InputValue($event))">
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ ConfigText('condition') || '—' }}</div>
+                  }
+                </div>
+              }
+              <div class="mj-agent-props-loop-grid">
+                <div class="mj-agent-props-field">
+                  <label>Execution Mode</label>
+                  @if (!ReadOnly) {
+                    <select class="mj-agent-props-input" [value]="ConfigText('executionMode') || 'sequential'"
+                      (change)="OnLoopExecutionModeChange(InputValue($event))">
+                      <option value="sequential">Sequential</option>
+                      <option value="parallel">Parallel</option>
+                    </select>
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ ConfigText('executionMode') || 'sequential' }}</div>
+                  }
+                </div>
+                <div class="mj-agent-props-field">
+                  <label>Max Iterations</label>
+                  @if (!ReadOnly) {
+                    <input type="number" min="1" step="1" class="mj-agent-props-input" placeholder="50"
+                      [value]="ConfigText('maxIterations')"
+                      (change)="OnConfigNumberChange('maxIterations', InputValue($event))">
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ ConfigText('maxIterations') || 'Default' }}</div>
+                  }
+                </div>
+              </div>
+              @if (ConfigText('executionMode') === 'parallel') {
+                <div class="mj-agent-props-field">
+                  <label>Max Concurrency</label>
+                  @if (!ReadOnly) {
+                    <input type="number" min="1" max="50" step="1" class="mj-agent-props-input" placeholder="4"
+                      [value]="ConfigText('maxConcurrency')"
+                      (change)="OnConfigNumberChange('maxConcurrency', InputValue($event))">
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ ConfigText('maxConcurrency') || '4' }}</div>
+                  }
+                </div>
+              }
+              <div class="mj-agent-props-field">
+                <button type="button" class="mj-agent-props-btn mj-agent-props-btn--xs" (click)="ShowRawLoopJson = !ShowRawLoopJson">
+                  <i class="fa-solid fa-code" aria-hidden="true"></i>
+                  {{ ShowRawLoopJson ? 'Hide Raw Loop JSON' : 'Edit Raw Loop JSON' }}
+                </button>
+                @if (ShowRawLoopJson) {
+                  <div style="margin-top:6px">
+                    <mj-code-editor
+                      [value]="FormatJsonDisplay(Step!.Configuration)"
+                      language="json"
+                      [readonly]="ReadOnly"
+                      setup="minimal"
+                      [lineWrapping]="true"
+                      (change)="OnConfigurationChange($any($event))">
+                    </mj-code-editor>
+                  </div>
+                }
               </div>
             }
             <!-- Decision Step Properties -->
@@ -475,6 +682,20 @@
           <ng-template mjAccordionTitle><span>Data Mapping</span></ng-template>
             <ng-template mjAccordionBody>
               <div class="mj-agent-props-section-body">
+              @if (!ReadOnly && UpstreamVariablePills.length > 0) {
+                <div class="mj-agent-props-field">
+                  <label>Quick-Insert Upstream Variables</label>
+                  <div class="mj-agent-props-var-pills">
+                    @for (pill of UpstreamVariablePills; track pill.Token) {
+                      <button type="button" class="mj-agent-props-var-pill"
+                        (click)="OnInsertVariablePill(pill)"
+                        [title]="'Insert ' + pill.Token + ' into Input Mapping'">
+                        {{ pill.Token }}
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
               <div class="mj-agent-props-field">
                 <label>Input Mapping</label>
                 <mj-code-editor
@@ -550,6 +771,40 @@
                 <div class="mj-agent-props-readonly-value">{{ Step!.TimeoutSeconds }}s</div>
               }
             </div>
+            @if (Step!.StepType === 'Action') {
+              <div class="mj-agent-props-field">
+                <label>Saga Rollback / Undo Action (optional)</label>
+                @if (!ReadOnly) {
+                  <select class="mj-agent-props-input"
+                    [value]="ConfigText('compensationActionId')"
+                    (change)="OnSagaCompensationActionChange(InputValue($event))">
+                    <option value="">-- No rollback action --</option>
+                    @for (action of Actions; track action.ID) {
+                      <option [value]="action.ID">{{ action.Name }}</option>
+                    }
+                  </select>
+                  <div class="mj-agent-props-hint">Runs automatically in reverse order if a downstream step fails and triggers Saga rollback.</div>
+                } @else {
+                  <div class="mj-agent-props-readonly-value">{{ ConfigText('compensationActionId') || 'None' }}</div>
+                }
+              </div>
+              @if (ConfigText('compensationActionId')) {
+                <div class="mj-agent-props-field">
+                  <label>If Rollback Fails</label>
+                  @if (!ReadOnly) {
+                    <select class="mj-agent-props-input"
+                      [value]="ConfigText('compensationFailurePolicy') || 'EscalateToHumanTask'"
+                      (change)="OnSagaFailurePolicyChange(InputValue($event))">
+                      <option value="EscalateToHumanTask">Escalate to Person step</option>
+                      <option value="HaltSaga">Halt rollback immediately</option>
+                      <option value="ContinueCompensation">Continue rolling back earlier steps</option>
+                    </select>
+                  } @else {
+                    <div class="mj-agent-props-readonly-value">{{ ConfigText('compensationFailurePolicy') || 'EscalateToHumanTask' }}</div>
+                  }
+                </div>
+              }
+            }
           </div>
           </ng-template>
       </mj-accordion-panel>

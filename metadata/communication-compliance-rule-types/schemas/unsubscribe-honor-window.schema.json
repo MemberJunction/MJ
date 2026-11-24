@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "maxHours"
+  ],
+  "properties": {
+    "maxHours": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum hours allowed to honor an unsubscribe request."
+    }
+  },
+  "additionalProperties": false
+}

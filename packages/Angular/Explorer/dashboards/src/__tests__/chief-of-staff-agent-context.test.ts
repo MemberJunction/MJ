@@ -12,12 +12,23 @@ import {
     ChiefOfStaffDisplayName,
     CreateDefaultPolicyDraft,
     CalculateChiefOfStaffMetrics,
+    EvaluateInstructionsOverrideSize,
+    INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD,
     IsApprovalRequest,
+    LEGACY_CHIEF_OF_STAFF_APP_NAME,
+    MY_AGENTS_APP_NAME,
+    MY_AGENTS_PREFERENCES_SETTING_KEY,
+    DEFAULT_MY_AGENTS_PREFERENCES,
+    IsSystemOrDemoCatalogAgent,
+    NormalizeAgentIconClass,
+    ParseMyAgentsDashboardPreferences,
+    PartitionAgentRoster,
     PolicyGovernanceSummary,
     RequestSummaryItem,
     ResolveSelectableAgent,
     RoutineSummaryItem,
     SelectableAgentsForGovernance,
+    SerializeMyAgentsDashboardPreferences,
     ValidateChiefOfStaffPageParam,
     ValidateSearchQueryParam,
     IsSpentOneShotRoutine,
@@ -203,6 +214,15 @@ describe('BuildChiefOfStaffScopeFilters', () => {
     it('escapes the agent id like any other bound value', () => {
         expect(BuildChiefOfStaffScopeFilters(USER, "x'y").Policy).toContain("AgentID = 'x''y'");
     });
+
+    it('builds user-scoped all-agent filters when selectedAgentId is null (Overview multi-instance mode)', () => {
+        const all = BuildChiefOfStaffScopeFilters(USER, null);
+        expect(all.Policy).toBe(`UserID = '${USER}'`);
+        expect(all.Routines).toBe(`UserID = '${USER}'`);
+        expect(all.Requests).toBe(
+            `RequestForUserID = '${USER}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
+        );
+    });
 });
 
 describe('CHIEF_OF_STAFF_AGENT_NAME', () => {
@@ -293,12 +313,36 @@ describe('Email approval payload: the draft travels in the request Comments as J
     });
 });
 
-describe('Chief of Staff pages', () => {
-    it('gives every page a nav item label and icon', () => {
-        expect(CHIEF_OF_STAFF_PAGES.map((p) => CHIEF_OF_STAFF_PAGE_LABELS[p])).toEqual(['Overview', 'Approvals & Wakes', 'Governance']);
+describe('My Agents pages', () => {
+    it('gives every page a nav item label and icon and exposes My Agents app name + legacy fallback', () => {
+        expect(MY_AGENTS_APP_NAME).toBe('My Agents');
+        expect(LEGACY_CHIEF_OF_STAFF_APP_NAME).toBe('Chief of Staff');
+        expect(CHIEF_OF_STAFF_PAGES.map((p) => CHIEF_OF_STAFF_PAGE_LABELS[p])).toEqual([
+            'Overview',
+            'Approvals & Wakes',
+            'Agent Channels',
+            'Agents',
+        ]);
         for (const page of CHIEF_OF_STAFF_PAGES) {
             expect(CHIEF_OF_STAFF_PAGE_ICONS[page]).toMatch(/^fa-/);
         }
+        expect(NormalizeAgentIconClass('fa-robot')).toBe('fa-solid fa-robot');
+        expect(NormalizeAgentIconClass('fa-regular fa-star')).toBe('fa-regular fa-star');
+        expect(NormalizeAgentIconClass(null)).toBe('fa-solid fa-robot');
+    });
+
+    it('EvaluateInstructionsOverrideSize flags overrides over the 4,000-character threshold', () => {
+        expect(EvaluateInstructionsOverrideSize(null)).toEqual({
+            Length: 0,
+            Threshold: INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD,
+            ExceedsThreshold: false,
+            PercentOfThreshold: 0,
+        });
+        expect(EvaluateInstructionsOverrideSize('x'.repeat(4000)).ExceedsThreshold).toBe(false);
+        const oversized = EvaluateInstructionsOverrideSize('x'.repeat(4200));
+        expect(oversized.ExceedsThreshold).toBe(true);
+        expect(oversized.Length).toBe(4200);
+        expect(oversized.PercentOfThreshold).toBe(105);
     });
 });
 
@@ -394,5 +438,150 @@ describe('Multi-agent picker helpers (Chief of Staff + Software Factory)', () =>
         expect(ctx['SelectedAgentID']).toBe(FACTORY_ID);
         expect(ctx['SelectedAgentName']).toBe('Software Factory');
         expect(ctx['AvailableAgentNames']).toEqual(['Chief of Staff', 'Software Factory']);
+    });
+
+    it('surfaces personal derived Chief of Staff instances (Pepper primary, Cato secondary) first and suppresses unreferenced Required template', () => {
+        const USER_ID = '11111111-0000-4000-8000-000000000099';
+        const PEPPER_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E11';
+        const CATO_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E22';
+        const raw = [
+            { ID: FACTORY_ID, Name: 'Software Factory', ParentID: null, Status: 'Active', InstantiationMode: 'None' },
+            { ID: COS_ID, Name: 'Chief of Staff', ParentID: null, Status: 'Active', InstantiationMode: 'Required' },
+            {
+                ID: CATO_ID,
+                Name: 'Cato',
+                ParentID: null,
+                BaseAgentID: COS_ID,
+                OwnerUserID: USER_ID,
+                IsPrimaryInstance: false,
+                Status: 'Active',
+            },
+            {
+                ID: PEPPER_ID,
+                Name: 'Pepper',
+                ParentID: null,
+                BaseAgentID: COS_ID,
+                OwnerUserID: USER_ID,
+                IsPrimaryInstance: true,
+                Status: 'Active',
+            },
+        ];
+
+        const selectable = SelectableAgentsForGovernance(raw, undefined, USER_ID);
+        expect(selectable.map((a) => a.Name)).toEqual(['Pepper', 'Cato', 'Software Factory']);
+        expect(selectable[0].IsDerivedInstance).toBe(true);
+        expect(selectable[0].IsPrimaryInstance).toBe(true);
+        expect(selectable[0].IsOwnedByCurrentUser).toBe(true);
+        expect(selectable[0].BaseAgentName).toBe('Chief of Staff');
+        expect(selectable[1].IsDerivedInstance).toBe(true);
+        expect(selectable[1].IsPrimaryInstance).toBeUndefined();
+
+        const partitioned = PartitionAgentRoster(selectable);
+        expect(partitioned.MyAgents.map((a) => a.Name)).toEqual(['Pepper', 'Cato']);
+        expect(partitioned.SharedAgents.map((a) => a.Name)).toEqual(['Software Factory']);
+    });
+
+    it('excludes Sub-Agent delegates from standalone roster (unless referenced) and classifies System/Demo/Restricted shared agents', () => {
+        const SUB_DB_ID = '50BA6E01-0000-4000-8000-000000000001';
+        const DEMO_LOOP_ID = 'DE001009-0000-4000-8000-000000000002';
+        const MEM_MGR_ID = '5E500001-0000-4000-8000-000000000003';
+        const REALTIME_ID = 'AEA1710E-0000-4000-8000-000000000004';
+        const RESEARCH_ID = 'AE5EAAC4-0000-4000-8000-000000000005';
+
+        const raw = [
+            {
+                ID: SUB_DB_ID,
+                Name: 'Database Research Agent',
+                ParentID: null,
+                Status: 'Active',
+                InvocationMode: 'Sub-Agent',
+            },
+            {
+                ID: DEMO_LOOP_ID,
+                Name: 'Demo Loop Agent',
+                ParentID: null,
+                Status: 'Active',
+                Category: 'Demo',
+                InvocationMode: 'Any',
+            },
+            {
+                ID: MEM_MGR_ID,
+                Name: 'Memory Manager',
+                ParentID: null,
+                Status: 'Active',
+                IsRestricted: true,
+                InvocationMode: 'Top-Level',
+            },
+            {
+                ID: REALTIME_ID,
+                Name: 'Realtime Co-Agent',
+                ParentID: null,
+                Status: 'Active',
+                Type: 'Realtime',
+                InvocationMode: 'Any',
+            },
+            {
+                ID: RESEARCH_ID,
+                Name: 'Research Agent',
+                ParentID: null,
+                Status: 'Active',
+                Category: 'Research',
+                InstantiationMode: 'Optional',
+                InvocationMode: 'Any',
+            },
+        ];
+
+        const selectable = SelectableAgentsForGovernance(raw);
+        // Sub-Agent is excluded outright
+        expect(selectable.find((a) => a.ID === SUB_DB_ID)).toBeUndefined();
+        // Specialists remain unmarked; Demo, Restricted, and Realtime are flagged IsSystemOrDemo
+        expect(selectable.find((a) => a.ID === RESEARCH_ID)?.IsSystemOrDemo).toBeUndefined();
+        expect(selectable.find((a) => a.ID === DEMO_LOOP_ID)?.IsSystemOrDemo).toBe(true);
+        expect(selectable.find((a) => a.ID === MEM_MGR_ID)?.IsSystemOrDemo).toBe(true);
+        expect(selectable.find((a) => a.ID === REALTIME_ID)?.IsSystemOrDemo).toBe(true);
+        expect(IsSystemOrDemoCatalogAgent({ ID: 'x', Name: 'Pepper', BaseAgentID: COS_ID, IsRestricted: true })).toBe(
+            false,
+        );
+
+        // If a Sub-Agent is explicitly referenced by an existing policy/request, it is preserved
+        const withRef = SelectableAgentsForGovernance(raw, new Set([SUB_DB_ID]));
+        expect(withRef.find((a) => a.ID === SUB_DB_ID)?.Name).toBe('Database Research Agent');
+    });
+
+    it('parses and serializes MyAgentsDashboardPreferences with clean defaults and enum sanitization', () => {
+        expect(MY_AGENTS_PREFERENCES_SETTING_KEY).toBe('myAgents.dashboardPreferences');
+        expect(ParseMyAgentsDashboardPreferences(null)).toEqual(DEFAULT_MY_AGENTS_PREFERENCES);
+        expect(ParseMyAgentsDashboardPreferences('not-json')).toEqual(DEFAULT_MY_AGENTS_PREFERENCES);
+
+        const serialized = SerializeMyAgentsDashboardPreferences({
+            myAgentsExpanded: true,
+            sharedExpanded: true,
+            showSystemAndDemo: true,
+            activeAgentSubTab: 'persona',
+            selectedAgentId: FACTORY_ID,
+            overviewStripDensity: 'compact',
+            overviewCollapsedPanels: ['channels'],
+        });
+        expect(ParseMyAgentsDashboardPreferences(serialized)).toEqual({
+            myAgentsExpanded: true,
+            sharedExpanded: true,
+            showSystemAndDemo: true,
+            activeAgentSubTab: 'persona',
+            selectedAgentId: FACTORY_ID,
+            overviewStripDensity: 'compact',
+            overviewCollapsedPanels: ['channels'],
+        });
+
+        const dirty = JSON.stringify({
+            sharedExpanded: 'nope',
+            activeAgentSubTab: 'bogus',
+            overviewStripDensity: 'ultra-wide',
+            overviewCollapsedPanels: ['wakes', 'invalid-panel'],
+        });
+        const sanitized = ParseMyAgentsDashboardPreferences(dirty);
+        expect(sanitized.sharedExpanded).toBe(false);
+        expect(sanitized.activeAgentSubTab).toBe('activity');
+        expect(sanitized.overviewStripDensity).toBe('cards');
+        expect(sanitized.overviewCollapsedPanels).toEqual(['wakes']);
     });
 });

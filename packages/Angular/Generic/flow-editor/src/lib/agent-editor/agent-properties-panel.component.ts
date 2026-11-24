@@ -17,6 +17,14 @@ import {
 import type { TaskGraphDecisionQuestion } from '@memberjunction/ai-core-plus';
 import { DECISION_QUESTION_KEY_PATTERN, ReadDecisionStepKey, ReadEditableDecisionConfig } from './decision-step-config';
 import { PathRunProblems, StepRunProblems, type FlowRunProblem } from './flow-run-check';
+import {
+  ParsePositiveNumber,
+  ReadStepConfigBag,
+  ReadWaitFields,
+  WithStepConfigField,
+  WithWaitMode,
+  type WaitFieldValues
+} from './waiting-step-config';
 
 /** Step type accent color mapping */
 const STEP_TYPE_COLORS: Record<string, string> = {
@@ -25,7 +33,10 @@ const STEP_TYPE_COLORS: Record<string, string> = {
   Decision: '#0891b2',
   'Sub-Agent': '#10b981',
   ForEach: '#f59e0b',
-  While: '#f59e0b'
+  While: '#f59e0b',
+  Human: '#7b1fa2',
+  External: '#0891b2',
+  Wait: '#64748b'
 };
 
 /** Step type icon mapping */
@@ -35,7 +46,10 @@ const STEP_TYPE_ICONS: Record<string, string> = {
   Decision: 'fa-scale-balanced',
   'Sub-Agent': 'fa-robot',
   ForEach: 'fa-arrows-spin',
-  While: 'fa-rotate'
+  While: 'fa-rotate',
+  Human: 'fa-user-check',
+  External: 'fa-arrow-up-right-from-square',
+  Wait: 'fa-hourglass-half'
 };
 
 /** What a Decision question asks for. */
@@ -105,6 +119,73 @@ export class AgentPropertiesPanelComponent {
 
   // ── Collapsible section state ─────────────────────────────
   protected collapsedSections: Record<string, boolean> = {};
+  public ActionSearchQuery = '';
+  public PromptSearchQuery = '';
+  public AgentSearchQuery = '';
+  public ShowRawLoopJson = false;
+
+  public get FilteredActions(): Array<{ ID: string; Name: string; IconClass?: string | null }> {
+    const q = this.ActionSearchQuery.trim().toLowerCase();
+    if (!q) return this.Actions;
+    const selectedId = this.Step?.ActionID ?? '';
+    return this.Actions.filter(a => UUIDsEqual(a.ID, selectedId) || a.Name.toLowerCase().includes(q));
+  }
+
+  public get FilteredPrompts(): PromptOption[] {
+    const q = this.PromptSearchQuery.trim().toLowerCase();
+    if (!q) return this.Prompts;
+    const selectedId = this.Step?.PromptID ?? '';
+    return this.Prompts.filter(p => UUIDsEqual(p.ID, selectedId) || p.Name.toLowerCase().includes(q));
+  }
+
+  public get FilteredAgents(): Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }> {
+    const q = this.AgentSearchQuery.trim().toLowerCase();
+    if (!q) return this.Agents;
+    const selectedId = this.Step?.SubAgentID ?? '';
+    return this.Agents.filter(a => UUIDsEqual(a.ID, selectedId) || a.Name.toLowerCase().includes(q));
+  }
+
+  /** Clickable upstream variable pills for visual Data Mapping insertion. */
+  public get UpstreamVariablePills(): Array<{ Label: string; Token: string }> {
+    const pills: Array<{ Label: string; Token: string }> = [
+      { Label: 'trigger.input', Token: '{{ trigger.input }}' },
+      { Label: 'payload', Token: '{{ payload }}' }
+    ];
+    const currentId = this.Step?.ID ?? '';
+    for (const step of this.AllSteps) {
+      if (UUIDsEqual(step.ID, currentId)) continue;
+      const slug = step.Name.trim().replace(/[^a-zA-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'step';
+      pills.push({ Label: `${step.Name}.output`, Token: `{{ ${slug}.output }}` });
+    }
+    return pills.slice(0, 8);
+  }
+
+  /** Inserts an upstream variable pill into the step's ActionInputMapping JSON. */
+  public OnInsertVariablePill(pill: { Label: string; Token: string }): void {
+    if (!this.Step || this.ReadOnly) return;
+    const bag = ReadStepConfigBag(this.Step.ActionInputMapping);
+    const baseKey = pill.Label.split('.')[0].replace(/[^a-zA-Z0-9_]+/g, '_').toLowerCase() || 'input';
+    let key = baseKey;
+    let i = 2;
+    while (Object.prototype.hasOwnProperty.call(bag, key)) {
+      key = `${baseKey}_${i++}`;
+    }
+    bag[key] = pill.Token;
+    this.Step.ActionInputMapping = JSON.stringify(bag, null, 2);
+    this.StepChanged.emit(this.Step);
+  }
+
+  public OnLoopExecutionModeChange(mode: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'executionMode', mode || undefined));
+  }
+
+  public OnSagaCompensationActionChange(actionId: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'compensationActionId', actionId || undefined));
+  }
+
+  public OnSagaFailurePolicyChange(policy: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'compensationFailurePolicy', policy || undefined));
+  }
 
   // ── Computed Properties ─────────────────────────────────────
 
@@ -165,6 +246,65 @@ export class AgentPropertiesPanelComponent {
     return this.ShowLoopConfig;
   }
 
+  // ── Waiting steps (Human, External, Wait) ───────────────────
+  // These steps finish without a runner. The fields below edit their Configuration; whether what is
+  // there would RUN is the flow's run check's call, which asks the runtime itself.
+
+  get ShowHumanConfig(): boolean { return this.Step?.StepType === 'Human'; }
+  get ShowExternalConfig(): boolean { return this.Step?.StepType === 'External'; }
+  get ShowWaitConfig(): boolean { return this.Step?.StepType === 'Wait'; }
+
+  /** A Wait's two ways of saying when, as the fields show them. */
+  get WaitFields(): WaitFieldValues {
+    return ReadWaitFields(this.Step?.Configuration);
+  }
+
+  /** One configuration field, as text for an input. */
+  ConfigText(field: string): string {
+    const value = ReadStepConfigBag(this.Step?.Configuration)[field];
+    if (value === undefined || value === null) return '';
+    return typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+  }
+
+  /** Sets (or, when empty, removes) one text field of the step's configuration. */
+  OnConfigTextChange(field: string, value: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, field, value));
+  }
+
+  /** Sets (or, when empty or not a number, removes) one numeric field. */
+  OnConfigNumberChange(field: string, value: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, field, ParsePositiveNumber(value)));
+  }
+
+  /** Switches a Wait between a duration and a moment, clearing the other so it never holds both. */
+  OnWaitModeChange(mode: 'duration' | 'until'): void {
+    this.writeConfig(WithWaitMode(this.Step?.Configuration, mode));
+  }
+
+  /**
+   * A Human step's provider configuration, edited as JSON because only the provider knows its shape.
+   * Text that does not parse is kept as typed rather than discarded, and the run check says so.
+   */
+  OnProviderConfigurationChange(value: string): void {
+    const text = (value ?? '').trim();
+    if (!text) {
+      this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'providerConfiguration', undefined));
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(text);
+      this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'providerConfiguration', parsed));
+    } catch {
+      // Not yet valid JSON — leave the stored value as it was until it is.
+    }
+  }
+
+  private writeConfig(next: string): void {
+    if (!this.Step || this.ReadOnly) return;
+    this.Step.Configuration = next;
+    this.StepChanged.emit(this.Step);
+  }
+
   get StepTypeLabel(): string {
     switch (this.Step?.StepType) {
       case 'Action': return 'Action';
@@ -173,6 +313,9 @@ export class AgentPropertiesPanelComponent {
       case 'Sub-Agent': return 'Sub-Agent';
       case 'ForEach': return 'For Each Loop';
       case 'While': return 'While Loop';
+      case 'Human': return 'Person';
+      case 'External': return 'External Signal';
+      case 'Wait': return 'Wait';
       default: return 'Step';
     }
   }

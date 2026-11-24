@@ -16,16 +16,17 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 15
+            "Priority": 15,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "EF1C066F-9FDB-485B-B095-7EDC1B123E7A"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:56.331Z",
-            "checksum": "60d82aa87bcd4db901f6a397ff9d449e5dedb810957a9e286cf7cd936aa327b4"
+            "lastModified": "2026-11-24T20:27:39.567Z",
+            "checksum": "d506a47afbd410305e8a2c4791f7bf340a8fac91eda561d07e6c05d69349db3c"
           }
         },
         {
@@ -61,26 +62,23 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 14
+            "Priority": 14,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "E88767EA-ADD3-4044-8DA0-5EA5202F7739"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:56.365Z",
-            "checksum": "4095dd485eee6b9cec54326858b6cb2deb3583af2380aa559ee6cc8e056e32f0"
+            "lastModified": "2026-11-24T20:27:39.581Z",
+            "checksum": "68ab91fd05d3c09d50d5b379fac9b6080d85b492281bd8d8ae46214d052eee22"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "6712859D-9958-416D-A99B-D9517CB00553"
-    },
-    "sync": {
-      "lastModified": "2026-10-28T00:35:45.836Z",
-      "checksum": "58d29f883e2574e3c4b2cc285826fd0f73cc8020ebb50ac6af4ec532a2f52f55"
     }
   }
 ]

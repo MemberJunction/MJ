@@ -546,5 +546,437 @@
       "lastModified": "2026-09-13T20:06:42.528Z",
       "checksum": "851df8e21aaa58b0c984d86dcba7ad5a27c5eba485a4406d3671368e4fb86e20"
     }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Kore",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DAAA603C-B3F2-4797-9311-2DA488C9E171"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.013Z",
+      "checksum": "0c54c010b5d7bb0267ca0d6b02f15c4cf2867c24495cd9ea59e4d92f3bea75ba"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Kore",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "1B4F8241-F9B1-4898-AFAC-FE505120DD7E"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.031Z",
+      "checksum": "b8023c9492cae506bf99f975143f11dacc584b3c91c3a31ce344edf60354c30f"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "21m00Tcm4TlvDq8ikWAM",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "ABD818B2-18C2-41E5-90CD-DE93CBDCEB53"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.048Z",
+      "checksum": "c8e308c52e3170973d12f3e1cc948125f1388c575aaaf85c30c06347e5aa587e"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Fenrir",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "0F1ADE51-4146-4C11-BA5A-748D2C6452D6"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.065Z",
+      "checksum": "6be94d2d0fed6cb1803958c121289143ae7df03f3b4236d4bbd6a1d791d8365f"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Fenrir",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A217DAD8-3D57-470C-AC22-A26D2B7F64B9"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.082Z",
+      "checksum": "62de5acca2029135f9af141f9d764df723fc1bd1f336fe25ab06753d10d62417"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "pNInz6obpgDQGcFmaJgB",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "28F45E07-D21E-4D7B-9A80-E7F3CECFA9C8"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.103Z",
+      "checksum": "48d50b83ec692c5dc5b44af6f021ed0ef1447c9b3f381663d91aebcace7d28c2"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Aoede",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F83A2269-20FA-4B97-9B97-2E7665E9A8F2"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.123Z",
+      "checksum": "4947bb3ccc8ba12eb0a3624be5fb7e8704bf276a05729ce3a909ac61c64555f8"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Aoede",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7FD78BAC-B9F9-4FF6-91DB-7E8E7DED43A8"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.140Z",
+      "checksum": "90f3eba8f47728f18259a02de7d5988c8eae688a20aff420e3b3da62312a04b7"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "21m00Tcm4TlvDq8ikWAM",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "41B103AC-67E5-4E85-8A3A-BA277EFC39F4"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.159Z",
+      "checksum": "ecfe9edd9c1f4fb1c1b6aad6c8d2c6b5dd7e3f577375d5ad7f0a5b7330a22099"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Aoede",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F56BBA08-693E-475E-8677-867D803D4771"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.178Z",
+      "checksum": "b4fcc1e653a283c6971098f12f09ea62c208d77543df3305f22e9217d241ed08"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Aoede",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A8BA0E77-505D-4D83-B28F-4F15DBBF116E"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.197Z",
+      "checksum": "9e960caa03518c8946c7a5c804f66beee27025db77c3e0427c91efe4d3d98071"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "21m00Tcm4TlvDq8ikWAM",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "935E68E7-F239-41CD-9860-7964A83DF2A3"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.217Z",
+      "checksum": "3ac891c8aa6acd200b7a02f2bd02b67cb2bed95956791fe5ec2608c112b04b81"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Kore",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A5F3563D-7CA8-4622-87AF-D2C86E879F97"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.235Z",
+      "checksum": "467e37289463f547cf3b69bd2b199a662b747755060baeeaedf776238bcd62c5"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Kore",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "2195A04C-9951-41CC-9EB6-73CE91D09DAD"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.256Z",
+      "checksum": "b9301c1fefa04c25725584cbc2bd8febb23ec4cd5a1a9692080e0e75afcb5285"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "21m00Tcm4TlvDq8ikWAM",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E6F70C2D-4734-4549-AAB0-2C7E22026D12"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.278Z",
+      "checksum": "3f8b216de2952ea21da9941d5188863d15d3d892f6d5c97270babc26d4814339"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Puck",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "0FCC2602-BE7B-4915-ABE9-8DE5355C6DE9"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.298Z",
+      "checksum": "803d16356c652ccf0b740ce1e524a520a368945f9a92ac3b16dce29796a8c128"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Puck",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6214CE09-0CC7-4BA0-987B-6CEBA4D938B8"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.317Z",
+      "checksum": "333cd964dd0c9aaa95a18a971a552f7cee6be9370697717e2a1f70621208eae5"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "pNInz6obpgDQGcFmaJgB",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4E2FD4F8-6536-441D-BA36-472AAFC37374"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.336Z",
+      "checksum": "3f400455cb134d066380ae1d8106d9a56c60989b5b8f20085aa92a09dd2f8e73"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Charon",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7321485A-1D1D-43A3-A650-42CAA6E83DE4"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.355Z",
+      "checksum": "ab9c982b79be049c146931f523f68329cce7330b9b14efabb9ee4fd526aa23a4"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Charon",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "2D7C7753-5E84-4BB4-B296-90E5E0DDD99D"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.374Z",
+      "checksum": "03f4bf75f7455d5ec0f6252f459d1d44359f4d6193fbed3af472fff7af4f8047"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "pNInz6obpgDQGcFmaJgB",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F8E7F8EF-528E-42B1-AC1B-1C9DB24CFE19"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.392Z",
+      "checksum": "de6ebdec1eccbf61122a20cbaf89c2f25c2ab3425adbd21a4369d2ca8980ad8c"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Onyx",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Charon",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "CF94B936-34F9-44CB-89C6-E170EA715169"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.411Z",
+      "checksum": "d3ecbf0e7eae1b858ba7173cef4cb63d747b4650e731337bf34535397e96d1c6"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Onyx",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Charon",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F1330AD2-DD34-48A6-AB83-F938C74B6CE8"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.432Z",
+      "checksum": "ddee0e6e853889c94fb82327224380d71fa953b90c749802cfe312c242e0d479"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Onyx",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "pNInz6obpgDQGcFmaJgB",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "2CC86C6C-898D-4141-B153-6FA4F3E8F2D1"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:51.450Z",
+      "checksum": "fe40a94c6c7c91e4c019e1d37c9b3817d2bcb7a750ab3d7d0b3bd3ff160c634b"
+    }
   }
 ]

@@ -1,13 +1,108 @@
 import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { RealtimeToolDefinition } from '@memberjunction/ai';
+import { JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
 import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs } from '@memberjunction/realtime-runtime';
 import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import { MEDIA_TOOL_DEFINITIONS, MEDIA_TOOL_NAMES, MEDIA_TOOL_PREFIX } from './media-channel-tools';
-import { IsAllowedExternalMediaUrl, MediaChannelState, MediaHighlight, MediaItemType } from './media-channel-state';
+import { IsAllowedExternalMediaUrl, MediaChannelState, MediaHighlight, MediaItem, MediaItemType } from './media-channel-state';
 import { RealtimeMediaSurfaceComponent } from './realtime-media-surface.component';
+
+/** Result of checking whether an external media URL loads cleanly before displaying it. */
+export interface MediaUrlHealthResult {
+  Ok: boolean;
+  Reason?: string;
+}
+
+/** Optional pluggable URL health checker hook (browser probe in UI, injectable in unit tests). */
+export type MediaUrlHealthChecker = (
+  url: string,
+  mediaType: MediaItemType,
+) => MediaUrlHealthResult | Promise<MediaUrlHealthResult>;
+
+const MEDIA_URL_PROBE_TIMEOUT_MS = 5000;
+
+/** Returns true when running inside a real browser DOM (never Node or jsdom where Image never fires onload/onerror). */
+function isRealBrowserDom(): boolean {
+  if (typeof window === 'undefined' || typeof Image !== 'function') {
+    return false;
+  }
+  const ua = typeof window.navigator?.userAgent === 'string' ? window.navigator.userAgent : '';
+  return !/jsdom/i.test(ua);
+}
+
+/**
+ * Probes an external media URL via real browser elements (`Image` for images, `<video>`/`<audio>` metadata
+ * for AV) so broken 404/403/corrupt image links fail pre-flight without rendering a broken icon and without
+ * failing on third-party hosts that disallow CORS `fetch()`.
+ */
+function probeBrowserMediaUrl(url: string, mediaType: MediaItemType): Promise<MediaUrlHealthResult> {
+  if (mediaType === 'image') {
+    return new Promise((resolve) => {
+      const img = new Image();
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve({ Ok: false, Reason: `Timed out loading image URL after ${MEDIA_URL_PROBE_TIMEOUT_MS}ms.` });
+        }
+      }, MEDIA_URL_PROBE_TIMEOUT_MS);
+      const finish = (result: MediaUrlHealthResult) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        img.onload = null;
+        img.onerror = null;
+        resolve(result);
+      };
+      img.referrerPolicy = 'no-referrer';
+      img.onload = () => finish({ Ok: true });
+      img.onerror = () =>
+        finish({
+          Ok: false,
+          Reason: 'Image URL failed to load (404/403, network error, or non-image response).',
+        });
+      img.src = url;
+    });
+  }
+  if (mediaType === 'video' || mediaType === 'audio') {
+    if (typeof document === 'undefined') {
+      return Promise.resolve({ Ok: true });
+    }
+    return new Promise((resolve) => {
+      const el = document.createElement(mediaType);
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          el.removeAttribute('src');
+          el.load();
+          resolve({ Ok: false, Reason: `Timed out loading ${mediaType} URL after ${MEDIA_URL_PROBE_TIMEOUT_MS}ms.` });
+        }
+      }, MEDIA_URL_PROBE_TIMEOUT_MS);
+      const finish = (result: MediaUrlHealthResult) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        el.onloadedmetadata = null;
+        el.onerror = null;
+        el.removeAttribute('src');
+        el.load();
+        resolve(result);
+      };
+      el.preload = 'metadata';
+      el.onloadedmetadata = () => finish({ Ok: true });
+      el.onerror = () => finish({ Ok: false, Reason: `${mediaType} URL failed to load metadata.` });
+      el.src = url;
+    });
+  }
+  return Promise.resolve({ Ok: true });
+}
 
 /** A JSON-serializable value (the building block of a parsed tool-args object). */
 type ToolArgValue = string | number | boolean | null | ToolArgValue[] | { [key: string]: ToolArgValue };
@@ -45,13 +140,18 @@ const VALID_MEDIA_TYPES: MediaItemType[] = ['image', 'video', 'audio', 'pdf', 'w
  */
 @RegisterClass(BaseRealtimeChannelClient, 'RealtimeMediaChannel')
 export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMediaSurfaceComponent> {
+  /** Optional hook (used in tests or custom hosts) to check external media URLs before showing them. */
+  public static UrlHealthChecker: MediaUrlHealthChecker | null = null;
+
   /** The media state of record — created fresh with the plugin (one per session). */
   public readonly State = new MediaChannelState();
 
   /** The live bound surface, when the channel tab's pane is instantiated. */
   private surface: RealtimeMediaSurfaceComponent | null = null;
-  /** Media-mutation subscription driving the debounced state-of-record save. */
+  /** Media-mutation subscription driving the debounced state-of-record save and passive perception updates. */
   private stateChangedSub: Subscription | null = null;
+  private pendingChangeAuthor: 'user' | 'agent' = 'user';
+  private restoring = false;
 
   public get ChannelName(): string {
     return 'Media';
@@ -122,11 +222,47 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     };
   }
 
-  /** Persist the media surface (host-debounced) on EVERY mutation — agent tools and tab changes. */
+  /**
+   * Persist the media surface (host-debounced) AND notify passive perception updates on user-driven
+   * changes (tab switches, dismissing items) so the realtime agent sees media surface activity.
+   */
   protected override OnInitialize(): void {
     this.stateChangedSub = this.State.Changed$.subscribe(() => {
       this.Context?.RequestSave(this.State.ToJSON());
+      if (!this.restoring) {
+        this.RecordChange({
+          Author: this.pendingChangeAuthor,
+          Perceive: this.pendingChangeAuthor !== 'agent',
+        });
+      }
     });
+  }
+
+  /** Compact state snapshot used by `GetSurfaceSnapshot()`, `[surface]` focus notes, and `ChannelPerceptionCoalescer`. */
+  public override GetState(): JSONObject {
+    const activeId = this.State.ActiveItemId;
+    return {
+      activeItemId: activeId,
+      itemCount: this.State.Items.length,
+      items: this.State.Items.map((item) => ({
+        id: item.Id,
+        type: item.Type,
+        displayName: item.DisplayName,
+        ...(item.Url ? { url: item.Url } : {}),
+        ...(item.FileID ? { fileId: item.FileID } : {}),
+        isActive: activeId === item.Id,
+      })),
+    };
+  }
+
+  /** Tags a synchronous state mutation with `'agent'` authorship so perception knows who changed it. */
+  private withAgentAuthor<T>(work: () => T): T {
+    this.pendingChangeAuthor = 'agent';
+    try {
+      return work();
+    } finally {
+      this.pendingChangeAuthor = 'user';
+    }
   }
 
   /**
@@ -139,23 +275,31 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     instance.State = this.State;
     instance.AgentName = this.Context?.AgentName ?? 'The agent';
     instance.Provider = this.Context?.Provider ?? null;
+    instance.OnRenderError = (item, reason) => this.handleSurfaceRenderError(item, reason);
   }
 
   public override UnbindSurface(): void {
+    if (this.surface) {
+      this.surface.OnRenderError = null;
+    }
     this.surface = null;
   }
 
+  private handleSurfaceRenderError(item: MediaItem, reason: string): void {
+    this.Context?.SendContextNote(
+      `[media] error displaying ${item.Type} "${item.DisplayName}" (id: ${item.Id}, url: ${item.Url ?? item.FileID ?? 'unknown'}): ${reason} — please fix or replace the URL and retry.`,
+    );
+  }
+
   /**
-   * Executes one `Media_*` tool call LOCALLY: parse args, mutate the state engine, push a `[media]`
-   * background context note so the agent stays aware of the surface, and return a short JSON result
-   * string for the model. Never throws — malformed args resolve to a `{ success: false, error }`
-   * payload the model can narrate. Works with or without a bound surface (it mutates the state engine,
-   * which the surface observes).
+   * Executes one `Media_*` tool call LOCALLY: parse args, validate external URLs when possible,
+   * mutate the state engine, push a `[media]` background context note so the agent stays aware of the
+   * surface, and return a short JSON result string for the model. Never throws.
    */
-  public ApplyAgentTool(toolName: string, argsJson: string): string {
+  public ApplyAgentTool(toolName: string, argsJson: string): string | Promise<string> {
     let args: Record<string, ToolArgValue> = {};
     try {
-      const parsed = argsJson ? (JSON.parse(argsJson) as unknown) : {};
+      const parsed = argsJson ? (JSON.parse(argsJson) as ToolArgValue) : {};
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         args = parsed as Record<string, ToolArgValue>;
       }
@@ -179,8 +323,11 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     }
   }
 
-  /** Adds a media item and makes it active. Source is a public `url` OR an MJStorage `fileId` (>=1 required). */
-  private applyShowMedia(args: Record<string, ToolArgValue>): string {
+  /**
+   * Adds a media item and makes it active. External URLs are health-checked before rendering so broken
+   * images/links fail immediately and never render as broken icons.
+   */
+  private applyShowMedia(args: Record<string, ToolArgValue>): string | Promise<string> {
     const mediaType = asString(args['mediaType']);
     const url = asString(args['url']);
     const fileId = asString(args['fileId']);
@@ -199,15 +346,63 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     if (!displayName) {
       return this.fail('Media_ShowMedia requires a "displayName".');
     }
-    const item = this.State.AddItem({
-      Type: mediaType as MediaItemType,
-      Url: url ? url.trim() : undefined,
-      FileID: fileId,
-      DisplayName: displayName,
-      Caption: asString(args['caption']),
-    });
-    this.note(`now showing ${mediaType} "${displayName}"`);
-    return JSON.stringify({ success: true, id: item.Id, active: true });
+
+    const trimmedUrl = url ? url.trim() : undefined;
+    const commitShow = (): string => {
+      const item = this.withAgentAuthor(() =>
+        this.State.AddItem({
+          Type: mediaType as MediaItemType,
+          Url: trimmedUrl,
+          FileID: fileId,
+          DisplayName: displayName,
+          Caption: asString(args['caption']),
+        }),
+      );
+      this.note(`now showing ${mediaType} "${displayName}"`);
+      return JSON.stringify({ success: true, id: item.Id, active: true });
+    };
+
+    if (trimmedUrl) {
+      const healthResult = this.checkExternalUrlHealth(trimmedUrl, mediaType as MediaItemType);
+      if (healthResult !== null) {
+        if (healthResult instanceof Promise) {
+          return healthResult.then(
+            (res) => {
+              if (!res.Ok) {
+                return this.fail(
+                  `Media URL "${trimmedUrl}" could not be loaded: ${res.Reason ?? 'unhealthy URL'}. Fix or replace the URL and retry.`,
+                );
+              }
+              return commitShow();
+            },
+            (err) =>
+              this.fail(
+                `Media URL "${trimmedUrl}" health check failed: ${err instanceof Error ? err.message : String(err)}. Fix or replace the URL and retry.`,
+              ),
+          );
+        }
+        if (!healthResult.Ok) {
+          return this.fail(
+            `Media URL "${trimmedUrl}" could not be loaded: ${healthResult.Reason ?? 'unhealthy URL'}. Fix or replace the URL and retry.`,
+          );
+        }
+      }
+    }
+
+    return commitShow();
+  }
+
+  private checkExternalUrlHealth(
+    url: string,
+    mediaType: MediaItemType,
+  ): MediaUrlHealthResult | Promise<MediaUrlHealthResult> | null {
+    if (RealtimeMediaChannel.UrlHealthChecker) {
+      return RealtimeMediaChannel.UrlHealthChecker(url, mediaType);
+    }
+    if (isRealBrowserDom() && (mediaType === 'image' || mediaType === 'video' || mediaType === 'audio')) {
+      return probeBrowserMediaUrl(url, mediaType);
+    }
+    return null;
   }
 
   /** Closes a media item. */
@@ -216,7 +411,7 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     if (!id) {
       return this.fail('Media_CloseMedia requires an "id".');
     }
-    const removed = this.State.RemoveItem(id);
+    const removed = this.withAgentAuthor(() => this.State.RemoveItem(id));
     if (!removed) {
       return this.fail(`No media item with id "${id}".`);
     }
@@ -230,7 +425,7 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     if (!id) {
       return this.fail('Media_PlayMedia requires an "id".');
     }
-    const ok = this.State.RequestPlay(id);
+    const ok = this.withAgentAuthor(() => this.State.RequestPlay(id));
     if (!ok) {
       return this.fail(`No media item with id "${id}".`);
     }
@@ -252,7 +447,7 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
       return this.fail('Media_Highlight requires numeric fractional x, y, w, h (0..1).');
     }
     const highlight: MediaHighlight = { X: x, Y: y, W: w, H: h, Label: asString(args['label']) };
-    const ok = this.State.Highlight(id, highlight);
+    const ok = this.withAgentAuthor(() => this.State.Highlight(id, highlight));
     if (!ok) {
       return this.fail(`No media item with id "${id}".`);
     }
@@ -262,7 +457,7 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
 
   /** Clears all media. */
   private applyClearAll(): string {
-    this.State.Clear();
+    this.withAgentAuthor(() => this.State.Clear());
     this.note('cleared all media');
     return JSON.stringify({ success: true });
   }
@@ -278,7 +473,12 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
    * `false` and the surface stays empty.
    */
   public override RestoreState(stateJson: string): boolean {
-    return this.State.LoadFromJSON(stateJson);
+    this.restoring = true;
+    try {
+      return this.State.LoadFromJSON(stateJson);
+    } finally {
+      this.restoring = false;
+    }
   }
 
   public override Dispose(): void {

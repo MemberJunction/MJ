@@ -65,7 +65,7 @@ const loadNgDashboardsActionsDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (22 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (23 entries) ---
 const loadNgDashboardsAiDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
@@ -77,7 +77,7 @@ const loadNgDashboardsArchivingDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/archiving-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
+// --- @memberjunction/ng-dashboards → ./communication-dashboards.module (9 entries) ---
 const loadNgDashboardsCommunicationDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/communication-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/communication-dashboards.module').then(() => {})
@@ -89,7 +89,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (42 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (43 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -235,6 +235,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AIPromptsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AnalyticsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AutotaggingPipelineResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffAgentChannels': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffApprovals': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffDashboard': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffGovernance': loadNgDashboardsAiDashboardsModule,
@@ -255,6 +256,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseDashboard::CommunicationsAdminDashboard': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationComplianceAdminResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationLogsResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationMonitorResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationProvidersResource': loadNgDashboardsCommunicationDashboardsModule,
@@ -277,6 +280,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AdminDataSchema': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminDeveloperTools': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminIdentityAccess': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::AdminLimitsResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminMonitoring': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AppStateInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ApplicationRolesResource': loadNgDashboardsCoreDashboardsModule,
@@ -405,4 +409,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 149;
+export const LAZY_FEATURE_CONFIG_COUNT = 153;

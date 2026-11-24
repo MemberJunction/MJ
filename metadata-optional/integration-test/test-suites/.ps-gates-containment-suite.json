@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Containment",
-      "Description": "The nine deterministic PR 2 containment gates (G0.1, G0.4, G0.5, G0.7–G0.12) and the truth-suite dataset load, datasets first. G0.6 (an LLM judge) is in \"Predictive Studio Gates — Pending\". Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Containment\"",
+      "Description": "The nine deterministic PR 2 containment gates (G0.1, G0.4, G0.5, G0.7–G0.12) and the truth-suite dataset load, datasets first, then the two PR 4 automated-publishing containment gates, G0.2 (W2 -> C1.1: at most 6 of 60 W2-noise builder-agent runs publish, every run consistent with its stored gate outcome; up to 30 minutes) and G0.3 (W3 -> C1.1: 0 of 2 W3-leak-row runs publish). G0.6 (an LLM judge) is in \"Predictive Studio Gates — Pending\". Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Containment\"",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -115,6 +115,28 @@
           },
           "primaryKey": {
             "ID": "1B27F9B8-519F-4BC2-8C27-0E3CD4658719"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W2 -> C1.1",
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A0896CC3-0AED-4A54-9DB9-239FD3F492FF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W3 -> C1.1",
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7D299C43-9D7E-4F08-A8E7-B307363DAABD"
           }
         }
       ]

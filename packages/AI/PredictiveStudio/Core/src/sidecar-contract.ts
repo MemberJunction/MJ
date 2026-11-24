@@ -137,6 +137,104 @@ export interface PredictRequest {
 }
 
 /**
+ * How a monitored input's z statistic and its no-drift replays are formed (monitor procedure M, D4-05, D4-11):
+ * `mean` — look mean minus reference mean over its SE (reference SD), normal-theory replays; `proportion` — 0/1 values,
+ * the pooled two-proportion z, binomial replays at the reference rate; `series` — one value per look minus the
+ * reference mean over the reference SD, stationary AR(1) replays at the reference's lag-1 autocorrelation.
+ */
+export type MonitorInputKind = 'mean' | 'proportion' | 'series';
+
+/**
+ * One monitored input at one look of `POST /monitor/drift`. The caller sends raw values; the sidecar computes every
+ * statistic (D4-11). `reference` needs at least 2 values (a series 3), finite and not all equal; a proportion's values
+ * are 0 or 1; a series' `current` is exactly one value. A request outside these rules is a 422.
+ */
+export interface MonitorDriftInput {
+  /** The input's (feature's) name; unique within the request. */
+  name: string; // case-violation-ok-legacy-back-compat: sidecar wire name
+  kind: MonitorInputKind; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** The training (reference) window's values. */
+  reference: number[]; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** This period's values (at least one). */
+  current: number[]; // case-violation-ok-legacy-back-compat: sidecar wire name
+}
+
+/** `POST /monitor/drift` request: one look of procedure M, BH across the inputs at `q` = q(L). Reproducible under `seed`. */
+export interface MonitorDriftRequest {
+  /** At least one input. */
+  inputs: MonitorDriftInput[]; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** 1-based look index since the reference window ended (integer 1..120); a series' replays depend on it. */
+  look: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** q(L), 0 < q < 1 (0.0095 for the 12-look design, 0.0171 for the 3-look one). */
+  q: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** No-drift replays behind each empirical p (integer 100..100000). */
+  replays: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** Integer >= 0 seeding the replays. */
+  seed: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+}
+
+/** One input's result at one look: an element of `MJ: ML Monitoring Results.DriftLook`. */
+export interface MonitorDriftLook {
+  /** The input's name. */
+  input: string; // case-violation-ok-legacy-back-compat: sidecar wire name
+  kind: MonitorInputKind; // case-violation-ok-legacy-back-compat: sidecar wire name
+  z: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** Empirical two-sided p: (1 + #{|z_null| >= |z|}) / (1 + replays). */
+  p: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** Benjamini–Hochberg adjusted p across the look's inputs (at most 1). */
+  pAdjusted: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** The q(L) the look was tested at. */
+  q: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  look: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** `pAdjusted <= q`: the input is a BH rejection at this look, i.e. a drift alarm. */
+  flagged: boolean; // case-violation-ok-legacy-back-compat: sidecar wire name
+}
+
+/** `POST /monitor/drift` response. */
+export interface MonitorDriftResponse {
+  look: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  q: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  replays: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** One result per input, in request order. */
+  results: MonitorDriftLook[]; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** The flagged results, in request order; empty when the look raises no alarm. */
+  alarms: MonitorDriftLook[]; // case-violation-ok-legacy-back-compat: sidecar wire name
+}
+
+/** One input of the design `POST /monitor/calibrate` calibrates; `reference` follows {@link MonitorDriftInput}'s rules. */
+export interface MonitorCalibrateInput {
+  name: string; // case-violation-ok-legacy-back-compat: sidecar wire name
+  kind: MonitorInputKind; // case-violation-ok-legacy-back-compat: sidecar wire name
+  reference: number[]; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** Rows per look (integer >= 1; a series exactly 1). */
+  lookSize: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+}
+
+/** `POST /monitor/calibrate` request: q(L) by bisection on seeded no-drift replays (production: 2,000, D4-11). */
+export interface MonitorCalibrateRequest {
+  /** At least one input, unique names. */
+  inputs: MonitorCalibrateInput[]; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** L, the number of looks (integer 1..120). */
+  looks: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** Replays per set (integer 100..100000): one set gives each look's null, a second the calibration. */
+  replays: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  seed: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** The any-alarm bound over L looks, 0 < target < 1 (0.05). */
+  target: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+}
+
+/** `POST /monitor/calibrate` response. */
+export interface MonitorCalibrateResponse {
+  /** The largest level whose any-alarm rate over L looks on the calibration replays is at most `target`. */
+  q: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  looks: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  replays: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  target: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+  /** The calibration replays' any-alarm rate at `q` (at most `target`). */
+  anyAlarmRate: number; // case-violation-ok-legacy-back-compat: sidecar wire name
+}
+
+/**
  * A single prediction for one input row. `score` is the model output
  * (probability for classification, predicted value for regression); `class` is
  * the predicted label for classification problems.

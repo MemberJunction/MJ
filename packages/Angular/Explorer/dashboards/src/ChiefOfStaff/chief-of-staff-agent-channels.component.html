@@ -1,0 +1,232 @@
+<mj-page-layout>
+    <mj-page-header
+        Title="Agent Channels"
+        Icon="fa-solid fa-comments"
+        Subtitle="Shared, observable coordination threads between your agents with loop-guard and human-intervention controls">
+        <div meta>
+            @if (PausedChannelCount > 0) {
+                <mj-stat-badge
+                    [Count]="PausedChannelCount"
+                    Label="paused for human"
+                    Variant="warning" />
+            }
+            @if (FilteredChannels.length !== Channels.length) {
+                <mj-stat-badge
+                    [Count]="FilteredChannels.length"
+                    [Total]="Channels.length"
+                    Label="channels" />
+            }
+        </div>
+        <div actions>
+            <mj-refresh-button [Loading]="IsLoadingChannels" (Clicked)="LoadChannels()" />
+        </div>
+        <div toolbar>
+            <mj-page-search
+                [Value]="SearchText"
+                Placeholder="Filter channels by topic or participant..."
+                (ValueChange)="OnSearchChange($event)" />
+            <div class="cos-status-segmented" role="group" aria-label="Filter by status">
+                @for (opt of StatusFilterOptions; track opt) {
+                    <button mjButton
+                            size="sm"
+                            [variant]="StatusFilter === opt ? 'primary' : 'outline'"
+                            (click)="SetStatusFilter(opt)">
+                        {{ opt }}
+                    </button>
+                }
+            </div>
+        </div>
+    </mj-page-header>
+
+    <mj-page-body>
+        @if (ChannelErrorMessage) {
+            <div class="cos-inline-warning" role="alert">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span>{{ ChannelErrorMessage }}</span>
+            </div>
+        }
+
+        @if (AgentFilterOptions.length > 0) {
+            <div class="cos-agent-filter-bar" role="group" aria-label="Filter channels by agent">
+                <span class="cos-agent-filter-bar__label">Agent:</span>
+                <button
+                    mjButton
+                    type="button"
+                    size="sm"
+                    [variant]="IsAgentFilterSelected(null) ? 'primary' : 'outline'"
+                    (click)="SetAgentFilter(null)">
+                    All
+                </button>
+                @for (agentOpt of AgentFilterOptions; track agentOpt.ID) {
+                    <button
+                        mjButton
+                        type="button"
+                        size="sm"
+                        [variant]="IsAgentFilterSelected(agentOpt.ID) ? 'primary' : 'outline'"
+                        (click)="SetAgentFilter(agentOpt.ID)">
+                        {{ agentOpt.Name }}
+                    </button>
+                }
+            </div>
+        }
+
+        @if (IsLoadingChannels && Channels.length === 0) {
+            <mj-loading text="Loading Agent Channels..." size="medium"></mj-loading>
+        } @else if (FilteredChannels.length === 0) {
+            <div class="cos-empty-state">
+                <i class="fa-solid fa-comments cos-empty-state__icon"></i>
+                <h3>No Agent Channels found</h3>
+                <p>When your agents open a shared coordination thread with a colleague's agent, it appears here so both sides can observe or step in at any time.</p>
+            </div>
+        } @else {
+            <div class="cos-channels-split" [class.cos-channels-split--mobile-detail]="MobileShowingDetail">
+                <aside class="cos-channels-list" aria-label="Agent Channel threads">
+                    @for (ch of FilteredChannels; track ch.ID) {
+                        <button type="button"
+                                class="cos-channel-item"
+                                [class.cos-channel-item--selected]="SelectedChannel?.ID === ch.ID"
+                                [class.cos-channel-item--paused]="ch.ChannelStatus === 'Paused For Human'"
+                                (click)="SelectChannel(ch)">
+                            <div class="cos-channel-item__top">
+                                <span class="cos-channel-item__topic">{{ ch.Topic }}</span>
+                                <span class="cos-channel-item__top-right">
+                                    <span class="cos-pill"
+                                          [class.cos-pill--warn]="ch.ChannelStatus === 'Paused For Human'"
+                                          [class.cos-pill--ok]="ch.ChannelStatus === 'Open'">
+                                        {{ ch.ChannelStatus }}
+                                    </span>
+                                    <i class="fa-solid fa-chevron-right cos-mobile-chevron" aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            <div class="cos-channel-item__meta">
+                                <span>
+                                    <i class="fa-solid fa-users"></i>
+                                    {{ ParticipantsFor(ch.ID).length }} participants
+                                </span>
+                                <span>
+                                    <i class="fa-solid fa-repeat"></i>
+                                    {{ ch.ConsecutiveAgentTurns }}/{{ ch.MaxConsecutiveAgentTurns }} turns
+                                </span>
+                                <span>
+                                    <i class="fa-solid fa-bolt"></i>
+                                    {{ ch.HourlyWakeCount }}/{{ ch.MaxHourlyWakes }}/hr
+                                </span>
+                            </div>
+                        </button>
+                    }
+                </aside>
+
+                <section class="cos-channel-detail" aria-label="Selected Agent Channel transcript">
+                    <div class="cos-mobile-back-bar">
+                        <button
+                            mjButton
+                            variant="flat"
+                            size="sm"
+                            type="button"
+                            (click)="ShowMobileThreadList()">
+                            <i class="fa-solid fa-arrow-left"></i> All Threads
+                        </button>
+                        <span class="cos-mobile-back-bar__title">{{ SelectedChannel?.Topic || 'Channel' }}</span>
+                    </div>
+                    @if (SelectedChannel; as ch) {
+                        <header class="cos-channel-detail__header">
+                            <div>
+                                <h2 class="cos-channel-detail__title">{{ ch.Topic }}</h2>
+                                <div class="cos-channel-detail__participants">
+                                    @for (part of SelectedParticipants; track part.ID) {
+                                        <span class="cos-pill">
+                                            @if (part.Agent) {
+                                                {{ part.Agent }} ({{ part.User || part.UserID }})
+                                            } @else {
+                                                {{ part.User || part.UserID }}
+                                            }
+                                            @if (part.Role === 'Initiator') {
+                                                · Initiator
+                                            }
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="cos-channel-detail__actions">
+                                @if (ch.ChannelStatus !== 'Resolved') {
+                                    <button mjButton
+                                            variant="outline"
+                                            size="sm"
+                                            [disabled]="IsPostingReply"
+                                            (click)="MarkSelectedChannelResolved()">
+                                        <i class="fa-solid fa-check"></i>
+                                        Resolve
+                                    </button>
+                                }
+                                <button mjButton
+                                        variant="flat"
+                                        size="sm"
+                                        (click)="OpenSelectedChannelRecord()">
+                                    Open Record
+                                </button>
+                            </div>
+                        </header>
+
+                        @if (ch.ChannelStatus === 'Paused For Human') {
+                            <div class="cos-inline-warning" role="status">
+                                <i class="fa-solid fa-hand"></i>
+                                <span>
+                                    This channel paused automatically after reaching its guard limit ({{ ch.ConsecutiveAgentTurns }}/{{ ch.MaxConsecutiveAgentTurns }} consecutive agent turns, {{ ch.HourlyWakeCount }}/{{ ch.MaxHourlyWakes }} hourly wakes). Post a human message below to reset the counter and resume coordination.
+                                </span>
+                            </div>
+                        }
+
+                        <div class="cos-channel-messages">
+                            @if (IsLoadingMessages) {
+                                <mj-loading text="Loading transcript..." size="small"></mj-loading>
+                            } @else if (SelectedMessages.length === 0) {
+                                <p class="cos-empty-text">No messages posted yet.</p>
+                            } @else {
+                                @for (msg of SelectedMessages; track msg.ID) {
+                                    <article class="cos-channel-msg"
+                                             [class.cos-channel-msg--human]="!msg.AgentID">
+                                        <div class="cos-channel-msg__meta">
+                                            <span class="cos-channel-msg__author">
+                                                @if (msg.AgentID) {
+                                                    <i class="fa-solid fa-robot"></i>
+                                                    Agent ({{ msg.User || msg.UserID || 'Participant' }})
+                                                } @else {
+                                                    <i class="fa-solid fa-user"></i>
+                                                    {{ msg.User || msg.UserID || 'Human' }}
+                                                }
+                                            </span>
+                                            <span class="cos-channel-msg__time">
+                                                {{ msg.__mj_CreatedAt | date: 'short' }}
+                                            </span>
+                                        </div>
+                                        <div class="cos-channel-msg__body">{{ msg.Message }}</div>
+                                    </article>
+                                }
+                            }
+                        </div>
+
+                        @if (ch.ChannelStatus !== 'Resolved') {
+                            <footer class="cos-channel-composer">
+                                <textarea class="cos-textarea"
+                                          rows="2"
+                                          [value]="ReplyDraft"
+                                          placeholder="Step in directly as a human participant (resets agent turn guard and re-opens paused channels)..."
+                                          (input)="OnReplyDraftInput($event)"></textarea>
+                                <div class="cos-channel-composer__actions">
+                                    <button mjButton
+                                            variant="primary"
+                                            size="sm"
+                                            [disabled]="IsPostingReply || !ReplyDraft.trim()"
+                                            (click)="PostHumanReply()">
+                                        <i class="fa-solid fa-paper-plane"></i>
+                                        {{ ch.ChannelStatus === 'Paused For Human' ? 'Reply & Resume Channel' : 'Post Human Reply' }}
+                                    </button>
+                                </div>
+                            </footer>
+                        }
+                    }
+                </section>
+            </div>
+        }
+    </mj-page-body>
+</mj-page-layout>

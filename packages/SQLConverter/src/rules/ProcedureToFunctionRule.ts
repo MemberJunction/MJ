@@ -113,7 +113,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
       return `-- SKIPPED (INTENTIONAL): ${procName} — ${paramCount} parameters exceeds PostgreSQL's ${POSTGRESQL_PROCEDURE_PARAM_LIMIT}-argument limit and could not be auto-converted to JSON-arg shape; needs manual handling`;
     }
 
-    const rowReturnsClause = this.determineReturnType(body, procName, context);
+    const rowReturnsClause = this.determineReturnType(body, procName, context, paramsBlock);
 
     // If the return type references a view that doesn't exist, skip this procedure
     if (rowReturnsClause.startsWith('-- SKIPPED')) {
@@ -126,7 +126,13 @@ export class ProcedureToFunctionRule implements IConversionRule {
     const returnsClause = outputAsInOut ? 'AS' : rowReturnsClause;
     const pgParams = this.convertProcParams(paramsBlock, outputAsInOut);
     const booleanParams = this.extractBooleanParams(paramsBlock);
-    const pgBody = this.convertProcBody(body, procName, context, booleanParams);
+    let pgBody = this.convertProcBody(body, procName, context, booleanParams);
+    // A RETURNS TABLE whose columns are real table columns ("ID", "__mj_UpdatedAt") declares OUT
+    // variables of the same names, so the UPDATE's `WHERE "ID" = p_ID` becomes ambiguous at run time.
+    // Native PG CodeGen resolves it the same way: column references win.
+    if (this.baseTableProjectionColumns(body, paramsBlock)) {
+      pgBody = `#variable_conflict use_column\n${pgBody}`;
+    }
 
     // Drop any existing overloads of this function before recreating. PG
     // dispatches functions by (name, ordered-arg-type-list) — `CREATE OR
@@ -468,11 +474,6 @@ $$ LANGUAGE plpgsql;
       ''
     );
 
-    // @@ROWCOUNT → GET DIAGNOSTICS
-    if (hasRowcount) {
-      declares.unshift('    _v_row_count INTEGER;');
-    }
-
     // SET p_var = value → p_var := value;
     sql = sql.replace(
       /\bSET\s+(p_\w+)\s*=\s*(.+?)(?:;|\s*$)/gim,
@@ -604,6 +605,12 @@ $$ LANGUAGE plpgsql;
     // Convert rowcount IF block pattern
     if (hasRowcount) {
       sql = convertRowcountIfBlock(sql);
+    }
+
+    // Declare _v_row_count only if still referenced after rowcount block conversion
+    // (IF @@ROWCOUNT = 0 CRUD checks convert directly to PL/pgSQL IF NOT FOUND).
+    if (/\b_v_row_count\b/.test(sql)) {
+      declares.unshift('    _v_row_count INTEGER;');
     }
 
     // Convert standalone SELECT * FROM → RETURN QUERY SELECT * FROM
@@ -743,7 +750,7 @@ $$ LANGUAGE plpgsql;
   // Return type detection
   // ---------------------------------------------------------------------------
 
-  private determineReturnType(body: string, procName: string, context: ConversionContext): string {
+  private determineReturnType(body: string, procName: string, context: ConversionContext, paramsBlock = ''): string {
     // Check for SELECT * FROM __mj.vwViewName → RETURNS SETOF
     const viewMatch = body.match(
       /SELECT\s+(?:\*|[\w\s,.*]+)\s+FROM\s+\[?__mj\]?\.\[?(vw\w+)\]?/i
@@ -784,6 +791,15 @@ $$ LANGUAGE plpgsql;
       return `RETURNS TABLE("${scalarMatch[2]}" ${colType}) AS`;
     }
 
+    // Single-write CodeGen spUpdate (MJ 6.3): returns named columns from the BASE TABLE rather than
+    // `SELECT * FROM vwX`. A typed RETURNS TABLE is required — SETOF RECORD needs a column definition
+    // list at every call site, which the data provider never supplies.
+    const projection = this.baseTableProjectionColumns(body, paramsBlock);
+    if (projection) {
+      const cols = projection.map((c) => `"${c.Name}" ${c.Type}`).join(', ');
+      return `RETURNS TABLE(${cols}) AS`;
+    }
+
     // If there's any SELECT that returns rows
     const upperBody = body.toUpperCase();
     if (/\bSELECT\b/.test(upperBody) && !/SELECT\s+@/.test(upperBody)) {
@@ -791,6 +807,51 @@ $$ LANGUAGE plpgsql;
     }
 
     return 'RETURNS VOID AS';
+  }
+
+  /**
+   * The typed result columns of a CRUD procedure that returns named columns from its base table — the
+   * single-write `spUpdate` shape CodeGen emits from MJ 6.3:
+   *
+   * ```sql
+   * IF @@ROWCOUNT = 0
+   *     SELECT TOP 0 [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[T] WHERE 1=0
+   * ELSE
+   *     SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[T] WHERE [ID] = @ID
+   * ```
+   *
+   * Types come from what the shape guarantees: the `__mj_*` timestamps are TIMESTAMPTZ, and every
+   * other projected column is a primary-key column, which the procedure takes as a parameter of the
+   * same name. Returns null when the body is not this shape or any column's type can't be resolved,
+   * so the caller falls back to its older handling rather than emitting a guessed type.
+   */
+  private baseTableProjectionColumns(body: string, paramsBlock: string): { Name: string; Type: string }[] | null {
+    if (!/@@ROWCOUNT/i.test(body)) return null;
+    const select = body.match(
+      /\bSELECT\s+((?:\[\w+\]\s*,\s*)*\[\w+\])\s+FROM\s+\[?__mj\]?\.\[?(?!vw)\w+\]?\s+WHERE\s+(?!1\s*=\s*0)/i,
+    );
+    if (!select) return null;
+    const names = [...select[1].matchAll(/\[(\w+)\]/g)].map((m) => m[1]);
+    // The CodeGen signature: it always returns the row's new __mj_UpdatedAt. Requiring it keeps a
+    // hand-written procedure that happens to select from a table out of this path.
+    if (!names.some((n) => /^__mj_UpdatedAt$/i.test(n))) return null;
+    const params = splitParams(paramsBlock);
+    const columns: { Name: string; Type: string }[] = [];
+    for (const name of names) {
+      const type = this.projectedColumnType(name, params);
+      if (!type) return null;
+      columns.push({ Name: name, Type: type });
+    }
+    return columns;
+  }
+
+  /** The PG type of one projected column, or null when neither rule in {@link baseTableProjectionColumns} applies. */
+  private projectedColumnType(name: string, params: string[]): string | null {
+    if (/^__mj_(?:CreatedAt|UpdatedAt)$/i.test(name)) return 'TIMESTAMPTZ';
+    const param = params
+      .map((p) => p.trim().match(/^@(\w+)\s+([\w]+(?:\s*\(\s*(?:\d+|MAX)\s*(?:,\s*\d+\s*)?\))?)/i))
+      .find((m) => m !== null && m[1].toLowerCase() === name.toLowerCase());
+    return param ? this.mapType(param[2]) : null;
   }
 
   /**
@@ -1380,6 +1441,56 @@ function convertBeginTryCatch(sql: string): string {
 }
 
 /**
+ * Find the row-returning SELECT of a single-write CRUD rowcount block — the ELSE branch's
+ * `SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM __mj."T" WHERE "ID" = p_ID`, after identifier
+ * and parameter conversion. The `WHERE 1=0` / `TOP 0` branch is skipped: plpgsql returns an empty
+ * set by simply not returning rows.
+ *
+ * @param blockLines - The lines after the `-- Check if the ... was successful` comment.
+ * @returns The statement (no trailing semicolon) and its line index, or null for any other shape.
+ */
+function findBaseTableReturnSelect(blockLines: string[]): { Select: string; Index: number } | null {
+  const pattern = /^\s*(SELECT\s+(?:"\w+"\s*,\s*)*"\w+"\s+FROM\s+__mj\."(?!vw)\w+"\s+WHERE\s+(?!1\s*=\s*0\b)[^;]+?)\s*;?\s*$/i;
+  for (let k = 0; k < blockLines.length; k++) {
+    const match = blockLines[k].match(pattern);
+    if (match && /"__mj_UpdatedAt"/i.test(match[1])) return { Select: match[1], Index: k };
+  }
+  return null;
+}
+
+/**
+ * True when the lines before `returnIndex` are exactly an unbraced `IF`'s empty-result branch and its
+ * `ELSE`: one `SELECT … WHERE 1=0` line, then `ELSE`, with only comments and blank lines between.
+ * Anything else (a `BEGIN`, a second statement) means the block is not the CRUD shape.
+ */
+function isUnbracedEmptyResultIfElse(lines: string[], returnIndex: number): boolean {
+  const code = lines
+    .slice(0, returnIndex)
+    .map((l) => l.trim())
+    .filter((l) => l !== '' && !l.startsWith('--'));
+  return code.length === 2 && /^SELECT\b.*\bWHERE\s+1\s*=\s*0\s*;?$/i.test(code[0]) && /^ELSE$/i.test(code[1]);
+}
+
+/**
+ * The plpgsql for a CRUD rowcount block, matching what native PostgreSQL CodeGen emits: return nothing
+ * when no row changed, otherwise the changed row.
+ *
+ * @param select - The row-returning SELECT from {@link findBaseTableReturnSelect}.
+ * @returns The replacement lines.
+ */
+export function BuildRowcountReturnBlock(select: string): string[] {
+  return [
+    '    GET DIAGNOSTICS _v_row_count = ROW_COUNT;',
+    '',
+    '    IF _v_row_count = 0 THEN',
+    '        RETURN;',
+    '    END IF;',
+    '',
+    `    RETURN QUERY ${select};`,
+  ];
+}
+
+/**
  * Convert the MJ CRUD rowcount check pattern to proper plpgsql.
  * Uses a line-based parser to handle varied whitespace/formatting.
  * Ported from Python convert_rowcount_if_block().
@@ -1396,6 +1507,20 @@ function convertRowcountIfBlock(sql: string): string {
     const checkMatch = stripped.match(
       /^--\s*Check if the (update|delete|insert|create) was successful/i
     );
+
+    // The single-write spUpdate written by hand, WITHOUT CodeGen's marker comment (V202611140845
+    // restored one that way): its SELECTs name base-table columns. The view-returning and delete
+    // shapes of the uncommented block are tryConvertUncommentedRowcountIf's, below.
+    if (!checkMatch && /^IF\s+_v_row_count\s*=\s*0$/i.test(stripped)) {
+      const rest = lines.slice(i + 1);
+      const found = findBaseTableReturnSelect(rest);
+      if (found && isUnbracedEmptyResultIfElse(rest, found.Index)) {
+        result.push(...BuildRowcountReturnBlock(found.Select));
+        i = i + 1 + found.Index + 1;
+        continue;
+      }
+    }
+
     if (checkMatch) {
       const opType = checkMatch[1].toLowerCase();
 
@@ -1416,6 +1541,7 @@ function convertRowcountIfBlock(sql: string): string {
       const blockText = blockLines.join('\n');
       const viewMatch = blockText.match(/FROM\s+(__mj\."(vw\w+)")/i);
       const viewRef = viewMatch ? viewMatch[1] : null;
+      const baseReturn = opType !== 'delete' && !viewRef ? findBaseTableReturnSelect(blockLines) : null;
 
       if (opType === 'delete') {
         // Delete pattern: SELECT NULL/p_ID AS "ID"
@@ -1438,6 +1564,13 @@ function convertRowcountIfBlock(sql: string): string {
         result.push('    ELSE');
         result.push(`        RETURN QUERY SELECT * FROM ${viewRef} WHERE "ID" = p_ID;`);
         result.push('    END IF;');
+      } else if (baseReturn) {
+        // Single-write spUpdate (MJ 6.3): an unbraced IF/ELSE whose SELECTs read named columns from
+        // the base table. It has no END of its own, so consume only through the returning SELECT
+        // and let any following lines be processed normally.
+        result.push(...BuildRowcountReturnBlock(baseReturn.Select));
+        i = i + 1 + baseReturn.Index + 1;
+        continue;
       } else {
         // Unknown pattern, keep as-is with GET DIAGNOSTICS
         result.push('    GET DIAGNOSTICS _v_row_count = ROW_COUNT;');
@@ -1448,6 +1581,15 @@ function convertRowcountIfBlock(sql: string): string {
       }
 
       i = j + 1;
+    } else if (/^IF\s+_v_row_count\s*=\s*0\s*$/i.test(stripped)) {
+      const converted = tryConvertUncommentedRowcountIf(lines, i, result);
+      if (converted) {
+        result.push(...converted.replacement);
+        i = converted.nextIdx;
+      } else {
+        result.push(lines[i]);
+        i++;
+      }
     } else {
       result.push(lines[i]);
       i++;
@@ -1455,6 +1597,161 @@ function convertRowcountIfBlock(sql: string): string {
   }
 
   return result.join('\n');
+}
+
+/**
+ * Ensure the last non-empty, non-comment line in `result` ends with a semicolon
+ * before emitting an `IF NOT FOUND THEN` block.
+ */
+function ensureTrailingSemicolon(result: string[]): void {
+  for (let k = result.length - 1; k >= 0; k--) {
+    const trimmed = result[k].trim();
+    if (!trimmed || trimmed.startsWith('--')) continue;
+    if (!trimmed.endsWith(';') && !/^(?:BEGIN|THEN|ELSE|LOOP)$/i.test(trimmed)) {
+      result[k] = result[k].trimEnd() + ';';
+    }
+    break;
+  }
+}
+
+/**
+ * Collect a single branch (either a `BEGIN ... END` block or a single SQL statement)
+ * starting at `startIdx`, stopping at `ELSE` when `stopAtElse` is true.
+ */
+function collectRowcountBranch(
+  lines: string[],
+  startIdx: number,
+  stopAtElse: boolean
+): { stmtText: string; nextIdx: number; hitElse: boolean } | null {
+  let j = startIdx;
+  while (j < lines.length && (!lines[j].trim() || lines[j].trim().startsWith('--'))) {
+    j++;
+  }
+  if (j >= lines.length) return null;
+
+  const first = lines[j].trim();
+  const branchLines: string[] = [];
+
+  if (/^BEGIN\b/i.test(first)) {
+    let depth = 1;
+    j++;
+    while (j < lines.length && depth > 0) {
+      const s = lines[j].trim();
+      if (/^BEGIN\b/i.test(s)) depth++;
+      else if (/^END\b/i.test(s)) {
+        depth--;
+        if (depth === 0) {
+          j++;
+          break;
+        }
+      }
+      if (s && !s.startsWith('--')) branchLines.push(s);
+      j++;
+    }
+    if (depth !== 0) return null;
+
+    if (stopAtElse) {
+      let k = j;
+      while (k < lines.length && (!lines[k].trim() || lines[k].trim().startsWith('--'))) {
+        k++;
+      }
+      if (k < lines.length && /^ELSE\b/i.test(lines[k].trim())) {
+        return { stmtText: branchLines.join(' ').trim(), nextIdx: k + 1, hitElse: true };
+      }
+    }
+    return { stmtText: branchLines.join(' ').trim(), nextIdx: j, hitElse: false };
+  }
+
+  // Single-statement branch (no BEGIN/END)
+  while (j < lines.length) {
+    const s = lines[j].trim();
+    if (!s) {
+      if (branchLines.length > 0 && !stopAtElse) break;
+      j++;
+      continue;
+    }
+    if (s.startsWith('--')) {
+      j++;
+      continue;
+    }
+    if (stopAtElse && /^ELSE\b/i.test(s)) {
+      return { stmtText: branchLines.join(' ').trim(), nextIdx: j + 1, hitElse: true };
+    }
+    if (/^(?:END|IF|RETURN|GRANT|REVOKE|GO)\b/i.test(s)) {
+      break;
+    }
+    if (branchLines.length > 0 && !/^(?:FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|ORDER|GROUP|HAVING|LIMIT|AND|OR|"[^"]+"\s*=)/i.test(s)) {
+      break;
+    }
+    branchLines.push(s);
+    j++;
+  }
+
+  return branchLines.length > 0
+    ? { stmtText: branchLines.join(' ').trim(), nextIdx: j, hitElse: false }
+    : null;
+}
+
+/**
+ * Convert an uncommented T-SQL `IF @@ROWCOUNT = 0 ... ELSE ...` CRUD check
+ * (already rewritten to `IF _v_row_count = 0`) into PL/pgSQL `IF NOT FOUND THEN ... END IF;`.
+ */
+function tryConvertUncommentedRowcountIf(
+  lines: string[],
+  startIdx: number,
+  result: string[]
+): { replacement: string[]; nextIdx: number } | null {
+  const indent = lines[startIdx].match(/^(\s*)/)?.[1] ?? '    ';
+  const ifBranch = collectRowcountBranch(lines, startIdx + 1, true);
+  if (!ifBranch || !ifBranch.hitElse) return null;
+
+  const elseBranch = collectRowcountBranch(lines, ifBranch.nextIdx, false);
+  if (!elseBranch) return null;
+
+  const ifStmt = ifBranch.stmtText.replace(/;\s*$/, '').trim();
+  const elseStmt = elseBranch.stmtText.replace(/;\s*$/, '').trim();
+
+  // Pattern 1: Update/Create CRUD returning SETOF view
+  // IF @@ROWCOUNT = 0 SELECT TOP 0 * FROM __mj."vwX" WHERE 1=0 ELSE SELECT * FROM __mj."vwX" WHERE ...
+  const emptyViewMatch = ifStmt.match(
+    /^SELECT\s+(?:TOP\s+0\s+)?\*\s+FROM\s+((?:\w+\.)?"vw\w+")\s+WHERE\s+1\s*=\s*0$/i
+  );
+  const fullSelectMatch = elseStmt.match(
+    /^(SELECT\s+\*\s+FROM\s+(?:\w+\.)?"vw\w+"\s+WHERE\s+[\s\S]+)$/i
+  );
+  if (emptyViewMatch && fullSelectMatch && !/\bTOP\b/i.test(elseStmt)) {
+    ensureTrailingSemicolon(result);
+    return {
+      replacement: [
+        `${indent}IF NOT FOUND THEN`,
+        `${indent}    RETURN;`,
+        `${indent}ELSE`,
+        `${indent}    RETURN QUERY ${fullSelectMatch[1].trim()};`,
+        `${indent}END IF;`,
+      ],
+      nextIdx: elseBranch.nextIdx,
+    };
+  }
+
+  // Pattern 2: Delete CRUD returning _result_id UUID
+  // IF @@ROWCOUNT = 0 SELECT NULL AS "ID" ELSE SELECT p_ID AS "ID"
+  const nullIdMatch = ifStmt.match(/^SELECT\s+NULL\s+AS\s+"?(\w+)"?$/i);
+  const varIdMatch = elseStmt.match(/^SELECT\s+(p_\w+)\s+AS\s+"?(\w+)"?$/i);
+  if (nullIdMatch && varIdMatch) {
+    ensureTrailingSemicolon(result);
+    return {
+      replacement: [
+        `${indent}IF NOT FOUND THEN`,
+        `${indent}    RETURN QUERY SELECT NULL::UUID AS "_result_id";`,
+        `${indent}ELSE`,
+        `${indent}    RETURN QUERY SELECT ${varIdMatch[1]}::UUID AS "_result_id";`,
+        `${indent}END IF;`,
+      ],
+      nextIdx: elseBranch.nextIdx,
+    };
+  }
+
+  return null;
 }
 
 /**

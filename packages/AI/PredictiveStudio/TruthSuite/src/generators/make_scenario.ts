@@ -9,6 +9,7 @@
 //                                  with mean + `deltaMean` (same SD). Target is drawn from the unchanged model, so the
 //                                  labels follow the true model and only the input distribution moves.
 //   - applySeriesLagColumns (T3):  post-pass writing LagTarget (legitimate) and SamePeriodTarget (leak).
+//   - applySeriesLag (T4):         post-pass writing the legitimate lag column alone (D4-181); it draws nothing.
 //   - applyRollingOrigins (series): post-pass writing Origin<k> train/test marks and truth_origins.csv.
 //   - stateFeature (C4):           a legitimate lagged-outcome feature (previous period's Target, 0 in period 0); it
 //                                  makes the next period's Target depend on this one, so NextPeriodFlag really leaks
@@ -23,7 +24,7 @@ import path from 'node:path';
 import { GenLib, type ScenarioIdMinter } from './gen_lib';
 import { Loom, type LoomRng } from './loom';
 import type {
-  CsvValue, ScenarioKind, ScenarioManifest, ScenarioPlanted, ScenarioPlantedCopied, ScenarioPlantedCopiedKey, ScenarioPlantedKey, ScenarioSpec, ScenarioTrapDeclaration,
+  CsvValue, ScenarioKind, ScenarioManifest, ScenarioPlanted, ScenarioPlantedCopied, ScenarioPlantedCopiedKey, ScenarioPlantedKey, ScenarioSeriesLag, ScenarioSpec, ScenarioTrapDeclaration,
 } from './types';
 
 /** One row of a scenario's `rows.csv`; feature and trap columns are keyed by name. */
@@ -146,7 +147,8 @@ export class ScenarioGenerator {
 
   /** D1: planted intercept shift. Periods p >= shiftFrom get +deltaIntercept on the linear predictor. */
   private static shiftOffset(spec: ScenarioSpec, p: number): number {
-    return (spec.shiftFrom !== undefined && p >= spec.shiftFrom) ? ScenarioGenerator.required(spec, 'deltaIntercept') : 0;
+    const shifted = spec.shiftFrom !== undefined && p >= spec.shiftFrom;
+    return shifted ? ScenarioGenerator.required(spec, 'deltaIntercept') : 0;
   }
 
   /** C4 leakage traps. rows/truth are entity-major, period-ordered; hidden rows (period == periodsPerEntity) are dropped. */
@@ -200,6 +202,11 @@ export class ScenarioGenerator {
       rows[t][l.lagColumn] = t === 0 ? null : rows[t - 1].Target;
       rows[t][l.sameColumn] = GenLib.Round(rows[t].Target + lrng.normal(0, l.leakSd), 4);
     }
+  }
+
+  /** T4: `lagColumn` = previous period's Target (legitimate, empty in period 0); no RNG stream is read, so Target is unchanged. */
+  private static applySeriesLag(l: ScenarioSeriesLag, rows: ScenarioRow[]): void {
+    for (let t = 0; t < rows.length; t++) rows[t][l.lagColumn] = t === 0 ? null : rows[t - 1].Target;
   }
 
   /**
@@ -256,6 +263,7 @@ export class ScenarioGenerator {
       truth.push({ ID: id, TrueValue: GenLib.Round(mean, 4), Split: t < nPeriods - testPeriods ? 'train' : 'test', OneStepMean: GenLib.Round(oneStep, 4) });
     }
     if (spec.seriesLeak) ScenarioGenerator.applySeriesLagColumns(ctx, rows);
+    if (spec.seriesLag) ScenarioGenerator.applySeriesLag(spec.seriesLag, rows);
     return { Rows: rows, Truth: truth, Origins: ScenarioGenerator.applyRollingOrigins(spec, truth, rows, means) };
   }
 
@@ -374,7 +382,7 @@ export class ScenarioGenerator {
   /** Write rows.csv, truth.csv, truth_origins.csv (series) and manifest.json. */
   private static writeOutputs(ctx: ScenarioContext, out: string, output: ScenarioOutput): void {
     const spec = ctx.Spec;
-    const featureCols = [...ctx.LinFeatures, ...(spec.seriesLeak ? [spec.seriesLeak.lagColumn] : [])];
+    const featureCols = [...ctx.LinFeatures, ...(spec.seriesLeak ? [spec.seriesLeak.lagColumn] : []), ...(spec.seriesLag ? [spec.seriesLag.lagColumn] : [])];
     const truthCols = ScenarioGenerator.truthColumns(spec);
     GenLib.WriteCsv(path.join(out, 'rows.csv'), output.Rows, { Columns: ['ID', 'EntityKey', 'T', ...featureCols, ...ScenarioGenerator.trapColumns(spec), 'Target'] });
     GenLib.WriteCsv(path.join(out, 'truth.csv'), output.Truth, { Columns: truthCols });

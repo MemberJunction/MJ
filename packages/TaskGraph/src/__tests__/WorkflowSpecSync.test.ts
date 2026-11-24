@@ -10,7 +10,8 @@
  * tier. What is unit-testable is everything that decides *whether* to touch a substrate at all.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { WorkflowSpecSync, RUN_WORKFLOW_JOB_TYPE, WORKFLOW_OWNER_KEY, EXECUTE_AGENT_ACTION, type WorkflowAgentWriter } from '../WorkflowSpecSync';
+import { WorkflowSpecSync, RUN_WORKFLOW_JOB_TYPE, WORKFLOW_OWNER_KEY, EXECUTE_AGENT_ACTION, GroupEntityEventTriggers, type WorkflowAgentWriter } from '../WorkflowSpecSync';
+import type { WorkflowEntityEventTrigger } from '@memberjunction/ai-core-plus';
 import type { WorkflowSpec } from '@memberjunction/ai-core-plus';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
@@ -151,5 +152,101 @@ describe('reconciliation contract', () => {
     it('marks owned rows by agent ID, so ownership survives a workflow rename', () => {
         // Matching on name would orphan the old schedule and leave two firing.
         expect(WORKFLOW_OWNER_KEY).toBe('WorkflowAgentID');
+    });
+});
+
+describe('record-change triggers follow the workflow (gap 5)', () => {
+    type Internals = {
+        reconcileEntityEvent: (group: unknown, agentID: string, status: string) => Promise<string>;
+        disableUnwantedBindings: (agentID: string, keep: string[]) => Promise<void>;
+        resolveJobTypeID: () => Promise<string>;
+        findOwnedJobs: () => Promise<unknown[]>;
+    };
+
+    function stubbed(sync: WorkflowSpecSync) {
+        const internals = sync as unknown as Internals;
+        const reconcile = vi.spyOn(internals, 'reconcileEntityEvent').mockResolvedValue('binding-1');
+        const disable = vi.spyOn(internals, 'disableUnwantedBindings').mockResolvedValue();
+        vi.spyOn(internals, 'resolveJobTypeID').mockResolvedValue('type-1');
+        vi.spyOn(internals, 'findOwnedJobs').mockResolvedValue([]);
+        return { reconcile, disable };
+    }
+
+    const invoiceTrigger: WorkflowEntityEventTrigger = { type: 'EntityEvent', entityName: 'Invoices', invocationType: 'Update' };
+
+    it('binds a DRAFT workflow\'s trigger Disabled, so it does not fire before the workflow is ready', async () => {
+        const sync = new WorkflowSpecSync(writerSpy());
+        const { reconcile } = stubbed(sync);
+        await sync.Persist(spec({ status: 'Draft', triggers: [invoiceTrigger] }), context());
+        expect(reconcile.mock.calls[0][2]).toBe('Disabled');
+    });
+
+    it('binds a PAUSED workflow\'s trigger Disabled', async () => {
+        const sync = new WorkflowSpecSync(writerSpy());
+        const { reconcile } = stubbed(sync);
+        await sync.Persist(spec({ status: 'Paused', triggers: [invoiceTrigger] }), context());
+        expect(reconcile.mock.calls[0][2]).toBe('Disabled');
+    });
+
+    it('binds an ACTIVE workflow\'s trigger Active', async () => {
+        const sync = new WorkflowSpecSync(writerSpy());
+        const { reconcile } = stubbed(sync);
+        await sync.Persist(spec({ status: 'Active', triggers: [invoiceTrigger] }), context());
+        expect(reconcile.mock.calls[0][2]).toBe('Active');
+    });
+
+    it('disables every owned binding the spec no longer names, keeping the ones it does', async () => {
+        const sync = new WorkflowSpecSync(writerSpy('agent-7'));
+        const { disable } = stubbed(sync);
+        await sync.Persist(spec({ status: 'Active', triggers: [invoiceTrigger] }), context());
+        expect(disable).toHaveBeenCalledWith('agent-7', ['binding-1'], expect.anything());
+    });
+
+    it('disables ALL owned bindings when the last record-change trigger is removed', async () => {
+        const sync = new WorkflowSpecSync(writerSpy('agent-7'));
+        const { reconcile, disable } = stubbed(sync);
+        await sync.Persist(spec({ status: 'Active', triggers: [{ type: 'OnDemand' }] }), context());
+        expect(reconcile).not.toHaveBeenCalled();
+        expect(disable).toHaveBeenCalledWith('agent-7', [], expect.anything());
+    });
+
+    it('reports a failure to disable removed bindings rather than dropping it', async () => {
+        const sync = new WorkflowSpecSync(writerSpy());
+        const { disable } = stubbed(sync);
+        disable.mockRejectedValue(new Error('db down'));
+        const r = await sync.Persist(spec({ status: 'Active', triggers: [invoiceTrigger] }), context());
+        expect(r.Unreconciled.some((u) => u.includes('db down'))).toBe(true);
+    });
+});
+
+describe('GroupEntityEventTriggers', () => {
+    const t = (over: Partial<WorkflowEntityEventTrigger>): WorkflowEntityEventTrigger => ({
+        type: 'EntityEvent', entityName: 'Invoices', invocationType: 'Update', ...over,
+    });
+
+    it('puts two change types on one entity and scope onto ONE binding', () => {
+        const groups = GroupEntityEventTriggers([t({ invocationType: 'Create' }), t({ invocationType: 'Update' })]);
+        expect(groups).toHaveLength(1);
+        expect(groups[0].Triggers.map((x) => x.invocationType)).toEqual(['Create', 'Update']);
+    });
+
+    it('keeps different entities and different scopes apart', () => {
+        const groups = GroupEntityEventTriggers([
+            t({}),
+            t({ entityName: 'Orders' }),
+            t({ scopeEntityName: 'Invoices', scopeRecordID: 'abc' }),
+        ]);
+        expect(groups).toHaveLength(3);
+    });
+
+    it('reports a second trigger whose filter would overwrite the first, instead of losing it silently', () => {
+        const groups = GroupEntityEventTriggers([
+            t({ invocationType: 'Create', filter: "NewValues.Status === 'Open'" }),
+            t({ invocationType: 'Update', filter: "DidFieldChangeToValue('Status', 'Paid')" }),
+        ]);
+        expect(groups).toHaveLength(1);
+        expect(groups[0].Triggers).toHaveLength(1);
+        expect(groups[0].Conflicts).toHaveLength(1);
+        expect(groups[0].Conflicts[0]).toContain('one binding can carry only one filter');
     });
 });

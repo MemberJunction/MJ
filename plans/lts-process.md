@@ -223,8 +223,8 @@ None of this makes the line frozen. It takes fixes it has a reason to take, and 
 | 2 | **Deterministic integration tier** (`npm run test:integration`) on the candidate build, against a dedicated certification DB (fresh-provisioned or snapshot — the tier's self-cleaning fixtures make shared-DB runs fine day-to-day, but certification evidence doesn't share mutable state) | Automated | Zero failures; sibling-parity check green |
 | 3 | **Full UX Regression Suite** (AI-driven) against a fresh install of the candidate | AI-automated | Documented pass criteria met. Failure triage: defect → `cert-blocker`; suspected flake → max 2 reruns, must pass clean twice consecutively. Results packet attached to scorecard |
 | 4 | **Fresh-install matrix**: `mj install` of the candidate on clean macOS + Windows; More Cheese and other sample environments stood up | Human + scripted | Install completes; smoke passes: login, Explorer loads, CodeGen runs, entity record created, view renders, agent run completes; **`mj sync push` on the fresh install is a clean no-op** (the single assertion that catches a non-self-contained migration or baseline). The install runs the plain path — no codegen/sync repair step may run before the no-op assertion, because a repair loop silently fixes exactly the defect this gate exists to surface |
-| 5 | **Upgrade matrix**: CDP stage, Skip stage, Izzy stage, MJC stage each upgraded to the candidate | Human | Each env owner reports pass/fail + issues within 2 business days of the request |
-| 6 | **Human hammering**: structured exploratory sessions on core flows — navigation/breadcrumbs, search, views (create/edit/render/share), forms, dashboards, auth, performance spot-checks | Human | Minimum agreed person-hours logged; all findings triaged (blocker vs. recorded) |
+| 5 | **Upgrade matrix**: CDP stage, Skip stage, Izzy stage, MJC stage, Betty stage (from line 6.3) each upgraded to the candidate | Human | Each env owner reports pass/fail + issues within 2 business days of the request |
+| 6 | **Human hammering**: by default, the AIDP Next dev team bases its daily work on the candidate line for the certification window, and that daily use is the soak (cert owner, 2026-11-23; first used for 6.1). Core flows it should touch: navigation/breadcrumbs, search, views (create/edit/render/share), forms, dashboards, auth, performance spot-checks. Structured exploratory sessions only where that use leaves a core flow untouched | Human | The team reports what ran on the line and since when; all findings triaged (blocker vs. recorded) |
 | 7 | **Zero open `cert-blocker`s** | Process | Label query returns empty |
 | 8 | **Certification sign-off** | Authority | Craig approves the `release-lines.json` PR — the only way the label applies |
 
@@ -243,7 +243,7 @@ R = does the work · A = accountable/sole approver · C = consulted · I = infor
 | Gate 3 execution (AI UX suite) | Caeleb | Craig (accepts results *and* approach) | Robert Kihm | — |
 | Gate 4 (fresh installs) | BC Labs crew — **names UNKNOWN** | Craig | — | — |
 | Gate 5 (stage upgrades) | Env owners — **CDP: UNKNOWN · Skip: UNKNOWN · Izzy: UNKNOWN · MJC: UNKNOWN** | Craig | Env teams | — |
-| Gate 6 (human hammering) | Craig + crew | Craig | — | — |
+| Gate 6 (human hammering) | Craig + the AIDP Next dev team | Craig | — | — |
 | Backport triage (weekly sweep + labels) | Craig (early cycles; then trained delegates) | Craig | Fix authors | — |
 | Line releases (`publish.yml`, LTS path) | Build engineer — **UNKNOWN** | Craig | — | Core team |
 | `release-lines.json` status changes | Craig | Craig | — | All (via PR) |

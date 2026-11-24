@@ -1089,7 +1089,7 @@ An app **that ships database objects** owns a dedicated SQL Server schema (e.g.,
 When app A depends on app B:
 1. The CLI performs a topological sort of the dependency graph
 2. Dependencies are installed depth-first before the dependent app
-3. Dependency versions are checked with semver satisfaction
+3. Dependency versions are checked with semver satisfaction. An installed app is held to the dependencies of the version that is installed (the manifest recorded for it), not to the `mj-app.json` on its default branch. When that record cannot be read, the manifest at the installed version is used; when neither can be read, the CLI warns that the app's dependencies are not checked
 4. Removal of a depended-upon app is blocked unless `--force` is used
 
 ### Version Compatibility

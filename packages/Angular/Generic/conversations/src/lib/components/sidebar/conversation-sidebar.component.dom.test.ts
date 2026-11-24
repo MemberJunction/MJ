@@ -45,6 +45,17 @@ class StubCollectionTreeComponent {
   @Input() currentUser: UserInfo | null = null;
 }
 
+@Component({ standalone: false, selector: 'mj-my-agents-section', template: '' })
+class StubMyAgentsSectionComponent {
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() CurrentUser: UserInfo | null = null;
+  @Input() ShowMyAgents = true;
+  @Input() ActiveAgentId: string | null = null;
+  @Output() StartChatWithAgent = new EventEmitter<unknown>();
+  @Output() StartOnboardingWithTemplate = new EventEmitter<unknown>();
+  @Output() AgentInstanceChanged = new EventEmitter<unknown>();
+}
+
 @Component({ standalone: false, selector: 'mj-conversation-routines-section', template: '' })
 class StubRoutinesSectionComponent {
   @Input() Provider: IMetadataProvider | null = null;
@@ -61,6 +72,7 @@ describe('ConversationSidebarComponent (DOM) — pass-throughs + re-emits', () =
       imports: [CommonModule],
       declarations: [
         ConversationSidebarComponent,
+        StubMyAgentsSectionComponent,
         StubConversationListComponent,
         StubCollectionTreeComponent,
         StubRoutinesSectionComponent,

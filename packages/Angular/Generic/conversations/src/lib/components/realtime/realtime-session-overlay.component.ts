@@ -32,6 +32,7 @@ import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
 import { AgentOrbStateFor, RealtimeAgentOrbComponent, type RealtimeAgentOrbState } from './realtime-agent-orb.component';
+import { IsNarrowRealtimeViewport } from './capture/realtime-capture-channel';
 import { RealtimeCameraCheckCardComponent } from './capture/realtime-camera-check-card.component';
 import { SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY } from './realtime-surface-placement-prefs';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
@@ -48,7 +49,7 @@ import {
 } from './realtime-ui-config';
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewChannelTab } from './realtime-surface-tabs.model';
-import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
+import { ChannelTabSortOrder, ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { SafeJSONParse } from '@memberjunction/global';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
@@ -202,7 +203,7 @@ export interface RealtimeAvatarCaption {
   styleUrl: './realtime-session-overlay.component.css'
 })
 export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, AfterViewChecked, OnDestroy {
-  private _agentName = 'Sage';
+  private _agentName = 'Assistant';
 
   /**
    * True while the call is MINIMIZED: the overlay hides itself (CSS, not destruction) so
@@ -212,10 +213,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @Input() Hidden = false;
 
-  /** Display name of the agent the voice session fronts (e.g. "Sage"). */
+  /** Display name of the agent the voice session fronts. */
   @Input()
   set AgentName(value: string) {
-    this._agentName = value || 'Sage';
+    this._agentName = value || 'Assistant';
     this.State.AgentName = this._agentName;
   }
   get AgentName(): string {
@@ -1602,7 +1603,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * earned, and Details is what earns it (same shape as {@link AllowDevLinks}).
    */
   public get ShowDetailsControl(): boolean {
-    return !this.IsReviewing && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
+    return !this.IsReviewing && !IsNarrowRealtimeViewport() && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
   }
 
   /**
@@ -2087,13 +2088,20 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
     this.cleanupStaleReviewChannelTabs(channels);
+    const ordered = [...channels].sort(
+      (a, b) => ChannelTabSortOrder(a.ChannelName) - ChannelTabSortOrder(b.ChannelName)
+    );
     let newlyUsedSurface = false;
-    for (const plugin of channels) {
+    let firstSurfacedKey: string | null = null;
+    for (const plugin of ordered) {
       if (!plugin.HasSurface()) {
         continue; // server-only channel — no surface to tab.
       }
       if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.realtime.HasChannelBeenUsed(plugin.ChannelName))) {
         continue; // not the whiteboard and not used yet — it earns its tab on first activity.
+      }
+      if (!firstSurfacedKey) {
+        firstSurfacedKey = plugin.ChannelName;
       }
       if (!this.surfacedLiveChannelKeys.has(plugin.ChannelName)) {
         this.surfacedLiveChannelKeys.add(plugin.ChannelName);
@@ -2102,10 +2110,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.registerPluginChannelTab(plugin);
     }
     // Resuming a prior session restores used channels before live tools fire; auto-open the
-    // surface panel once per newly-surfaced channel so restored tabs (Workspace/Browser/Media)
-    // pick up visibly where the previous session left off.
+    // surface panel once per newly-surfaced channel so restored tabs (Workspace/Whiteboard/Browser/Media)
+    // keep their canonical order and pick up visibly where the previous session left off.
     if (newlyUsedSurface && this.realtime.IsActive && !this.IsReviewing && !this.DetailsPeek) {
       this.DetailsPeek = true;
+      if (!this.pendingRevealKey && firstSurfacedKey) {
+        this.pendingRevealKey = firstSurfacedKey;
+      }
       this.recomputeUi();
     }
     this.cdr.markForCheck();

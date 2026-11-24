@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot } from '@memberjunction/core';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 
 type PdfJsModule = typeof import('pdfjs-dist');
@@ -185,6 +185,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   private downloadUrl = '';
   private isObjectUrl = false;
   private _pdfjsLib: PdfJsLib | null = null;
+  private isDestroyed = false;
 
   /** Discrete zoom steps — 50 % to 400 %. */
   private readonly ZOOM_STEPS = [0.5, 0.67, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0];
@@ -235,6 +236,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   }
 
   ngOnDestroy(): void {
+    this.isDestroyed = true;
     this.cancelCurrentRender();
     this.pdfDoc?.destroy();
     this.pdfDoc = null;
@@ -388,6 +390,12 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
         this.isObjectUrl = true;
       }
 
+      if (this.isDestroyed) {
+        pdfDoc.destroy();
+        this.revokeObjectUrl();
+        return;
+      }
+
       this.pdfDoc = pdfDoc;
       this.TotalPages = pdfDoc.numPages;
       this.CurrentPage = 1;
@@ -396,8 +404,14 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
       // exists before renderPage() tries to draw on it.
       this.cdr.detectChanges();
       await this.setFitWidthZoom();
+      if (this.isDestroyed) {
+        return;
+      }
       await this.renderPage(1);
     } catch (err) {
+      if (this.isDestroyed) {
+        return;
+      }
       this.showError(`Could not load PDF: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
@@ -499,6 +513,15 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.isLoading = false;
     this.errorMessage = message;
     this.cdr.markForCheck();
+  }
+
+  /** The original file, once it has loaded. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return this.downloadUrl ? [this.FileExportOption('PDF (.pdf)', 'fa-solid fa-file-pdf', 'The original file')] : [];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    return key === FILE_EXPORT_KEY ? this.OnDownload() : super.RunExport(key);
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

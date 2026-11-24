@@ -478,6 +478,60 @@ END`;
       expect(result).not.toContain('@@ROWCOUNT');
     });
 
+    it('should convert uncommented spUpdate IF @@ROWCOUNT = 0 SELECT TOP 0 ... ELSE SELECT ... to IF NOT FOUND THEN ... END IF;', () => {
+      const input = `CREATE PROCEDURE [__mj].[spUpdateUser]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[User]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [__mj_UpdatedAt] = GETUTCDATE()
+    WHERE
+        [ID] = @ID
+
+    IF @@ROWCOUNT = 0
+        SELECT TOP 0 * FROM [__mj].[vwUsers] WHERE 1=0
+    ELSE
+        SELECT * FROM [__mj].[vwUsers] WHERE [ID] = @ID
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('IF NOT FOUND THEN');
+      expect(result).toContain('RETURN;');
+      expect(result).toContain('RETURN QUERY SELECT * FROM __mj."vwUsers" WHERE "ID" = p_ID;');
+      expect(result).toContain('END IF;');
+      expect(result).not.toContain('LIMIT 0');
+      expect(result).not.toContain('WHERE 1=0');
+      expect(result).not.toContain('_v_row_count');
+      expect(result).toMatch(/WHERE\s+"ID"\s*=\s*p_ID;\s*\n\s*IF NOT FOUND THEN/);
+    });
+
+    it('should convert uncommented spDelete IF @@ROWCOUNT = 0 SELECT NULL AS [ID] ELSE SELECT @ID AS [ID] to IF NOT FOUND THEN ... END IF;', () => {
+      const input = `CREATE PROCEDURE [__mj].[spDeleteUser]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM [__mj].[User] WHERE [ID] = @ID
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID]
+    ELSE
+        SELECT @ID AS [ID]
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('WHERE "ID" = p_ID;');
+      expect(result).toContain('IF NOT FOUND THEN');
+      expect(result).toContain('RETURN QUERY SELECT NULL::UUID AS "_result_id";');
+      expect(result).toContain('RETURN QUERY SELECT p_ID::UUID AS "_result_id";');
+      expect(result).toContain('END IF;');
+      expect(result).not.toContain('_v_row_count');
+    });
+
     it('should convert PRINT to RAISE NOTICE', () => {
       const input = `CREATE PROCEDURE [__mj].[spTest]
 AS
@@ -912,5 +966,103 @@ BEGIN
 END`);
       expect(result).toContain('SELECT COUNT(*) INTO p_Count FROM __mj."Task"');
     });
+  });
+});
+
+// Regression: V202611111351 — MJ 6.3's single-write spUpdate returns named columns from the BASE
+// TABLE through an unbraced IF/ELSE with comment lines. The legacy path emitted `IF _v_row_count = 0`
+// with no THEN, bare SELECTs and RETURNS SETOF RECORD, and PG refused to create the function.
+describe('ProcedureToFunctionRule — single-write spUpdate', () => {
+  const input = `CREATE PROCEDURE [__mj].[spUpdateWidget]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL,
+    @Notes_Clear bit = 0,
+    @Notes nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[Widget]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [Notes] = CASE WHEN @Notes_Clear = 1 THEN NULL ELSE ISNULL(@Notes, [Notes]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE [ID] = @ID
+END`;
+
+  it('declares a typed RETURNS TABLE matching native PG CodeGen', () => {
+    const result = convert(input);
+    expect(result).toContain('RETURNS TABLE("ID" UUID, "__mj_CreatedAt" TIMESTAMPTZ, "__mj_UpdatedAt" TIMESTAMPTZ) AS');
+    expect(result).not.toContain('SETOF RECORD');
+  });
+
+  it('lets column references win over the RETURNS TABLE OUT variables', () => {
+    const result = convert(input);
+    expect(result).toMatch(/\$\$\n#variable_conflict use_column\n/);
+  });
+
+  it('emits a well-formed IF ... THEN ... END IF and a RETURN QUERY', () => {
+    const result = convert(input);
+    expect(result).toContain('IF _v_row_count = 0 THEN\n        RETURN;\n    END IF;');
+    expect(result).toContain('RETURN QUERY SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM __mj."Widget" WHERE "ID" = p_ID;');
+    expect(result).not.toMatch(/IF _v_row_count = 0\s*\n\s*--/);
+    expect(result).not.toContain('LIMIT 0');
+    expect(result).not.toContain('WHERE 1=0');
+  });
+
+  it('leaves a hand-written procedure that selects table columns on its old path', () => {
+    const handWritten = `CREATE PROCEDURE [__mj].[spUpdateThing]
+    @ID uniqueidentifier
+AS
+BEGIN
+    UPDATE [__mj].[Thing] SET [Name] = 'x' WHERE [ID] = @ID
+    IF @@ROWCOUNT = 0
+        SELECT [ID] FROM [__mj].[Thing] WHERE [ID] = @ID
+END`;
+    const result = convert(handWritten);
+    expect(result).not.toContain('#variable_conflict');
+    expect(result).not.toContain('RETURNS TABLE("ID"');
+  });
+});
+
+// Regression: V202611140845 — the single-write spUpdate written by hand, without CodeGen's
+// `-- Check if the update was successful` marker, reached PG as `IF _v_row_count = 0` with no THEN,
+// a bare SELECT and a stray `LIMIT 0`. (The view-returning shape of the unmarked block is covered by
+// the `body conversion` test that expects IF NOT FOUND THEN.)
+describe('ProcedureToFunctionRule — hand-written rowcount IF/ELSE', () => {
+  it('converts an unmarked base-table IF @@ROWCOUNT = 0 ... ELSE ... block', () => {
+    const input = `CREATE PROCEDURE [__mj].[spUpdateWidget]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[Widget]
+    SET
+        [Name] = ISNULL(@Name, [Name])
+    WHERE
+        [ID] = @ID
+
+    IF @@ROWCOUNT = 0
+        SELECT TOP 0 [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE 1=0
+    ELSE
+        SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE [ID] = @ID
+END`;
+    const result = convert(input);
+    expect(result).toContain('GET DIAGNOSTICS _v_row_count = ROW_COUNT;');
+    expect(result).toContain('IF _v_row_count = 0 THEN\n        RETURN;\n    END IF;');
+    expect(result).toContain('RETURN QUERY SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM __mj."Widget" WHERE "ID" = p_ID;');
+    expect(result).toContain('RETURNS TABLE("ID" UUID, "__mj_CreatedAt" TIMESTAMPTZ, "__mj_UpdatedAt" TIMESTAMPTZ) AS');
+    expect(result).not.toContain('LIMIT 0');
+    expect(result).not.toContain('WHERE 1=0');
   });
 });

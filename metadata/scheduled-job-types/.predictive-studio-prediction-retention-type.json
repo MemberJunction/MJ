@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Prediction Retention",
+      "Description": "The daily Predictive Studio prediction maintenance. First the binding backfill: every MJ: ML Model Scoring Bindings row with no ViewAuthorizationID (the pre-change bindings the PR 4 migration reshaped) gets the seeded \"View Model Predictions\" authorization, looked up by name; while that authorization is not loaded nothing changes and the next run retries. Then the retention sweep: for every binding with a RetentionDays, active or withdrawn, its Source = 'Model' Feature Values with an EffectiveAsOf more than RetentionDays days before the run's UTC day are deleted through the entity layer, 1,000 per batch (Record Changes records each). It never deletes a binding, model or pipeline. The per-binding counts go to the job run's Details. No configuration.",
+      "DriverClass": "PredictiveStudioPredictionRetentionJobDriver",
+      "DomainRunEntity": null,
+      "DomainRunEntityFKey": null,
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "60E75B95-DA24-4A4A-98F2-3188F1306A50"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:46.722Z",
+      "checksum": "d77dd34139adcfaacb007c8c75bbfb549b0371c665301160907060203c7cd32e"
+    }
+  }
+]

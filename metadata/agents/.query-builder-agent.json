@@ -6,6 +6,7 @@
       "Description": "Business-friendly orchestrator agent that helps users explore their data and build saved queries. Delegates technical SQL work to the Query Strategist sub-agent. Presents results visually with diagrams and formatted tables, hiding SQL complexity unless the user asks for it.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "InstantiationMode": "Optional",
       "AcceptsSkills": "All",
       "SkillActivationMode": "Auto",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Data",
@@ -45,6 +46,25 @@
               "List Workspace Artifacts"
             ]
           }
+        },
+        "instantiation": {
+          "suggestedNames": [
+            "Revenue Analyst",
+            "Pipeline Inspector",
+            "Ops Metrics Scout"
+          ],
+          "suggestedIcons": [
+            "fa-solid fa-chart-line",
+            "fa-solid fa-database",
+            "fa-solid fa-table-columns",
+            "fa-solid fa-hammer"
+          ],
+          "suggestedPersonaNames": [
+            "Alloy",
+            "Kore",
+            "Onyx",
+            "Sage"
+          ]
         }
       }
     },
@@ -102,10 +122,10 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "ALL_QUERIES",
-            "Description": "Complete list of existing queries for reference and composition. Includes Reusable flag and SQL for composition planning.",
+            "Description": "Approved queries, for reference and composition: names, descriptions, categories and the Reusable flag, without SQL. Approved only: a Pending query is a draft (for example one saved from a conversation so a list can refresh from it) and is not offered to agents.",
             "SourceType": "RunView",
             "EntityName": "MJ: Queries",
-            "ExtraFilter": "Status = 'Approved' OR Status = 'Pending'",
+            "ExtraFilter": "Status = 'Approved'",
             "OrderBy": "Name ASC",
             "FieldsToRetrieve": [
               "ID",
@@ -114,8 +134,7 @@
               "CategoryID",
               "Category",
               "Status",
-              "Reusable",
-              "SQL"
+              "Reusable"
             ],
             "ResultType": "simple",
             "DestinationType": "Data",
@@ -129,8 +148,8 @@
             "ID": "87D8E91D-A10C-43A8-91D2-694819E422C3"
           },
           "sync": {
-            "lastModified": "2026-03-14T01:24:29.592Z",
-            "checksum": "5d762c63087d613fa7095dc99f19836eefaff7976115e16eb80aab80707d1de2"
+            "lastModified": "2026-11-24T20:27:43.920Z",
+            "checksum": "816f0388ed59436207d1cc076df1509a284749de9cc4409756118b48b4452f40"
           }
         },
         {
@@ -485,6 +504,34 @@
                   "lastModified": "2026-11-18T00:24:47.280Z",
                   "checksum": "e9b61ca75b6273dd85663b4826aeaec6e434a7f3948c7a223ce485f019f6adfb"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Graph Context",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "81F24722-81C5-4A2C-A3AE-A2B3A8E05003"
+                },
+                "sync": {
+                  "lastModified": "2026-11-24T20:27:43.948Z",
+                  "checksum": "fbc842a67a8a8872bb435c53c6959399d20e2cfc1f9c401d43223d0aadf3aa63"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Find Graph Path",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4B7BEFDF-66C2-484E-BFA5-8181D668B181"
+                },
+                "sync": {
+                  "lastModified": "2026-11-24T20:27:43.977Z",
+                  "checksum": "b243a366831b01962c1c5bf17740c253562be6b1caf00b8f79da50d54301897d"
+                }
               }
             ],
             "MJ: AI Agent Rubrics": [
@@ -567,8 +614,8 @@
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
     },
     "sync": {
-      "lastModified": "2026-11-18T00:24:47.104Z",
-      "checksum": "00e0fed5d759a582d355e514837676e4a1d3fe03e62d44a88427923343c4e205"
+      "lastModified": "2026-11-24T20:27:43.879Z",
+      "checksum": "76f148110afcb81a42de0171faba0790a0c65e5a38a90e42d8811280875a7531"
     }
   }
 ]

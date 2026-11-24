@@ -20,6 +20,7 @@ import {
   DocumentCollaborationSession,
 } from '../../services/document-collaboration.service';
 import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
+import { ArtifactCommandPaletteComponent } from './artifact-command-palette.component';
 import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
 
 @Component({
@@ -87,6 +88,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -107,6 +109,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -130,6 +133,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -182,6 +186,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -280,6 +285,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -323,6 +329,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -1158,6 +1165,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
@@ -1203,6 +1211,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         SheetPluginViewerStubComponent,
         XlsxPreviewStubComponent,
         ArtifactAgentPresenceBarComponent,
+        ArtifactCommandPaletteComponent,
       ],
       declarations: [SpreadsheetArtifactViewerComponent, MjContextMenuComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],

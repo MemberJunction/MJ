@@ -23,8 +23,11 @@ import {
     MJSQLDialectEntity,
     QueryDefinitionRows,
     QueryEngine,
+    QUERY_APPROVAL_REFUSAL,
+    QUERY_VALIDATION_SQL_REFUSAL,
+    UserCanApproveQueries,
 } from "@memberjunction/core-entities";
-import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDMap, UUIDsEqual } from "@memberjunction/global";
 import { GenericDatabaseProvider, UserCache } from "@memberjunction/generic-database-provider";
 import { CompositionFullPath } from "@memberjunction/sql-parser";
 import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
@@ -57,6 +60,7 @@ import type {
     CompositionTargetRead,
 } from "./query-extraction";
 import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
+import type { ApproverRule } from "./approvalStamp";
 
 /** The provider shape extraction reads and writes through. */
 type ExtractionProvider = IMetadataProvider & IRunViewProvider;
@@ -66,6 +70,13 @@ function IsExtractionProvider(provider: unknown): provider is ExtractionProvider
     if (provider === null || typeof provider !== 'object') return false;
     return typeof Reflect.get(provider, 'RunView') === 'function' && typeof Reflect.get(provider, 'GetEntityObject') === 'function';
 }
+
+/**
+ * Queries whose save is running in this process, by ID, counting nested saves (a re-extraction can
+ * run inside another save). A dialect row written during its query's save leaves the fingerprint to
+ * that save, which stamps last; see {@link MJQueryEntityServer.IsSaveInProgress}.
+ */
+const savesInProgress = new UUIDMap<number>();
 
 /** Whether and how a save extracts. */
 interface ExtractionPlan {
@@ -202,10 +213,42 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         // the save reaches applies the approval rules and extracts; doing it here too would write the
         // child rows twice, the second time from the client.
         if (this.savesOverNetwork) return super.Save(options);
+        const id = this.ID;
+        savesInProgress.Set(id, (savesInProgress.Get(id) ?? 0) + 1);
+        try {
+            return await this.saveOnServerAsync(options);
+        } finally {
+            const remaining = (savesInProgress.Get(id) ?? 1) - 1;
+            if (remaining > 0) savesInProgress.Set(id, remaining);
+            else savesInProgress.Delete(id);
+        }
+    }
+
+    /**
+     * Whether a save of this query is running in this process. Its dialect and parameter rows are
+     * written during that save, before it stamps the fingerprints, so a row saved then needs no
+     * stamp of its own.
+     */
+    public static IsSaveInProgress(queryID: string): boolean {
+        return savesInProgress.Has(queryID);
+    }
+
+    /**
+     * Re-stamps `DefinitionFingerprint` from the definition as now stored. For a dialect row saved
+     * or deleted on its own, after this query's save: a metadata push writes a query's
+     * `relatedEntities` rows after the query, so the save's own stamp did not see them. Approval is
+     * untouched; only a save can approve.
+     */
+    public async RestampDefinitionFingerprintAsync(): Promise<void> {
+        await this.stampFingerprintsAsync(undefined, false);
+    }
+
+    private async saveOnServerAsync(options: EntitySaveOptions | undefined): Promise<boolean> {
         let approving: boolean;
         try {
+            if (!options?.ReplayOnly) this.assertMayWriteValidationSQL();
             // Approving is a server act; a ReplayOnly save writes nothing, so it has nothing to stamp.
-            approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'Status', this.Status);
+            approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'Status', this.Status, this.approverRule);
         } catch (e) {
             this.RegisterResultHistoryEntry(ApprovalRefusalResult(this, e));
             return false;
@@ -221,6 +264,32 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             this.platformSQLOverride = null;
             this.presetExtraction = null;
             this.refreshing = false;
+        }
+    }
+
+    /**
+     * Who may approve a query: a holder of the `Queries: Approve` authorization (or an Owner). Anyone
+     * the role permissions let save a query can still save it as a draft.
+     */
+    private get approverRule(): ApproverRule {
+        return {
+            CanApprove: (user) => UserCanApproveQueries(user, this.extractionProvider),
+            Refusal: QUERY_APPROVAL_REFUSAL,
+        };
+    }
+
+    /**
+     * Refuses a save that sets `CacheValidationSQL` to text, unless the user this save runs as may
+     * approve queries. A client's cache check runs that SQL as written, with none of the checks the
+     * query's own SQL goes through, so writing it takes the same trust as approving. Clearing it is
+     * always allowed. A save with no context user is not checked, like the fingerprint stamp.
+     */
+    private assertMayWriteValidationSQL(): void {
+        // A new record writes every field it carries, so only a saved one can leave it unchanged.
+        if (!this.CacheValidationSQL?.trim() || (this.IsSaved && !this.FieldIsDirty('CacheValidationSQL'))) return;
+        const user = this.ContextCurrentUser;
+        if (user && !UserCanApproveQueries(user, this.extractionProvider)) {
+            throw new Error(QUERY_VALIDATION_SQL_REFUSAL);
         }
     }
 
@@ -404,6 +473,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * each refresh. On an approving save it also goes in `ApprovedFingerprint`; until that write
      * lands the approval is not current, so a failure here fails closed. Nothing is written when
      * neither value changed.
+     *
+     * The stamp is a second save, an update, so it is skipped for a user who may create queries but
+     * not update them (the UI role saving a draft). That user cannot approve, so only
+     * `DefinitionFingerprint` is lost, and it is left null: a list linked to the query computes the
+     * fingerprint live and treats a null stored one as unchanged.
      */
     private async stampFingerprintsAsync(options: EntitySaveOptions | undefined, approving: boolean): Promise<void> {
         try {
@@ -411,12 +485,19 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             this.DefinitionFingerprint = fingerprint;
             if (approving) this.ApprovedFingerprint = fingerprint;
             if (!this.Dirty) return;
+            if (!approving && !this.contextUserCanUpdate()) return;
             if (!await super.Save(options)) {
                 LogError(`[MJQueryEntityServer] Query "${this.Name}" saved, but its fingerprint was not: ${this.LatestResult?.CompleteMessage}`);
             }
         } catch (e) {
             LogError(`[MJQueryEntityServer] Query "${this.Name}" saved, but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    /** Whether the user this save runs as may update queries; true when there is no such user. */
+    private contextUserCanUpdate(): boolean {
+        const user = this.ContextCurrentUser;
+        return !user || this.EntityInfo.GetUserPermisions(user)?.CanUpdate === true;
     }
 
     /** This query's dialect and parameter rows as stored, bypassing every cache. */

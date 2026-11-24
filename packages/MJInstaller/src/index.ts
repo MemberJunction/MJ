@@ -83,7 +83,7 @@ export { GitHubReleaseProvider } from './adapters/GitHubReleaseProvider.js';
 export { FileSystemAdapter } from './adapters/FileSystemAdapter.js';
 export { ProcessRunner, type ProcessResult, type ProcessOptions } from './adapters/ProcessRunner.js';
 export { SqlServerAdapter, type SqlConnectivityResult } from './adapters/SqlServerAdapter.js';
-export { PostgresAdapter, type PgConnectivityResult } from './adapters/PostgresAdapter.js';
+export { PostgresAdapter, type PgConnectivityResult, type PgSetupStep } from './adapters/PostgresAdapter.js';
 export { RepoFetcher, type SparseFetchOptions, type SparseFetchResult } from './adapters/RepoFetcher.js';
 
 // Distribution assembly (sparse-checkout install + `mj bundle`)
@@ -95,6 +95,15 @@ export { PreflightPhase, type PreflightContext, type PreflightResult } from './p
 export { ScaffoldPhase, type ScaffoldContext, type ScaffoldResult } from './phases/ScaffoldPhase.js';
 export { ConfigurePhase, type ConfigureContext, type ConfigureResult } from './phases/ConfigurePhase.js';
 export { DatabaseProvisionPhase, type DatabaseProvisionContext, type DatabaseProvisionResult } from './phases/DatabaseProvisionPhase.js';
+// PostgreSQL setup builders, shared with `mj migrate`'s managed-host preflight so the
+// remediation SQL it prints is the same SQL the installer runs.
+export {
+  BuildPostgresSetupSteps,
+  POSTGRES_MJ_GROUP_ROLES,
+  POSTGRES_MJ_EXTENSIONS,
+  QuotePgIdentifier,
+  QuotePgLiteral,
+} from './phases/DatabaseProvisionPhase.js';
 export { MigratePhase, type MigrateContext, type MigrateResult } from './phases/MigratePhase.js';
 export { PlatformCompatPhase, type PlatformCompatContext, type PlatformCompatResult } from './phases/PlatformCompatPhase.js';
 export { DependencyPhase, type DependencyContext, type DependencyResult } from './phases/DependencyPhase.js';
