@@ -39,6 +39,11 @@ export class AssemblyAIVoiceRealtimeClient extends OpenAIProtocolWebSocketRealti
         return undefined;
     }
 
+    /** @inheritdoc — a proxy ticket opens one connection, and the call outlives it. */
+    protected override get RefreshesCredentialAhead(): boolean {
+        return false;
+    }
+
     /** @inheritdoc — the proxy URL is the credential. */
     protected openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket {
         this.timeLimitReached = false;

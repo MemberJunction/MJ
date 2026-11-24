@@ -102,6 +102,8 @@ export class AssemblyAIVoicePipeline implements IRealtimeInProcessUpstream {
     private waitingRequest: ReplyRequest | null = null;
     /** Host requests the next reply answers; the host expects a response for each. */
     private waitingCount = 0;
+    /** A tool result came that no reply has been written from. */
+    private resultUnanswered = false;
     private requestTimes: number[] = [];
     private stallTimer: ReturnType<typeof setTimeout> | null = null;
     private playedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -232,6 +234,7 @@ export class AssemblyAIVoicePipeline implements IRealtimeInProcessUpstream {
             const callID = asText(item['call_id']);
             if (callID) {
                 this.conversation.AddToolResult(callID, asText(item['output']) ?? '');
+                this.resultUnanswered = true;
             }
             return;
         }
@@ -340,6 +343,10 @@ export class AssemblyAIVoicePipeline implements IRealtimeInProcessUpstream {
         this.send({ type: 'input_audio_buffer.committed', item_id: turn.ItemID });
         if (transcript.length === 0) {
             this.send({ type: 'conversation.item.input_audio_transcription.failed', item_id: turn.ItemID });
+            if (this.resultUnanswered) {
+                // The client drops its request for a result when the user speaks: their turn was to be answered instead.
+                this.waitingRequest = {};
+            }
             this.startWaitingReply();
             return;
         }
@@ -420,6 +427,7 @@ export class AssemblyAIVoicePipeline implements IRealtimeInProcessUpstream {
             if (this.reply !== reply) {
                 return;
             }
+            this.conversation.BeginReply();
             if (request.FixedText) {
                 reply.AddText(request.FixedText);
             } else {
@@ -440,6 +448,9 @@ export class AssemblyAIVoicePipeline implements IRealtimeInProcessUpstream {
 
     /** Streams the LLM's words, and its tool calls, into the reply. */
     private async writeReply(reply: VoiceReply, instruction: string | undefined): Promise<void> {
+        if (!instruction) {
+            this.resultUnanswered = false; // a reply under an instruction may say something else
+        }
         const request: LLMRequest = {
             Model: this.config.LLMModel,
             Messages: this.conversation.Messages(this.instructions, instruction),
@@ -606,7 +617,7 @@ export class AssemblyAIVoicePipeline implements IRealtimeInProcessUpstream {
         if (heard.length > 0) {
             this.send({ type: 'response.output_audio_transcript.done', response_id: reply.ID, item_id: reply.ItemID, transcript: heard });
             if (reply.KeepInHistory && !reply.RecordedWithToolCalls) {
-                this.conversation.AddAssistant(heard.length < reply.FullText.length ? `${heard}…` : heard);
+                this.conversation.AddReply(heard.length < reply.FullText.length ? `${heard}…` : heard);
                 this.stt?.UpdateAgentContext(heard);
             }
         }

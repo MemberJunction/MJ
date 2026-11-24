@@ -440,6 +440,127 @@ describe('AssemblyAIVoicePipeline', () => {
             expect(h.History().at(-1)).toContain('{"v":42}');
         });
 
+        /** A spoken update while the tool runs, up to where its words are being played. */
+        async function narrating(h: Harness): Promise<void> {
+            h.Receive(message('system', 'Progress: half way.'));
+            h.Receive({ type: 'response.create', response: { instructions: 'Give a short status.' } });
+            await settle();
+            h.LastLLM.Text('Still looking.').End();
+            await settle();
+            h.TTS.Deliver(h.TTS.Spoken.length - 1, 1000);
+        }
+
+        const answered = (h: Harness): string => h.LastLLM.Request.Messages.map((m) => m.role).slice(1).join(' ');
+
+        it('puts a result in its place when only a spoken update came since the call', async () => {
+            const h = await called();
+            await narrating(h);
+            await settle(1100);
+            h.Receive(toolOutput('c1', '{"v":42}'));
+            h.Receive({ type: 'response.create' });
+            await settle();
+            expect(h.LastLLM.Request.Messages.at(-1)).toEqual({ role: 'tool', tool_call_id: 'c1', content: '{"v":42}' });
+            expect(answered(h)).toBe('user user assistant tool');
+            expect(h.History().join()).toContain('Still looking.');
+        });
+
+        it('ends on the result, not on the spoken update it arrived during', async () => {
+            const h = await called();
+            await narrating(h);
+            await settle(300);
+            h.Receive(toolOutput('c1', '{"v":42}'));
+            h.Receive({ type: 'response.create' });
+            await settle(1000);
+            expect(h.LastLLM.Request.Messages.at(-1)).toEqual({ role: 'tool', tool_call_id: 'c1', content: '{"v":42}' });
+            expect(answered(h)).toBe('user user assistant tool');
+        });
+
+        it('ends on a late result, not on the reply it arrived during', async () => {
+            const h = await called();
+            h.STT.Say('What is two plus two?');
+            await settle();
+            h.LastLLM.Text('Four.').End();
+            await settle();
+            h.TTS.Deliver(0, 1000);
+            h.Receive(toolOutput('c1', '{"v":42}'));
+            h.Receive({ type: 'response.create' });
+            await settle(1100);
+            expect(h.LLM).toHaveLength(3);
+            expect(h.History().at(-1)).toContain('{"v":42}');
+            expect(h.History().at(-2)).toBe('assistant: Four.');
+        });
+
+        it('a result that came while the voice was reopened is known to the reply that waited for it', async () => {
+            const opens: Array<() => void> = [];
+            let h: Harness;
+            h = new Harness({}, {
+                OpenTTS: (handlers) => {
+                    const tts = new FakeTTS(handlers);
+                    h.TTSs.push(tts);
+                    return h.TTSs.length === 1 ? Promise.resolve(tts) : new Promise((resolve) => opens.push(() => resolve(tts)));
+                },
+            });
+            await h.Start();
+            h.STT.Say('Revenue?');
+            await settle();
+            h.LastLLM.Calls({ CallID: 'c1', Name: 'find', Arguments: '{}' }).End();
+            await settle();
+            h.TTS.Lose();
+            h.Receive({ type: 'response.create' });
+            await settle();
+            h.Receive(toolOutput('c1', '{"v":42}'));
+            opens[0]();
+            await settle();
+            expect(h.LastLLM.Request.Messages.at(-1)).toMatchObject({ role: 'tool', content: '{"v":42}' });
+            h.LastLLM.Text('It is 42.').End();
+            await settle();
+            h.TTS.Deliver(0, 100);
+            await settle(200);
+            h.STT.Say('Thanks.');
+            await settle();
+            expect(h.History().slice(-2)).toEqual(['assistant: It is 42.', 'user: Thanks.']);
+        });
+
+        it('answers a result whose request the client dropped for a user turn that turned out empty', async () => {
+            const h = await called('Let me check. ');
+            h.TTS.Deliver(0, 2000);
+            h.Receive(toolOutput('c1', '{"v":42}')); // the client holds its request until the reply is done
+            await settle(300);
+            h.STT.StartSaying('wait'); // and drops it: the user's turn is to be answered instead
+            h.STT.Finish('');
+            await settle();
+            expect(h.LLM).toHaveLength(2);
+            expect(h.LastLLM.Request.Messages.at(-1)).toEqual({ role: 'tool', tool_call_id: 'c1', content: '{"v":42}' });
+        });
+
+        it('a dropped result request is not lost to a spoken update either', async () => {
+            const h = await called('Let me check. ');
+            h.TTS.Deliver(0, 2000);
+            h.Receive(toolOutput('c1', '{"v":42}'));
+            await settle(300);
+            h.STT.StartSaying('wait');
+            h.Receive({ type: 'response.create', response: { instructions: 'Say it is still running.' } });
+            h.STT.Finish('');
+            await settle();
+            expect(h.LLM).toHaveLength(2);
+            expect(h.History().join()).not.toContain('still running.');
+        });
+
+        it('an empty turn after the result was answered starts no reply', async () => {
+            const h = await called();
+            h.Receive(toolOutput('c1', '{"v":42}'));
+            h.Receive({ type: 'response.create' });
+            await settle();
+            h.LastLLM.Text('It is 42.').End();
+            await settle();
+            h.TTS.Deliver(0, 100);
+            await settle(200);
+            h.STT.StartSaying('uh');
+            h.STT.Finish('');
+            await settle();
+            expect(h.LLM).toHaveLength(2);
+        });
+
         it('several requests while speaking become one reply, and a plain one is not lost to a spoken update', async () => {
             const h = await called('Let me check. ');
             h.TTS.Deliver(0, 2000);

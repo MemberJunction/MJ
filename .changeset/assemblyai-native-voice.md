@@ -2,6 +2,7 @@
 "@memberjunction/ai": minor
 "@memberjunction/ai-agents": minor
 "@memberjunction/ai-assemblyai": minor
+"@memberjunction/ai-openai": minor
 "@memberjunction/ai-realtime-client": minor
 "@memberjunction/server": minor
 "@memberjunction/realtime-runtime": minor

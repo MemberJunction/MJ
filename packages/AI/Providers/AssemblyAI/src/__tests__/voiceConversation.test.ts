@@ -89,6 +89,48 @@ describe('VoiceConversation', () => {
         expect(contents(c).at(-1)).toBe('{"v":1}');
     });
 
+    it('keeps the words that answered one result after it, when a result of the same turn comes later', () => {
+        const c = new VoiceConversation();
+        c.AddUser('Both?');
+        c.AddToolCalls('', [call('a'), call('b', 'find_costs')]);
+        c.AddToolResult('a', '{"v":1}');
+        c.BeginReply();
+        c.AddReply('Revenue is one.');
+        c.AddToolResult('b', '{"v":2}');
+        expect(roles(c)).toEqual(['system', 'user', 'assistant', 'tool', 'tool', 'assistant', 'user']);
+        expect(contents(c)[5]).toBe('Revenue is one.');
+        expect(contents(c).at(-1)).toMatch(/find_costs.*\{"v":2\}/);
+    });
+
+    it('puts two results that come during one spoken update in their places', () => {
+        const c = new VoiceConversation();
+        c.AddToolCalls('Let me check.', [call('a'), call('b')]);
+        c.BeginReply();
+        c.AddToolResult('a', '1');
+        c.AddToolResult('b', '2');
+        c.AddReply('Still looking.');
+        expect(roles(c)).toEqual(['system', 'assistant', 'tool', 'tool']);
+        expect(contents(c)).toEqual(['SYS', 'Let me check. Still looking.', '1', '2']);
+    });
+
+    it('keeps a user who spoke during a reply after its words', () => {
+        const c = new VoiceConversation();
+        c.AddUser('Hi');
+        c.BeginReply();
+        c.AddUser('typed');
+        c.AddReply('Hello!');
+        expect(contents(c)).toEqual(['SYS', 'Hi', 'Hello!', 'typed']);
+    });
+
+    it('a reply of which nothing was heard adds nothing', () => {
+        const c = new VoiceConversation();
+        c.AddToolCalls('', [call('a')]);
+        c.BeginReply();
+        c.AddToolResult('a', '1');
+        c.AddReply('');
+        expect(contents(c)).toEqual(['SYS', '', '1']);
+    });
+
     it('keeps a result for a call it does not know, as a note', () => {
         const c = new VoiceConversation();
         c.AddToolResult('zzz', '{"v":1}');

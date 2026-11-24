@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRealtimeModel, RealtimeProxyRegistry, type IRealtimeSession, type RealtimeSessionParams, type RealtimeInProcessPeer } from '@memberjunction/ai';
+import { BaseRealtimeModel, RealtimeProxyRegistry, type IRealtimeSession, type RealtimeReconnectContext, type RealtimeSessionParams, type RealtimeInProcessPeer } from '@memberjunction/ai';
 import { AssemblyAIVoiceRealtime, BuildAssemblyAIVoiceSettings } from '../assemblyAIVoiceRealtime';
 import type { VoicePipelineConfig, VoicePipelineProviders } from '../voice/assemblyAIVoicePipeline';
 import type { AssemblyAIVoiceSettings } from '../assemblyAIVoiceRealtime';
@@ -276,6 +276,58 @@ describe('AssemblyAIVoiceRealtime', () => {
             await session.Close();
         });
 
+        it('speaks an update under its direction, however long the prompt, with the prompt given once', async () => {
+            const { driver, session } = await start(new TestDriver('k'), { ...PARAMS, SystemPrompt: 'P'.repeat(20_000) });
+            session.RequestSpokenUpdate?.('Tell the user the report is ready.');
+            await settle();
+            const messages = driver.LLM[0].Request.Messages.map((m) => String(m.content));
+            expect(messages.at(-1)).toContain('Tell the user the report is ready.');
+            expect(messages.filter((m) => m.includes('PPPP'))).toHaveLength(1);
+            await session.Close();
+        });
+
+        it('keeps tools cleared when the connection is replaced', async () => {
+            const { driver, session } = await start();
+            await session.RegisterTools([]);
+            await reconnect(session);
+            driver.STT.Say('Hi.');
+            await settle();
+            expect(driver.LLM[0].Request.Tools).toEqual([]);
+            await session.Close();
+        });
+
+        it('keeps the first tools when the connection is replaced', async () => {
+            const { driver, session } = await start();
+            await reconnect(session);
+            driver.STT.Say('Hi.');
+            await settle();
+            expect(driver.LLM[0].Request.Tools.map((t) => t.Name)).toEqual(['secret_tool']);
+            await session.Close();
+        });
+
+        it('counts the session cap from the start of the call when the connection is replaced', async () => {
+            const { driver, session } = await start(new TestDriver('k'), { ...PARAMS, MaxSessionSeconds: 120 });
+            await settle(100_000);
+            await reconnect(session);
+            expect(driver.STTs).toHaveLength(2);
+            await settle(19_000);
+            expect(driver.STT.CloseCalls).toBe(0);
+            await settle(2_000);
+            expect(driver.STT.CloseCalls).toBe(1);
+            await session.Close();
+        });
+
+        it('a replacement connection that cannot open fails at once', async () => {
+            const { driver, session } = await start();
+            driver.FailTTS = true;
+            let failure: unknown;
+            void reconnect(session).catch((err: unknown) => (failure = err));
+            await settle(100);
+            expect(failure).toBeInstanceOf(Error);
+            expect(driver.STT.CloseCalls).toBe(1);
+            await session.Close();
+        });
+
         it('closes both services on Close, and reports nothing', async () => {
             const { driver, session } = await start();
             const error = vi.fn();
@@ -339,6 +391,25 @@ describe('AssemblyAIVoiceRealtime', () => {
         expect(voices.every((v) => v.ID.startsWith('aai-'))).toBe(true);
     });
 });
+
+/** Moves a server session to a new connection, as its reconnect controller does. */
+async function reconnect(session: IRealtimeSession): Promise<void> {
+    const context: RealtimeReconnectContext = {
+        Reason: 'proactive',
+        Attempt: 1,
+        MaxAttempts: 3,
+        ElapsedConnectionSeconds: 100,
+        ResumptionHandle: null,
+        UseNativeResumption: false,
+        ConversationSeed: null,
+        Abandoned: false,
+        Signal: new AbortController().signal,
+    };
+    const moving = (session as unknown as { Reconnect(context: RealtimeReconnectContext): Promise<void> }).Reconnect(context);
+    moving.catch(() => undefined);
+    await settle();
+    await moving;
+}
 
 function ticketOf(url: string): string {
     return new URL(url).searchParams.get('ticket') ?? '';

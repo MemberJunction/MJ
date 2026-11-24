@@ -127,12 +127,12 @@ function withoutFirstMessage(params: RealtimeSessionParams): RealtimeSessionPara
     return { ...params, Config: config };
 }
 
-/** Params for a call that connects some time after its mint: the session cap counts from the mint. */
-function withRemainingTime(params: RealtimeSessionParams, maxSessionSeconds: number | undefined, mintedAtMs: number): RealtimeSessionParams {
+/** Params for a connection opened some time after its call began: the session cap counts from the beginning. */
+function withRemainingTime(params: RealtimeSessionParams, maxSessionSeconds: number | undefined, beganAtMs: number): RealtimeSessionParams {
     if (maxSessionSeconds === undefined) {
         return params;
     }
-    const elapsedSeconds = Math.floor((Date.now() - mintedAtMs) / 1000);
+    const elapsedSeconds = Math.floor((Date.now() - beganAtMs) / 1000);
     return { ...params, MaxSessionSeconds: Math.max(1, maxSessionSeconds - elapsedSeconds) };
 }
 
@@ -180,6 +180,7 @@ export const ASSEMBLYAI_VOICE_PROFILE: OpenAIRealtimeProfile = {
     supportsVoiceOutput: false,
     supportsLiveReconfigure: true,
     supportsDynamicToolSet: true,
+    responseInstructionsAddToPrompt: true,
     unexpectedCloseMessage: 'AssemblyAI voice connection closed unexpectedly',
     // Turn settings go to speech to text when the pipeline opens, not over the protocol.
     supportedTurnModes: [],
@@ -239,10 +240,13 @@ export class AssemblyAIVoiceRealtime extends OpenAIRealtime {
 
     /** Opens a server session. Resolves once it can hear, speak and has its config; rejects with nothing left open. */
     public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
+        const startedAtMs = Date.now();
+        // Opened without tools: the session sends the current ones, and sends none when they were all removed.
         const open = (from: RealtimeSessionParams): IOpenAIRealtimeConnection =>
-            new InProcessRealtimeConnection((peer) => this.openPipeline(peer, from, { AcceptSessionUpdates: true }));
+            new InProcessRealtimeConnection((peer) => this.openPipeline(peer, { ...from, Tools: [] }, { AcceptSessionUpdates: true }));
         const session = new AssemblyAIVoiceRealtimeSession(open(params), RealtimeDriverFactsOf(this), this);
-        session.SetConnectionFactory(() => open(withoutFirstMessage(params)));
+        const maxSessionSeconds = this.ClampSessionSeconds(params.MaxSessionSeconds);
+        session.SetConnectionFactory(() => open(withRemainingTime(withoutFirstMessage(params), maxSessionSeconds, startedAtMs)));
         session.applyInitialConfig(params);
         try {
             await session.WaitForConfigApplied();

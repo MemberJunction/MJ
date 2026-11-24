@@ -3,7 +3,14 @@ import type { LLMToolCall } from './assemblyAILLMGateway';
 
 type ConversationItem =
     | { Kind: 'user' | 'assistant' | 'note'; Text: string }
-    | { Kind: 'toolCalls'; Text: string; Calls: LLMToolCall[]; Results: Map<string, string> };
+    | {
+          Kind: 'toolCalls';
+          Text: string;
+          Calls: LLMToolCall[];
+          Results: Map<string, string>;
+          /** Whether a reply has been asked for since a result came. */
+          ResultsRead: boolean;
+      };
 
 /** The most items kept. Roughly an hour of talk; past it the oldest turns go. */
 const DEFAULT_MAX_ITEMS = 200;
@@ -28,6 +35,8 @@ const RUNNING_PLACEHOLDER = '{"status":"still running; the result will follow in
  */
 export class VoiceConversation {
     private items: ConversationItem[] = [];
+    /** What came since the reply in progress began: it does not know of it. */
+    private readonly sinceReplyBegan = new Set<ConversationItem>();
 
     constructor(private readonly maxItems: number = DEFAULT_MAX_ITEMS) {}
 
@@ -39,6 +48,34 @@ export class VoiceConversation {
         this.add({ Kind: 'assistant', Text: text });
     }
 
+    /** The agent begins a reply, from what has been said and done so far. Its words follow in {@link AddReply}. */
+    public BeginReply(): void {
+        this.sinceReplyBegan.clear();
+        for (const item of this.items) {
+            if (item.Kind === 'toolCalls' && item.Results.size > 0) {
+                item.ResultsRead = true;
+            }
+        }
+    }
+
+    /**
+     * The words heard of the reply begun last. They go before what came meanwhile, so a result that came during a reply
+     * is still what the next one answers.
+     */
+    public AddReply(text: string): void {
+        const index = this.items.findIndex((item) => this.sinceReplyBegan.has(item));
+        const next = this.items[index];
+        this.sinceReplyBegan.clear();
+        if (!next || text.trim().length === 0) {
+            this.AddAssistant(text);
+        } else if (next.Kind === 'toolCalls') {
+            next.Text = cut(joinWords(next.Text, text)); // a separate turn would put two of the agent's in a row
+        } else {
+            this.items.splice(index, 0, { Kind: 'assistant', Text: cut(text) });
+            this.trim();
+        }
+    }
+
     /** Background the model should know, which is not part of the conversation. */
     public AddNote(text: string): void {
         this.add({ Kind: 'note', Text: text });
@@ -46,7 +83,7 @@ export class VoiceConversation {
 
     /** Tool calls the model made, with whatever it said before them. */
     public AddToolCalls(text: string, calls: LLMToolCall[]): void {
-        this.items.push({ Kind: 'toolCalls', Text: cut(text), Calls: calls, Results: new Map() });
+        this.items.push({ Kind: 'toolCalls', Text: cut(text), Calls: calls, Results: new Map(), ResultsRead: false });
         this.trim();
     }
 
@@ -62,10 +99,12 @@ export class VoiceConversation {
             return;
         }
         const after = this.items.slice(index + 1);
-        if (after.every((later) => later.Kind === 'note')) {
+        if (!item.ResultsRead && after.every((later) => later.Kind === 'note' || later.Kind === 'assistant')) {
             item.Results.set(callID, cut(output));
-            // Notes since the call are progress reports on it: the result comes after them.
-            this.items = [...this.items.slice(0, index), ...after, item];
+            // Notes and words since the call are progress reports on it: the result comes after them.
+            item.Text = cut(after.reduce((text, later) => (later.Kind === 'assistant' ? joinWords(text, later.Text) : text), item.Text));
+            this.items = [...this.items.slice(0, index), ...after.filter((later) => later.Kind === 'note'), item];
+            this.sinceReplyBegan.add(item);
             this.trim();
             return;
         }
@@ -87,7 +126,9 @@ export class VoiceConversation {
         if (item.Text.trim().length === 0) {
             return;
         }
-        this.items.push({ ...item, Text: cut(item.Text) });
+        const added = { ...item, Text: cut(item.Text) };
+        this.items.push(added);
+        this.sinceReplyBegan.add(added);
         this.trim();
     }
 
@@ -104,8 +145,14 @@ export class VoiceConversation {
         }
         const kept = this.items.slice(first);
         const firstUser = kept.findIndex((item) => item.Kind === 'user');
-        this.items = firstUser > 0 ? kept.slice(firstUser) : kept;
+        const dropped = this.items.slice(0, first + Math.max(firstUser, 0));
+        this.items = this.items.slice(dropped.length);
+        dropped.forEach((item) => this.sinceReplyBegan.delete(item));
     }
+}
+
+function joinWords(first: string, second: string): string {
+    return first.trim().length > 0 ? `${first} ${second}` : second;
 }
 
 function cut(text: string, limit: number = MAX_ENTRY_CHARS): string {

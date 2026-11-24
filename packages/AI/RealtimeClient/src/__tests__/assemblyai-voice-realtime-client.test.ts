@@ -142,6 +142,38 @@ describe('AssemblyAIVoiceRealtimeClient', () => {
         expect(socket().Types()).toEqual(['conversation.item.create', 'response.create']);
     });
 
+    it('still asks for the result reply when the host cancels the reply it was waiting on', async () => {
+        await connect();
+        socket().Emit({ type: 'response.created' });
+        socket().Emit({ type: 'response.function_call_arguments.done', call_id: 'c1', name: 'find', arguments: '{}' });
+        client.SendToolResult('c1', '{"v":1}');
+        client.CancelActiveResponse();
+        socket().Emit({ type: 'response.done', response: { status: 'cancelled' } });
+        expect(socket().Types()).toEqual(['conversation.item.create', 'response.cancel', 'response.create']);
+    });
+
+    it('mints no ticket ahead of a reconnect: a ticket is used once, and the call outlives it', async () => {
+        vi.useFakeTimers();
+        try {
+            const refresh = vi.fn(async () => ({ Kind: 'token' as const, EphemeralToken: 'wss://api.example.com/realtime-proxy?ticket=new', ExpiresAt: new Date(Date.now() + 300_000).toISOString(), SessionConfig: {} }));
+            client.ApplySessionConfigTiming({ ...CONFIG, ExpiresAt: new Date(Date.now() + 300_000).toISOString() });
+            client.SetTokenRefreshCallback(refresh);
+            await vi.advanceTimersByTimeAsync(1_000_000);
+            expect(refresh).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('still mints a ticket for a reconnect', async () => {
+        const refresh = vi.fn(async () => ({ Kind: 'token' as const, EphemeralToken: 'wss://api.example.com/realtime-proxy?ticket=new', ExpiresAt: new Date(Date.now() + 300_000).toISOString(), SessionConfig: {} }));
+        client.SetTokenRefreshCallback(refresh);
+        await connect();
+        socket().onclose?.({ code: 1011 });
+        await vi.waitFor(() => expect(socket().Url).toContain('ticket=new'), { timeout: 5000 });
+        expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
     it('stops playback when the user interrupts', async () => {
         await connect();
         const interrupted = vi.fn();
