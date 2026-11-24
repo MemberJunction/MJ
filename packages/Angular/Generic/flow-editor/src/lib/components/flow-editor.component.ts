@@ -194,6 +194,8 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   protected contextMenuItems: FlowContextMenuItem[] = [];
 
   private destroy$ = new Subject<void>();
+  /** Set in ngOnDestroy. The auto-fit timers are not cancelled, so one can still fire afterwards. */
+  private destroyed = false;
   private initialized = false;
   private lastConnectionClickTime = 0;
 
@@ -225,6 +227,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -247,6 +250,10 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
    * stay crisp and centered instead of over-zooming to 200%+. Persists when triggered explicitly.
    */
   ZoomToFit(persist: boolean = true): void {
+    // A fit scheduled with setTimeout (a ViewportKey change, AutoArrange, a host's own timer) can
+    // land after the editor is gone. Foblex's canvas then registers a destroy hook on a destroyed
+    // view, which throws NG0911.
+    if (this.destroyed) return;
     const el = this.canvasArea?.nativeElement;
     const vw = el?.clientWidth ?? 0;
     const vh = el?.clientHeight ?? 0;
