@@ -59,6 +59,11 @@ export interface InstalledAppMap {
          * dependencies; undefined means they are not known locally.
          */
         Dependencies?: Record<string, DependencyValue>;
+        /**
+         * Read what this app depends on from its repository's default branch instead of
+         * `Dependencies`, which is then used only when the default branch cannot be read.
+         */
+        FromHead?: boolean;
     };
 }
 

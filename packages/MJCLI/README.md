@@ -594,6 +594,9 @@ mj app install https://github.com/acme/mj-crm --version 1.2.0
 mj app upgrade acme-crm
 mj app upgrade acme-crm --version 1.3.0
 
+# Development only: check an installed app against its default branch (repeatable, or 'all')
+mj app upgrade acme-crm --dependencies-from-head mj-common
+
 # Enable / disable without removing
 mj app enable <name>
 mj app disable <name>

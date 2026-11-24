@@ -7,7 +7,7 @@
 import { join } from 'node:path';
 import { readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
+import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction, DependenciesFromHead } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest, ParseManifestDependencies } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
@@ -262,7 +262,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     // in leaf-first order. Skipped when this call is itself a pre-resolved member
     // of a parent's graph (the parent already resolved and installed our deps).
     if (!options._skipDependencyResolution) {
-      const depResult = await ResolveDependencyChain(manifest, context);
+      const depResult = await ResolveDependencyChain(manifest, context, options.DependenciesFromHead);
       if (!depResult.Success) {
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
       }
@@ -901,7 +901,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 3: Check dependency compatibility
     if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
-      const depResult = await ResolveDependencyChain(manifest, context);
+      const depResult = await ResolveDependencyChain(manifest, context, options.DependenciesFromHead);
       if (!depResult.Success) {
         return BuildFailureResult(
           'Upgrade',
@@ -1625,8 +1625,9 @@ interface InternalResult {
  * depends on (an installed app's recorded manifest, otherwise the manifest in its
  * repository) so the complete graph is known up front — which is what makes genuine
  * cross-repo cycle detection (A -> B -> A) possible before any install work begins.
+ * The installed apps in `fromHead` are read from their default branches first.
  */
-async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
+async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext, fromHead: DependenciesFromHead = []): Promise<InternalResult> {
   if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
     return { Success: true };
   }
@@ -1649,12 +1650,19 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     if (app.Name === manifest.name) {
       continue;
     }
+    const appFromHead = fromHead === 'all' || fromHead.includes(app.Name);
     installedMap[app.Name] = {
       Version: app.Version,
       Repository: app.RepositoryURL,
       Subpath: app.Subpath,
-      Dependencies: ReadInstalledDependencies(app, context),
+      Dependencies: ReadInstalledDependencies(app, context, appFromHead),
+      FromHead: appFromHead,
     };
+  }
+
+  const unknown = fromHead === 'all' ? [] : fromHead.filter((name) => !installedMap[name]);
+  if (unknown.length > 0) {
+    return { Success: false, ErrorMessage: `Cannot read dependencies from the default branch of ${unknown.map((name) => `'${name}'`).join(', ')}: not another app that is installed (Active or Disabled)` };
   }
 
   // Zod infers object variant fields as optional; DependencyValue requires them.
@@ -1689,14 +1697,15 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 /**
  * What an installed app depends on, read from its persisted `ManifestJSON` (the documented source
  * of truth, saved in the same write as `Version`). Returns undefined, after a warning, when that
- * cannot be read: the graph then reads the installed version's manifest from the app's repository.
+ * cannot be read: the graph then reads the manifest from the app's repository, at the installed
+ * version or, with `fromHead`, on the default branch.
  */
-function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorContext): Record<string, DependencyValue> | undefined {
+function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorContext, fromHead: boolean): Record<string, DependencyValue> | undefined {
   const recorded = ParseManifestDependencies(app.ManifestJSON);
   if (!recorded.Success || !recorded.Dependencies) {
     context.Callbacks?.OnWarn?.(
       'Dependencies',
-      `Could not read the recorded dependencies of installed app '${app.Name}' (${recorded.Errors?.join(', ')}). If this operation needs them, they are read from ${app.RepositoryURL} at version ${app.Version}.`,
+      `Could not read the recorded dependencies of installed app '${app.Name}' (${recorded.Errors?.join(', ')}). If this operation needs them, they are read from ${app.RepositoryURL} ${fromHead ? 'on its default branch' : `at version ${app.Version}`}.`,
     );
     return undefined;
   }

@@ -3,6 +3,7 @@ import { InstallApp } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
+import { ParseDependenciesFromHead } from '../../utils/dependencies-from-head.js';
 
 /**
  * CLI command: `mj app install <source>`.
@@ -28,6 +29,7 @@ Private repositories need a GitHub credential. GitHub returns 404 (not 403) for 
     '<%= config.bin %> app install https://github.com/acme/mj-crm --verbose',
     '<%= config.bin %> app install https://github.com/MemberJunction/Integrations/CRM/HubSpot',
     '<%= config.bin %> app install https://github.com/acme/mj-crm --non-interactive',
+    '<%= config.bin %> app install https://github.com/acme/mj-crm --dependencies-from-head mj-common',
     'GITHUB_TOKEN=$(gh auth token) <%= config.bin %> app install https://github.com/acme/private-app',
   ];
 
@@ -45,6 +47,13 @@ Private repositories need a GitHub credential. GitHub returns 404 (not 403) for 
     'non-interactive': Flags.boolean({
       description: 'Skip interactive setup prompts; post-install hooks use environment variables / defaults (for CI/headless installs)',
       default: false,
+    }),
+    'dependencies-from-head': Flags.string({
+      description:
+        "For development: read the dependencies of this installed app from its repository's default branch, instead of those recorded for its installed version. Repeat for more apps, or give 'all'",
+      helpValue: '<app|all>',
+      multiple: true,
+      multipleNonGreedy: true,
     }),
     'dangerously-ignore-dbl-underscore-schema-rule': Flags.boolean({
       hidden: true,
@@ -66,6 +75,7 @@ Private repositories need a GitHub credential. GitHub returns 404 (not 403) for 
           Version: flags.version,
           Verbose: flags.verbose,
           AllowDoubleUnderscoreSchema: flags['dangerously-ignore-dbl-underscore-schema-rule'],
+          DependenciesFromHead: ParseDependenciesFromHead(flags['dependencies-from-head']),
         },
         context
       );

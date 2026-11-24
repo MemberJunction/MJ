@@ -162,6 +162,9 @@ export interface AppHookPayload {
     Manifest: unknown;
 }
 
+/** Names of installed apps, or 'all' of them. See {@link InstallOptions.DependenciesFromHead}. */
+export type DependenciesFromHead = 'all' | string[];
+
 /**
  * Options for the install command.
  */
@@ -189,6 +192,13 @@ export interface InstallOptions {
      * MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
+    /**
+     * The installed apps (by name, or 'all') whose dependencies are read from their repository's
+     * default branch, instead of those recorded for their installed version. For a developer whose
+     * apps follow their default branches; on a deployment it checks requirements of code that is
+     * not installed (#6877).
+     */
+    DependenciesFromHead?: DependenciesFromHead;
     /**
      * @internal Set by the orchestrator when installing the pre-resolved members
      * of a dependency graph in topological order — never set this directly. When
@@ -237,6 +247,13 @@ export interface UpgradeOptions {
      * MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
+    /**
+     * The installed apps (by name, or 'all') whose dependencies are read from their repository's
+     * default branch, instead of those recorded for their installed version. For a developer whose
+     * apps follow their default branches; on a deployment it checks requirements of code that is
+     * not installed (#6877).
+     */
+    DependenciesFromHead?: DependenciesFromHead;
 }
 
 /**
