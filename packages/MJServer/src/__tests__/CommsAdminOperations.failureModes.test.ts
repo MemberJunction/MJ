@@ -1030,6 +1030,50 @@ describe('Communications.BlockEndpoint', () => {
     expect(endpoint).toMatchObject({ Status: 'Active', SaveCalls: 0 });
   });
 
+  /** Serves the suppression view call by call: `answers[i]` answers the i-th read. */
+  function serveSuppressionReads(...answers: Array<object[] | 'fail'>): void {
+    let call = 0;
+    views.Serve('MJ: Communication Suppressions', () => {
+      const answer = answers[Math.min(call++, answers.length - 1)];
+      return answer === 'fail' ? FakeViews.Failure('re-read failed') : answer;
+    });
+  }
+
+  it('reports the winning block when a concurrent request blocked the address first', async () => {
+    // The pre-check sees no block; the insert then loses to the unique index on active Admin
+    // Blocks; after the rollback the re-read finds the block the other request created.
+    seedBlock({ suppressionBehaviour: { SaveSucceeds: false, SaveError: 'Cannot insert duplicate key row' } });
+    provider.EnableTransactions(() => () => undefined);
+    serveSuppressionReads([], [{ ID: 'supp-winner' }]);
+
+    const res = await block('ep-1');
+
+    expect(res.Output).toEqual({ Success: true, SuppressionID: 'supp-winner' });
+    expect(auditLogs()).toHaveLength(0);
+    expect(views.CallsFor('MJ: Communication Suppressions')).toHaveLength(2);
+    expect(views.CallsFor('MJ: Communication Suppressions')[1].Params).toMatchObject({ BypassCache: true });
+  });
+
+  it('returns the save error when the save fails and no block exists afterwards', async () => {
+    seedBlock({ suppressionBehaviour: { SaveSucceeds: false, SaveError: 'Create not permitted' } });
+    serveSuppressionReads([], []);
+
+    const res = await block('ep-1');
+
+    expect(res.Output).toEqual({ Success: false, ErrorMessage: 'Create not permitted' });
+    expect(auditLogs()).toHaveLength(0);
+  });
+
+  it('fails when the save fails and the re-read for a winning block fails too', async () => {
+    seedBlock({ suppressionBehaviour: { SaveSucceeds: false, SaveError: 'Cannot insert duplicate key row' } });
+    serveSuppressionReads([], 'fail');
+
+    const res = await block('ep-1');
+
+    expect(res.Output).toEqual({ Success: false, ErrorMessage: 'Cannot insert duplicate key row' });
+    expect(auditLogs()).toHaveLength(0);
+  });
+
   it('does not create a second active Admin Block for an endpoint that already has one', async () => {
     seedBlock();
     await block('ep-1');

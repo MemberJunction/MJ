@@ -831,17 +831,19 @@ export class CommsBlockEndpointServerOperation extends CommunicationsBlockEndpoi
 
     try {
       // The re-check, the suppression and its audit row run in one transaction, so no block
-      // exists without its audit row. The re-check narrows, but does not close, the window for two
-      // concurrent blocks of one endpoint: that needs a filtered unique index on
-      // (CommunicationEndpointID) WHERE Reason='Admin Block' AND Status='Active'. A duplicate is
-      // harmless to sending (either one blocks) and revoking one leaves the other in force.
+      // exists without its audit row. Two concurrent blocks of one address cannot both be saved:
+      // UX_CommunicationSuppression_ActiveAdminBlock allows one active Admin Block per endpoint.
       const suppressionID = await RunInEntityTransaction(asTransactionalProvider(provider), () => createAdminBlock(provider, user, endpoint));
       return { Success: true, SuppressionID: suppressionID };
     } catch (ex) {
-      if (ex instanceof AdminWriteFailedError) {
-        return { Success: false, ErrorMessage: ex.message };
+      if (!(ex instanceof AdminWriteFailedError)) throw ex;
+      // The transaction rolled back. If a concurrent request blocked the address first, the
+      // address is blocked, which is what was asked: report that block.
+      const winner = await findActiveAdminBlock(provider, user, endpoint.ID);
+      if (winner.Success && winner.SuppressionID) {
+        return { Success: true, SuppressionID: winner.SuppressionID };
       }
-      throw ex;
+      return { Success: false, ErrorMessage: ex.message };
     }
   }
 }
@@ -863,17 +865,17 @@ function isTransactionalProvider(
   return 'BeginEntityTransaction' in provider && typeof provider.BeginEntityTransaction === 'function';
 }
 
-/** Returns the endpoint's existing active Admin Block, or creates and audits one. */
-async function createAdminBlock(
+/** Reads the endpoint's active Admin Block, if it has one. */
+async function findActiveAdminBlock(
   provider: IMetadataProvider,
   user: UserInfo,
-  endpoint: MJCommunicationEndpointEntity,
-): Promise<string> {
+  endpointID: string,
+): Promise<{ Success: boolean; SuppressionID?: string; ErrorMessage?: string }> {
   const rv = RunView.FromMetadataProvider(provider);
-  const existingRes = await rv.RunView<{ ID: string }>(
+  const res = await rv.RunView<{ ID: string }>(
     {
       EntityName: 'MJ: Communication Suppressions',
-      ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpoint.ID)}' AND Reason='Admin Block' AND Status='Active'`,
+      ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpointID)}' AND Reason='Admin Block' AND Status='Active'`,
       Fields: ['ID'],
       MaxRows: 1,
       ResultType: 'simple',
@@ -881,11 +883,24 @@ async function createAdminBlock(
     },
     user,
   );
-  if (!existingRes.Success) {
-    throw new AdminWriteFailedError(existingRes.ErrorMessage || 'Failed checking existing Admin Block suppressions');
+  if (!res.Success) {
+    return { Success: false, ErrorMessage: res.ErrorMessage || 'Failed checking existing Admin Block suppressions' };
   }
-  if (existingRes.Results.length > 0) {
-    return existingRes.Results[0].ID;
+  return { Success: true, SuppressionID: res.Results[0]?.ID };
+}
+
+/** Returns the endpoint's existing active Admin Block, or creates and audits one. */
+async function createAdminBlock(
+  provider: IMetadataProvider,
+  user: UserInfo,
+  endpoint: MJCommunicationEndpointEntity,
+): Promise<string> {
+  const existing = await findActiveAdminBlock(provider, user, endpoint.ID);
+  if (!existing.Success) {
+    throw new AdminWriteFailedError(existing.ErrorMessage ?? 'Failed checking existing Admin Block suppressions');
+  }
+  if (existing.SuppressionID) {
+    return existing.SuppressionID;
   }
 
   const supp = await provider.GetEntityObject<MJCommunicationSuppressionEntity>('MJ: Communication Suppressions', user);
