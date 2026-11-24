@@ -25,6 +25,13 @@ import {
     type UserPolicyLimitsMetadataInput,
 } from '../limits-diagnostics';
 
+/**
+ * Wall-clock ceiling for the pathological-input check. It guards against catastrophic or polynomial
+ * backtracking (seconds), not machine speed: tight millisecond bounds fail on shared CI runners
+ * (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 function makeAgentStub(overrides: Partial<AgentLimitsMetadataInput> = {}): AgentLimitsMetadataInput {
     return {
         MaxCostPerRun: null,
@@ -292,7 +299,7 @@ describe('limitsDiagnosticsSnapshot & 5-tier AI agent resolution', () => {
             ),
         ).toEqual({});
         const elapsedMs = Date.now() - t0;
-        expect(elapsedMs).toBeLessThan(250);
+        expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
 
         // Valid envelope after earlier unclosed opener still succeeds when within scan budget
         const mixedPolicy = makePolicyStub({
