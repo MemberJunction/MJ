@@ -40,7 +40,19 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/global', () => ({
+    BaseSingleton: class {
+        static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
+    },
+    EscapeSQLString: (s: string) => s,
     UUIDsEqual: (a: string, b: string) => a === b,
+}));
+
+vi.mock('@memberjunction/templates', () => ({
+    TemplateEngineServer: { Instance: { Loaded: true, Config: vi.fn(), FindTemplateByID: vi.fn(), RenderTemplate: vi.fn() } },
+}));
+
+vi.mock('@memberjunction/communication-types', () => ({
+    CommunicationEngineBase: { Instance: { StartRun: vi.fn(), EndRun: vi.fn() } },
 }));
 
 vi.mock('@memberjunction/communication-engine', () => ({

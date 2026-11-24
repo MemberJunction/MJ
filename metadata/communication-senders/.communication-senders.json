@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "CommunicationSenderTypeID": "@lookup:MJ: Communication Sender Types.Name=Company",
+      "RecordID": null,
+      "ParentSenderID": null,
+      "Name": "Default Organization",
+      "Description": "Default organization sender used when a communication send does not specify a sender.",
+      "IsDefault": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2C9CB769-CE65-494C-864D-299EA9D66CA4"
+    }
+  }
+]
