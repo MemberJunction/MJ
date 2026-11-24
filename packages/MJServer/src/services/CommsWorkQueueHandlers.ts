@@ -280,9 +280,12 @@ export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkP
             )
             .digest('hex');
 
+        // These hits come from MJ's own routes, not from a provider, so the provider is not known
+        // here. Left empty, the activity worker takes it from the log the token identifies, which
+        // is the provider that actually sent the message.
         return [
             {
-                CommunicationProviderID: sgEntity?.ID ?? '',
+                CommunicationProviderID: '',
                 ProviderEventID: externalEventId,
                 NormalizedAddress: '',
                 EventType: payload.EventType,

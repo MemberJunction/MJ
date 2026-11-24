@@ -61,7 +61,12 @@ function makeRecord(
     },
     async Save() {
       // Save() never throws on a constraint violation: it returns false and reports through LatestResult.
-      const violation = table === 'MJ: Communication Suppressions' ? suppressionConstraintViolation(this) : null;
+      const violation =
+        table === 'MJ: Communication Suppressions'
+          ? suppressionConstraintViolation(this)
+          : table === 'MJ: Communication Provider Events'
+            ? providerEventConstraintViolation(this, store[table])
+            : null;
       if (violation) {
         this.LatestResult = { Success: false, CompleteMessage: violation };
         rejectedSaves.push({ Table: table, Message: violation });
@@ -81,6 +86,17 @@ let rejectedSaves: Array<{ Table: keyof MockStore; Message: string }> = [];
 
 function isUnset(value: unknown): boolean {
   return value === null || value === undefined;
+}
+
+/** UQ_CommunicationProviderEvent_Event: one row per provider and provider event ID. This is the claim. */
+function providerEventConstraintViolation(row: MockRecord, existing: MockRecord[]): string | null {
+  const taken = existing.some(
+    (r) =>
+      r.ID !== row.ID &&
+      String(r.CommunicationProviderID).toLowerCase() === String(row.CommunicationProviderID).toLowerCase() &&
+      r.ProviderEventID === row.ProviderEventID,
+  );
+  return taken ? 'Violation of UNIQUE KEY constraint "UQ_CommunicationProviderEvent_Event".' : null;
 }
 
 /**
@@ -945,5 +961,71 @@ describe('CommsActivityWorker', () => {
     expect(store['MJ: Communication Activities']).toHaveLength(1);
     const savedCorrelation = JSON.parse(String(store['MJ: Communication Activities'][0].CorrelationData));
     expect(savedCorrelation).toEqual({ campaignId: 'camp-fp' });
+  });
+
+  it('REGRESSION: takes the provider of an open, click or unsubscribe hit from its log, and rejects a redelivery', async () => {
+    // MJ's own tracking routes do not know which provider sent the message, so the hit arrives
+    // with an idempotency key and no provider. It used to be stamped with the provider named
+    // "SendGrid" before it got here.
+    store['MJ: Communication Logs'].push(
+      makeRecord(
+        'MJ: Communication Logs',
+        store,
+        {
+          ID: 'log-mock',
+          CommunicationProviderID: 'prov-local-mock',
+          CommunicationSenderID: 'sender-1',
+          CommunicationEndpointID: 'ep-mock',
+          TrackingToken: 'tok-mock-1',
+        },
+        false,
+      ),
+    );
+
+    // The real database refuses an empty provider ID (it is not a uniqueidentifier), so the
+    // fake refuses it too: a lookup keyed on it must never be issued.
+    const provider = CommunicationEngineBase.Instance.ProviderToUse;
+    const runView = provider.RunView.bind(provider);
+    const emptyProviderLookups: string[] = [];
+    vi.spyOn(provider, 'RunView').mockImplementation(async (params: RunViewParams, user?: UserInfo) => {
+      if (/CommunicationProviderID\s*=\s*''/.test(params.ExtraFilter ?? '')) {
+        emptyProviderLookups.push(params.ExtraFilter ?? '');
+        return {
+          Success: false,
+          Results: [],
+          RowCount: 0,
+          TotalRowCount: 0,
+          ErrorMessage: 'Conversion failed when converting from a character string to uniqueidentifier.',
+        } as unknown as Awaited<ReturnType<typeof runView>>;
+      }
+      return runView(params, user);
+    });
+
+    const hit = (): NormalizedActivityEvent => ({
+      CommunicationProviderID: '',
+      ProviderEventID: 'hit-click-1',
+      NormalizedAddress: '',
+      TrackingToken: 'tok-mock-1',
+      TargetURL: 'https://example.com/landing',
+      EventType: 'Clicked',
+      OccurredAt: new Date('2026-03-04T12:00:00Z'),
+      IsMachineEvent: false,
+    });
+
+    const first = await worker.ProcessActivityBatch([hit()], mockUser);
+    const redelivered = await worker.ProcessActivityBatch([hit()], mockUser);
+
+    expect(emptyProviderLookups).toEqual([]);
+    expect(first).toMatchObject({ ProcessedCount: 1, ErrorCount: 0 });
+    expect(redelivered).toMatchObject({ ProcessedCount: 0, DuplicateCount: 1, ErrorCount: 0 });
+    expect(store['MJ: Communication Activities']).toHaveLength(1);
+    expect(store['MJ: Communication Activities'][0]).toMatchObject({
+      CommunicationLogID: 'log-mock',
+      CommunicationProviderID: 'prov-local-mock',
+      EventType: 'Clicked',
+    });
+    expect(store['MJ: Communication Provider Events'].map((r) => [r.CommunicationProviderID, r.ProviderEventID])).toEqual([
+      ['prov-local-mock', 'hit-click-1'],
+    ]);
   });
 });

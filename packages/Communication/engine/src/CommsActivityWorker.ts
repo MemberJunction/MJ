@@ -316,9 +316,13 @@ export class CommsActivityWorker {
     events: NormalizedActivityEvent[],
     contextUser: UserInfo,
   ): Promise<NormalizedActivityEvent[]> {
+    // An event with no provider yet (open, click and unsubscribe hits from MJ's own routes) takes
+    // its provider from the log it is correlated to, later, per event. It cannot be looked up
+    // here: an empty provider ID is not a valid key. The database claim made after correlation
+    // still rejects a redelivery.
     const withProviderEventId = events.filter(
       (e): e is NormalizedActivityEvent & { ProviderEventID: string } =>
-        Boolean(e.ProviderEventID),
+        Boolean(e.ProviderEventID) && Boolean(e.CommunicationProviderID),
     );
     const existingKeys = await this.loadExistingProviderEventKeys(
       withProviderEventId,

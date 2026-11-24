@@ -756,7 +756,7 @@ describe('CommsActivityWorkHandler (comms.activity)', () => {
       expect(outcome).toEqual({ Kind: 'Complete' });
       expect(processedEvents()).toEqual([
         {
-          CommunicationProviderID: SENDGRID_PROVIDER_ID,
+          CommunicationProviderID: '',
           ProviderEventID: expect.any(String),
           NormalizedAddress: '',
           EventType: 'Opened',
@@ -814,14 +814,19 @@ describe('CommsActivityWorkHandler (comms.activity)', () => {
       expect(state.batchCalls).toHaveLength(0);
     });
 
-    it('attributes a tracking event to no provider when the engine has no provider named SendGrid', async () => {
-      // FLAG: open, click and unsubscribe hits are attributed to the provider *named*
-      // "SendGrid", whichever provider actually sent the message.
-      state.providerEntities = [{ ID: 'prov-mailgun', Name: 'Mailgun' }];
+    it('REGRESSION: leaves the provider of a tracking event empty, for the worker to take from the log', async () => {
+      // These hits used to be attributed to the provider named "SendGrid", whichever provider
+      // had sent the message.
+      for (const hit of [
+        { Source: 'open-pixel', EventType: 'Opened', TrackingToken: TRACKING_TOKEN },
+        { Source: 'click-redirect', EventType: 'Clicked', TrackingToken: TRACKING_TOKEN, TargetURL: 'https://example.com/landing' },
+        { Source: 'unsubscribe', EventType: 'Unsubscribed', UnsubscribeToken: '550e8400-e29b-41d4-a716-446655440000' },
+      ]) {
+        await handle({ ...hit, OccurredAt: '2026-11-20T12:00:00.000Z' });
+      }
 
-      await handle({ Source: 'open-pixel', EventType: 'Opened', TrackingToken: TRACKING_TOKEN, OccurredAt: '2026-11-20T12:00:00.000Z' });
-
-      expect(processedEvents()[0].CommunicationProviderID).toBe('');
+      expect(state.providerEntities.some((p) => p.Name === 'SendGrid')).toBe(true);
+      expect([0, 1, 2].map((call) => processedEvents(call)[0].CommunicationProviderID)).toEqual(['', '', '']);
     });
 
     it('gives a tracking event an idempotency key, so a redelivered message is not recorded twice', async () => {
