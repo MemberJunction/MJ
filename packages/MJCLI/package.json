@@ -55,6 +55,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
+    "@memberjunction/ai-agent-harness": "6.3.0-edge.1",
     "@memberjunction/ai-cli": "6.3.0-edge.1",
     "@memberjunction/cli-core": "6.3.0-edge.1",
     "@memberjunction/codegen-lib": "6.3.0-edge.1",

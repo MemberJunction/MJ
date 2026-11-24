@@ -6,6 +6,7 @@ import { AgGridModule } from 'ag-grid-angular';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { ComposerModule } from '@memberjunction/ng-composer';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -141,6 +142,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     FormsModule,
     MarkdownModule,
     CodeEditorModule,
+    ComposerModule,
     MJReactModule,
     MJNotificationsModule,
     QueryViewerModule,
