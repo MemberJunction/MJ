@@ -23,6 +23,17 @@ export const DEFAULT_ROUTE_RATE_LIMITS = {
     mediaUpload: { enabled: true, windowMs: 60_000, maxRequests: 30 },
     /** `GET /media/:fileId[/:filename]` (Range streaming; a player issues many range requests). */
     mediaRead: { enabled: true, windowMs: 60_000, maxRequests: 1200 },
+    /**
+     * Not a limiter of its own: `rateLimiting.routes.comms` is a field-by-field fallback for the three
+     * `comms*` groups below, and only the fields it sets apply. These values are kept for the type.
+     */
+    comms: { enabled: true, windowMs: 60_000, maxRequests: 600 },
+    /** `POST /comms/webhooks/*` (provider webhook batches arrive from a small set of provider IPs). */
+    commsWebhooks: { enabled: true, windowMs: 60_000, maxRequests: 1200 },
+    /** `GET /comms/open/*`, `GET /comms/click/*` (image-proxy opens / click redirects from few IPs). */
+    commsTracking: { enabled: true, windowMs: 60_000, maxRequests: 1200 },
+    /** `POST/GET /comms/unsubscribe*`, `/preferences*`, `/confirm*` (recipient one-click / preference center). */
+    commsUnsubscribe: { enabled: true, windowMs: 60_000, maxRequests: 300 },
 } as const satisfies Record<string, RouteRateLimitSettings>;
 
 /** The route groups that carry a per-route limiter. */

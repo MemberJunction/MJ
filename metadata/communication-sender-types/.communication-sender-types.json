@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "Company",
+      "Description": "Organization or company sender backed by MJ: Companies.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Companies",
+      "DriverClass": null,
+      "Configuration": {
+        "Slots": {
+          "Name": "Name",
+          "Website": "Website",
+          "LogoURL": "LogoURL"
+        }
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B565FF42-75A5-4EAE-8127-5544F5255C74"
+    }
+  }
+]
