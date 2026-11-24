@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (508 classes)
+// @memberjunction/core-entities (528 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -381,11 +381,29 @@ import {
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
+    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
+    MJCommunicationComplianceRegimeEntity,
+    MJCommunicationComplianceRegimeJurisdictionEntity,
+    MJCommunicationComplianceRegimeRuleEntity,
+    MJCommunicationComplianceRuleTypeEntity,
+    MJCommunicationConsentAuditLogEntity,
+    MJCommunicationEndpointEntity,
+    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
+    MJCommunicationPreferenceEntity,
+    MJCommunicationPrincipalEntity,
+    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
+    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
+    MJCommunicationSenderEntity,
+    MJCommunicationSenderPermissionEntity,
+    MJCommunicationSenderTypeEntity,
+    MJCommunicationSendingDomainEntity,
+    MJCommunicationSuppressionEntity,
+    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -539,6 +557,8 @@ import {
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
+    MJJurisdictionEntity,
+    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1843,11 +1863,29 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
+    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
+    MJCommunicationComplianceRegimeEntity,
+    MJCommunicationComplianceRegimeJurisdictionEntity,
+    MJCommunicationComplianceRegimeRuleEntity,
+    MJCommunicationComplianceRuleTypeEntity,
+    MJCommunicationConsentAuditLogEntity,
+    MJCommunicationEndpointEntity,
+    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
+    MJCommunicationPreferenceEntity,
+    MJCommunicationPrincipalEntity,
+    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
+    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
+    MJCommunicationSenderEntity,
+    MJCommunicationSenderPermissionEntity,
+    MJCommunicationSenderTypeEntity,
+    MJCommunicationSendingDomainEntity,
+    MJCommunicationSuppressionEntity,
+    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -2001,8 +2039,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
+    MJJurisdictionEntity,
+    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJLibraryItemEntity,
     MJListCategoryEntity,
     MJListDetailEntity,
@@ -2023,10 +2067,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJMLModelScoringBindingEntity,
     MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
@@ -2207,6 +2247,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
     MJAIModelEntityExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MJAIPromptCategoryEntityExtended,
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
@@ -2227,10 +2271,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
     ApolloCreateListAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
     ApolloGetListAccountsAction,
@@ -2411,6 +2451,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DecisionReranker,
     LLMReranker,
     DecisionReasoningProvider,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
     AgentRubricEvaluator,
@@ -2431,10 +2475,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DecisionReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     FullTextSearchProvider,
     GraphSearchProvider,
     NoopReRanker,
@@ -2615,6 +2655,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJMaterializedResultEntityServer,
     MJProjectEntityServer,
     MJQueryEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
@@ -2635,10 +2679,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJTaskDependencyEntityServer,
     MJTaskEntityServer,
     MJTemplateContentEntityServer,
@@ -2819,6 +2859,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
@@ -2839,10 +2883,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SyncMCPToolsAction,
     TavilySearchAction,
     TeamsWebhookAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
@@ -2919,7 +2959,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1259;
+export const CLASS_REGISTRATIONS_COUNT = 1279;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
