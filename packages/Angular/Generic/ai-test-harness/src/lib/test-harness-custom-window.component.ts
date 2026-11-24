@@ -17,6 +17,7 @@ export interface CustomWindowData {
     initialTemplateData?: Record<string, unknown>;
     initialTemplateVariables?: Record<string, unknown>;
     selectedModelId?: string;
+    initialDebugMode?: boolean;
     mode?: 'agent' | 'prompt';
 }
 
@@ -93,6 +94,7 @@ export interface CustomWindowData {
                     <mj-ai-test-harness
                         [entity]="(Agent || Prompt) || null"
                         [mode]="Mode"
+                        [InitialDebugMode]="Data.initialDebugMode === true"
                         [isVisible]="true"
                         (runOpened)="OnRunOpened($event)">
                     </mj-ai-test-harness>

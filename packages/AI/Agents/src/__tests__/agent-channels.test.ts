@@ -386,4 +386,62 @@ describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage', () => {
         expect(outcome4.channelStatus).toBe('Open');
         expect(outcome4.results[0].triggered).toBe(true);
     });
+
+    it('wakes the sibling personal agent (e.g., Pepper -> Cato) when two agents owned by the same user share an Agent Channel', async () => {
+        const fixture = buildChannelFixture({
+            ConsecutiveAgentTurns: 0,
+            MaxConsecutiveAgentTurns: 6,
+        });
+        const sameUserParticipants = [
+            { ID: 'p-pepper', AgentChannelID: 'chan-1', UserID: alice.ID, AgentID: 'agent-pepper', Role: 'Initiator' },
+            { ID: 'p-cato', AgentChannelID: 'chan-1', UserID: alice.ID, AgentID: 'agent-cato', Role: 'Participant' },
+        ] as unknown as MJAgentChannelParticipantEntity[];
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: Agent Channel Participants') {
+                    return { Success: true, Results: sameUserParticipants };
+                }
+                if (params.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-pepper',
+                                AgentID: 'agent-pepper',
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                Agent: 'Pepper',
+                            },
+                            {
+                                ID: 'pol-cato',
+                                AgentID: 'agent-cato',
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                Agent: 'Cato',
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as unknown as RunView);
+
+        const outcome = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            channelID: 'chan-1',
+            senderUserID: alice.ID,
+            senderAgentID: 'agent-pepper',
+            messagePreview: 'Greetings Cato — Socratic stress-test on doubling R&D without headcount?',
+            contextUser: alice,
+            metadataProvider: fixture.md,
+        });
+
+        expect(outcome.pausedByGuard).toBe(false);
+        expect(outcome.results).toHaveLength(1);
+        expect(outcome.results[0].triggered).toBe(true);
+        expect(fixture.routineStub.UserID).toBe(alice.ID);
+        expect(fixture.routineStub.TargetID).toBe('agent-cato');
+    });
 });

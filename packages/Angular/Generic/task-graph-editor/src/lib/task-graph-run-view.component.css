@@ -13,11 +13,125 @@
   min-width: 0;
 }
 
-.run-view-summary {
+/* ── Plain-English Diagnostic Co-Pilot Banner ─────────────────────────────── */
+.run-view-copilot {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: var(--mj-space-3);
-  font-size: var(--mj-font-size-sm);
+  padding: 8px 12px;
+  border-radius: var(--mj-radius-md);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-elevated);
+  color: var(--mj-text-primary);
+  font-size: var(--mj-text-xs);
+}
+.run-view-copilot[data-kind="held"],
+.run-view-copilot[data-kind="worker-lost"] {
+  border-color: var(--mj-status-warning-border);
+  background: var(--mj-status-warning-bg);
+}
+.run-view-copilot[data-kind="failed"],
+.run-view-copilot[data-kind="taint"] {
+  border-color: var(--mj-status-error-border);
+  background: var(--mj-status-error-bg);
+}
+.run-view-copilot[data-kind="breakpoint"] {
+  border-color: var(--mj-status-info-border);
+  background: var(--mj-status-info-bg);
+}
+.run-view-copilot-icon {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--mj-radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+}
+.run-view-copilot[data-kind="held"] .run-view-copilot-icon,
+.run-view-copilot[data-kind="worker-lost"] .run-view-copilot-icon {
+  color: var(--mj-status-warning);
+}
+.run-view-copilot[data-kind="failed"] .run-view-copilot-icon,
+.run-view-copilot[data-kind="taint"] .run-view-copilot-icon {
+  color: var(--mj-status-error);
+}
+.run-view-copilot-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.run-view-copilot-title {
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  line-height: 1.25;
+}
+.run-view-copilot-msg {
+  color: var(--mj-text-secondary);
+  line-height: 1.35;
+}
+.run-view-copilot-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.run-view-copilot-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--mj-radius-sm);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.run-view-copilot-btn:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.run-view-copilot-btn--primary {
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+.run-view-copilot-btn--primary:hover {
+  background: var(--mj-brand-primary-hover);
+}
+.run-view-copilot-dismiss {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+}
+.run-view-copilot-dismiss:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
+/* ── Summary Strip ────────────────────────────────────────────────────────── */
+.run-view-summary {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  font-size: var(--mj-text-sm);
   color: var(--mj-text-secondary);
 }
 
@@ -25,11 +139,113 @@
 
 /* Not-taken reads as neutral, never as a failure: a skipped branch is a normal outcome, and
    colouring it like an error sends people hunting for a bug that does not exist. */
-.run-view-skipped { color: var(--mj-text-tertiary); }
+.run-view-skipped { color: var(--mj-text-muted); }
 .run-view-running { color: var(--mj-brand-primary); font-weight: 600; }
 .run-view-waiting { color: var(--mj-brand-primary); font-weight: 700; }
 .run-view-done { color: var(--mj-status-success); font-weight: 600; }
 
+.run-view-expand-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.run-view-expand-btn:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
+/* ── Embedded Compact Vertical Card List (360px side-rail hosts) ──────────── */
+.run-view-embedded-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.run-view-embedded-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.run-view-embedded-card:hover {
+  border-color: var(--mj-border-strong);
+  background: var(--mj-bg-surface-hover);
+}
+.run-view-embedded-card--selected {
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-focus-ring);
+}
+.run-view-embedded-num {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.run-view-embedded-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.run-view-embedded-name {
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-view-embedded-live {
+  font-size: 11px;
+  color: var(--mj-brand-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-view-embedded-bar {
+  display: block;
+  width: 100%;
+  height: 3px;
+  border-radius: var(--mj-radius-pill);
+  background: var(--mj-bg-surface-sunken);
+  overflow: hidden;
+}
+.run-view-embedded-fill {
+  display: block;
+  height: 100%;
+  background: var(--mj-brand-primary);
+  border-radius: var(--mj-radius-pill);
+}
+
+/* ── Split Console Body ───────────────────────────────────────────────────── */
 .run-view-body {
   display: flex;
   flex: 1 1 auto;
@@ -61,7 +277,7 @@
   transform: rotate(180deg);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-size: var(--mj-font-size-xs);
+  font-size: var(--mj-text-xs);
   font-weight: 700;
 }
 .run-view-vars-rail i { font-size: 11px; }
@@ -94,9 +310,6 @@
   overflow: hidden;
 }
 
-/* Takes what the summary line leaves, rather than a percentage of an ancestor that may not have a
-   definite height — which is what left a canvas stopping halfway down its pane with dead space
-   below it. */
 .run-view-canvas {
   width: 100%;
   height: 100%;
@@ -128,7 +341,7 @@
   padding: 6px 8px;
   border-bottom: 1px solid var(--mj-border-default);
   color: var(--mj-text-secondary);
-  font-size: var(--mj-font-size-xs);
+  font-size: var(--mj-text-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -143,7 +356,7 @@
 }
 .run-view-vars-step-name {
   color: var(--mj-text-primary);
-  font-size: var(--mj-font-size-xs);
+  font-size: var(--mj-text-xs);
   font-weight: 600;
   letter-spacing: normal;
   text-transform: none;
@@ -154,7 +367,7 @@
 .run-view-vars-status {
   flex: 0 0 auto;
   padding: 1px 6px;
-  border-radius: var(--mj-radius-full, 999px);
+  border-radius: var(--mj-radius-pill);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: normal;
@@ -185,7 +398,7 @@
   border-bottom: 1px solid var(--mj-border-default);
   background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
   color: var(--mj-status-error);
-  font-size: var(--mj-font-size-xs);
+  font-size: var(--mj-text-xs);
   line-height: 1.35;
 }
 .run-view-vars-min {
@@ -213,7 +426,7 @@
 .run-view-loading {
   padding: var(--mj-space-4);
   color: var(--mj-text-secondary);
-  font-size: var(--mj-font-size-sm);
+  font-size: var(--mj-text-sm);
 }
 
 .run-view-bp {
@@ -235,26 +448,68 @@
 .run-view-bp-on:hover { color: var(--mj-status-error); }
 .run-view-bp i { font-size: 10px; }
 .run-view-bp-name {
-  font-size: var(--mj-font-size-xs);
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-muted);
 }
 
-.run-view-legend {
+/* ── Docked Interactive Replay Scrubber ───────────────────────────────────── */
+.run-view-replay {
+  flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--mj-space-3);
-  font-size: var(--mj-font-size-xs);
-  color: var(--mj-text-muted);
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-elevated);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
 }
-.run-view-legend span {
+.run-view-replay-btn {
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 50%;
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  cursor: pointer;
 }
-.run-view-key-break { color: var(--mj-status-error); font-size: 8px; }
-.run-view-key-paused { color: var(--mj-brand-primary); font-size: 10px; }
-.run-view-key-forced { color: var(--mj-status-warning); font-size: 10px; }
-.run-view-key-if {
-  font-family: var(--mj-font-mono, ui-monospace, monospace);
-  font-style: italic;
+.run-view-replay-btn:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.run-view-replay-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+  color: var(--mj-text-muted);
+}
+.run-view-replay-slider {
+  flex: 1 1 auto;
+  accent-color: var(--mj-brand-primary);
+  cursor: pointer;
+}
+.run-view-replay-time {
+  font-family: var(--mj-font-family-mono);
+  font-size: 11px;
+  color: var(--mj-text-primary);
+  min-width: 82px;
+  text-align: right;
+}
+.run-view-replay-now {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.run-view-replay-now:hover {
+  background: var(--mj-bg-surface-hover);
 }

@@ -3,6 +3,13 @@ import { MJCommunicationBaseMessageTypeEntity, MJCommunicationProviderMessageTyp
 import { IMetadataProvider, LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { ProcessedMessageServer } from "./BaseProvider";
+import {
+    LOCAL_JSON_COMMUNICATION_PROVIDER_NAME,
+    LoadLocalJsonCommunicationProvider,
+    MJ_MOCK_COMM_DIR_ENV,
+} from "./LocalJsonCommunicationProvider";
+
+LoadLocalJsonCommunicationProvider();
  
 
 /**
@@ -264,7 +271,10 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
 
              // Check if provider supports drafts
              const providerEntity = this.Providers.find(p => p.Name === providerName);
-             if (!providerEntity?.SupportsDrafts) {
+             const isLocalJsonMockActive =
+                 providerName === LOCAL_JSON_COMMUNICATION_PROVIDER_NAME &&
+                 Boolean(process.env[MJ_MOCK_COMM_DIR_ENV]?.trim());
+             if (!providerEntity?.SupportsDrafts && !isLocalJsonMockActive) {
                  return {
                      Success: false,
                      ErrorMessage: `Provider ${providerName} does not support creating drafts`

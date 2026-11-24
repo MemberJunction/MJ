@@ -10459,8 +10459,7 @@ export class MJAIAgent_ {
     @Field({nullable: true, description: "A detailed description of the AI agent."}) 
     Description?: string;
         
-    @Field({nullable: true, description: "URL to an image file or base64 data URI (e.g., data:image/png;base64,...) for the agent logo. Takes precedence over IconClass in UI display."}) 
-    @MaxLength(255)
+    @Field({nullable: true, description: "URL to an image file, presigned asset URL, or base64 data URI (e.g., data:image/png;base64,...) for the agent logo or custom instance avatar. Takes precedence over IconClass in UI display."}) 
     LogoURL?: string;
         
     @Field() 
@@ -10731,6 +10730,20 @@ export class MJAIAgent_ {
     @MaxLength(20)
     Isolation?: string;
         
+    @Field({nullable: true, description: "Optional prototype/base agent ID for multi-level capability inheritance (instance-of), distinct from ParentID (structural sub-agent composition). Derived agents inherit prompts, actions, sub-agents, skills, configurations, modalities, and rhythm templates live from their BaseAgentID chain (up to MaxDepth 5)."}) 
+    @MaxLength(36)
+    BaseAgentID?: string;
+        
+    @Field({nullable: true, description: "Controls whether users can create tailored derived instances from this agent via BaseAgentID: None (direct-use only; default for catalog agents, sub-agents, and personal leaf instances), Optional (directly runnable and instantiable as a template), or Required (template/onboarding factory only; excluded from direct ad-hoc delegation)."}) 
+    @MaxLength(20)
+    InstantiationMode?: string;
+        
+    @Field({nullable: true, description: "Optional standing instructions appended to this agent's prompt context and stacked down the BaseAgentID inheritance chain from root template to personal leaf instance."}) 
+    AdditionalInstructions?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When true, marks this derived agent as the owner's primary instance among multiple instances sharing the same RootBaseAgentID for deterministic routing (e.g., inbound mailbox wakes, inter-agent requests, default dashboard selection)."}) 
+    IsPrimaryInstance?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -10780,6 +10793,10 @@ export class MJAIAgent_ {
     ConversationSummaryPrompt?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(255)
+    BaseAgent?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
         
@@ -10794,6 +10811,22 @@ export class MJAIAgent_ {
         
     @Field(() => Int, {nullable: true}) 
     ParentIDChildCount?: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootBaseAgentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    BaseAgentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    BaseAgentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    BaseAgentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    BaseAgentIDChildCount?: number;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -11048,6 +11081,18 @@ export class CreateMJAIAgentInput {
     @Field({ nullable: true })
     Isolation?: string;
 
+    @Field({ nullable: true })
+    BaseAgentID: string | null;
+
+    @Field({ nullable: true })
+    InstantiationMode?: string;
+
+    @Field({ nullable: true })
+    AdditionalInstructions: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsPrimaryInstance?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -11300,6 +11345,18 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     Isolation?: string;
+
+    @Field({ nullable: true })
+    BaseAgentID?: string | null;
+
+    @Field({ nullable: true })
+    InstantiationMode?: string;
+
+    @Field({ nullable: true })
+    AdditionalInstructions?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsPrimaryInstance?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

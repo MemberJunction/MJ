@@ -1499,7 +1499,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (98 classes)
+// @memberjunction/core-entities-server (99 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1508,6 +1508,7 @@ import {
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -1701,7 +1702,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (208 classes)
+// @memberjunction/core-actions (209 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1837,6 +1838,7 @@ import {
     LoopAction,
     MCPToolAction,
     ManageAgentSuggestionsAction,
+    ManageMyAgentInstanceAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
@@ -3041,6 +3043,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -3209,11 +3212,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
-    CSVParserAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    CSVParserAction,
     CalculateExpressionAction,
     CancelAgentWakeAction,
     CensusDataLookupAction,
@@ -3334,6 +3337,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     LoopAction,
     MCPToolAction,
     ManageAgentSuggestionsAction,
+    ManageMyAgentInstanceAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
@@ -3412,12 +3416,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
-    MJWorkQueueMessageEntityServer,
-    MJWorkQueueSubscriptionEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    MJWorkQueueMessageEntityServer,
+    MJWorkQueueSubscriptionEntityServer,
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
     WorkQueueDiscardDeliveryServerOperation,
@@ -3474,7 +3478,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1438;
+export const CLASS_REGISTRATIONS_COUNT = 1440;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

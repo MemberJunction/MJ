@@ -1,8 +1,8 @@
 /**
- * IT186's (the Predictive Studio prediction-serving bundle's) user-key minting. IT186 is a server-transport bundle
+ * IT187's (the Predictive Studio prediction-serving bundle's) user-key minting. IT187 is a server-transport bundle
  * whose identities authenticate through the live MJAPI, so each key and its scope rule must be written THROUGH MJAPI
  * on a system-key connection: MJAPI's key-scope cache then sees them at once, instead of on its timed reload (written
- * in process, IT186 Setup was refused "No matching key scope rules" for over 200 s). The shared FLS client helper
+ * in process, IT187 Setup was refused "No matching key scope rules" for over 200 s). The shared FLS client helper
  * writes on `ctx.Provider`, which serves the client-transport bundles; this PS-owned copy keeps that helper as `next`
  * ships it.
  *
@@ -14,7 +14,7 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { MintedUserKeyIds } from './fls-client.checks';
 
-/** Mints IT186's user API keys through MJAPI. */
+/** Mints IT187's user API keys through MJAPI. */
 export class PsServingKeys {
     /**
      * Mints a user API key and grants it `full_access` on `'*'` (scope enforcement fails closed, so a key with no rule

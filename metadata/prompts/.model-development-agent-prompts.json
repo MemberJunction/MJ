@@ -18,26 +18,56 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 1
+            "Priority": 10,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "C9414B82-E01B-4A1B-943C-656A8F1A2001"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9,
+            "Status": "Active",
+            "EffortLevel": 20
           },
-          "sync": {
-            "lastModified": "2026-09-21T02:45:36.040Z",
-            "checksum": "ef1a6e0c86a2c66987099284a4b5f8a6486ac8ad1f885a73a124869373242e88"
+          "primaryKey": {
+            "ID": "FC353E35-F82A-4466-B617-B6CB28896366"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6.1 Sol",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "78A403DC-4D05-48EB-A0C0-38B76B211604"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A61D84D5-2284-42C3-BF42-ACACF7CF302B"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "44F868D2-20ED-407E-ACB0-0720344B1BDE"
-    },
-    "sync": {
-      "lastModified": "2026-11-23T06:45:56.807Z",
-      "checksum": "c33b4346323f41c4ec05a03ef26b083ed6d20d6232944c1cf45917e22e4aed1b"
     }
   },
   {
@@ -59,26 +89,56 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 1
+            "Priority": 10,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "C9414B82-E01B-4A1B-943C-656A8F1A2002"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9,
+            "Status": "Active",
+            "EffortLevel": 20
           },
-          "sync": {
-            "lastModified": "2026-09-21T02:45:36.058Z",
-            "checksum": "ef1a6e0c86a2c66987099284a4b5f8a6486ac8ad1f885a73a124869373242e88"
+          "primaryKey": {
+            "ID": "DAB72A98-8998-44ED-9452-7BB07ED22776"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6.1 Sol",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9D48FDE5-CEEC-49B1-9F76-D9214A96D7F8"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0599C3B0-FFB4-4CF6-945D-D9C565FDB3C9"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "4F1D56B0-7D1B-4C69-B282-341C830A6A1C"
-    },
-    "sync": {
-      "lastModified": "2026-10-28T00:35:23.240Z",
-      "checksum": "8cd6d9bb4fb806d6127bc5cc3a2d09dcde79a4c570e53f649f67129dc19cb3c7"
     }
   },
   {
@@ -100,26 +160,56 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 1
+            "Priority": 10,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "C9414B82-E01B-4A1B-943C-656A8F1A2003"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9,
+            "Status": "Active",
+            "EffortLevel": 20
           },
-          "sync": {
-            "lastModified": "2026-09-21T02:45:36.074Z",
-            "checksum": "ef1a6e0c86a2c66987099284a4b5f8a6486ac8ad1f885a73a124869373242e88"
+          "primaryKey": {
+            "ID": "D5DD81B1-CCFD-4EB0-A79B-46CA7340543E"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6.1 Sol",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "74A9DCA3-68A9-4CF7-9DBC-D63FC3923D15"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "ECD25202-0726-40F0-B342-60E632560DD4"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "D8DF8DC9-87EB-4E4C-939A-7CBD2F8813C7"
-    },
-    "sync": {
-      "lastModified": "2026-11-10T23:41:43.299Z",
-      "checksum": "065cb4ff2860cc68f2b4a4a5824e0940e1a2337bdf97e97d053b6b4b666a8d96"
     }
   },
   {
@@ -141,26 +231,56 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 1
+            "Priority": 10,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "C9414B82-E01B-4A1B-943C-656A8F1A2004"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9,
+            "Status": "Active",
+            "EffortLevel": 20
           },
-          "sync": {
-            "lastModified": "2026-09-21T02:45:36.090Z",
-            "checksum": "ef1a6e0c86a2c66987099284a4b5f8a6486ac8ad1f885a73a124869373242e88"
+          "primaryKey": {
+            "ID": "D3A66FE1-076B-4C31-9805-C3FBD9C39F7B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6.1 Sol",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E78B1B2B-0FD1-40E1-B3A0-F7E8FDDA0543"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB001096-19A8-4056-8C4F-291154CBB928"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "E97FE2BB-C7E5-458E-B80D-02A90531FADA"
-    },
-    "sync": {
-      "lastModified": "2026-11-10T23:41:43.361Z",
-      "checksum": "5848a96536ff012e2dac0c9b7c030c65f53aeb2469c11eb5a4269bc609e376e8"
     }
   }
 ]

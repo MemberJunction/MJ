@@ -122,19 +122,35 @@
 
                   <div class="workflow-actions">
                     @if (!WorkflowDebuggerActive || WorkflowSettled) {
-                      <button mjButton variant="primary" (click)="RunWorkflow()"
-                              [disabled]="isExecuting && !WorkflowParentTaskID">
-                        @if (isExecuting && !WorkflowDebuggerActive && !WorkflowParentTaskID) {
-                          <i class="fa-solid fa-spinner fa-spin"></i> Starting&hellip;
-                        } @else {
-                          <i class="fa-solid fa-play"></i> Run workflow
-                        }
-                      </button>
-                      <button mjButton variant="secondary" (click)="DebugWorkflow()"
-                              [disabled]="isExecuting && !WorkflowParentTaskID"
-                              title="Start paused — nothing is claimed until you continue or step">
-                        <i class="fa-solid fa-bug"></i> Debug
-                      </button>
+                      @if (InitialDebugMode) {
+                        <button mjButton variant="primary" (click)="DebugWorkflow()"
+                                [disabled]="isExecuting && !WorkflowParentTaskID"
+                                title="Start paused — nothing is claimed until you continue or step">
+                          <i class="fa-solid fa-bug"></i> Debug (Start Paused)
+                        </button>
+                        <button mjButton variant="secondary" (click)="RunWorkflow()"
+                                [disabled]="isExecuting && !WorkflowParentTaskID">
+                          @if (isExecuting && !WorkflowDebuggerActive && !WorkflowParentTaskID) {
+                            <i class="fa-solid fa-spinner fa-spin"></i> Starting&hellip;
+                          } @else {
+                            <i class="fa-solid fa-play"></i> Run workflow
+                          }
+                        </button>
+                      } @else {
+                        <button mjButton variant="primary" (click)="RunWorkflow()"
+                                [disabled]="isExecuting && !WorkflowParentTaskID">
+                          @if (isExecuting && !WorkflowDebuggerActive && !WorkflowParentTaskID) {
+                            <i class="fa-solid fa-spinner fa-spin"></i> Starting&hellip;
+                          } @else {
+                            <i class="fa-solid fa-play"></i> Run workflow
+                          }
+                        </button>
+                        <button mjButton variant="secondary" (click)="DebugWorkflow()"
+                                [disabled]="isExecuting && !WorkflowParentTaskID"
+                                title="Start paused — nothing is claimed until you continue or step">
+                          <i class="fa-solid fa-bug"></i> Debug
+                        </button>
+                      }
                     }
                     @if (WorkflowDebuggerActive && !WorkflowParentTaskID) {
                       <span class="workflow-starting">
@@ -143,7 +159,11 @@
                       </span>
                     }
                     <span class="workflow-hint">
-                      Runs on the dispatcher &mdash; you can close this and it keeps running.
+                      @if (InitialDebugMode && !WorkflowParentTaskID) {
+                        Debug mode &mdash; starts paused before the first step so you can step through or set breakpoints.
+                      } @else {
+                        Runs on the dispatcher &mdash; you can close this and it keeps running.
+                      }
                     </span>
                   </div>
 

@@ -218,7 +218,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 the live challenger's Model rows and its divergence on the monitoring period row (IT166, M6.8)
-        ['ps-prediction-serving', PsPredictionServingChecks, 8], // Z1-Z8 predictions served as Feature Values with zero schema change, gated by the binding's view authorization (IT186)
+        ['ps-prediction-serving', PsPredictionServingChecks, 8], // Z1-Z8 predictions served as Feature Values with zero schema change, gated by the binding's view authorization (IT187)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
@@ -397,6 +397,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-execution-primitives-live': 4,
         'agent-external-harness': 7,
         'agent-handoff': 6,
+        'agent-instances-and-inheritance': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 14,
         'agent-memory-guards': 5,
@@ -695,7 +696,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(285);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(286);
     });
 });
 
@@ -734,6 +735,13 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     // Checks skipped in the deterministic lane unless RUN_MUTATION_TESTS=1 arms the nightly mutation rig.
     const EXPECTED_MUTATION_GATED: string[] = [
         'actions-pipeline.AP2',
+        'agent-instances-and-inheritance.AII1',
+        'agent-instances-and-inheritance.AII2',
+        'agent-instances-and-inheritance.AII3',
+        'agent-instances-and-inheritance.AII4',
+        'agent-instances-and-inheritance.AII5',
+        'agent-instances-and-inheritance.AII6',
+        'agent-instances-and-inheritance.AII7',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
         'archive-paging.ARP1',
