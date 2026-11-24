@@ -14069,6 +14069,17 @@ export const MJCommunicationLogSchema = z.object({
         * * Display Name: Compliance Decision
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON record of the gate's decision: applicable regimes and jurisdictions, resolved rules, obligations injected. Evidence of why the message was allowed.`),
+    IsDryRun: z.boolean().describe(`
+        * * Field Name: IsDryRun
+        * * Display Name: Is Dry Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when the message went through the provider's dry-run path and was not delivered. A dry-run log is Complete but is never counted as sent.`),
+    DeferredPayload: z.string().nullable().describe(`
+        * * Field Name: DeferredPayload
+        * * Display Name: Deferred Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of the rendered message (subject and bodies) for a send deferred to a later time. Written when the log is created Pending, read by the scheduled sweep, and cleared once the message is dispatched so the body is not kept.`),
     CommunicationProvider: z.string().nullable().describe(`
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
@@ -14642,6 +14653,16 @@ export const MJCommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, sends through this provider require a Verified Communication Sending Domain matching the sender's domain and credential.`),
+    DeliveryGuarantee: z.union([z.literal('At Least Once'), z.literal('At Most Once')]).describe(`
+        * * Field Name: DeliveryGuarantee
+        * * Display Name: Delivery Guarantee
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: At Most Once
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+        * * Description: What happens when a send's outcome is unknown (the provider may have accepted it, but the result was never recorded). At Most Once: never resend; the message is reported as Failed with OutcomeUnknown, so a recipient may miss it. At Least Once: resend; a recipient may get it twice. Default for every send through this provider.`),
     DefaultCredential: z.string().nullable().describe(`
         * * Field Name: DefaultCredential
         * * Display Name: Default Credential
@@ -14649,6 +14670,71 @@ export const MJCommunicationProviderSchema = z.object({
 });
 
 export type MJCommunicationProviderEntityType = z.infer<typeof MJCommunicationProviderSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Communication Run Chunks
+ */
+export const MJCommunicationRunChunkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationRunID: z.string().describe(`
+        * * Field Name: CommunicationRunID
+        * * Display Name: Communication Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Runs (vwCommunicationRuns.ID)
+        * * Description: Run the chunk belongs to.`),
+    ChunkIndex: z.number().describe(`
+        * * Field Name: ChunkIndex
+        * * Display Name: Chunk Index
+        * * SQL Data Type: int
+        * * Description: Zero-based position of the chunk in the run. Unique per run.`),
+    Status: z.union([z.literal('Complete'), z.literal('Failed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+        * * Description: Complete when the chunk was processed (individual recipients may still be blocked or failed); Failed when the chunk was refused before any recipient was processed.`),
+    RecipientCount: z.number().describe(`
+        * * Field Name: RecipientCount
+        * * Display Name: Recipient Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of recipients in the chunk.`),
+    CompletedAt: z.date().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the chunk finished.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Why the chunk was refused, when Status is Failed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationRun: z.string().nullable().describe(`
+        * * Field Name: CommunicationRun
+        * * Display Name: Communication Run
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommunicationRunChunkEntityType = z.infer<typeof MJCommunicationRunChunkSchema>;
 
 /**
  * zod schema definition for the entity MJ: Communication Runs
@@ -14711,6 +14797,20 @@ export const MJCommunicationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ChunkCount: z.number().nullable().describe(`
+        * * Field Name: ChunkCount
+        * * Display Name: Chunk Count
+        * * SQL Data Type: int
+        * * Description: Number of queued chunks the run was split into. The run is ended when this many Communication Run Chunks have been recorded. NULL for a run that is not chunked.`),
+    DeliveryGuarantee: z.union([z.literal('At Least Once'), z.literal('At Most Once')]).nullable().describe(`
+        * * Field Name: DeliveryGuarantee
+        * * Display Name: Delivery Guarantee
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+        * * Description: Overrides the sender and provider DeliveryGuarantee for every send in this run. NULL inherits.`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -14966,6 +15066,15 @@ export const MJCommunicationSenderSchema = z.object({
     *   * Off
     *   * Shadow
         * * Description: Per-sender override of the instance compliance enforcement mode (Off, Shadow or Enforce). NULL uses the instance setting.`),
+    DeliveryGuarantee: z.union([z.literal('At Least Once'), z.literal('At Most Once')]).nullable().describe(`
+        * * Field Name: DeliveryGuarantee
+        * * Display Name: Delivery Guarantee
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+        * * Description: Overrides the provider's DeliveryGuarantee for sends from this sender. NULL inherits from the nearest ancestor sender, then the provider.`),
     Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Suspended')]).describe(`
         * * Field Name: Status
         * * Display Name: Status

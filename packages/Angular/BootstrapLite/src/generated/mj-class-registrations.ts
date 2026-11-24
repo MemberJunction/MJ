@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (528 classes)
+// @memberjunction/core-entities (529 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -209,6 +209,7 @@ import {
     MJCommunicationProviderEntity,
     MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
+    MJCommunicationRunChunkEntity,
     MJCommunicationRunEntity,
     MJCommunicationSenderEntity,
     MJCommunicationSenderPermissionEntity,
@@ -997,6 +998,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationProviderEntity,
     MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
+    MJCommunicationRunChunkEntity,
     MJCommunicationRunEntity,
     MJCommunicationSenderEntity,
     MJCommunicationSenderPermissionEntity,
@@ -1012,11 +1014,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
-    MJCompanyIntegrationRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
@@ -1216,11 +1218,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunEntity,
     MJProjectEntity,
     MJProjectEntityExtended,
-    MJPublicLinkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
     MJQueryEntity,
@@ -1420,11 +1422,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RealtimeCameraChannel,
     RealtimeMediaChannel,
     RealtimeScreenShareChannel,
-    RealtimeWhiteboardChannel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
     SkillCommandProvider,
@@ -1548,7 +1550,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 709;
+export const CLASS_REGISTRATIONS_COUNT = 710;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

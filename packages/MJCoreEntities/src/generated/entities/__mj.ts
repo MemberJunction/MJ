@@ -149,6 +149,7 @@ import type {
   MJCommunicationProviderEventEntityType,
   MJCommunicationProviderMessageTypeEntityType,
   MJCommunicationProviderEntityType,
+  MJCommunicationRunChunkEntityType,
   MJCommunicationRunEntityType,
   MJCommunicationSenderPermissionEntityType,
   MJCommunicationSenderTypeEntityType,
@@ -41797,7 +41798,7 @@ export class MJCommunicationComplianceRuleTypeEntity extends BaseEntity<MJCommun
  * * Schema: __mj
  * * Base Table: CommunicationConsentAuditLog
  * * Base View: vwCommunicationConsentAuditLogs
- * * @description Append-only history of every change to a suppression or principal preference. Never updated or deleted.
+ * * @description Append-only history of every change to a suppression or principal preference. A trigger refuses every update, and every delete except those spDeleteEntityWithCoreDependencies makes when the entity the rows belong to is deleted.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -42765,6 +42766,33 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
     }
     set ComplianceDecision(value: string | null) {
         this.Set('ComplianceDecision', value);
+    }
+
+    /**
+    * * Field Name: IsDryRun
+    * * Display Name: Is Dry Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when the message went through the provider's dry-run path and was not delivered. A dry-run log is Complete but is never counted as sent.
+    */
+    get IsDryRun(): boolean {
+        return this.Get('IsDryRun');
+    }
+    set IsDryRun(value: boolean) {
+        this.Set('IsDryRun', value);
+    }
+
+    /**
+    * * Field Name: DeferredPayload
+    * * Display Name: Deferred Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of the rendered message (subject and bodies) for a send deferred to a later time. Written when the log is created Pending, read by the scheduled sweep, and cleared once the message is dispatched so the body is not kept.
+    */
+    get DeferredPayload(): string | null {
+        return this.Get('DeferredPayload');
+    }
+    set DeferredPayload(value: string | null) {
+        this.Set('DeferredPayload', value);
     }
 
     /**
@@ -44169,12 +44197,190 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     }
 
     /**
+    * * Field Name: DeliveryGuarantee
+    * * Display Name: Delivery Guarantee
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: At Most Once
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+    * * Description: What happens when a send's outcome is unknown (the provider may have accepted it, but the result was never recorded). At Most Once: never resend; the message is reported as Failed with OutcomeUnknown, so a recipient may miss it. At Least Once: resend; a recipient may get it twice. Default for every send through this provider.
+    */
+    get DeliveryGuarantee(): 'At Least Once' | 'At Most Once' {
+        return this.Get('DeliveryGuarantee');
+    }
+    set DeliveryGuarantee(value: 'At Least Once' | 'At Most Once') {
+        this.Set('DeliveryGuarantee', value);
+    }
+
+    /**
     * * Field Name: DefaultCredential
     * * Display Name: Default Credential
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultCredential(): string | null {
         return this.Get('DefaultCredential');
+    }
+}
+
+
+/**
+ * MJ: Communication Run Chunks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationRunChunk
+ * * Base View: vwCommunicationRunChunks
+ * * @description One row per finished chunk of a chunked communication run. A redelivered chunk updates its existing row, so it is never counted twice.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Run Chunks')
+export class MJCommunicationRunChunkEntity extends BaseEntity<MJCommunicationRunChunkEntityType> {
+    /**
+    * Loads the MJ: Communication Run Chunks record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Run Chunks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationRunChunkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationRunID
+    * * Display Name: Communication Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Runs (vwCommunicationRuns.ID)
+    * * Description: Run the chunk belongs to.
+    */
+    get CommunicationRunID(): string {
+        return this.Get('CommunicationRunID');
+    }
+    set CommunicationRunID(value: string) {
+        this.Set('CommunicationRunID', value);
+    }
+
+    /**
+    * * Field Name: ChunkIndex
+    * * Display Name: Chunk Index
+    * * SQL Data Type: int
+    * * Description: Zero-based position of the chunk in the run. Unique per run.
+    */
+    get ChunkIndex(): number {
+        return this.Get('ChunkIndex');
+    }
+    set ChunkIndex(value: number) {
+        this.Set('ChunkIndex', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    * * Description: Complete when the chunk was processed (individual recipients may still be blocked or failed); Failed when the chunk was refused before any recipient was processed.
+    */
+    get Status(): 'Complete' | 'Failed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Complete' | 'Failed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: RecipientCount
+    * * Display Name: Recipient Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of recipients in the chunk.
+    */
+    get RecipientCount(): number {
+        return this.Get('RecipientCount');
+    }
+    set RecipientCount(value: number) {
+        this.Set('RecipientCount', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the chunk finished.
+    */
+    get CompletedAt(): Date {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why the chunk was refused, when Status is Failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationRun
+    * * Display Name: Communication Run
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CommunicationRun(): string | null {
+        return this.Get('CommunicationRun');
     }
 }
 
@@ -44338,6 +44544,36 @@ export class MJCommunicationRunEntity extends BaseEntity<MJCommunicationRunEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ChunkCount
+    * * Display Name: Chunk Count
+    * * SQL Data Type: int
+    * * Description: Number of queued chunks the run was split into. The run is ended when this many Communication Run Chunks have been recorded. NULL for a run that is not chunked.
+    */
+    get ChunkCount(): number | null {
+        return this.Get('ChunkCount');
+    }
+    set ChunkCount(value: number | null) {
+        this.Set('ChunkCount', value);
+    }
+
+    /**
+    * * Field Name: DeliveryGuarantee
+    * * Display Name: Delivery Guarantee
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+    * * Description: Overrides the sender and provider DeliveryGuarantee for every send in this run. NULL inherits.
+    */
+    get DeliveryGuarantee(): 'At Least Once' | 'At Most Once' | null {
+        return this.Get('DeliveryGuarantee');
+    }
+    set DeliveryGuarantee(value: 'At Least Once' | 'At Most Once' | null) {
+        this.Set('DeliveryGuarantee', value);
     }
 
     /**
@@ -44974,6 +45210,23 @@ export class MJCommunicationSenderEntity extends BaseEntity<MJCommunicationSende
     }
     set EnforcementMode(value: 'Enforce' | 'Off' | 'Shadow' | null) {
         this.Set('EnforcementMode', value);
+    }
+
+    /**
+    * * Field Name: DeliveryGuarantee
+    * * Display Name: Delivery Guarantee
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * At Least Once
+    *   * At Most Once
+    * * Description: Overrides the provider's DeliveryGuarantee for sends from this sender. NULL inherits from the nearest ancestor sender, then the provider.
+    */
+    get DeliveryGuarantee(): 'At Least Once' | 'At Most Once' | null {
+        return this.Get('DeliveryGuarantee');
+    }
+    set DeliveryGuarantee(value: 'At Least Once' | 'At Most Once' | null) {
+        this.Set('DeliveryGuarantee', value);
     }
 
     /**

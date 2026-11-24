@@ -152,11 +152,11 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDiagnosticBundlesApprovedByUserID', sectionName: 'Diagnostic Bundles (Approved By User ID)', isExpanded: false },
             { sectionKey: 'mJAgentChannelParticipants', sectionName: 'Agent Channel Participants', isExpanded: false },
             { sectionKey: 'mJAIAgentSuggestions', sectionName: 'AI Agent Suggestions', isExpanded: false },
-            { sectionKey: 'mJCommunicationSuppressionsRevokedByUserID', sectionName: 'Communication Suppressions (Revoked By User ID)', isExpanded: false },
-            { sectionKey: 'mJCommunicationSuppressionsCreatedByUserID', sectionName: 'Communication Suppressions (Created By User ID)', isExpanded: false },
+            { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false },
             { sectionKey: 'mJCommunicationSenderPermissions', sectionName: 'Communication Sender Permissions', isExpanded: false },
             { sectionKey: 'mJCommunicationConsentAuditLogs', sectionName: 'Communication Consent Audit Logs', isExpanded: false },
-            { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false }
+            { sectionKey: 'mJCommunicationSuppressionsRevokedByUserID', sectionName: 'Communication Suppressions (Revoked By User ID)', isExpanded: false },
+            { sectionKey: 'mJCommunicationSuppressionsCreatedByUserID', sectionName: 'Communication Suppressions (Created By User ID)', isExpanded: false }
         ]);
     }
 }

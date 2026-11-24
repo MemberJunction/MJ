@@ -49,5 +49,17 @@
       "Name": "MJ: Communication Endpoints",
       "TrackRecordChanges": false
     }
+  },
+  {
+    "_comments": [
+      "Per-chunk bookkeeping for chunked communication runs: high volume and written by the system, so no record-change tracking"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Communication Run Chunks"
+    },
+    "fields": {
+      "Name": "MJ: Communication Run Chunks",
+      "TrackRecordChanges": false
+    }
   }
 ]

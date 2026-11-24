@@ -248,7 +248,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (528 classes)
+// @memberjunction/core-entities (529 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -420,6 +420,7 @@ import {
     MJCommunicationProviderEntity,
     MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
+    MJCommunicationRunChunkEntity,
     MJCommunicationRunEntity,
     MJCommunicationSenderEntity,
     MJCommunicationSenderPermissionEntity,
@@ -2270,6 +2271,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJCommunicationProviderEntity,
     MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
+    MJCommunicationRunChunkEntity,
     MJCommunicationRunEntity,
     MJCommunicationSenderEntity,
     MJCommunicationSenderPermissionEntity,
@@ -2422,11 +2424,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
-    MJIntegrationObjectEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
@@ -2626,11 +2628,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkspaceItemEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
-    QueryMetadataEdgeProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
@@ -2830,11 +2832,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GeocodioGeocodingProvider,
     GoogleGeocodingProvider,
     HereGeocodingProvider,
-    AiProviderReadinessProbe,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AiProviderReadinessProbe,
     DbConnectivityProbe,
     EventLoopLagProbe,
     HealthLiveCrudVerificationOperation,
@@ -3034,11 +3036,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessRunNowServerOperation,
     ArchiveExtractor,
     CredentialAccessDriver,
-    DeleteContentItemStage,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    DeleteContentItemStage,
     DeleteStage,
     DeterministicConceptSynthesizer,
     DiscoverStage,
@@ -3238,11 +3240,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     VideoStudioRenderAgent,
     VideoStudioSetupHealthServerOperation,
     BraveWebSearchProvider,
-    DuckDuckGoWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    DuckDuckGoWebSearchProvider,
     GoogleCustomSearchWebSearchProvider,
     PerplexityWebSearchProvider,
     TavilyWebSearchProvider,
@@ -3442,11 +3444,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     TextAnalyzerAction,
     TriggerAgentWakeAction,
     URLLinkValidatorAction,
-    URLMetadataExtractorAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    URLMetadataExtractorAction,
     UnitConverterAction,
     UnshareListAction,
     UpdateListItemStatusAction,
@@ -3528,7 +3530,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1463;
+export const CLASS_REGISTRATIONS_COUNT = 1464;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

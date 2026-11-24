@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (528 classes)
+// @memberjunction/core-entities (529 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -397,6 +397,7 @@ import {
     MJCommunicationProviderEntity,
     MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
+    MJCommunicationRunChunkEntity,
     MJCommunicationRunEntity,
     MJCommunicationSenderEntity,
     MJCommunicationSenderPermissionEntity,
@@ -1879,6 +1880,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJCommunicationProviderEntity,
     MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
+    MJCommunicationRunChunkEntity,
     MJCommunicationRunEntity,
     MJCommunicationSenderEntity,
     MJCommunicationSenderPermissionEntity,
@@ -2042,11 +2044,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJJurisdictionEntity,
     MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
-    MJLibraryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
     MJListDetailEntity,
@@ -2246,11 +2248,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
-    MJAIModelEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJAIModelEntityExtended,
     MJAIPromptCategoryEntityExtended,
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
@@ -2450,11 +2452,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ParallelExecutionCoordinator,
     DecisionReranker,
     LLMReranker,
-    DecisionReasoningProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DecisionReasoningProvider,
     DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
     AgentRubricEvaluator,
@@ -2654,11 +2656,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJMLTrainingSnapshotEntityServer,
     MJMaterializedResultEntityServer,
     MJProjectEntityServer,
-    MJQueryEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
@@ -2858,11 +2860,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RevertInteractiveFormAction,
     RevokeListInvitationAction,
     RunAdhocQueryAction,
-    RunClusterAnalysisAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    RunClusterAnalysisAction,
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
@@ -2959,7 +2961,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1279;
+export const CLASS_REGISTRATIONS_COUNT = 1280;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

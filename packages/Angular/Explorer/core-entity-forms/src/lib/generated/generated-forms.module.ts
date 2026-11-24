@@ -162,6 +162,7 @@ import { MJCommunicationPrincipalPreferenceFormComponent } from "./Entities/MJCo
 import { MJCommunicationProviderEventFormComponent } from "./Entities/MJCommunicationProviderEvent/mjcommunicationproviderevent.form.component";
 import { MJCommunicationProviderFormComponent } from "./Entities/MJCommunicationProvider/mjcommunicationprovider.form.component";
 import { MJCommunicationProviderMessageTypeFormComponent } from "./Entities/MJCommunicationProviderMessageType/mjcommunicationprovidermessagetype.form.component";
+import { MJCommunicationRunChunkFormComponent } from "./Entities/MJCommunicationRunChunk/mjcommunicationrunchunk.form.component";
 import { MJCommunicationRunFormComponent } from "./Entities/MJCommunicationRun/mjcommunicationrun.form.component";
 import { MJCommunicationSenderFormComponent } from "./Entities/MJCommunicationSender/mjcommunicationsender.form.component";
 import { MJCommunicationSenderPermissionFormComponent } from "./Entities/MJCommunicationSenderPermission/mjcommunicationsenderpermission.form.component";
@@ -1044,6 +1045,7 @@ declarations: [
     MJActionCategoryFormComponent,
     MJActionResultCodeFormComponent,
     MJApplicationRoleFormComponent,
+    MJCommunicationRunChunkFormComponent,
     MJCompanyIntegrationEntityMapFormComponent,
     MJCompanyIntegrationRunAPILogFormComponent,
     MJComponentDependencyFormComponent,
