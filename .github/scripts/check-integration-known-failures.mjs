@@ -27,7 +27,7 @@
  *     `Entity <entity> not found in metadata`,
  *     `No record found in 'MJ: Entities' where Name='<entity>'`,
  *     `Field <column> does not exist on <entity>`,
- *     PostgreSQL's `column "<column>" does not exist`.
+ *     PostgreSQL's `column "<column>" does not exist` and `column <alias>.<column> does not exist`.
  *   A message that only mentions a missing name (a permission error, say) still fails the job, as
  *   does every other unlisted failure.
  *
@@ -107,8 +107,8 @@ export function parityGapPatterns(gap) {
     }
     for (const { Entity, Field } of gap?.Fields ?? []) {
         patterns.push(new RegExp(`\\bField ${quoted(Field)} does not exist on ${quoted(Entity)}`, 'i'));
-        // PostgreSQL names the column (sometimes qualified by a table alias), not the entity.
-        patterns.push(new RegExp(`\\bcolumn (?:"?[A-Za-z0-9_]+"?\\.)?"${escapeRegExp(Field)}" does not exist`, 'i'));
+        // PostgreSQL names the column, not the entity: `column "X"`, or `column alias.X` with no quotes.
+        patterns.push(new RegExp(`\\bcolumn (?:"${escapeRegExp(Field)}"|[A-Za-z0-9_]+\\.${escapeRegExp(Field)}) does not exist`, 'i'));
     }
     return patterns;
 }

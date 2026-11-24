@@ -105,14 +105,15 @@ describe('compareWithKnownFailures', () => {
                 failed('a.E1', 'Open Agent Channel failed: Entity MJ: Agent Channels not found in metadata or could not be created'),
                 failed('a.E2', `Lookup failed: No record found in 'MJ: Entities' where Name='MJ: Agent Channels'`),
                 failed('a.F1', 'Field BaseAgentID does not exist on MJ: AI Agents'),
-                failed('a.F2', 'column a."BaseAgentID" does not exist'),
+                failed('a.F2', 'column "BaseAgentID" does not exist'),
+                failed('a.F3', 'column a.BaseAgentID does not exist'),
             ],
             {},
             {},
             GAP,
         );
         expect(result.NewFailures).toEqual([]);
-        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.E1', 'a.E2', 'a.F1', 'a.F2']);
+        expect(result.GapFailures.map((o) => o.Key)).toEqual(['a.E1', 'a.E2', 'a.F1', 'a.F2', 'a.F3']);
         expect(report(result, () => {})).toBe(0);
     });
 
@@ -136,6 +137,8 @@ describe('compareWithKnownFailures', () => {
         const result = compareWithKnownFailures(
             [
                 failed('a.C1', 'column "BaseAgentIDs" does not exist'),
+                failed('a.C4', 'column a.BaseAgentIDs does not exist'),
+                failed('a.C5', 'column a."BaseAgentID" does not exist'),
                 failed('a.C2', 'Field BaseAgentID does not exist on MJ: Actions'),
                 failed('a.C3', 'Entity MJ: Agent Channel Participants not found in metadata'),
             ],
@@ -144,7 +147,7 @@ describe('compareWithKnownFailures', () => {
             GAP,
         );
         expect(result.GapFailures).toEqual([]);
-        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.C1', 'a.C2', 'a.C3']);
+        expect(result.NewFailures.map((o) => o.Key)).toEqual(['a.C1', 'a.C4', 'a.C5', 'a.C2', 'a.C3']);
     });
 
     it('attributes nothing to a gap when nothing is missing', () => {
