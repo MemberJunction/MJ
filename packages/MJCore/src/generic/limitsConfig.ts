@@ -1392,6 +1392,7 @@ function resolveSingleKey(
     };
     let preRunValue: LimitsScalarValue = codeFallbackBase;
     let preRunTier: LimitsSourceTier = 'CodeFallback';
+    let wasClamped = false;
 
     for (const tier of LIMITS_TIER_PRECEDENCE) {
         if (tier === 'RunOverride') {
@@ -1404,6 +1405,33 @@ function resolveSingleKey(
         const candidate = extractTierValue(layer, key);
         if (candidate !== undefined) {
             tierValues[tier] = candidate;
+            if (tier === 'UserAgentPolicy' && !callerCanRaiseCeilings) {
+                // F1 org-ceiling invariant: `mj.config.cjs` (MjConfig) sits at the root ceiling
+                // of user agent policies; a user's personal policy may only narrow, never raise
+                // (or clear to null/unlimited), org ceilings — and when configured ceilings are
+                // enforced, cannot raise Agent/Workflow ceilings either.
+                const mjConfigVal = tierValues.MjConfig;
+                const clampAgainstPreRun =
+                    enforceConfiguredCeilings && shouldClampToPolicyCeiling(key, candidate, preRunValue);
+                const clampAgainstMjConfig =
+                    (enforceConfiguredCeilings || enforceUserPolicyCeiling) &&
+                    shouldClampToPolicyCeiling(key, candidate, mjConfigVal);
+
+                if (clampAgainstPreRun || clampAgainstMjConfig) {
+                    if (
+                        clampAgainstMjConfig &&
+                        (!clampAgainstPreRun ||
+                            (typeof mjConfigVal === 'number' &&
+                                typeof preRunValue === 'number' &&
+                                mjConfigVal <= preRunValue))
+                    ) {
+                        preRunValue = mjConfigVal as number;
+                        preRunTier = 'MjConfig';
+                    }
+                    wasClamped = true;
+                    continue;
+                }
+            }
             preRunValue = candidate;
             preRunTier = tier;
         }
@@ -1411,7 +1439,6 @@ function resolveSingleKey(
 
     let winningValue: LimitsScalarValue = preRunValue;
     let sourceTier: LimitsSourceTier = preRunTier;
-    let wasClamped = false;
 
     const runLayer = tiers.RunOverride;
     const runCandidate = runLayer ? extractTierValue(runLayer, key) : undefined;
@@ -1421,15 +1448,21 @@ function resolveSingleKey(
         sourceTier = 'RunOverride';
 
         if (!callerCanRaiseCeilings) {
-            const policyVal = tierValues.UserAgentPolicy;
-            if (enforceUserPolicyCeiling && shouldClampToPolicyCeiling(key, winningValue, policyVal)) {
-                winningValue = policyVal;
-                sourceTier = 'UserAgentPolicy';
-                wasClamped = true;
-            } else if (enforceConfiguredCeilings && shouldClampToPolicyCeiling(key, winningValue, preRunValue)) {
+            if (enforceConfiguredCeilings && shouldClampToPolicyCeiling(key, winningValue, preRunValue)) {
                 winningValue = preRunValue;
                 sourceTier = preRunTier;
                 wasClamped = true;
+            } else if (enforceUserPolicyCeiling && tierValues.UserAgentPolicy !== undefined) {
+                // Use the effective (possibly MjConfig-clamped) policy ceiling, never the raw unclamped policy value
+                const effectivePolicyCeiling =
+                    preRunTier === 'MjConfig' || preRunTier === 'UserAgentPolicy'
+                        ? preRunValue
+                        : tierValues.UserAgentPolicy;
+                if (shouldClampToPolicyCeiling(key, winningValue, effectivePolicyCeiling)) {
+                    winningValue = effectivePolicyCeiling;
+                    sourceTier = preRunTier === 'MjConfig' ? 'MjConfig' : 'UserAgentPolicy';
+                    wasClamped = true;
+                }
             }
         }
     }

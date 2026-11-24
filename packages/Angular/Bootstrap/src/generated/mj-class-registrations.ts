@@ -11,9 +11,10 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (9 classes)
+// @memberjunction/ai-realtime-client (10 classes)
 import {
     AssemblyAIRealtimeClient,
+    AssemblyAIVoiceRealtimeClient,
     ElevenLabsRealtimeClient,
     ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
@@ -936,6 +937,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
+    AssemblyAIVoiceRealtimeClient,
     ElevenLabsRealtimeClient,
     ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
@@ -1134,11 +1136,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentProcessRunEntity,
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
-    MJContentSourceParamEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentSourceParamEntity,
     MJContentSourceTypeEntity,
     MJContentSourceTypeParamEntity,
     MJContentTypeAttributeEntity,
@@ -1338,11 +1340,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
-    MJRecordCloneLogItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
@@ -1542,11 +1544,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RoleManagementComponent,
     SettingsComponent,
     SqlLoggingComponent,
-    UserManagementComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    UserManagementComponent,
     RubricEngineBase,
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
@@ -1746,11 +1748,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
-    WorkflowsResourceComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    WorkflowsResourceComponent,
     ArtifactResource,
     ChatCollectionsResource,
     ChatConversationsResource,
@@ -1781,7 +1783,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 815;
+export const CLASS_REGISTRATIONS_COUNT = 816;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
