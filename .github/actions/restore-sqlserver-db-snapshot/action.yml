@@ -1,0 +1,162 @@
+name: Restore SQL Server DB snapshot and migrate
+description: >-
+  Computes a release-line-scoped git-tree hash for the SQL Server integration DB, restores the
+  matching cached `.bak` snapshot (with prefix fallback on the same release line), loads it into
+  the running `sql` container, and runs `mj migrate` with cold-rebuild retry on out-of-order
+  migrations. Restore-only: callers save snapshots exclusively on push/schedule backstops.
+
+inputs:
+  variant:
+    description: >-
+      Snapshot variant: 'full' (migrations + metadata + metadata-optional + pre-baked first-run
+      scheduled jobs, for integration-sqlserver and cross-server-invalidation) or 'base'
+      (migrations + metadata only, for codegen-drift).
+    required: true
+  skip-restore:
+    description: >-
+      Set to 'true' (e.g. on nightly schedule runs) to bypass cache restore and provision cold
+      so the lineage is re-seeded cleanly each day.
+    required: false
+    default: 'false'
+
+outputs:
+  key:
+    description: Computed exact cache key for this commit's DB inputs.
+    value: ${{ steps.dbkey.outputs.key }}
+  cache-hit:
+    description: "'true' only on an exact key match (gates skipping metadata sync push)."
+    value: ${{ steps.dbcache.outputs.cache-hit }}
+  warm:
+    description: "'1' if a cached .bak snapshot was restored into [test], else '0'."
+    value: ${{ steps.dbload.outputs.warm }}
+  retried:
+    description: "'1' if mj migrate failed against the warm snapshot and rebuilt cold, else '0'."
+    value: ${{ steps.migrate.outputs.retried }}
+  needs-sync:
+    description: "'true' if metadata sync push must run; 'false' on an exact warm hit with no cold retry."
+    value: ${{ steps.syncflag.outputs.needs_sync }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compute the snapshot cache key
+      id: dbkey
+      shell: bash
+      env:
+        VARIANT: ${{ inputs.variant }}
+        # Set only on pull_request events; push, schedule and dispatch use the branch itself.
+        BASE_REF: ${{ github.base_ref }}
+        REF_NAME: ${{ github.ref_name }}
+      run: |
+        if [ "$VARIANT" = "full" ]; then
+          TREE_LIST=(migrations metadata metadata-optional packages/MJCLI/src packages/MetadataSync/src)
+          VERSION_TAG="mj-ci-db-v4"
+        elif [ "$VARIANT" = "base" ]; then
+          TREE_LIST=(migrations metadata packages/MJCLI/src packages/MetadataSync/src)
+          VERSION_TAG="mj-ci-db-base-v1"
+        else
+          echo "::error::Unknown restore-sqlserver-db-snapshot variant: '${VARIANT}' (expected 'full' or 'base')."
+          exit 1
+        fi
+
+        # git tree hashes, not hashFiles: these trees hold thousands of files and git already
+        # knows their hash, so this is exact and free. MJCLI and MetadataSync are in the key
+        # because they PRODUCE the database content — a change to either must miss.
+        TREES=''
+        for TREE in "${TREE_LIST[@]}"; do
+          HASH=$(git rev-parse "HEAD:${TREE}")
+          echo "  ${TREE} = ${HASH}"
+          TREES="${TREES}${HASH}"
+        done
+        LINE=$(printf '%s' "${BASE_REF:-$REF_NAME}" | tr -c 'A-Za-z0-9._-' '-')
+        PREFIX="${VERSION_TAG}-${LINE}-"
+        KEY="${PREFIX}$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
+        echo "prefix=${PREFIX}" >> "$GITHUB_OUTPUT"
+        echo "key=${KEY}" >> "$GITHUB_OUTPUT"
+        echo "Snapshot key (${VARIANT}): ${KEY}"
+
+    - name: Restore the provisioned-DB snapshot
+      id: dbcache
+      if: inputs.skip-restore != 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: /tmp/mjdb
+        key: ${{ steps.dbkey.outputs.key }}
+        # Prefix fallback to the newest snapshot of the same release line. `cache-hit` is 'true'
+        # ONLY on an exact key match, which is what gates skipping metadata sync push; a prefix
+        # match leaves it 'false', so the full metadata reconcile still runs.
+        restore-keys: ${{ steps.dbkey.outputs.prefix }}
+
+    - name: Load the snapshot into SQL Server
+      id: dbload
+      shell: bash
+      env:
+        MATCHED: ${{ steps.dbcache.outputs.cache-matched-key }}
+        VARIANT: ${{ inputs.variant }}
+      run: |
+        if [ ! -f /tmp/mjdb/test.bak ]; then
+          echo 'No snapshot available — provisioning cold.'
+          echo "DB provisioning (${VARIANT}): **cold** — no snapshot in the cache for this key" >> "$GITHUB_STEP_SUMMARY"
+          echo 'warm=0' >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        ls -lh /tmp/mjdb/test.bak
+        # -b so sqlcmd exits non-zero on a SQL error. chmod 0644 so uid 10001 (mssql) can read
+        # the file that `docker cp` wrote as the host uid.
+        if docker cp /tmp/mjdb/test.bak sql:/var/opt/mssql/test.bak && \
+           docker exec -u 0 sql chmod 0644 /var/opt/mssql/test.bak && \
+           docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+             /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
+             -Q "RESTORE DATABASE [test] FROM DISK='/var/opt/mssql/test.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_log.ldf';"; then
+          echo "warm=1" >> "$GITHUB_OUTPUT"
+          echo "Snapshot restored from key: ${MATCHED}"
+          echo "DB provisioning (${VARIANT}): **warm** — restored from \`${MATCHED}\`" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "::warning::Snapshot restore failed — dropping the database and provisioning cold."
+          echo "DB provisioning (${VARIANT}): **cold (restore FAILED)** — fell back to clean provisioning" >> "$GITHUB_STEP_SUMMARY"
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' \
+            -Q "IF DB_ID('test') IS NOT NULL BEGIN ALTER DATABASE [test] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [test]; END; CREATE DATABASE [test];"
+          echo "warm=0" >> "$GITHUB_OUTPUT"
+        fi
+
+    # Unconditional by design: on a warm exact-hit restore Flyway sees its history table is
+    # already current and finishes in seconds; on a prefix restore it applies only the delta.
+    # If an out-of-order PR migration fails against a warm snapshot, rebuild cold and retry once.
+    - name: Migrate — apply committed migrations to the fresh DB
+      id: migrate
+      shell: bash
+      env:
+        MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        WARM: ${{ steps.dbload.outputs.warm }}
+      run: |
+        if node packages/MJCLI/bin/run.js migrate; then
+          echo "retried=0" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [ "$WARM" != "1" ]; then
+          echo "::error::migrate failed against a cold database — this is a real migration failure, not a snapshot-cache artifact."
+          exit 1
+        fi
+        echo "::warning::migrate failed against the restored snapshot — rebuilding the database cold and retrying once. The usual cause is a migration numbered below the snapshot's ceiling (out-of-order)."
+        echo 'DB provisioning: **cold (retried)** — migrate failed against the snapshot, rebuilt from scratch' >> "$GITHUB_STEP_SUMMARY"
+        echo "retried=1" >> "$GITHUB_OUTPUT"
+        docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+          /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' \
+          -Q "IF DB_ID('test') IS NOT NULL BEGIN ALTER DATABASE [test] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [test]; END; CREATE DATABASE [test];"
+        node packages/MJCLI/bin/run.js migrate
+
+    - name: Determine whether metadata sync push is required
+      id: syncflag
+      shell: bash
+      env:
+        CACHE_HIT: ${{ steps.dbcache.outputs.cache-hit }}
+        WARM: ${{ steps.dbload.outputs.warm }}
+        RETRIED: ${{ steps.migrate.outputs.retried }}
+      run: |
+        if [ "$CACHE_HIT" = "true" ] && [ "$WARM" = "1" ] && [ "$RETRIED" != "1" ]; then
+          echo "needs_sync=false" >> "$GITHUB_OUTPUT"
+          echo "Exact warm DB snapshot hit — skipping metadata sync push."
+        else
+          echo "needs_sync=true" >> "$GITHUB_OUTPUT"
+        fi
