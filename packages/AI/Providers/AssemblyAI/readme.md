@@ -18,7 +18,7 @@ browser mic -> MJAPI -> STT 3.7 Realtime Agent -> LLM Gateway -> TTS-1 -> MJAPI 
 | Concern | How it works |
 | --- | --- |
 | Protocol | The pipeline (`src/voice/assemblyAIVoicePipeline.ts`) speaks the OpenAI Realtime protocol, so MJ's shared OpenAI-protocol session and browser client drive it |
-| Browser sessions | A one-time ticket for MJAPI's realtime proxy, whose upstream is the pipeline in that process. The prompt, tools and key never reach the browser, and a browser `session.update` is ignored |
+| Browser sessions | A one-time ticket for MJAPI's realtime proxy, whose upstream is the pipeline in that process. The prompt, tools and key never reach the browser, a browser `session.update` is ignored, and the prompt is not saved on the session row (`ServerHeldConfig`), so only the MJAPI instance that minted a session can reconnect it |
 | Server sessions | The shared session over an in-memory connection |
 | Turns | STT decides when the user has finished. A turn that ends in a name or a number is held open longer (up to 1.28 s in `balanced`), in case more of it follows |
 | Interruption | Words stop the reply; a listening sound ("mm-hm") does not. History keeps what was heard, estimated from when the audio plays |

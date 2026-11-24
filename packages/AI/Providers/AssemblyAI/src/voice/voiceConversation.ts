@@ -14,6 +14,9 @@ const MAX_ENTRY_CHARS = 50_000;
 /** The most text kept, in characters: about 100,000 tokens, all of which the LLM reads for every reply. */
 const MAX_TOTAL_CHARS = 400_000;
 
+/** The longest one-off instruction, in characters. */
+const MAX_INSTRUCTION_CHARS = 8_000;
+
 const RUNNING_PLACEHOLDER = '{"status":"still running; the result will follow in a later message"}';
 
 /**
@@ -75,7 +78,7 @@ export class VoiceConversation {
     public Messages(systemPrompt: string, instruction?: string): ChatCompletionMessageParam[] {
         const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt }, ...this.items.flatMap(render)];
         if (instruction && instruction.trim().length > 0) {
-            messages.push({ role: 'user', content: `[Instruction from the application, not said by the user] ${instruction}` });
+            messages.push({ role: 'user', content: `[Instruction from the application, not said by the user] ${cut(instruction, MAX_INSTRUCTION_CHARS)}` });
         }
         return messages;
     }
@@ -105,8 +108,8 @@ export class VoiceConversation {
     }
 }
 
-function cut(text: string): string {
-    return text.length > MAX_ENTRY_CHARS ? `${text.slice(0, MAX_ENTRY_CHARS)} [truncated]` : text;
+function cut(text: string, limit: number = MAX_ENTRY_CHARS): string {
+    return text.length > limit ? `${text.slice(0, limit)} [truncated]` : text;
 }
 
 function size(item: ConversationItem): number {

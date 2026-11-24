@@ -127,6 +127,15 @@ function withoutFirstMessage(params: RealtimeSessionParams): RealtimeSessionPara
     return { ...params, Config: config };
 }
 
+/** Params for a call that connects some time after its mint: the session cap counts from the mint. */
+function withRemainingTime(params: RealtimeSessionParams, maxSessionSeconds: number | undefined, mintedAtMs: number): RealtimeSessionParams {
+    if (maxSessionSeconds === undefined) {
+        return params;
+    }
+    const elapsedSeconds = Math.floor((Date.now() - mintedAtMs) / 1000);
+    return { ...params, MaxSessionSeconds: Math.max(1, maxSessionSeconds - elapsedSeconds) };
+}
+
 /**
  * The browser connection each call runs on. A reconnect opens a second one while the first may still be billing, so the
  * first ends as soon as the second is ready, whether or not the browser closes it.
@@ -263,11 +272,13 @@ export class AssemblyAIVoiceRealtime extends OpenAIRealtime {
     }
 
     private mintClientSession(params: RealtimeSessionParams, callID: string): ClientRealtimeSessionConfig {
+        const maxSessionSeconds = this.ClampSessionSeconds(params.MaxSessionSeconds);
+        const mintedAtMs = Date.now();
         const ticket = RealtimeProxyRegistry.Instance.Issue({
-            OpenInProcess: (peer) => this.openBrowserCall(peer, params, callID),
+            OpenInProcess: (peer) => this.openBrowserCall(peer, withRemainingTime(params, maxSessionSeconds, mintedAtMs), callID),
             UserID: params.UserID,
             DriverClass: this.constructor.name,
-            TTLSeconds: ASSEMBLYAI_VOICE_TICKET_TTL_SECONDS,
+            TTLSeconds: Math.min(ASSEMBLYAI_VOICE_TICKET_TTL_SECONDS, maxSessionSeconds ?? ASSEMBLYAI_VOICE_TICKET_TTL_SECONDS),
         });
         const timing = ResolveRealtimeTiming({
             Config: params.Config,
@@ -282,7 +293,8 @@ export class AssemblyAIVoiceRealtime extends OpenAIRealtime {
             EphemeralToken: `${ResolveRealtimeProxyBaseWsUrl(params)}${REALTIME_PROXY_PATH}?ticket=${encodeURIComponent(ticket.ID)}`,
             ExpiresAt: ticket.ExpiresAt,
             SessionConfig: { sampleRate: ASSEMBLYAI_VOICE_SAMPLE_RATE, [CALL_ID_KEY]: callID },
-            MaxSessionSeconds: this.ClampSessionSeconds(params.MaxSessionSeconds),
+            ServerHeldConfig: true,
+            MaxSessionSeconds: maxSessionSeconds,
             ...(timing.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: timing.ConnectionMaxSeconds } : {}),
             ReconnectBufferSeconds: timing.ReconnectBufferSeconds,
             TrustNativeResumption: timing.TrustNativeResumption,

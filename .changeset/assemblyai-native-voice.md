@@ -1,5 +1,6 @@
 ---
 "@memberjunction/ai": minor
+"@memberjunction/ai-agents": minor
 "@memberjunction/ai-assemblyai": minor
 "@memberjunction/ai-realtime-client": minor
 "@memberjunction/server": minor

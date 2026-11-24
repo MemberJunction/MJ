@@ -72,6 +72,7 @@ describe('AssemblyAIVoiceRealtime', () => {
         it('mints a one-time proxy URL and gives the browser no prompt, tool or key', async () => {
             const config = await new TestDriver('sk-secret').CreateClientSession(PARAMS);
             expect(config.Provider).toBe('assemblyai-voice');
+            expect(config.ServerHeldConfig).toBe(true);
             expect(config.EphemeralToken).toMatch(/^wss:\/\/api\.example\.com\/realtime-proxy\?ticket=/);
             expect(config.SessionConfig).toEqual({ sampleRate: 24000, callID: expect.any(String) });
             const all = JSON.stringify(config);
@@ -92,6 +93,23 @@ describe('AssemblyAIVoiceRealtime', () => {
             await settle(121_000);
             expect(closes).toEqual([4000]);
             peer;
+        });
+
+        it('counts the session cap from the mint, not from when the browser connects', async () => {
+            const config = await new TestDriver('k').CreateClientSession({ ...PARAMS, MaxSessionSeconds: 120 });
+            await settle(100_000);
+            const { closes } = openTicket(config.EphemeralToken);
+            await settle(19_000);
+            expect(closes).toEqual([]);
+            await settle(2_000);
+            expect(closes).toEqual([4000]);
+        });
+
+        it('a ticket does not outlive the session cap', async () => {
+            const driver = new TestDriver('k');
+            const config = await driver.CreateClientSession({ ...PARAMS, MaxSessionSeconds: 60 });
+            await settle(61_000);
+            expect(RealtimeProxyRegistry.Instance.Consume(ticketOf(config.EphemeralToken))).toBeNull();
         });
 
         it('opens nothing until the browser connects, then runs the call with the server prompt, context and tools', async () => {

@@ -129,6 +129,11 @@ describe('VoiceConversation', () => {
         expect(tool).toMatch(/truncated/);
     });
 
+    it('cuts a very long instruction', () => {
+        const c = new VoiceConversation();
+        expect(String(c.Messages('SYS', 'x'.repeat(500_000)).at(-1)?.content).length).toBeLessThan(9_000);
+    });
+
     it('drops the oldest entries past its total size', () => {
         const c = new VoiceConversation();
         for (let i = 0; i < 40; i++) {
