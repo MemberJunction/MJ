@@ -3861,6 +3861,19 @@ describe('RealtimeClientSessionService — the mint snapshot persisted on the ow
         }
     }
 
+    /** A driver like AssemblyAI voice: the agent runs in MJAPI, so the browser gets a ticket URL and no prompt or tools. */
+    class ServerHeldModel extends MockRealtimeModel {
+        public MintCount = 0;
+        public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+            this.LastParams = params;
+            this.MintCount++;
+            return { Provider: 'held', Model: params.Model, EphemeralToken: 'wss://mjapi.example.test/realtime-proxy?ticket=t', ExpiresAt: new Date(Date.now() + 60_000).toISOString(), ServerHeldConfig: true, SessionConfig: { callID: 'call-1' } };
+        }
+        public override async RefreshClientSessionCredential(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+            return this.CreateClientSession(params);
+        }
+    }
+
     function serviceWith(model: MockRealtimeModel): TestableService {
         const svc = new TestableService();
         svc.Model = model;
@@ -3961,6 +3974,35 @@ describe('RealtimeClientSessionService — the mint snapshot persisted on the ow
         expect(model.LastParams).toEqual(minted);
         // The hydrated copy keeps the target the session was minted for.
         expect(RealtimeMintSnapshotRegistry.Instance.Get(sessionID)?.targetAgentID).toBe('target-1');
+    });
+
+    it('persists only routing for a session whose config the server holds', async () => {
+        const sessionID = 'a0a0a0a0-0000-4000-8000-000000000011';
+        const prep = await serviceWith(new ServerHeldModel()).PrepareClientSession(prepInput(sessionID), contextUser, provider);
+
+        expect(prep.Success).toBe(true);
+        expect(prep.MintSnapshot?.serverHeld).toBe(true);
+        expect(prep.MintSnapshot?.sessionParams).toBeUndefined();
+        const stored = JSON.stringify(prep.MintSnapshot);
+        for (const text of SERVER_ONLY_TEXT) {
+            expect(stored).not.toContain(text);
+        }
+    });
+
+    it('refreshes a server-held session here, and refuses on an instance that does not hold its snapshot', async () => {
+        const sessionID = 'a0a0a0a0-0000-4000-8000-000000000012';
+        const model = new ServerHeldModel();
+        const svc = serviceWith(model);
+        const prep = await svc.PrepareClientSession(prepInput(sessionID), contextUser, provider);
+        const input = { AgentSessionID: sessionID, CoAgentID: 'co-1', PersistedMintSnapshot: prep.MintSnapshot };
+
+        expect((await svc.RefreshClientSessionCredential(input, contextUser, provider)).Success).toBe(true);
+        expect(model.MintCount).toBe(2);
+        RealtimeMintSnapshotRegistry.Instance.Clear();
+        const elsewhere = await svc.RefreshClientSessionCredential(input, contextUser, provider);
+        expect(elsewhere.Success).toBe(false);
+        expect(elsewhere.ErrorMessage).toContain('only the MJAPI instance that minted it can refresh its credential');
+        expect(model.MintCount).toBe(2);
     });
 
     it('refreshes a relay session from this instance\'s snapshot, extending its relay in place', async () => {

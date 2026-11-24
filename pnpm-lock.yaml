@@ -1713,10 +1713,22 @@ importers:
       '@memberjunction/ai':
         specifier: 6.3.0-edge.1
         version: link:../../Core
+      '@memberjunction/ai-openai':
+        specifier: 6.3.0-edge.1
+        version: link:../OpenAI
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../../MJGlobal
+      openai:
+        specifier: 6.18.0
+        version: 6.18.0(ws@8.22.0)(zod@4.6.7)
+      ws:
+        specifier: ^8.19.0
+        version: 8.22.0
     devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -12921,6 +12933,9 @@ importers:
       '@inquirer/prompts':
         specifier: ^8.2.0
         version: 8.2.0(@types/node@24.10.11)
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.3.0-edge.1
+        version: link:../AI/AgentHarness
       '@memberjunction/ai-cli':
         specifier: 6.3.0-edge.1
         version: link:../AI/AICLI

@@ -1953,6 +1953,25 @@ describe('OpenAIRealtimeSession — reconnect hand-over', () => {
         expect(driver.Connections[1].Unhandled).toEqual([]);
     });
 
+    it('tries again at once when a new connection closes before session.created, instead of waiting for the setup limit', async () => {
+        void session.TriggerReconnect('connection-lost');
+        driver.Connections[1].FireSocketClose();
+        await vi.advanceTimersByTimeAsync(REALTIME_CONNECTION_SETUP_TIMEOUT_MS / 2);
+
+        expect(driver.Connections.length).toBeGreaterThan(2);
+        expect(driver.Connections[1].Closed).toBe(true);
+        expect(driver.Connections[1].Unhandled).toEqual([]);
+    });
+
+    it('a new connection that closes after session.created is not discarded a second time by the wait for it', async () => {
+        const reconnect = session.TriggerReconnect('connection-lost');
+        driver.Connections[1].Fire({ type: 'session.created' } as RealtimeServerEvent);
+        expect(await reconnect).toBe(true);
+        driver.Connections[1].FireSocketClose();
+
+        expect(driver.Connections[1].Closed).toBe(false);
+    });
+
     it('closes the new connection of an attempt the session closed during, with an error guard on it', async () => {
         const reconnect = session.TriggerReconnect('connection-lost');
         const second = driver.Connections[1];
