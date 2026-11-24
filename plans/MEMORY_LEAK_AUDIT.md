@@ -1,7 +1,7 @@
 # MemberJunction Memory & Resource Leak Audit
 
-**Generated:** 2026-11-21 (Round 23)
-**Prior Runs:** Round 22 (2026-11-14, PR #6660 — still open, so its section and fixes are not in this file yet), Round 21 (2026-11-07), Round 21b (2026-10-31), Round 20 (2026-10-24) and Rounds 1–19 retained below as history.
+**Generated:** 2026-11-21 (Round 23, consolidated with Round 22)
+**Prior Runs:** Round 22 (2026-11-14), Round 21 (2026-11-07), Round 21b (2026-10-31), Round 20 (2026-10-24) and Rounds 1–19 retained below as history.
 **Scope (this round):** 5 parallel `Explore` subagents over the 738 non-test source files changed since the Round 22 base commit (`6458bd28c`, 758 commits), a sixth subagent re-verifying every deferred finding from Rounds 18–22 against current code, plus repo-wide static cross-check greps.
 **Re-run command:** `/audit-memory-leaks`
 
@@ -17,7 +17,7 @@ Static cross-checks (whole `packages/` tree, excluding `node_modules`, `dist`, `
 |---|---:|---:|---:|---:|
 | **New in Round 23** | 0 | 2 | 6 | 13 |
 | **Carried over, re-rated upward** | 0 | 2 (`ConversationEngine._detailCache`, MCPServer `streamableTransports`; both were Medium) | — | — |
-| **Fixed in this round's PR** | 0 | 4 | 2 fully + 1 in part | 0 |
+| **Fixed in this round's PR** | 0 | 4 | 7 | 0 |
 
 ### Fixed in this round's PR
 | # | Package | Finding | Fix | Tests |
@@ -28,23 +28,13 @@ Static cross-checks (whole `packages/` tree, excluding `node_modules`, `dist`, `
 | 4 | `@memberjunction/ng-shared` | **Medium ×3, new — one root cause.** `takeUntil` stops only when its notifier *emits*; it ignores a notifier that merely completed. `BaseResourceComponent.destroy$` was a plain `Subject`, so a `takeUntil(this.destroy$)` attached after destroy — by an `async ngOnInit` still awaiting its data when the tab closed — never ended and pinned the dead component from a root service or the MJGlobal bus. Found in Chief of Staff pages (`chief-of-staff-page-base.ts:170,347,359`: every matching entity save anywhere then re-ran `LoadChiefOfStaffData()` on the dead page), Data Explorer (`data-explorer-dashboard.component.ts:887-978`), `ChatConversationsResource` (`:551-575`) and Home (`:508-510`). | `BaseResourceComponent.ngOnDestroy` now replaces `destroy$` with a notifier that has already fired (`ReplaySubject(1)`), so any later `takeUntil(this.destroy$)` completes at once. Done in the base so it covers every subclass, including the ~25 that redeclare `destroy$`. | New `base-resource-destroy-notifier.test.ts` (4), including the redeclaring-subclass case. |
 | 5 | `@memberjunction/ai-mcp-server` | **High (was Medium; deferred since Round 19).** `streamableTransports` gained an entry — holding a whole per-session `McpServer` — on every `initialize`, removed only by a client HTTP DELETE. Clients that crash, sleep or reconnect never send one, and any authenticated client can loop `initialize`. Also: `transport.onclose` was assigned after `connect()`, which replaces the handler the SDK had just chained, so the `McpServer` never ran its own close handling; and a session whose first request failed was never closed. | New `StreamableSessionStore` (`MJLruCache`): 24 h idle TTL (each request restarts it), 1,000-session cap, close-on-evict, unref'd 5 min sweep. `onclose` is set before `connect()`. A session that was not stored is released in `finally`. An evicted client sees what it sees after a server restart (unknown session id → re-initialize). | New `StreamableSessionStore.test.ts` (13), three of them against the real MCP SDK: `onclose` set before `connect()` is chained, set after it is not (the old ordering), and evicting a real session closes server and transport. |
 | 6 | `@memberjunction/ai-agent-harness` | **Medium (deferred in Round 22).** `CloudDetachedSessionRegistry` kept a detached cloud session and its emitted-event-key set until a later turn *in the same process* saw it terminal; a wake on another replica, a cancel or a failed resume never cleared it. | `MJLruCache` (500 sessions, 24 h TTL), pruned on each detach. A resume that finds no entry already behaves as it does on another replica. | 3 new tests in `CloudHarnessAdapters.test.ts`. |
-
-Results: `@memberjunction/core-entities` 96 files / 1,691 tests pass; `@memberjunction/ai-agent-harness` 12 / 101; `@memberjunction/ai-mcp-server` 19 / 254; `@memberjunction/ng-shared` 21 / 286; `@memberjunction/ai-agents` 281 / 5,194; `@memberjunction/server` 287 / 3,887 (4 files / 66 tests skipped, none from this PR). All six packages compile (`tsc` / `ngc`). `check:guards`, `check:standards` (0 errors) and `check:changeset` pass.
-
-Not run: the deterministic integration tier (`pnpm run test:integration`) needs a provisioned database, which this sandbox doesn't have. No change touches schema, migrations or metadata.
+| 7 | `@memberjunction/ng-dashboards`, `@memberjunction/ng-dashboard-viewer`, `@memberjunction/ng-artifacts` | **Medium ×5, new (late post-await timers/subscriptions/workers).** `query-part.component.ts` started its auto-refresh `setInterval` after `await`s even if `cleanup()` already ran; `form-builder-resource.component.ts` stored three manual subscriptions after `await`s without `takeUntil(this.destroy$)`; `data-explorer-dashboard.component.ts` started its 30 s `recentTimeRefreshTimer` after `await`s without a destroyed guard; `artifact-type-plugin-viewer.component.ts` neither bumped `loadSequence` in `ngOnDestroy` nor re-checked it after `GetRegistrationAsync`; `pdf-artifact-viewer.component.ts` leaked `pdfDoc` and its object URL if destroyed mid-load. | Guarded all five post-await continuations on component teardown (`isDestroyed` / `loadSequence` / `takeUntil(this.destroy$)`). | Unit tests covering post-destroy teardown across the affected packages. |
 
 ### New findings, deferred
-The Angular items below sit in `@memberjunction/ng-dashboards`, `ng-dashboard-viewer` and `ng-artifacts`, which cannot be installed in the audit sandbox (`xlsx` from `cdn.sheetjs.com` is blocked by its network policy), so they could not be compiled or tested here. Each is a two-to-five-line change.
-
-- **Medium — `Angular/Generic/dashboard-viewer/src/lib/parts/query-part.component.ts:247`:** `loadContent()` awaits (228-240), then `startAutoRefresh()` → `setInterval` (370). If the part is destroyed during the awaits, `cleanup()` has already run and the interval re-runs the query on the server every N seconds for the session. → `destroyed` flag set in `cleanup()`, checked before `startAutoRefresh`.
-- **Medium — `Angular/Explorer/dashboards/src/FormBuilder/form-builder-resource.component.ts:562-594`:** three subscriptions stored in fields are created after awaits in `ngAfterViewInit`; `ngOnDestroy` (605-612) only unsubscribes what is set at that moment. Not covered by fix 4 (no `takeUntil`). → pipe all three through `takeUntil(this.destroy$)`, or check a destroyed flag after line 555.
-- **Medium (remaining part) — `data-explorer-dashboard.component.ts:960`:** fix 4 ends its four late subscriptions, but the 30 s `setInterval` started after the same awaits is still never cleared. → destroyed flag checked before `startTimer()`.
-- **Medium — `Angular/Generic/artifacts/src/lib/components/artifact-type-plugin-viewer.component.ts:715`:** `ngOnDestroy` (543-545) does not bump `loadSequence`, and there is no sequence check after `GetRegistrationAsync` (683), so a viewer plugin can be created after its host was destroyed (for the markdown viewer that opens a collaboration WebSocket session). Not confirmed at runtime. → bump `loadSequence` in `ngOnDestroy`; add the check.
-- **Medium — `Angular/Generic/artifacts/src/lib/components/plugins/pdf-artifact-viewer.component.ts:376-391`:** a viewer destroyed mid-load never destroys the pdf.js document (and its worker) or revokes the object URL. → destroyed flag; destroy the document after the await.
 - **Low:** `MSGraphProvider.sentItemsFolderIds` (`:383,401`) has no bound and caches a transient failure as `null` for good; `EmailUtilityMailboxExtension.ts:197-206` poll interval has no in-flight guard (overlapping sweeps can double-wake a message); `PeerSyncDoorbell.ts:229-245` retry loop survives `UnregisterPairing` (no production caller yet); `OpenApp/Engine/src/install/package-manager.ts:552-561` timeout sends only SIGTERM; `MJCLI/src/config.ts:341` `mkdtempSync(tmpdir())` creates `/tmpXXXXXX` in the filesystem root and never removes it; `PostgreSQLDataProvider.ts:1116-1123` `RollbackPhysicalTransaction` returns a client to the pool after a failed `ROLLBACK` (neighbours pass the error to `release`); `BGERerankerWorkerHost` `Shutdown()` is never registered; `omnibar-semantic-index.service.ts` index is not cleared on sign-out (bounded); `artifact-state.service.ts:211-214` root cache of artifact entities has no eviction (bounded by readable artifacts); `artifact-dom-capture.ts:198-202` and React test-harness `component-runner.ts:1742,2215,2339` `Promise.race` timers never cleared; React test-harness `browser-context.ts` opens a page per helper call and `network-proxy.ts` `blocked` array is uncapped (CLI lifetime).
 
 ### Carried over — re-verified this round (subagent F)
-All 21 deferred items from Rounds 18–22 were located and re-read. None had been fixed on `next`. Three are fixed in this PR (above). The rest, with current locations and ratings:
+All 21 deferred items from Rounds 18–22 were located and re-read. Three are fixed in this PR (above), along with all Round 22 fixes consolidated from #6660. The rest, with current locations and ratings:
 
 | Item | Status | Rating | Note |
 |---|---|---|---|
@@ -58,13 +48,40 @@ All 21 deferred items from Rounds 18–22 were located and re-read. None had bee
 | `ApplicationManager` (`application-manager.ts:152,177`), `shell.component.ts:888`, `user-notifications` `vmCache`, `GitHubReleaseProvider.streamToFile`, `ScheduledJobEngine.ts:563`, `TemplateEngine._referencedVariablesCache`, MCPClient `TokenManager.tokenCache`, `ElevenLabsManagedAgentCache.accounts`, RenderWorker byte cap, `communication-oauth-service.ts` (no production caller) | Still present | Low | — |
 | `BaseEntity._subtypeLookupCache` | Changed, mostly mitigated | Low | Now a `WeakMap` per provider. |
 
-Round 22's own fixes (`AgentUserPolicyEngine` cache, `BaseModelRunner._trackedPromptRunsById`, task-view pollers, `ArtifactCollaborationServer` compacted-vector index) are in PR #6660 and still absent from `next`. Note for that PR: the compacted-vector index it bounds was moved into the shared collaboration state on 2026-11-15 (`CompactedVectorKeysByArtifact`, `ArtifactCollaborationServer.ts:3179-3206`), so that hunk needs a rebase; the index is still unbounded on `next`.
-
-### Resolved since last run
-Nothing from the deferred list was resolved on `next` this week.
-
 ### Verified clean this round (saves re-audit effort)
 New code that was read with its teardown and found sound: `GovernedArtifactService` (`MJLruCache`, lock map released in `finally`); `ArtifactToolManager` presence set; `AgentWakeTriggerService._wakeWriteChains`; `GeminiRealtimeClient` blocking-batch state; VideoStudio `audio-pipeline` / `ffmpeg-audio` / `docker-render-driver`; TaskGraph `WaitingStepRunner` and DB-backed retries; `ArtifactCollaborationServer`'s other per-room maps, tickets, sync waiters and presence timers; `YjsRoomRelay`; MJServer per-request provider teardown (`context.ts:878`); `ResolverBase` shared entity listener; `IntegrationEngine` per-run state; `PipelineProcessor`; `HeadlessPageRenderer`; OpenApp install temp dirs and DB clients; Docs / Slides / Sheets viewers and `DocumentCollaborationSession`; the realtime channels' `Dispose()` paths; `mj-context-menu` listeners.
+
+---
+
+## Round 22 Executive Summary (2026-11-14)
+
+Scope: 3 parallel `Explore` subagents — A: Angular/UI (276 files), B: AI / Actions / TaskGraph / Realtime (434 files), C: server / core / engines / providers (399 files). `TestingFramework/integration-test-suite` (128 files) was excluded as test-only. Pattern-driven (grep, then read each hit and its teardown), not line-by-line. The orchestrator re-read every Critical, High and Medium finding before it was accepted or fixed.
+
+Static cross-checks (whole `packages/` tree, excluding `node_modules`, `dist`, `generated`, tests): 48 `MJGlobal…GetEventListener`, 194 `setInterval`, 356 `.addEventListener(`, 496 private `Map` fields, 165 `extends BaseSingleton`, 363 `package.json`.
+
+| Status | Critical | High | Medium | Low |
+|---|---:|---:|---:|---:|
+| **New in Round 22** | 1 | 2 | 4 | 7 |
+| **Fixed in this round's PR** | 1 | 2 | 2 | 0 |
+
+### Fixed in this round's PR
+| # | Package | Finding | Fix | Tests |
+|---|---|---|---|---|
+| 1 | `@memberjunction/ai-core-plus` | **Critical.** `AgentUserPolicyEngine.policyCache` / `nonePolicyCacheExpiry` (singleton) are keyed by `p:<provider-object-id>::agent::user`. MJServer builds a fresh provider per request (`context.ts createLazyOrEagerPerRequestProviders`) and every caller passes it (`base-agent.ts`, `AgentWakeTriggerService.ts` ×4, the CoreActions AI actions, `agent-data-policy-guard.ts` ×3), so each lookup added a key that was never read again. Expired "none" slots were only removed when re-read; found slots held a `BaseEntity` that pinned the request's provider. | Both maps merged into one `MJLruCache<string, PolicyCacheEntry>` (`MAX_POLICY_CACHE_ENTRIES = 2000`, 15 min TTL; the 30 s "none" expiry is kept per entry). A pair → keys index, maintained from `onEvict`, keeps `ClearCache(agent, user)` working across providers without scanning. New `CachedPolicySlotCount` getter. | 2 new tests in `AgentUserPolicyEngine.test.ts`: 2,100 fresh-provider lookups stay ≤ 2,000 and a pair clear empties them all; a pair clear spares other pairs. |
+| 2 | `@memberjunction/ai-prompts` | **High.** `BaseModelRunner._trackedPromptRunsById` held every prompt-run entity until `FlushPendingSaves()`, which only `BaseAgent` calls. Long-lived runners (the shared `RealtimeTurnModerator` runner, `LLMDecision`, `LLMReranker`, `MJComputerUseEngine`) grew it by one entity per call. | `trackPromptRun` drops entries whose INSERT has landed (`IsSaved`) before adding, and caps the table at 256 for INSERTs that never land. Parent/child INSERT chaining is unchanged (a saved parent needs no chaining). New `TrackedPromptRunCount` getter. | 2 new tests in `BaseModelRunner.runRecord.test.ts` (saved runs pruned; cap holds when INSERTs never settle); existing chaining test still passes. |
+| 3 | `@memberjunction/server` | **Medium.** `ArtifactCollaborationServer` `CompactedVectorKeysByArtifact` gained one entry per artifact ever compacted; the global cap trimmed only `CompactedStateVectors`. | The index is kept in recency order and capped at `MAX_TRACKED_COMPACTED_ARTIFACTS = 256` (half the vector cap: each artifact holds ≥ 2 vector keys); evicting an artifact also drops its vectors. | New test: 1,000 compactions leave ≤ 256 index entries and ≤ 512 vectors, newest still resolvable. |
+| 4 | `@memberjunction/ng-conversations` | **High + Medium.** `TasksFullViewComponent.LoadTasks()` ran `updateLivePollingState()` from its `finally` with no destroyed check, so a load in flight at destroy started a 4 s `setInterval(LoadTasks)` that was never cleared (reloading up to 1,000 `MJ: Tasks` rows per tick and pinning the view). `MessageItemComponent.loadTasks()` restarted its 1 s elapsed-time interval after its `await` the same way. | `updateLivePollingState` and `LoadTasks` return early once `isDestroyed`; `MessageItemComponent` gains `_isDestroyed` (set in `ngOnDestroy`), checked after the `await`, before the queued reload, and in `startElapsedTimeUpdater`. | New `task-polling-teardown.test.ts` (5 tests). |
+
+### New findings, deferred
+- **Medium — `AI/AgentHarness/src/adapters/BaseCloudHarnessAdapter.ts:150-179,505,592`:** `CloudDetachedSessionRegistry` keeps a detached cloud session plus its emitted-event-key set until a later turn *in the same process* sees it terminal. *(Fixed in Round 23 above.)*
+- **Medium — `Angular/Generic/whiteboard/src/lib/whiteboard-board.component.ts:1248`:** `URL.createObjectURL(file)` for pasted images is never revoked, and the `blob:` URL is saved into board state. That is also a correctness bug: the image breaks for other viewers and after reload. → store a data URL or upload to storage. Needs an owner decision on storage.
+- **Low:** `tab-container.component.ts:3058-3080` context-menu document listeners survive a menu-item close; `document-collaboration.service.ts:2298` `frozenSnapshotVerificationCache` has no cap; `SpreadsheetEngine.viewerCache` (`:2013`, browser-only today) has no sweep; `SQLServerDataProvider/src/config.ts:40` `RefreshIfNeeded` interval is never stored, unref'd or cleared; `WorkerThreadHost.ts:113-121` (LocalEmbeddings + CoreActions twin): a throwing `postMessage` leaves its pending entry and a ref'd worker; `shadow-scoring.ts:562` `artifactCache` holds artifacts for retired models; `DockerSandboxProvider.ts:228` `runDockerCommand` has no timeout.
+
+### Carried over, still open
+Round 21 deferred: `realtime-recording-capture.ts` in-memory PCM (needs a design decision), `ConversationEngine._detailCache` *(fixed in Round 23 above)*, `ml-sidecar.ts` buffers, `communication-oauth-service.ts:310` session sweep, RenderWorker byte cap, and the Round 21 Lows. Re-confirmed by subagent A: `ai-test-harness.component.ts` typing interval (now `:2522`), `application-manager.ts:152,177`, `shell.component.ts:888`. Re-confirmed by subagent C: `BaseEntity._subtypeLookupCache` (Round 19 #6, now provider → user → key), `TemplateEngine._referencedVariablesCache`, `ScheduledJobEngine.ts:565` shutdown race timer, `UserCache` staleness interval not `IShutdownable`.
+
+### Resolved since last run (verified by reading the code)
+- Round 20 "ResolverBase entity listener pins the first caller's pubSub": now one shared MJGlobal subscription with a 24 h session TTL and 2,048 sessions per entity (`MJServer/src/generic/ResolverBase.ts:119-170,1914-2003`). Note, not a leak: the cap evicts by insertion order, not recency.
 
 ---
 

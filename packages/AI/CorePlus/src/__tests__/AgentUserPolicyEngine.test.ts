@@ -709,6 +709,43 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
         expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-saved-fresh');
     });
 
+    it('stays bounded when every lookup arrives on a fresh per-request provider object', async () => {
+        const runViewFn = vi.fn().mockResolvedValue({
+            Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1,
+        });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: runViewFn,
+        } as Partial<RunView> as RunView);
+
+        // MJServer builds one provider per request; each one is a new cache scope.
+        for (let i = 0; i < 2_100; i++) {
+            const perRequestProvider = {} as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider;
+            await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+                provider: perRequestProvider,
+            });
+        }
+        expect(engine.CachedPolicySlotCount).toBeLessThanOrEqual(2_000);
+
+        // Clearing the pair still reaches every provider-scoped slot that survived eviction.
+        engine.ClearCache('agent-cos', 'user-alice-1');
+        expect(engine.CachedPolicySlotCount).toBe(0);
+    });
+
+    it('clears one (agent, user) pair across providers without touching other pairs', () => {
+        const providerA = {} as Partial<IMetadataProvider> as IMetadataProvider;
+        const providerB = {} as Partial<IMetadataProvider> as IMetadataProvider;
+        engine.SetCachedPolicy(buildPolicy({ ID: 'alice-a' }), providerA);
+        engine.SetCachedPolicy(buildPolicy({ ID: 'alice-b' }), providerB);
+        engine.SetCachedPolicy(buildPolicy({ ID: 'bob-a', UserID: 'user-bob-2' }), providerA);
+
+        engine.ClearCache('agent-cos', 'user-alice-1');
+
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerA)).toBeNull();
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)).toBeNull();
+        expect(engine.GetCachedPolicy('agent-cos', 'user-bob-2', providerA)?.ID).toBe('bob-a');
+        expect(engine.CachedPolicySlotCount).toBe(1);
+    });
+
     it('never leaks a cached "none" across providers and expires negative cache entries after TTL', async () => {
         const policyOnProviderB = buildPolicy({ ID: 'pol-b-only', DefaultDataAccessMode: 'ReadOnly' });
         const runViewFn = vi

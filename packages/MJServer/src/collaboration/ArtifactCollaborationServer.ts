@@ -599,6 +599,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512;
     private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8;
+    /**
+     * Cap on artifacts in `CompactedVectorKeysByArtifact` (shared collaboration state). Each artifact
+     * contributes at least two keys to `CompactedStateVectors`, so more than half the vector cap can
+     * never all be live.
+     */
+    private static readonly MAX_TRACKED_COMPACTED_ARTIFACTS = ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS / 2;
     private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144;
     private static readonly SYNC_WAIT_TIMEOUT_MS = 1500;
     private static readonly MAX_CONTROLLED_CLIENT_IDS_PER_CONN = 32;
@@ -3194,7 +3200,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             map.delete(evicted.verKey);
             map.delete(evicted.artKey);
         }
+        // Re-insert so the artifact becomes most recent, then evict the least recent artifacts (and
+        // their vectors) past the cap. Without this the index kept one entry per artifact ever
+        // compacted for the life of the process, even after the global cap dropped its vectors.
+        perArtifactMap.delete(perArtifactKey);
         perArtifactMap.set(perArtifactKey, filteredPerArtifact);
+        while (perArtifactMap.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_ARTIFACTS) {
+            const oldestArtifactKey = perArtifactMap.keys().next().value;
+            if (oldestArtifactKey === undefined) {
+                break;
+            }
+            for (const evicted of perArtifactMap.get(oldestArtifactKey) ?? []) {
+                map.delete(evicted.verKey);
+                map.delete(evicted.artKey);
+            }
+            perArtifactMap.delete(oldestArtifactKey);
+        }
 
         while (map.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS) {
             const oldestKey = map.keys().next().value;
