@@ -176,7 +176,6 @@ describe('integration.yml turbo build seed', () => {
 const OTHER_SEEDED_WORKFLOWS = [
     { file: 'pg-migrations.yml', expectedJobs: ['pg-parity', 'managed-host'] },
     { file: 'claude-pack.yml', expectedJobs: ['e2e-bundle-smoke'] },
-    { file: 'ci-standards.yml', expectedJobs: ['standards'] },
     {
         file: 'eds-integration.yml',
         expectedJobs: [

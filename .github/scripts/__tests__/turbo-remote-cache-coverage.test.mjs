@@ -33,8 +33,27 @@ const REPO_ROOT = resolve(HERE, '..', '..', '..');
 /** The four vars a turbo-invoking job needs. TURBO_API is intentionally an unset variable. */
 const REQUIRED_VARS = ['TURBO_TOKEN', 'TURBO_TEAM', 'TURBO_API', 'TURBO_REMOTE_CACHE_SIGNATURE_KEY'];
 
+/** True when a workflow's top-level `on:` trigger includes `pull_request`. */
+function hasPullRequestTrigger(text) {
+    const lines = text.split('\n');
+    let inOn = false;
+    for (const line of lines) {
+        if (/^on:\s*(?:#.*)?$/.test(line)) {
+            inOn = true;
+            continue;
+        }
+        const inlineOn = /^on:\s*\[([^\]]+)\]/.exec(line);
+        if (inlineOn) return inlineOn[1].split(',').some((t) => t.trim() === 'pull_request');
+        if (/^on:\s*pull_request\b/.test(line)) return true;
+        if (!inOn) continue;
+        if (/^[A-Za-z]/.test(line)) break;
+        if (/^ {2}pull_request\s*:/.test(line)) return true;
+    }
+    return false;
+}
+
 /**
- * Parse one workflow into `{ name, env, runScript }` per job.
+ * Parse one workflow into `{ name, env, envValues, runScript }` per job.
  *
  * Indentation in these files is uniform: jobs at 2 spaces, job keys at 4, job-level `env:`
  * entries at 6. Step-level `env:` sits at 8 and `services:` blocks deeper still, so anchoring
@@ -61,7 +80,7 @@ function parseJobs(text) {
         const jobMatch = /^ {2}([A-Za-z0-9_-]+):\s*(?:#.*)?$/.exec(line);
         if (jobMatch) {
             if (job) jobs.push(job);
-            job = { name: jobMatch[1], env: new Set(), runScript: [] };
+            job = { name: jobMatch[1], env: new Set(), envValues: new Map(), runScript: [] };
             inJobEnv = false;
             runIndent = null;
             continue;
@@ -76,9 +95,10 @@ function parseJobs(text) {
             continue;
         }
         if (inJobEnv) {
-            const entry = /^ {6}([A-Za-z_][A-Za-z0-9_]*):/.exec(line);
+            const entry = /^ {6}([A-Za-z_][A-Za-z0-9_]*):(.*)$/.exec(line);
             if (entry) {
                 job.env.add(entry[1]);
+                job.envValues.set(entry[1], entry[2].trim());
                 continue;
             }
             // A comment inside the block, or a blank line, does not end it.
@@ -110,12 +130,13 @@ function parseJobs(text) {
     return jobs;
 }
 
-/** Every job in every workflow, tagged with its file. */
+/** Every job in every workflow, tagged with its file and whether the workflow handles pull_request. */
 function allJobs() {
     const out = [];
     for (const file of readdirSync(WORKFLOW_DIR).filter((f) => f.endsWith('.yml'))) {
         const text = readFileSync(resolve(WORKFLOW_DIR, file), 'utf8');
-        for (const job of parseJobs(text)) out.push({ file, ...job });
+        const triggersOnPR = hasPullRequestTrigger(text);
+        for (const job of parseJobs(text)) out.push({ file, triggersOnPR, ...job });
     }
     return out;
 }
@@ -151,6 +172,27 @@ describe('turbo remote cache — env coverage', () => {
         const withToken = JOBS.filter((j) => j.env.has('TURBO_TOKEN')).map((j) => `${j.file} → ${j.name}`);
         const withKey = JOBS.filter((j) => j.env.has('TURBO_REMOTE_CACHE_SIGNATURE_KEY')).map((j) => `${j.file} → ${j.name}`);
         expect(withKey.sort()).toEqual(withToken.sort());
+    });
+
+    // PR #6817 cache-poisoning boundary: no pull_request-triggered job may ever receive the
+    // remote-cache write token or HMAC signing key. Without this gate, unreviewed PR code could
+    // sign and upload poisoned build artifacts that push/release runs later replay.
+    it('every pull_request-triggered workflow gates TURBO_TOKEN and TURBO_REMOTE_CACHE_SIGNATURE_KEY off pull_request', () => {
+        const prSecretJobs = JOBS.filter(
+            (j) => j.triggersOnPR && (j.env.has('TURBO_TOKEN') || j.env.has('TURBO_REMOTE_CACHE_SIGNATURE_KEY')),
+        );
+        expect(prSecretJobs.length).toBeGreaterThan(5);
+
+        const leaks = [];
+        for (const j of prSecretJobs) {
+            for (const key of ['TURBO_TOKEN', 'TURBO_REMOTE_CACHE_SIGNATURE_KEY']) {
+                const value = j.envValues.get(key) ?? '';
+                if (!/github\.event_name\s*!=\s*'pull_request'/.test(value)) {
+                    leaks.push(`${j.file} → ${j.name} (${key}: ${value})`);
+                }
+            }
+        }
+        expect(leaks, 'PR-triggered jobs must gate Turbo write credentials off pull_request').toEqual([]);
     });
 
     // Secrets are not inherited by reusable workflows. `vars` are — so a caller that forgets

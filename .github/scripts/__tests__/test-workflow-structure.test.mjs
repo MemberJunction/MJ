@@ -303,6 +303,12 @@ describe('test.yml — failed-job re-run cache fallback', () => {
             expect(body).toMatch(/turbo-v1-\$\{\{\s*runner\.os\s*\}\}-/);
         }
     });
+
+    it('cleanup always deletes the run-scoped turbo cache so red PR runs never orphan ~3 GB entries', () => {
+        const delStep = readJobSteps('cleanup').find((s) => s.name === 'Delete the run-scoped turbo cache');
+        expect(delStep).toBeDefined();
+        expect(delStep.body.join('\n')).not.toMatch(/^\s*if:/m);
+    });
 });
 
 describe('integration.yml — CodeGen idempotency skips duplicate warm-twice', () => {

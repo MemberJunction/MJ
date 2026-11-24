@@ -20,10 +20,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  # Pin turbo's local cache directory so the seed restore and turbo agree on its location.
-  TURBO_CACHE_DIR: .turbo/cache
-
 jobs:
   changes:
     name: Detect standards-relevant changes
@@ -79,16 +75,6 @@ jobs:
       - uses: ./.github/actions/mj-setup
         with:
           create-explorer-env: 'false'
-
-      # Restore next's turbo build seed on PR runs (PR jobs receive no remote-cache credentials).
-      - name: Restore the turbo build seed from next
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@v6
-        with:
-          path: .turbo/cache
-          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            turbo-v1-${{ runner.os }}-
 
       # @memberjunction/standards is a workspace package here, so build it before running it.
       # Consumers outside this repo just `pnpm install --frozen-lockfile` and get it from the registry.

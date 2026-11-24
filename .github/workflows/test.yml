@@ -794,10 +794,12 @@ jobs:
         run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --turbo-args="$TURBO_FILTER"
 
       # The handoff to the shards. Keyed to this RUN (not this ref or sha) so it can never be
-      # read by another run, and deleted by the cleanup job at the end — the repo shares one
+      # read by another run, and always deleted by the cleanup job at the end — the repo shares one
       # LRU-evicted Actions cache budget, and a ~3 GB entry per PR would evict the `next` seed that
-      # every PR's build restores from. run_attempt is in the key so a re-run rebuilds rather
-      # than reading a half-written entry from the attempt that failed.
+      # every PR's build restores from. run_attempt is included so a full re-run gets a fresh key;
+      # on "Re-run failed jobs" (where build does not re-run), shards fall back via restore-keys to
+      # `turbo-run-<run_id>-` if still present and otherwise to `turbo-v1-<os>-` (next's build seed)
+      # so they only rebuild the PR's changed subtree without leaving orphaned ~3 GB entries behind.
       - name: Save turbo cache for the test shards
         uses: actions/cache/save@v6
         with:
@@ -1212,12 +1214,7 @@ jobs:
     permissions:
       actions: write
     steps:
-      # Keep the run-scoped handoff cache when test or esm-guard failed so "Re-run failed jobs"
-      # can restore `turbo-run-${run_id}-1` instead of rebuilding from scratch. When the run
-      # succeeds (or is cancelled) delete it immediately; failed entries age out via LRU or are
-      # deleted when the re-run succeeds.
       - name: Delete the run-scoped turbo cache
-        if: needs.test.result != 'failure' && needs.esm-guard.result != 'failure'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}

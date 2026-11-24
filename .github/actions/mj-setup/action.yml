@@ -65,8 +65,10 @@ runs:
     - name: Install dependencies
       if: inputs.install == 'true'
       shell: bash
+      env:
+        IGNORE_SCRIPTS: ${{ inputs.ignore-scripts }}
       run: |
-        if [ "${{ inputs.ignore-scripts }}" = "true" ]; then
+        if [ "$IGNORE_SCRIPTS" = "true" ]; then
           pnpm install --frozen-lockfile --ignore-scripts
         else
           pnpm install --frozen-lockfile
