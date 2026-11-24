@@ -5,6 +5,10 @@
   ],
   "tasks": {
     "test": {
+      "dependsOn": [
+        "$TURBO_EXTENDS$",
+        "@memberjunction/ai-agents#build"
+      ],
       "inputs": [
         "$TURBO_EXTENDS$",
         "$TURBO_ROOT$/metadata/**"

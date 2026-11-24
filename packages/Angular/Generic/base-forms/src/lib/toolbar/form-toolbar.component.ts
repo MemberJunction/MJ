@@ -239,7 +239,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /**
    * Callback supplied by the form host when the entity has both a custom view
-   * and a CodeGen standard form. Shown inside the View bottom sheet on phones.
+   * and a CodeGen standard form. Shown inside the More menu across all viewports.
    */
   @Input() FormModeSwitch: FormModeSwitch | null = null;
 
@@ -1369,7 +1369,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   }
 
   public get ShowMoreMenu(): boolean {
-    return this.MoreMenuItems.length > 0 || !!this.DeleteMenuItem;
+    return this.MoreMenuItems.length > 0 || !!this.FormModeSwitch || !!this.DeleteMenuItem;
   }
 
   /** Whether the action is pinned for this user and offered on this form (shown as a button, or waiting past the cap). */
@@ -1509,15 +1509,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       this.HasCustomSectionOrder ||
       !!this.Config.ShowWidthToggle
     );
-    return sections || this.ShowVariantPickerButton || (this.IsAutoHideViewport && !!this.FormModeSwitch);
+    return sections || this.ShowVariantPickerButton;
   }
 
-  /** Switch between the entity's custom view and its CodeGen standard form from the phone View sheet. */
+  /** Switch between the entity's custom view and its CodeGen standard form from the More menu. */
   public OnFormModeSwitchClick(): void {
     if (!this.FormModeSwitch) return;
     const next = this.FormModeSwitch.Mode === 'standard' ? 'default' : 'standard';
     if (this.FormModeSwitch.Switch(next)) {
-      this.OnMenuSheetVisibleChange('view', false);
+      this.OnMenuSheetVisibleChange('more', false);
     }
   }
 

@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MarkdownComponent, type ImageClickedEventArgs } from './markdown.component';
 import { MarkdownModule } from '../markdown.module';
+import { UpgradeInlineMediaElements } from '../extensions/inline-media.extension';
 import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
 /**
@@ -609,6 +610,199 @@ describe('MarkdownComponent (DOM)', () => {
     });
   });
 
+  describe('EnableInlineMedia', () => {
+    it('upgrades /media/:fileId?kind=video markdown images into <video> with <track> and lazy transcript drawer when enabled', () => {
+      const md =
+        'Watch the walkthrough:\n\n' +
+        '![Renewal Demo](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2#t=42)';
+      const c = container(render({ data: md, EnableInlineMedia: true }));
+
+      expect(c.querySelector('img')).toBeNull();
+      const video = c.querySelector<HTMLVideoElement>('.mj-markdown-video > video.mj-markdown-video__player');
+      expect(video).not.toBeNull();
+      expect(video?.getAttribute('title')).toBe('Renewal Demo');
+      expect(video?.hasAttribute('controls')).toBe(true);
+      expect(video?.getAttribute('preload')).toBe('metadata');
+      expect(video?.getAttribute('crossorigin')).toBe('anonymous');
+
+      const track = video?.querySelector<HTMLTrackElement>('track[kind="captions"]');
+      expect(track).not.toBeNull();
+      expect(track?.getAttribute('src')).toBe('/media/66666666-7777-8888-9999-000000000000?token=tok2');
+
+      const details = c.querySelector<HTMLDetailsElement>('details.mj-markdown-video__transcript');
+      expect(details).not.toBeNull();
+      expect(details?.open).toBe(false);
+
+      // Simulate loadedmetadata to verify #t=42 initial seek fallback
+      video!.dispatchEvent(new Event('loadedmetadata'));
+      expect(video?.currentTime).toBe(42);
+    });
+
+    it('defaults EnableInlineMedia to false so unmodified hosts keep <img> rendering', () => {
+      const md =
+        '![Default Video](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video)';
+      const c = container(render({ data: md }));
+      expect(c.querySelector('video')).toBeNull();
+      expect(c.querySelectorAll('img')).toHaveLength(1);
+    });
+
+    it('preserves non-root MJAPI_BASE_PATH prefixes only for relative or explicitly allowlisted origins', () => {
+      const md =
+        '![Subpath Clip](https://api.example.test/api/media/11111111-2222-3333-4444-555555555555/demo.mp4?token=tok1&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2) ' +
+        '![Untrusted Clip](https://evil.example.test/api/media/11111111-2222-3333-4444-555555555555/demo.mp4?token=tok1)';
+      const c = container(render({
+        data: md,
+        EnableInlineMedia: true,
+        InlineMediaAllowedOrigins: ['https://api.example.test'],
+      }));
+
+      const videos = c.querySelectorAll('video');
+      expect(videos).toHaveLength(1);
+      expect(c.querySelectorAll('img')).toHaveLength(1);
+      const track = videos[0]?.querySelector<HTMLTrackElement>('track[kind="captions"]');
+      expect(track).not.toBeNull();
+      expect(track?.getAttribute('src')).toBe(
+        'https://api.example.test/api/media/66666666-7777-8888-9999-000000000000?token=tok2',
+      );
+    });
+
+    it('loads cues lazily only when <details> opens, seeks on cue click, and highlights active cue on timeupdate', async () => {
+      const vttBody = [
+        'WEBVTT',
+        '',
+        '00:00:05.000 --> 00:00:12.000',
+        '<v.loud Jane Doe>Welcome to the member portal.',
+        '',
+        '00:00:12.000 --> 00:00:20.000',
+        'Select Invoices from the left navigation.',
+      ].join('\n');
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(vttBody, { status: 200, headers: { 'Content-Type': 'text/vtt' } }),
+      );
+
+      try {
+        const md =
+          '![Portal Clip](/api/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2)';
+        const c = container(render({ data: md, EnableInlineMedia: true }));
+
+        // Closed drawer must NOT fire fetch on initial render
+        expect(fetchSpy).not.toHaveBeenCalled();
+
+        const details = c.querySelector<HTMLDetailsElement>('details.mj-markdown-video__transcript')!;
+        const video = c.querySelector<HTMLVideoElement>('video.mj-markdown-video__player')!;
+        video.play = vi.fn().mockResolvedValue(undefined);
+
+        details.open = true;
+        details.dispatchEvent(new Event('toggle'));
+
+        await vi.waitFor(() => {
+          expect(details.querySelectorAll('button.mj-markdown-video__cue')).toHaveLength(2);
+        });
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(fetchSpy).toHaveBeenCalledWith('/api/media/66666666-7777-8888-9999-000000000000?token=tok2');
+
+        const cueButtons = Array.from(details.querySelectorAll<HTMLButtonElement>('button.mj-markdown-video__cue'));
+        expect(cueButtons[0].querySelector('.mj-markdown-video__cue-time')?.textContent).toBe('00:05');
+        expect(cueButtons[0].querySelector('.mj-markdown-video__cue-text')?.textContent).toBe(
+          'Jane Doe: Welcome to the member portal.',
+        );
+        expect(cueButtons[1].querySelector('.mj-markdown-video__cue-time')?.textContent).toBe('00:12');
+
+        // Click second cue -> seeks to 12s
+        cueButtons[1].click();
+        expect(video.currentTime).toBe(12);
+
+        // Emit timeupdate -> highlights active cue
+        video.currentTime = 7;
+        video.dispatchEvent(new Event('timeupdate'));
+        expect(cueButtons[0].classList.contains('mj-markdown-video__cue--active')).toBe(true);
+        expect(cueButtons[1].classList.contains('mj-markdown-video__cue--active')).toBe(false);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('leaves regular/linked/tokenless images untouched, rejects upload-stage captions, and omits crossorigin without captions', async () => {
+      const md =
+        '![Diagram](/media/11111111-2222-3333-4444-555555555555?token=tok1) ' +
+        '[![Linked](/media/22222222-2222-3333-4444-555555555555?token=tok1&kind=video)](https://example.test/watch) ' +
+        '![Tokenless](/media/44444444-2222-3333-4444-555555555555?kind=video) ' +
+        '![UploadStage](/media/55555555-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=upload-stage&vttToken=tok2) ' +
+        '![BadVtt](/media/33333333-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=../evil&vttToken=tok2)';
+      const f = render({ data: md, EnableInlineMedia: true });
+      const c = container(f);
+
+      // Diagram + Linked + Tokenless stay <img>; UploadStage + BadVtt upgrade to <video> WITHOUT <track>, <details>, or crossorigin
+      expect(c.querySelectorAll('img')).toHaveLength(3);
+      const videos = Array.from(c.querySelectorAll<HTMLVideoElement>('video.mj-markdown-video__player'));
+      expect(videos).toHaveLength(2);
+      for (const video of videos) {
+        expect(video.querySelector('track')).toBeNull();
+        expect(video.hasAttribute('crossorigin')).toBe(false);
+      }
+      expect(c.querySelector('details.mj-markdown-video__transcript')).toBeNull();
+
+      // Toggling EnableInlineMedia=false restores <img> rendering for all 5 items
+      f.componentRef.setInput('EnableInlineMedia', false);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(c.querySelector('video')).toBeNull();
+      expect(c.querySelectorAll('img')).toHaveLength(5);
+    });
+
+    it('rejects backslash origin-bypass paths and invalid file IDs, and renders XSS cue text literally', async () => {
+      // Directly exercise UpgradeInlineMediaElements with a raw backslash protocol-relative bypass
+      // that Markdown/DOMPurify might strip before UpgradeInlineMediaElements runs.
+      const host = document.createElement('div');
+      const bypassImg = document.createElement('img');
+      bypassImg.setAttribute('src', '/\\evil.example/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video');
+      host.appendChild(bypassImg);
+      UpgradeInlineMediaElements(host);
+      expect(host.querySelectorAll('video')).toHaveLength(0);
+      expect(host.querySelectorAll('img')).toHaveLength(1);
+
+      const md =
+        '![InvalidFileId](/media/bad.file/clip.mp4?token=tok1&kind=video) ' +
+        '![ValidClip](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2)';
+      const xssVtt = [
+        'WEBVTT',
+        '',
+        '00:00:01.000 --> 00:00:03.000',
+        'Before <img src=x onerror=alert(1)> and &lt;img onerror=alert(2)&gt;',
+      ].join('\n');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(xssVtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }),
+      );
+
+      try {
+        const c = container(render({ data: md, EnableInlineMedia: true }));
+
+        expect(c.querySelectorAll('img')).toHaveLength(1);
+        const video = c.querySelector<HTMLVideoElement>('video.mj-markdown-video__player')!;
+        expect(video).not.toBeNull();
+        expect(video.getAttribute('src')).toBe(
+          `${window.location.origin}/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2`,
+        );
+
+        const details = c.querySelector<HTMLDetailsElement>('details.mj-markdown-video__transcript')!;
+        details.open = true;
+        details.dispatchEvent(new Event('toggle'));
+
+        await vi.waitFor(() => {
+          expect(details.querySelectorAll('button.mj-markdown-video__cue')).toHaveLength(1);
+        });
+        expect(details.querySelectorAll('img')).toHaveLength(0);
+        expect(details.querySelector('.mj-markdown-video__cue-text')?.textContent).toBe(
+          'Before and <img onerror=alert(2)>',
+        );
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
   describe('incremental block-tail streaming rendering', () => {
     it('monotonic streaming append reuses cached prefix DOM nodes without tearing down completed elements', () => {
       const f = render({ data: '# Title\n\nParagraph 1' });
@@ -785,5 +979,6 @@ describe('MarkdownComponent (DOM)', () => {
     });
   });
 });
+
 
 

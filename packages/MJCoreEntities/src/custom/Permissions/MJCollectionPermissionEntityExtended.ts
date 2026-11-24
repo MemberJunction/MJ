@@ -9,6 +9,7 @@ import {
     AssertCallerMaySaveShare,
     BuildActionsSummary,
     CheckShareManagePermission,
+    DeriveSharePermissionLevel,
     DispatchShareNotificationAfterSave,
     FailShareSave,
     GetStoredShareFieldString,
@@ -70,18 +71,33 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
 
         const saved = await super.Save(options);
         if (saved) {
-            await DispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, (provider, grantorId) => ({
-                Provider: provider,
-                ContextUser: this.ContextCurrentUser,
-                GrantorUserID: grantorId,
-                GranteeUserID: this.UserID,
-                ResourceTypeLabel: 'Collection',
-                // No ResourceTypeName — Collections aren't in the Resource Type catalog
-                ResourceName: this.Collection ?? null,
-                ResourceRecordID: this.CollectionID,
-                ActionsSummary: this.actionsSummary(),
-                ExtraConfiguration: { PermissionID: this.ID },
-            }));
+            await DispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, async (provider, grantorId) => {
+                const collectionName = this.Collection?.trim() ? this.Collection : await this.fetchCollectionName(provider);
+                const permissionLevel = DeriveSharePermissionLevel({
+                    canEdit: this.CanEdit,
+                    canDelete: this.CanDelete,
+                    canShare: this.CanShare,
+                });
+                return {
+                    Provider: provider,
+                    ContextUser: this.ContextCurrentUser,
+                    GrantorUserID: grantorId,
+                    GranteeUserID: this.UserID,
+                    ResourceTypeLabel: 'Collection',
+                    // No ResourceTypeName — Collections aren't in the Resource Type catalog
+                    ResourceName: collectionName,
+                    ResourceRecordID: this.CollectionID,
+                    PermissionLevel: permissionLevel,
+                    ActionsSummary: this.actionsSummary(),
+                    ExtraConfiguration: {
+                        type: 'collection',
+                        collectionId: this.CollectionID,
+                        ResourceRecordID: this.CollectionID,
+                        PermissionID: this.ID,
+                        PermissionLevel: permissionLevel,
+                    },
+                };
+            });
             await this.notifyCollectionArtifactPermissionsChanged(this.CollectionID, storedTargetUserId ?? this.UserID);
         }
         return saved;
@@ -242,6 +258,24 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
         } catch {
             // Best-effort live room notification; never fail the permission save/delete itself.
         }
+    }
+
+    private async fetchCollectionName(provider: IMetadataProvider): Promise<string | null> {
+        if (!IsValidUUID(this.CollectionID)) {
+            return null;
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const queryParams: RunViewParams = {
+            EntityName: 'MJ: Collections',
+            ExtraFilter: `ID='${EscapeSQLString(this.CollectionID)}'`,
+            Fields: ['ID', 'Name'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+        };
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(queryParams);
+        const result = await rv.RunView<{ ID: string; Name?: string | null }>(queryParams, this.ContextCurrentUser);
+        return result.Success ? result.Results?.[0]?.Name ?? null : null;
     }
 
     private actionsSummary(): string {

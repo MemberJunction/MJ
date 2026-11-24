@@ -145,6 +145,7 @@
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "check:standards": "node packages/MJCLI/bin/run.js standards check",
     "check:guards": "./.github/scripts/check-guards.sh",
+    "check:limits-literals": "node .github/scripts/sweep-limits-literals.mjs --check-standards",
     "check:naming": "node packages/MJCLI/bin/run.js standards check --check naming-conventions",
     "check:changeset": "node .github/scripts/check-changeset-bump.mjs",
     "check:changeset:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-changeset-bump",

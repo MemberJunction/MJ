@@ -456,19 +456,19 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             }));
             expect(simplifiedModels).toEqual([
                 {
-                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 3.8 Flash',
+                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen',
                     VendorID: '@lookup:MJ: AI Vendors.Name=Google',
                     ConfigurationID: null,
                     Priority: 3,
-                    EffortLevel: null,
+                    EffortLevel: 20,
                     Status: 'Active',
                 },
                 {
-                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 3.8 Flash',
+                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen',
                     VendorID: '@lookup:MJ: AI Vendors.Name=Vertex AI',
                     ConfigurationID: null,
                     Priority: 2,
-                    EffortLevel: null,
+                    EffortLevel: 20,
                     Status: 'Active',
                 },
                 {
@@ -480,19 +480,19 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
                     Status: 'Active',
                 },
                 {
-                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 3.8 Flash',
+                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen',
                     VendorID: '@lookup:MJ: AI Vendors.Name=Google',
                     ConfigurationID: '@lookup:MJ: AI Configurations.Name=Video Studio Draft',
                     Priority: 2,
-                    EffortLevel: 25,
+                    EffortLevel: 20,
                     Status: 'Active',
                 },
                 {
-                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 3.8 Flash',
+                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen',
                     VendorID: '@lookup:MJ: AI Vendors.Name=Vertex AI',
                     ConfigurationID: '@lookup:MJ: AI Configurations.Name=Video Studio Draft',
                     Priority: 1,
-                    EffortLevel: 25,
+                    EffortLevel: 20,
                     Status: 'Active',
                 },
                 {
@@ -504,7 +504,7 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
                     Status: 'Active',
                 },
                 {
-                    ModelID: '@lookup:MJ: AI Models.Name=Claude Fable 5.1',
+                    ModelID: '@lookup:MJ: AI Models.Name=Claude Fable 5.2',
                     VendorID: '@lookup:MJ: AI Vendors.Name=Anthropic',
                     ConfigurationID: '@lookup:MJ: AI Configurations.Name=Video Studio High',
                     Priority: 2,
@@ -512,7 +512,7 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
                     Status: 'Active',
                 },
                 {
-                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 3.1 Pro',
+                    ModelID: '@lookup:MJ: AI Models.Name=Gemini 4 Argon',
                     VendorID: '@lookup:MJ: AI Vendors.Name=Google',
                     ConfigurationID: '@lookup:MJ: AI Configurations.Name=Video Studio High',
                     Priority: 1,

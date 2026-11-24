@@ -22,26 +22,42 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 1
+            "Priority": 10
           },
           "primaryKey": {
             "ID": "9C27AB4A-821E-408F-AF62-A8408799AD2E"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9,
+            "Status": "Active"
           },
-          "sync": {
-            "lastModified": "2026-06-09T06:32:33.103Z",
-            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
+          "primaryKey": {
+            "ID": "5B6CC08C-FB9A-4720-AA07-0F5E0AB7E9B8"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Luna",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C33E333B-AFB7-48D2-A772-729CFE9F1E82"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "9890B578-65C5-468A-8C2C-0BEE839A4E0C"
-    },
-    "sync": {
-      "lastModified": "2026-06-09T06:32:33.063Z",
-      "checksum": "9559344821fb10f79780bd1c39b978ed59150bdaaef3a758162ad02122dba589"
     }
   }
 ]

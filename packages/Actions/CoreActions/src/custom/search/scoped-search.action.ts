@@ -2,15 +2,18 @@ import { ActionResultSimple, RunActionParams, ActionParam, ActionRunScopeIsBound
 import { BaseAction } from "@memberjunction/actions";
 import { IsPlainObject, NormalizeUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from "@memberjunction/core";
+import { AIEngine } from "@memberjunction/aiengine";
 import {
     SearchEngine,
     SearchAudience,
     SearchResult,
     SearchResultItem,
+    SearchResultScopeAttribution,
     SearchStreamEvent,
     GetSearchScopePermissionResolver,
     EffectivePermission
 } from "@memberjunction/search-engine";
+import { NormalizeScopedSearchQuery } from "./search-query.util";
 import {
     SearchEngineBase,
     MJAIAgentEntity,
@@ -39,6 +42,9 @@ interface FormattedSearchResult {
     RecordName?: string;
     MatchedAt: string;
     RawMetadata?: string;
+    OriginatingScopeID?: string;
+    OriginatingScopeName?: string;
+    OriginatingScopes?: SearchResultScopeAttribution[];
 }
 
 /**
@@ -217,8 +223,10 @@ export class ScopedSearchAction extends BaseAction {
             const exec = await this.searchUnderTenant(params, { query, agent, scope, scopeID, skillID: skill?.ID ?? undefined, tenant });
             if ('result' in exec) return exec.result;
 
-            // 5. Build the success response (no SourceCounts for a room: they are counted before the audience pass)
-            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents, params.Audience !== undefined);
+            // 5. Build the success response (no SourceCounts for a room or structural common-reach audience:
+            // they are counted before the audience pass)
+            const underAudience = params.Audience !== undefined || params.IsStructuralAudience === true;
+            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents, underAudience);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`ScopedSearchAction error: ${msg}`);
@@ -239,7 +247,8 @@ export class ScopedSearchAction extends BaseAction {
         | { ok: true; query: string; agent: MJAIAgentEntity }
         | { ok: false; result: ActionResultSimple }
     > {
-        const query = this.getStringParam(params, "query");
+        const rawQuery = this.getStringParam(params, "query");
+        const query = rawQuery ? NormalizeScopedSearchQuery(rawQuery) : undefined;
         if (!query) {
             return { ok: false, result: this.createErrorResult("Query parameter is required", "MISSING_QUERY") };
         }
@@ -572,6 +581,7 @@ export class ScopedSearchAction extends BaseAction {
             secondaryScopes: tenant.secondaryScopes,
             aiSkillID: skillID,
             audience: params.Audience,
+            underAudience: params.Audience !== undefined || params.IsStructuralAudience === true,
         });
     }
 
@@ -593,6 +603,7 @@ export class ScopedSearchAction extends BaseAction {
         secondaryScopes: Record<string, SecondaryScopeValue> | undefined;
         aiSkillID: string | undefined;
         audience: SearchAudience | undefined;
+        underAudience: boolean;
     }): Promise<{ ok: true; sr: SearchResult; progressEvents: Array<Record<string, unknown>> } | { ok: false; result: ActionResultSimple }> {
         // Construct a SearchContext only when the caller supplied at least
         // one runtime dimension. Leaving it undefined preserves the existing
@@ -653,7 +664,7 @@ export class ScopedSearchAction extends BaseAction {
             } else if (ev.phase === 'error') {
                 errorMsg = ev.error;
             }
-            const progress = this.progressEventFor(ev, input.audience !== undefined);
+            const progress = this.progressEventFor(ev, input.underAudience);
             if (progress) progressEvents.push(progress);
         }
         if (errorMsg || !finalEvent) {
@@ -938,9 +949,21 @@ export class ScopedSearchAction extends BaseAction {
         return undefined;
     }
 
-    /** Load the skill principal. Mirrors loadAgent; null when it cannot be loaded. */
+    /**
+     * Load the skill principal from AIEngine's shared metadata cache first, falling back to direct
+     * entity load; returns null when it cannot be loaded. Reading from AIEngine skips the per-user
+     * `entity.Load` read check on the skill definition row, which is safe because a skill principal
+     * only narrows search scope rather than widening data access.
+     */
     private async loadSkill(skillID: string, contextUser: UserInfo): Promise<MJAISkillEntity | null> {
         try {
+            try {
+                await AIEngine.Instance.Config(false, contextUser);
+                const cached = AIEngine.Instance.Skills?.find(s => UUIDsEqual(s.ID, skillID));
+                if (cached) return cached;
+            } catch {
+                // Fall back to direct entity load if AIEngine cache is unavailable
+            }
             const md = new Metadata(); // global-provider-ok: same rationale as loadAgent below
             const entity = await md.GetEntityObject<MJAISkillEntity>('MJ: AI Skills', contextUser);
             const loaded = await entity.Load(skillID);
@@ -953,8 +976,21 @@ export class ScopedSearchAction extends BaseAction {
         }
     }
 
+    /**
+     * Load the agent principal from AIEngine's shared metadata cache first, falling back to direct
+     * entity load; returns null when it cannot be loaded. Reading from AIEngine skips the per-user
+     * `entity.Load` read check on the agent definition row, which is safe because an agent principal
+     * only narrows search scope rather than widening data access.
+     */
     private async loadAgent(agentID: string, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
         try {
+            try {
+                await AIEngine.Instance.Config(false, contextUser);
+                const cached = AIEngine.Instance.Agents?.find(a => UUIDsEqual(a.ID, agentID));
+                if (cached) return cached;
+            } catch {
+                // Fall back to direct entity load if AIEngine cache is unavailable
+            }
             const md = new Metadata(); // global-provider-ok: BaseAction has no bound IMetadataProvider; contextUser is the per-request scope
             const entity = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
             const loaded = await entity.Load(agentID);
@@ -1103,7 +1139,10 @@ export class ScopedSearchAction extends BaseAction {
             MatchedAt: item.MatchedAt instanceof Date
                 ? item.MatchedAt.toISOString()
                 : String(item.MatchedAt),
-            RawMetadata: item.RawMetadata
+            RawMetadata: item.RawMetadata,
+            ...(item.OriginatingScopeID !== undefined ? { OriginatingScopeID: item.OriginatingScopeID } : {}),
+            ...(item.OriginatingScopeName !== undefined ? { OriginatingScopeName: item.OriginatingScopeName } : {}),
+            ...(item.OriginatingScopes !== undefined ? { OriginatingScopes: item.OriginatingScopes } : {}),
         }));
     }
 

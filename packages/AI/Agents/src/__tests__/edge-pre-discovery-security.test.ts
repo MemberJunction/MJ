@@ -292,6 +292,8 @@ class SecurityDiscoveryHarness {
             }
             throw new Error(`Unexpected entity ${entityName}`);
         },
+        RunView: async () => ({ Success: true, Results: [] }),
+        RunViews: async () => [],
     };
 }
 

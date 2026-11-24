@@ -36,7 +36,27 @@
       "Severity": "error",
       "Roots": [
         "metadata"
-      ]
+      ],
+      "Options": {
+        "AllowedAllSkillsAgents": [
+          "Sage",
+          "Research Agent",
+          "Knowledge Agent",
+          "Codesmith Agent",
+          "Marketing Agent"
+        ]
+      }
+    },
+    "limits-literals": {
+      "Severity": "error",
+      "Roots": [
+        "packages"
+      ],
+      "Options": {
+        "AllowedFiles": [
+          "packages/MJCore/src/generic/limitsConfig.ts"
+        ]
+      }
     },
     "migration-existence-guards": {
       "Severity": "error",

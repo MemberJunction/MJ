@@ -13,7 +13,7 @@
  * @module @memberjunction/ai-core-plus
  */
 
-import { BaseEntity, BaseEntityEvent, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
@@ -37,13 +37,108 @@ import { Subscription } from 'rxjs';
 const POLICY_ENTITY_NAME = 'MJ: AI Agent User Policies';
 
 /**
+ * Strongly-typed default posture applied to newly created `MJ: AI Agent User Policies` records:
+ * - `CoordinationMode`: `'Autonomous'`
+ * - `EmailChannelMode`: `'DraftOnly'`
+ * - `CalendarChannelMode`: `'ProposeWithApproval'` (calendar mutations require approval)
+ * - `PhoneChannelMode`: `'Disabled'` (phone channel off until explicitly requested)
+ */
+export interface DefaultAgentUserPolicyPosture {
+    readonly Status: MJAIAgentUserPolicyEntity['Status'];
+    readonly OnboardingStatus: MJAIAgentUserPolicyEntity['OnboardingStatus'];
+    readonly CoordinationMode: MJAIAgentUserPolicyEntity['CoordinationMode'];
+    readonly DefaultDataAccessMode: MJAIAgentUserPolicyEntity['DefaultDataAccessMode'];
+    readonly EmailChannelMode: MJAIAgentUserPolicyEntity['EmailChannelMode'];
+    readonly CalendarChannelMode: MJAIAgentUserPolicyEntity['CalendarChannelMode'];
+    readonly PhoneChannelMode: MJAIAgentUserPolicyEntity['PhoneChannelMode'];
+    readonly MessagingChannelMode: MJAIAgentUserPolicyEntity['MessagingChannelMode'];
+    readonly AllowInterAgentCoordination: MJAIAgentUserPolicyEntity['AllowInterAgentCoordination'];
+    readonly RequireApprovalForExternalComms: MJAIAgentUserPolicyEntity['RequireApprovalForExternalComms'];
+    readonly RequireApprovalForFinancials: MJAIAgentUserPolicyEntity['RequireApprovalForFinancials'];
+    readonly RequireApprovalForDestructiveActions: MJAIAgentUserPolicyEntity['RequireApprovalForDestructiveActions'];
+    readonly AutoApproveAmountThreshold: MJAIAgentUserPolicyEntity['AutoApproveAmountThreshold'];
+}
+
+/**
+ * Canonical Slice 3 default posture for newly onboarded/created user agent policies.
+ */
+export const DEFAULT_AGENT_USER_POLICY_POSTURE: DefaultAgentUserPolicyPosture = {
+    Status: 'Active',
+    OnboardingStatus: 'NotStarted',
+    CoordinationMode: 'Autonomous',
+    DefaultDataAccessMode: 'UserCeiling',
+    EmailChannelMode: 'DraftOnly',
+    CalendarChannelMode: 'ProposeWithApproval',
+    PhoneChannelMode: 'Disabled',
+    MessagingChannelMode: 'Enabled',
+    AllowInterAgentCoordination: true,
+    RequireApprovalForExternalComms: true,
+    RequireApprovalForFinancials: true,
+    RequireApprovalForDestructiveActions: true,
+    AutoApproveAmountThreshold: null,
+};
+
+/**
+ * Populates unset fields on a newly created `MJAIAgentUserPolicyEntity` with
+ * {@link DEFAULT_AGENT_USER_POLICY_POSTURE}. Existing explicit values are preserved unless
+ * `overwriteExisting` is `true`.
+ */
+export function ApplyDefaultAgentUserPolicyValues(
+    policy: MJAIAgentUserPolicyEntity,
+    options?: { overwriteExisting?: boolean }
+): MJAIAgentUserPolicyEntity {
+    const overwrite = options?.overwriteExisting === true;
+    if (overwrite || !policy.Status) {
+        policy.Status = DEFAULT_AGENT_USER_POLICY_POSTURE.Status;
+    }
+    if (overwrite || !policy.OnboardingStatus) {
+        policy.OnboardingStatus = DEFAULT_AGENT_USER_POLICY_POSTURE.OnboardingStatus;
+    }
+    if (overwrite || !policy.CoordinationMode) {
+        policy.CoordinationMode = DEFAULT_AGENT_USER_POLICY_POSTURE.CoordinationMode;
+    }
+    if (overwrite || !policy.DefaultDataAccessMode) {
+        policy.DefaultDataAccessMode = DEFAULT_AGENT_USER_POLICY_POSTURE.DefaultDataAccessMode;
+    }
+    if (overwrite || !policy.EmailChannelMode) {
+        policy.EmailChannelMode = DEFAULT_AGENT_USER_POLICY_POSTURE.EmailChannelMode;
+    }
+    if (overwrite || !policy.CalendarChannelMode) {
+        policy.CalendarChannelMode = DEFAULT_AGENT_USER_POLICY_POSTURE.CalendarChannelMode;
+    }
+    if (overwrite || !policy.PhoneChannelMode) {
+        policy.PhoneChannelMode = DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode;
+    }
+    if (overwrite || !policy.MessagingChannelMode) {
+        policy.MessagingChannelMode = DEFAULT_AGENT_USER_POLICY_POSTURE.MessagingChannelMode;
+    }
+    if (overwrite || policy.AllowInterAgentCoordination == null) {
+        policy.AllowInterAgentCoordination = DEFAULT_AGENT_USER_POLICY_POSTURE.AllowInterAgentCoordination;
+    }
+    if (overwrite || policy.RequireApprovalForExternalComms == null) {
+        policy.RequireApprovalForExternalComms = DEFAULT_AGENT_USER_POLICY_POSTURE.RequireApprovalForExternalComms;
+    }
+    if (overwrite || policy.RequireApprovalForFinancials == null) {
+        policy.RequireApprovalForFinancials = DEFAULT_AGENT_USER_POLICY_POSTURE.RequireApprovalForFinancials;
+    }
+    if (overwrite || policy.RequireApprovalForDestructiveActions == null) {
+        policy.RequireApprovalForDestructiveActions =
+            DEFAULT_AGENT_USER_POLICY_POSTURE.RequireApprovalForDestructiveActions;
+    }
+    if (overwrite && policy.AutoApproveAmountThreshold === undefined) {
+        policy.AutoApproveAmountThreshold = DEFAULT_AGENT_USER_POLICY_POSTURE.AutoApproveAmountThreshold;
+    }
+    return policy;
+}
+
+/**
  * Discriminated result of looking up a `(agentId, userId)` policy so security-critical
  * callers can distinguish "no policy row configured" from "policy lookup failed" and fail closed.
  */
 export type PolicyLookupResult =
     | { status: 'found'; policy: MJAIAgentUserPolicyEntity }
     | { status: 'none'; policy: null }
-    | { status: 'error'; policy: null; errorMessage: string };
+    | { status: 'error'; policy: null; errorMessage: string; missingRunViewProvider?: boolean };
 
 /**
  * Options for {@link AgentUserPolicyEngine.ResolvePolicyForAgentAndUser}.
@@ -555,10 +650,20 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             return { status: 'none', policy: null };
         } catch (error) {
             const errMessage = error instanceof Error ? error.message : String(error);
-            LogError(
-                `AgentUserPolicyEngine.ResolvePolicyForAgentAndUser threw for agent=${agentId}, user=${userId}: ${errMessage}`
-            );
-            return { status: 'error', policy: null, errorMessage: errMessage };
+            const missingRunViewProvider =
+                Boolean(options?.provider) &&
+                typeof (options?.provider as Partial<IRunViewProvider>).RunView !== 'function';
+            if (!missingRunViewProvider) {
+                LogError(
+                    `AgentUserPolicyEngine.ResolvePolicyForAgentAndUser threw for agent=${agentId}, user=${userId}: ${errMessage}`
+                );
+            }
+            return {
+                status: 'error',
+                policy: null,
+                errorMessage: errMessage,
+                ...(missingRunViewProvider ? { missingRunViewProvider: true } : {}),
+            };
         }
     }
 
@@ -578,19 +683,267 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
     }
 
     /**
+     * Resolves and intersects user policies across an agent's `BaseAgentID` prototype inheritance
+     * chain (`[rootAgentId, ..., leafAgentId]`) using strictest-wins ceiling semantics.
+     *
+     * Fast-path: when only a single agent in the chain has a policy row (the common case where
+     * only a personal instance like *Pepper* has a policy), returns that policy directly in O(1).
+     */
+    public async GetEffectivePolicyForAgentChain(
+        agentChainIds: readonly string[],
+        userId: string,
+        contextUser: UserInfo,
+        options?: ResolvePolicyLookupOptions
+    ): Promise<MJAIAgentUserPolicyEntity | null> {
+        const uniqueIds = this.deduplicateOrderedAgentIds(agentChainIds);
+        if (uniqueIds.length === 0 || !userId) {
+            return null;
+        }
+        const lookups = await Promise.all(
+            uniqueIds.map((agentId) => this.ResolvePolicyForAgentAndUser(agentId, userId, contextUser, options))
+        );
+        const policies: MJAIAgentUserPolicyEntity[] = [];
+        for (const lookup of lookups) {
+            if (lookup.status === 'found' && lookup.policy) {
+                policies.push(lookup.policy);
+            }
+        }
+        return this.IntersectPolicies(policies);
+    }
+
+    /**
+     * Synchronous counterpart to {@link GetEffectivePolicyForAgentChain} over already-cached
+     * policies in memory.
+     */
+    public GetCachedEffectivePolicyForAgentChain(
+        agentChainIds: readonly string[],
+        userId: string,
+        provider?: IMetadataProvider | null
+    ): MJAIAgentUserPolicyEntity | null {
+        const uniqueIds = this.deduplicateOrderedAgentIds(agentChainIds);
+        if (uniqueIds.length === 0 || !userId) {
+            return null;
+        }
+        const policies: MJAIAgentUserPolicyEntity[] = [];
+        for (const agentId of uniqueIds) {
+            const cached = this.GetCachedPolicy(agentId, userId, provider);
+            if (cached) {
+                policies.push(cached);
+            }
+        }
+        return this.IntersectPolicies(policies);
+    }
+
+    /**
+     * Combines an ordered list of policies from `[rootAgent ... leafAgent]` into a single
+     * effective policy using strictest-wins ceiling semantics:
+     * - `Status`, `CoordinationMode`, `DefaultDataAccessMode`, and all channel modes take the
+     *   minimum (most restrictive) rank across the chain.
+     * - `AllowInterAgentCoordination` is ANDed across the chain.
+     * - `RequireApprovalForExternalComms`, `RequireApprovalForFinancials`, and
+     *   `RequireApprovalForDestructiveActions` are ORed across the chain.
+     * - `AutoApproveAmountThreshold` takes the strictest ceiling (`null` beats any finite value;
+     *   otherwise `Math.min`).
+     * - `EntityAccessRules` and `ActionPolicyRules` concatenate root -> leaf so every ancestor
+     *   rule remains enforced alongside leaf narrowings.
+     * - Personalization metadata (`DisplayNameOverride`, `OnboardingStatus`, `PreferredPersonaID`)
+     *   takes the nearest descendant value (leaf wins), while non-empty `InstructionsOverride`
+     *   values stack root -> leaf.
+     *
+     * Does not mutate any input entity. Returns `null` when empty, or the single policy directly
+     * when only one policy is present.
+     */
+    public IntersectPolicies(
+        policies: ReadonlyArray<MJAIAgentUserPolicyEntity | null | undefined>
+    ): MJAIAgentUserPolicyEntity | null {
+        const present = policies.filter((p): p is MJAIAgentUserPolicyEntity => p != null);
+        if (present.length === 0) {
+            return null;
+        }
+        if (present.length === 1) {
+            return present[0];
+        }
+
+        const leaf = present[present.length - 1];
+
+        const statusRank: Record<MJAIAgentUserPolicyEntity['Status'], number> = {
+            Disabled: 0,
+            Paused: 1,
+            Active: 2,
+        };
+        const coordRank: Record<MJAIAgentUserPolicyEntity['CoordinationMode'], number> = {
+            Observer: 0,
+            Coordinator: 1,
+            Autonomous: 2,
+        };
+        const dataModeRank: Record<MJAIAgentUserPolicyEntity['DefaultDataAccessMode'], number> = {
+            AllowListOnly: 0,
+            ReadOnly: 1,
+            UserCeiling: 2,
+        };
+        const emailRank: Record<MJAIAgentUserPolicyEntity['EmailChannelMode'], number> = {
+            Disabled: 0,
+            ReadOnly: 1,
+            DraftOnly: 2,
+            SendAsAgent: 3,
+            SendAsUser: 4,
+        };
+        const phoneRank: Record<MJAIAgentUserPolicyEntity['PhoneChannelMode'], number> = {
+            Disabled: 0,
+            InboundOnly: 1,
+            OutboundWithApproval: 2,
+            OutboundAutonomous: 3,
+        };
+        const calendarRank: Record<MJAIAgentUserPolicyEntity['CalendarChannelMode'], number> = {
+            Disabled: 0,
+            ReadOnly: 1,
+            ProposeWithApproval: 2,
+            Autonomous: 3,
+        };
+        const msgRank: Record<MJAIAgentUserPolicyEntity['MessagingChannelMode'], number> = {
+            Disabled: 0,
+            Enabled: 1,
+        };
+
+        const pickStrictest = <T extends string>(values: readonly T[], ranks: Record<T, number>): T => {
+            let best = values[0];
+            let bestRank = ranks[best];
+            for (let i = 1; i < values.length; i++) {
+                const candidate = values[i];
+                const rank = ranks[candidate];
+                if (rank < bestRank) {
+                    best = candidate;
+                    bestRank = rank;
+                }
+            }
+            return best;
+        };
+
+        const effectiveStatus = pickStrictest(
+            present.map((p) => p.Status ?? DEFAULT_AGENT_USER_POLICY_POSTURE.Status),
+            statusRank
+        );
+        const effectiveCoordinationMode = pickStrictest(
+            present.map((p) => p.CoordinationMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CoordinationMode),
+            coordRank
+        );
+        const effectiveAllowInterAgent = present.every(
+            (p) => (p.AllowInterAgentCoordination ?? DEFAULT_AGENT_USER_POLICY_POSTURE.AllowInterAgentCoordination) === true
+        );
+        const effectiveDataMode = pickStrictest(
+            present.map((p) => p.DefaultDataAccessMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.DefaultDataAccessMode),
+            dataModeRank
+        );
+        const effectiveEmailMode = pickStrictest(
+            present.map((p) => p.EmailChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.EmailChannelMode),
+            emailRank
+        );
+        const effectivePhoneMode = pickStrictest(
+            present.map((p) => p.PhoneChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode),
+            phoneRank
+        );
+        const effectiveCalendarMode = pickStrictest(
+            present.map((p) => p.CalendarChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CalendarChannelMode),
+            calendarRank
+        );
+        const effectiveMessagingMode = pickStrictest(
+            present.map((p) => p.MessagingChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.MessagingChannelMode),
+            msgRank
+        );
+        const effectiveReqExternal = present.some((p) => p.RequireApprovalForExternalComms !== false);
+        const effectiveReqFinancials = present.some((p) => p.RequireApprovalForFinancials !== false);
+        const effectiveReqDestructive = present.some((p) => p.RequireApprovalForDestructiveActions !== false);
+
+        let effectiveAutoApproveThreshold: number | null = null;
+        if (present.every((p) => p.AutoApproveAmountThreshold != null)) {
+            effectiveAutoApproveThreshold = Math.min(
+                ...present.map((p) => p.AutoApproveAmountThreshold as number)
+            );
+        }
+
+        const combinedEntityRules: MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[] = [];
+        const combinedActionRules: MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[] = [];
+        const instructionParts: string[] = [];
+        for (const p of present) {
+            combinedEntityRules.push(...this.resolveEntityRules(p));
+            combinedActionRules.push(...this.resolveActionRules(p));
+            if (p.InstructionsOverride && p.InstructionsOverride.trim().length > 0) {
+                instructionParts.push(p.InstructionsOverride.trim());
+            }
+        }
+
+        const serializedEntityRules = combinedEntityRules.length > 0 ? JSON.stringify(combinedEntityRules) : null;
+        const serializedActionRules = combinedActionRules.length > 0 ? JSON.stringify(combinedActionRules) : null;
+        const stackedInstructions = instructionParts.length > 0 ? instructionParts.join('\n\n') : null;
+
+        let effectiveDisplayName: string | null = null;
+        let effectivePreferredPersonaId: string | null = null;
+        for (let i = present.length - 1; i >= 0; i--) {
+            if (!effectiveDisplayName && present[i].DisplayNameOverride?.trim()) {
+                effectiveDisplayName = present[i].DisplayNameOverride;
+            }
+            if (!effectivePreferredPersonaId && present[i].PreferredPersonaID) {
+                effectivePreferredPersonaId = present[i].PreferredPersonaID;
+            }
+        }
+
+        return Object.create(leaf, {
+            Status: { get: () => effectiveStatus, enumerable: true, configurable: true },
+            CoordinationMode: { get: () => effectiveCoordinationMode, enumerable: true, configurable: true },
+            AllowInterAgentCoordination: { get: () => effectiveAllowInterAgent, enumerable: true, configurable: true },
+            DefaultDataAccessMode: { get: () => effectiveDataMode, enumerable: true, configurable: true },
+            EmailChannelMode: { get: () => effectiveEmailMode, enumerable: true, configurable: true },
+            PhoneChannelMode: { get: () => effectivePhoneMode, enumerable: true, configurable: true },
+            CalendarChannelMode: { get: () => effectiveCalendarMode, enumerable: true, configurable: true },
+            MessagingChannelMode: { get: () => effectiveMessagingMode, enumerable: true, configurable: true },
+            RequireApprovalForExternalComms: { get: () => effectiveReqExternal, enumerable: true, configurable: true },
+            RequireApprovalForFinancials: { get: () => effectiveReqFinancials, enumerable: true, configurable: true },
+            RequireApprovalForDestructiveActions: { get: () => effectiveReqDestructive, enumerable: true, configurable: true },
+            AutoApproveAmountThreshold: { get: () => effectiveAutoApproveThreshold, enumerable: true, configurable: true },
+            EntityAccessRules: { get: () => serializedEntityRules, enumerable: true, configurable: true },
+            EntityAccessRulesObject: { get: () => combinedEntityRules, enumerable: true, configurable: true },
+            ActionPolicyRules: { get: () => serializedActionRules, enumerable: true, configurable: true },
+            ActionPolicyRulesObject: { get: () => combinedActionRules, enumerable: true, configurable: true },
+            DisplayNameOverride: { get: () => effectiveDisplayName, enumerable: true, configurable: true },
+            PreferredPersonaID: { get: () => effectivePreferredPersonaId, enumerable: true, configurable: true },
+            InstructionsOverride: { get: () => stackedInstructions, enumerable: true, configurable: true },
+        }) as MJAIAgentUserPolicyEntity;
+    }
+
+    private deduplicateOrderedAgentIds(agentIds: readonly string[]): string[] {
+        const seen = new Set<string>();
+        const result: string[] = [];
+        for (const id of agentIds) {
+            const trimmed = id?.trim();
+            if (!trimmed) {
+                continue;
+            }
+            const lower = trimmed.toLowerCase();
+            if (!seen.has(lower)) {
+                seen.add(lower);
+                result.push(trimmed);
+            }
+        }
+        return result;
+    }
+
+    /**
      * Capture an immutable snapshot of permission-bearing fields on a policy entity before
      * in-place mutation so {@link DetectAgentPolicyWidening} can compare against the baseline.
      */
     public SnapshotPolicy(policy: MJAIAgentUserPolicyEntity): AgentPolicyBaselineSnapshot {
         return {
-            Status: policy.Status ?? 'Active',
-            CoordinationMode: policy.CoordinationMode ?? 'Observer',
-            AllowInterAgentCoordination: policy.AllowInterAgentCoordination ?? true,
-            DefaultDataAccessMode: policy.DefaultDataAccessMode ?? 'UserCeiling',
-            EmailChannelMode: policy.EmailChannelMode ?? 'DraftOnly',
-            PhoneChannelMode: policy.PhoneChannelMode ?? 'InboundOnly',
-            MessagingChannelMode: policy.MessagingChannelMode ?? 'Enabled',
-            CalendarChannelMode: policy.CalendarChannelMode ?? 'ProposeWithApproval',
+            Status: policy.Status ?? DEFAULT_AGENT_USER_POLICY_POSTURE.Status,
+            CoordinationMode: policy.CoordinationMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CoordinationMode,
+            AllowInterAgentCoordination:
+                policy.AllowInterAgentCoordination ?? DEFAULT_AGENT_USER_POLICY_POSTURE.AllowInterAgentCoordination,
+            DefaultDataAccessMode:
+                policy.DefaultDataAccessMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.DefaultDataAccessMode,
+            EmailChannelMode: policy.EmailChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.EmailChannelMode,
+            PhoneChannelMode: policy.PhoneChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode,
+            MessagingChannelMode:
+                policy.MessagingChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.MessagingChannelMode,
+            CalendarChannelMode: policy.CalendarChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CalendarChannelMode,
             RequireApprovalForExternalComms: policy.RequireApprovalForExternalComms !== false,
             RequireApprovalForFinancials: policy.RequireApprovalForFinancials !== false,
             RequireApprovalForDestructiveActions: policy.RequireApprovalForDestructiveActions !== false,
@@ -633,14 +986,18 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
                 : [];
 
         return {
-            Status: readOld('Status') ?? 'Active',
-            CoordinationMode: readOld('CoordinationMode') ?? 'Observer',
-            AllowInterAgentCoordination: readOld('AllowInterAgentCoordination') ?? true,
-            DefaultDataAccessMode: readOld('DefaultDataAccessMode') ?? 'UserCeiling',
-            EmailChannelMode: readOld('EmailChannelMode') ?? 'DraftOnly',
-            PhoneChannelMode: readOld('PhoneChannelMode') ?? 'InboundOnly',
-            MessagingChannelMode: readOld('MessagingChannelMode') ?? 'Enabled',
-            CalendarChannelMode: readOld('CalendarChannelMode') ?? 'ProposeWithApproval',
+            Status: readOld('Status') ?? DEFAULT_AGENT_USER_POLICY_POSTURE.Status,
+            CoordinationMode: readOld('CoordinationMode') ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CoordinationMode,
+            AllowInterAgentCoordination:
+                readOld('AllowInterAgentCoordination') ?? DEFAULT_AGENT_USER_POLICY_POSTURE.AllowInterAgentCoordination,
+            DefaultDataAccessMode:
+                readOld('DefaultDataAccessMode') ?? DEFAULT_AGENT_USER_POLICY_POSTURE.DefaultDataAccessMode,
+            EmailChannelMode: readOld('EmailChannelMode') ?? DEFAULT_AGENT_USER_POLICY_POSTURE.EmailChannelMode,
+            PhoneChannelMode: readOld('PhoneChannelMode') ?? DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode,
+            MessagingChannelMode:
+                readOld('MessagingChannelMode') ?? DEFAULT_AGENT_USER_POLICY_POSTURE.MessagingChannelMode,
+            CalendarChannelMode:
+                readOld('CalendarChannelMode') ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CalendarChannelMode,
             RequireApprovalForExternalComms: readOld('RequireApprovalForExternalComms') !== false,
             RequireApprovalForFinancials: readOld('RequireApprovalForFinancials') !== false,
             RequireApprovalForDestructiveActions: readOld('RequireApprovalForDestructiveActions') !== false,
@@ -655,8 +1012,9 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
     }
 
     /**
-     * Compare a proposed `MJAIAgentUserPolicyEntity` against `baseline` (or conservative self-onboarding
-     * defaults when `baseline === null`) and return a list of human-readable policy-widening violations.
+     * Compare a proposed `MJAIAgentUserPolicyEntity` against `baseline` (or self-onboarding
+     * defaults {@link DEFAULT_AGENT_USER_POLICY_POSTURE} when `baseline === null`) and return a
+     * list of human-readable policy-widening violations.
      *
      * Used when an agent invokes `Configure Agent User Policy` on its own behalf so a prompt-injected
      * agent can narrow or personalize its policy during onboarding, but can NEVER loosen approval gates,
@@ -667,18 +1025,19 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         proposed: MJAIAgentUserPolicyEntity
     ): string[] {
         const effectiveBaseline: AgentPolicyBaselineSnapshot = baseline ?? {
-            Status: 'Active',
-            CoordinationMode: 'Observer',
-            AllowInterAgentCoordination: true,
-            DefaultDataAccessMode: 'UserCeiling',
-            EmailChannelMode: 'DraftOnly',
-            PhoneChannelMode: 'InboundOnly',
-            MessagingChannelMode: 'Enabled',
-            CalendarChannelMode: 'ProposeWithApproval',
-            RequireApprovalForExternalComms: true,
-            RequireApprovalForFinancials: true,
-            RequireApprovalForDestructiveActions: true,
-            AutoApproveAmountThreshold: null,
+            Status: DEFAULT_AGENT_USER_POLICY_POSTURE.Status,
+            CoordinationMode: DEFAULT_AGENT_USER_POLICY_POSTURE.CoordinationMode,
+            AllowInterAgentCoordination: DEFAULT_AGENT_USER_POLICY_POSTURE.AllowInterAgentCoordination,
+            DefaultDataAccessMode: DEFAULT_AGENT_USER_POLICY_POSTURE.DefaultDataAccessMode,
+            EmailChannelMode: DEFAULT_AGENT_USER_POLICY_POSTURE.EmailChannelMode,
+            PhoneChannelMode: DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode,
+            MessagingChannelMode: DEFAULT_AGENT_USER_POLICY_POSTURE.MessagingChannelMode,
+            CalendarChannelMode: DEFAULT_AGENT_USER_POLICY_POSTURE.CalendarChannelMode,
+            RequireApprovalForExternalComms: DEFAULT_AGENT_USER_POLICY_POSTURE.RequireApprovalForExternalComms,
+            RequireApprovalForFinancials: DEFAULT_AGENT_USER_POLICY_POSTURE.RequireApprovalForFinancials,
+            RequireApprovalForDestructiveActions:
+                DEFAULT_AGENT_USER_POLICY_POSTURE.RequireApprovalForDestructiveActions,
+            AutoApproveAmountThreshold: DEFAULT_AGENT_USER_POLICY_POSTURE.AutoApproveAmountThreshold,
             EntityAccessRules: [],
             ActionPolicyRules: [],
         };
@@ -690,7 +1049,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             Paused: 1,
             Active: 2,
         };
-        const nextStatus = proposed.Status ?? 'Active';
+        const nextStatus = proposed.Status ?? DEFAULT_AGENT_USER_POLICY_POSTURE.Status;
         if (statusRank[nextStatus] > statusRank[effectiveBaseline.Status]) {
             violations.push(`Cannot widen Status from '${effectiveBaseline.Status}' to '${nextStatus}'.`);
         }
@@ -700,14 +1059,15 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             Coordinator: 1,
             Autonomous: 2,
         };
-        const nextCoord = proposed.CoordinationMode ?? 'Observer';
+        const nextCoord = proposed.CoordinationMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CoordinationMode;
         if (coordRank[nextCoord] > coordRank[effectiveBaseline.CoordinationMode]) {
             violations.push(
                 `Cannot widen CoordinationMode from '${effectiveBaseline.CoordinationMode}' to '${nextCoord}'.`
             );
         }
 
-        const nextInterAgent = proposed.AllowInterAgentCoordination ?? true;
+        const nextInterAgent =
+            proposed.AllowInterAgentCoordination ?? DEFAULT_AGENT_USER_POLICY_POSTURE.AllowInterAgentCoordination;
         if (nextInterAgent && !effectiveBaseline.AllowInterAgentCoordination) {
             violations.push('Cannot enable AllowInterAgentCoordination when disabled in baseline policy.');
         }
@@ -717,7 +1077,8 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             ReadOnly: 1,
             UserCeiling: 2,
         };
-        const nextDataMode = proposed.DefaultDataAccessMode ?? 'UserCeiling';
+        const nextDataMode =
+            proposed.DefaultDataAccessMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.DefaultDataAccessMode;
         if (dataModeRank[nextDataMode] > dataModeRank[effectiveBaseline.DefaultDataAccessMode]) {
             violations.push(
                 `Cannot widen DefaultDataAccessMode from '${effectiveBaseline.DefaultDataAccessMode}' to '${nextDataMode}'.`
@@ -731,7 +1092,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             SendAsAgent: 3,
             SendAsUser: 4,
         };
-        const nextEmail = proposed.EmailChannelMode ?? 'DraftOnly';
+        const nextEmail = proposed.EmailChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.EmailChannelMode;
         if (emailRank[nextEmail] > emailRank[effectiveBaseline.EmailChannelMode]) {
             violations.push(
                 `Cannot widen EmailChannelMode from '${effectiveBaseline.EmailChannelMode}' to '${nextEmail}'.`
@@ -744,7 +1105,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             OutboundWithApproval: 2,
             OutboundAutonomous: 3,
         };
-        const nextPhone = proposed.PhoneChannelMode ?? 'InboundOnly';
+        const nextPhone = proposed.PhoneChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode;
         if (phoneRank[nextPhone] > phoneRank[effectiveBaseline.PhoneChannelMode]) {
             violations.push(
                 `Cannot widen PhoneChannelMode from '${effectiveBaseline.PhoneChannelMode}' to '${nextPhone}'.`
@@ -757,7 +1118,8 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             ProposeWithApproval: 2,
             Autonomous: 3,
         };
-        const nextCalendar = proposed.CalendarChannelMode ?? 'ProposeWithApproval';
+        const nextCalendar =
+            proposed.CalendarChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CalendarChannelMode;
         if (calendarRank[nextCalendar] > calendarRank[effectiveBaseline.CalendarChannelMode]) {
             violations.push(
                 `Cannot widen CalendarChannelMode from '${effectiveBaseline.CalendarChannelMode}' to '${nextCalendar}'.`
@@ -768,7 +1130,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             Disabled: 0,
             Enabled: 1,
         };
-        const nextMsg = proposed.MessagingChannelMode ?? 'Enabled';
+        const nextMsg = proposed.MessagingChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.MessagingChannelMode;
         if (msgRank[nextMsg] > msgRank[effectiveBaseline.MessagingChannelMode]) {
             violations.push(
                 `Cannot widen MessagingChannelMode from '${effectiveBaseline.MessagingChannelMode}' to '${nextMsg}'.`
@@ -1270,10 +1632,10 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             '### User Governance & Personalization Policy',
             `- **User**: ${user.Name} (${user.Email})`,
             `- **Agent Display Name**: ${policy.DisplayNameOverride || 'Chief of Staff'}`,
-            `- **Policy Status**: \`${policy.Status}\` | **Onboarding Status**: \`${policy.OnboardingStatus}\``,
-            `- **Coordination Mode**: \`${policy.CoordinationMode}\` | **Inter-Agent Coordination**: \`${policy.AllowInterAgentCoordination ? 'Allowed' : 'Disabled'}\``,
-            `- **Default Data Access Mode**: \`${policy.DefaultDataAccessMode}\` (always bounded by user's MJ role permissions)`,
-            `- **Channels**: Email=\`${policy.EmailChannelMode}\`, Calendar=\`${policy.CalendarChannelMode ?? 'ProposeWithApproval'}\`, Phone=\`${policy.PhoneChannelMode}\`, Messaging=\`${policy.MessagingChannelMode}\``,
+            `- **Policy Status**: \`${policy.Status ?? DEFAULT_AGENT_USER_POLICY_POSTURE.Status}\` | **Onboarding Status**: \`${policy.OnboardingStatus ?? DEFAULT_AGENT_USER_POLICY_POSTURE.OnboardingStatus}\``,
+            `- **Coordination Mode**: \`${policy.CoordinationMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CoordinationMode}\` | **Inter-Agent Coordination**: \`${(policy.AllowInterAgentCoordination ?? DEFAULT_AGENT_USER_POLICY_POSTURE.AllowInterAgentCoordination) ? 'Allowed' : 'Disabled'}\``,
+            `- **Default Data Access Mode**: \`${policy.DefaultDataAccessMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.DefaultDataAccessMode}\` (always bounded by user's MJ role permissions)`,
+            `- **Channels**: Email=\`${policy.EmailChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.EmailChannelMode}\`, Calendar=\`${policy.CalendarChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.CalendarChannelMode}\`, Phone=\`${policy.PhoneChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode}\`, Messaging=\`${policy.MessagingChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.MessagingChannelMode}\``,
             `- **Approval Guardrails**: ExternalComms=\`${policy.RequireApprovalForExternalComms ? 'RequireApproval' : 'Auto'}\`, Financials=\`${policy.RequireApprovalForFinancials ? 'RequireApproval' : 'Auto'}\` (Threshold: ${policy.AutoApproveAmountThreshold != null ? `$${policy.AutoApproveAmountThreshold}` : 'None'}), Destructive=\`${policy.RequireApprovalForDestructiveActions ? 'RequireApproval' : 'Auto'}\``,
         ];
 
@@ -1382,6 +1744,51 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             verdict: 'Allow',
             mode,
             reason: `Sending email permitted under EmailChannelMode=${mode}.`,
+        };
+    }
+
+    /**
+     * Evaluate whether a user's `PhoneChannelMode` permits inbound or outbound telephony operations.
+     * Defaults to `'Disabled'` (`Off`) when unset until explicitly requested by the user.
+     */
+    public EvaluatePhoneOperation(
+        policy: MJAIAgentUserPolicyEntity | null,
+        direction: 'Inbound' | 'Outbound'
+    ): { verdict: AgentPolicyVerdict; mode: MJAIAgentUserPolicyEntity['PhoneChannelMode']; reason: string } {
+        const mode: MJAIAgentUserPolicyEntity['PhoneChannelMode'] =
+            policy?.PhoneChannelMode ?? DEFAULT_AGENT_USER_POLICY_POSTURE.PhoneChannelMode;
+        if (policy?.Status === 'Disabled' || mode === 'Disabled') {
+            return {
+                verdict: 'Deny',
+                mode: 'Disabled',
+                reason: 'Phone channel access is Disabled (Off) in the user\'s AI Agent User Policy.',
+            };
+        }
+        if (direction === 'Inbound') {
+            return {
+                verdict: 'Allow',
+                mode,
+                reason: `Inbound phone handling permitted under PhoneChannelMode='${mode}'.`,
+            };
+        }
+        if (mode === 'InboundOnly') {
+            return {
+                verdict: 'Deny',
+                mode,
+                reason: 'Outbound phone calls are blocked because PhoneChannelMode is InboundOnly.',
+            };
+        }
+        if (mode === 'OutboundWithApproval' || policy?.RequireApprovalForExternalComms) {
+            return {
+                verdict: 'RequireApproval',
+                mode,
+                reason: `Outbound phone calls require user approval under PhoneChannelMode='${mode}'.`,
+            };
+        }
+        return {
+            verdict: 'Allow',
+            mode,
+            reason: 'Outbound phone call permitted under PhoneChannelMode=OutboundAutonomous.',
         };
     }
 

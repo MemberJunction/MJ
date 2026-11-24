@@ -10,7 +10,8 @@
       "DefaultWakeGate": null,
       "WakeReason": "Review active skills, newly available offered rhythms, and standing policy posture with the user.",
       "OfferAt": "Both",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard"
     },
     "primaryKey": {
       "ID": "BAC7A9EA-958B-42CB-A988-6764785D389F"
@@ -27,18 +28,19 @@
       "Name": "Daily Calendar Guard & Conflict Check",
       "WorkstreamKey": "calendar-daily-review",
       "Description": "Weekday morning scan of today's and tomorrow's calendar for double-bookings, missing prep, and focus-time erosion.",
-      "DefaultCronExpression": "30 7 * * 1-5",
+      "DefaultCronExpression": "15 7 * * 1-5",
       "DefaultWakeGate": null,
       "WakeReason": "Check today's and tomorrow's calendar for conflicts, overbooking, and unprotected focus time.",
       "OfferAt": "Onboarding",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast"
     },
     "primaryKey": {
       "ID": "F0294D16-F2B7-4DA2-897F-B9FB27FD5BF5"
     },
     "sync": {
-      "lastModified": "2026-11-20T22:01:59.931Z",
-      "checksum": "cd8fa4def95008312df74843392231d24c826b2b5baf2a1b0482c5a8a9e867ae"
+      "lastModified": "2026-11-21T15:59:22.853Z",
+      "checksum": "b0638c767ba863635b69697c1a1d40d4efa000b0fe2156bb3f700617c1f84819"
     }
   },
   {
@@ -52,7 +54,8 @@
       "DefaultWakeGate": null,
       "WakeReason": "Review next week's calendar to protect focus blocks and flag meetings needing prep or rescheduling.",
       "OfferAt": "Onboarding",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard"
     },
     "primaryKey": {
       "ID": "01532AD0-302D-4C70-A054-608866F86670"
@@ -60,6 +63,168 @@
     "sync": {
       "lastModified": "2026-11-20T22:01:59.944Z",
       "checksum": "8c072dd90e80a6170e11f60182e072e28b577ddef77ef910572192564af39e99"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Daily Tasks Triage",
+      "WorkstreamKey": "tasks-daily-triage",
+      "Description": "Weekday morning triage covering overdue, due-today, blocked, newly assigned, and waiting-on-others tasks, plus scheduling pre-meeting prep and post-meeting transcript wakes.",
+      "DefaultCronExpression": "30 7 * * 1-5",
+      "DefaultWakeGate": null,
+      "WakeReason": "Run weekday morning tasks triage via Assemble My Briefing: surface overdue, due today, blocked, newly assigned, and waiting-on-others items, and schedule meeting prep/transcript wakes for qualifying meetings.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast"
+    },
+    "primaryKey": {
+      "ID": "46070CBD-59A0-4B39-98B0-0D8C216546B6"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Huddle Prep & Top-of-Mind Brief",
+      "WorkstreamKey": "planning-huddle-prep",
+      "Description": "Pre-huddle preparation brief summarizing open stucks, due execution items, Critical Number tier changes, and open Planning alerts ahead of each huddle session the user attends.",
+      "DefaultCronExpression": "30 8 * * 1-5",
+      "DefaultWakeGate": null,
+      "WakeReason": "Huddle prep: generate the Top-of-Mind brief with open stucks, due items, Critical Numbers, and open alerts ahead of the user's upcoming huddle.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast"
+    },
+    "primaryKey": {
+      "ID": "0BAEB690-C189-45C9-A3D1-716E5B3FB5FA"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Daily 15Five Work Report",
+      "WorkstreamKey": "daily-15five",
+      "Description": "End-of-day 15Five draft synthesized from your task completions, check-ins, and updates (skips quietly on NO_ACTIVITY) and presented for author approval before submitting to your supervisor.",
+      "DefaultCronExpression": "0 17 * * 1-5",
+      "DefaultWakeGate": null,
+      "WakeReason": "Call Draft Work Report for today; stop silently on NO_ACTIVITY, otherwise present the concise 5-minute draft for author approval before submission.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast"
+    },
+    "primaryKey": {
+      "ID": "55653494-EE4F-4069-962B-439E62362E1B"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Weekly Tasks Review",
+      "WorkstreamKey": "tasks-weekly-review",
+      "Description": "Friday afternoon review summarizing completed vs. slipped tasks, open loops waiting on others, stalled blockers, and team work pulse signals.",
+      "DefaultCronExpression": "0 15 * * 5",
+      "DefaultWakeGate": null,
+      "WakeReason": "Run Friday weekly review via Assemble My Briefing and Find Tasks: summarize completed vs. slipped items, open waiting-on-others loops, and recommended cleanup for next week.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard"
+    },
+    "primaryKey": {
+      "ID": "83390C68-83D7-4A35-8042-3974F7EA6548"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Weekly OKR & Priority Review",
+      "WorkstreamKey": "planning-weekly-okr-review",
+      "Description": "Monday morning strategic pace review covering priority completion vs. period elapsed %, behind-pace Key Results, stale check-ins, Red/Yellow Critical Numbers, and open Planning alerts.",
+      "DefaultCronExpression": "0 8 * * 1",
+      "DefaultWakeGate": null,
+      "WakeReason": "Weekly OKR review: evaluate period pace, surface behind-pace Key Results, stale check-ins, and Red/Yellow Critical Numbers, and prompt the user for due priority check-ins.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard"
+    },
+    "primaryKey": {
+      "ID": "9D0C9A6E-F14B-4180-AEEA-D9B197D9C27C"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Period Closeout & Rollover Prep",
+      "WorkstreamKey": "planning-period-close",
+      "Description": "Final-week period closeout review that drafts recommended rollover dispositions (Achieved, CarryForward, Defer, Drop) for user confirmation before closing the period.",
+      "DefaultCronExpression": "0 9 * * 1,4",
+      "DefaultWakeGate": null,
+      "WakeReason": "Period closeout prep: review active priorities, gather execution track record context, and draft rollover dispositions (Achieved / CarryForward / Defer / Drop) for user confirmation.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard"
+    },
+    "primaryKey": {
+      "ID": "523DBA7B-1547-4D50-96F9-795E12CE5DB3"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Mid-Quarter Strategic Checkpoint",
+      "WorkstreamKey": "planning-midquarter-checkpoint",
+      "Description": "Mid-period strategic checkpoint gated to fire once the active planning period crosses 50% elapsed time, delivering a frank assessment of what is on pace, at risk, or needs re-scoping.",
+      "DefaultCronExpression": "0 9 * * 1-5",
+      "DefaultWakeGate": null,
+      "WakeReason": "Mid-quarter checkpoint: deliver a frank mid-period read on priorities on pace vs. at risk, deterministic alignment drift gaps, and what should be cut or re-scoped.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power"
+    },
+    "primaryKey": {
+      "ID": "84586912-01F6-467A-B870-529D8D64AD26"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": "@lookup:MJ: AI Skills.Name=Growth Coach",
+      "Name": "Growth Coaching & Career Development Review",
+      "WorkstreamKey": "growth-coaching",
+      "Description": "Opt-in biweekly reflective coaching review using bounded retrieval over recent tasks, meeting transcripts/notes, work reports, and conversations to deliver a Start / Stop / Continue note into a private ParentID side conversation.",
+      "DefaultCronExpression": "0 10 1,15 * *",
+      "DefaultWakeGate": null,
+      "WakeReason": "Run opt-in biweekly growth coaching review: synthesize bounded 14-day tasks, meetings, work reports, and conversation evidence into a Start / Stop / Continue note inside a private ParentID Coaching side conversation.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power"
+    },
+    "primaryKey": {
+      "ID": "96B5DADF-5BB6-480B-98DE-15071E4C49C3"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Project Risk & Delivery Assessment",
+      "WorkstreamKey": "project-risk-review",
+      "Description": "Deep cross-workstream project risk review identifying critical-path dependencies, recurring schedule slippage, escalation triggers, and concrete mitigation plans.",
+      "DefaultCronExpression": "0 9 * * 3",
+      "DefaultWakeGate": null,
+      "WakeReason": "Run project risk review: surface cross-workstream delivery risks, dependency bottlenecks, slipping milestones, and prioritized mitigations.",
+      "OfferAt": "Both",
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power"
+    },
+    "primaryKey": {
+      "ID": "34DFB48A-73D8-4FA9-BFF6-9963C455ED6B"
     }
   }
 ]
