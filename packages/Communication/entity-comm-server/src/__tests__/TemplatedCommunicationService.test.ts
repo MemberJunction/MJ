@@ -16,6 +16,27 @@ const capturedEnqueued: Array<{ taskType: string; payload: unknown }> = [];
 const capturedSendCalls: SendToPrincipalsParams[] = [];
 const recordRunChunkDone = vi.fn().mockResolvedValue(false);
 
+/** A run as StartRun returns it: RenderAndSend stamps ChunkCount (and DeliveryGuarantee) and saves it before queueing. */
+interface FakeRun {
+  ID: string;
+  ChunkCount: number | null;
+  DeliveryGuarantee: string | null;
+  Save: () => Promise<boolean>;
+  LatestResult: { CompleteMessage: string };
+}
+const runState: { saveSucceeds: boolean; runs: FakeRun[] } = { saveSucceeds: true, runs: [] };
+function makeRun(): FakeRun {
+  const run: FakeRun = {
+    ID: 'run-v2-1',
+    ChunkCount: null,
+    DeliveryGuarantee: null,
+    Save: vi.fn(async () => runState.saveSucceeds),
+    LatestResult: { CompleteMessage: 'Simulated run save failure' },
+  };
+  runState.runs.push(run);
+  return run;
+}
+
 const MOCK_USER = { ID: 'user-1', Name: 'Tester' } as unknown as UserInfo;
 
 const state: {
@@ -127,7 +148,7 @@ vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/communication-types', () => ({
   CommunicationEngineBase: {
     Instance: {
-      StartRun: vi.fn().mockResolvedValue({ ID: 'run-v2-1' }),
+      StartRun: vi.fn(async () => makeRun()),
       EndRun: vi.fn().mockResolvedValue(true),
     },
   },
@@ -292,6 +313,8 @@ describe('TemplatedCommunicationService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    runState.saveSucceeds = true;
+    runState.runs.length = 0;
     callOrder.length = 0;
     capturedRenderContexts.length = 0;
     capturedRunViews.length = 0;
@@ -643,6 +666,29 @@ describe('TemplatedCommunicationService', () => {
       const chunks = capturedEnqueued.map((e) => (e.payload as RenderBatchPayload).RunChunk);
       expect(chunks).toEqual([{ Index: 0, Count: 2 }, { Index: 1, Count: 2 }]);
       expect(CommunicationEngineBase.Instance.EndRun).not.toHaveBeenCalled();
+      expect(runState.runs[0].ChunkCount).toBe(2);
+      expect(runState.runs[0].Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('stores the envelope delivery guarantee on the run before queueing', async () => {
+      queueTwoBatches();
+      await service.RenderAndSend(
+        { Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email', DeliveryGuarantee: 'At Least Once' }, EntityID: 'ent-customers', Recipients: recipients, Templates: { SubjectTemplateID: 'tpl-subj' } },
+        MOCK_USER,
+      );
+      expect(runState.runs[0].DeliveryGuarantee).toBe('At Least Once');
+    });
+
+    it('enqueues nothing and fails when the run cannot record its batch count', async () => {
+      queueTwoBatches();
+      runState.saveSucceeds = false;
+      const result = await service.RenderAndSend(
+        { Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email' }, EntityID: 'ent-customers', Recipients: recipients, Templates: { SubjectTemplateID: 'tpl-subj' } },
+        MOCK_USER,
+      );
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('Simulated run save failure');
+      expect(capturedEnqueued).toHaveLength(0);
     });
 
     it('HandleRenderBatch passes the batch RunChunk into Send()', async () => {
@@ -667,7 +713,8 @@ describe('TemplatedCommunicationService', () => {
       const result = await service.HandleRenderBatch(capturedEnqueued[0].payload as RenderBatchPayload, MOCK_USER);
       expect(capturedSendCalls).toHaveLength(0);
       expect(result.Outcomes?.[0].Reason).toBe('RenderFailed');
-      expect(recordRunChunkDone).toHaveBeenCalledWith('run-v2-1', { Index: 0, Count: 2 }, MOCK_USER);
+      // Every recipient failed to render: the batch was processed, so it counts as Complete.
+      expect(recordRunChunkDone).toHaveBeenCalledWith('run-v2-1', { Index: 0, Count: 2 }, { Status: 'Complete', RecipientCount: 1 }, MOCK_USER);
     });
 
     it('a batch whose acting user cannot be resolved still records its chunk', async () => {
@@ -679,7 +726,12 @@ describe('TemplatedCommunicationService', () => {
       const payload = { ...(capturedEnqueued[1].payload as RenderBatchPayload), ActingUserID: 'someone-else' };
       const result = await service.HandleRenderBatch(payload, MOCK_USER);
       expect(result.Success).toBe(false);
-      expect(recordRunChunkDone).toHaveBeenCalledWith('run-v2-1', { Index: 1, Count: 2 }, MOCK_USER);
+      expect(recordRunChunkDone).toHaveBeenCalledWith(
+        'run-v2-1',
+        { Index: 1, Count: 2 },
+        { Status: 'Failed', RecipientCount: 1, ErrorMessage: expect.stringContaining('someone-else') },
+        MOCK_USER,
+      );
     });
 
     it('the in-process path sends without RunChunk and ends the run itself', async () => {

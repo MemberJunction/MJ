@@ -258,6 +258,22 @@ export class TemplatedCommunicationService
     const batches = this.chunkArray(sendableItems, batchSize);
 
     if (this.config.EnqueueWork) {
+      // The run must know how many batches it has before any of them can finish.
+      run.ChunkCount = batches.length;
+      if (params.Envelope.DeliveryGuarantee) run.DeliveryGuarantee = params.Envelope.DeliveryGuarantee;
+      if (!(await run.Save())) {
+        return {
+          Success: false,
+          CommunicationRunID: run.ID,
+          IsAsyncRun: false,
+          TotalCount: params.Recipients.length,
+          QueuedCount: 0,
+          BlockedCount: eligibility.Blocked.length,
+          DeferredCount: 0,
+          Outcomes: blockedOutcomes,
+          ErrorMessage: `Failed to record the batch count on communication run ${run.ID}: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        };
+      }
       for (let index = 0; index < batches.length; index++) {
         const batch = batches[index];
         const sanitizedBatch = batch.map((r) =>
@@ -422,7 +438,7 @@ export class TemplatedCommunicationService
     }
 
     if (!payload.ActingUserID) {
-      await this.recordChunkWithoutSend(payload, user);
+      await this.recordChunkWithoutSend(payload, user, 'ActingUserID is required for async template rendering');
       return {
         Success: false,
         CommunicationRunID: payload.CommunicationRunID,
@@ -441,7 +457,11 @@ export class TemplatedCommunicationService
     } else {
       const resolvedActingUser = this.config.ResolveUser?.(payload.ActingUserID);
       if (!resolvedActingUser) {
-        await this.recordChunkWithoutSend(payload, user);
+        await this.recordChunkWithoutSend(
+          payload,
+          user,
+          `Acting user '${payload.ActingUserID}' could not be resolved for async template rendering`,
+        );
         return {
           Success: false,
           CommunicationRunID: payload.CommunicationRunID,
@@ -684,7 +704,13 @@ export class TemplatedCommunicationService
     if (Sendable.length === 0) {
       // Send() is skipped, so it cannot record this chunk; record it here or the run never ends.
       if (communicationRunID && runChunk) {
-        await this.chunkRecorder.RecordRunChunkDone(communicationRunID, runChunk, user);
+        // Every recipient failed to render: the batch was processed, so it counts as Complete.
+        await this.chunkRecorder.RecordRunChunkDone(
+          communicationRunID,
+          runChunk,
+          { Status: 'Complete', RecipientCount: rendered.length },
+          user,
+        );
       }
       return {
         Success: true,
@@ -748,9 +774,14 @@ export class TemplatedCommunicationService
    * Records a queued batch as done when it ends without calling `Send()` (which is what normally
    * records it), so the run still ends once its last batch finishes.
    */
-  private async recordChunkWithoutSend(payload: RenderBatchPayload, user: UserInfo): Promise<void> {
+  private async recordChunkWithoutSend(payload: RenderBatchPayload, user: UserInfo, reason: string): Promise<void> {
     if (!payload.RunChunk) return;
-    await this.chunkRecorder.RecordRunChunkDone(payload.CommunicationRunID, payload.RunChunk, user);
+    await this.chunkRecorder.RecordRunChunkDone(
+      payload.CommunicationRunID,
+      payload.RunChunk,
+      { Status: 'Failed', RecipientCount: payload.Recipients.length, ErrorMessage: reason },
+      user,
+    );
   }
 
   /**
