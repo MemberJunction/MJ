@@ -1,0 +1,16 @@
+[
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_R1Copy"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_R1Copy",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  }
+]

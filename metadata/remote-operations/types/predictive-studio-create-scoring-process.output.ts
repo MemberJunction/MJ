@@ -7,14 +7,14 @@ export interface PredictiveStudioCreateScoringProcessOutput {
      */
     recordProcessId: string;
     /**
-     * Whether write-back was configured — `true` when an `outputField` was supplied
-     * (the Record Process carries an `OutputMapping` and a scoring binding was
-     * created), `false` in generic mode (predictions recorded in run history only).
+     * Whether the binding names a column — `true` when an `outputField` was supplied
+     * (each run copies the newest score into it through the binding; the Record Process
+     * carries no `OutputMapping`), `false` in generic mode (Feature Values only).
      */
     wroteColumn: boolean;
     /**
-     * Id of the created `MJ: ML Model Scoring Bindings` lineage row (`Mode='OnDemand'`)
-     * in write-back mode. Omitted in generic mode (no `outputField`, no binding).
+     * Id of the created (or updated) `MJ: ML Model Scoring Bindings` row (`Mode='OnDemand'`),
+     * in both modes: a run of the process scores through it.
      */
     scoringBindingId?: string;
 }

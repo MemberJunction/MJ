@@ -284,6 +284,7 @@ import type {
   MJInteractionOfferEntityType,
   MJInteractionEntityType,
   MJKnowledgeHubSavedSearchEntityType,
+  MJvwLatestFeatureValuesEntityType,
   MJLibraryEntityType,
   MJLibraryItemEntityType,
   MJListCategoryEntityType,
@@ -302,9 +303,13 @@ import type {
   MJMLAlgorithmUseCaseEntityType,
   MJMLAlgorithmEntityType,
   MJMLEvaluationProtocolEntityType,
+  MJMLModelPublishRecordEntityType,
   MJMLModelScoringBindingEntityType,
   MJMLModelEntityType,
+  MJMLMonitoringResultEntityType,
+  MJMLOutputBindingEntityType,
   MJMLPredictionUnitEntityType,
+  MJMLScoringRunEntityType,
   MJMLTrainingPipelineEntityType,
   MJMLTrainingRunEntityType,
   MJMLTrainingSnapshotEntityType,
@@ -72291,10 +72296,10 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
     * * Description: The Record Process (Feature Pipeline) that computed this feature value.
     */
-    get RecordProcessID(): string {
+    get RecordProcessID(): string | null {
         return this.Get('RecordProcessID');
     }
-    set RecordProcessID(value: string) {
+    set RecordProcessID(value: string | null) {
         this.Set('RecordProcessID', value);
     }
 
@@ -72634,13 +72639,14 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Human
+    *   * Model
     *   * Pipeline
     * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).
     */
-    get Source(): 'Human' | 'Pipeline' {
+    get Source(): 'Human' | 'Model' | 'Pipeline' {
         return this.Get('Source');
     }
-    set Source(value: 'Human' | 'Pipeline') {
+    set Source(value: 'Human' | 'Model' | 'Pipeline') {
         this.Set('Source', value);
     }
 
@@ -72703,6 +72709,47 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * * Field Name: MLModelScoringBindingID
+    * * Display Name: ML Model Scoring Binding
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Model Scoring Bindings (vwMLModelScoringBindings.ID)
+    * * Description: The scoring binding whose prediction this is; set on every Model row and on a person's value entered on a binding.
+    */
+    get MLModelScoringBindingID(): string | null {
+        return this.Get('MLModelScoringBindingID');
+    }
+    set MLModelScoringBindingID(value: string | null) {
+        this.Set('MLModelScoringBindingID', value);
+    }
+
+    /**
+    * * Field Name: MLScoringRunID
+    * * Display Name: ML Scoring Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Scoring Runs (vwMLScoringRuns.ID)
+    * * Description: The scoring run that wrote this Model row.
+    */
+    get MLScoringRunID(): string | null {
+        return this.Get('MLScoringRunID');
+    }
+    set MLScoringRunID(value: string | null) {
+        this.Set('MLScoringRunID', value);
+    }
+
+    /**
+    * * Field Name: InTraining
+    * * Display Name: In Training
+    * * SQL Data Type: bit
+    * * Description: Model rows: true when the record was in the model's training snapshot, so its score is optimistic.
+    */
+    get InTraining(): boolean | null {
+        return this.Get('InTraining');
+    }
+    set InTraining(value: boolean | null) {
+        this.Set('InTraining', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -72754,6 +72801,15 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     */
     get AIModel(): string | null {
         return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: MLModelScoringBinding
+    * * Display Name: ML Model Scoring Binding
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLModelScoringBinding(): string | null {
+        return this.Get('MLModelScoringBinding');
     }
 }
 
@@ -79781,6 +79837,309 @@ export class MJKnowledgeHubSavedSearchEntity extends BaseEntity<MJKnowledgeHubSa
 
 
 /**
+ * MJ: Latest Feature Values - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: vwLatestFeatureValues
+ * * Base View: vwLatestFeatureValues
+ * * @description The latest value of each record's feature: one row per entity, record and feature name, the newest Champion Feature Value by effective date, then computation time. Read-only.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Latest Feature Values')
+export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureValuesEntityType> {
+    /**
+    * Loads the MJ: Latest Feature Values record from the database
+    * @param ID: string - primary key value to load the MJ: Latest Feature Values record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJvwLatestFeatureValuesEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Latest Feature Values - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJvwLatestFeatureValuesEntity
+    * @throws {Error} - Save is not allowed for MJ: Latest Feature Values, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Latest Feature Values, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Latest Feature Values - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJvwLatestFeatureValuesEntity
+    * @throws {Error} - Delete is not allowed for MJ: Latest Feature Values, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Latest Feature Values, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Unique identifier for this feature value record, matching the source FeatureValue.ID.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: The entity ID of the record this feature was computed for.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(900)
+    * * Description: Serialized primary key of the record this feature value belongs to.
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: FeatureName
+    * * Display Name: Feature Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the feature.
+    */
+    get FeatureName(): string {
+        return this.Get('FeatureName');
+    }
+    set FeatureName(value: string) {
+        this.Set('FeatureName', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Who produced the value (e.g., Pipeline, Human, Model).
+    */
+    get Source(): string {
+        return this.Get('Source');
+    }
+    set Source(value: string) {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Role of the feature value (e.g., Champion).
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+    set Role(value: string) {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: EffectiveAsOf
+    * * Display Name: Effective As Of
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp from which this value is considered effective for the feature.
+    */
+    get EffectiveAsOf(): Date | null {
+        return this.Get('EffectiveAsOf');
+    }
+    set EffectiveAsOf(value: Date | null) {
+        this.Set('EffectiveAsOf', value);
+    }
+
+    /**
+    * * Field Name: ComputedAt
+    * * Display Name: Computed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this feature value was computed.
+    */
+    get ComputedAt(): Date {
+        return this.Get('ComputedAt');
+    }
+    set ComputedAt(value: Date) {
+        this.Set('ComputedAt', value);
+    }
+
+    /**
+    * * Field Name: MLModelScoringBindingID
+    * * Display Name: ML Model Scoring Binding ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Identifier of the scoring binding whose prediction this value represents.
+    */
+    get MLModelScoringBindingID(): string | null {
+        return this.Get('MLModelScoringBindingID');
+    }
+    set MLModelScoringBindingID(value: string | null) {
+        this.Set('MLModelScoringBindingID', value);
+    }
+
+    /**
+    * * Field Name: MLModelID
+    * * Display Name: ML Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Identifier of the ML model that scored this value.
+    */
+    get MLModelID(): string | null {
+        return this.Get('MLModelID');
+    }
+    set MLModelID(value: string | null) {
+        this.Set('MLModelID', value);
+    }
+
+    /**
+    * * Field Name: MLScoringRunID
+    * * Display Name: ML Scoring Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Identifier of the ML scoring run that computed this value.
+    */
+    get MLScoringRunID(): string | null {
+        return this.Get('MLScoringRunID');
+    }
+    set MLScoringRunID(value: string | null) {
+        this.Set('MLScoringRunID', value);
+    }
+
+    /**
+    * * Field Name: InTraining
+    * * Display Name: In Training
+    * * SQL Data Type: bit
+    * * Description: Indicates whether this record was included in the model's training snapshot.
+    */
+    get InTraining(): boolean | null {
+        return this.Get('InTraining');
+    }
+    set InTraining(value: boolean | null) {
+        this.Set('InTraining', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Identifier of the Record Process (Feature Pipeline) that computed this feature value.
+    */
+    get RecordProcessID(): string | null {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string | null) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: ValueText
+    * * Display Name: Value (Text)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Computed feature value as text, for textual or categorical features.
+    */
+    get ValueText(): string | null {
+        return this.Get('ValueText');
+    }
+    set ValueText(value: string | null) {
+        this.Set('ValueText', value);
+    }
+
+    /**
+    * * Field Name: ValueNumeric
+    * * Display Name: Value (Numeric)
+    * * SQL Data Type: float(53)
+    * * Description: Computed feature value as a floating-point numeric score or metric.
+    */
+    get ValueNumeric(): number | null {
+        return this.Get('ValueNumeric');
+    }
+    set ValueNumeric(value: number | null) {
+        this.Set('ValueNumeric', value);
+    }
+
+    /**
+    * * Field Name: ValueDate
+    * * Display Name: Value (Date)
+    * * SQL Data Type: datetimeoffset
+    * * Description: Computed feature value formatted as a date/time timestamp.
+    */
+    get ValueDate(): Date | null {
+        return this.Get('ValueDate');
+    }
+    set ValueDate(value: Date | null) {
+        this.Set('ValueDate', value);
+    }
+
+    /**
+    * * Field Name: ValueBoolean
+    * * Display Name: Value (Boolean)
+    * * SQL Data Type: bit
+    * * Description: Computed feature value as a boolean true/false flag.
+    */
+    get ValueBoolean(): boolean | null {
+        return this.Get('ValueBoolean');
+    }
+    set ValueBoolean(value: boolean | null) {
+        this.Set('ValueBoolean', value);
+    }
+
+    /**
+    * * Field Name: ValueJSON
+    * * Display Name: Value (JSON)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Computed feature value as structured JSON data.
+    */
+    get ValueJSON(): string | null {
+        return this.Get('ValueJSON');
+    }
+    set ValueJSON(value: string | null) {
+        this.Set('ValueJSON', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: float(53)
+    * * Description: Optional confidence score associated with this computed feature value.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+}
+
+
+/**
  * MJ: Libraries - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Library
@@ -83649,11 +84008,572 @@ export class MJMLEvaluationProtocolEntity extends BaseEntity<MJMLEvaluationProto
 
 
 /**
+ * JSON shapes for the `MJ: ML Model Publish Records` columns that store Predictive Studio contract values: `Initiator`
+ * (`MJMLModelPublishRecordEntity_Actor`), `MJMLModelPublishRecordEntity_GateDecision` (`MJMLModelPublishRecordEntity_GateDecision`), `Evidence` (`MJMLModelPublishRecordEntity_EvidenceSnapshot`) and `Refusal` (`MJMLModelPublishRecordEntity_TransitionRefusal`).
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it verbatim, and CodeGen emits it inline
+ * (once per entity, however many fields bind it), so it cannot import another file. CodeGen emits typed
+ * `InitiatorObject`, `GateDecisionObject`, `EvidenceObject` and `RefusalObject` accessors on
+ * `MJMLModelPublishRecordEntity`.
+ *
+ * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
+ * `@memberjunction/predictive-studio-core` (`packages/AI/PredictiveStudio/Core/src/`): `MJMLModelPublishRecordEntity_Actor` in `prediction-unit.ts`;
+ * `MJMLModelPublishRecordEntity_GateDecision` and `MJMLModelPublishRecordEntity_PairedComparison` in `gate.ts`; `MJMLModelPublishRecordEntity_EvidenceSnapshot` in `governance-contracts.ts`;
+ * `MJMLModelPublishRecordEntity_TransitionRefusal`, `MJMLModelPublishRecordEntity_LifecycleState`, `MJMLModelPublishRecordEntity_PersistedLifecycleState` and `MJMLModelPublishRecordEntity_StatusGuardDecision` in `registry-contracts.ts`; `MJMLModelPublishRecordEntity_Interval`,
+ * `MJMLModelPublishRecordEntity_MetricWithInterval`, `MJMLModelPublishRecordEntity_ProperScore`, `MJMLModelPublishRecordEntity_SecondaryMetric` and `MJMLModelPublishRecordEntity_MetricKey` in `evaluation-protocol.ts`; `MJMLModelPublishRecordEntity_LeakageFlag` in
+ * `trainer-contract.ts`. Runtime code reads the columns through those Core types, so a member added there must be added
+ * here. Edit both in the same commit; Core's `src/__tests__/jsontype-mirrors.compile.test.ts` fails when they drift.
+ * The keys are camelCase because they are stored JSON and trainer wire names.
+ */
+
+/**
+ * Who authored a version or started an action — data, never a permission by itself. `human` is a user; `agent`,
+ * `scheduled-job` and `system` are the automated authors. A `system` actor started by a Record Process run
+ * (auto-train) names that run in `processRunId`.
+ */
+export type MJMLModelPublishRecordEntity_Actor =
+  | { readonly kind: 'human'; readonly userId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'agent'; readonly agentRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'scheduled-job'; readonly scheduledJobRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  // case-violation-ok-legacy-back-compat: stored Prediction Unit and publish-record Initiator JSON field names
+  | { readonly kind: 'system'; readonly component: string; readonly processRunId?: string };
+
+/** The gate's decision: what ships (a model, the best simple baseline, or nothing) and the branch that decided it. */
+export type MJMLModelPublishRecordEntity_GateDecision =
+  | {
+      readonly outcome: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: 'no simple baseline carries demonstrable signal' | null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    }
+  | {
+      readonly outcome: 'keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'b:keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'simpleBaseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    }
+  | {
+      readonly outcome: 'no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'c:no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    };
+
+/** What the approver (or the automated gate) was shown, built server-side from stored rows at signing or publish. */
+export interface MJMLModelPublishRecordEntity_EvidenceSnapshot {
+  readonly holdoutPrimary: MJMLModelPublishRecordEntity_MetricWithInterval;  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  readonly comparisons: Readonly<Record<string, MJMLModelPublishRecordEntity_PairedComparison>>;  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  readonly gate: MJMLModelPublishRecordEntity_GateDecision;  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  readonly leakageFlags: readonly MJMLModelPublishRecordEntity_LeakageFlag[];  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  /** The training data window, as ISO dates (yyyy-mm-dd). */
+  readonly dataWindow: { readonly from: string; readonly to: string };  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  readonly snapshotHash: string;  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+}
+
+/** A confidence interval at `level` around an estimate. */
+export interface MJMLModelPublishRecordEntity_Interval { readonly level: number; readonly lower: number; readonly upper: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** One metric's value on `n` rows, with its interval. */
+export interface MJMLModelPublishRecordEntity_MetricWithInterval { readonly metric: MJMLModelPublishRecordEntity_MetricKey; readonly value: number; readonly interval: MJMLModelPublishRecordEntity_Interval; readonly n: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+
+/** The proper scoring rule a protocol ranks candidates by, per target family. */
+export type MJMLModelPublishRecordEntity_ProperScore =
+  | { readonly family: 'binary'; readonly metric: 'log-loss' | 'brier' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'multiclass'; readonly metric: 'multiclass-log-loss' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'continuous'; readonly metric: 'rmse' | 'mae' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'count'; readonly metric: 'poisson-deviance' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'non-negative'; readonly metric: 'tweedie-deviance' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'forecast'; readonly metric: 'mase' | 'rmse' };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** The metrics reported beside the primary score; never used to rank. */
+export type MJMLModelPublishRecordEntity_SecondaryMetric = 'auc' | 'accuracy' | 'f1' | 'precision' | 'recall' | 'r2' | 'calibration-slope';
+/** Every metric a run may report: the proper scores and the secondary metrics. */
+export type MJMLModelPublishRecordEntity_MetricKey = MJMLModelPublishRecordEntity_ProperScore['metric'] | MJMLModelPublishRecordEntity_SecondaryMetric;
+
+/** A paired comparison of two scorers' losses on the same holdout rows. */
+export interface MJMLModelPublishRecordEntity_PairedComparison {
+  /** Mean of (base loss − candidate loss); positive favours the candidate. */
+  readonly value: number;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+  /** The interval on `value` at the protocol's lower-bound level. */
+  readonly ci: readonly [number, number];  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+  /** True when ci[0] > the protocol's margin. */
+  readonly beats: boolean;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+}
+
+/** One leakage-audit finding. */
+export type MJMLModelPublishRecordEntity_LeakageFlag =
+  | { readonly kind: 'single-feature-auc'; readonly sourceColumn: string; readonly heldOutAuc: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'time-shifted-label'; readonly scoreWithShiftedLabel: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'drop-column'; readonly sourceColumn: string; readonly scoreDrop: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'high-cardinality-id'; readonly sourceColumn: string; readonly distinctRatio: number };  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+
+/** Why a lifecycle transition was refused; stored as `MJ: ML Model Publish Records.Refusal` JSON. */
+export type MJMLModelPublishRecordEntity_TransitionRefusal =
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'illegal-transition'; readonly from: MJMLModelPublishRecordEntity_PersistedLifecycleState; readonly to: MJMLModelPublishRecordEntity_PersistedLifecycleState }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'no-sign-off' }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'gate-no-signal'; readonly reason: string }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'unacknowledged-leakage-flags'; readonly flags: readonly MJMLModelPublishRecordEntity_LeakageFlag['kind'][] }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'semantics-check-failed'; readonly mismatches: readonly string[] }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'actor-not-permitted'; readonly actor: MJMLModelPublishRecordEntity_Actor['kind'] }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'does-not-beat-incumbent'; readonly incumbentModelId: string; readonly comparison: MJMLModelPublishRecordEntity_PairedComparison }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'status-written-outside-gate'; readonly guard: Extract<MJMLModelPublishRecordEntity_StatusGuardDecision, { readonly Allow: false }> }
+  /** Storage unreachable while verifying the artifact; transient (D4-16). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'artifact-unverifiable'; readonly detail: string }
+  /** The publish lock timed out; transient (D4-16). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'publish-in-progress' }
+  /** A keep-simple-baseline outcome without `autoPublishKeepBaseline` or a human request; final (D-031, D4-16). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'keep-baseline-not-auto-published' }
+  /** The registry job closed a sign-off wait: a newer run was evaluated, or `signOffExpiryDays` passed (D4-19). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'sign-off-wait-closed'; readonly closedBy: 'newer-run-evaluated' | 'expired' }
+  /** A run whose decision kept the incumbent heuristic: no model row (PR 3 Q3-5; D4-56). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'kept-existing-rule'; readonly rule: string }
+  /** The shipped finalist's calibration hides its family (the trainer's CALIBRATION HOLD); the slope, or null when unmeasured (D4-57). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'calibration-held'; readonly slope: number | null }
+  /** The model cannot be served (no artifact file, or a delivery that ships nothing); the reason in words (D4-57). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'not-servable'; readonly reason: string }
+  /** No model row has this ID, or the ID is not a UUID (refused before any read). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'model-not-found'; readonly modelId: string }
+  /** An archive or a rollback without a reason. */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'reason-required' }
+  /** The run's stored comparison is against a model other than the one Published now (another publish replaced it, §5.7 R2); final. */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+
+/** A lifecycle state of the contract. */
+export type MJMLModelPublishRecordEntity_LifecycleState = 'draft' | 'validated' | 'published' | 'archived';
+
+/** A lifecycle state as a refusal names it: the contract's four plus `unevaluated` and `keep-baseline` (D4-90). */
+export type MJMLModelPublishRecordEntity_PersistedLifecycleState = MJMLModelPublishRecordEntity_LifecycleState | 'unevaluated' | 'keep-baseline';
+
+/** The Status guard's decision for one save of `MJ: ML Models`. */
+export type MJMLModelPublishRecordEntity_StatusGuardDecision =
+  | { readonly Allow: true; readonly Reason: 'create-as-draft' | 'status-unchanged' | 'gate-authorised' }
+  | {
+      readonly Allow: false;
+      readonly Reason:
+        | 'create-not-draft'
+        | 'stored-row-unreadable'
+        | 'deferred-in-transaction-group'
+        | 'status-changed-outside-gate'
+        | 'gate-transition-mismatch'
+        | 'serving-flag-set-outside-migration';
+    };
+
+/**
+ * MJ: ML Model Publish Records - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLModelPublishRecord
+ * * Base View: vwMLModelPublishRecords
+ * * @description The publish ledger of ML models: every human sign-off, every applied publish or rollback (automatic or by a person) and every refused publish attempt. An audit trail only: the lifecycle gate re-derives each decision from the stored evaluation and the model's Delivery. Rows are never updated, except that spDeleteEntityWithCoreDependencies clears SignOffID, ReplacesModelID and TrainingRunID on surviving rows when the referenced row is deleted with its entity.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Model Publish Records')
+export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRecordEntityType> {
+    /**
+    * Loads the MJ: ML Model Publish Records record from the database
+    * @param ID: string - primary key value to load the MJ: ML Model Publish Records record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLModelPublishRecordEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The model the record is about. NULL only on a run-level refusal: a training run whose outcome produced no model row.
+    */
+    get ModelID(): string | null {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string | null) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: TrainingRunID
+    * * Display Name: Training Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+    * * Description: The training run the record is about; the idempotency key of a publish and of a run-level refusal.
+    */
+    get TrainingRunID(): string | null {
+        return this.Get('TrainingRunID');
+    }
+    set TrainingRunID(value: string | null) {
+        this.Set('TrainingRunID', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * publish
+    *   * refusal
+    *   * sign-off
+    * * Description: sign-off (a person approved or rejected), publish (a status change was applied) or refusal (a publish attempt was refused).
+    */
+    get Kind(): 'publish' | 'refusal' | 'sign-off' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'publish' | 'refusal' | 'sign-off') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: Purpose
+    * * Display Name: Purpose
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adopt
+    *   * evaluate
+    *   * publish
+    *   * rollback
+    * * Description: publish, rollback (an archived model published again), evaluate (a run-level outcome only) or adopt (a pre-change Published model re-verified).
+    */
+    get Purpose(): 'adopt' | 'evaluate' | 'publish' | 'rollback' {
+        return this.Get('Purpose');
+    }
+    set Purpose(value: 'adopt' | 'evaluate' | 'publish' | 'rollback') {
+        this.Set('Purpose', value);
+    }
+
+    /**
+    * * Field Name: ApproverKind
+    * * Display Name: Approver Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Description: automated-gate when no person approved the publish; user when a person published or the publish consumed that person's approving sign-off.
+    */
+    get ApproverKind(): string {
+        return this.Get('ApproverKind');
+    }
+    set ApproverKind(value: string) {
+        this.Set('ApproverKind', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The person who approved, when ApproverKind is user.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Initiator
+    * * Display Name: Initiator
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelPublishRecordEntity_Actor
+    * * Description: JSON Actor: who started the attempt (a user, an agent run, a Record Process run or a scheduled job run).
+    */
+    get Initiator(): string {
+        return this.Get('Initiator');
+    }
+    set Initiator(value: string) {
+        this.Set('Initiator', value);
+    }
+
+    /**
+    * Typed accessor for Initiator — a live view of the parsed JSON as MJMLModelPublishRecordEntity_Actor.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Initiator field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get InitiatorObject(): MJMLModelPublishRecordEntity_Actor {
+        return this.GetJSONFieldObject<MJMLModelPublishRecordEntity_Actor>('Initiator')!;
+    }
+    set InitiatorObject(value: MJMLModelPublishRecordEntity_Actor) {
+        this.SetJSONFieldObject<MJMLModelPublishRecordEntity_Actor>('Initiator', value);
+    }
+
+    /**
+    * * Field Name: RecordedAt
+    * * Display Name: Recorded At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the record was written.
+    */
+    get RecordedAt(): Date {
+        return this.Get('RecordedAt');
+    }
+    set RecordedAt(value: Date) {
+        this.Set('RecordedAt', value);
+    }
+
+    /**
+    * * Field Name: Decision
+    * * Display Name: Decision
+    * * SQL Data Type: nvarchar(10)
+    * * Description: Sign-off rows only: approve or reject.
+    */
+    get Decision(): string | null {
+        return this.Get('Decision');
+    }
+    set Decision(value: string | null) {
+        this.Set('Decision', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The reason in plain words; required when the record overrides flags.
+    */
+    get Reason(): string | null {
+        return this.Get('Reason');
+    }
+    set Reason(value: string | null) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: GateDecision
+    * * Display Name: Gate Decision
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelPublishRecordEntity_GateDecision
+    * * Description: JSON GateDecision as the gate re-derived it at the publish, kept as a copy for audit. Required on publish rows.
+    */
+    get GateDecision(): string | null {
+        return this.Get('GateDecision');
+    }
+    set GateDecision(value: string | null) {
+        this.Set('GateDecision', value);
+    }
+
+    /**
+    * Typed accessor for GateDecision — a live view of the parsed JSON as MJMLModelPublishRecordEntity_GateDecision.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying GateDecision field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get GateDecisionObject(): MJMLModelPublishRecordEntity_GateDecision | null {
+        return this.GetJSONFieldObject<MJMLModelPublishRecordEntity_GateDecision>('GateDecision');
+    }
+    set GateDecisionObject(value: MJMLModelPublishRecordEntity_GateDecision | null) {
+        this.SetJSONFieldObject<MJMLModelPublishRecordEntity_GateDecision>('GateDecision', value);
+    }
+
+    /**
+    * * Field Name: Evidence
+    * * Display Name: Evidence
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelPublishRecordEntity_EvidenceSnapshot
+    * * Description: JSON EvidenceSnapshot built by the server from stored rows at the moment of the sign-off or publish.
+    */
+    get Evidence(): string | null {
+        return this.Get('Evidence');
+    }
+    set Evidence(value: string | null) {
+        this.Set('Evidence', value);
+    }
+
+    /**
+    * Typed accessor for Evidence — a live view of the parsed JSON as MJMLModelPublishRecordEntity_EvidenceSnapshot.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Evidence field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get EvidenceObject(): MJMLModelPublishRecordEntity_EvidenceSnapshot | null {
+        return this.GetJSONFieldObject<MJMLModelPublishRecordEntity_EvidenceSnapshot>('Evidence');
+    }
+    set EvidenceObject(value: MJMLModelPublishRecordEntity_EvidenceSnapshot | null) {
+        this.SetJSONFieldObject<MJMLModelPublishRecordEntity_EvidenceSnapshot>('Evidence', value);
+    }
+
+    /**
+    * * Field Name: EvidenceSha256
+    * * Display Name: Evidence SHA-256
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 of the canonical Evidence JSON; a sign-off authorises a publish only while it equals a fresh recomputation.
+    */
+    get EvidenceSha256(): string | null {
+        return this.Get('EvidenceSha256');
+    }
+    set EvidenceSha256(value: string | null) {
+        this.Set('EvidenceSha256', value);
+    }
+
+    /**
+    * * Field Name: OverridesFlags
+    * * Display Name: Overrides Flags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * Description: JSON array of the leakage flags a sign-off acknowledges by name; empty on every other row.
+    */
+    get OverridesFlags(): string {
+        return this.Get('OverridesFlags');
+    }
+    set OverridesFlags(value: string) {
+        this.Set('OverridesFlags', value);
+    }
+
+    /**
+    * * Field Name: SignOffID
+    * * Display Name: Sign-Off
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Model Publish Records (vwMLModelPublishRecords.ID)
+    * * Description: Publish rows: the human sign-off this publish consumed, when one was required.
+    */
+    get SignOffID(): string | null {
+        return this.Get('SignOffID');
+    }
+    set SignOffID(value: string | null) {
+        this.Set('SignOffID', value);
+    }
+
+    /**
+    * * Field Name: ReplacesModelID
+    * * Display Name: Replaces Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: Publish rows: the model archived in the same transaction.
+    */
+    get ReplacesModelID(): string | null {
+        return this.Get('ReplacesModelID');
+    }
+    set ReplacesModelID(value: string | null) {
+        this.Set('ReplacesModelID', value);
+    }
+
+    /**
+    * * Field Name: Refusal
+    * * Display Name: Refusal Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelPublishRecordEntity_TransitionRefusal
+    * * Description: Refusal rows: JSON TransitionRefusal, the reason the attempt was refused.
+    */
+    get Refusal(): string | null {
+        return this.Get('Refusal');
+    }
+    set Refusal(value: string | null) {
+        this.Set('Refusal', value);
+    }
+
+    /**
+    * Typed accessor for Refusal — a live view of the parsed JSON as MJMLModelPublishRecordEntity_TransitionRefusal.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Refusal field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get RefusalObject(): MJMLModelPublishRecordEntity_TransitionRefusal | null {
+        return this.GetJSONFieldObject<MJMLModelPublishRecordEntity_TransitionRefusal>('Refusal');
+    }
+    set RefusalObject(value: MJMLModelPublishRecordEntity_TransitionRefusal | null) {
+        this.SetJSONFieldObject<MJMLModelPublishRecordEntity_TransitionRefusal>('Refusal', value);
+    }
+
+    /**
+    * * Field Name: Transient
+    * * Display Name: Transient
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Refusal rows: true when a retry may succeed.
+    */
+    get Transient(): boolean {
+        return this.Get('Transient');
+    }
+    set Transient(value: boolean) {
+        this.Set('Transient', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Details
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+}
+
+
+/**
  * MJ: ML Model Scoring Bindings - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: MLModelScoringBinding
  * * Base View: vwMLModelScoringBindings
- * * @description Binds an MLModel to where it scores, so staleness can be detected and retraining driven (maintenance). The scoring itself runs as a Record Process (the new ML inference work type); the binding records the target entity/column written and the scoring mode. MaterializedResultID is a forward-compatible SOFT reference to MJ: Materialized Results (PR #2770), not yet a FK because that table is not merged.
+ * * @description Defines a prediction feature: the training pipeline whose Published model scores, the entity whose records it scores and the feature name its predictions are stored under as Feature Values. Optionally copies the newest value into an existing column. Who may see the predictions is ViewAuthorizationID.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -83692,20 +84612,6 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     }
 
     /**
-    * * Field Name: MLModelID
-    * * Display Name: ML Model ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
-    * * Description: Foreign key to the MLModel that does the scoring
-    */
-    get MLModelID(): string {
-        return this.Get('MLModelID');
-    }
-    set MLModelID(value: string) {
-        this.Set('MLModelID', value);
-    }
-
-    /**
     * * Field Name: RecordProcessID
     * * Display Name: Record Process ID
     * * SQL Data Type: uniqueidentifier
@@ -83737,7 +84643,7 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     * * Field Name: TargetColumn
     * * Display Name: Target Column
     * * SQL Data Type: nvarchar(255)
-    * * Description: Name of the column that receives the prediction (when scores are written back / materialized)
+    * * Description: Name of an existing column of the target entity that also receives the newest prediction; NULL stores the predictions as Feature Values only.
     */
     get TargetColumn(): string | null {
         return this.Get('TargetColumn');
@@ -83753,29 +84659,15 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     * * Default Value: OnDemand
     * * Value List Type: List
     * * Possible Values 
-    *   * Materialized
     *   * OnDemand
     *   * Scheduled
-    * * Description: Scoring mode: OnDemand, Scheduled, or Materialized
+    * * Description: Scoring mode: OnDemand or Scheduled.
     */
-    get Mode(): 'Materialized' | 'OnDemand' | 'Scheduled' {
+    get Mode(): 'OnDemand' | 'Scheduled' {
         return this.Get('Mode');
     }
-    set Mode(value: 'Materialized' | 'OnDemand' | 'Scheduled') {
+    set Mode(value: 'OnDemand' | 'Scheduled') {
         this.Set('Mode', value);
-    }
-
-    /**
-    * * Field Name: MaterializedResultID
-    * * Display Name: Materialized Result ID
-    * * SQL Data Type: uniqueidentifier
-    * * Description: Soft reference to a MJ: Materialized Results row (PR #2770) when Mode=Materialized; not a FK until that table exists
-    */
-    get MaterializedResultID(): string | null {
-        return this.Get('MaterializedResultID');
-    }
-    set MaterializedResultID(value: string | null) {
-        this.Set('MaterializedResultID', value);
     }
 
     /**
@@ -83825,6 +84717,91 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     }
 
     /**
+    * * Field Name: MLTrainingPipelineID
+    * * Display Name: ML Training Pipeline
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+    * * Description: The training pipeline whose Published model scores for this binding; publishing a new version needs no binding change.
+    */
+    get MLTrainingPipelineID(): string {
+        return this.Get('MLTrainingPipelineID');
+    }
+    set MLTrainingPipelineID(value: string) {
+        this.Set('MLTrainingPipelineID', value);
+    }
+
+    /**
+    * * Field Name: FeatureName
+    * * Display Name: Feature Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The feature name the predictions are stored under, unique on the target entity.
+    */
+    get FeatureName(): string {
+        return this.Get('FeatureName');
+    }
+    set FeatureName(value: string) {
+        this.Set('FeatureName', value);
+    }
+
+    /**
+    * * Field Name: TargetColumnSource
+    * * Display Name: Target Column Source
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The result reference ($.Value, $.Class, $.AdverseProbability or $.Probabilities.<class>) the column copy writes into TargetColumn; required when TargetColumn is set.
+    */
+    get TargetColumnSource(): string | null {
+        return this.Get('TargetColumnSource');
+    }
+    set TargetColumnSource(value: string | null) {
+        this.Set('TargetColumnSource', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Withdrawn
+    * * Description: Active or Withdrawn. A withdrawn binding no longer scores, and the column copies it made are cleared; its Feature Values stay.
+    */
+    get Status(): 'Active' | 'Withdrawn' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Withdrawn') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ViewAuthorizationID
+    * * Display Name: View Authorization
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Authorizations (vwAuthorizations.ID)
+    * * Description: The authorization a user must hold to see this binding's predictions; a binding with none is visible to no user.
+    */
+    get ViewAuthorizationID(): string | null {
+        return this.Get('ViewAuthorizationID');
+    }
+    set ViewAuthorizationID(value: string | null) {
+        this.Set('ViewAuthorizationID', value);
+    }
+
+    /**
+    * * Field Name: RetentionDays
+    * * Display Name: Retention Days
+    * * SQL Data Type: int
+    * * Description: Days of prediction history kept; NULL keeps all of it.
+    */
+    get RetentionDays(): number | null {
+        return this.Get('RetentionDays');
+    }
+    set RetentionDays(value: number | null) {
+        this.Set('RetentionDays', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -83841,8 +84818,127 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     get TargetEntity(): string | null {
         return this.Get('TargetEntity');
     }
+
+    /**
+    * * Field Name: MLTrainingPipeline
+    * * Display Name: ML Training Pipeline Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLTrainingPipeline(): string | null {
+        return this.Get('MLTrainingPipeline');
+    }
+
+    /**
+    * * Field Name: ViewAuthorization
+    * * Display Name: View Authorization Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ViewAuthorization(): string | null {
+        return this.Get('ViewAuthorization');
+    }
 }
 
+
+/**
+ * JSON shapes for the `MJ: ML Models` columns that store Predictive Studio contract values: `MJMLModelEntity_CodeVersion`
+ * (`MJMLModelEntity_CodeVersion`), `MJMLModelEntity_OutputSemantics` (`MJMLModelEntity_OutputSemantics`) and `Delivery` (`MJMLModelEntity_RegisteredDeliveryView`).
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it verbatim, and CodeGen emits it inline
+ * (once per entity, however many fields bind it), so it cannot import another file. CodeGen emits typed
+ * `CodeVersionObject`, `OutputSemanticsObject` and `DeliveryObject` accessors on `MJMLModelEntity`.
+ *
+ * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
+ * `@memberjunction/predictive-studio-core` (`packages/AI/PredictiveStudio/Core/src/`): `MJMLModelEntity_CodeVersion` in
+ * `trainer-contract.ts`; `MJMLModelEntity_OutputSemantics`, `MJMLModelEntity_RegisteredDeliveryView` and `MJMLModelEntity_StoredFile` in `registry-contracts.ts`;
+ * `MJMLModelEntity_TaskType` in `task-type.ts`; `MJMLModelEntity_GateDecision` in `gate.ts`. Runtime code reads the columns through those Core types,
+ * so a member added there must be added here. Edit both in the same commit; Core's
+ * `src/__tests__/jsontype-mirrors.compile.test.ts` fails when they drift.
+ * The keys are camelCase because they are stored JSON and trainer wire names.
+ */
+
+/** The code a run executed: the repository commit, the sidecar version, the library versions, threads and seed. */
+export interface MJMLModelEntity_CodeVersion {
+  readonly psGitSha: string;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  readonly sidecarVersion: string;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  readonly libraryVersions: Readonly<Record<string, string>>;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  readonly threads: number;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  readonly seed: number;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+}
+
+/**
+ * Which class a score is for and which direction is adverse (S9.5). Only the task type is stored; the scored class and
+ * adverse direction are derived by `TaskTypeRules.ScoreSemantics`, so there is one source of truth.
+ */
+export interface MJMLModelEntity_OutputSemantics {
+  readonly task: MJMLModelEntity_TaskType;  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.MJMLModelEntity_OutputSemantics JSON key
+}
+
+/** The declared task type of a Prediction Unit. */
+export type MJMLModelEntity_TaskType =
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'binary'; readonly classOrder: readonly [string, string]; readonly adverseIndex: 0 | 1 }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'multiclass'; readonly classOrder: readonly string[]; readonly adverseIndices: readonly number[] }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'continuous' }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'count' }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'non-negative'; readonly tweediePower: number }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'forecast'; readonly valueKind: 'continuous' | 'count' | 'non-negative' };
+
+/** The registry's view of a delivery, persisted as `MJ: ML Models.Delivery` JSON: the stored file with the gate inside. */
+export type MJMLModelEntity_RegisteredDeliveryView =
+  | {
+      readonly kind: 'delivered';  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+      readonly gate: Exclude<MJMLModelEntity_GateDecision, { readonly outcome: 'no-signal' }>;  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+      readonly shippedRole: 'model' | 'simpleBaseline';  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+      readonly artifact: MJMLModelEntity_StoredFile;  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+    }
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON keys
+  | { readonly kind: 'no-signal'; readonly gate: Extract<MJMLModelEntity_GateDecision, { readonly outcome: 'no-signal' }>; readonly artifact: null };
+
+/** A file held through MJ's file-storage provider (`MJ: Files` row + `FileStorageBase` driver), stored write-once. */
+export interface MJMLModelEntity_StoredFile {
+  /** `MJ: Files`.ID */
+  readonly fileId: string;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** `MJ: File Storage Providers`.ID; never the OS temp directory. */
+  readonly storageProviderId: string;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** Object name passed to `FileStorageBase.PutObject` / `GetObject`. */
+  readonly providerKey: string;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** Lower-case hex SHA-256 of the stored bytes. */
+  readonly sha256: string;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** Size of the stored bytes. */
+  readonly sizeBytes: number;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** Write-once: a second PutObject to this key is refused by the registry. */
+  readonly writeOnce: true;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+}
+
+/** The gate's decision: what ships (a model, the best simple baseline, or nothing) and the branch that decided it. */
+export type MJMLModelEntity_GateDecision =
+  | {
+      readonly outcome: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: 'no simple baseline carries demonstrable signal' | null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    }
+  | {
+      readonly outcome: 'keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'b:keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'simpleBaseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    }
+  | {
+      readonly outcome: 'no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'c:no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    };
 
 /**
  * MJ: ML Models - strongly typed entity sub-class
@@ -84099,14 +85195,16 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     * * Possible Values 
     *   * Archived
     *   * Draft
+    *   * KeepBaseline
     *   * Published
+    *   * Unevaluated
     *   * Validated
     * * Description: Lifecycle status: Draft, Validated, Published, or Archived
     */
-    get Status(): 'Archived' | 'Draft' | 'Published' | 'Validated' {
+    get Status(): 'Archived' | 'Draft' | 'KeepBaseline' | 'Published' | 'Unevaluated' | 'Validated' {
         return this.Get('Status');
     }
-    set Status(value: 'Archived' | 'Draft' | 'Published' | 'Validated') {
+    set Status(value: 'Archived' | 'Draft' | 'KeepBaseline' | 'Published' | 'Unevaluated' | 'Validated') {
         this.Set('Status', value);
     }
 
@@ -84128,6 +85226,249 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: PredictionUnitID
+    * * Display Name: Prediction Unit
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+    * * Description: The Prediction Unit version the model was trained under (the exact version row).
+    */
+    get PredictionUnitID(): string | null {
+        return this.Get('PredictionUnitID');
+    }
+    set PredictionUnitID(value: string | null) {
+        this.Set('PredictionUnitID', value);
+    }
+
+    /**
+    * * Field Name: EvaluationProtocolID
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+    * * Description: The Evaluation Protocol version the model was graded under (the exact version row).
+    */
+    get EvaluationProtocolID(): string | null {
+        return this.Get('EvaluationProtocolID');
+    }
+    set EvaluationProtocolID(value: string | null) {
+        this.Set('EvaluationProtocolID', value);
+    }
+
+    /**
+    * * Field Name: TrainingSnapshotID
+    * * Display Name: Training Snapshot
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
+    * * Description: The Training Snapshot the model was trained on.
+    */
+    get TrainingSnapshotID(): string | null {
+        return this.Get('TrainingSnapshotID');
+    }
+    set TrainingSnapshotID(value: string | null) {
+        this.Set('TrainingSnapshotID', value);
+    }
+
+    /**
+    * * Field Name: TrainingRunID
+    * * Display Name: Training Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+    * * Description: The training run that produced the model.
+    */
+    get TrainingRunID(): string | null {
+        return this.Get('TrainingRunID');
+    }
+    set TrainingRunID(value: string | null) {
+        this.Set('TrainingRunID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactSha256
+    * * Display Name: Artifact SHA-256
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 of the shipped artifact's stored bytes; a load that hashes differently is refused.
+    */
+    get ArtifactSha256(): string | null {
+        return this.Get('ArtifactSha256');
+    }
+    set ArtifactSha256(value: string | null) {
+        this.Set('ArtifactSha256', value);
+    }
+
+    /**
+    * * Field Name: SnapshotHash
+    * * Display Name: Snapshot Hash
+    * * SQL Data Type: char(64)
+    * * Description: Content hash of the training snapshot, copied at registration.
+    */
+    get SnapshotHash(): string | null {
+        return this.Get('SnapshotHash');
+    }
+    set SnapshotHash(value: string | null) {
+        this.Set('SnapshotHash', value);
+    }
+
+    /**
+    * * Field Name: CodeVersion
+    * * Display Name: Code Version
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelEntity_CodeVersion
+    * * Description: JSON CodeVersion of the training code: git commit, sidecar version, library versions, threads and seed.
+    */
+    get CodeVersion(): string | null {
+        return this.Get('CodeVersion');
+    }
+    set CodeVersion(value: string | null) {
+        this.Set('CodeVersion', value);
+    }
+
+    /**
+    * Typed accessor for CodeVersion — a live view of the parsed JSON as MJMLModelEntity_CodeVersion.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying CodeVersion field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get CodeVersionObject(): MJMLModelEntity_CodeVersion | null {
+        return this.GetJSONFieldObject<MJMLModelEntity_CodeVersion>('CodeVersion');
+    }
+    set CodeVersionObject(value: MJMLModelEntity_CodeVersion | null) {
+        this.SetJSONFieldObject<MJMLModelEntity_CodeVersion>('CodeVersion', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchemaHash
+    * * Display Name: Feature Schema Hash
+    * * SQL Data Type: char(64)
+    * * Description: Hash of the feature schema the model scores; a scoring request whose features hash differently is refused.
+    */
+    get FeatureSchemaHash(): string | null {
+        return this.Get('FeatureSchemaHash');
+    }
+    set FeatureSchemaHash(value: string | null) {
+        this.Set('FeatureSchemaHash', value);
+    }
+
+    /**
+    * * Field Name: OutputSemantics
+    * * Display Name: Output Semantics
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelEntity_OutputSemantics
+    * * Description: JSON {task}: what the model's output means (the task type and, for a classification, the adverse class).
+    */
+    get OutputSemantics(): string | null {
+        return this.Get('OutputSemantics');
+    }
+    set OutputSemantics(value: string | null) {
+        this.Set('OutputSemantics', value);
+    }
+
+    /**
+    * Typed accessor for OutputSemantics — a live view of the parsed JSON as MJMLModelEntity_OutputSemantics.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying OutputSemantics field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get OutputSemanticsObject(): MJMLModelEntity_OutputSemantics | null {
+        return this.GetJSONFieldObject<MJMLModelEntity_OutputSemantics>('OutputSemantics');
+    }
+    set OutputSemanticsObject(value: MJMLModelEntity_OutputSemantics | null) {
+        this.SetJSONFieldObject<MJMLModelEntity_OutputSemantics>('OutputSemantics', value);
+    }
+
+    /**
+    * * Field Name: Delivery
+    * * Display Name: Delivery
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelEntity_RegisteredDeliveryView
+    * * Description: JSON RegisteredDelivery: what the training run shipped and the gate decision it shipped under.
+    */
+    get Delivery(): string | null {
+        return this.Get('Delivery');
+    }
+    set Delivery(value: string | null) {
+        this.Set('Delivery', value);
+    }
+
+    /**
+    * Typed accessor for Delivery — a live view of the parsed JSON as MJMLModelEntity_RegisteredDeliveryView.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Delivery field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DeliveryObject(): MJMLModelEntity_RegisteredDeliveryView | null {
+        return this.GetJSONFieldObject<MJMLModelEntity_RegisteredDeliveryView>('Delivery');
+    }
+    set DeliveryObject(value: MJMLModelEntity_RegisteredDeliveryView | null) {
+        this.SetJSONFieldObject<MJMLModelEntity_RegisteredDeliveryView>('Delivery', value);
+    }
+
+    /**
+    * * Field Name: StatusReason
+    * * Display Name: Status Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why the model has its status, in plain words: a kept baseline, a demotion to Unevaluated, an archive or a withheld publish.
+    */
+    get StatusReason(): string | null {
+        return this.Get('StatusReason');
+    }
+    set StatusReason(value: string | null) {
+        this.Set('StatusReason', value);
+    }
+
+    /**
+    * * Field Name: ArtifactStatus
+    * * Display Name: Artifact Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: unverified
+    * * Value List Type: List
+    * * Possible Values 
+    *   * hash-mismatch
+    *   * legacy-local
+    *   * missing
+    *   * unverified
+    *   * verified
+    * * Description: Health of the stored artifact as last checked: unverified, verified, missing, hash-mismatch or legacy-local.
+    */
+    get ArtifactStatus(): 'hash-mismatch' | 'legacy-local' | 'missing' | 'unverified' | 'verified' {
+        return this.Get('ArtifactStatus');
+    }
+    set ArtifactStatus(value: 'hash-mismatch' | 'legacy-local' | 'missing' | 'unverified' | 'verified') {
+        this.Set('ArtifactStatus', value);
+    }
+
+    /**
+    * * Field Name: ArtifactCheckedAt
+    * * Display Name: Artifact Checked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When ArtifactStatus was last checked.
+    */
+    get ArtifactCheckedAt(): Date | null {
+        return this.Get('ArtifactCheckedAt');
+    }
+    set ArtifactCheckedAt(value: Date | null) {
+        this.Set('ArtifactCheckedAt', value);
+    }
+
+    /**
+    * * Field Name: ServingWhileUnevaluated
+    * * Display Name: Serving While Unevaluated
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True for a model that was Published before the lifecycle gate, demoted to Unevaluated and kept serving its pipeline until a model published through the gate replaces it. Never set by an entity save.
+    */
+    get ServingWhileUnevaluated(): boolean {
+        return this.Get('ServingWhileUnevaluated');
+    }
+    set ServingWhileUnevaluated(value: boolean) {
+        this.Set('ServingWhileUnevaluated', value);
     }
 
     /**
@@ -84155,6 +85496,818 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     */
     get ArtifactFile(): string | null {
         return this.Get('ArtifactFile');
+    }
+
+    /**
+    * * Field Name: PredictionUnit
+    * * Display Name: Prediction Unit Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PredictionUnit(): string | null {
+        return this.Get('PredictionUnit');
+    }
+
+    /**
+    * * Field Name: EvaluationProtocol
+    * * Display Name: Evaluation Protocol Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EvaluationProtocol(): string | null {
+        return this.Get('EvaluationProtocol');
+    }
+
+    /**
+    * * Field Name: TrainingSnapshot
+    * * Display Name: Training Snapshot Name
+    * * SQL Data Type: nvarchar(64)
+    */
+    get TrainingSnapshot(): string | null {
+        return this.Get('TrainingSnapshot');
+    }
+}
+
+
+/**
+ * JSON shapes for the `MJ: ML Monitoring Results` columns the monitoring job writes (PR 4 Task M6.3): `PrimaryScore`
+ * (`MJMLMonitoringResultEntity_MetricWithInterval`), `TrackedMetrics` (an array of `MJMLMonitoringResultEntity_TrackedMetric`), `Calibration` (`MJMLMonitoringResultEntity_CalibrationReport`),
+ * `DriftLook` and `DriftAlarms` (arrays of `MJMLMonitoringResultEntity_DriftLookEntry`), `Parity` (`MJMLMonitoringResultEntity_MonitoringParity`), `TriggersFired` (an array
+ * of `MJMLMonitoringResultEntity_MonitoringTriggerFired`), `ChallengerResult` (`MJMLMonitoringResultEntity_MonitoringChallengerResult`) and `RollbackCheck`
+ * (`MJMLMonitoringResultEntity_MonitoringRollbackCheck`).
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it verbatim, and CodeGen emits it inline
+ * (once per entity, however many fields bind it), so it cannot import another file.
+ *
+ * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
+ * `@memberjunction/predictive-studio-core`: `MJMLMonitoringResultEntity_Interval`, `MJMLMonitoringResultEntity_MetricWithInterval` and the metric keys in
+ * `evaluation-protocol.ts`; `MJMLMonitoringResultEntity_CalibrationReport` in `trainer-contract.ts`; the monitoring shapes in
+ * `monitoring-contracts.ts`. Edit both in the same commit; Core's `src/__tests__/jsontype-mirrors.compile.test.ts` fails
+ * when they drift. The keys are camelCase because they are stored JSON.
+ */
+
+/** Every metric a run may report: the proper scores and the secondary metrics. */
+export type MJMLMonitoringResultEntity_MetricKey =
+  | 'log-loss' | 'brier' | 'multiclass-log-loss' | 'rmse' | 'mae' | 'poisson-deviance' | 'tweedie-deviance' | 'mase'
+  | 'auc' | 'accuracy' | 'f1' | 'precision' | 'recall' | 'r2' | 'calibration-slope';
+
+/** A confidence interval at `level` around an estimate. */
+export interface MJMLMonitoringResultEntity_Interval { readonly level: number; readonly lower: number; readonly upper: number }  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+
+/** One metric's value on `n` rows, with its interval. */
+export interface MJMLMonitoringResultEntity_MetricWithInterval { readonly metric: MJMLMonitoringResultEntity_MetricKey; readonly value: number; readonly interval: MJMLMonitoringResultEntity_Interval; readonly n: number }  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+
+/** A tracked metric of one period beside the primary score: a proper score, a label rate or the mean prediction. */
+export interface MJMLMonitoringResultEntity_TrackedMetric {
+  readonly metric: MJMLMonitoringResultEntity_MetricKey | 'positive-rate' | 'class-rate' | 'mean-prediction';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly className: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly value: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly interval: MJMLMonitoringResultEntity_Interval;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly n: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** A binary model's calibration over the period: the recalibration fit and the reliability bins. */
+export interface MJMLMonitoringResultEntity_CalibrationReport {
+  readonly method: 'platt' | 'isotonic' | 'auto' | 'not-applicable';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly intercept: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly slope: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly reliability: readonly {  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly binLower: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly binUpper: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly meanPredicted: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly observedRate: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    readonly n: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  }[];
+}
+
+/** One input's procedure-M result at the period's look. */
+export interface MJMLMonitoringResultEntity_DriftLookEntry {
+  readonly input: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly kind: 'mean' | 'proportion' | 'series';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly z: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly p: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly pAdjusted: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly q: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly look: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly flagged: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The period's scoring parity check. */
+export interface MJMLMonitoringResultEntity_MonitoringParity {
+  readonly sampled: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly maxAbsDifference: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly passed: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly tolerance: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly resampled: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly trainingRunId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly skipped: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** One retrain trigger that fired at the period. */
+export interface MJMLMonitoringResultEntity_MonitoringTriggerFired {
+  readonly kind: 'outcome-degradation' | 'calibration-drift';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly reason: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The live challenger mirror's divergence over the period (`agreement` is a classifier's; null for any other task). */
+export interface MJMLMonitoringResultEntity_MonitoringMirror {
+  readonly challengerModelId: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly paired: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly agreement: number | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly meanScoreDelta: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly failures: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The period's challenger outcome and the live mirror's divergence. */
+export interface MJMLMonitoringResultEntity_MonitoringChallengerResult {
+  readonly outcome: 'none' | 'waiting' | 'published' | 'withheld' | 'stopped' | 'failed';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly trainingRunId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly recordId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly reason: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly mirror: MJMLMonitoringResultEntity_MonitoringMirror | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+}
+
+/** The period's automated rollback check. */
+export type MJMLMonitoringResultEntity_MonitoringRollbackCheck =
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'off' }
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'no-predecessor' }
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON keys
+  | { readonly kind: 'not-eligible'; readonly predecessorModelId: string; readonly reason: string }
+  | {
+      readonly kind: 'checked' | 'rolled-back' | 'rollback-withheld';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly predecessorModelId: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly sharedRowIds: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly comparisons: readonly MJMLMonitoringResultEntity_Interval[];  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+      readonly recordId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+    };
+
+/**
+ * MJ: ML Monitoring Results - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLMonitoringResult
+ * * Base View: vwMLMonitoringResults
+ * * @description One row per Published model per monitoring period: the outcome join, the tracked metrics, drift, parity, the triggers that fired and the challenger and rollback checks.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Monitoring Results')
+export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultEntityType> {
+    /**
+    * Loads the MJ: ML Monitoring Results record from the database
+    * @param ID: string - primary key value to load the MJ: ML Monitoring Results record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLMonitoringResultEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The model monitored.
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: The monitoring job run that wrote the row; NULL for a run started from the UI or a test.
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
+    }
+
+    /**
+    * * Field Name: Period
+    * * Display Name: Period
+    * * SQL Data Type: date
+    * * Description: The first day of the period.
+    */
+    get Period(): Date {
+        return this.Get('Period');
+    }
+    set Period(value: Date) {
+        this.Set('Period', value);
+    }
+
+    /**
+    * * Field Name: PeriodGrain
+    * * Display Name: Period Grain
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * month
+    *   * quarter
+    *   * week
+    *   * year
+    * * Description: week, month, quarter or year.
+    */
+    get PeriodGrain(): 'month' | 'quarter' | 'week' | 'year' {
+        return this.Get('PeriodGrain');
+    }
+    set PeriodGrain(value: 'month' | 'quarter' | 'week' | 'year') {
+        this.Set('PeriodGrain', value);
+    }
+
+    /**
+    * * Field Name: State
+    * * Display Name: State
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * evaluated
+    *   * failed
+    *   * insufficient-rows
+    *   * window-open
+    * * Description: window-open (outcomes not yet known), evaluated, insufficient-rows (fewer scored rows than the job's minimum, so the period is recorded and not judged) or failed.
+    */
+    get State(): 'evaluated' | 'failed' | 'insufficient-rows' | 'window-open' {
+        return this.Get('State');
+    }
+    set State(value: 'evaluated' | 'failed' | 'insufficient-rows' | 'window-open') {
+        this.Set('State', value);
+    }
+
+    /**
+    * * Field Name: ScoredRows
+    * * Display Name: Scored Rows
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Predictions the model stored for the period.
+    */
+    get ScoredRows(): number {
+        return this.Get('ScoredRows');
+    }
+    set ScoredRows(value: number) {
+        this.Set('ScoredRows', value);
+    }
+
+    /**
+    * * Field Name: JoinedRows
+    * * Display Name: Joined Rows
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Predictions joined to a known outcome.
+    */
+    get JoinedRows(): number {
+        return this.Get('JoinedRows');
+    }
+    set JoinedRows(value: number) {
+        this.Set('JoinedRows', value);
+    }
+
+    /**
+    * * Field Name: ExcludedInTrainingRows
+    * * Display Name: Excluded In Training Rows
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Joined predictions left out because the record was in the model's training snapshot.
+    */
+    get ExcludedInTrainingRows(): number {
+        return this.Get('ExcludedInTrainingRows');
+    }
+    set ExcludedInTrainingRows(value: number) {
+        this.Set('ExcludedInTrainingRows', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScore
+    * * Display Name: Primary Score
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_MetricWithInterval
+    * * Description: JSON MetricWithInterval: the protocol's primary metric over the joined rows.
+    */
+    get PrimaryScore(): string | null {
+        return this.Get('PrimaryScore');
+    }
+    set PrimaryScore(value: string | null) {
+        this.Set('PrimaryScore', value);
+    }
+
+    /**
+    * Typed accessor for PrimaryScore — a live view of the parsed JSON as MJMLMonitoringResultEntity_MetricWithInterval.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying PrimaryScore field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PrimaryScoreObject(): MJMLMonitoringResultEntity_MetricWithInterval | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_MetricWithInterval>('PrimaryScore');
+    }
+    set PrimaryScoreObject(value: MJMLMonitoringResultEntity_MetricWithInterval | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_MetricWithInterval>('PrimaryScore', value);
+    }
+
+    /**
+    * * Field Name: PrimaryValue
+    * * Display Name: Primary Value
+    * * SQL Data Type: float(53)
+    * * Description: The primary metric's value, copied from PrimaryScore for queries and charts.
+    */
+    get PrimaryValue(): number | null {
+        return this.Get('PrimaryValue');
+    }
+    set PrimaryValue(value: number | null) {
+        this.Set('PrimaryValue', value);
+    }
+
+    /**
+    * * Field Name: PrimaryLower
+    * * Display Name: Primary Lower Bound
+    * * SQL Data Type: float(53)
+    * * Description: The primary metric's interval lower bound, copied from PrimaryScore.
+    */
+    get PrimaryLower(): number | null {
+        return this.Get('PrimaryLower');
+    }
+    set PrimaryLower(value: number | null) {
+        this.Set('PrimaryLower', value);
+    }
+
+    /**
+    * * Field Name: PrimaryUpper
+    * * Display Name: Primary Upper Bound
+    * * SQL Data Type: float(53)
+    * * Description: The primary metric's interval upper bound, copied from PrimaryScore.
+    */
+    get PrimaryUpper(): number | null {
+        return this.Get('PrimaryUpper');
+    }
+    set PrimaryUpper(value: number | null) {
+        this.Set('PrimaryUpper', value);
+    }
+
+    /**
+    * * Field Name: TrackedMetrics
+    * * Display Name: Tracked Metrics
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJMLMonitoringResultEntity_TrackedMetric>
+    * * Description: JSON array of MetricWithInterval: the other tracked metrics (positive rate, log loss, RMSE and so on).
+    */
+    get TrackedMetrics(): string | null {
+        return this.Get('TrackedMetrics');
+    }
+    set TrackedMetrics(value: string | null) {
+        this.Set('TrackedMetrics', value);
+    }
+
+    /**
+    * Typed accessor for TrackedMetrics — a live view of the parsed JSON as Array<MJMLMonitoringResultEntity_TrackedMetric>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying TrackedMetrics field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get TrackedMetricsObject(): Array<MJMLMonitoringResultEntity_TrackedMetric> | null {
+        return this.GetJSONFieldObject<Array<MJMLMonitoringResultEntity_TrackedMetric>>('TrackedMetrics');
+    }
+    set TrackedMetricsObject(value: Array<MJMLMonitoringResultEntity_TrackedMetric> | null) {
+        this.SetJSONFieldObject<Array<MJMLMonitoringResultEntity_TrackedMetric>>('TrackedMetrics', value);
+    }
+
+    /**
+    * * Field Name: Calibration
+    * * Display Name: Calibration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_CalibrationReport
+    * * Description: JSON CalibrationReport over the joined rows.
+    */
+    get Calibration(): string | null {
+        return this.Get('Calibration');
+    }
+    set Calibration(value: string | null) {
+        this.Set('Calibration', value);
+    }
+
+    /**
+    * Typed accessor for Calibration — a live view of the parsed JSON as MJMLMonitoringResultEntity_CalibrationReport.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Calibration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get CalibrationObject(): MJMLMonitoringResultEntity_CalibrationReport | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_CalibrationReport>('Calibration');
+    }
+    set CalibrationObject(value: MJMLMonitoringResultEntity_CalibrationReport | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_CalibrationReport>('Calibration', value);
+    }
+
+    /**
+    * * Field Name: DriftLook
+    * * Display Name: Drift Look
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJMLMonitoringResultEntity_DriftLookEntry>
+    * * Description: JSON per-input drift statistics of the period's look: z, empirical p, adjusted p, the look's threshold and index.
+    */
+    get DriftLook(): string | null {
+        return this.Get('DriftLook');
+    }
+    set DriftLook(value: string | null) {
+        this.Set('DriftLook', value);
+    }
+
+    /**
+    * Typed accessor for DriftLook — a live view of the parsed JSON as Array<MJMLMonitoringResultEntity_DriftLookEntry>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DriftLook field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DriftLookObject(): Array<MJMLMonitoringResultEntity_DriftLookEntry> | null {
+        return this.GetJSONFieldObject<Array<MJMLMonitoringResultEntity_DriftLookEntry>>('DriftLook');
+    }
+    set DriftLookObject(value: Array<MJMLMonitoringResultEntity_DriftLookEntry> | null) {
+        this.SetJSONFieldObject<Array<MJMLMonitoringResultEntity_DriftLookEntry>>('DriftLook', value);
+    }
+
+    /**
+    * * Field Name: DriftAlarms
+    * * Display Name: Drift Alarms
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * JSON Type: Array<MJMLMonitoringResultEntity_DriftLookEntry>
+    * * Description: JSON array of the inputs whose drift alarm fired.
+    */
+    get DriftAlarms(): string {
+        return this.Get('DriftAlarms');
+    }
+    set DriftAlarms(value: string) {
+        this.Set('DriftAlarms', value);
+    }
+
+    /**
+    * Typed accessor for DriftAlarms — a live view of the parsed JSON as Array<MJMLMonitoringResultEntity_DriftLookEntry>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DriftAlarms field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DriftAlarmsObject(): Array<MJMLMonitoringResultEntity_DriftLookEntry> {
+        return this.GetJSONFieldObject<Array<MJMLMonitoringResultEntity_DriftLookEntry>>('DriftAlarms')!;
+    }
+    set DriftAlarmsObject(value: Array<MJMLMonitoringResultEntity_DriftLookEntry>) {
+        this.SetJSONFieldObject<Array<MJMLMonitoringResultEntity_DriftLookEntry>>('DriftAlarms', value);
+    }
+
+    /**
+    * * Field Name: Parity
+    * * Display Name: Parity
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_MonitoringParity
+    * * Description: JSON {sampled, maxAbsDifference, passed}: the period's scoring parity check.
+    */
+    get Parity(): string | null {
+        return this.Get('Parity');
+    }
+    set Parity(value: string | null) {
+        this.Set('Parity', value);
+    }
+
+    /**
+    * Typed accessor for Parity — a live view of the parsed JSON as MJMLMonitoringResultEntity_MonitoringParity.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Parity field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ParityObject(): MJMLMonitoringResultEntity_MonitoringParity | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringParity>('Parity');
+    }
+    set ParityObject(value: MJMLMonitoringResultEntity_MonitoringParity | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringParity>('Parity', value);
+    }
+
+    /**
+    * * Field Name: TriggersFired
+    * * Display Name: Triggers Fired
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * JSON Type: Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>
+    * * Description: JSON array of {kind, reason}: the retrain and rollback triggers that fired.
+    */
+    get TriggersFired(): string {
+        return this.Get('TriggersFired');
+    }
+    set TriggersFired(value: string) {
+        this.Set('TriggersFired', value);
+    }
+
+    /**
+    * Typed accessor for TriggersFired — a live view of the parsed JSON as Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying TriggersFired field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get TriggersFiredObject(): Array<MJMLMonitoringResultEntity_MonitoringTriggerFired> {
+        return this.GetJSONFieldObject<Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>>('TriggersFired')!;
+    }
+    set TriggersFiredObject(value: Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>) {
+        this.SetJSONFieldObject<Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>>('TriggersFired', value);
+    }
+
+    /**
+    * * Field Name: ChallengerRunID
+    * * Display Name: Challenger Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+    * * Description: The challenger training run a fired trigger started.
+    */
+    get ChallengerRunID(): string | null {
+        return this.Get('ChallengerRunID');
+    }
+    set ChallengerRunID(value: string | null) {
+        this.Set('ChallengerRunID', value);
+    }
+
+    /**
+    * * Field Name: ChallengerResult
+    * * Display Name: Challenger Result
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_MonitoringChallengerResult
+    * * Description: JSON {sharedRowIds, comparison, outcome, publishRecordId}: how the challenger compared and whether it was published or withheld.
+    */
+    get ChallengerResult(): string | null {
+        return this.Get('ChallengerResult');
+    }
+    set ChallengerResult(value: string | null) {
+        this.Set('ChallengerResult', value);
+    }
+
+    /**
+    * Typed accessor for ChallengerResult — a live view of the parsed JSON as MJMLMonitoringResultEntity_MonitoringChallengerResult.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ChallengerResult field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ChallengerResultObject(): MJMLMonitoringResultEntity_MonitoringChallengerResult | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringChallengerResult>('ChallengerResult');
+    }
+    set ChallengerResultObject(value: MJMLMonitoringResultEntity_MonitoringChallengerResult | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringChallengerResult>('ChallengerResult', value);
+    }
+
+    /**
+    * * Field Name: RollbackCheck
+    * * Display Name: Rollback Check
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLMonitoringResultEntity_MonitoringRollbackCheck
+    * * Description: JSON {previousModelId, sharedRowIds, comparison, consecutive, fired or not-eligible with the reason}: the automated rollback check.
+    */
+    get RollbackCheck(): string | null {
+        return this.Get('RollbackCheck');
+    }
+    set RollbackCheck(value: string | null) {
+        this.Set('RollbackCheck', value);
+    }
+
+    /**
+    * Typed accessor for RollbackCheck — a live view of the parsed JSON as MJMLMonitoringResultEntity_MonitoringRollbackCheck.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying RollbackCheck field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get RollbackCheckObject(): MJMLMonitoringResultEntity_MonitoringRollbackCheck | null {
+        return this.GetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringRollbackCheck>('RollbackCheck');
+    }
+    set RollbackCheckObject(value: MJMLMonitoringResultEntity_MonitoringRollbackCheck | null) {
+        this.SetJSONFieldObject<MJMLMonitoringResultEntity_MonitoringRollbackCheck>('RollbackCheck', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why the period failed, when State is failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ScheduledJobRun
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ScheduledJobRun(): string | null {
+        return this.Get('ScheduledJobRun');
+    }
+}
+
+
+/**
+ * MJ: ML Output Bindings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLOutputBinding
+ * * Base View: vwMLOutputBindings
+ * * @description How one surface shows a model's output: what it sorts by, which way driver directions point and the label. Created from the model's OutputSemantics when the model is evaluated; a save that contradicts those semantics is refused.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Output Bindings')
+export class MJMLOutputBindingEntity extends BaseEntity<MJMLOutputBindingEntityType> {
+    /**
+    * Loads the MJ: ML Output Bindings record from the database
+    * @param ID: string - primary key value to load the MJ: ML Output Bindings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLOutputBindingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The model whose output the surface shows.
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: Surface
+    * * Display Name: Surface
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * at-risk-list
+    *   * predictions-grid
+    *   * record-panel
+    *   * why-badge
+    * * Description: at-risk-list, why-badge, predictions-grid or record-panel.
+    */
+    get Surface(): 'at-risk-list' | 'predictions-grid' | 'record-panel' | 'why-badge' {
+        return this.Get('Surface');
+    }
+    set Surface(value: 'at-risk-list' | 'predictions-grid' | 'record-panel' | 'why-badge') {
+        this.Set('Surface', value);
+    }
+
+    /**
+    * * Field Name: SortsBy
+    * * Display Name: Sorts By
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adverse-probability-desc
+    *   * none
+    *   * score-asc
+    *   * score-desc
+    * * Description: adverse-probability-desc, score-desc, score-asc or none.
+    */
+    get SortsBy(): 'adverse-probability-desc' | 'none' | 'score-asc' | 'score-desc' {
+        return this.Get('SortsBy');
+    }
+    set SortsBy(value: 'adverse-probability-desc' | 'none' | 'score-asc' | 'score-desc') {
+        this.Set('SortsBy', value);
+    }
+
+    /**
+    * * Field Name: DriverDirectionRelativeTo
+    * * Display Name: Driver Direction Relative To
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adverse-class
+    *   * raw-contribution
+    * * Description: adverse-class (a driver that raises the adverse outcome points up) or raw-contribution.
+    */
+    get DriverDirectionRelativeTo(): 'adverse-class' | 'raw-contribution' {
+        return this.Get('DriverDirectionRelativeTo');
+    }
+    set DriverDirectionRelativeTo(value: 'adverse-class' | 'raw-contribution') {
+        this.Set('DriverDirectionRelativeTo', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The label the surface shows, naming the scored class.
+    */
+    get Label(): string {
+        return this.Get('Label');
+    }
+    set Label(value: string) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -84452,6 +86605,700 @@ export class MJMLPredictionUnitEntity extends BaseEntity<MJMLPredictionUnitEntit
     */
     get LineageRoot(): string | null {
         return this.Get('LineageRoot');
+    }
+}
+
+
+/**
+ * JSON shapes for the `MJ: ML Scoring Runs` columns that store Predictive Studio contract values: `Scope`
+ * (`MJMLScoringRunEntity_ScoringScope`), `MJMLScoringRunEntity_ReadPolicy` (`MJMLScoringRunEntity_ReadPolicy`), `RequestedBy` (`MJMLScoringRunEntity_Actor`), `EntityMapping` (`MJMLScoringRunEntity_EntityRef`), `Refusal`
+ * (`MJMLScoringRunEntity_ScoringRefusal`) and `FirstErrors` (an array of `MJMLScoringRunEntity_ScoringRowError`, at most 20).
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it verbatim, and CodeGen emits it inline
+ * (once per entity, however many fields bind it), so it cannot import another file. CodeGen emits typed
+ * `ScopeObject`, `ReadPolicyObject`, `RequestedByObject`, `EntityMappingObject`, `RefusalObject` and
+ * `FirstErrorsObject` accessors on `MJMLScoringRunEntity`.
+ *
+ * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
+ * `@memberjunction/predictive-studio-core` (`packages/AI/PredictiveStudio/Core/src/`): `MJMLScoringRunEntity_ScoringScope`, `MJMLScoringRunEntity_EntityRef`,
+ * `MJMLScoringRunEntity_ScoringRefusal` and `MJMLScoringRunEntity_ScoringRowError` in `scoring-contracts.ts`; `MJMLScoringRunEntity_ReadPolicy` and `MJMLScoringRunEntity_AssemblyRefusal` in
+ * `assembly-contract.ts`; `MJMLScoringRunEntity_Actor` in `prediction-unit.ts`; `MJMLScoringRunEntity_PersistedModelStatus` in `registry-contracts.ts`;
+ * `MJMLScoringRunEntity_LeakageFlag` in `trainer-contract.ts`. Runtime code reads the columns through those Core types, so a member added
+ * there must be added here. Edit both in the same commit; Core's `src/__tests__/jsontype-mirrors.compile.test.ts`
+ * fails when they drift. The keys are camelCase because they are stored JSON.
+ */
+
+/** Which records one scoring call scores. */
+export type MJMLScoringRunEntity_ScoringScope =
+  // case-violation-ok-legacy-back-compat: stored scoring-run Scope JSON keys
+  | { readonly kind: 'record-ids'; readonly entity: string; readonly ids: readonly string[] }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Scope JSON keys
+  | { readonly kind: 'view'; readonly entity: string; readonly userViewId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Scope JSON keys
+  | { readonly kind: 'filter'; readonly entity: string; readonly extraFilter: string };
+
+/** How the scope's rows were read: all of them, or in pages of `pageSize`. */
+export type MJMLScoringRunEntity_ReadPolicy = { readonly mode: 'complete' } | { readonly mode: 'paged'; readonly pageSize: number };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+
+/**
+ * Who asked for the run — data, never a permission by itself. `human` is a user; `agent`, `scheduled-job` and `system`
+ * are the automated authors. A `system` actor started by a Record Process run names that run in `processRunId`.
+ */
+export type MJMLScoringRunEntity_Actor =
+  | { readonly kind: 'human'; readonly userId: string }  // case-violation-ok-legacy-back-compat: stored scoring-run RequestedBy JSON field name
+  | { readonly kind: 'agent'; readonly agentRunId: string }  // case-violation-ok-legacy-back-compat: stored scoring-run RequestedBy JSON field name
+  | { readonly kind: 'scheduled-job'; readonly scheduledJobRunId: string }  // case-violation-ok-legacy-back-compat: stored scoring-run RequestedBy JSON field name
+  // case-violation-ok-legacy-back-compat: stored scoring-run RequestedBy JSON field names
+  | { readonly kind: 'system'; readonly component: string; readonly processRunId?: string };
+
+/** A reference to a stored row: its entity name and its ID. */
+export interface MJMLScoringRunEntity_EntityRef {
+  readonly entity: string;  // case-violation-ok-legacy-back-compat: stored scoring-run EntityMapping JSON key
+  readonly id: string;  // case-violation-ok-legacy-back-compat: stored scoring-run EntityMapping JSON key
+}
+
+/** A model status as stored on `MJ: ML Models.Status`. */
+export type MJMLScoringRunEntity_PersistedModelStatus = 'Draft' | 'Validated' | 'Published' | 'Archived' | 'KeepBaseline' | 'Unevaluated';
+
+/** A leakage flag the trainer raised; a refusal names only its `kind`. */
+export type MJMLScoringRunEntity_LeakageFlag =
+  | { readonly kind: 'single-feature-auc'; readonly sourceColumn: string; readonly heldOutAuc: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'time-shifted-label'; readonly scoreWithShiftedLabel: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'drop-column'; readonly sourceColumn: string; readonly scoreDrop: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'high-cardinality-id'; readonly sourceColumn: string; readonly distinctRatio: number };  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+
+/** Why feature assembly refused, carried by an `assembly-refused` scoring refusal. */
+export type MJMLScoringRunEntity_AssemblyRefusal =
+  | { readonly kind: 'select-changes-after-decision-date'; readonly entity: string; readonly field: string; readonly changesAfter: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'decision-date-before-change-history'; readonly entity: string; readonly field: string; readonly historyStart: string | null; readonly rowsAffected: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'truncated-read'; readonly entity: string; readonly rowsExpected: number; readonly rowsRead: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'non-numeric-in-numeric-column'; readonly column: string; readonly sampleValue: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'future-period-lag'; readonly column: string; readonly lag: number; readonly horizonPeriods: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'unpinned-feature-version'; readonly featureName: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'scope-entity-mismatch'; readonly modelEntity: string; readonly scopeEntity: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'unresolved-column'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'incumbent-score-missing'; readonly entity: string; readonly rows: number; readonly firstRowIds: readonly string[] }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'virtual-field'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'unsupported-step-kind'; readonly stepId: string; readonly stepKind: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'invalid-date-in-history'; readonly entity: string; readonly field: string; readonly value: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  /** A Temporal Spec lag or rolling window asked of a unit whose rows carry no series key (each `grain` row is its own entity), so every series would hold one point and the feature would be empty on every row (D4-181). */
+  | { readonly kind: 'series-without-key'; readonly entity: string; readonly feature: string };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+
+/** Why a scoring call wrote nothing, decided before any assembly. */
+export type MJMLScoringRunEntity_ScoringRefusal =
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'model-not-published'; readonly status: MJMLScoringRunEntity_PersistedModelStatus }
+  /** The model carries leakage flags, or the dominance re-run over its stored feature importance flagged one feature. */
+  | {
+      readonly kind: 'model-flagged';  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly flags: readonly MJMLScoringRunEntity_LeakageFlag['kind'][];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly dominance?: {  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly topFeature: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly topShare: number;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+        readonly threshold: number;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      };
+    }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'artifact-missing'; readonly fileId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'artifact-hash-mismatch'; readonly expected: string; readonly actual: string }
+  | {
+      readonly kind: 'feature-schema-mismatch';  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly expectedHash: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly actualHash: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly missingColumns: readonly string[];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly extraColumns: readonly string[];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly typeMismatches: readonly string[];  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+    }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'scope-entity-mismatch'; readonly modelEntity: string; readonly scopeEntity: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'assembly-refused'; readonly refusal: MJMLScoringRunEntity_AssemblyRefusal }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'nan-or-empty-feature-column'; readonly columns: readonly string[] }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'no-published-model'; readonly pipelineId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'binding-withdrawn'; readonly bindingId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'binding-not-authorized'; readonly bindingId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'as-of-unsupported'; readonly modelId: string; readonly asOf: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'leakage-unknown'; readonly modelId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'artifact-unverified'; readonly modelId: string }
+  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
+  | { readonly kind: 'feature-values-not-writable'; readonly userId: string };
+
+/** One record that failed to score; `FirstErrors` stores an array of these (at most 20). */
+export interface MJMLScoringRunEntity_ScoringRowError {
+  readonly recordId: string;  // case-violation-ok-legacy-back-compat: stored scoring-run FirstErrors JSON key
+  readonly message: string;  // case-violation-ok-legacy-back-compat: stored scoring-run FirstErrors JSON key
+}
+
+/**
+ * MJ: ML Scoring Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLScoringRun
+ * * Base View: vwMLScoringRuns
+ * * @description One row per scoring call, dry runs and refusals included, written by the scoring service only. A running row exists before the first record is scored, so a crash leaves a visible row.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Scoring Runs')
+export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
+    /**
+    * Loads the MJ: ML Scoring Runs record from the database
+    * @param ID: string - primary key value to load the MJ: ML Scoring Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLScoringRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The exact model version that scored. NULL only on a refused run whose binding's pipeline has no Published model.
+    */
+    get ModelID(): string | null {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string | null) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: ModelVersion
+    * * Display Name: Model Version
+    * * SQL Data Type: int
+    * * Description: The model's Version, copied at the run.
+    */
+    get ModelVersion(): number | null {
+        return this.Get('ModelVersion');
+    }
+    set ModelVersion(value: number | null) {
+        this.Set('ModelVersion', value);
+    }
+
+    /**
+    * * Field Name: MLModelScoringBindingID
+    * * Display Name: ML Model Scoring Binding
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Model Scoring Bindings (vwMLModelScoringBindings.ID)
+    * * Description: The scoring binding a writing run scored for; NULL for a call that returns its scores and writes no Feature Value.
+    */
+    get MLModelScoringBindingID(): string | null {
+        return this.Get('MLModelScoringBindingID');
+    }
+    set MLModelScoringBindingID(value: string | null) {
+        this.Set('MLModelScoringBindingID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactSha256
+    * * Display Name: Artifact SHA-256
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 of the artifact bytes that scored; NULL only when the run was refused before the artifact verified.
+    */
+    get ArtifactSha256(): string | null {
+        return this.Get('ArtifactSha256');
+    }
+    set ArtifactSha256(value: string | null) {
+        this.Set('ArtifactSha256', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchemaHash
+    * * Display Name: Feature Schema Hash
+    * * SQL Data Type: char(64)
+    * * Description: Hash of the model's feature schema the run scored with.
+    */
+    get FeatureSchemaHash(): string | null {
+        return this.Get('FeatureSchemaHash');
+    }
+    set FeatureSchemaHash(value: string | null) {
+        this.Set('FeatureSchemaHash', value);
+    }
+
+    /**
+    * * Field Name: Path
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * monitoring
+    *   * parity
+    *   * predict
+    *   * record-process
+    *   * score-record-set
+    * * Description: Which caller ran it: score-record-set, record-process, monitoring, parity or predict.
+    */
+    get Path(): 'monitoring' | 'parity' | 'predict' | 'record-process' | 'score-record-set' {
+        return this.Get('Path');
+    }
+    set Path(value: 'monitoring' | 'parity' | 'predict' | 'record-process' | 'score-record-set') {
+        this.Set('Path', value);
+    }
+
+    /**
+    * * Field Name: ScopeKind
+    * * Display Name: Scope Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * filter
+    *   * record-ids
+    *   * view
+    * * Description: How the scope names its records: record-ids, view or filter.
+    */
+    get ScopeKind(): 'filter' | 'record-ids' | 'view' {
+        return this.Get('ScopeKind');
+    }
+    set ScopeKind(value: 'filter' | 'record-ids' | 'view') {
+        this.Set('ScopeKind', value);
+    }
+
+    /**
+    * * Field Name: ScopeEntityID
+    * * Display Name: Scope Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity whose records the scope names.
+    */
+    get ScopeEntityID(): string {
+        return this.Get('ScopeEntityID');
+    }
+    set ScopeEntityID(value: string) {
+        this.Set('ScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_ScoringScope
+    * * Description: JSON ScoringScope: the records the call asked to score.
+    */
+    get Scope(): string {
+        return this.Get('Scope');
+    }
+    set Scope(value: string) {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * Typed accessor for Scope — a live view of the parsed JSON as MJMLScoringRunEntity_ScoringScope.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Scope field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ScopeObject(): MJMLScoringRunEntity_ScoringScope {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_ScoringScope>('Scope')!;
+    }
+    set ScopeObject(value: MJMLScoringRunEntity_ScoringScope) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_ScoringScope>('Scope', value);
+    }
+
+    /**
+    * * Field Name: EntityMapping
+    * * Display Name: Entity Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_EntityRef
+    * * Description: JSON EntityRef mapping the scope entity onto the model's grain, when they differ.
+    */
+    get EntityMapping(): string | null {
+        return this.Get('EntityMapping');
+    }
+    set EntityMapping(value: string | null) {
+        this.Set('EntityMapping', value);
+    }
+
+    /**
+    * Typed accessor for EntityMapping — a live view of the parsed JSON as MJMLScoringRunEntity_EntityRef.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying EntityMapping field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get EntityMappingObject(): MJMLScoringRunEntity_EntityRef | null {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_EntityRef>('EntityMapping');
+    }
+    set EntityMappingObject(value: MJMLScoringRunEntity_EntityRef | null) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_EntityRef>('EntityMapping', value);
+    }
+
+    /**
+    * * Field Name: AsOfDate
+    * * Display Name: As Of Date
+    * * SQL Data Type: datetimeoffset
+    * * Description: The as-of instant the features were read at.
+    */
+    get AsOfDate(): Date {
+        return this.Get('AsOfDate');
+    }
+    set AsOfDate(value: Date) {
+        this.Set('AsOfDate', value);
+    }
+
+    /**
+    * * Field Name: ReadPolicy
+    * * Display Name: Read Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_ReadPolicy
+    * * Description: JSON ReadPolicy the features were read under.
+    */
+    get ReadPolicy(): string {
+        return this.Get('ReadPolicy');
+    }
+    set ReadPolicy(value: string) {
+        this.Set('ReadPolicy', value);
+    }
+
+    /**
+    * Typed accessor for ReadPolicy — a live view of the parsed JSON as MJMLScoringRunEntity_ReadPolicy.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ReadPolicy field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ReadPolicyObject(): MJMLScoringRunEntity_ReadPolicy {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_ReadPolicy>('ReadPolicy')!;
+    }
+    set ReadPolicyObject(value: MJMLScoringRunEntity_ReadPolicy) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_ReadPolicy>('ReadPolicy', value);
+    }
+
+    /**
+    * * Field Name: DryRun
+    * * Display Name: Dry Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when the call scored without writing anything.
+    */
+    get DryRun(): boolean {
+        return this.Get('DryRun');
+    }
+    set DryRun(value: boolean) {
+        this.Set('DryRun', value);
+    }
+
+    /**
+    * * Field Name: RequestedBy
+    * * Display Name: Requested By
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_Actor
+    * * Description: JSON Actor: who asked for the run.
+    */
+    get RequestedBy(): string {
+        return this.Get('RequestedBy');
+    }
+    set RequestedBy(value: string) {
+        this.Set('RequestedBy', value);
+    }
+
+    /**
+    * Typed accessor for RequestedBy — a live view of the parsed JSON as MJMLScoringRunEntity_Actor.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying RequestedBy field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get RequestedByObject(): MJMLScoringRunEntity_Actor {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_Actor>('RequestedBy')!;
+    }
+    set RequestedByObject(value: MJMLScoringRunEntity_Actor) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_Actor>('RequestedBy', value);
+    }
+
+    /**
+    * * Field Name: RequestedByUserID
+    * * Display Name: Requested By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The requesting user, when a person asked; a joinable copy of RequestedBy.
+    */
+    get RequestedByUserID(): string | null {
+        return this.Get('RequestedByUserID');
+    }
+    set RequestedByUserID(value: string | null) {
+        this.Set('RequestedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: The Process Run, when the Record Process path ran it.
+    */
+    get ProcessRunID(): string | null {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string | null) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: The Scheduled Job Run, when monitoring or parity ran it.
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * completed
+    *   * failed
+    *   * refused
+    *   * running
+    * * Description: running, refused, failed or completed. A failed run keeps the batches it wrote before the failing one.
+    */
+    get Status(): 'completed' | 'failed' | 'refused' | 'running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'completed' | 'failed' | 'refused' | 'running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Refusal
+    * * Display Name: Refusal
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLScoringRunEntity_ScoringRefusal
+    * * Description: JSON ScoringRefusal when the run was refused.
+    */
+    get Refusal(): string | null {
+        return this.Get('Refusal');
+    }
+    set Refusal(value: string | null) {
+        this.Set('Refusal', value);
+    }
+
+    /**
+    * Typed accessor for Refusal — a live view of the parsed JSON as MJMLScoringRunEntity_ScoringRefusal.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Refusal field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get RefusalObject(): MJMLScoringRunEntity_ScoringRefusal | null {
+        return this.GetJSONFieldObject<MJMLScoringRunEntity_ScoringRefusal>('Refusal');
+    }
+    set RefusalObject(value: MJMLScoringRunEntity_ScoringRefusal | null) {
+        this.SetJSONFieldObject<MJMLScoringRunEntity_ScoringRefusal>('Refusal', value);
+    }
+
+    /**
+    * * Field Name: Total
+    * * Display Name: Total Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Records in scope.
+    */
+    get Total(): number {
+        return this.Get('Total');
+    }
+    set Total(value: number) {
+        this.Set('Total', value);
+    }
+
+    /**
+    * * Field Name: Written
+    * * Display Name: Written Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Records whose prediction was written.
+    */
+    get Written(): number {
+        return this.Get('Written');
+    }
+    set Written(value: number) {
+        this.Set('Written', value);
+    }
+
+    /**
+    * * Field Name: Failed
+    * * Display Name: Failed Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Records that failed to score.
+    */
+    get Failed(): number {
+        return this.Get('Failed');
+    }
+    set Failed(value: number) {
+        this.Set('Failed', value);
+    }
+
+    /**
+    * * Field Name: Skipped
+    * * Display Name: Skipped Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Records skipped (for example, a person's value the run must not overwrite).
+    */
+    get Skipped(): number {
+        return this.Get('Skipped');
+    }
+    set Skipped(value: number) {
+        this.Set('Skipped', value);
+    }
+
+    /**
+    * * Field Name: FirstErrors
+    * * Display Name: First Errors
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJMLScoringRunEntity_ScoringRowError>
+    * * Description: JSON array of the first errors, at most 20, each {recordId, message}.
+    */
+    get FirstErrors(): string | null {
+        return this.Get('FirstErrors');
+    }
+    set FirstErrors(value: string | null) {
+        this.Set('FirstErrors', value);
+    }
+
+    /**
+    * Typed accessor for FirstErrors — a live view of the parsed JSON as Array<MJMLScoringRunEntity_ScoringRowError>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying FirstErrors field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get FirstErrorsObject(): Array<MJMLScoringRunEntity_ScoringRowError> | null {
+        return this.GetJSONFieldObject<Array<MJMLScoringRunEntity_ScoringRowError>>('FirstErrors');
+    }
+    set FirstErrorsObject(value: Array<MJMLScoringRunEntity_ScoringRowError> | null) {
+        this.SetJSONFieldObject<Array<MJMLScoringRunEntity_ScoringRowError>>('FirstErrors', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the run started.
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the run ended; NULL while it runs.
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MLModelScoringBinding
+    * * Display Name: ML Model Scoring Binding Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLModelScoringBinding(): string | null {
+        return this.Get('MLModelScoringBinding');
+    }
+
+    /**
+    * * Field Name: ScopeEntity
+    * * Display Name: Scope Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ScopeEntity(): string | null {
+        return this.Get('ScopeEntity');
+    }
+
+    /**
+    * * Field Name: RequestedByUser
+    * * Display Name: Requested By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RequestedByUser(): string | null {
+        return this.Get('RequestedByUser');
+    }
+
+    /**
+    * * Field Name: ScheduledJobRun
+    * * Display Name: Scheduled Job Run Details
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ScheduledJobRun(): string | null {
+        return this.Get('ScheduledJobRun');
     }
 }
 
@@ -97228,17 +100075,25 @@ export class MJRecordProcessWatermarkEntity extends BaseEntity<MJRecordProcessWa
 
 /**
  * Configuration stored on RecordProcess.ChallengerConfiguration: a shadow challenger that scores a
- * sample of the record process's live invocations against the same frozen feature snapshot as the
- * champion. Challenger scores are written as `Role = 'Challenger'` feature values for comparison and
- * drift monitoring; they never change the business record and never delay or fail the champion.
+ * sample of the record process's records against the same feature snapshot as the champion. It never
+ * changes the business record and never fails the champion.
  *
- * NULL when the record process has no challenger.
+ * - 'ML Model': read only for a process a scoring binding names. The binding run scores the sampled records
+ *   with ChallengerModelID and writes them as Source = 'Model', Role = 'Challenger' feature values under the
+ *   challenger's own scoring run, in the champion batch's transaction. An unbound process mirrors nothing.
+ * - 'Infer': the prompt challenger of an Infer process, run in the background on a sample of invocations.
+ *
+ * NULL when the record process has no challenger. A stored 'ML Model' configuration that carries MaxLatencyMs
+ * (or MaxInFlight, which this interface does not name) is read without error; an 'ML Model' challenger ignores both.
  */
 export interface MJRecordProcessEntity_IRecordProcessChallengerConfig {
     /** Turns the challenger on or off without deleting its settings. */
     Enabled: boolean;
 
-    /** Fraction of live invocations (0.0 to 1.0) mirrored to the challenger. */
+    /**
+     * Fraction of records (0.0 to 1.0) mirrored to the challenger; 1 or more mirrors every record. An 'ML Model'
+     * challenger draws each record deterministically from the binding, the record and the as-of date.
+     */
     SampleRate: number;
 
     /** The kind of challenger: 'ML Model' scores with ChallengerModelID; 'Infer' runs ChallengerPromptID. */
@@ -97250,8 +100105,11 @@ export interface MJRecordProcessEntity_IRecordProcessChallengerConfig {
     /** The MJ: AI Prompts record the challenger runs, for WorkType 'Infer'. */
     ChallengerPromptID?: string;
 
-    /** Time budget for one challenger score, in milliseconds. A score that takes longer is recorded as timed out. */
-    MaxLatencyMs: number;
+    /**
+     * Time budget for one 'Infer' challenger prompt run, in milliseconds; a run that takes longer is recorded as timed
+     * out. An 'ML Model' challenger scores inside the champion's batch and has no time budget: it does not read this.
+     */
+    MaxLatencyMs?: number;
 }
 
 /**

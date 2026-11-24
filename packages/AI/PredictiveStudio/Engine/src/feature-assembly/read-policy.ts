@@ -2,7 +2,9 @@
  * @module feature-assembly/read-policy
  *
  * Complete reads: the source is counted, read in full (or paged by key), and the rows read are compared with the
- * count. A short read is the refusal `truncated-read`, never a silently smaller matrix.
+ * count. A short read is the refusal `truncated-read`, never a silently smaller matrix. A requested field the read did
+ * not return is the refusal `unresolved-column`, never a column of missing values: the provider leaves a field the
+ * caller may not read out of every row it returns (field-level security), while a readable NULL comes back as null.
  */
 import { EscapeSQLString } from '@memberjunction/global';
 import type { AssemblyRefusal, ReadPolicy } from '@memberjunction/predictive-studio-core';
@@ -30,6 +32,8 @@ export class CompleteReader {
       throw new Error(`Counting ${params.EntityName} failed: ${counted.ErrorMessage || 'unknown error'}`);
     }
     const rows = policy.mode === 'complete' ? await CompleteReader.readAll(dataAccess, params) : await CompleteReader.readPaged(dataAccess, params, policy.pageSize);
+    const unreturned = CompleteReader.UnreturnedField(rows, CompleteReader.fieldsWithKey(params));
+    if (unreturned !== null) return { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: params.EntityName, field: unreturned } };
     if (rows.length === counted.Count) {
       return { Status: 'read', Rows: rows, Expected: counted.Count };
     }
@@ -39,6 +43,16 @@ export class CompleteReader {
       return { Status: 'read', Rows: rows, Expected: recount.Count };
     }
     return { Status: 'refused', Refusal: { kind: 'truncated-read', entity: params.EntityName, rowsExpected: counted.Count, rowsRead: rows.length } };
+  }
+
+  /**
+   * The first of `fields` some row of `rows` does not carry at all (absent, not null): a field the read did not return,
+   * which the provider does for a field the caller may not read. Null when every row carries every field, when no
+   * fields were named, or when there are no rows. Pure.
+   */
+  public static UnreturnedField(rows: readonly SourceRow[], fields: readonly string[] | undefined): string | null {
+    if (!fields || rows.length === 0) return null;
+    return fields.find((f) => rows.some((row) => !(f in row))) || null;
   }
 
   private static fieldsWithKey(params: CompleteReadParams): string[] | undefined {
