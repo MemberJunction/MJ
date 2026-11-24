@@ -222,7 +222,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
         ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT187)
         ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT188)
-        ['comms-v2-send', CommsV2SendChecks, 4], // CV2S1-CV2S4 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider (IT189)
+        ['comms-v2-send', CommsV2SendChecks, 7], // CV2S1-CV2S7 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider, run-chunk completion, delivery guarantee on a stuck log, Admin Block uniqueness and append-only audit log on SQL Server (IT189)
         ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT190)
         ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT191)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
@@ -434,7 +434,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'comms-v2-activity': 4,
         'comms-v2-compliance': 4,
         'comms-v2-core': 3,
-        'comms-v2-send': 4,
+        'comms-v2-send': 7,
         'comms-v2-wire': 5,
         'concurrency-conflict-client': 5,
         'concurrent': 2,
