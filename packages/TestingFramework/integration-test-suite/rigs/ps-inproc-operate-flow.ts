@@ -9,14 +9,14 @@
  *
  *   1. GENERIC output — `createScoringProcess({ modelId, targetEntityName, scope })` (no outputField):
  *      assembles a `WorkType='ML Model'` Record Process (OnDemandEnabled=true, ScheduleEnabled=false,
- *      NO OutputMapping, ScopeType='Filter'), `result.binding === null`. Running it via
+ *      NO OutputMapping, ScopeType='Filter') and a scoring binding with no `TargetColumn`. Running it via
  *      `RecordProcessExecutor.RunByID` records predictions in the process run history
  *      (`MJ: Process Run Details`, a numeric `score` per row) — and writes NOTHING back to the member
  *      record (RenewalScore stays null). This is the core assertion: predictions persist in run
- *      history with NO binding.
+ *      history and no column is written.
  *
  *   2. WRITE-BACK output — `createScoringProcess({ ..., outputField: 'RenewalScore' })`:
- *      `result.binding !== null` (Mode='OnDemand', TargetColumn='RenewalScore'), the RP carries an
+ *      its binding has Mode='OnDemand' and TargetColumn='RenewalScore' (a feature of its own), the RP carries an
  *      OutputMapping, and a run BOTH records predictions in run history AND writes RenewalScore back
  *      on the scoped rows.
  *
@@ -90,6 +90,9 @@ const DRIVER_KEY = 'logistic_regression';
 const TAG = 'ps-inproc-operate-flow (safe to delete)';
 /** The column the write-back leg writes the prediction into. */
 const OUTPUT_FIELD = 'RenewalScore';
+/** The generic and whole-entity processes' feature names: each process is its own binding, beside the write-back one. */
+const GENERIC_FEATURE = 'Renewal score (run history)';
+const WHOLE_ENTITY_FEATURE = 'Renewal score (whole entity)';
 /** How many Membership rows to scope/score (kept small so the on-demand runs are fast). */
 const ROW_COUNT = 15;
 
@@ -326,21 +329,22 @@ async function trainAndPromote(md: IMetadataProvider, user: UserInfo, state: Rig
   return training.Model.ID;
 }
 
-/** Steps 3–3b: the GENERIC Record Process — no binding, predictions in run history only, nothing written back. */
+/** Steps 3–3b: the GENERIC Record Process — a binding with no column, predictions in run history, nothing written back. */
 async function proveGenericOutput(md: IMetadataProvider, user: UserInfo, modelId: string, scope: { filter: string }): Promise<void> {
-  // The Operate dialog's "record predictions in run history only" mode: no binding, no write-back.
-  banner('3. CreateScoringProcess(...) — GENERIC output (no write-back, no binding)');
+  // The Operate dialog's "record predictions in run history only" mode: no write-back column.
+  banner('3. CreateScoringProcess(...) — GENERIC output (no write-back column)');
   const generic: CreateScoringProcessResult = await CreateScoringProcess({
     modelId,
     targetEntityName: 'Memberships',
     scope: { filter: scope.filter },
     primaryKeyField: 'ID',
+    featureName: GENERIC_FEATURE,
     contextUser: user,
     provider: md,
   });
   const genericRP = generic.recordProcess;
   console.log(`  Record Process ${genericRP.ID} ('${genericRP.Name}')`);
-  check(generic.binding === null, 'GENERIC mode → result.binding === null (no lineage row)');
+  check(generic.binding.TargetColumn === null, `GENERIC mode → the binding names no column (got '${generic.binding.TargetColumn}')`);
   await verifyGenericRecordProcess(user, genericRP.ID, modelId);
 
   // ── 3b. Run the GENERIC RP — predictions persist in run history, NOT the column ──
@@ -379,7 +383,7 @@ async function verifyGenericRecordProcess(user: UserInfo, recordProcessId: strin
   check(UUIDsEqual(cfg?.modelId ?? '', modelId), `RP Configuration.modelId === the model id`);
 }
 
-/** The core generic-mode assertion: predictions persist in `MJ: Process Run Details` with NO binding, and they vary. */
+/** The core generic-mode assertion: predictions persist in `MJ: Process Run Details`, and they vary. */
 async function verifyGenericRunHistory(user: UserInfo, processRunId: string): Promise<void> {
   const payloads = await readRunDetailPayloads(user, processRunId);
   console.log(`  ${payloads.length} Process Run Detail payloads parsed.`);
@@ -410,12 +414,9 @@ async function proveWriteBackOutput(md: IMetadataProvider, user: UserInfo, model
   });
   const wbRP = writeBack.recordProcess;
   console.log(`  Record Process ${wbRP.ID} ('${wbRP.Name}')`);
-  check(writeBack.binding !== null, 'WRITE-BACK mode → result.binding !== null');
-  if (writeBack.binding) {
-    check(writeBack.binding.Mode === 'OnDemand', `binding.Mode === 'OnDemand' (got '${writeBack.binding.Mode}')`);
-    check(writeBack.binding.TargetColumn === OUTPUT_FIELD, `binding.TargetColumn === '${OUTPUT_FIELD}' (got '${writeBack.binding.TargetColumn}')`);
-    check(UUIDsEqual(writeBack.binding.RecordProcessID, wbRP.ID), 'binding.RecordProcessID === the RP id');
-  }
+  check(writeBack.binding.Mode === 'OnDemand', `binding.Mode === 'OnDemand' (got '${writeBack.binding.Mode}')`);
+  check(writeBack.binding.TargetColumn === OUTPUT_FIELD, `binding.TargetColumn === '${OUTPUT_FIELD}' (got '${writeBack.binding.TargetColumn}')`);
+  check(UUIDsEqual(writeBack.binding.RecordProcessID, wbRP.ID), 'binding.RecordProcessID === the RP id');
 
   // ── 4a. Verify the write-back RP carries an OutputMapping ─────────────────
   const wbCheck = await new RunView().RunView<MJRecordProcessEntity>(
@@ -457,6 +458,7 @@ async function proveWholeEntityShape(md: IMetadataProvider, user: UserInfo, mode
     targetEntityName: 'Memberships',
     scope: { all: true },
     primaryKeyField: 'ID',
+    featureName: WHOLE_ENTITY_FEATURE,
     contextUser: user,
     provider: md,
   });

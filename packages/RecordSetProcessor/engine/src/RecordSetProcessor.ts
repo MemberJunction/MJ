@@ -33,6 +33,12 @@ import type { OutputMappingConfig } from './writeBack';
 const DEFAULT_BATCH_SIZE = 100;
 /** Default error-rate circuit-breaker threshold (percent). */
 const DEFAULT_ERROR_THRESHOLD = 20;
+/**
+ * How many of a batch's watermark writes run at once on the batch path (`ProcessBatch`). Each record's watermark is its
+ * own row (read, then saved, in that order); no state is shared across records, so they run concurrently once the
+ * batch's results are in.
+ */
+export const BATCH_WATERMARK_WRITE_CONCURRENCY = 8;
 
 /**
  * The server-side engine that processes a record set through the source/processor/tracker pipeline.
@@ -163,60 +169,55 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         return { ...summary, ProcessRunID: handle.ProcessRunID };
     }
 
-    /** The core batch loop. Returns the terminal status. */
+    /**
+     * The core batch loop. Returns the terminal status. Each turn is a wave of up to `MaxConcurrentBatches` batches
+     * (default 1: one batch per turn), processed concurrently; the cursor checkpoint, budget gate and breaker follow the
+     * whole wave.
+     */
     private async runBatchLoop(ctx: BatchLoopContext): Promise<ProcessRunStatusValue> {
-        const { options, source, batchSize, counts } = ctx;
+        const { options, counts } = ctx;
         const contextUser = options.ContextUser;
+        const waveSize = Math.max(1, Math.floor(options.Processor.MaxConcurrentBatches || 1));
 
         // eslint-disable-next-line no-constant-condition
         while (true) {
             if (options.Signal?.aborted) {
                 return this.stopped(ctx);
             }
-            const batch = await source.NextBatch(ctx.getCursor(), batchSize, contextUser, ctx.provider);
-            if (batch.TotalRowCount != null && ctx.getTotal() == null) {
-                ctx.setTotal(batch.TotalRowCount);
-            }
-            if (batch.Records.length === 0) {
+            const wave = await this.readWave(ctx, waveSize);
+            if (wave.Batches.length === 0) {
                 return 'Completed';
             }
-
-            // Honor a hard record cap by trimming the batch.
-            let records = batch.Records;
-            if (options.MaxRecords != null) {
-                const remaining = options.MaxRecords - counts.Processed;
-                if (remaining <= 0) {
-                    return 'Completed';
-                }
-                if (records.length > remaining) {
-                    records = records.slice(0, remaining);
-                }
-            }
-
             if (ctx.rateLimiter) {
-                await ctx.rateLimiter.Acquire();
+                for (let i = 0; i < wave.Batches.length; i++) await ctx.rateLimiter.Acquire();
             }
 
-            await this.processBatch(records, ctx);
+            // Disjoint record sets; the shared counters are only incremented (single-threaded event loop), never reset.
+            // Every batch of the wave settles before a rejection fails the run, so no batch writes after the run closes.
+            const settled = await Promise.allSettled(wave.Batches.map((records) => this.processBatch(records, ctx)));
+            const rejected = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+            if (rejected) {
+                throw rejected.reason;
+            }
 
             options.OnProgress?.({ ...counts, Total: ctx.getTotal() });
 
-            // Stopped mid-page: end before the cursor moves, so a resumed run reads this page again and
+            // Stopped mid-wave: end before the cursor moves, so a resumed run reads this wave again and
             // picks up the records the stop left unreached.
             if (options.Signal?.aborted) {
                 return this.stopped(ctx);
             }
 
             // Checkpoint + pause/cancel handshake.
-            ctx.setCursor(batch.NextCursor);
-            const shouldContinue = await ctx.tracker.Checkpoint(ctx.handle, batch.NextCursor, counts, contextUser, ctx.provider);
+            ctx.setCursor(wave.NextCursor);
+            const shouldContinue = await ctx.tracker.Checkpoint(ctx.handle, wave.NextCursor, counts, contextUser, ctx.provider);
             if (!shouldContinue) {
                 return 'Paused';
             }
 
             // Budget gate.
             if (options.OnAfterBatch) {
-                const verdict = await this.safeAfterBatch(options.OnAfterBatch, records, counts.Processed);
+                const verdict = await this.safeAfterBatch(options.OnAfterBatch, wave.Batches.flat(), counts.Processed);
                 if (verdict && !verdict.Continue) {
                     ctx.setErrorMessage(verdict.Reason ? `Auto-paused: ${verdict.Reason}` : 'Auto-paused: budget exceeded');
                     return 'Paused';
@@ -233,13 +234,51 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 }
             }
 
-            if (batch.Exhausted) {
+            if (wave.Exhausted) {
                 return 'Completed';
             }
             if (ctx.delayMs > 0) {
                 await this.delay(ctx.delayMs);
             }
         }
+    }
+
+    /**
+     * Reads up to `waveSize` consecutive batches from the cursor, trimming at `MaxRecords`. `Exhausted` when the source
+     * or the cap ended inside the wave; `NextCursor` follows the wave's last batch.
+     */
+    private async readWave(ctx: BatchLoopContext, waveSize: number): Promise<{ Batches: RecordRef[][]; NextCursor: ProcessCursor | undefined; Exhausted: boolean }> {
+        const { options, source, batchSize, counts } = ctx;
+        const batches: RecordRef[][] = [];
+        let cursor = ctx.getCursor();
+        let read = 0;
+        while (batches.length < waveSize) {
+            const batch = await source.NextBatch(cursor, batchSize, options.ContextUser, ctx.provider);
+            if (batch.TotalRowCount != null && ctx.getTotal() == null) {
+                ctx.setTotal(batch.TotalRowCount);
+            }
+            if (batch.Records.length === 0) {
+                return { Batches: batches, NextCursor: cursor, Exhausted: true };
+            }
+            // Honor a hard record cap by trimming the batch.
+            let records = batch.Records;
+            if (options.MaxRecords != null) {
+                const remaining = options.MaxRecords - counts.Processed - read;
+                if (remaining <= 0) {
+                    return { Batches: batches, NextCursor: cursor, Exhausted: true };
+                }
+                if (records.length > remaining) {
+                    records = records.slice(0, remaining);
+                }
+            }
+            batches.push(records);
+            read += records.length;
+            cursor = batch.NextCursor;
+            if (batch.Exhausted) {
+                return { Batches: batches, NextCursor: cursor, Exhausted: true };
+            }
+        }
+        return { Batches: batches, NextCursor: cursor, Exhausted: false };
     }
 
     /** Processes one batch with bounded concurrency, isolating per-record failures. */
@@ -335,6 +374,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             const totalDuration = Date.now() - batchStarted;
             const perRecordDuration = Math.round(totalDuration / Math.max(1, eligibleRecords.length));
 
+            const watermarkWrites: Array<() => Promise<void>> = [];
             for (const record of eligibleRecords) {
                 if (!batchResults.has(record.RecordID) && options.Signal?.aborted) {
                     continue; // the stop came before the processor reached it; it is still ready for the next run
@@ -348,19 +388,11 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                     counts.Success++;
                     const decision = watermarkDecisions?.get(record.RecordID);
                     if (!options.DryRun && decision?.BasisHash && options.RecordProcessID && options.EntityID) {
-                        try {
-                            await WatermarkService.Instance.UpdateWatermark({
-                                RecordProcessID: options.RecordProcessID,
-                                EntityID: options.EntityID,
-                                RecordID: record.RecordID,
-                                BasisHash: decision.BasisHash,
-                                ExistingWatermark: decision.ExistingWatermark,
-                                ContextUser: options.ContextUser,
-                                Provider: ctx.provider,
-                            });
-                        } catch (e) {
-                            LogError(`RecordSetProcessor: Failed to update watermark for record '${record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
-                        }
+                        const params = {
+                            RecordProcessID: options.RecordProcessID, EntityID: options.EntityID, RecordID: record.RecordID, BasisHash: decision.BasisHash,
+                            ExistingWatermark: decision.ExistingWatermark, ContextUser: options.ContextUser, Provider: ctx.provider,
+                        };
+                        watermarkWrites.push(() => this.updateWatermark(params));
                     }
                 } else if (result.Status === 'Skipped') {
                     counts.Skipped++;
@@ -372,6 +404,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 this.holdRunForLogRow(result, ctx.logRowsInFlight);
                 await ctx.tracker.RecordResult(ctx.handle, record, result, options.ContextUser, ctx.provider);
             }
+            await this.runWithConcurrency(watermarkWrites, BATCH_WATERMARK_WRITE_CONCURRENCY, (write) => write());
             return;
         }
 
@@ -460,6 +493,15 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
     private tallyRecord(result: RecordResult, tally: RunTally): void {
         if (result.Status === 'Failed' && result.FailureKind === 'RejectedInvalid') {
             tally.RejectedInvalid++;
+        }
+    }
+
+    /** One record's watermark write; a failure is logged, never thrown (the record's result stands). */
+    private async updateWatermark(params: Parameters<WatermarkService['UpdateWatermark']>[0]): Promise<void> {
+        try {
+            await WatermarkService.Instance.UpdateWatermark(params);
+        } catch (e) {
+            LogError(`RecordSetProcessor: Failed to update watermark for record '${params.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 

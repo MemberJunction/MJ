@@ -164,6 +164,19 @@ describe('ResolveFeatureColumns — forecast units', () => {
     const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'series', FeatureName: 'Lag5', Feature: { kind: 'lag', index: 5 } }] }, forecastUnit, t3, md, { denyFields: [], denySources: [] });
     expect(r).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'T3', field: 'TemporalSpec.lag[5]' } });
   });
+  it('refuses a declared lag or rolling window on a grain unit, whose every row is its own series key (D4-181)', () => {
+    const withWindow: PredictionUnitSpec = { ...forecastUnit, temporal: { timeColumn: 'T', horizonPeriods: 1, lags: [1], rollingWindows: [{ endLag: 1, periods: 3, aggregate: 'mean' }], period: 'month', seasonality: 12 } };
+    const lag = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'series', FeatureName: 'Lag1', Feature: { kind: 'lag', index: 0 } }] }, withWindow, t3, md, { denyFields: [], denySources: [] });
+    expect(lag).toEqual({ Status: 'refused', Refusal: { kind: 'series-without-key', entity: 'T3', feature: 'TemporalSpec.lag[0]' } });
+    const rolling = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'r', Kind: 'series', FeatureName: 'Mean3', Feature: { kind: 'rolling', index: 0 } }] }, withWindow, t3, md, { denyFields: [], denySources: [] });
+    expect(rolling).toEqual({ Status: 'refused', Refusal: { kind: 'series-without-key', entity: 'T3', feature: 'TemporalSpec.rolling[0]' } });
+  });
+  it('resolves a declared lag on a grain × periods unit, whose rows carry the grain key as their series key', () => {
+    const months: AssemblyEntityInfo = { ...t3, Name: 'Months', Fields: [...t3.Fields, f('SeriesID', 'string', false, 'uniqueidentifier', 'Series')] };
+    const panel: PredictionUnitSpec = { ...forecastUnit, rows: { kind: 'grain-x-periods', grainEntity: 'Series', childEntity: 'Months', foreignKey: 'SeriesID', periodDate: 'T', filter: [] } };
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'series', FeatureName: 'Lag1', Feature: { kind: 'lag', index: 0 } }] }, panel, months, { Entity: (n) => (n === 'Months' ? months : null) }, { denyFields: [], denySources: [] });
+    expect(r.Status === 'resolved' && r.Columns.map((c) => c.source)).toEqual([{ kind: 'series', feature: { kind: 'lag', index: 0 } }]);
+  });
 });
 
 describe('ResolveFeatureColumns — fields whose stored value is not the value since creation', () => {

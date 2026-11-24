@@ -3,6 +3,7 @@ import {
   OperateModelState,
   MapStateToCreateScoringInput,
   DescribeOperateMappingError,
+  OperateRunNoticeOf,
 } from '../PredictiveStudio/components/ps-operate-dialog.mapping';
 
 /** A valid baseline state — tests override individual knobs. */
@@ -20,7 +21,7 @@ function baseState(overrides: Partial<OperateModelState> = {}): OperateModelStat
   };
 }
 
-describe('mapStateToCreateScoringInput', () => {
+describe('MapStateToCreateScoringInput', () => {
   describe('scope', () => {
     it('maps "all" to { all: true }', () => {
       const r = MapStateToCreateScoringInput(baseState({ ScopeMode: 'all' }));
@@ -101,5 +102,19 @@ describe('mapStateToCreateScoringInput', () => {
     for (const e of errors) {
       expect(DescribeOperateMappingError(e).length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('OperateRunNoticeOf', () => {
+  it('a completed run reports its counts', () => {
+    expect(OperateRunNoticeOf({ status: 'Completed', processed: 4, success: 4, error: 0, skipped: 0 })).toEqual({ Message: 'Scored 4/4 record(s) — Completed.', Style: 'success' });
+  });
+
+  it('a refused scoring run reports the refusal and the scoring run the error names', () => {
+    const errorMessage = 'Scoring refused: the scoring binding b1 was withdrawn (scoring run r1; refusal {"kind":"binding-withdrawn","bindingId":"b1"}).';
+    const notice = OperateRunNoticeOf({ status: 'Failed', processed: 0, success: 0, error: 0, skipped: 0, errorMessage });
+    expect(notice.Style).toBe('error');
+    expect(notice.Message).toContain('binding-withdrawn');
+    expect(notice.Message).toContain('scoring run r1');
   });
 });

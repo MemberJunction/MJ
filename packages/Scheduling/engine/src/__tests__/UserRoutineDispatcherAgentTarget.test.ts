@@ -15,10 +15,11 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     RegisterClass: () => (target: unknown) => target,
 }));
 
-const { runInConversation, agentLoad, resolveWakeConfig } = vi.hoisted(() => ({
+const { runInConversation, agentLoad, resolveWakeConfig, resolvePrimaryInstance } = vi.hoisted(() => ({
     runInConversation: vi.fn(),
     agentLoad: vi.fn(async () => true),
     resolveWakeConfig: vi.fn<() => Promise<string | undefined>>(async () => undefined),
+    resolvePrimaryInstance: vi.fn(async (targetId: string) => ({ ID: targetId, Name: 'Chief of Staff' })),
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => ({
@@ -33,6 +34,11 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
 vi.mock('@memberjunction/ai-agents', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@memberjunction/ai-agents')>()),
     AgentRunner: class { RunAgentInConversation = runInConversation; RunAgent = vi.fn(); },
+    AgentWakeTriggerService: {
+        Instance: {
+            ResolvePrimaryUserAgentInstance: resolvePrimaryInstance,
+        },
+    },
     ResolveWakeAgentConfigurationID: resolveWakeConfig,
 }));
 vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
@@ -72,8 +78,11 @@ function driver(): Driver {
 
 beforeEach(() => {
     runInConversation.mockReset();
+    agentLoad.mockClear();
     resolveWakeConfig.mockReset();
     resolveWakeConfig.mockResolvedValue(undefined);
+    resolvePrimaryInstance.mockReset();
+    resolvePrimaryInstance.mockImplementation(async (targetId: string) => ({ ID: targetId, Name: 'Chief of Staff' }));
     runInConversation.mockResolvedValue({
         agentResult: {
             success: true,
@@ -135,5 +144,13 @@ describe('UserRoutineDispatcherDriver — an Agent target run', () => {
 
         const baseParams = runInConversation.mock.calls[0][0] as { configurationId?: string };
         expect('configurationId' in baseParams).toBe(false);
+    });
+
+    it('E1: resolves a template TargetID to the user primary derived instance before loading and running the agent', async () => {
+        resolvePrimaryInstance.mockResolvedValueOnce({ ID: 'PEPPER-PRIMARY-ID', Name: 'Pepper' });
+        await driver().executeAgentTarget(routine({ TargetID: 'COS-TEMPLATE-ID', UserID: 'ALICE-1' }), { ID: 'ALICE-1' });
+
+        expect(resolvePrimaryInstance).toHaveBeenCalledWith('COS-TEMPLATE-ID', 'ALICE-1', { ID: 'ALICE-1' });
+        expect(agentLoad).toHaveBeenCalledWith('PEPPER-PRIMARY-ID');
     });
 });

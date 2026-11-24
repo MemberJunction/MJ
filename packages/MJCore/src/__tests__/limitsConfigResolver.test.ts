@@ -508,4 +508,79 @@ describe('LimitsConfigResolver & CODE_FALLBACK_LIMITS', () => {
         expect(approved.Limits.AgentAbsoluteIterations).toBe(250_000);
         expect(approved.ClampedKeys).toEqual([]);
     });
+
+    it('E2 (F1): clamps UserAgentPolicy attempts to raise or clear MjConfig org ceilings while allowing narrowing and admin overrides', () => {
+        const standardUser = {
+            ID: 'user-standard',
+            Name: 'Standard User',
+            Type: 'User',
+            UserRoles: [{ RoleID: 'role-ui', Role: 'UI' }],
+        } as Partial<UserInfo> as UserInfo;
+
+        const ownerUser = {
+            ID: 'user-owner',
+            Name: 'Org Owner',
+            Type: 'Owner',
+            UserRoles: [],
+        } as Partial<UserInfo> as UserInfo;
+
+        const layers = {
+            MjConfig: {
+                AgentAbsoluteIterations: 5_000,
+                Budgets: {
+                    PerRun: { MaxCostUsd: 10, MaxWallClockMs: 60_000 },
+                    PerUserPerDay: { MaxCostUsd: 50 },
+                },
+            },
+            UserAgentPolicy: {
+                // Attempts to raise iterations, raise PerRun cost, clear PerUserPerDay to unlimited (null),
+                // and narrow PerRun wall clock to 30s
+                AgentAbsoluteIterations: 50_000,
+                Budgets: {
+                    PerRun: { MaxCostUsd: 25, MaxWallClockMs: 30_000 },
+                    PerUserPerDay: { MaxCostUsd: null },
+                },
+            },
+            RunOverride: {
+                // Also tries to widen past MjConfig
+                Budgets: { PerRun: { MaxCostUsd: 99 } },
+            },
+        };
+
+        const clamped = LimitsConfigResolver.Resolve(layers, {
+            EnforceUserPolicyAsCeiling: true,
+            EnforceConfiguredCeilings: true,
+            AllowAuthorizedCeilingOverride: true,
+            ContextUser: standardUser,
+        });
+
+        expect(clamped.Limits.AgentAbsoluteIterations).toBe(5_000);
+        expect(clamped.Provenance.AgentAbsoluteIterations.SourceTier).toBe('MjConfig');
+        expect(clamped.Provenance.AgentAbsoluteIterations.WasClampedByPolicyCeiling).toBe(true);
+
+        expect(clamped.Limits.Budgets.PerRun.MaxCostUsd).toBe(10);
+        expect(clamped.Provenance['Budgets.PerRun.MaxCostUsd'].SourceTier).toBe('MjConfig');
+        expect(clamped.Provenance['Budgets.PerRun.MaxCostUsd'].WasClampedByPolicyCeiling).toBe(true);
+
+        expect(clamped.Limits.Budgets.PerUserPerDay.MaxCostUsd).toBe(50);
+        expect(clamped.Provenance['Budgets.PerUserPerDay.MaxCostUsd'].SourceTier).toBe('MjConfig');
+        expect(clamped.Provenance['Budgets.PerUserPerDay.MaxCostUsd'].WasClampedByPolicyCeiling).toBe(true);
+
+        // Narrowing below MjConfig is allowed
+        expect(clamped.Limits.Budgets.PerRun.MaxWallClockMs).toBe(30_000);
+        expect(clamped.Provenance['Budgets.PerRun.MaxWallClockMs'].SourceTier).toBe('UserAgentPolicy');
+        expect(clamped.Provenance['Budgets.PerRun.MaxWallClockMs'].WasClampedByPolicyCeiling).toBe(false);
+
+        // Authorized Owner can raise org ceilings when AllowAuthorizedCeilingOverride is enabled
+        const adminResolved = LimitsConfigResolver.Resolve(layers, {
+            EnforceUserPolicyAsCeiling: true,
+            EnforceConfiguredCeilings: true,
+            AllowAuthorizedCeilingOverride: true,
+            ContextUser: ownerUser,
+        });
+        expect(adminResolved.Limits.AgentAbsoluteIterations).toBe(50_000);
+        expect(adminResolved.Limits.Budgets.PerRun.MaxCostUsd).toBe(99);
+        expect(adminResolved.Limits.Budgets.PerUserPerDay.MaxCostUsd).toBeNull();
+        expect(adminResolved.ClampedKeys).toEqual([]);
+    });
 });

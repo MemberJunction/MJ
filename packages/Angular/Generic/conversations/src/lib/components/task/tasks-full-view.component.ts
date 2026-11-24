@@ -2454,6 +2454,12 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   }
 
   private updateLivePollingState(): void {
+    // A LoadTasks() still awaiting its RunView when the view is destroyed lands here from its
+    // `finally`; re-arming the poller then would leak a 4 s interval (and this component) for good.
+    if (this.isDestroyed) {
+      this.stopLivePolling();
+      return;
+    }
     const hasActive = this.WorkflowGroups.some(g => g.NormalizedCategory === 'active');
     if (hasActive && !this.livePollTimer) {
       this.livePollTimer = setInterval(() => {
@@ -2486,6 +2492,9 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   }
 
   public async LoadTasks(): Promise<void> {
+    if (this.isDestroyed) {
+      return;
+    }
     if (this.isLoadingTasks) {
       this.pendingReload = true;
       return;

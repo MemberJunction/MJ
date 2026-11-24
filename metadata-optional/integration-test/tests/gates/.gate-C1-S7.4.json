@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S7.4",
+    "Description": "Gate G5.4 (owner PR 4, phase 5, dataset C1, criterion S7.4): every score row from a scenario C1 scoring run carries the four lineage fields and each resolves to an existing record, 100%. The check trains and publishes the C1 renewal model, binds it through a test scoring binding, scores every record of the binding's entity with one Score Record Set call and reads the run's Model rows with their run and model in one RunViews (ScoringLineage): each must name and resolve its model and run, the run's artifact hash must equal the model's registered SHA-256, and EffectiveAsOf must be the run's AsOfDate.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G5.4\", \"owner:PR4\", \"phase:5\", \"dataset:C1\", \"criterion:S7.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "Every Model row of the C1 run carries and resolves its model, run, artifact hash and as-of date, 100%."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s7-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "AF9B9659-9785-46EF-8E9D-2EDFE128C3C8"
+  }
+}

@@ -177,18 +177,25 @@ export class ConversationAgentService {
   }
 
   /**
-   * Resolve the conversation manager agent via the runtime's 4-step
-   * DefaultAgentResolver chain (explicit input → app-scoped Application
-   * Setting → global Application Setting → code-const Sage fallback). The
-   * result is cached on this service for use by the synchronous
-   * {@link ConversationManagerAgentName} getter.
-   *
-   * Existing callers expect a Promise<MJAIAgentEntityExtended | null> — we
-   * preserve that shape (returning null on failure rather than throwing)
-   * so the call sites don't need to change.
+  /** Tracks unavailable user-default IDs already surfaced once per session. */
+  private readonly _notifiedUnavailableDefaultIds = new Set<string>();
+
+  /**
+   * Clears the cached conversation manager agent so the next lookup re-runs
+   * `DefaultAgentResolver` (for example after the user updates `Conversations.DefaultAgentID`).
    */
-  public async GetConversationManagerAgent(): Promise<MJAIAgentEntityExtended | null> {
-    if (this._conversationManagerAgent) {
+  public ClearConversationManagerCache(): void {
+    this._conversationManagerAgent = null;
+  }
+
+  /**
+   * Resolve the conversation manager agent via the runtime's DefaultAgentResolver
+   * chain (explicit input → per-user `Conversations.DefaultAgentID` → user primary
+   * instance of org default template → app/global settings → code-const fallback).
+   * The result is cached on this service for use by {@link ConversationManagerAgentName}.
+   */
+  public async GetConversationManagerAgent(forceRefresh = false): Promise<MJAIAgentEntityExtended | null> {
+    if (!forceRefresh && this._conversationManagerAgent) {
       return this._conversationManagerAgent;
     }
     // A user who may not read the agents has no manager agent to resolve: say nothing, rather than an error for a state
@@ -196,15 +203,35 @@ export class ConversationAgentService {
     if (AIEngineBase.Instance.IsPermissionConstrained && AIEngineBase.Instance.ReadableAgents.length === 0) {
       return null;
     }
-
     try {
       const provider = this.Provider;
-      const agent = await ConversationsRuntime.Instance.DefaultAgent.resolve({
+      const resolveOpts = {
         contextUser: provider.CurrentUser ?? undefined,
         provider,
-      });
-      this._conversationManagerAgent = agent;
-      return agent;
+      };
+      const defaultAgent = ConversationsRuntime.Instance.DefaultAgent;
+      const resolved =
+        typeof defaultAgent.ResolveWithDetails === 'function'
+          ? await defaultAgent.ResolveWithDetails(resolveOpts)
+          : { agent: await defaultAgent.resolve(resolveOpts), source: 'code-fallback' as const };
+
+      if (resolved.userDefaultUnavailable && resolved.unavailableUserDefaultAgentId) {
+        const key = resolved.unavailableUserDefaultAgentId.toLowerCase();
+        if (!this._notifiedUnavailableDefaultIds.has(key)) {
+          this._notifiedUnavailableDefaultIds.add(key);
+          const detail = resolved.userDefaultUnavailableReason
+            ? ` (${resolved.userDefaultUnavailableReason})`
+            : '';
+          MJNotificationService.Instance?.CreateSimpleNotification(
+            `Your default agent is currently unavailable${detail}. Using ${resolved.agent.Name} instead.`,
+            'warning',
+            6000
+          );
+        }
+      }
+
+      this._conversationManagerAgent = resolved.agent;
+      return resolved.agent;
     } catch (error) {
       const errorMsg = 'Error resolving conversation manager agent: ' + (error instanceof Error ? error.message : String(error));
       console.error(errorMsg);
@@ -613,6 +640,7 @@ ${compactHistory}${artifactContext}
         messages: [{ role: 'user', content: userMessage }],
         data: {
           hasPriorArtifact: agentArtifacts.length > 0,
+          conversationManagerName: this._conversationManagerAgent?.Name || 'Assistant',
           priorArtifacts: agentArtifacts
         }
       });

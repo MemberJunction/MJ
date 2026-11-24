@@ -24,7 +24,8 @@ export class MJAuthorizationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAuditLogTypes', sectionName: 'Audit Log Types', isExpanded: false },
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
             { sectionKey: 'mJAuthorizationRoles', sectionName: 'Authorization Roles', isExpanded: false },
-            { sectionKey: 'mJAuthorizations', sectionName: 'Authorizations', isExpanded: false }
+            { sectionKey: 'mJAuthorizations', sectionName: 'Authorizations', isExpanded: false },
+            { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false }
         ]);
     }
 }

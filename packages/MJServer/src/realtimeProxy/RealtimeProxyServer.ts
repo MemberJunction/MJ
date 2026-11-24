@@ -17,6 +17,7 @@ import {
     type RealtimeRelayLimits,
     type RealtimeRelayTunnelHost,
 } from './RealtimeRelayTunnel.js';
+import { RealtimeInProcessTunnel, REALTIME_IN_PROCESS_LIMITS, type RealtimeInProcessLimits } from './RealtimeInProcessTunnel.js';
 
 /** The optional Origin allowlist both paths apply: comma-separated origins. */
 const ALLOWED_ORIGINS_ENV = 'MJ_REALTIME_PROXY_ALLOWED_ORIGINS';
@@ -55,8 +56,14 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
     /** The relay's upgrade server: the same routing, plus the client frame cap, enforced while a frame is read. */
     private readonly relayWss = new WebSocketServer({ noServer: true, maxPayload: REALTIME_RELAY_MAX_CLIENT_FRAME_BYTES });
 
+    /** The upgrade server for in-process upstreams: their frame cap is enforced while a frame is read. */
+    private readonly inProcessWss = new WebSocketServer({ noServer: true, maxPayload: this.InProcessLimits.MaxFrameBytes });
+
     /** Live browser↔upstream tunnels, tracked for shutdown teardown. */
     private readonly tunnels = new Set<RealtimeProxyTunnel>();
+
+    /** Live calls whose upstream runs in this process, tracked for shutdown teardown. */
+    private readonly inProcessTunnels = new Set<RealtimeInProcessTunnel>();
 
     /** Live relay connections, tracked for shutdown teardown. */
     private readonly relays = new Set<RealtimeRelayTunnel>();
@@ -85,6 +92,11 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         return REALTIME_RELAY_LIMITS;
     }
 
+    /** The limits for a call whose upstream runs in this process ({@link REALTIME_IN_PROCESS_LIMITS}); a subclass may tune them. */
+    protected get InProcessLimits(): RealtimeInProcessLimits {
+        return REALTIME_IN_PROCESS_LIMITS;
+    }
+
     /**
      * Routes an HTTP `upgrade` for {@link REALTIME_PROXY_PATH} (ticket in the query) or {@link REALTIME_RELAY_PATH}
      * (ticket in the path, any suffix). Returns `true` when it OWNS (handled/rejected) the request, `false` when
@@ -104,7 +116,7 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         return false; // not ours — leave it for the GraphQL WS server
     }
 
-    /** `/realtime-proxy?ticket=<id>`: consumes the single-use ticket and opens a byte tunnel. */
+    /** `/realtime-proxy?ticket=<id>`: consumes the single-use ticket and opens a byte tunnel, or the ticket's in-process upstream. */
     private handleProxyUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer, url: URL): void {
         this.ensureRegistered();
         // Optional Origin allowlist (MJ_REALTIME_PROXY_ALLOWED_ORIGINS: comma-separated origins).
@@ -120,7 +132,8 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
             RealtimeProxyServer.rejectUpgrade(socket, 401, 'Unauthorized');
             return;
         }
-        this.wss.handleUpgrade(request, socket, head, (browserWs) => this.openTunnel(browserWs, entry));
+        const server = entry.OpenInProcess ? this.inProcessWss : this.wss;
+        server.handleUpgrade(request, socket, head, (browserWs) => this.openTunnel(browserWs, entry));
     }
 
     /**
@@ -205,8 +218,16 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         return allowed.includes(normalize(origin));
     }
 
-    /** Opens the upstream leg and wires a bidirectional pump between the browser socket and it. */
+    /** Opens the upstream leg (a websocket URL, or an upstream in this process) and wires it to the browser socket. */
     private openTunnel(browserWs: WsClient, entry: RealtimeProxyTicketEntry): void {
+        if (entry.OpenInProcess) {
+            const inProcess = new RealtimeInProcessTunnel(browserWs, entry.OpenInProcess, this.InProcessLimits, () =>
+                this.inProcessTunnels.delete(inProcess)
+            );
+            this.inProcessTunnels.add(inProcess);
+            inProcess.Start();
+            return;
+        }
         const tunnel = new RealtimeProxyTunnel(browserWs, entry, () => this.tunnels.delete(tunnel));
         this.tunnels.add(tunnel);
         tunnel.Start();
@@ -226,12 +247,16 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
             tunnel.Close();
         }
         this.tunnels.clear();
+        for (const call of [...this.inProcessTunnels]) {
+            call.Close(1001, 'Server shutting down');
+        }
+        this.inProcessTunnels.clear();
         for (const relay of [...this.relays]) {
             relay.Close(1001, 'Server shutting down');
         }
         this.relays.clear();
         this.liveRelays.clear();
-        for (const server of [this.wss, this.relayWss]) {
+        for (const server of [this.wss, this.inProcessWss, this.relayWss]) {
             try {
                 server.close();
             } catch {

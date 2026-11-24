@@ -21,9 +21,9 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, type EntityInfo, type TransactionGroupBase, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJMLModelEntity, UserInfoEngine, type MJListDetailEntity, type MJListEntity, type MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
 import {
   AllCommunityModule,
@@ -43,20 +43,25 @@ import {
 
 import {
   AtRiskRules,
+  OutputBindingRows,
   ProblemTypes,
+  type AtRiskModelOptions,
   type AtRiskRow,
+  type OutputBindingEntityRow,
   type RowDriver,
   type OutcomeConfig,
-  resolveOutcomeConfig,
+  type SemanticsCheckBinding,
+  ResolveOutcomeConfig,
   ResolveScoreBand,
-  resolveOutcomeStyle,
-  formatPredictionScore,
+  ResolveOutcomeStyle,
+  FormatPredictionScore,
 } from '@memberjunction/predictive-studio-core';
 import {
   PredictiveStudioScoreHistoryService,
   type ModelScoreHistoryPoint,
 } from '../predictive-studio-score-history.service';
-import { PredictiveStudioEngine, type PSRunDetailRow } from '../engine/predictive-studio.engine';
+import { PredictiveStudioEngine, type PSRunDetailRow, type PSRunDetails } from '../engine/predictive-studio.engine';
+import { LatestPredictionRows, type LatestPredictionBinding, type LatestPredictionRow } from '../latest-prediction-rows';
 import { PSRowDriversComponent } from './ps-row-drivers.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -127,12 +132,33 @@ interface RowTier {
   Icon?: string;
 }
 
+/** The surfaces the grid renders as: the business At-Risk list, or the analyst predictions grid. */
+export type PredictionGridSurface = Extract<SemanticsCheckBinding['Surface'], 'at-risk-list' | 'predictions-grid'>;
+
+/** The `MJ: ML Models` fields the grid reads. */
+export type PredictionGridModelFields = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'ProblemType' | 'TargetVariable' | 'Lineage' | 'OutputSemantics'>;
+
+/** The fields of {@link PredictionGridModelFields}, as the read names them. */
+const PREDICTION_GRID_MODEL_FIELDS = ['ID', 'PipelineID', 'ProblemType', 'TargetVariable', 'Lineage', 'OutputSemantics'] as const satisfies readonly (keyof PredictionGridModelFields)[];
+
+/** What {@link PSPredictionsGridComponent.LoadModelWithBindings} reads in one batch: the model and the binding rows the grid renders from. */
+export interface PredictionGridModelRead {
+  /** The model, or null when no model row has the bound id. */
+  Model: PredictionGridModelFields | null;
+  /** The binding row of the grid's {@link PSPredictionsGridComponent.Surface}; null when the model has none. */
+  Binding: SemanticsCheckBinding | null;
+  /** The model's `why-badge` binding row (the drivers' label and direction); null when the model has none. */
+  WhyBadge: SemanticsCheckBinding | null;
+}
+
 /** {@link PSPredictionsGridComponent.RowsLoaded}'s payload: the parsed at-risk rows of the run the grid shows. */
 export interface PredictionGridRowsLoadedEvent {
   /** The run's at-risk rows, highest risk first, exactly as the grid parsed them. */
   Rows: AtRiskRow[];
   /** True when the run has more predictions than {@link PredictiveStudioEngine.MaxRunDetailRows}; `Rows` holds the first ones. */
   Capped: boolean;
+  /** The grid's own `MJ: ML Output Bindings` row (its {@link PSPredictionsGridComponent.Surface}); null when the model has none. */
+  Binding: SemanticsCheckBinding | null;
 }
 
 /**
@@ -140,6 +166,9 @@ export interface PredictionGridRowsLoadedEvent {
  * model predictions. Shared between:
  *   1. **Predictions tab** (`PSPredictionsResourceComponent`) — business view of all at-risk records.
  *   2. **Models tab** (`PSProductionComponent`) — analyst run drill-in view.
+ *
+ * Reads, with no run bound, the latest values of the model pipeline's scoring binding from `MJ: Latest Feature Values`
+ * (§5.8.4); with a run bound, that run's process run details.
  *
  * Supports:
  *   - Virtualized AG Grid scrolling for thousands of rows (no artificial 50/200 cap).
@@ -166,40 +195,25 @@ export interface PredictionGridRowsLoadedEvent {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PSPredictionsGridComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
-  @Input() modelId: string | null = null;
+  /** The `MJ: ML Models` row whose predictions the grid shows. */
+  @Input() ModelId: string | null = null;
+  /** The run to show; null shows the latest values of the model pipeline's scoring binding (or, without one, the latest run). */
   @Input() RunId: string | null = null;
-
-  /** @deprecated Use {@link RunId}. */
-  @Input() set runId(value: string | null) {
-    this.RunId = value;
-  }
-  /** @deprecated Use {@link RunId}. */
-  get runId(): string | null {
-    return this.RunId;
-  }
-  @Input() entityName: string | null = null;
+  /**
+   * The surface the grid renders as, whose `MJ: ML Output Bindings` row it reads: `at-risk-list` in the business
+   * workspace, `predictions-grid` in the analyst's run drill-in.
+   */
+  @Input() Surface: PredictionGridSurface = 'predictions-grid';
+  /** The scored entity's name, when the host knows it; otherwise the grid resolves it from the model's pipeline. */
+  @Input() EntityName: string | null = null;
+  /** The model's problem type until the model row is read (the row's value then wins). */
   @Input() ProblemType: string | null = 'classification';
-
-  /** @deprecated Use {@link ProblemType}. */
-  @Input() set problemType(value: string | null) {
-    this.ProblemType = value;
-  }
-  /** @deprecated Use {@link ProblemType}. */
-  get problemType(): string | null {
-    return this.ProblemType;
-  }
-  @Input() title: string | null = null;
-  @Input() height = '560px';
+  /** The grid's title, as the host names it. */
+  @Input() Title: string | null = null;
+  /** The grid's CSS height. */
+  @Input() Height = '560px';
+  /** True when the host shows the grid without actions that change records. */
   @Input() ReadOnly = false;
-
-  /** @deprecated Use {@link ReadOnly}. */
-  @Input() set readOnly(value: PSPredictionsGridComponent['ReadOnly']) {
-    this.ReadOnly = value;
-  }
-  /** @deprecated Use {@link ReadOnly}. */
-  get readOnly(): PSPredictionsGridComponent['ReadOnly'] {
-    return this.ReadOnly;
-  }
 
   /**
    * Emitted after the grid parses a run, with the run's at-risk rows. A host that needs the rows (counts, export, a list)
@@ -213,6 +227,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   private readonly navigationService = inject(NavigationService);
   private readonly scoreHistoryService = inject(PredictiveStudioScoreHistoryService);
 
+  /** `Math`, for the template. */
   public readonly Math = Math;
 
   /** The run-detail cap, formatted for the footer notice. */
@@ -221,196 +236,70 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   /** The tier of a regression row whose value falls in none of the outcome bands. */
   private static readonly unbandedTier: RowTier = { Key: 'unbanded', Label: 'No band', BadgeColor: 'gray' };
 
-  public isLoading = false;
-  public loadError: string | null = null;
+  /** True while the run's predictions load. */
+  public IsLoading = false;
+  /** The load failure's message, shown with a retry; null when the last load succeeded. */
+  public LoadError: string | null = null;
   /** True when the run has more predictions than {@link PredictiveStudioEngine.MaxRunDetailRows}; only the first are shown. */
   public DetailRowsCapped = false;
 
+  /** Every displayed row of the run, in the binding row's order (or highest risk first without one). */
   public AllRows: PredictionGridRow[] = [];
 
-  /** @deprecated Use {@link AllRows}. */
-  public get allRows(): PredictionGridRow[] {
-    return this.AllRows;
-  }
-  /** @deprecated Use {@link AllRows}. */
-  public set allRows(value: PredictionGridRow[]) {
-    this.AllRows = value;
-  }
+  /** The rows the tier, decile and search filters leave; the grid's row data. */
   public FilteredRows: PredictionGridRow[] = [];
 
-  /** @deprecated Use {@link FilteredRows}. */
-  public get filteredRows(): PredictionGridRow[] {
-    return this.FilteredRows;
-  }
-  /** @deprecated Use {@link FilteredRows}. */
-  public set filteredRows(value: PredictionGridRow[]) {
-    this.FilteredRows = value;
-  }
-
+  /** The toolbar's search text. */
   public SearchText = '';
 
-  /** @deprecated Use {@link SearchText}. */
-  public get searchText() {
-    return this.SearchText;
-  }
-  /** @deprecated Use {@link SearchText}. */
-  public set searchText(value) {
-    this.SearchText = value;
-  }
+  /** The tier chip in force (`all`, a risk band key, or an outcome band key). */
   public SelectedTier: string = 'all';
 
-  /** @deprecated Use {@link SelectedTier}. */
-  public get selectedTier(): string {
-    return this.SelectedTier;
-  }
-  /** @deprecated Use {@link SelectedTier}. */
-  public set selectedTier(value: string) {
-    this.SelectedTier = value;
-  }
-  public OutcomeConfig: OutcomeConfig = resolveOutcomeConfig();
+  /** The model's resolved outcome config: score and status labels, formatting and outcome bands. */
+  public OutcomeConfig: OutcomeConfig = ResolveOutcomeConfig();
 
-  /** @deprecated Use {@link OutcomeConfig}. */
-  public get outcomeConfig(): OutcomeConfig {
-    return this.OutcomeConfig;
-  }
-  /** @deprecated Use {@link OutcomeConfig}. */
-  public set outcomeConfig(value: OutcomeConfig) {
-    this.OutcomeConfig = value;
-  }
+  /** The tier chips and KPI cards, with their counts. */
   public VisibleBands: VisibleBandSummary[] = [];
 
-  /** @deprecated Use {@link VisibleBands}. */
-  public get visibleBands(): VisibleBandSummary[] {
-    return this.VisibleBands;
-  }
-  /** @deprecated Use {@link VisibleBands}. */
-  public set visibleBands(value: VisibleBandSummary[]) {
-    this.VisibleBands = value;
-  }
-
+  /** The view the toggle shows. */
   public ActiveView: 'grid' | 'chart' = 'grid';
 
-  /** @deprecated Use {@link ActiveView}. */
-  public get activeView(): 'grid' | 'chart' {
-    return this.ActiveView;
-  }
-  /** @deprecated Use {@link ActiveView}. */
-  public set activeView(value: 'grid' | 'chart') {
-    this.ActiveView = value;
-  }
+  /** The grid / chart view toggle's options. */
   public readonly ViewOptions = [
     { key: 'grid', icon: 'fa-solid fa-table', title: 'Grid View' },
     { key: 'chart', icon: 'fa-solid fa-chart-column', title: 'Chart View' },
   ];
 
-  /** @deprecated Use {@link ViewOptions}. */
-  public get viewOptions() {
-    return this.ViewOptions;
-  }
-
   // Slide-in detail state
+  /** True while the detail drawer is open. */
   public DetailOpen = false;
 
-  /** @deprecated Use {@link DetailOpen}. */
-  public get detailOpen() {
-    return this.DetailOpen;
-  }
-  /** @deprecated Use {@link DetailOpen}. */
-  public set detailOpen(value) {
-    this.DetailOpen = value;
-  }
+  /** The detail drawer's width, from the user's setting. */
   public DrawerWidthPx = 640;
 
-  /** @deprecated Use {@link DrawerWidthPx}. */
-  public get drawerWidthPx() {
-    return this.DrawerWidthPx;
-  }
-  /** @deprecated Use {@link DrawerWidthPx}. */
-  public set drawerWidthPx(value) {
-    this.DrawerWidthPx = value;
-  }
+  /** The row the detail drawer shows. */
   public SelectedRow: PredictionGridRow | null = null;
 
-  /** @deprecated Use {@link SelectedRow}. */
-  public get selectedRow(): PredictionGridRow | null {
-    return this.SelectedRow;
-  }
-  /** @deprecated Use {@link SelectedRow}. */
-  public set selectedRow(value: PredictionGridRow | null) {
-    this.SelectedRow = value;
-  }
+  /** True while the selected record's score history loads. */
   public HistoryLoading = false;
 
-  /** @deprecated Use {@link HistoryLoading}. */
-  public get historyLoading() {
-    return this.HistoryLoading;
-  }
-  /** @deprecated Use {@link HistoryLoading}. */
-  public set historyLoading(value) {
-    this.HistoryLoading = value;
-  }
+  /** The selected record's scores across runs, oldest first. */
   public HistoryPoints: ModelScoreHistoryPoint[] = [];
 
-  /** @deprecated Use {@link HistoryPoints}. */
-  public get historyPoints(): ModelScoreHistoryPoint[] {
-    return this.HistoryPoints;
-  }
-  /** @deprecated Use {@link HistoryPoints}. */
-  public set historyPoints(value: ModelScoreHistoryPoint[]) {
-    this.HistoryPoints = value;
-  }
-
+  /** The scored entity's ID, once resolved. */
   public ResolvedEntityId: string | null = null;
 
-  /** @deprecated Use {@link ResolvedEntityId}. */
-  public get resolvedEntityId(): string | null {
-    return this.ResolvedEntityId;
-  }
-  /** @deprecated Use {@link ResolvedEntityId}. */
-  public set resolvedEntityId(value: string | null) {
-    this.ResolvedEntityId = value;
-  }
+  /** The scored entity's name, once resolved. */
   public ResolvedEntityName: string | null = null;
 
-  /** @deprecated Use {@link ResolvedEntityName}. */
-  public get resolvedEntityName(): string | null {
-    return this.ResolvedEntityName;
-  }
-  /** @deprecated Use {@link ResolvedEntityName}. */
-  public set resolvedEntityName(value: string | null) {
-    this.ResolvedEntityName = value;
-  }
-
+  /** The entity of the selected record's subject (a person, account…), when it has one. */
   public SubjectEntityName: string | null = null;
 
-  /** @deprecated Use {@link SubjectEntityName}. */
-  public get subjectEntityName(): string | null {
-    return this.SubjectEntityName;
-  }
-  /** @deprecated Use {@link SubjectEntityName}. */
-  public set subjectEntityName(value: string | null) {
-    this.SubjectEntityName = value;
-  }
+  /** The selected record's subject record ID, when it has one. */
   public SubjectRecordId: string | null = null;
 
-  /** @deprecated Use {@link SubjectRecordId}. */
-  public get subjectRecordId(): string | null {
-    return this.SubjectRecordId;
-  }
-  /** @deprecated Use {@link SubjectRecordId}. */
-  public set subjectRecordId(value: string | null) {
-    this.SubjectRecordId = value;
-  }
+  /** The selected record's subject record name, when resolved. */
   public SubjectRecordName: string | null = null;
-
-  /** @deprecated Use {@link SubjectRecordName}. */
-  public get subjectRecordName(): string | null {
-    return this.SubjectRecordName;
-  }
-  /** @deprecated Use {@link SubjectRecordName}. */
-  public set subjectRecordName(value: string | null) {
-    this.SubjectRecordName = value;
-  }
 
   private gridApi: GridApi<PredictionGridRow> | null = null;
   private chartGridApi: GridApi<PredictionGridRow> | null = null;
@@ -421,6 +310,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   private visibleLookupDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── AG Grid Configuration ──
+  /** The AG Grid theme, on the design tokens. */
   public Theme: Theme = themeAlpine.withParams({
     backgroundColor: 'var(--mj-bg-surface)',
     foregroundColor: 'var(--mj-text-primary)',
@@ -440,6 +330,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     browserColorScheme: 'inherit',
   });
 
+  /** The main grid's options. */
   public GridOptions: GridOptions<PredictionGridRow> = {
     animateRows: true,
     rowHeight: 46,
@@ -456,6 +347,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     onCellClicked: (event: CellClickedEvent<PredictionGridRow>) => this.OnCellClicked(event),
   };
 
+  /** The decile drill-down grid's options. */
   public ChartGridOptions: GridOptions<PredictionGridRow> = {
     animateRows: true,
     rowHeight: 46,
@@ -472,51 +364,30 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     onCellClicked: (event: CellClickedEvent<PredictionGridRow>) => this.OnCellClicked(event),
   };
 
-  /** @deprecated Use {@link ChartGridOptions}. */
-  public get chartGridOptions(): GridOptions<PredictionGridRow> {
-    return this.ChartGridOptions;
-  }
-  /** @deprecated Use {@link ChartGridOptions}. */
-  public set chartGridOptions(value: GridOptions<PredictionGridRow>) {
-    this.ChartGridOptions = value;
-  }
-
+  /** The column defaults both grids share. */
   public DefaultColDef: ColDef = {
     sortable: true,
     resizable: true,
     minWidth: 80,
   };
 
-  /** @deprecated Use {@link DefaultColDef}. */
-  public get defaultColDef(): ColDef {
-    return this.DefaultColDef;
-  }
-  /** @deprecated Use {@link DefaultColDef}. */
-  public set defaultColDef(value: ColDef) {
-    this.DefaultColDef = value;
-  }
-
-  /** True when the model's score is the probability of the good outcome, so risk is `1 - score` (e.g. a renewal model). */
+  /**
+   * True when the model's score is the probability of the good outcome, so risk is `1 - score`. With a binding row this
+   * is the declared `OutputSemantics` (`AtRiskRules.BuildAtRiskOptions`), never the model's name.
+   */
   public IsRenewalModel = false;
 
-  /** @deprecated Use {@link IsRenewalModel}. */
-  public get isRenewalModel() {
-    return this.IsRenewalModel;
-  }
-  /** @deprecated Use {@link IsRenewalModel}. */
-  public set isRenewalModel(value) {
-    this.IsRenewalModel = value;
-  }
-  public SelectedDecileIndex: number | null = null;
+  /** The grid's own `MJ: ML Output Bindings` row ({@link Surface}); null when the model has none (the outcome-config rule applies). */
+  public Binding: SemanticsCheckBinding | null = null;
 
-  /** @deprecated Use {@link SelectedDecileIndex}. */
-  public get selectedDecileIndex(): number | null {
-    return this.SelectedDecileIndex;
-  }
-  /** @deprecated Use {@link SelectedDecileIndex}. */
-  public set selectedDecileIndex(value: number | null) {
-    this.SelectedDecileIndex = value;
-  }
+  /** The model's `why-badge` binding row: the drivers' label and direction. Null when the model has none. */
+  public WhyBadgeBinding: SemanticsCheckBinding | null = null;
+
+  /** Why the polarity could not be read from the model's semantics although a binding row exists; shown as a notice. */
+  public SemanticsProblem: string | null = null;
+
+  /** The histogram decile filtering the rows; null when none. */
+  public SelectedDecileIndex: number | null = null;
 
   /**
    * True for a regression model. Risk bands are classification rules, so a regression model's tiers, row band, status and
@@ -526,25 +397,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return ProblemTypes.IsRegression(this.ProblemType);
   }
 
-  /** @deprecated Use {@link IsRegression}. */
-  public get isRegression(): boolean {
-    return this.IsRegression;
-  }
-
+  /** Both grids' columns ({@link SetupColumnDefs}). */
   public ColumnDefs: ColDef<PredictionGridRow>[] = [];
 
-  /** @deprecated Use {@link ColumnDefs}. */
-  public get columnDefs(): ColDef<PredictionGridRow>[] {
-    return this.ColumnDefs;
-  }
-  /** @deprecated Use {@link ColumnDefs}. */
-  public set columnDefs(value: ColDef<PredictionGridRow>[]) {
-    this.ColumnDefs = value;
-  }
-
+  /**
+   * Builds the columns (and hands them to both grids once they are ready). With a binding row, its `Label` heads the
+   * column it names: the risk column of a classification, the value column of a regression.
+   */
   public SetupColumnDefs(): void {
-    const scoreLabel = this.OutcomeConfig.ScoreLabel || 'Prediction Score';
+    const bindingLabel = this.Binding?.Label || null;
+    const scoreLabel = (this.IsRegression && bindingLabel) || this.OutcomeConfig.ScoreLabel || 'Prediction Score';
     const statusLabel = this.OutcomeConfig.StatusLabel || 'Risk Level';
+    const riskLabel = (!this.IsRegression && bindingLabel) || 'Risk';
+    const driverLabel = this.WhyBadgeBinding?.Label || 'risk';
 
     this.ColumnDefs = [
       {
@@ -579,10 +444,11 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           const badgeColor = params.data.badgeColor || 'gray';
           const colorClass = `badge-${badgeColor}`;
           const formatted = this.escapeHtml(params.data.scoreFormatted);
+          const scoreAttrs = `data-testid="ps-score-cell" data-score="${params.data.score}"`;
 
           if (this.IsRegression) {
             return `
-              <div class="pg-score-cell">
+              <div class="pg-score-cell" ${scoreAttrs}>
                 <span class="pg-score-val ${colorClass}" style="font-weight: 600; font-size: 13.5px;">${formatted}</span>
               </div>
             `;
@@ -590,7 +456,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
           const pct = Math.min(100, Math.max(0, Math.round(params.data.score * 100)));
           return `
-            <div class="pg-score-cell">
+            <div class="pg-score-cell" ${scoreAttrs}>
               <span class="pg-score-val ${colorClass}">${formatted}</span>
               <div class="pg-score-bar">
                 <div class="pg-score-fill ${colorClass}" style="width: ${pct}%"></div>
@@ -606,8 +472,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         // The tier order: by risk for classification (the tiers are risk bands), by value for regression.
         comparator: (_a: string, _b: string, nodeA, nodeB): number =>
           this.IsRegression
-            ? (nodeA.data?.score ?? 0) - (nodeB.data?.score ?? 0)
-            : (nodeA.data?.riskPct ?? 0) - (nodeB.data?.riskPct ?? 0),
+            ? (nodeA.data?.score || 0) - (nodeB.data?.score || 0)
+            : (nodeA.data?.riskPct || 0) - (nodeB.data?.riskPct || 0),
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data) return '';
           const badgeColor = params.data.badgeColor || 'gray';
@@ -618,7 +484,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       },
       {
         field: 'riskPct',
-        headerName: 'Risk',
+        headerName: riskLabel,
         width: 95,
         // Risk is a classification measure (1 - score for a good-outcome model); a regression value has none.
         hide: this.IsRegression,
@@ -632,7 +498,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data || !params.data.class) return '<span class="ps-muted">—</span>';
           const cls = this.escapeHtml(params.data.class);
-          const style = resolveOutcomeStyle(params.data.class, this.OutcomeConfig);
+          const style = ResolveOutcomeStyle(params.data.class, this.OutcomeConfig);
           const icon = style.Icon ? `<i class="fa-solid ${style.Icon}"></i> ` : '';
           return `<span class="ps-badge ${style.BadgeColor}">${icon}${cls}</span>`;
         },
@@ -652,8 +518,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
             const cls = d.Up ? 'up' : 'down';
             const icon = d.Up ? 'fa-arrow-up' : 'fa-arrow-down';
             const label = this.escapeHtml(d.Label);
-            // The arrow is the direction of RISK, not of the score column, so the tooltip says so.
-            const title = `${label}: ${d.Up ? 'raises' : 'lowers'} risk`;
+            // The arrow is the direction the why-badge's row names (risk, or the raw value), not of the score column.
+            const title = `${label}: ${d.Up ? 'raises' : 'lowers'} ${this.escapeHtml(driverLabel)}`;
             return `<span class="ps-why-chip ${cls}" title="${title}"><i class="fa-solid ${icon}"></i> ${label}</span>`;
           }).join(' ');
           return `<div class="pg-drivers-cell">${chips}</div>`;
@@ -664,7 +530,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         headerName: 'Scored At',
         width: 145,
         comparator: (_a: Date | null, _b: Date | null, nodeA, nodeB): number =>
-          (nodeA.data?.scoredAtDate?.getTime() ?? 0) - (nodeB.data?.scoredAtDate?.getTime() ?? 0),
+          PSPredictionsGridComponent.timeOrZero(nodeA.data?.scoredAtDate) - PSPredictionsGridComponent.timeOrZero(nodeB.data?.scoredAtDate),
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data || !params.data.scoredAtDate) return '<span class="ps-muted">—</span>';
           const d = params.data.scoredAtDate;
@@ -690,11 +556,6 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     }
   }
 
-  /** @deprecated Use {@link SetupColumnDefs}. */
-  public setupColumnDefs(): void {
-    return this.SetupColumnDefs();
-  }
-
   ngOnInit(): void {
     const pref = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.predictions.drawerWidth');
     if (pref) {
@@ -709,9 +570,10 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   ngOnChanges(changes: SimpleChanges): void {
     if (
-      (changes['modelId'] && !changes['modelId'].firstChange) ||
-      (changes['runId'] && !changes['runId'].firstChange) ||
-      (changes['entityName'] && !changes['entityName'].firstChange)
+      (changes['ModelId'] && !changes['ModelId'].firstChange) ||
+      (changes['RunId'] && !changes['RunId'].firstChange) ||
+      (changes['Surface'] && !changes['Surface'].firstChange) ||
+      (changes['EntityName'] && !changes['EntityName'].firstChange)
     ) {
       void this.loadPredictions();
     }
@@ -730,44 +592,37 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // ── Data Loading & Name Resolution ──
 
+  /** Reloads the run's predictions. */
   public async Reload(): Promise<void> {
     await this.loadPredictions();
   }
 
-  /** @deprecated Use {@link Reload}. */
-  public async reload(): Promise<void> {
-    return this.Reload();
-  }
-
   private async loadPredictions(): Promise<void> {
     this.resetRunState();
-    if (!this.modelId && !this.RunId) {
+    if (!this.ModelId && !this.RunId) {
       this.applyFilter();
       return;
     }
 
-    this.isLoading = true;
+    this.IsLoading = true;
     this.cdr.markForCheck();
 
     try {
       const provider = this.ProviderToUse;
-      const user = provider.CurrentUser ?? undefined;
-      const model = await this.loadModel();
-      const effectiveRunId = this.RunId ?? (await this.resolveLatestRunId());
-      if (!effectiveRunId) {
+      const user = provider.CurrentUser || undefined;
+      const read0 = await this.loadModelAndBindings();
+      const model = read0.Model;
+      const read = await this.loadScoredRows(model, provider, user);
+      if (!read) {
         this.applyFilter();
-        this.RowsLoaded.emit({ Rows: [], Capped: false });
+        this.RowsLoaded.emit({ Rows: [], Capped: false, Binding: read0.Binding });
         return;
       }
-
-      await this.resolveTargetEntity(model);
-
-      // The run's process run details by keyset paging, read-only and only the columns the grid uses; throws on failure.
-      const read = await PredictiveStudioEngine.Instance.LoadRunDetails(effectiveRunId, provider, user);
-      this.applyModelOptions(model);
+      const atRiskOptions = this.applyModelOptions(read0);
       const parsedAtRisk = AtRiskRules.ParseAtRiskRows(
         read.Rows.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
-        { InvertedRisk: this.IsRenewalModel },
+        // the drivers render on the why-badge, so its row (when the model has one) signs them
+        { ...atRiskOptions, DriverDirectionRelativeTo: this.WhyBadgeBinding?.DriverDirectionRelativeTo || atRiskOptions.DriverDirectionRelativeTo },
       );
       const detailByRecord = new Map<string, PSRunDetailRow>();
       for (const d of read.Rows) {
@@ -778,19 +633,116 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
       this.computeVisibleBands();
       this.applyFilter();
-      this.RowsLoaded.emit({ Rows: parsedAtRisk, Capped: read.Capped });
+      this.RowsLoaded.emit({ Rows: parsedAtRisk, Capped: read.Capped, Binding: this.Binding });
 
       // Lazy lookup of record names for visible rows
       this.ScheduleVisibleRowsLookup(0);
     } catch (err) {
-      this.loadError = err instanceof Error ? err.message : String(err);
-      LogError(`PSPredictionsGridComponent.loadPredictions: ${this.loadError}`);
-      this.RowsLoadFailed.emit(this.loadError);
+      this.LoadError = err instanceof Error ? err.message : String(err);
+      LogError(`PSPredictionsGridComponent.loadPredictions: ${this.LoadError}`);
+      this.RowsLoadFailed.emit(this.LoadError);
     } finally {
-      this.isLoading = false;
+      this.IsLoading = false;
       this.cdr.markForCheck();
     }
   }
+
+  /**
+   * The rows the grid shows. With no run bound and an `Active` scoring binding on the model's pipeline: the binding's
+   * latest values from `MJ: Latest Feature Values` (§5.8.4). With a run bound (an analyst's drill-in to a past run), or a
+   * model whose pipeline has no binding: that run's — or the latest run's — process run details, the per-run audit.
+   * Null when there is nothing to show (no binding and no run). Throws when a read fails.
+   */
+  private async loadScoredRows(model: PredictionGridModelFields | null, provider: IMetadataProvider, user: UserInfo | undefined): Promise<PSRunDetails | null> {
+    const binding = this.RunId ? null : this.activeScoringBinding(model);
+    if (binding) {
+      this.resolveBindingEntity(binding);
+      const latest = await this.LoadLatestValues(binding);
+      return { Rows: latest.Rows.map((r) => LatestPredictionRows.ToRunDetail(r)).filter((r): r is PSRunDetailRow => r !== null), Capped: latest.Capped };
+    }
+    const runId = this.RunId || (await this.resolveLatestRunId());
+    if (!runId) return null;
+    await this.resolveTargetEntity(model);
+    // The run's process run details by keyset paging, read-only and only the columns the grid uses; throws on failure.
+    return this.engine.LoadRunDetails(runId, provider, user);
+  }
+
+  /**
+   * The Predictive Studio engine of the grid's provider (multi-provider: the engine instance that provider's host
+   * configured, never the process-global one).
+   */
+  private get engine(): PredictiveStudioEngine {
+    return PredictiveStudioEngine.GetProviderInstance(this.ProviderToUse, PredictiveStudioEngine) as PredictiveStudioEngine;
+  }
+
+  /**
+   * The model pipeline's `Active` scoring binding (with a target entity) the grid shows, from the engine's cache, chosen
+   * the same way on every read: when the host opened the grid for an entity (`EntityName`), the Active binding on that
+   * entity, or none; otherwise any Active binding. Several candidates (a pipeline's bindings are unique per entity and
+   * feature, not per pipeline) are ordered by feature name, then ID, and the first is shown.
+   */
+  private activeScoringBinding(model: PredictionGridModelFields | null): MJMLModelScoringBindingEntity | null {
+    if (!model?.PipelineID) return null;
+    const opened = this.EntityName ? this.ProviderToUse.EntityByName(this.EntityName) : undefined;
+    const candidates = this.engine.ScoringBindingsForPipeline(model.PipelineID)
+      .filter((b) => b.Status === 'Active' && !!b.TargetEntityID && (!opened || UUIDsEqual(b.TargetEntityID, opened.ID)))
+      .sort((a, b) => a.FeatureName.localeCompare(b.FeatureName) || NormalizeUUID(a.ID).localeCompare(NormalizeUUID(b.ID)));
+    return candidates[0] || null;
+  }
+
+  /** Resolves the scored entity to the binding's target entity, whose records its values name. */
+  private resolveBindingEntity(binding: MJMLModelScoringBindingEntity): void {
+    const entity = binding.TargetEntityID ? this.ProviderToUse.EntityByID(binding.TargetEntityID) : undefined;
+    this.ResolvedEntityId = entity ? entity.ID : binding.TargetEntityID;
+    this.ResolvedEntityName = entity ? entity.Name : null;
+  }
+
+  /**
+   * The binding's latest scored values (`Source = 'Model'`) from `MJ: Latest Feature Values`, one keyset page at a time,
+   * up to {@link PredictiveStudioEngine.MaxRunDetailRows}; `Capped` when more exist. Read past MJAPI's RunView cache: the
+   * view entity has no save event to invalidate a cached read. The row-level security filter returns no row to a user
+   * who does not hold the binding's view authorization.
+   *
+   * @throws Error when a page fails to load
+   */
+  protected async LoadLatestValues(binding: LatestPredictionBinding): Promise<{ Rows: LatestPredictionRow[]; Capped: boolean }> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const user = this.ProviderToUse.CurrentUser || undefined;
+    const rows: LatestPredictionRow[] = [];
+    let afterKey: CompositeKey | undefined;
+    while (true) {
+      const page = await rv.RunView<LatestPredictionRow>(
+        {
+          EntityName: 'MJ: Latest Feature Values',
+          ExtraFilter: LatestPredictionRows.Filter(binding),
+          Fields: [...LatestPredictionRows.Fields],
+          MaxRows: PSPredictionsGridComponent.latestPageSize,
+          AfterKey: afterKey,
+          ResultType: 'simple',
+          BypassCache: true,
+        },
+        user,
+      );
+      if (!page.Success || !page.Results) {
+        throw new Error(`Could not read the latest values of "${binding.FeatureName}": ${page.ErrorMessage || 'the request failed'}`);
+      }
+      rows.push(...page.Results);
+      if (page.Results.length < PSPredictionsGridComponent.latestPageSize) return { Rows: rows, Capped: false };
+      afterKey = CompositeKey.FromID(page.Results[page.Results.length - 1].ID); // first-pk-ok: keyset AfterKey over MJ: Latest Feature Values (single ID key)
+      if (rows.length >= PredictiveStudioEngine.MaxRunDetailRows) {
+        // Capped only when more really exist: exactly the cap is complete.
+        const probe = await rv.RunView<Pick<LatestPredictionRow, 'ID'>>(
+          { EntityName: 'MJ: Latest Feature Values', ExtraFilter: LatestPredictionRows.Filter(binding), Fields: ['ID'], MaxRows: 1, SkipTotalRowCount: true, AfterKey: afterKey, ResultType: 'simple', BypassCache: true },
+          user,
+        );
+        if (!probe.Success) throw new Error(`Could not tell whether "${binding.FeatureName}" has more than ${rows.length} latest values: ${probe.ErrorMessage || 'the request failed'}`);
+        return { Rows: rows, Capped: probe.Results.length > 0 };
+      }
+    }
+  }
+
+  /** The page size of {@link LoadLatestValues}. */
+  private static readonly latestPageSize = 1000;
 
   /** Clears everything derived from the previous run, so a model or run switch never shows the old run's rows or notices. */
   private resetRunState(): void {
@@ -798,57 +750,107 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.FilteredRows = [];
     this.VisibleBands = [];
     this.DetailRowsCapped = false;
-    this.loadError = null;
+    this.LoadError = null;
     this.SelectedTier = 'all';
     this.SelectedDecileIndex = null;
+    this.Binding = null;
+    this.WhyBadgeBinding = null;
+    this.SemanticsProblem = null;
   }
 
-  /** The grid's model, or null when no model id is bound. */
-  private async loadModel(): Promise<MJMLModelEntity | null> {
-    if (!this.modelId) return null;
+  /** The bound model and its binding rows, or nothing when no model id is bound. */
+  private async loadModelAndBindings(): Promise<PredictionGridModelRead> {
+    if (!this.ModelId) return { Model: null, Binding: null, WhyBadge: null };
+    return this.LoadModelWithBindings(this.ModelId);
+  }
+
+  /**
+   * The model and the binding rows the grid renders from — its {@link Surface}'s and the `why-badge`'s — in one batched
+   * `RunViews` read (rows are read at render, so an edited row shows on the next load).
+   *
+   * @throws Error when a read fails (a failed binding read is never taken as "the model has no row")
+   */
+  protected async LoadModelWithBindings(modelId: string): Promise<PredictionGridModelRead> {
     const provider = this.ProviderToUse;
-    const modelsRes = await RunView.FromMetadataProvider(provider).RunView<MJMLModelEntity>(
-      {
-        EntityName: 'MJ: ML Models',
-        ExtraFilter: `ID = '${EscapeSQLString(this.modelId)}'`,
-        MaxRows: 1,
-        SkipTotalRowCount: true,
-        ResultType: 'entity_object',
-      },
-      provider.CurrentUser ?? undefined,
+    const id = EscapeSQLString(modelId);
+    const [modelRes, bindingRes, whyBadgeRes] = await RunView.FromMetadataProvider(provider).RunViews<PredictionGridModelFields | OutputBindingEntityRow>(
+      [
+        { EntityName: 'MJ: ML Models', ExtraFilter: `ID='${id}'`, Fields: [...PREDICTION_GRID_MODEL_FIELDS], MaxRows: 1, SkipTotalRowCount: true, ResultType: 'simple' },
+        PSPredictionsGridComponent.bindingParams(id, this.Surface),
+        PSPredictionsGridComponent.bindingParams(id, 'why-badge'),
+      ],
+      provider.CurrentUser || undefined,
     );
-    return modelsRes.Success && modelsRes.Results ? modelsRes.Results[0] ?? null : null;
+    for (const r of [modelRes, bindingRes, whyBadgeRes]) {
+      if (!r || !r.Success) throw new Error(`Reading ML Model ${modelId} and its output bindings failed: ${r?.ErrorMessage || 'unknown error'}`);
+    }
+    return {
+      Model: modelRes.Results.find(PSPredictionsGridComponent.isModelRow) || null,
+      Binding: OutputBindingRows.ForSurface(bindingRes.Results.filter(PSPredictionsGridComponent.isBindingRow), this.Surface),
+      WhyBadge: OutputBindingRows.ForSurface(whyBadgeRes.Results.filter(PSPredictionsGridComponent.isBindingRow), 'why-badge'),
+    };
+  }
+
+  /** The read of a model's binding row for one surface: a simple read of the binding fields, past the server's RunView cache; at most one row per surface. */
+  private static bindingParams(escapedModelId: string, surface: SemanticsCheckBinding['Surface']): RunViewParams {
+    return {
+      EntityName: 'MJ: ML Output Bindings',
+      ExtraFilter: `ModelID='${escapedModelId}' AND Surface='${surface}'`,
+      Fields: [...OutputBindingRows.Fields],
+      MaxRows: 1,
+      SkipTotalRowCount: true,
+      ResultType: 'simple',
+      // The row is what renders, so it is read past MJAPI's RunView cache: a row changed outside the entity layer (no
+      // invalidation event) would otherwise keep rendering its old label and order until the server restarts.
+      BypassCache: true,
+    };
+  }
+
+  private static isModelRow(r: PredictionGridModelFields | OutputBindingEntityRow): r is PredictionGridModelFields {
+    return 'TargetVariable' in r;
+  }
+
+  private static isBindingRow(r: PredictionGridModelFields | OutputBindingEntityRow): r is OutputBindingEntityRow {
+    return 'Surface' in r;
   }
 
   /** The model's latest run when no run id is bound, or null when it has none. */
   private async resolveLatestRunId(): Promise<string | null> {
-    if (!this.modelId) return null;
+    if (!this.ModelId) return null;
     const provider = this.ProviderToUse;
-    const runs = await PredictiveStudioEngine.Instance.LoadRecentRunsForModel(this.modelId, provider, provider.CurrentUser ?? undefined, { maxRows: 1 });
-    return runs[0]?.ID ?? null;
+    const runs = await this.engine.LoadRecentRunsForModel(this.ModelId, provider, provider.CurrentUser || undefined, { maxRows: 1 });
+    return runs[0]?.ID || null;
   }
 
-  /** The model's problem type, outcome config and polarity: one rule (`BuildAtRiskOptions`), shared with the resource and the gate probe. */
-  private applyModelOptions(model: MJMLModelEntity | null): void {
+  /**
+   * The model's problem type, outcome config, polarity, sort and driver direction: one rule (`BuildAtRiskOptions` over
+   * the model and its binding row), shared with the gate probe.
+   */
+  private applyModelOptions(read: PredictionGridModelRead): AtRiskModelOptions {
+    const model = read.Model;
     if (model?.ProblemType) {
       this.ProblemType = model.ProblemType.toLowerCase();
     }
-    const atRiskOptions = AtRiskRules.BuildAtRiskOptions(model ?? undefined);
+    this.Binding = read.Binding;
+    this.WhyBadgeBinding = read.WhyBadge;
+    const atRiskOptions = AtRiskRules.BuildAtRiskOptions(model || undefined, read.Binding);
     this.OutcomeConfig = atRiskOptions.OutcomeConfig;
-    // A positive-polarity score is P(good outcome): risk is 1 - score, while the displayed score stays the model's own.
+    this.SemanticsProblem = atRiskOptions.SemanticsProblem;
+    // When risk is inverted the score is P(good outcome): risk is 1 - score, while the displayed score stays the model's own.
     this.IsRenewalModel = atRiskOptions.InvertedRisk === true;
     this.SetupColumnDefs();
+    return atRiskOptions;
   }
 
   /** One displayed row: the model's own score, its risk, and its tier (risk band, or outcome band for regression). */
   private toGridRow(r: AtRiskRow, detail: PSRunDetailRow | undefined): PredictionGridRow {
-    const dt = detail?.CompletedAt ?? detail?.__mj_CreatedAt ?? null;
+    const dt = detail?.CompletedAt || detail?.__mj_CreatedAt || null;
     const tier = this.tierFor(r);
     return {
       recordId: r.RecordID,
       recordName: r.Label || r.RecordID,
       score: r.Score,
-      scoreFormatted: formatPredictionScore(r.Score, this.OutcomeConfig, this.ProblemType),
+      scoreFormatted: FormatPredictionScore(r.Score, this.OutcomeConfig, this.ProblemType),
       riskPct: r.RiskPct,
       band: tier.Key,
       badgeColor: tier.BadgeColor,
@@ -872,10 +874,10 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return band ? { Key: band.Key, Label: band.Label, BadgeColor: band.BadgeColor, Icon: band.Icon } : PSPredictionsGridComponent.unbandedTier;
   }
 
-  private async resolveTargetEntity(model: MJMLModelEntity | null): Promise<void> {
+  private async resolveTargetEntity(model: PredictionGridModelFields | null): Promise<void> {
     const provider = this.ProviderToUse;
-    if (this.entityName) {
-      const e = provider.EntityByName(this.entityName);
+    if (this.EntityName) {
+      const e = provider.EntityByName(this.EntityName);
       if (e) {
         this.ResolvedEntityId = e.ID;
         this.ResolvedEntityName = e.Name;
@@ -893,7 +895,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           ResultType: 'simple',
           Fields: ['TargetEntityID'],
         },
-        provider.CurrentUser ?? undefined,
+        provider.CurrentUser || undefined,
       );
       if (pRes.Success && pRes.Results && pRes.Results.length > 0) {
         const tId = pRes.Results[0]['TargetEntityID'];
@@ -950,11 +952,6 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.visibleLookupDebounceTimer = setTimeout(() => {
       void this.resolveVisibleRecordNames();
     }, delayMs);
-  }
-
-  /** @deprecated Use {@link ScheduleVisibleRowsLookup}. */
-  public scheduleVisibleRowsLookup(delayMs: number = 60): void {
-    return this.ScheduleVisibleRowsLookup(delayMs);
   }
 
   /**
@@ -1027,7 +1024,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
       const results: EntityRecordNameResult[] = await provider.GetEntityRecordNames(
         inputs,
-        provider.CurrentUser ?? undefined,
+        provider.CurrentUser || undefined,
       );
 
       const nodesToRefresh: IRowNode<PredictionGridRow>[] = [];
@@ -1049,7 +1046,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         }
       }
 
-      // Keep allRows in sync so client-side filter and view toggle retain resolved names
+      // Keep AllRows in sync so client-side filter and view toggle retain resolved names
       for (const row of this.AllRows) {
         const cached = this.recordNameCache.get(NormalizeUUID(row.recordId));
         if (cached && row.recordName !== cached) {
@@ -1078,26 +1075,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // ── Grid & Toolbar Event Handlers ──
 
+  /** Keeps the main grid's API and resolves the visible rows' names. */
   public OnGridReady(event: GridReadyEvent<PredictionGridRow>): void {
     this.gridApi = event.api;
     this.ScheduleVisibleRowsLookup(50);
   }
 
-  /** @deprecated Use {@link OnGridReady}. */
-  public onGridReady(event: GridReadyEvent<PredictionGridRow>): void {
-    return this.OnGridReady(event);
-  }
-
+  /** Keeps the drill-down grid's API and resolves the visible rows' names. */
   public OnChartGridReady(event: GridReadyEvent<PredictionGridRow>): void {
     this.chartGridApi = event.api;
     this.ScheduleVisibleRowsLookup(50);
   }
 
-  /** @deprecated Use {@link OnChartGridReady}. */
-  public onChartGridReady(event: GridReadyEvent<PredictionGridRow>): void {
-    return this.OnChartGridReady(event);
-  }
-
+  /** Opens the record when its link in the record cell is clicked. */
   public OnCellClicked(event: CellClickedEvent<PredictionGridRow>): void {
     const target = event.event?.target as HTMLElement | null;
     if (target && target.closest('[data-action="open-record"]')) {
@@ -1107,11 +1097,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     }
   }
 
-  /** @deprecated Use {@link OnCellClicked}. */
-  public onCellClicked(event: CellClickedEvent<PredictionGridRow>): void {
-    return this.OnCellClicked(event);
-  }
-
+  /** Opens the detail drawer for a clicked row (not for a click on the record link). */
   public OnRowClicked(event: RowClickedEvent<PredictionGridRow>): void {
     const target = event.event?.target as HTMLElement | null;
     if (target && target.closest('[data-action="open-record"]')) {
@@ -1122,52 +1108,32 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     }
   }
 
-  /** @deprecated Use {@link OnRowClicked}. */
-  public onRowClicked(event: RowClickedEvent<PredictionGridRow>): void {
-    return this.OnRowClicked(event);
-  }
-
+  /** Applies the toolbar's search text. */
   public OnSearchInput(event: Event): void {
     const target = event.target as HTMLInputElement;
-    this.SearchText = target.value ?? '';
+    this.SearchText = target.value || '';
     this.applyFilter();
   }
 
-  /** @deprecated Use {@link OnSearchInput}. */
-  public onSearchInput(event: Event): void {
-    return this.OnSearchInput(event);
-  }
-
+  /** Filters by a tier chip. */
   public SetTier(tier: string): void {
     this.SelectedTier = tier;
     this.applyFilter();
   }
 
-  /** @deprecated Use {@link SetTier}. */
-  public setTier(tier: string): void {
-    return this.SetTier(tier);
-  }
-
+  /** Filters by a KPI card's tier and shows the grid. */
   public SetTierAndGrid(tier: string): void {
     this.SelectedTier = tier;
     this.ActiveView = 'grid';
     this.applyFilter();
   }
 
-  /** @deprecated Use {@link SetTierAndGrid}. */
-  public setTierAndGrid(tier: string): void {
-    return this.SetTierAndGrid(tier);
-  }
-
+  /** The badge colour of a predicted class. */
   public GetOutcomeBadgeClass(className: string | null | undefined): string {
-    return resolveOutcomeStyle(className, this.OutcomeConfig).BadgeColor;
+    return ResolveOutcomeStyle(className, this.OutcomeConfig).BadgeColor;
   }
 
-  /** @deprecated Use {@link GetOutcomeBadgeClass}. */
-  public getOutcomeBadgeClass(className: string | null | undefined): string {
-    return this.GetOutcomeBadgeClass(className);
-  }
-
+  /** The design token of a badge colour. */
   public GetBadgeColorVar(color: string): string {
     switch (color) {
       case 'green':
@@ -1183,11 +1149,6 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     }
   }
 
-  /** @deprecated Use {@link GetBadgeColorVar}. */
-  public getBadgeColorVar(color: string): string {
-    return this.GetBadgeColorVar(color);
-  }
-
   /**
    * The tier chips and KPI cards, each with its tier's average model score. Classification: one per risk band (the
    * at-risk list's tiers). Regression: one per configured outcome band, plus any tier a row landed in outside them.
@@ -1199,7 +1160,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   /** The configured outcome bands, then each other tier the rows carry (e.g. values outside every band), in row order. */
   private regressionTiers(): RowTier[] {
-    const tiers: RowTier[] = (this.OutcomeConfig.Bands ?? []).map((b) => ({ Key: b.Key, Label: b.Label, BadgeColor: b.BadgeColor, Icon: b.Icon }));
+    const tiers: RowTier[] = (this.OutcomeConfig.Bands || []).map((b) => ({ Key: b.Key, Label: b.Label, BadgeColor: b.BadgeColor, Icon: b.Icon }));
     const known = new Set(tiers.map((t) => t.Key));
     for (const r of this.AllRows) {
       if (!known.has(r.band)) {
@@ -1222,32 +1183,25 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       count,
       pct: total > 0 ? Math.round((count / total) * 100) : 0,
       avgScore: Math.round(rawAvg * 100),
-      avgScoreFormatted: formatPredictionScore(rawAvg, this.OutcomeConfig, this.ProblemType),
+      avgScoreFormatted: FormatPredictionScore(rawAvg, this.OutcomeConfig, this.ProblemType),
       badgeColor: t.BadgeColor,
       icon: t.Icon,
     };
   }
 
+  /** Switches between the grid and chart views. */
   public OnViewToggle(key: string): void {
     this.ActiveView = key === 'chart' ? 'chart' : 'grid';
     this.cdr.markForCheck();
   }
 
-  /** @deprecated Use {@link OnViewToggle}. */
-  public onViewToggle(key: string): void {
-    return this.OnViewToggle(key);
-  }
-
+  /** Clears the toolbar's search. */
   public ClearSearch(): void {
     this.SearchText = '';
     this.applyFilter();
   }
 
-  /** @deprecated Use {@link ClearSearch}. */
-  public clearSearch(): void {
-    return this.ClearSearch();
-  }
-
+  /** Filters by a histogram decile (again to clear) and scrolls to the drill-down. */
   public SelectDecile(idx: number): void {
     if (this.SelectedDecileIndex === idx) {
       this.SelectedDecileIndex = null;
@@ -1266,35 +1220,23 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     }
   }
 
-  /** @deprecated Use {@link SelectDecile}. */
-  public selectDecile(idx: number): void {
-    return this.SelectDecile(idx);
-  }
-
+  /** Clears the decile filter. */
   public ClearDecileFilter(): void {
     this.SelectedDecileIndex = null;
     this.applyFilter();
   }
 
-  /** @deprecated Use {@link ClearDecileFilter}. */
-  public clearDecileFilter(): void {
-    return this.ClearDecileFilter();
-  }
-
   /** The selected tier's label for the footer ("High risk", or an outcome band's label), empty when all tiers show. */
   public get SelectedTierLabel(): string {
     if (this.SelectedTier === 'all') return '';
-    return this.VisibleBands.find((b) => b.key === this.SelectedTier)?.label ?? this.SelectedTier;
+    const label = this.VisibleBands.find((b) => b.key === this.SelectedTier)?.label;
+    return label === null || label === undefined ? this.SelectedTier : label;
   }
 
+  /** The selected decile's range, e.g. `40%–50%`; empty when none. */
   public get SelectedDecileLabel(): string {
     if (this.SelectedDecileIndex === null) return '';
     return `${this.SelectedDecileIndex * 10}%–${(this.SelectedDecileIndex + 1) * 10}%`;
-  }
-
-  /** @deprecated Use {@link SelectedDecileLabel}. */
-  public get selectedDecileLabel(): string {
-    return this.SelectedDecileLabel;
   }
 
   private applyFilter(): void {
@@ -1327,8 +1269,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // ── Drill-Through Navigation ──
 
+  /** Opens a row's record in Explorer. */
   public DrillThrough(row: PredictionGridRow): void {
-    const entName = this.ResolvedEntityName || this.entityName;
+    const entName = this.ResolvedEntityName || this.EntityName;
     if (!entName) return;
 
     try {
@@ -1336,27 +1279,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const ck = CompositeKey.FromURLSegment(entity, row.recordId);
       this.navigationService.OpenEntityRecord(entName, ck);
     } catch (err) {
-      LogError(`PSPredictionsGridComponent.drillThrough failed: ${err instanceof Error ? err.message : String(err)}`);
+      LogError(`PSPredictionsGridComponent.DrillThrough failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-  }
-
-  /** @deprecated Use {@link DrillThrough}. */
-  public drillThrough(row: PredictionGridRow): void {
-    return this.DrillThrough(row);
   }
 
   // ── Slide-In Detail & Score History ──
 
+  /** Keeps the drawer width and saves it as the user's setting. */
   public OnDrawerWidthChanged(width: number): void {
     this.DrawerWidthPx = width;
     UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.predictions.drawerWidth', width.toString());
   }
 
-  /** @deprecated Use {@link OnDrawerWidthChanged}. */
-  public onDrawerWidthChanged(width: number): void {
-    return this.OnDrawerWidthChanged(width);
-  }
-
+  /** Opens the detail drawer for a row and loads its score history and subject record. */
   public OpenDetail(row: PredictionGridRow): void {
     this.SelectedRow = row;
     this.DetailOpen = true;
@@ -1369,17 +1304,13 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
     void this.loadScoreHistory(row.recordId);
 
-    const entName = this.ResolvedEntityName || this.entityName;
+    const entName = this.ResolvedEntityName || this.EntityName;
     if (entName) {
       void this.resolveSubjectRecord(entName, row.recordId);
     }
   }
 
-  /** @deprecated Use {@link OpenDetail}. */
-  public openDetail(row: PredictionGridRow): void {
-    return this.OpenDetail(row);
-  }
-
+  /** Closes the detail drawer. */
   public CloseDetail(): void {
     this.DetailOpen = false;
     this.SelectedRow = null;
@@ -1390,11 +1321,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.cdr.markForCheck();
   }
 
-  /** @deprecated Use {@link CloseDetail}. */
-  public closeDetail(): void {
-    return this.CloseDetail();
-  }
-
+  /** Opens the selected record's subject record in Explorer. */
   public OpenSubjectRecord(): void {
     if (!this.SubjectEntityName || !this.SubjectRecordId) return;
     try {
@@ -1403,13 +1330,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const ck = CompositeKey.FromURLSegment(entity, this.SubjectRecordId);
       this.navigationService.OpenEntityRecord(this.SubjectEntityName, ck);
     } catch (err) {
-      LogError(`PSPredictionsGridComponent.openSubjectRecord failed: ${err instanceof Error ? err.message : String(err)}`);
+      LogError(`PSPredictionsGridComponent.OpenSubjectRecord failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-  }
-
-  /** @deprecated Use {@link OpenSubjectRecord}. */
-  public openSubjectRecord(): void {
-    return this.OpenSubjectRecord();
   }
 
   private async resolveSubjectRecord(targetEntityName: string, recordId: string): Promise<void> {
@@ -1457,7 +1379,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           ResultType: 'simple',
           Fields: [matchedField],
         },
-        provider.CurrentUser ?? undefined,
+        provider.CurrentUser || undefined,
       );
 
       if (recRes.Success && recRes.Results && recRes.Results.length > 0) {
@@ -1475,11 +1397,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
                   CompositeKey: CompositeKey.FromURLSegment(relatedEntity, subjectId),
                 },
               ],
-              provider.CurrentUser ?? undefined,
+              provider.CurrentUser || undefined,
             );
 
             if (names && names.length > 0 && names[0].Success) {
-              this.SubjectRecordName = names[0].RecordName ?? null;
+              const recordName = names[0].RecordName;
+              this.SubjectRecordName = recordName === null || recordName === undefined ? null : recordName;
             }
           }
           this.cdr.markForCheck();
@@ -1495,10 +1418,10 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     try {
       this.HistoryPoints = await this.scoreHistoryService.LoadRecordScoreHistory({
         provider: this.ProviderToUse,
-        User: this.ProviderToUse.CurrentUser ?? undefined,
+        User: this.ProviderToUse.CurrentUser || undefined,
         entityId: this.ResolvedEntityId,
         recordId,
-        modelId: this.modelId,
+        modelId: this.ModelId,
         OutcomeConfig: this.OutcomeConfig,
         ProblemType: this.ProblemType,
         InvertedRisk: this.IsRenewalModel,
@@ -1509,143 +1432,92 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     }
   }
 
+  /** The scored entity's name for display. */
   public get EntityDisplayName(): string {
-    return this.ResolvedEntityName || this.entityName || 'Entity Record';
-  }
-
-  /** @deprecated Use {@link EntityDisplayName}. */
-  public get entityDisplayName(): string {
-    return this.EntityDisplayName;
+    return this.ResolvedEntityName || this.EntityName || 'Entity Record';
   }
 
   // ── KPI & Chart Computations ──
 
+  /** Rows in the high tier. */
   public get HighCount(): number {
     return this.AllRows.filter((r) => r.band === 'high').length;
   }
 
-  /** @deprecated Use {@link HighCount}. */
-  public get highCount(): number {
-    return this.HighCount;
-  }
+  /** Rows in the medium tier. */
   public get MediumCount(): number {
     return this.AllRows.filter((r) => r.band === 'medium').length;
   }
 
-  /** @deprecated Use {@link MediumCount}. */
-  public get mediumCount(): number {
-    return this.MediumCount;
-  }
+  /** Rows in the low tier. */
   public get LowCount(): number {
     return this.AllRows.filter((r) => r.band === 'low').length;
   }
 
-  /** @deprecated Use {@link LowCount}. */
-  public get lowCount(): number {
-    return this.LowCount;
-  }
-
+  /** The high tier's share of the rows, 0–100. */
   public get HighPct(): number {
     return this.AllRows.length > 0 ? Math.round((this.HighCount / this.AllRows.length) * 100) : 0;
   }
 
-  /** @deprecated Use {@link HighPct}. */
-  public get highPct(): number {
-    return this.HighPct;
-  }
+  /** The medium tier's share of the rows, 0–100. */
   public get MediumPct(): number {
     return this.AllRows.length > 0 ? Math.round((this.MediumCount / this.AllRows.length) * 100) : 0;
   }
 
-  /** @deprecated Use {@link MediumPct}. */
-  public get mediumPct(): number {
-    return this.MediumPct;
-  }
+  /** The low tier's share of the rows, 0–100. */
   public get LowPct(): number {
     return this.AllRows.length > 0 ? Math.round((this.LowCount / this.AllRows.length) * 100) : 0;
   }
 
-  /** @deprecated Use {@link LowPct}. */
-  public get lowPct(): number {
-    return this.LowPct;
-  }
-
+  /** The high tier's mean risk, 0–100. */
   public get HighAvg(): number {
     return this.HighAvgRisk;
   }
 
-  /** @deprecated Use {@link HighAvg}. */
-  public get highAvg(): number {
-    return this.HighAvg;
-  }
+  /** The medium tier's mean risk, 0–100. */
   public get MediumAvg(): number {
     return this.MediumAvgRisk;
   }
 
-  /** @deprecated Use {@link MediumAvg}. */
-  public get mediumAvg(): number {
-    return this.MediumAvg;
-  }
+  /** The low tier's mean risk, 0–100. */
   public get LowAvg(): number {
     return this.LowAvgRisk;
   }
 
-  /** @deprecated Use {@link LowAvg}. */
-  public get lowAvg(): number {
-    return this.LowAvg;
-  }
-
+  /** The high tier's mean risk, 0–100. */
   public get HighAvgRisk(): number {
     const list = this.AllRows.filter((r) => r.band === 'high');
     return list.length > 0 ? Math.round(list.reduce((acc, r) => acc + r.riskPct, 0) / list.length) : 0;
   }
 
-  /** @deprecated Use {@link HighAvgRisk}. */
-  public get highAvgRisk(): number {
-    return this.HighAvgRisk;
-  }
+  /** The medium tier's mean risk, 0–100. */
   public get MediumAvgRisk(): number {
     const list = this.AllRows.filter((r) => r.band === 'medium');
     return list.length > 0 ? Math.round(list.reduce((acc, r) => acc + r.riskPct, 0) / list.length) : 0;
   }
 
-  /** @deprecated Use {@link MediumAvgRisk}. */
-  public get mediumAvgRisk(): number {
-    return this.MediumAvgRisk;
-  }
+  /** The low tier's mean risk, 0–100. */
   public get LowAvgRisk(): number {
     const list = this.AllRows.filter((r) => r.band === 'low');
     return list.length > 0 ? Math.round(list.reduce((acc, r) => acc + r.riskPct, 0) / list.length) : 0;
   }
 
-  /** @deprecated Use {@link LowAvgRisk}. */
-  public get lowAvgRisk(): number {
-    return this.LowAvgRisk;
-  }
-
+  /** The rows' mean model score, 0–100. */
   public get MeanScorePct(): number {
     if (this.AllRows.length === 0) return 0;
     const total = this.AllRows.reduce((acc, r) => acc + r.score, 0);
     return Math.round((total / this.AllRows.length) * 100);
   }
 
-  /** @deprecated Use {@link MeanScorePct}. */
-  public get meanScorePct(): number {
-    return this.MeanScorePct;
-  }
-
+  /** The rows' mean model score, formatted by the outcome config. */
   public get MeanScoreFormatted(): string {
     if (this.AllRows.length === 0) return '—';
     const total = this.AllRows.reduce((acc, r) => acc + r.score, 0);
     const avg = total / this.AllRows.length;
-    return formatPredictionScore(avg, this.OutcomeConfig, this.ProblemType);
+    return FormatPredictionScore(avg, this.OutcomeConfig, this.ProblemType);
   }
 
-  /** @deprecated Use {@link MeanScoreFormatted}. */
-  public get meanScoreFormatted(): string {
-    return this.MeanScoreFormatted;
-  }
-
+  /** The 10-bin score histogram of the chart view. */
   public get HistogramBins(): HistogramBin[] {
     const total = this.AllRows.length;
     if (total === 0) return [];
@@ -1691,8 +1563,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       let label: string;
       let shortLabel: string;
       if (isReg) {
-        const fmtMin = formatPredictionScore(binMin, this.OutcomeConfig, this.ProblemType);
-        const fmtMax = formatPredictionScore(binMax, this.OutcomeConfig, this.ProblemType);
+        const fmtMin = FormatPredictionScore(binMin, this.OutcomeConfig, this.ProblemType);
+        const fmtMax = FormatPredictionScore(binMax, this.OutcomeConfig, this.ProblemType);
         label = `${fmtMin}–${fmtMax}`;
         shortLabel = fmtMin;
       } else {
@@ -1717,11 +1589,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     });
   }
 
-  /** @deprecated Use {@link HistogramBins}. */
-  public get histogramBins(): HistogramBin[] {
-    return this.HistogramBins;
-  }
-
+  /** The predicted classes' shares, largest first. */
   public get ClassBreakdown(): ClassShare[] {
     const total = this.AllRows.length;
     if (total === 0) return [];
@@ -1729,7 +1597,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     const counts = new Map<string, number>();
     for (const r of this.AllRows) {
       if (r.class) {
-        counts.set(r.class, (counts.get(r.class) ?? 0) + 1);
+        counts.set(r.class, (counts.get(r.class) || 0) + 1);
       }
     }
 
@@ -1752,13 +1620,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       }));
   }
 
-  /** @deprecated Use {@link ClassBreakdown}. */
-  public get classBreakdown(): ClassShare[] {
-    return this.ClassBreakdown;
-  }
-
   // ── Trendline SVG Plotting ──
 
+  /** The score-history trendline's points, in SVG coordinates. */
   public get TrendlinePlotPoints(): TrendlinePlotPoint[] {
     const pts = this.HistoryPoints;
     if (pts.length === 0) return [];
@@ -1804,20 +1668,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     });
   }
 
-  /** @deprecated Use {@link TrendlinePlotPoints}. */
-  public get trendlinePlotPoints(): TrendlinePlotPoint[] {
-    return this.TrendlinePlotPoints;
-  }
-
+  /** The trendline's polyline points. */
   public get TrendlineLinePoints(): string {
     return this.TrendlinePlotPoints.map((p) => `${p.x},${p.y}`).join(' ');
   }
 
-  /** @deprecated Use {@link TrendlineLinePoints}. */
-  public get trendlineLinePoints(): string {
-    return this.TrendlineLinePoints;
-  }
-
+  /** The trendline's filled-area polygon points. */
   public get TrendlineAreaPoints(): string {
     const plot = this.TrendlinePlotPoints;
     if (plot.length === 0) return '';
@@ -1826,13 +1682,99 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return `${first.x},130 ` + plot.map((p) => `${p.x},${p.y}`).join(' ') + ` ${last.x},130`;
   }
 
-  /** @deprecated Use {@link TrendlineAreaPoints}. */
-  public get trendlineAreaPoints(): string {
-    return this.TrendlineAreaPoints;
-  }
-
   // ── CSV Export ──
 
+  /** True while the selection is being saved as a List. */
+  public SavingList = false;
+
+  /** The outcome of the last "Save as list", for the toolbar; null before any. */
+  public ListMessage: string | null = null;
+
+  /** The most records a selection saved as a List may hold (one transaction group carries the List and a detail per record). */
+  public static readonly MaxListSelection = 5000;
+
+  /** {@link MaxListSelection}, for the template. */
+  public readonly ListSelectionLimit = PSPredictionsGridComponent.MaxListSelection;
+
+  /** True when the shown rows can be saved as a List: a resolved target entity and 1..{@link MaxListSelection} rows. */
+  public get CanSaveAsList(): boolean {
+    return !this.SavingList && !!this.ResolvedEntityName && this.FilteredRows.length > 0 && this.FilteredRows.length <= PSPredictionsGridComponent.MaxListSelection;
+  }
+
+  /**
+   * Saves the grid's selection — the rows its tier and decile filters show — as a new List (§5.4) and opens it: the
+   * `MJ: Lists` row of the target entity and one `MJ: List Details` row per record, created as the current user (so the
+   * user's own List permissions decide) in one transaction group — all of them or none.
+   */
+  public async SaveSelectionAsList(): Promise<void> {
+    const entity = this.ResolvedEntityName ? this.ProviderToUse.EntityByName(this.ResolvedEntityName) : undefined;
+    if (!this.CanSaveAsList || !entity) return;
+    this.SavingList = true;
+    this.ListMessage = null;
+    this.cdr.markForCheck();
+    try {
+      const name = this.selectionListName();
+      const listId = await this.createSelectionList(entity, name);
+      this.ListMessage = `Saved ${this.FilteredRows.length} record(s) as the list "${name}".`;
+      this.navigationService.OpenEntityRecord('MJ: Lists', CompositeKey.FromID(listId));
+    } catch (e) {
+      this.ListMessage = `Could not save the list: ${e instanceof Error ? e.message : String(e)}`;
+      LogError(`PSPredictionsGridComponent.SaveSelectionAsList: ${this.ListMessage}`);
+    } finally {
+      this.SavingList = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Queues the List named `name` of `entity` and a List Detail per shown row in one transaction group and submits it.
+   * The List's ID is the one its new record carries, so each detail names it before anything is written.
+   *
+   * @returns the created List's ID
+   * @throws Error when a row is refused before it joins the group, or the group's submit fails (nothing is written)
+   */
+  private async createSelectionList(entity: EntityInfo, name: string): Promise<string> {
+    const p = this.ProviderToUse;
+    const user = p.CurrentUser;
+    const group = await p.CreateTransactionGroup();
+    const list = await p.GetEntityObject<MJListEntity>('MJ: Lists', user);
+    list.NewRecord();
+    list.Name = name;
+    list.EntityID = entity.ID;
+    list.UserID = user.ID;
+    list.TransactionGroup = group;
+    // In a transaction group Save() only queues the row: false means it was refused before it joined.
+    if (!(await list.Save())) throw new Error(list.LatestResult?.CompleteMessage || 'the list was refused');
+    for (const [seq, r] of this.FilteredRows.entries()) await this.queueListDetail(group, list.ID, r.recordId, seq);
+    if (!(await group.Submit())) throw new Error(list.LatestResult?.CompleteMessage || 'the list and its records were not saved');
+    return list.ID;
+  }
+
+  /**
+   * Queues the List Detail naming `recordId` (its compact key segment) at `seq` in `group`.
+   *
+   * @throws Error when the detail is refused before it joins the group
+   */
+  private async queueListDetail(group: TransactionGroupBase, listId: string, recordId: string, seq: number): Promise<void> {
+    const p = this.ProviderToUse;
+    const detail = await p.GetEntityObject<MJListDetailEntity>('MJ: List Details', p.CurrentUser);
+    detail.ListID = listId;
+    detail.RecordID = recordId;
+    detail.Sequence = seq;
+    detail.Status = 'Active';
+    detail.TransactionGroup = group;
+    if (!(await detail.Save())) throw new Error(detail.LatestResult?.CompleteMessage || 'a record of the list was refused');
+  }
+
+  /** "<title>: <tier> (<date>)", within the 100 characters of `MJ: Lists.Name`. */
+  private selectionListName(): string {
+    const title = this.Title || this.ResolvedEntityName || 'Predictions';
+    const parts = [this.SelectedTierLabel, this.SelectedDecileLabel].filter((p) => p).join(', ') || 'all';
+    const name = `${title}: ${parts} (${new Date().toISOString().slice(0, 10)})`;
+    return name.length > 100 ? `${name.slice(0, 99)}…` : name;
+  }
+
+  /** Downloads the filtered rows as a CSV. */
   public ExportCSV(): void {
     if (this.AllRows.length === 0) return;
 
@@ -1866,9 +1808,10 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     URL.revokeObjectURL(url);
   }
 
-  /** @deprecated Use {@link ExportCSV}. */
-  public exportCSV(): void {
-    return this.ExportCSV();
+  /** A date's epoch milliseconds for sorting; 0 when there is no date (an invalid date keeps its NaN, as before). */
+  private static timeOrZero(d: Date | null | undefined): number {
+    const t = d?.getTime();
+    return t === null || t === undefined ? 0 : t;
   }
 
   private escapeHtml(str: string): string {
