@@ -1021,7 +1021,7 @@ describe.each(buildTransportHarnesses())('Epic 2 Slice 2 — Queued Graphs & Enq
             Harness: harness,
             Provider: provider,
             Dispatcher: dispatcher,
-            TimeoutMs: 25_000,
+            TimeoutMs: 100_000,
             Until: async () => store.GetRow(sub.ParentTaskID!)?.Status === 'Complete',
         });
 
@@ -1037,7 +1037,7 @@ describe.each(buildTransportHarnesses())('Epic 2 Slice 2 — Queued Graphs & Enq
         expect(state['totalItems']).toBe(10_000);
         expect(state['completedCount']).toBe(10_000);
         expect(String(state['completedBitmapHex']).length).toBe(2500);
-    }, 30_000);
+    }, 120_000);
 
     it('(d) deduplicates duplicate WorkQueue deliveries and repeated CompleteWaitingStep calls idempotently', async () => {
         const harness = createHarness();

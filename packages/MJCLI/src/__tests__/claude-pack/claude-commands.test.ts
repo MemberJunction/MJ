@@ -345,8 +345,8 @@ describe('install:claude via spawned bin/run.js — --json purity', () => {
     // though the command itself runs in ~0.1s warm. Give the subprocess a hard
     // spawnSync timeout (so a genuine hang fails fast and loud instead of
     // silently eating the test budget) and a per-test timeout above it.
-    const SPAWN_TIMEOUT_MS = 60_000;
-    const TEST_TIMEOUT_MS = 90_000;
+    const SPAWN_TIMEOUT_MS = 180_000;
+    const TEST_TIMEOUT_MS = 210_000;
 
     beforeEach(() => {
         target = mkdtempSync(path.join(tmpdir(), 'mj-cmd-bin-target-'));

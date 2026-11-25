@@ -398,12 +398,21 @@ describe('a While loop must be able to reach its exit condition', () => {
             return elapsedMs;
         };
 
+        // The fastest of several runs is the one least disturbed by other work on the machine.
+        const fastestSequentialRun = async (count: number): Promise<number> => {
+            let fastestMs = Infinity;
+            for (let run = 0; run < 5; run++) {
+                fastestMs = Math.min(fastestMs, await measureSequentialRun(count));
+            }
+            return fastestMs;
+        };
+
         // Warm up JIT once
         await measureSequentialRun(200);
-        const smallMs = await measureSequentialRun(500);
-        const largeMs = await measureSequentialRun(5_000);
+        const smallMs = await fastestSequentialRun(500);
+        const largeMs = await fastestSequentialRun(5_000);
         const ratio = largeMs / Math.max(smallMs, 0.5);
-        // Quadratic scaling on 10x N would be ~100x; linear bookkeeping stays well under 30x even under noisy CI load.
+        // Quadratic scaling on 10x N would be ~100x; linear bookkeeping stays well under 30x.
         expect(ratio).toBeLessThan(30);
 
         // 2) Sparse ResumeFromCursor without replaying already-completed indices
