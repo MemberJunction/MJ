@@ -93,7 +93,7 @@ function restoreKeys(step) {
 
 /** Does this step compile packages with turbo? A `--dry` run plans a build and compiles nothing. */
 function buildsWithTurbo(step) {
-    return code(step).some((l) => /(^|[\s;&|(])turbo\s+(run\s+)?build(?=\s|$)/.test(l) && !/--dry\b/.test(l));
+    return code(step).some((l) => !/^\s*-\s+name:/.test(l) && /(^|[\s;&|(])turbo\s+(run\s+)?build(?=\s|$)/.test(l) && !/--dry\b/.test(l));
 }
 
 const usesAction = (step, action) => code(step).some((l) => new RegExp(`^\\s*(?:- )?uses: ${action}@`).test(l));
@@ -168,5 +168,57 @@ describe('integration.yml turbo build seed', () => {
             j.steps.filter((s) => usesAction(s, 'actions/cache/save') && field(s, 'path') === seedPath).map(() => j.name),
         );
         expect(saves).toEqual([]);
+    });
+});
+
+// PR-triggered turbo builds in sibling workflows share the same no-remote-cache constraint as
+// integration.yml and must also restore next's build seed before their first turbo build.
+const OTHER_SEEDED_WORKFLOWS = [
+    { file: 'pg-migrations.yml', expectedJobs: ['pg-parity', 'managed-host'] },
+    { file: 'claude-pack.yml', expectedJobs: ['e2e-bundle-smoke'] },
+    {
+        file: 'eds-integration.yml',
+        expectedJobs: [
+            'pg-driver-integration',
+            'mongo-driver-integration',
+            'sqlserver-driver-integration',
+            'mysql-driver-integration',
+            'oracle-driver-integration',
+        ],
+    },
+];
+
+describe('other PR workflows — turbo build seed', () => {
+    for (const { file, expectedJobs } of OTHER_SEEDED_WORKFLOWS) {
+        it(`${file} pins TURBO_CACHE_DIR and restores next's seed before each PR turbo build`, () => {
+            const text = readWorkflowFile(file);
+            const cacheDir = /^ {2}TURBO_CACHE_DIR:\s*(.+?)\s*$/m.exec(text)?.[1];
+            expect(cacheDir, `${file} must pin TURBO_CACHE_DIR to ${seedPath}`).toBe(seedPath);
+
+            const jobs = readJobs(text);
+            for (const name of expectedJobs) {
+                const job = jobs.find((j) => j.name === name);
+                expect(job, `${file} → ${name}`).toBeDefined();
+                const firstBuild = job.steps.findIndex(buildsWithTurbo);
+                const restore = job.steps.findIndex(isSeedRestore);
+                expect(firstBuild, `${file} → ${name} builds with turbo`).toBeGreaterThanOrEqual(0);
+                expect(restore, `${file} → ${name} restores seed before build`).toBeGreaterThanOrEqual(0);
+                expect(restore, `${file} → ${name} restores seed before build`).toBeLessThan(firstBuild);
+                expect(restoreKeys(job.steps[restore])).toEqual([seedPrefix]);
+            }
+        });
+    }
+
+    it('build.yml pins TURBO_CACHE_DIR and restores next build seed before pnpm run build', () => {
+        const text = readWorkflowFile('build.yml');
+        const cacheDir = /^ {2}TURBO_CACHE_DIR:\s*(.+?)\s*$/m.exec(text)?.[1];
+        expect(cacheDir).toBe(seedPath);
+        const buildJob = readJobs(text).find((j) => j.name === 'build-only');
+        expect(buildJob).toBeDefined();
+        const restore = buildJob.steps.findIndex(isSeedRestore);
+        const buildIdx = buildJob.steps.findIndex((s) => code(s).some((l) => /\bpnpm run build\b/.test(l)));
+        expect(restore).toBeGreaterThanOrEqual(0);
+        expect(restore).toBeLessThan(buildIdx);
+        expect(restoreKeys(buildJob.steps[restore])).toEqual([seedPrefix]);
     });
 });

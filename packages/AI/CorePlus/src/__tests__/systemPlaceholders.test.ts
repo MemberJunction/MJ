@@ -288,3 +288,38 @@ describe('SystemPlaceholderManager.ReplaceAvailablePlaceholders', () => {
         expect(out.content).toBe('{{ _BROKEN }} {{ _EMPTY }} {{ _TURN_COUNT }} 2026-10-14');
     });
 });
+
+describe('SystemPlaceholderManager.ResolveAvailablePlaceholders', () => {
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 9, 14, 12));
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+        SystemPlaceholderManager.ResetToDefaults();
+    });
+
+    const user = { Name: 'Ada', Email: 'ada@example.com', ID: 'u-1' } as unknown as AIPromptParams['contextUser'];
+
+    it('returns the clock and user values with a contextUser, and nothing that needs the prompt or execution', async () => {
+        const values = await SystemPlaceholderManager.ResolveAvailablePlaceholders({ contextUser: user });
+        expect(values._CURRENT_DATE).toBe('2026-10-14');
+        expect(values._USER_NAME).toBe('Ada');
+        expect(values._USER_EMAIL).toBe('ada@example.com');
+        const needsMore = SystemPlaceholderManager.GetPlaceholders()
+            .filter(p => !p.requires || p.requires.some(r => r === 'prompt' || r === 'execution'))
+            .map(p => p.name);
+        expect(needsMore.length).toBeGreaterThan(0);
+        for (const name of needsMore) {
+            expect(values).not.toHaveProperty(name);
+        }
+    });
+
+    it('leaves the user values out without a contextUser, and skips a placeholder that throws', async () => {
+        SystemPlaceholderManager.AddPlaceholder({ name: '_BROKEN', requires: [], getValue: async () => { throw new Error('down'); } });
+        const values = await SystemPlaceholderManager.ResolveAvailablePlaceholders({});
+        expect(values._CURRENT_DATE).toBe('2026-10-14');
+        expect(values).not.toHaveProperty('_USER_NAME');
+        expect(values).not.toHaveProperty('_BROKEN');
+    });
+});

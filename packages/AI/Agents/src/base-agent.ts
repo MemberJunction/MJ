@@ -61,6 +61,7 @@ import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
+import { IsTemplatedSkillInstructions } from './skill-instructions-template';
 import { LoopAgentType } from './agent-types/loop-agent-type';
 import { CreateAgentInstance } from './agent-instance';
 import { FailingStepError, GetMaxRepeatedFailingStep, IsPromptTurnStep, RepeatedFailingStepTracker } from './repeated-failing-step';
@@ -9191,6 +9192,20 @@ export class BaseAgent {
     }
 
     /**
+     * Configures the template engine once per run (every call when no run is active yet).
+     * Callers wrap it in their own error handling.
+     */
+    private async ensureTemplateEngineConfigured(contextUser: UserInfo | undefined): Promise<void> {
+        if (this._agentRun && this._templateEngineConfiguredForRun) {
+            return;
+        }
+        await TemplateEngineServer.Instance.Config(false, contextUser);
+        if (this._agentRun) {
+            this._templateEngineConfiguredForRun = true;
+        }
+    }
+
+    /**
      * Raw template text (placeholders intact) for an AI prompt from the cached template engine.
      * Null when the prompt has no template or the lookup fails.
      */
@@ -9202,12 +9217,7 @@ export class BaseAgent {
             return null;
         }
         try {
-            if (!this._agentRun || !this._templateEngineConfiguredForRun) {
-                await TemplateEngineServer.Instance.Config(false, contextUser);
-                if (this._agentRun) {
-                    this._templateEngineConfiguredForRun = true;
-                }
-            }
+            await this.ensureTemplateEngineConfigured(contextUser);
             const templates = TemplateEngineServer.Instance.Templates;
             if (!templates) {
                 return null;
@@ -22295,7 +22305,8 @@ The context is now within limits. Please retry your request with the recovered c
             await this.persistConversationSkillActivation(skill, params);
         }
 
-        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        const instructions = await this.resolveSkillInstructionsFor(newlyActivated, params, currentPayload);
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated, instructions);
         params.conversationMessages.push({
             role: 'user',
             content: activationMessage,
@@ -22443,7 +22454,8 @@ The context is now within limits. Please retry your request with the recovered c
             await this.persistConversationSkillActivation(skill, params);
         }
 
-        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        const instructions = await this.resolveSkillInstructionsFor(newlyActivated, params, currentPayload);
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated, instructions);
         if (!params.conversationMessages) {
             params.conversationMessages = [];
         }
@@ -22641,12 +22653,105 @@ The context is now within limits. Please retry your request with the recovered c
      * actually puts each skill's `Instructions` into effect for the rest of the run. Override to
      * change formatting (e.g. a more compact representation for a high skill-activation-count agent).
      *
+     * @param skills the skills being activated
+     * @param resolvedInstructions the text to use per skill ID, as produced by
+     *   {@link resolveSkillInstructions}; a skill missing from the map uses its stored `Instructions`
      * @protected
      */
-    protected buildSkillActivationMessage(skills: MJAISkillEntity[]): string {
-        const sections = skills.map(s => `## Skill Activated: ${s.Name}\n\n${s.Instructions}`);
+    protected buildSkillActivationMessage(
+        skills: MJAISkillEntity[],
+        resolvedInstructions?: ReadonlyMap<string, string>
+    ): string {
+        const sections = skills.map(s =>
+            `## Skill Activated: ${s.Name}\n\n${resolvedInstructions?.get(s.ID) ?? s.Instructions}`);
         return `The following skill(s) have been activated. Their instructions are now in effect ` +
             `for the remainder of this run:\n\n${sections.join('\n\n')}`;
+    }
+
+    /**
+     * The text each activating skill contributes to the activation message, keyed by skill ID.
+     * Runs {@link resolveSkillInstructions} once per skill, at activation only: the result is
+     * appended to the conversation once and never re-rendered on later turns.
+     */
+    private async resolveSkillInstructionsFor(
+        skills: MJAISkillEntity[],
+        params: ExecuteAgentParams,
+        payload: unknown
+    ): Promise<Map<string, string>> {
+        const resolved = new Map<string, string>();
+        for (const skill of skills) {
+            resolved.set(skill.ID, await this.resolveSkillInstructions(skill, params, payload));
+        }
+        return resolved;
+    }
+
+    /**
+     * The instructions a skill puts into effect when it activates.
+     *
+     * Plain instructions are returned as stored. Instructions that start with
+     * {@link SKILL_INSTRUCTIONS_TEMPLATE_MARKER} are rendered as a Nunjucks template with
+     * {@link buildSkillTemplateData}, using the same HTML autoescaping as agent prompts, so
+     * `{% template "Name" %}` and the other registered template tags work. If rendering fails the
+     * stored text is used: the template engine logs the render error, and a warning naming the skill
+     * is logged here. A template error never fails the run.
+     *
+     * Override to source or render instructions differently (for example, a custom data shape).
+     *
+     * @param skill the activating skill
+     * @param params the run's parameters
+     * @param payload the payload at activation time
+     * @protected
+     */
+    protected async resolveSkillInstructions(
+        skill: MJAISkillEntity,
+        params: ExecuteAgentParams,
+        payload: unknown
+    ): Promise<string> {
+        const stored = skill.Instructions ?? '';
+        if (!IsTemplatedSkillInstructions(stored)) {
+            return stored;
+        }
+        try {
+            await this.ensureTemplateEngineConfigured(params.contextUser);
+            const result = await TemplateEngineServer.Instance.RenderTemplateSimple(
+                stored, await this.buildSkillTemplateData(params, payload), { ContextUser: params.contextUser });
+            if (result.Success && result.Output != null) {
+                return result.Output.trimStart();
+            }
+            this.warnSkillRenderFailed(skill, params, result.Message);
+        } catch (error) {
+            this.warnSkillRenderFailed(skill, params, error instanceof Error ? error.message : String(error));
+        }
+        return stored;
+    }
+
+    /**
+     * The data a templated skill renders with, in increasing priority: the system placeholders that
+     * need only the acting user (`_CURRENT_DATE`, `_USER_NAME` and the other clock, environment and user
+     * values, as agent prompts get them), the run's `params.data`, the current payload as
+     * `_CURRENT_PAYLOAD` (the name agent prompts use), and the agent's name and description.
+     * Override to add values.
+     *
+     * @protected
+     */
+    protected async buildSkillTemplateData(params: ExecuteAgentParams, payload: unknown): Promise<Record<string, unknown>> {
+        const placeholders = await SystemPlaceholderManager.ResolveAvailablePlaceholders({ contextUser: params.contextUser });
+        return {
+            ...placeholders,
+            ...(params.data ?? {}),
+            [BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER]: payload ?? {},
+            agentName: params.agent.Name,
+            agentDescription: params.agent.Description ?? '',
+        };
+    }
+
+    private warnSkillRenderFailed(skill: MJAISkillEntity, params: ExecuteAgentParams, reason: string | undefined): void {
+        LogErrorEx({
+            message: `Skill '${skill.Name}' instructions failed to render as a template; using the stored text: ${reason ?? 'no message from the template engine'}`,
+            severity: 'warning',
+            category: 'AgentSkills',
+            metadata: { agent: params.agent.Name, skillID: skill.ID },
+        });
     }
 
     /**

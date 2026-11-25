@@ -566,6 +566,19 @@ export class SystemPlaceholderManager {
             : m);
     }
 
+    /**
+     * Values for every placeholder whose `requires` the params meet: the clock and environment values, and
+     * with `contextUser` the user values. Placeholders that need the prompt or the execution, fail, or
+     * return no value are left out. For templates rendered outside a prompt run, such as skill instructions.
+     *
+     * @param params - What is known outside a prompt run, typically `contextUser`
+     * @returns Placeholder names mapped to their values
+     */
+    public static async ResolveAvailablePlaceholders(params: Partial<AIPromptParams>): Promise<Record<string, string>> {
+        const names = new Set(this.placeholders.map(p => p.name));
+        return Object.fromEntries(await this.resolveAvailable(names, params));
+    }
+
     /** Values for those of `names` whose `requires` the params meet; failed and empty ones are left out. */
     private static async resolveAvailable(names: ReadonlySet<string>, params: Partial<AIPromptParams>): Promise<Map<string, string>> {
         const has: Record<SystemPlaceholderRequirement, boolean> = {

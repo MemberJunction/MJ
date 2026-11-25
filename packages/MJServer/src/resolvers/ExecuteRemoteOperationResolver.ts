@@ -5,6 +5,7 @@ import { ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY, RemoteOperationEngineBase } from 
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { LoadSynthesizeArtifactFromSourcesOperation } from '../operations/SynthesizeArtifactFromSourcesServerOperation.js';
 import { LoadArtifactComplianceAuditOperation } from '../operations/ArtifactComplianceAuditHelper.js';
 import { LoadArtifactEvaluateAiFormulaOperation } from '../operations/ArtifactEvaluateAiFormulaServerOperation.js';
@@ -103,8 +104,8 @@ export class ExecuteRemoteOperationResultType {
 
 /**
  * The single generic server entry point for Remote Operations. Resolves the operation by key,
- * applies the framework authorization gates (API-key scope, system-user, then the operation's own
- * `Authorize`), and routes the operation through the per-request provider — which executes it
+ * applies the framework authorization gates (API-key scope, system-user, the scope-limited opt-in, then
+ * the operation's own `Authorize`), and routes the operation through the per-request provider — which executes it
  * in-process. Only registered, active operations are reachable, so the public `RouteOperation`
  * power-tool is safe by construction.
  */
@@ -147,8 +148,13 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
             if (!user) {
                 return fail('NO_USER', 'Not authenticated');
             }
-            if (opDecl?.DisallowMagicLinkScope && (user.IsMagicLinkAnonymous || user.MagicLinkScope)) {
+            if (opDecl?.DisallowMagicLinkScope && (user.IsMagicLinkAnonymous || user.MagicLinkScope) && !ctx.userPayload.isSystemUser) {
                 return fail('FORBIDDEN', `Magic Link sessions cannot invoke remote operation '${key}'.`);
+            }
+            // (2b) Scope-limited gate: a magic-link guest or resource-scoped session may only run an
+            // operation that explicitly opts in — and an opted-in operation's Authorize checks the caller's scope.
+            if (IsScopeLimitedPrincipal(user) && !ctx.userPayload.isSystemUser && opDecl?.AllowScopeLimitedPrincipals !== true) {
+                return fail('FORBIDDEN', `Operation '${key}' is not available to scope-limited sessions`);
             }
 
             const provider = GetReadWriteProvider(ctx.providers);
