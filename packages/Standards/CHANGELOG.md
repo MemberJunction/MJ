@@ -1,5 +1,28 @@
 # @memberjunction/standards
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 916fe91: Add the extensible Chief of Staff skills platform, typed core actions, offered rhythms, suggestions, and Agent Channels (`V202611201630`):
+  - **Schema & CodeGen (`V202611201630`)**: Add `AISkillAction.Role` (`Tool` | `Briefing` | `Both`), `AIAgentSkill.AllowMetadataSyncUpdate`, `RowLevelSecurityFilter.PlatformVariants` (SQL Server + PostgreSQL dialect RLS), `MJ: AI Agent Rhythm Templates`, `MJ: AI Agent Suggestions`, `ConversationType` `AGENT_CHANNEL`, `MJ: Agent Channels` (IS-A `MJ: Conversations`), and `MJ: Agent Channel Participants`.
+  - **Policy & Briefing Engine**: Introduce `TypedActionPolicyGuard` in `@memberjunction/ai-core-plus` with sub-agent policy ceiling propagation across `BaseAgent` and `AgentUserPolicyEngine`, plus `AIEngine.GetBriefingActionsForAgent` / `GetSkillBriefingActionIDs` for dynamic cross-app briefing fan-out.
+  - **Core Typed Actions & Agent Channels**: Replace all raw SQL / generic CRUD actions on Chief of Staff with 13 scoped typed actions (including `Assemble My Briefing`, Offered Rhythms, Suggestions, Memory, and Agent Channel actions), add `AgentChannelConversationDriver` with loop-guard and hourly wake rate limits, and enforce recurring routine confirmation in `Schedule Next Agent Wake`.
+  - **Inbound Utility Mailbox Adapter**: Add `InboundUtilityMailboxIngestionService` and `EmailUtilityMailboxExtension` (`BaseServerExtension`) in `@memberjunction/messaging-adapters`.
+  - **Governance, Standards & UI**: Add `agent-skill-governance` repo standard, `ChiefOfStaffAgentChannelsComponent` and Governance `InstructionsOverride` size monitor in `@memberjunction/ng-dashboards`, and `IT157` (`COS9–COS12`) integration checks.
+
+- e6b15b9: Harden Chief of Staff security, governance, email ingestion, agent channels, wake policy enforcement, and briefing resilience:
+  - **Chief of Staff skill governance & SQL isolation (`@memberjunction/standards`, Chief of Staff metadata)**: Switched Chief of Staff `AcceptsSkills` from `All` to `Limited`, explicitly granted safe core skills (`Web Research`, `Data Visualization`, `Document Builder`) while excluding `Data Analysis & Queries`, and attached `Query Builder` as an explicit sub-agent bounded by the user's policy ceiling. Extended the `agent-skill-governance` repo standard to flag non-allow-listed agents setting `AcceptsSkills: 'All'` (or explicitly granting an SQL-bundling skill) when an active skill bundles `Run Ad-hoc Query`.
+  - **Server-verified approval & rhythm validation (`@memberjunction/core-actions`)**: Added `VerifyApprovedAgentRequest` and `VerifyActiveRhythmTemplate` helpers; hardened `ScheduleNextAgentWakeAction`, `EnableAgentRhythmAction`, and `SendInterAgentRequestAction` so agent-context execution rejects self-attested `ConfirmedByUser = true` and unverified/inactive/wrong-agent `RhythmTemplateID` values, requiring a server-verified `Approved` `MJ: AI Agent Requests` row (`ConfirmedApprovalRequestID`). Direct human/UI calls continue to work without requiring an approval request.
+  - **MS Graph & Gmail inbound mailbox ingestion + durable dedup (`@memberjunction/messaging-adapters`)**: Added `CommunicationProviderInboundMailboxFetcher` (supporting Microsoft Graph and Gmail via `CommunicationEngine`) and `InMemoryInboundMailboxFetcher`, auto-registered when `PollIntervalMs > 0`. Added native `POST <root>/inbound/msgraph` (including `validationToken` handshake) and `POST <root>/inbound/gmail` (Pub/Sub base64 payload) webhook normalizers and routes on `EmailUtilityMailboxExtension`. Added durable DB-backed deduplication in `InboundUtilityMailboxIngestionService` via `MJ: User Settings` under the System User so deduplication survives restarts and multi-instance concurrency.
+  - **Human replies in Agent Channels wake peer agents (`@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/ng-dashboards`)**: Added a decoupled `GetGlobalObjectStore()` hook (`RegisterAgentChannelHumanPostWakeHandler`) invoked by `AgentChannelConversationDriver.HandleHumanMessagePosted` and registered by `AgentWakeTriggerService`, ensuring human replies reopen paused channels and wake peer participant agents. Updated `ChiefOfStaffAgentChannelsComponent` to show clear resumed/notified confirmation banners.
+  - **Active policy enforcement for workstream wakes (`@memberjunction/ai-agents`)**: Updated `AgentWakeTriggerService.TriggerWakeForWorkstream` to require an `Active` `MJ: AI Agent User Policies` row for `(AgentID, UserID)`, cleanly suppressing wakes (`POLICY_DENIED`) for users who have not onboarded.
+  - **Briefing timeout/truncation & rhythm staggering (`@memberjunction/core-actions`, Chief of Staff metadata)**: Added per-contributor timeout (`ContributorTimeoutMs`, default 10s) and serialized payload truncation (`MaxContributorChars`, default 32,768 chars) to `AssembleMyBriefingAction`, and staggered the `Daily Calendar Guard & Conflict Check` rhythm template to `15 7 * * 1-5`.
+
+### Patch Changes
+
+- dfc0449: Add strongly-typed 5-tier `LimitsConfigResolver` with approved backstop defaults (`DEFAULT_MJ_LIMITS_CONFIG` / `CODE_FALLBACK_LIMITS`) in `@memberjunction/core`, migrate `RunawayGuard`, `ResourceGuard`, and `Tuning` work bounds across AI/TaskGraph/Actions/Bridge/Server to resolve through `LimitsConfigResolver.Instance`, commit the categorized `docs/limits-sweep-inventory.csv` sweep inventory, and enforce the `limits-literals` CI/Standards guard.
+
 ## 6.3.0-edge.1
 
 ## 6.3.0-edge.0

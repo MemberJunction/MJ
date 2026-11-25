@@ -288,6 +288,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Communication Endpoint Principals&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.811Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
           }
         }
       ]
@@ -311,6 +315,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Communication Logs&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.828Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
           }
         }
       ]
@@ -334,6 +342,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Communication Principal Preferences&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.843Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
           }
         }
       ]
@@ -357,6 +369,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Communication Suppressions&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.860Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
           }
         }
       ]

@@ -1,5 +1,76 @@
 # @memberjunction/testing-cli
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 62245bf: `mj test suite --test <name>` and `mj test regression up --test <name>` run only the named tests of a suite (repeat the flag for more than one). `mj test scripts` takes `--format` (console, markdown or json) and `--output`, so its drift report can go into a PR body, and it now exits when it is done instead of staying open.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [061fa06]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [17406fc]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [f3e942f]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [447f7fa]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [9fa004a]
+  - @memberjunction/ai-agents@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.2
+  - @memberjunction/testing-engine@6.3.0-edge.2
+  - @memberjunction/testing-integration@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/rubrics@6.3.0-edge.2
+  - @memberjunction/testing-engine-base@6.3.0-edge.2
+  - @memberjunction/rubrics-base@6.3.0-edge.2
+  - @memberjunction/dynamic-packages@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

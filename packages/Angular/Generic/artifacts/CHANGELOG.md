@@ -1,5 +1,129 @@
 # @memberjunction/ng-artifacts
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- c799eea: Epic 4a Slice 4: add Library `Shared with Me` and `Shared by Me` views displaying shared conversations (including `ParentID` side threads) and artifacts with owner Revoke actions, restrict conversation sharing UI strictly to owners with `ParentID` privacy indicators, verify direct `NavigationService` deep links with post-revocation access denial, and add unit/DOM + Playwright E2E coverage.
+- 9499d4b: Lists made in a conversation now keep themselves current.
+  - `ListOperations.MaterializeFromQuery` creates a list from a saved query's rows, linked to the query with its parameters, key column, refresh mode and current fingerprint; `CreateListFromRecords` creates a list with no source.
+  - `ListFromQuery` (shared by the action and the mutation) links a list to a saved query, or saves SQL written in a conversation as a Pending query in the user's own "User Lists" query category and links the list to it. When the user can't save queries, the list is still made and says why it won't refresh. When no list comes of a query just saved, the query is deleted. `UserListQueries` does the saving, without embeddings.
+  - Saved-query discoverability follows status: Approved queries are canon, Pending ones are drafts that still run (so a list refreshes from one) but are not offered on shared surfaces. The Query Builder's `ALL_QUERIES` data source is now Approved only and no longer retrieves SQL, and `#query` mentions offer Approved queries only. This is a discovery boundary, not access control: every run is still bounded by the user's entity permissions and field-level security.
+  - New action **Create List From Query**, added to the Lists & Audiences skill with instructions on when to offer a list and what to ask. SQL gets the same checks as Run Ad-hoc Query; those checks now live in a shared `CheckAdhocSQL`.
+  - New GraphQL mutation `CreateListFromQuery` (client: `GraphQLListsClient.CreateListFromQuery`), with the ExecuteAdhocQuery checks for SQL.
+  - The Data artifact has a **Save as List** button, offered when the result's rows are records.
+  - The list form's source badge reads "Definition unchanged" (it said "Matches approved version", which read as the query's own approval when the query is Pending).
+  - New "User Lists" query category in core metadata.
+  - Integration bundle IT179 (`list-from-query`).
+
+- d529e66: Approving a query now needs the new `Queries: Approve` authorization, granted to the Developer and Integration roles. Any user can save a query as a draft (Pending): the UI role gets Create on `MJ: Queries` and `MJ: Query Categories`. The server refuses a save that would approve a query when the user doesn't hold the authorization. The Save Query dialog saves a draft for those users and offers "approve now" to holders, and the Query Browser offers the Approved status only to users who can approve, or for a query that was Approved when the drawer opened.
+
+  A draft (any status but Approved) run by a user who doesn't hold `Queries: Approve` must now pass the same statement screen as ad-hoc SQL, on its rendered SQL: one read statement, reading only entity base views that user reads unscoped (no row or API-key filter, no denied field, not confined by RunView's server hooks). Base tables, system catalogs, other relations and SQL the screen can't account for are refused. Approved queries, queries with `MJ: Query Permissions` rows, and holders of the authorization are not screened, unless the holder's session carries an API-key row filter. A cache check now uses a query's `CacheValidationSQL` only when the query is Approved; a draft gets fresh rows from its screened run (`no_validation`). Saving `CacheValidationSQL` needs `Queries: Approve`. A query saved by a user who can't update queries no longer logs an error when its fingerprint can't be stamped. New helpers: `UserCanApproveQueries`, `APPROVE_QUERIES_AUTHORIZATION`, `QUERY_APPROVAL_REFUSAL`, `QUERY_VALIDATION_SQL_REFUSAL`, and an optional `ApproverRule` on `ApplyApprovalRulesAsync`.
+
+- 96bf010: Add full-screen Present Mode with dual-window `BroadcastChannel` Presenter/Audience sync, progressive reveal steps, blackout/whiteout/laser/numeric-jump shortcuts, 5 new visual slide layouts (`KpiStrip`, `Timeline`, `BentoGrid`, `Quadrant`, `MetricComparison`), 8 designer theme presets, 1-click deterministic `BeautifySlide` ("Polish") + agent tools (`apply_design_preset`, `beautify_slide`, `list_design_options` with schema validation), canonical live-session channel tab ordering on resume with natural co-agent continuity, Docs/Sheets polish parity (YAML frontmatter cover strip + reading time, Sheets Freeze Panes menu, formula autocomplete, `SPARKLINE(...)` SVG inline cell rendering), calm single-row 40px progressive-disclosure toolbars with shared `Cmd/Ctrl+K` command palette across Docs/Sheets/Slides and floating slide design pill, passive focused-surface switch notes & all-channel `GetState()` snapshots, read-only `ContextTool` / `ArtifactWorkspace` peek (`get_workspace_state`, `get_state`), upfront artifact tool parameter schema validation, auto-returned document outline/blocks on missing `blockId`, and pre-display + runtime Media URL health checks.
+
+### Patch Changes
+
+- a87fe90: The artifact viewer header now has one Export menu in place of the PDF-only button. A viewer lists its formats with `GetExportOptions()` and runs the chosen one with `RunExport(key)`. By default these give the portrait and landscape PDF entries when `SupportsPDFExport` is true, so the Docs and Component viewers export as before. An option with a `DisabledReason` shows greyed out, with the reason in place of its description, and does not run. The menu is an `mj-menu`: the arrow keys move between options, and an unavailable option can still take focus, so a screen reader reads its reason.
+
+  Query (data) artifacts now export their results as Excel, CSV or JSON, and their query as a `.sql` file. A results export runs the query again without paging, up to 100,000 rows, through the grid's own export. A warning shows when that limit is hit or the query fails and only the rows on screen were exported. The same menu saves the query (save, update, or save as new), saves the records as a list, opens the saved query as a live Excel workbook when the server has the Excel add-in, and creates a Live Sheet (a Sheets artifact with a live table on the saved query). Excel (live) and Live Sheet need a saved query that matches the version on screen. The data toolbar no longer has the Save Query, Update Query and Save as List buttons; when the SQL has changed it shows an Open Query button next to its badge.
+
+  More viewers now list their exports in the same menu, through the export code they already had. Docs offer Word, Markdown and PDF. Sheets offer the workbook as Excel and the active sheet as CSV. Slides offer PowerPoint and a printable PDF. PDF, Word, Excel file, image, audio and video artifacts offer their original file. SVG, HTML, JSON and code artifacts save their source with the matching extension. The base viewer has `FILE_EXPORT_KEY` and protected `FileExportOption`, `OriginalFileName`, `ExportFileName` and `DownloadTextFile` helpers for this. The code viewer now detects JavaScript content as JavaScript; before, it showed it as Java. The Word (.docx) export of a Docs artifact now works in the browser; before, it failed with "nodebuffer is not supported by this platform".
+
+  `NavigationRequest` has optional `ArtifactID` and `ArtifactName`. The Conversations resource, the artifact tab, the dashboard chat pane and the chat overlay open that artifact in its own tab.
+
+  **Import change:** `LiveSheetClientToolHelper` and its helpers (`CreateLiveSheetHelperForProvider` and the other exports of `live-sheet-client-tool.helper`) moved from `@memberjunction/ng-dashboards` to `@memberjunction/ng-artifacts`. `@memberjunction/ng-dashboards` no longer exports them, so code outside this repository that imports them from `@memberjunction/ng-dashboards` must import them from `@memberjunction/ng-artifacts`. `@memberjunction/ng-query-viewer` now exports its Open in Excel parameter helpers (`HasRequiredParameterValues`, `ToExcelParameterValues`, `CanOpenQueryInExcel`).
+
+- d7a630c: Documents show what they are connected to. `LoadRecordRelations` (core-entities) returns a record's links, backlinks and concept relations as one viewer may see them, from every active graph whose edge provider projects `LinksTo` or `SharesConceptWith` edges. The artifact viewer gains a "Related" tab, rendered by the new standalone `<mj-artifact-related-panel>`, shown when such a graph exists. Picking a related artifact emits `OpenArtifactRequested` (or switches the viewer in place when nothing listens); picking any other record emits `OpenEntityRecord`.
+- 3c2a521: Replace name-resolved `[[Name]]` doc links with durable record-mention tokens (`ConversationUtility.CreateRecordLink`), `[[` autocomplete in the MJ Docs editor (searching readable artifacts as the current user), batched permission-aware link chip rendering (`ArtifactPermissionEngine.ResolvePermissionsBatch` + batched PK-only entity `RunViews`), and plain-label export.
+- d635ec5: Memory-leak audit Round 23 fixes.
+  - `ArtifactCollaborationServer` omits full `BaseVersionText` document bodies from server watermarks whenever a room's working state matches its persisted base version (`Working === Base`), retaining `BaseVersionText` only while uncompacted working-state edits exist and dropping it immediately on compaction — eliminating duplicate multi-MB artifact strings across closed rooms without an arbitrary watermark count cap.
+  - `ConversationToolManager` loads conversation history fresh per agent run via `ConversationEngine.LoadWindowRowsFresh` (memoized on the per-run manager instance and cleared in `BaseAgent.endRun`), preventing server-side agent runs from populating `ConversationEngine`'s process-global UI detail cache.
+  - The fallback artifact suggestion store shared by the document, spreadsheet and slide-deck tool libraries deletes superseded ephemeral content-hash keys when standalone suggestions are accepted and expires idle keys after 2 hours without an arbitrary count cap.
+  - `BaseResourceComponent` replaces `destroy$` with an already-fired notifier on destroy, so a `takeUntil(this.destroy$)` attached after an `await` in a component that was destroyed meanwhile ends immediately instead of living for the session.
+  - `DataExplorerDashboardComponent`, `FormBuilderResourceComponent`, `QueryPartComponent`, `ArtifactTypePluginViewerComponent`, and `PdfArtifactViewerComponent` guard post-`await` timers, subscriptions, plugin instantiations, and PDF document/blob-URL resources when destroyed mid-load.
+  - The MCP server closes Streamable HTTP sessions once idle past `mcpServerSettings.sessionIdleTtlMs` (default 24 hours, swept every `sessionSweepIntervalMs`) without evicting active sessions under a hard count cap, sets `transport.onclose` before `connect()` so the SDK's own close handling runs, and releases sessions whose first request fails.
+  - `CloudDetachedSessionRegistry` clears detached sessions deterministically on terminal turn completion or non-detached `EndSession()` teardown and expires abandoned sessions after their 24-hour idle TTL without an arbitrary count cap.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [a87fe90]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [1d4a3f0]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6e740d7]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [ba46ec9]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [66258b1]
+- Updated dependencies [375f9f1]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [dccf367]
+- Updated dependencies [ab9f8e8]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/ng-composer@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ng-query-viewer@6.3.0-edge.2
+  - @memberjunction/ng-base-forms@6.3.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ng-ui-components@6.3.0-edge.2
+  - @memberjunction/ng-markdown@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/ng-shared-generic@6.3.0-edge.2
+  - @memberjunction/video-studio-core@6.3.0-edge.2
+  - @memberjunction/ng-base-types@6.3.0-edge.2
+  - @memberjunction/ng-code-editor@6.3.0-edge.2
+  - @memberjunction/ng-notifications@6.3.0-edge.2
+  - @memberjunction/ng-react@6.3.0-edge.2
+  - @memberjunction/ng-trees@6.3.0-edge.2
+  - @memberjunction/ng-export-service@6.3.0-edge.2
+  - @memberjunction/ng-media-player@6.3.0-edge.2
+  - @memberjunction/interactive-component-types@6.3.0-edge.2
+  - @memberjunction/excel-addin@6.3.0-edge.2
+  - @memberjunction/ai-diagrams@6.3.0-edge.2
+  - @memberjunction/ng-pagination@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

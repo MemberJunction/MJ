@@ -176,6 +176,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&Name=BaseAgentID"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:31.574Z",
+            "checksum": "7d2929d49bb352d3a5581762405ae70ca5b3e0fdb32a12202011b4f4a1ea617d"
           }
         }
       ]
@@ -1040,6 +1044,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversations&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:31.651Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]

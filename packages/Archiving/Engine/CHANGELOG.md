@@ -1,5 +1,64 @@
 # @memberjunction/archiving-engine
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 009442c: Archive runs process every eligible record in one run, one batch in memory at a time.
+  - `ArchiveProcessor` loads records a page of `BatchSize` at a time, ordered by primary key, until a page comes back empty. A run used to read one query capped at the entity's `UserViewMaxRows` (1,000 by default) and stop. Each page starts after the last key of the previous page, copied when the page loads: single-key entities use `AfterKey`; composite-key entities seek with `(k1 > v1) OR (k1 = v1 AND k2 > v2) ...` and must have only string or number key columns (otherwise the entity is refused before any record is read). Paging never depends on what the driver did to a record, so deleted, stripped, skipped and failed records are each loaded once.
+  - `BaseArchiveDriver.BuildEligibilityFilter(context)` (new, default null) lets a driver add a SQL filter matching the records its `ShouldArchiveRecord` accepts. `DefaultArchiveDriver` returns an OR of `[field] IS NOT NULL` (nullable) and, in StripFields mode, `[field] LIKE '_%'` (NOT NULL string) over `SkipIfAllNullFields` or the active fields, so records a StripFields run already cleared are no longer loaded or counted as skipped on every later run. `FilterExpression` still applies.
+  - In StripFields mode `DefaultArchiveDriver.ShouldArchiveRecord` treats an empty string in a NOT NULL column as no value, since that is what StripFields writes there; such records (for example stripped Record Changes) were archived again on every run. Other modes are unchanged.
+  - The configured `DateField` must be a field of the entity and is written in square brackets.
+  - New deterministic integration test IT182 (`archive-paging`).
+
+- 30a813e: An archive run that fails partway through an entity now records the records it already processed. `ArchiveProcessor.ProcessEntity` takes an optional `runTotals` and adds each page's counts to it as the page completes; `ArchiveEngine` passes its running totals, so a Failed run's `ArchivedRecords` (the only record of what a Purge run removed) includes the pages processed before the error.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/storage@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

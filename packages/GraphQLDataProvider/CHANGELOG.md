@@ -1,5 +1,89 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 9499d4b: Lists made in a conversation now keep themselves current.
+  - `ListOperations.MaterializeFromQuery` creates a list from a saved query's rows, linked to the query with its parameters, key column, refresh mode and current fingerprint; `CreateListFromRecords` creates a list with no source.
+  - `ListFromQuery` (shared by the action and the mutation) links a list to a saved query, or saves SQL written in a conversation as a Pending query in the user's own "User Lists" query category and links the list to it. When the user can't save queries, the list is still made and says why it won't refresh. When no list comes of a query just saved, the query is deleted. `UserListQueries` does the saving, without embeddings.
+  - Saved-query discoverability follows status: Approved queries are canon, Pending ones are drafts that still run (so a list refreshes from one) but are not offered on shared surfaces. The Query Builder's `ALL_QUERIES` data source is now Approved only and no longer retrieves SQL, and `#query` mentions offer Approved queries only. This is a discovery boundary, not access control: every run is still bounded by the user's entity permissions and field-level security.
+  - New action **Create List From Query**, added to the Lists & Audiences skill with instructions on when to offer a list and what to ask. SQL gets the same checks as Run Ad-hoc Query; those checks now live in a shared `CheckAdhocSQL`.
+  - New GraphQL mutation `CreateListFromQuery` (client: `GraphQLListsClient.CreateListFromQuery`), with the ExecuteAdhocQuery checks for SQL.
+  - The Data artifact has a **Save as List** button, offered when the result's rows are records.
+  - The list form's source badge reads "Definition unchanged" (it said "Matches approved version", which read as the query's own approval when the query is Pending).
+  - New "User Lists" query category in core metadata.
+  - Integration bundle IT179 (`list-from-query`).
+
+- 49a5866: Workflows gain waiting steps, a pluggable Human-step provider, durable retries, and lose the 50-step cap (minor: migrations `V202611181900__v6.3.x__TaskGraph_Waiting_Steps` and `V202611182100__v6.3.x__TaskGraph_Durable_Retry`).
+  - **External steps run.** A step reached by the dispatcher waits until something completes it through the new `TaskGraph.CompleteWaitingStep` operation (or `TaskGraphWaitingSteps.CompleteWaitingStep` in-process), by task ID or by `correlationKey`. The signal's payload is merged into the workflow payload; a signal that arrives early is held and applied when the step is reached; `expiresInHours` fails the step when nothing arrives. New column `Task.CorrelationKey`.
+  - **Wait steps.** `{ until }` (timestamp or `payload.<path>`) or `{ durationSeconds }`, durable on `Task.DueAt` and judged on the database clock.
+  - **Human-step providers.** A Human step may name `provider`; any package can register `@RegisterClass(BaseHumanTaskProvider, '<key>')`, raise the ask in its own system, and complete the step through the same completion path. Omitted or `AgentRequest` keeps the built-in inbox. Unregistered providers are refused at submit.
+  - Drawn workflows (`AIAgentStep`) accept `External` and `Wait` steps, and Save-as-Workflow now keeps Human, External and Wait steps instead of dropping them. The flow editor's palette offers Person, External Signal and Wait steps with fields for their settings, and the task-graph canvas renders Wait steps.
+  - A waiting step records its output taint like any runner: a Wait passes on its input taint, a signal that carries a payload taints what follows (it is outside content), and a provider's completion never clears taint.
+  - The 50-node cap now applies only to model-authored graphs (`MAX_TASKS_PER_AGENT_GRAPH`); code-built and drawn graphs are bounded by a 10,000-node blast-radius ceiling.
+  - Record-change triggers follow the workflow's status: bindings are `Active` only while the workflow is, and a removed trigger's binding is disabled. Two triggers on one entity and scope with different filters are reported instead of one silently overwriting the other.
+  - **Retries are durable.** A step with `policy.retryCount` that fails goes back to `Pending` with `Task.AttemptCount` and `Task.NextAttemptAt` (database clock) instead of being retried by sleeping inside the claim, so a retry survives a restart and runs on any instance. Action steps retry only when their action is idempotent (unchanged), Prompt and Decision steps now retry, Agent steps never do. Viewers receive a `ClaimChanged` frame with `ClaimEvent: 'retry-scheduled'`. `TaskGraph.RetryTask` resets the count.
+
+### Patch Changes
+
+- ba46ec9: Tests only: retry the real-timer SharedTabKernel churn test (up to 2 retries), which flakes on loaded shared CI runners.
+- ab9f8e8: Save workspace layouts with `SkipOldValuesCheck`, so a layout row changed elsewhere (another tab or device, or a save whose response was lost to a dropped connection) no longer refuses every later layout save until a page reload, each refusal writing an `MJ: Error Logs` row. The last layout saved wins, as before MJ 6.2. `GraphQLDataProvider.Save` now reports a field-level concurrency refusal on `LatestResult.ConcurrencyConflict`, as server-side saves do.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/lists-base@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/interactive-component-types@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

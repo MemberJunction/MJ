@@ -4,6 +4,7 @@ import {
     EntityDeleteOptions,
     EntitySaveOptions,
     IMetadataProvider,
+    LocalCacheManager,
     LogError,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -28,7 +29,8 @@ const ROUTINE_FIELDS = ['AutoRefresh', 'Name', 'UserID', 'SourceViewID', 'Source
  * Integration role. The rule lives once in {@link MJListEntityExtended.UserCanDelete} and is shared
  * with the UI. The `EntityPermission` migration grants the UI role entity-wide Delete on Lists, and
  * this override narrows it to owner-or-privileged, since entity permissions can't express row-level
- * ownership. The list's refresh routine is deleted after the list.
+ * ownership. The database deletes the list's members with the list, so the cached List Details
+ * results are cleared after the delete. The list's refresh routine is deleted after the list.
  *
  * **Source and refresh.** Only the list's owner may link it to a source query or view, or turn on
  * Refresh automatically. Linking an existing list to a new source fills it from that source right
@@ -85,6 +87,9 @@ export class MJListEntityServer extends MJListEntityExtended {
         }
         const routineID = this.RefreshRoutineID;
         if (!(await super.Delete(options))) return false;
+        // The database removes the list's members with the list, with no entity events for them.
+        await this.runSafely('member cache clear', () =>
+            LocalCacheManager.Instance.InvalidateEntityCaches('MJ: List Details', this.ProviderToUse as unknown as IMetadataProvider));
         // The list's foreign key points at the routine, so the routine goes after the list.
         if (routineID) {
             await this.runSafely('routine delete', () => this.routine().DeleteAsync(routineID));

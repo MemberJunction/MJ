@@ -1,5 +1,84 @@
 # @memberjunction/generic-database-provider
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 5f514f2: Implement the MJ Peer Sync (`MemberJunctionConnector`) core and in-process pipeline (#6021 / #6502), including the `RecordChange` T-SQL migration (`CHK_RecordChange_Source` `'Sync'`, `spCreateRecordChange_Internal` `@IntegrationID`, and `IX_RecordChange_EntityID_ChangedAt`), server-only `BaseEntity.SetSyncContext` (`RecordChange.Source = 'Sync'`, `Integration.ID` FK binding, and `IRecordChangeSyncContext` provenance with optional `OriginUserEmail` for service accounts across `MJCore` and SQL Server / PostgreSQL data providers), Tarjan SCC + two-pass nullable FK cycle planning in `@memberjunction/record-graph`, per-record `EntityVectorSyncer.VectorizeRecords` and batch `DuplicateRecordDetector.FindCandidatesForValues`, `ComputeThreeWayFieldMerge` and the `BaseIntegrationConnector.RunPipeline` seam (plus incremental push `'MJ: Record Changes'` and `EntityID` record-map lookup fixes), and the `SchemaPlanner`, `ChangeSetPlanner`, `PeerIdentityGate`, `PeerSyncApplier`, `PeerSyncEndpointService` (`InProcessPeerSyncTransport` + per-run `FlushDeferredForeignKeys`), `PeerSyncDoorbell`, and `MemberJunctionConnector` modules.
+- d529e66: Approving a query now needs the new `Queries: Approve` authorization, granted to the Developer and Integration roles. Any user can save a query as a draft (Pending): the UI role gets Create on `MJ: Queries` and `MJ: Query Categories`. The server refuses a save that would approve a query when the user doesn't hold the authorization. The Save Query dialog saves a draft for those users and offers "approve now" to holders, and the Query Browser offers the Approved status only to users who can approve, or for a query that was Approved when the drawer opened.
+
+  A draft (any status but Approved) run by a user who doesn't hold `Queries: Approve` must now pass the same statement screen as ad-hoc SQL, on its rendered SQL: one read statement, reading only entity base views that user reads unscoped (no row or API-key filter, no denied field, not confined by RunView's server hooks). Base tables, system catalogs, other relations and SQL the screen can't account for are refused. Approved queries, queries with `MJ: Query Permissions` rows, and holders of the authorization are not screened, unless the holder's session carries an API-key row filter. A cache check now uses a query's `CacheValidationSQL` only when the query is Approved; a draft gets fresh rows from its screened run (`no_validation`). Saving `CacheValidationSQL` needs `Queries: Approve`. A query saved by a user who can't update queries no longer logs an error when its fingerprint can't be stamped. New helpers: `UserCanApproveQueries`, `APPROVE_QUERIES_AUTHORIZATION`, `QUERY_APPROVAL_REFUSAL`, `QUERY_VALIDATION_SQL_REFUSAL`, and an optional `ApproverRule` on `ApplyApprovalRulesAsync`.
+
+### Patch Changes
+
+- 4feb8ad: Fix peer metadata change notices being silently dropped or stalled during concurrent background saves on SQL Server, eliminate redundant timestamp reads and `set`-notice jitter, and run the cross-server invalidation CI rig with `MJ_SERVER_ROLE=api`.
+- d74bfbb: PostgreSQL fixes found by running the deterministic integration tier against PostgreSQL.
+  - **A commit that PostgreSQL rolled back no longer reports success.** Once a statement fails inside a PostgreSQL transaction, `COMMIT` does not error: the server rolls the transaction back and answers `ROLLBACK`. The PostgreSQL provider now checks that reply and throws `DoomedTransactionError`, so the caller learns its writes did not persist.
+  - **An aborted PostgreSQL transaction is recognized as doomed.** SQLSTATE `25P02` (`in_failed_sql_transaction`) now marks the ambient transaction doomed, as `25P01` and the SQL Server codes already did, so nested units and saves inside it refuse instead of failing with a raw driver error.
+  - **Saving a record whose nullable boolean is NULL no longer reports a false concurrency conflict.** The conflict check read the caller's `null` old value as `false` but compared it with the stored `NULL` as is, so on PostgreSQL (which stores NULL where SQL Server's column default stores 0) every edit of such a field was rejected as "Concurrent modification conflict". The stored side now gets the same rule.
+  - **`mj app install` and Open App migrations follow the PostgreSQL TLS and login settings.** The migration run and the metadata refresh after it now use the same `PG_SSL_*` and `PG_AUTH_MODE` resolution as `mj migrate`, through a new `SSL` option on the engine's database config. Before, both connected without TLS and failed against a server that requires it.
+  - Integration checks that assumed SQL Server: `ISNULL` in a filter, `[RecordChange]` bracket quoting, a constraint lookup that compared PostgreSQL's mixed-case names in lowercase, and the list-from-query fixture's bracket-quoted SQL, which the provider now quotes.
+
+- 447f7fa: Security hardening sweep: Data Mapper refuses templates that reach JavaScript internals (SSTI defense) and drops nunjucks function globals; HTTP Request action strips credential headers on cross-origin redirects; /media serves only passive content types inline (attachment otherwise) and adds Referrer-Policy: no-referrer; /media/upload-stage verifies the upload token before buffering the request body; REST transport now enforces API-key scopes (entity:create/update/delete, view:run, view:batch) like GraphQL, including on the entity list route; multi-tenancy header mode rejects requests that omit the tenant header instead of degrading to an unscoped session (admin roles and the system user exempt); MCP server stops accepting API keys from query strings and compares the system key in constant time; CSV export neutralizes leading formula characters in text cells (signed numbers stay as they are); user-search terms refuse structural SQL characters when a UserSearchParamFormatAPI format splices the term outside a string literal.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [d6c032f]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/actions@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/sql-parser@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/queue@6.3.0-edge.2
+  - @memberjunction/encryption@6.3.0-edge.2
+  - @memberjunction/query-processor@6.3.0-edge.2
+  - @memberjunction/geo-core@6.3.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

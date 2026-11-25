@@ -5,8 +5,8 @@ import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { of, Subject } from 'rxjs';
-import { BaseEntityResult, TransactionGroupBase, type IMetadataProvider, type RunViewParams, type TransactionResult } from '@memberjunction/core';
-import { MJListDetailEntity, MJListEntity, MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, ResourceData, type MJMLOutputBindingEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
+import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, ResourceData, type MJListEntity, type MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RenderComponentFixture, CreateFakeProvider, Query } from '@memberjunction/ng-test-utils';
@@ -15,8 +15,15 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSPredictionsGridComponent, type PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
 import type { LatestPredictionRow } from '../latest-prediction-rows';
+import type { ApplyResult } from '@memberjunction/lists-base';
 import { PSPredictionsResourceComponent } from './ps-predictions-resource.component';
 import { TestEntityRows } from '../../__tests__/fixtures/test-entity-rows';
+
+vi.mock('@memberjunction/graphql-dataprovider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/graphql-dataprovider')>();
+  return { ...actual, GraphQLListsClient: vi.fn(function GraphQLListsClientDouble() { return listsClient; }) };
+});
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -224,6 +231,11 @@ const gridStub = (fixture: ComponentFixture<PSPredictionsResourceComponent>): Gr
 
 afterEach(() => vi.restoreAllMocks());
 
+/** The bulk list client "Send to a list" calls: one spy per server operation it may use. */
+const listsClient = {
+  AddRecordsToList: vi.fn<(listId: string, recordIds: readonly string[], opts?: { Status?: string; SequenceFromOrder?: boolean }) => Promise<ApplyResult>>(),
+};
+
 /** The `MJ: ML Output Bindings` fields the embedded grid reads. */
 type BindingRow = Pick<MJMLOutputBindingEntity, 'ID' | 'ModelID' | 'Surface' | 'SortsBy' | 'DriverDirectionRelativeTo' | 'Label'>;
 
@@ -285,74 +297,38 @@ const atRiskListBinding = (sortsBy: SemanticsCheckBinding['SortsBy']): Semantics
   BindingID: 'B-list', Surface: 'at-risk-list', SortsBy: sortsBy, DriverDirectionRelativeTo: sortsBy === 'none' ? 'raw-contribution' : 'adverse-class', Label: sortsBy === 'none' ? 'Predicted class' : 'false risk',
 });
 
-/** A List Detail double: the group it joined, its latest result, and a save that queues it (or refuses it). */
-/** A transaction group whose submit the test decides (no provider is reached). */
-class GroupDouble extends TransactionGroupBase {
-  constructor(private readonly submit: () => Promise<boolean>) {
-    super();
-  }
-  public override async Submit(): Promise<boolean> {
-    return this.submit();
-  }
-  protected async HandleSubmit(): Promise<TransactionResult[]> {
-    return [];
-  }
-}
-
-/** A List Detail whose save queues it or is refused, as the test decides (no provider is reached). */
-class ListDetailDouble extends MJListDetailEntity {
-  constructor(public readonly Index: number, private readonly queues: (i: number) => boolean) {
-    super(TestEntityRows.Entity('MJ: List Details', ['ID', 'ListID', 'RecordID', 'Sequence', 'Status']));
-  }
-  public override async Save(): Promise<boolean> {
-    if (this.queues(this.Index)) return true;
-    this.Refuse();
-    return false;
-  }
-
-  /** Records this detail's save as refused (its own refusal, or the group's rollback). */
-  public Refuse(): void {
-    this.RegisterResultHistoryEntry(new BaseEntityResult(false, `detail ${this.Index} refused`, 'create'));
-  }
-}
-
-/** A List that saves without a provider. */
-class ListDouble extends MJListEntity {
-  constructor() {
-    super(TestEntityRows.Entity('MJ: Lists', ['ID', 'Name', 'EntityID', 'UserID', 'RefreshMode', 'UseSnapshot']));
-    this.ID = 'L1';
-  }
-  public override async Save(): Promise<boolean> {
-    return true;
-  }
-}
-
 /**
- * A provider whose List saves and whose List Details join one transaction group the test controls: `submit` decides the
- * group's outcome and `queues(i)` whether the i-th detail's save queues it.
+ * A GraphQL provider whose List saves; it records the name of every entity object the workspace creates, and `add`
+ * is the server's answer to the bulk add.
  */
-function listProvider(submit: () => Promise<boolean>, queues: (i: number) => boolean = () => true) {
-  const Details: ListDetailDouble[] = [];
-  // a failed submit rolls the group back, marking each queued detail refused, as a real group's result does
-  const Submit = vi.fn(async (): Promise<boolean> => {
-    const ok = await submit();
-    if (!ok) for (const d of Details) d.Refuse();
-    return ok;
-  });
-  const Group = new GroupDouble(Submit);
+function listProvider(add: ApplyResult) {
+  const EntityObjectNames: string[] = [];
   const base = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
-  // GetEntityObject<T> is generic: a typed mock resolves to the List first, then one new List Detail per call
-  const getEntityObject = vi.fn<IMetadataProvider['GetEntityObject']>().mockImplementation(async (entityName: string) => {
-    if (entityName === 'MJ: Lists') return new ListDouble();
-    const d = new ListDetailDouble(Details.length, queues);
-    Details.push(d);
-    return d;
-  });
-  const Provider = Object.assign(base, {
-    CreateTransactionGroup: vi.fn<IMetadataProvider['CreateTransactionGroup']>().mockResolvedValue(Group),
-    GetEntityObject: getEntityObject,
-  });
-  return { Provider, Group, Submit, Details };
+  const fake = {
+    ...base,
+    CreateTransactionGroup: vi.fn(async () => ({ Submit: async () => true })),
+    GetEntityObject: vi.fn(async (entityName: string) => {
+      EntityObjectNames.push(entityName);
+      return { ID: 'L1', Name: '', Save: async () => true } as unknown as MJListEntity;
+    }),
+  };
+  Object.setPrototypeOf(fake, GraphQLDataProvider.prototype);
+  listsClient.AddRecordsToList.mockReset();
+  listsClient.AddRecordsToList.mockResolvedValue(add);
+  return { Provider: fake as unknown as IMetadataProvider, EntityObjectNames, CreateTransactionGroup: fake.CreateTransactionGroup };
+}
+
+/** The server's answer to an add of `added` new members with `failed` failures. */
+function addResult(added: number, failed = 0, errors?: string[]): ApplyResult {
+  const ok = failed === 0;
+  return {
+    Success: ok,
+    ResultCode: ok ? 'SUCCESS' : 'PARTIAL_SUCCESS',
+    Message: ok ? `Added ${added}, removed 0 member(s)` : `Added ${added}, removed 0 member(s), ${failed} failed`,
+    TargetListId: 'L1',
+    Counts: { Added: added, Removed: 0, Failed: failed },
+    Errors: errors,
+  };
 }
 
 /** Loads 250 records at or above the list's risk floor (plus 10 below it) and sends them to a list. */
@@ -494,27 +470,25 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
   });
 
   it('reports how many of the qualifying records "Send to a list" added', async () => {
-    const lists = listProvider(async () => true);
+    const lists = listProvider(addResult(200));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     await sendAtRisk(fixture, resource);
-    expect(lists.Details.length).toBe(200);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 200 of 250 at-risk records (highest risk first)');
   });
 
   it("a list whose at-risk-list binding sorts by 'none' cannot be sent: the control is off, says why, and nothing is written", async () => {
-    const lists = listProvider(async () => true);
+    const lists = listProvider(addResult(200));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     await sendAtRisk(fixture, resource, atRiskListBinding('none'));
     const button = Query(fixture, '[data-testid="ps-act-list"]');
     expect(button instanceof HTMLButtonElement && button.disabled).toBe(true);
     expect(Query(fixture, '[data-testid="ps-act-list-reason"]')?.textContent?.trim()).toBe('This list is not ranked by risk: its At-Risk list binding sorts by none.');
     expect(button?.getAttribute('title')).toBe(AtRiskRules.NoRankingReason);
-    expect([lists.Details.length, lists.Submit.mock.calls.length, Query(fixture, '[data-testid="ps-list-result"]')]).toEqual([0, 0, null]);
-    expect(vi.mocked(lists.Provider.GetEntityObject)).not.toHaveBeenCalled();
+    expect([lists.EntityObjectNames.length, listsClient.AddRecordsToList.mock.calls.length, Query(fixture, '[data-testid="ps-list-result"]')]).toEqual([0, 0, null]);
   });
 
   it("a list whose at-risk-list binding sorts by adverse probability is sent as before", async () => {
-    const lists = listProvider(async () => true);
+    const lists = listProvider(addResult(200));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: false, Binding: atRiskListBinding('adverse-probability-desc') });
     await settle(fixture);
@@ -522,34 +496,39 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
     expect(button instanceof HTMLButtonElement && button.disabled).toBe(false);
     expect(Query(fixture, '[data-testid="ps-act-list-reason"]')).toBeNull();
     await sendAtRisk(fixture, resource, atRiskListBinding('adverse-probability-desc'));
-    expect(lists.Details.length).toBe(200);
+    expect(listsClient.AddRecordsToList.mock.calls[0][1].length).toBe(200);
   });
 
-  it('queues every member on one transaction group and submits it once, so the adds take one round trip', async () => {
-    const lists = listProvider(async () => true);
+  it('adds every member with one server call, highest risk first, and creates no List Details rows in the browser', async () => {
+    const lists = listProvider(addResult(200));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     await sendAtRisk(fixture, resource);
-    expect([lists.Submit.mock.calls.length, lists.Details.every((d) => d.TransactionGroup === lists.Group)]).toEqual([1, true]);
+    expect(listsClient.AddRecordsToList.mock.calls.length).toBe(1);
+    const [listId, recordIds, opts] = listsClient.AddRecordsToList.mock.calls[0];
+    expect(opts).toEqual({ Status: 'Active', SequenceFromOrder: true });
+    expect([listId, recordIds.length, recordIds[0]]).toEqual(['L1', 200, 'hi-0']);
+    expect(lists.EntityObjectNames).toEqual(['MJ: Lists']);
+    expect(lists.CreateTransactionGroup).not.toHaveBeenCalled();
   });
 
-  it('counts nothing added when the batch fails, naming the first error', async () => {
+  it('counts the failed members of a partial add, naming the first error', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const lists = listProvider(async () => false);
-    const { fixture, resource } = await renderWorkspace(lists.Provider);
-    await sendAtRisk(fixture, resource);
-    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 0 of 200 records to “At-Risk: ');
-    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('200 failed to add (first error: detail 0 refused)');
-    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 200/200 adds failed. First: detail 0 refused')]);
-  });
-
-  it('counts a member refused before it joined the batch as failed, and the rest as added', async () => {
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const lists = listProvider(async () => true, (i) => i !== 3);
+    const lists = listProvider(addResult(199, 1, ["Failed to add 'hi-3': refused"]));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     await sendAtRisk(fixture, resource);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 199 of 200 records');
-    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('1 failed to add (first error: detail 3 refused)');
-    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 1/200 adds failed. First: detail 3 refused')]);
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain("1 failed to add (first error: Failed to add 'hi-3': refused)");
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining("sendToList: 1/200 adds failed. First: Failed to add 'hi-3': refused")]);
+  });
+
+  it('counts nothing added when the server refuses the add, naming its message', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const lists = listProvider({ Success: false, ResultCode: 'TARGET_NOT_FOUND', Message: 'List L1 not found' });
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 0 of 200 records to “At-Risk: ');
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('200 failed to add (first error: List L1 not found)');
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 200/200 adds failed. First: List L1 not found')]);
   });
 });
 

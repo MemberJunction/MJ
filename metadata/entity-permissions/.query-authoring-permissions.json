@@ -11,6 +11,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Queries&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:53.480Z",
+      "checksum": "3d638bebe254e853b7fec3e29cde74a15bee3b972774d27839c65ed2e8a7bcb7"
     }
   },
   {
@@ -25,6 +29,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Query Categories&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:53.489Z",
+      "checksum": "46cb75bb7235d93533caeabd6e4c305881e380b859d25a79ccd8f66d4a306a4f"
     }
   }
 ]

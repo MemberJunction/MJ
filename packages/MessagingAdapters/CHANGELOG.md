@@ -1,5 +1,100 @@
 # @memberjunction/messaging-adapters
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 2f41586: Default new AI agent user policies (`AIAgentUserPolicy`) to `Autonomous` coordination mode, `DraftOnly` email, `ProposeWithApproval` calendar changes requiring approval, and `Disabled` (Off) phone channel across database schema defaults, stored procedures, `AgentUserPolicyEngine`, `MJAIAgentUserPolicyEntityServer`, Chief of Staff actions, UI draft builders, and agent prompts, and verify the complete Epic 3 acceptance suite.
+- 916fe91: Add the extensible Chief of Staff skills platform, typed core actions, offered rhythms, suggestions, and Agent Channels (`V202611201630`):
+  - **Schema & CodeGen (`V202611201630`)**: Add `AISkillAction.Role` (`Tool` | `Briefing` | `Both`), `AIAgentSkill.AllowMetadataSyncUpdate`, `RowLevelSecurityFilter.PlatformVariants` (SQL Server + PostgreSQL dialect RLS), `MJ: AI Agent Rhythm Templates`, `MJ: AI Agent Suggestions`, `ConversationType` `AGENT_CHANNEL`, `MJ: Agent Channels` (IS-A `MJ: Conversations`), and `MJ: Agent Channel Participants`.
+  - **Policy & Briefing Engine**: Introduce `TypedActionPolicyGuard` in `@memberjunction/ai-core-plus` with sub-agent policy ceiling propagation across `BaseAgent` and `AgentUserPolicyEngine`, plus `AIEngine.GetBriefingActionsForAgent` / `GetSkillBriefingActionIDs` for dynamic cross-app briefing fan-out.
+  - **Core Typed Actions & Agent Channels**: Replace all raw SQL / generic CRUD actions on Chief of Staff with 13 scoped typed actions (including `Assemble My Briefing`, Offered Rhythms, Suggestions, Memory, and Agent Channel actions), add `AgentChannelConversationDriver` with loop-guard and hourly wake rate limits, and enforce recurring routine confirmation in `Schedule Next Agent Wake`.
+  - **Inbound Utility Mailbox Adapter**: Add `InboundUtilityMailboxIngestionService` and `EmailUtilityMailboxExtension` (`BaseServerExtension`) in `@memberjunction/messaging-adapters`.
+  - **Governance, Standards & UI**: Add `agent-skill-governance` repo standard, `ChiefOfStaffAgentChannelsComponent` and Governance `InstructionsOverride` size monitor in `@memberjunction/ng-dashboards`, and `IT157` (`COS9–COS12`) integration checks.
+
+- e6b15b9: Harden Chief of Staff security, governance, email ingestion, agent channels, wake policy enforcement, and briefing resilience:
+  - **Chief of Staff skill governance & SQL isolation (`@memberjunction/standards`, Chief of Staff metadata)**: Switched Chief of Staff `AcceptsSkills` from `All` to `Limited`, explicitly granted safe core skills (`Web Research`, `Data Visualization`, `Document Builder`) while excluding `Data Analysis & Queries`, and attached `Query Builder` as an explicit sub-agent bounded by the user's policy ceiling. Extended the `agent-skill-governance` repo standard to flag non-allow-listed agents setting `AcceptsSkills: 'All'` (or explicitly granting an SQL-bundling skill) when an active skill bundles `Run Ad-hoc Query`.
+  - **Server-verified approval & rhythm validation (`@memberjunction/core-actions`)**: Added `VerifyApprovedAgentRequest` and `VerifyActiveRhythmTemplate` helpers; hardened `ScheduleNextAgentWakeAction`, `EnableAgentRhythmAction`, and `SendInterAgentRequestAction` so agent-context execution rejects self-attested `ConfirmedByUser = true` and unverified/inactive/wrong-agent `RhythmTemplateID` values, requiring a server-verified `Approved` `MJ: AI Agent Requests` row (`ConfirmedApprovalRequestID`). Direct human/UI calls continue to work without requiring an approval request.
+  - **MS Graph & Gmail inbound mailbox ingestion + durable dedup (`@memberjunction/messaging-adapters`)**: Added `CommunicationProviderInboundMailboxFetcher` (supporting Microsoft Graph and Gmail via `CommunicationEngine`) and `InMemoryInboundMailboxFetcher`, auto-registered when `PollIntervalMs > 0`. Added native `POST <root>/inbound/msgraph` (including `validationToken` handshake) and `POST <root>/inbound/gmail` (Pub/Sub base64 payload) webhook normalizers and routes on `EmailUtilityMailboxExtension`. Added durable DB-backed deduplication in `InboundUtilityMailboxIngestionService` via `MJ: User Settings` under the System User so deduplication survives restarts and multi-instance concurrency.
+  - **Human replies in Agent Channels wake peer agents (`@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/ng-dashboards`)**: Added a decoupled `GetGlobalObjectStore()` hook (`RegisterAgentChannelHumanPostWakeHandler`) invoked by `AgentChannelConversationDriver.HandleHumanMessagePosted` and registered by `AgentWakeTriggerService`, ensuring human replies reopen paused channels and wake peer participant agents. Updated `ChiefOfStaffAgentChannelsComponent` to show clear resumed/notified confirmation banners.
+  - **Active policy enforcement for workstream wakes (`@memberjunction/ai-agents`)**: Updated `AgentWakeTriggerService.TriggerWakeForWorkstream` to require an `Active` `MJ: AI Agent User Policies` row for `(AgentID, UserID)`, cleanly suppressing wakes (`POLICY_DENIED`) for users who have not onboarded.
+  - **Briefing timeout/truncation & rhythm staggering (`@memberjunction/core-actions`, Chief of Staff metadata)**: Added per-contributor timeout (`ContributorTimeoutMs`, default 10s) and serialized payload truncation (`MaxContributorChars`, default 32,768 chars) to `AssembleMyBriefingAction`, and staggered the `Daily Calendar Guard & Conflict Check` rhythm template to `15 7 * * 1-5`.
+
+- 9fa004a: Enforce fail-closed Active coordination policy wake gating via batched Simple RunView lookups across all event-driven and scheduled wake paths, coalesce per-(UserID, ApplicationID) event wakes into single bounded wake keys within configurable coalescing windows, and add an AIDP server startup/deployment guard watermark preventing spurious startup or retroactive wakes while preserving recovery of pre-existing pending routines.
+
+### Patch Changes
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [061fa06]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [2463948]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [17406fc]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [4c44c40]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [0b32bd4]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [f3e942f]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [5331ce5]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [447f7fa]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [9fa004a]
+  - @memberjunction/ai-agents@6.3.0-edge.2
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/communication-engine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/communication-types@6.3.0-edge.2
+  - @memberjunction/task-graph@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/server-extensions-core@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes
