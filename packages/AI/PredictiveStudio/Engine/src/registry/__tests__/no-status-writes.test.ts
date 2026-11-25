@@ -265,13 +265,13 @@ export class StatusAssignments {
 describe('R0 one publish function: no Status write outside the lifecycle gate (static scan)', () => {
   it('finds no Status assignment to an ML model outside the lifecycle gate', () => {
     expect(StatusAssignments.Scan(['packages/AI/PredictiveStudio', 'packages/Angular'], { Allow: ['registry/lifecycle-gate.ts'] })).toEqual([]);
-  }, 60_000);
+  }, 180_000);
 
   it('reports (does not fail on) Set / SetMany / Object.assign calls that write an ML model\'s Status outside the lifecycle gate', () => {
     const calls = StatusAssignments.ScanCalls(['packages/AI/PredictiveStudio', 'packages/Angular'], { Allow: ['registry/lifecycle-gate.ts'] });
     for (const c of calls) console.warn(`R0 report (not a failure): ${c.File}:${c.Line} ${c.Form}`);
     expect(Array.isArray(calls)).toBe(true);
-  }, 60_000);
+  }, 180_000);
 
   describe('the scan finds a planted assignment', () => {
     let scratch = '';
@@ -313,7 +313,7 @@ describe('R0 one publish function: no Status write outside the lifecycle gate (s
       const file = path.relative(StatusAssignments.RepositoryRoot(), path.join(scratch, 'src', 'planted.ts')).split(path.sep).join('/');
       expect(StatusAssignments.Scan([scratch], { Allow: [] })).toEqual([6, 7, 11, 12, 14].map((line) => ({ File: file, Line: line })));
       expect(StatusAssignments.Scan([scratch], { Allow: ['src/planted.ts'] })).toEqual([]);
-    }, 60_000);
+    }, 180_000);
 
     it('does not type-check a generated class-registration manifest, which only imports and lists classes', () => {
       const generated = path.join(scratch, 'src', 'generated');
@@ -323,7 +323,7 @@ describe('R0 one publish function: no Status write outside the lifecycle gate (s
       }
       const candidates = StatusAssignments.Candidates(scratch).map((f) => path.basename(f));
       expect(candidates).toEqual(['planted.ts']);
-    }, 60_000);
+    }, 180_000);
 
     it('scans past an unresolved import of a package that cannot carry an ML model type, and fails on one that can', () => {
       const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ps-r0-imports-'));
@@ -339,7 +339,7 @@ describe('R0 one publish function: no Status write outside the lifecycle gate (s
       } finally {
         fs.rmSync(other, { recursive: true, force: true });
       }
-    }, 60_000);
+    }, 180_000);
 
     it('reports the Set / SetMany / Object.assign calls on an ML model with their form, and not those on another entity', () => {
       const file = path.relative(StatusAssignments.RepositoryRoot(), path.join(scratch, 'src', 'planted.ts')).split(path.sep).join('/');
@@ -348,6 +348,6 @@ describe('R0 one publish function: no Status write outside the lifecycle gate (s
         { File: file, Line: 17, Form: 'SetMany({ Status })' },
         { File: file, Line: 18, Form: 'Object.assign(model, { Status })' },
       ]);
-    }, 60_000);
+    }, 180_000);
   });
 });

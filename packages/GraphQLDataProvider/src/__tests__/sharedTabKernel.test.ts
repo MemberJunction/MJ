@@ -687,7 +687,8 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
         const host = new SharedTabKernelHost({
             CreateWsClient: wsRegistry.CreateFactory(),
             CreateStorageProvider: () => new InstrumentedStorageProvider(),
-            HeartbeatTimeoutMs: 70,
+            // 20 missed heartbeats: a live tab on a slow machine is not taken for a dead one.
+            HeartbeatTimeoutMs: 500,
             HeartbeatSweepIntervalMs: 20,
         });
         hostsToDispose.push(host);
@@ -752,8 +753,11 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
         const sub8 = tab8.PushStatusUpdates('churn-session-8').subscribe((m) => receivedByTab.get(8)!.push(m));
         await Promise.all([tab7.SharedTabKernel!.WaitUntilReady(), tab8.SharedTabKernel!.WaitUntilReady()]);
 
-        // Wait enough for heartbeat sweeper to detect dead Tab 3
-        await flushMicrotasksAndTimers(130);
+        // Wait for the heartbeat sweeper to detect dead Tab 3
+        await vi.waitFor(async () => {
+            const stats = await tab7.GetSharedTabKernelStats();
+            expect(stats!.DroppedTabCleanupCount).toBeGreaterThanOrEqual(1);
+        }, { timeout: 10_000, interval: 20 });
 
         // Stream batch 2 (50 more msgs) to surviving tabs 4, 5, 6, 7, 8
         for (let seq = 51; seq <= 100; seq++) {
