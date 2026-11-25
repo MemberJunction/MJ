@@ -206,7 +206,22 @@ export const POSTGRES_MJ_GROUP_ROLES: readonly string[] = Object.freeze([
   'cdp_UI',
 ]);
 
-/** Extensions MJ's PostgreSQL migrations require (they run `CREATE EXTENSION IF NOT EXISTS`). */
+/**
+ * Extensions the installer creates up front, as the administrator, before any migration runs.
+ *
+ * MJ itself needs neither: its PostgreSQL floor is 14, UUID defaults use the built-in
+ * `gen_random_uuid()` (core since PG 13), and no `pgcrypto` or `uuid-ossp` function is called. The
+ * converter now emits a `CREATE EXTENSION` only when a converted body calls into one
+ * (`PG_EXTENSION_REQUIREMENTS` in `@memberjunction/sql-converter`).
+ *
+ * Both stay here anyway. Migrations that have already shipped still begin with
+ * `CREATE EXTENSION IF NOT EXISTS "pgcrypto"` / `"uuid-ossp"`, and a shipped migration is immutable —
+ * editing one changes its checksum on every database that has applied it. Those statements run as the
+ * CodeGen login, which on a managed host (RDS, Azure Flexible Server, HorizonDB) may lack the right to
+ * create an extension, and on an allowlisting host is refused for one that isn't listed. Creating both
+ * here first turns each of them into a no-op. Trim this list only once a new baseline has rolled the
+ * last such file out of the fresh-install path.
+ */
 export const POSTGRES_MJ_EXTENSIONS: readonly string[] = Object.freeze(['pgcrypto', 'uuid-ossp']);
 
 /** The PostgreSQL maintenance database the setup connects to before the MJ database exists. */

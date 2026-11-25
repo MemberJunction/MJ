@@ -11,7 +11,7 @@ import {
   ConvertStringConcat, ConvertTopToLimit, ConvertCastTypes, ConvertIIF,
   ConvertConvertFunction, RemoveNPrefix, RemoveCollate, ConvertCommonFunctions,
   ConvertBooleanLiteralComparisons,
-  EscapeRegExp,
+  EscapeRegExp, AddLateralOnTrue,
 } from './ExpressionHelpers.js';
 
 /** SQL keywords that should NOT be quoted as column references */
@@ -137,7 +137,7 @@ export class ViewRule implements IConversionRule {
     result = result.replace(lateralFuncPattern, '$1 (SELECT * FROM $2) $3');
 
     // Add ON TRUE for LEFT JOIN LATERAL that lacks ON clause
-    result = this.addLateralOnTrue(result);
+    result = AddLateralOnTrue(result);
 
     // Quote LATERAL alias references: root_xxx."Col" → "root_xxx"."Col"
     result = result.replace(/\bAS\s+(root_\w+)\s+ON\s+TRUE/gi, 'AS "$1" ON TRUE');
@@ -260,8 +260,13 @@ export class ViewRule implements IConversionRule {
     // Quote PascalCase word after ORDER BY / GROUP BY:
     // ORDER BY StartedAt → ORDER BY "StartedAt"
     // GROUP BY PatronID  → GROUP BY "PatronID"
+    // The trailing lookahead keeps it off a QUALIFIER. Without it, `ORDER BY cirInner."StartedAt"`
+    // (the `i` flag lets `[A-Z][a-z]` match a camelCase alias) became `"cirInner"."StartedAt"`, while
+    // the FROM clause's `cirInner` stayed unquoted and folded to `cirinner` — so the reference matched
+    // nothing (V202611110216). Every other pattern below ends in a required terminator, so only this
+    // one could swallow a qualifier.
     sql = sql.replace(
-      /(\b(?:ORDER|GROUP)\s+BY\s+)([A-Z][a-z]\w+)/gi,
+      /(\b(?:ORDER|GROUP)\s+BY\s+)([A-Z][a-z]\w+)(?![\w.])/gi,
       (match, prefix: string, ident: string) => {
         if (SQL_KEYWORDS.has(ident.toUpperCase())) return match;
         return `${prefix}"${ident}"`;
@@ -330,61 +335,6 @@ export class ViewRule implements IConversionRule {
       }
     );
     return sql;
-  }
-
-  /** Add ON TRUE for LEFT JOIN LATERAL that lacks an ON clause */
-  private addLateralOnTrue(sql: string): string {
-    const lines = sql.split('\n');
-    const result: string[] = [];
-    let lateralDepth = 0;
-    let inLateral = false;
-
-    for (let i = 0; i < lines.length; i++) {
-      result.push(lines[i]);
-
-      // Detect LATERAL block start
-      if (/\bLATERAL\b/i.test(lines[i]) && !inLateral) {
-        const lateralIdx = lines[i].search(/\bLATERAL\b/i);
-        const rest = lines[i].slice(lateralIdx);
-        let openCount = 0;
-        let closeCount = 0;
-        for (const ch of rest) {
-          if (ch === '(') openCount++;
-          else if (ch === ')') closeCount++;
-        }
-
-        if (openCount > closeCount) {
-          // Multi-line LATERAL: opening paren not closed on this line
-          inLateral = true;
-          lateralDepth = openCount - closeCount;
-        } else if (openCount > 0 && openCount === closeCount) {
-          // Single-line LATERAL: fully closed on this line
-          const nextLine = i + 1 < lines.length ? lines[i + 1].trim().toUpperCase() : '';
-          if (!nextLine.startsWith('ON ')) {
-            result.push('    ON TRUE');
-          }
-        }
-        continue;
-      }
-
-      // Track multi-line LATERAL depth
-      if (inLateral) {
-        for (const ch of lines[i]) {
-          if (ch === '(') lateralDepth++;
-          else if (ch === ')') lateralDepth--;
-        }
-
-        if (lateralDepth <= 0) {
-          inLateral = false;
-          // Check if next line needs ON TRUE
-          const nextLine = i + 1 < lines.length ? lines[i + 1].trim().toUpperCase() : '';
-          if (!nextLine.startsWith('ON ')) {
-            result.push('    ON TRUE');
-          }
-        }
-      }
-    }
-    return result.join('\n');
   }
 }
 

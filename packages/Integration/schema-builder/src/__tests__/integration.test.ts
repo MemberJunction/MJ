@@ -314,7 +314,7 @@ describe('SchemaBuilder (integration)', () => {
             expect(ssOut.Errors).toHaveLength(0);
             const ssSql = ssOut.MigrationFiles[0].Content;
             // Whitespace-only ContactID and Deal table descriptions omitted
-            expect(ssSql).not.toContain("@level2name = 'ContactID'");
+            expect(ssSql).not.toContain("@level2name = N'ContactID'");
             expect(ssSql).not.toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Deal', NULL, NULL)");
             // Multi-line description preserved verbatim and survives SplitBatches + SplitStatements
             expect(ssSql).toContain(trickyDesc);
@@ -326,12 +326,12 @@ describe('SchemaBuilder (integration)', () => {
                 expect(quoteCount % 2).toBe(0);
             }
             // Email description capped at SQL Server MaxCommentLength
-            const emailExecMatch = ssSql.match(/@value = N'(Z+\.\.\.)'[\s\S]*?@level2name = 'Email'/);
+            const emailExecMatch = ssSql.match(/@value = N'(Z+\.\.\.)'[\s\S]*?@level2name = N'Email'/);
             expect(emailExecMatch).not.toBeNull();
             expect(emailExecMatch![1].length).toBe(maxChars);
             // Every standard column description emitted on SQL Server
             for (const colName of Object.keys(STANDARD_COLUMN_DESCRIPTIONS)) {
-                expect(ssSql).toContain(`@level2name = '${colName}'`);
+                expect(ssSql).toContain(`@level2name = N'${colName}'`);
             }
 
             const pgDialect = GetDialect('postgresql');

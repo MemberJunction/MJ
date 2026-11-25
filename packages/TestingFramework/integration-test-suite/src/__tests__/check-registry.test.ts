@@ -218,7 +218,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['scheduled-jobs', ScheduledJobsChecks, 2],
         ['field-rules-bulk-update', FieldRulesBulkUpdateChecks, 3],
         ['remote-operations', RemoteOperationsChecks, 7],
-        ['ai-skills', AiSkillsChecks, 21],
+        ['ai-skills', AiSkillsChecks, 22],
         ['api-keys', ApiKeysChecks, 3],
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
@@ -426,7 +426,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
-        'ai-skills': 21,
+        'ai-skills': 22,
         'ai-vendor-effort': 2,
         'alternate-base-views': 6,
         'api-keys': 3,
