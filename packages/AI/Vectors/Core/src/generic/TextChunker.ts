@@ -179,15 +179,15 @@ export class TextChunker {
     // ─────────────────────────────────────────────
 
     /**
-     * Split text into sentences using common sentence-ending punctuation.
-     * Handles abbreviations, decimals, and common edge cases.
+     * Split text into sentences at sentence-ending punctuation followed by whitespace.
+     *
+     * SPLITS rather than matches, so no character is ever dropped: a `.` that does not end a
+     * sentence — a decimal (3.48), an abbreviation (i.e., e.g.), a DOI or URL — simply stays
+     * inside its sentence. The previous match-based regex could not start a match at such a
+     * `.`, and `String.match` silently skipped every character up to the next place it could.
      */
     private static splitSentences(text: string): string[] {
-        // Split on sentence-ending punctuation followed by space or end of string
-        const sentenceRegex = /[^.!?]*[.!?]+(?:\s|$)|[^.!?]+$/g;
-        const matches = text.match(sentenceRegex);
-        if (!matches) return [text];
-        return matches.map((s) => s.trim()).filter((s) => s.length > 0);
+        return text.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter((s) => s.length > 0);
     }
 
     /**
