@@ -345,7 +345,7 @@ Add environment variables:
 ```bash
 MICROSOFT_APP_ID=your-app-id-guid
 MICROSOFT_APP_PASSWORD=your-client-secret
-MICROSOFT_APP_TENANT_ID=your-tenant-id  # Only for Single Tenant
+MICROSOFT_APP_TENANT_ID=your-tenant-id  # Required for Teams tenant verification (or configure AllowedTenantIDs)
 ```
 
 Add to `mj.config.cjs`:
@@ -515,12 +515,13 @@ In thread replies, the adapter remembers which agent was originally invoked (thr
 ### User Identity Mapping & Agent Permissions
 
 Platform users are mapped to active MJ users by email:
-1. Extract email from the incoming platform message (`activity.from.email` on Teams when present)
-2. Look up email via the platform API if omitted:
+1. **Teams tenant verification (fail closed):** On `msteams` channels, the adapter checks the activity's Entra ID tenant (`activity.conversation.tenantId` / `channelData.tenant.id`) — and `member.tenantId` returned by `TeamsInfo.getMember` — against `MicrosoftAppTenantId` (or `MICROSOFT_APP_TENANT_ID`) and optional `AllowedTenantIDs`. Activities from unconfigured or foreign tenants are refused before any email mapping or fallback runs, preventing cross-tenant email impersonation.
+2. Extract email from the incoming platform message (`activity.from.email` on Teams when present and tenant-verified)
+3. Look up email via the platform API if omitted:
    - **Slack:** `users.info` (`users:read.email` scope)
    - **Teams:** `TeamsInfo.getMember(turnContext, userId)` using the Bot Framework token (no Microsoft Graph permission required)
-3. Match the email against active users in MJ `UserCache.Instance` (case-insensitive)
-4. **Fail closed by default:** if no active MJ user matches, the message is refused so external guests and unlinked accounts never inherit the `ContextUserEmail` service account's permissions. Set `AllowFallbackUser: true` in `Settings` only for intentionally open dev/demo or public bots.
+4. Match the email against active users in MJ `UserCache.Instance` (case-insensitive)
+5. **Fail closed by default:** if no active MJ user matches, the message is refused so external guests and unlinked accounts never inherit the `ContextUserEmail` service account's permissions. Set `AllowFallbackUser: true` in `Settings` only for intentionally open dev/demo or public bots.
 
 Agent routing enforces MJ's full agent permission model on every `@mention`, thread follow-up, slash command, form submission, and handoff:
 - **Discoverability:** Sub-agents, child agents (`ParentID`), and instantiation-required prototype templates (`InstantiationMode = 'Required'`) cannot be invoked directly.
@@ -612,6 +613,7 @@ Or use **Slack Socket Mode** to avoid ngrok entirely (see Part 1b above).
 ## Known Limitations
 
 - **Teams thread history across restarts**: Teams multi-turn history is loaded from MJ's own `MJ: Conversation Details` (no Graph `ChannelMessage.Read.All` required), keyed by the in-memory thread-to-conversation map. Restarting MJAPI starts a fresh conversation on the next Teams turn; users can also type `/new` (or `/new <prompt>`) anytime to start fresh.
+- **Shared Teams chats share one MJ conversation**: In Teams group chats, meetings, and channel threads, all participants share the single MJ Conversation mapped to that Teams conversation (loading up to `MaxThreadMessages` turns from that conversation, and `/new` from any participant resets it for the chat). Members added to a group chat later without Teams chat history may still see context from earlier turns through the agent's reply.
 - **Full response text store**: The "View Full" button in Slack stores content in memory with a 30-minute TTL. Content is lost on server restart.
 - **Conversation references**: Teams conversation references for proactive messaging are stored in memory (lost on restart).
 - **Max delegation hops**: Agent delegation chains are limited to 3 hops to prevent infinite loops.

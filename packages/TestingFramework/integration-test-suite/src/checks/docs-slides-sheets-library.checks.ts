@@ -352,7 +352,7 @@ async function checkDsl2PhysicalConstraintsAndViews(ctx: IntegrationCheckContext
                    FROM pg_constraint con
                    JOIN pg_namespace nsp ON nsp.oid = con.connamespace
                   WHERE nsp.nspname = '${schemaName}'
-                    AND con.conname IN (${expectedConstraints.map((c) => `'${c.toLowerCase()}'`).join(', ')})`,
+                    AND lower(con.conname) IN (${expectedConstraints.map((c) => `'${c.toLowerCase()}'`).join(', ')})`,
             );
             foundLower = new Set(rows.map((r) => String(r.name).toLowerCase()));
         } else {

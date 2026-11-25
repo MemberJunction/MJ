@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 798fe51: Relocate `@memberjunction/ng-auth-services` from `packages/Angular/Explorer/auth-services` to `packages/Angular/Generic/auth-services` and set `mjUILayer` to `widgets` so non-Explorer Angular applications can reuse authentication services and login UI without Explorer coupling.
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [30460b0]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6e740d7]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [942e220]
+- Updated dependencies [df69cd5]
+- Updated dependencies [346795c]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [193d979]
+- Updated dependencies [66258b1]
+- Updated dependencies [375f9f1]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/realtime-runtime@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ng-ui-components@6.3.0-edge.2
+  - @memberjunction/theme-engine@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

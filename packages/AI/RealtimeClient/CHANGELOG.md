@@ -1,5 +1,30 @@
 # @memberjunction/ai-realtime-client
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 3c70bf7: Add AssemblyAI's current voice stack as a realtime model. `AssemblyAIVoiceRealtime` runs STT 3.7 Realtime Agent, an LLM Gateway model and TTS-1 as one voice agent inside MJAPI, and replaces the Voice Agent API that AssemblyAI retires on February 1, 2027 (`AssemblyAIRealtime`, unchanged here). Set `AI_VENDOR_API_KEY__AssemblyAIVoiceRealtime` to use it. MJAPI's realtime proxy can now connect a browser to an upstream that runs inside the process (`RealtimeProxyIssueParams.OpenInProcess`), so such a driver needs no host of its own and the prompt, tools and key stay on the server.
+
+### Patch Changes
+
+- 60b406c: `GeminiRealtimeClient` no longer leaves a session silent after a parallel tool-call batch in blocking mode (#6753). A blocking Gemini Live model answers only once it has every result of a `toolCall` frame, but the first result marked the client busy for the reply, so results 2..N queued behind it and the session waited until the connection moved.
+
+  On blocking tooling with the `turnComplete` idle signal:
+  - **Every result of a batch goes out, in order.** Once a batch's first result is sent, its other results skip the wait for the reply. Context notes and narrations still wait for the reply, also when a second `toolCall` frame joins the batch.
+  - **An open client turn is committed after the batch's last result**, not after its first. Only the batch's other owed calls hold it: a stale or duplicate result does not.
+  - **The tool-batch barrier's timeout releases the batch.** Its queued results go out first, then a held commit (once, last), whether or not the client is busy. A result that arrives later still goes out at once. A commit still held when the session moves to a new connection goes out once the move completes.
+  - **A no-output backstop** (`GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS`, 10 s) releases the turn when the model has not answered after the last result. This covers a single blocking call too (a batch of one), so a blocking reply that takes over 10 s to start is released early. Model output, `turnComplete`, a new tool call or a new user turn clears it. The 10 s value rests on a downstream eval: last result to next model output p50 1.17 s, p95 3.78 s, max 4.76 s over 85 waits.
+
+  NON_BLOCKING tooling, the `interactionStatus` idle profile and the OpenAI clients are unchanged.
+
+- Updated dependencies [3c70bf7]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

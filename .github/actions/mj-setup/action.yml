@@ -20,6 +20,18 @@ inputs:
       scripts and need no dependency tree.
     required: false
     default: 'true'
+  ignore-scripts:
+    description: >-
+      Pass `--ignore-scripts` to `pnpm install --frozen-lockfile`. Use in jobs that do not need
+      postinstall hooks.
+    required: false
+    default: 'false'
+  create-explorer-env:
+    description: >-
+      Synthesize the gitignored packages/MJExplorer/src/environments/environment.ts file. Set to
+      'false' for jobs that do not build MJExplorer or that assert a clean git working tree.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -53,7 +65,14 @@ runs:
     - name: Install dependencies
       if: inputs.install == 'true'
       shell: bash
-      run: pnpm install --frozen-lockfile
+      env:
+        IGNORE_SCRIPTS: ${{ inputs.ignore-scripts }}
+      run: |
+        if [ "$IGNORE_SCRIPTS" = "true" ]; then
+          pnpm install --frozen-lockfile --ignore-scripts
+        else
+          pnpm install --frozen-lockfile
+        fi
 
     - name: Save the pnpm store
       if: inputs.install == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
@@ -65,6 +84,7 @@ runs:
     # MJExplorer's environment.ts is gitignored (it carries per-deployment auth config), so CI
     # has to synthesize one or the Explorer packages fail to compile.
     - name: Create MJExplorer environment file
+      if: inputs.create-explorer-env == 'true'
       shell: bash
       run: |
         mkdir -p packages/MJExplorer/src/environments

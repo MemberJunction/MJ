@@ -405,19 +405,19 @@ async function checkMa5LiveAgentPermissionsRbacAndInactiveUser(ctx: IntegrationC
         `MA5: expected permission refusal, got '${regRestricted.refusalMessage ?? ''}'`
     );
 
-    // Regular user (CanView=false on HiddenAgent) gets NotFound fallback without leaking HiddenAgent in available list
+    // Regular user (CanView=false on HiddenAgent) gets silent fallback with NO note (indistinguishable from no match)
     const regHidden = await adapter.ResolveAgentForTest(
         buildMessage({ Text: `@${f.HiddenAgent.Name} run`, MentionedAgentNames: [f.HiddenAgent.Name!] }),
         f.RegularUser
     );
     Assert(
         regHidden.agent != null && UUIDsEqual(regHidden.agent.ID, f.DefaultAgent.ID),
-        'MA5: unviewable explicit @mention should fall back identically to unknown agent'
+        'MA5: unviewable explicit @mention should fall back silently to default agent'
     );
-    Assert(
-        !(regHidden.multiAgentNote ?? '').includes(`Available agents:`) ||
-        !(regHidden.multiAgentNote ?? '').split('Available agents:')[1]?.includes(f.HiddenAgent.Name!),
-        'MA5: Available agents list must not leak HiddenAgent to user without CanView'
+    AssertEqual(
+        regHidden.multiAgentNote,
+        null,
+        'MA5: unviewable @mention must not emit a note revealing or confirming the hidden agent'
     );
 }
 
@@ -524,7 +524,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         const adminRole = await ctx.Provider.GetEntityObject<MJRoleEntity>('MJ: Roles', ctx.User);
         adminRole.NewRecord();
         adminRole.Name = `${prefix}-AdminRole`;
-        adminRole.Description = `IT193 test role ${FIXTURE_TAG}`;
+        adminRole.Description = `IT194 test role ${FIXTURE_TAG}`;
         Assert(await adminRole.Save(), `${BUNDLE} Setup: failed to create AdminRole: ${adminRole.LatestResult?.CompleteMessage}`);
         createdRoleIDs.push(adminRole.ID);
 
@@ -533,7 +533,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             u.NewRecord();
             u.Name = `${prefix}-${tag}`;
             u.FirstName = tag;
-            u.LastName = 'IT193';
+            u.LastName = 'IT194';
             u.Email = `${prefix}-${tag.toLowerCase()}@example.test`;
             u.Type = 'User';
             u.IsActive = active;
@@ -576,7 +576,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             const a = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
             a.NewRecord();
             a.Name = name;
-            a.Description = `IT193 test agent ${FIXTURE_TAG}`;
+            a.Description = `IT194 test agent ${FIXTURE_TAG}`;
             a.TypeID = loopType.ID;
             a.Status = 'Active';
             a.InvocationMode = 'Top-Level';

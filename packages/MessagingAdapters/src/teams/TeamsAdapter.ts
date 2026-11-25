@@ -12,7 +12,7 @@
 import { TurnContext, ActivityTypes, Activity, ConversationReference, TeamsInfo } from 'botbuilder';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus } from '@memberjunction/core';
-import { SanitizeForLog } from '@memberjunction/global';
+import { SanitizeForLog, UUIDSet } from '@memberjunction/global';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { MarkdownToAdaptiveCard } from './teams-formatter.js';
@@ -104,8 +104,13 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         const conversationRef = TurnContext.getConversationReference(activity);
         this.storeConversationRef(activity.conversation?.id ?? '', conversationRef);
 
-        // Extract sender email from activity (available in Teams)
-        const senderEmail = (activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined;
+        // Extract sender email from activity only when the activity's Entra tenant is trusted
+        // (for non-Teams channels like Web Chat/Emulator, tenant checks do not apply).
+        const isTeamsActivity = activity.channelId === 'msteams' || this.extractActivityTenantId(activity) != null;
+        const tenantTrusted = !isTeamsActivity || this.checkActivityTenant(turnContext).allowed;
+        const senderEmail = tenantTrusted
+            ? ((activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined)
+            : undefined;
 
         return {
             MessageID: activity.id ?? '',
@@ -141,6 +146,39 @@ export class TeamsAdapter extends BaseMessagingAdapter {
 
     protected getBotUserId(): string {
         return this.botID;
+    }
+
+    /**
+     * Enforce Entra ID tenant verification for Microsoft Teams activities before delegating
+     * to `BaseMessagingAdapter.HandleMessage`.
+     *
+     * Refuses (fails closed) any `msteams` activity (or any activity carrying a tenant ID)
+     * whose tenant is not `MicrosoftAppTenantId` or in `AllowedTenantIDs`, even if
+     * `AllowFallbackUser` is enabled.
+     */
+    public override async HandleMessage(message: IncomingMessage): Promise<void> {
+        const turnContext = (message.RawEvent as Record<string, unknown> | undefined)?.['turnContext'] as TurnContext | undefined;
+        const activity = turnContext?.activity ?? ((message.RawEvent as Record<string, unknown> | undefined)?.['activity'] as Partial<Activity> | undefined);
+        const isTeamsActivity =
+            message.ChannelID === 'msteams' ||
+            activity?.channelId === 'msteams' ||
+            this.extractActivityTenantId(activity) != null;
+
+        if (isTeamsActivity) {
+            const tenantCheck = this.checkActivityTenant(turnContext, activity);
+            if (!tenantCheck.allowed) {
+                LogStatus(
+                    `Teams: refusing message from sender '${SanitizeForLog(message.SenderID)}' (${tenantCheck.reason})`
+                );
+                if (this.defaultAgent && turnContext) {
+                    const refusal = await this.formatResponse(null, this.defaultAgent, 'This bot is not authorized for your tenant.');
+                    await this.sendFinalMessage(message, refusal);
+                }
+                return;
+            }
+        }
+
+        await super.HandleMessage(message);
     }
 
     /**
@@ -324,21 +362,38 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             return null;
         }
 
-        const cached = this.getCachedUserEmail(platformUserId);
-        if (cached) {
-            return cached;
-        }
-
         const turnContext = (message?.RawEvent as Record<string, unknown> | undefined)?.['turnContext'] as TurnContext | undefined;
         if (!turnContext || turnContext.activity?.channelId !== 'msteams') {
             return null;
         }
 
+        const tenantCheck = this.checkActivityTenant(turnContext);
+        if (!tenantCheck.allowed || !tenantCheck.tenantId) {
+            LogStatus(
+                `Teams: refusing user email lookup for '${SanitizeForLog(platformUserId)}' (${tenantCheck.reason})`
+            );
+            return null;
+        }
+
+        const cacheKey = `${tenantCheck.tenantId.toLowerCase()}:${platformUserId}`;
+        const cached = this.getCachedUserEmail(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         try {
             const member = await TeamsInfo.getMember(turnContext, platformUserId);
+            const memberTenantId = member?.tenantId?.trim();
+            if (memberTenantId && !this.getAllowedTenantIds().Has(memberTenantId)) {
+                LogStatus(
+                    `Teams: refusing member '${SanitizeForLog(platformUserId)}' from untrusted tenant`
+                );
+                return null;
+            }
+
             const email = member?.email?.trim() || member?.userPrincipalName?.trim() || null;
             if (email) {
-                this.storeCachedUserEmail(platformUserId, email);
+                this.storeCachedUserEmail(cacheKey, email);
             }
             return email;
         } catch (error) {
@@ -346,6 +401,77 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             LogError('TeamsInfo.getMember failed:', undefined, error);
             return null;
         }
+    }
+
+    /**
+     * Build the set of trusted Entra ID tenant IDs from `MicrosoftAppTenantId` (or
+     * `MICROSOFT_APP_TENANT_ID` env var) and `AllowedTenantIDs`.
+     */
+    private getAllowedTenantIds(): UUIDSet {
+        const allowed = new UUIDSet();
+        const primaryTenant = (this.settings.MicrosoftAppTenantId ?? process.env.MICROSOFT_APP_TENANT_ID ?? '').trim();
+        if (primaryTenant) {
+            allowed.Add(primaryTenant);
+        }
+        if (Array.isArray(this.settings.AllowedTenantIDs)) {
+            for (const tid of this.settings.AllowedTenantIDs) {
+                const trimmed = tid?.trim();
+                if (trimmed) {
+                    allowed.Add(trimmed);
+                }
+            }
+        }
+        return allowed;
+    }
+
+    /**
+     * Extract the Entra ID tenant ID from a Bot Framework activity (`conversation.tenantId`
+     * or `channelData.tenant.id`).
+     */
+    private extractActivityTenantId(activity?: Partial<Activity>): string | null {
+        const convTenant = activity?.conversation?.tenantId?.trim();
+        if (convTenant) {
+            return convTenant;
+        }
+        const channelData = activity?.channelData as { tenant?: { id?: string } } | undefined;
+        const cdTenant = channelData?.tenant?.id?.trim();
+        return cdTenant || null;
+    }
+
+    /**
+     * Verify that the activity's Entra tenant is explicitly allowed.
+     * Fails closed when no tenant is configured or the activity carries no matching tenant ID.
+     */
+    private checkActivityTenant(
+        turnContext?: TurnContext,
+        activityOverride?: Partial<Activity>
+    ): { allowed: boolean; tenantId: string | null; reason?: string } {
+        const allowedTenants = this.getAllowedTenantIds();
+        const activity = turnContext?.activity ?? activityOverride;
+        const tenantId = this.extractActivityTenantId(activity);
+
+        if (allowedTenants.Size === 0) {
+            return {
+                allowed: false,
+                tenantId,
+                reason: 'no MicrosoftAppTenantId or AllowedTenantIDs configured',
+            };
+        }
+        if (!tenantId) {
+            return {
+                allowed: false,
+                tenantId: null,
+                reason: 'activity is missing a tenant ID',
+            };
+        }
+        if (!allowedTenants.Has(tenantId)) {
+            return {
+                allowed: false,
+                tenantId,
+                reason: 'activity tenant is not in the configured allow-list',
+            };
+        }
+        return { allowed: true, tenantId };
     }
 
     private getCachedUserEmail(userId: string): string | null {
@@ -443,7 +569,11 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             const messageText = `@${formResponse}`;
 
             // Build a synthetic IncomingMessage and route through the adapter
-            const senderEmail = (activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined;
+            const isTeamsActivity = activity.channelId === 'msteams' || this.extractActivityTenantId(activity) != null;
+            const tenantTrusted = !isTeamsActivity || this.checkActivityTenant(turnContext).allowed;
+            const senderEmail = tenantTrusted
+                ? ((activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined)
+                : undefined;
 
             // Store conversation reference for proactive messaging
             const conversationRef = TurnContext.getConversationReference(activity);
@@ -476,7 +606,7 @@ export class TeamsAdapter extends BaseMessagingAdapter {
                 IsBotMention: true,
                 MentionedAgentNames: formAgentName ? [formAgentName] : undefined,
                 Timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
-                RawEvent: { activity, turnContext } as unknown as Record<string, unknown>,
+                RawEvent: { activity, turnContext, type: 'form_submit' } as unknown as Record<string, unknown>,
             };
 
             await this.HandleMessage(incomingMessage);

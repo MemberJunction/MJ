@@ -443,12 +443,14 @@ export class SlackMessagingExtension extends BaseServerExtension {
 
         LogStatus(`Slack slash command: command=${logValue(command)}, text="${logValue(text)}", user=${logValue(user_id)}, channel=${logValue(channel_id)}`);
 
-        // Look up the agent for this command
+        // Look up the agent for this command. Keep immediate ephemeral acks neutral so
+        // unmapped or unprivileged users cannot enumerate restricted agent names before
+        // HandleMessage performs user mapping and per-user RBAC checks.
         const agentName = this.resolveSlashCommandAgent(command);
         if (!agentName) {
             res.json({
                 response_type: 'ephemeral',
-                text: `Unknown command \`${command}\`. Configured commands: ${this.listSlashCommands()}`
+                text: `Unknown command \`${command}\`.`
             });
             return;
         }
@@ -456,7 +458,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
         // Acknowledge within 3 seconds — visible only to the user
         res.json({
             response_type: 'ephemeral',
-            text: `_Routing to *${agentName}*..._`
+            text: `_Processing \`${command}\`..._`
         });
 
         // Process asynchronously — post a thread-root message first, then route to the agent
@@ -504,13 +506,6 @@ export class SlackMessagingExtension extends BaseServerExtension {
         const merged = { ...autoCommands, ...(configuredCommands ?? {}) };
         LogStatus(`Slack slash commands: ${Object.keys(merged).length} available (${Object.keys(configuredCommands ?? {}).length} from config, ${Object.keys(autoCommands).length} auto-generated)`);
         return merged;
-    }
-
-    /** Format the list of configured slash commands for display. */
-    private listSlashCommands(): string {
-        const entries = Object.entries(this.slashCommands);
-        if (entries.length === 0) return '_none configured_';
-        return entries.map(([cmd, agent]) => `\`${cmd}\` → ${agent}`).join(', ');
     }
 
     /**

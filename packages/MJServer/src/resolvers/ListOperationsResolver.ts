@@ -1,4 +1,5 @@
 import { LogError, UserInfo } from '@memberjunction/core';
+import type { MJListDetailEntity } from '@memberjunction/core-entities';
 import { type CheckedCallerSQL, ListFromQuery, type ListFromQueryOutcome, type ListFromQueryRequest, ListOperations, ListSharing } from '@memberjunction/lists';
 import type {
   ApplyResult as CoreApplyResult,
@@ -132,9 +133,18 @@ export class ApplyListResultType {
   @Field(() => Int, { nullable: true }) AddedCount?: number;
   @Field(() => Int, { nullable: true }) RemovedCount?: number;
   @Field(() => Int, { nullable: true }) FailedCount?: number;
+  @Field(() => Int, { nullable: true, description: 'Members changed in place, such as by SetListRecordStatus.' })
+  UpdatedCount?: number;
   @Field(() => [String], { nullable: true }) Errors?: string[];
   @Field(() => ListSourceChangeType, { nullable: true, description: 'Set when ResultCode is SOURCE_CHANGED.' })
   SourceChange?: ListSourceChangeType;
+}
+
+@InputType('CreateListFromRecordsInput')
+export class CreateListFromRecordsInput {
+  @Field(() => String) ListName!: string;
+  @Field(() => String, { nullable: true }) Description?: string;
+  @Field(() => String, { nullable: true, description: 'List Category to file the new list under.' }) CategoryId?: string;
 }
 
 @InputType('CreateListFromQueryInput')
@@ -362,6 +372,7 @@ export function FromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
     AddedCount: r.Counts?.Added,
     RemovedCount: r.Counts?.Removed,
     FailedCount: r.Counts?.Failed,
+    UpdatedCount: r.Counts?.Updated,
     Errors: r.Errors,
     SourceChange: r.SourceChange ? FromCoreSourceChange(r.SourceChange) : undefined,
   };
@@ -616,6 +627,123 @@ export class ListOperationsResolver extends ResolverBase {
       return FromCoreApplyResult(result);
     } catch (e) {
       return this.unexpectedFailure(e, 'AddViewResultsToList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description: 'Add records to a list. Records the list already holds are skipped.',
+  })
+  async AddRecordsToList(
+    @Arg('listId', () => String) listId: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Ctx() ctx: AppContext,
+    @Arg('status', () => String, { nullable: true, description: 'Status of the new members.' }) status?: string,
+    @Arg('sequenceFromOrder', () => Boolean, {
+      nullable: true,
+      description: 'When true, each new member gets its zero-based input position as Sequence.',
+    })
+    sequenceFromOrder?: boolean,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const opts = { Status: (status ?? undefined) as MJListDetailEntity['Status'] | undefined, SequenceFromOrder: sequenceFromOrder === true };
+      return FromCoreApplyResult(await ops.AddRecordsToList(listId, recordIds, opts));
+    } catch (e) {
+      return this.unexpectedFailure(e, 'AddRecordsToList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, { description: 'Remove records from a list.' })
+  async RemoveRecordsFromList(
+    @Arg('listId', () => String) listId: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      return FromCoreApplyResult(await ops.RemoveRecordsFromList(listId, recordIds));
+    } catch (e) {
+      return this.unexpectedFailure(e, 'RemoveRecordsFromList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description: 'Copy a list and all its members into a new plain list owned by the caller. Default name: "<name> (Copy)".',
+  })
+  async DuplicateList(
+    @Arg('listId', () => String) listId: string,
+    @Arg('listName', () => String, { nullable: true }) listName: string | null | undefined,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      return FromCoreApplyResult(await ops.DuplicateList(listId, { ListName: listName ?? undefined }));
+    } catch (e) {
+      return this.unexpectedFailure(e, 'DuplicateList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description:
+      'Copy records from one list to another. With removeFromSource they are then removed from the source, ' +
+      'but only when every add succeeded.',
+  })
+  async CopyRecordsToList(
+    @Arg('sourceListId', () => String) sourceListId: string,
+    @Arg('targetListId', () => String) targetListId: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Arg('removeFromSource', () => Boolean) removeFromSource: boolean,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const result = await ops.CopyRecordsToList(sourceListId, targetListId, recordIds, {
+        RemoveFromSource: removeFromSource,
+      });
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'CopyRecordsToList');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description: 'Set the Status of list members. The status must be a List Details Status value; UpdatedCount reports the rows changed.',
+  })
+  async SetListRecordStatus(
+    @Arg('listId', () => String) listId: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Arg('status', () => String) status: string,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      // ListOperations checks the value against the field's value list before it writes anything.
+      const result = await ops.SetRecordStatus(listId, recordIds, status as MJListDetailEntity['Status']);
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'SetListRecordStatus');
+    }
+  }
+
+  @Mutation(() => ApplyListResultType, {
+    description: 'Create a plain list (no source, never refreshes) holding the given records of an entity.',
+  })
+  async CreateListFromRecords(
+    @Arg('entityName', () => String) entityName: string,
+    @Arg('recordIds', () => [String]) recordIds: string[],
+    @Arg('options', () => CreateListFromRecordsInput) options: CreateListFromRecordsInput,
+    @Ctx() ctx: AppContext,
+  ): Promise<ApplyListResultType> {
+    const ops = this.buildOps(ctx);
+    try {
+      const result = await ops.CreateListFromRecords(entityName, recordIds, {
+        ListName: options.ListName,
+        Description: options.Description,
+        CategoryId: options.CategoryId,
+      });
+      return FromCoreApplyResult(result);
+    } catch (e) {
+      return this.unexpectedFailure(e, 'CreateListFromRecords');
     }
   }
 

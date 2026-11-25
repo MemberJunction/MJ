@@ -1,5 +1,199 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 2f41586: Default new AI agent user policies (`AIAgentUserPolicy`) to `Autonomous` coordination mode, `DraftOnly` email, `ProposeWithApproval` calendar changes requiring approval, and `Disabled` (Off) phone channel across database schema defaults, stored procedures, `AgentUserPolicyEngine`, `MJAIAgentUserPolicyEntityServer`, Chief of Staff actions, UI draft builders, and agent prompts, and verify the complete Epic 3 acceptance suite.
+- 03e803d: Semantic graph: path finding, ambiguity reporting, and deterministic domain proposals (minor because it adds action, agent-binding and remote-operation metadata).
+  - `GraphEngine.FindPath` returns the fewest-hop path between two nodes that the caller may see, using the same permission-checked traversal as `Subgraph`; `DescribePathForPrompt` renders it. A hidden endpoint gets the same answer as an unconnected one.
+  - `CanonGraphEngine.ResolveConcepts` classifies concept matches as `Matched`, `Ambiguous` or `NoMatch` (`ClassifyConceptMatches`). A fragment or shared name that fits several concepts is ambiguous; a question that names several concepts is not. `FindConcepts` is unchanged.
+  - `CanonGraphEngine.ResolveGraphEndpoint` and `FindPathBetween` resolve a record or concept endpoint and stop with `AmbiguousEndpoint` or `EndpointNotFound` before searching.
+  - New action `Find Graph Path` and remote operation `Graph.FindPath` (server body `GraphFindPathServerOperation`) both run `FindPathBetween`.
+  - `Get Graph Context` now returns `AMBIGUOUS_CONCEPT` (with `Candidates`) and `NO_MATCH` instead of a plain `SUCCESS`, plus a `Resolution` output. Callers that treated every success as `SUCCESS` should accept the two new codes, which both have `Success: true`.
+  - `ProposeEntityDomains` / `CanonGraphEngine.ProposeDomainConcepts` group entities into candidate business domains with Louvain community detection over foreign-key and IS-A links (deterministic, no AI). New action `Propose Canon Domains` returns them (dry run by default) or writes them as `Proposed` `Domain` concepts with `Inferred` + `Proposed` `Describes` edges via `SaveDomainProposals`.
+  - `Database Research Agent` and `Query Strategist` gain `Get Graph Context` and `Find Graph Path`.
+
+- cd98580: Implement MemberJunction Communications V2 (Comms V2): schema, metadata seeds, compliance gate with 9 rule drivers, endpoint resolution, link/pixel tracking, SendGrid webhook/domain auth, public preference center and admin dashboard, templated delivery, and IT188–IT192 integration test suites.
+
+  Key behavior details:
+  - V1 `SendSingleMessage` and `CoreActions` remain unchanged by default; opt into V1 compliance gating via `Message.CheckComplianceGate = true` or `MJ_COMMS_V1_COMPLIANCE_GATE=true`.
+  - `EntityCommunicationsEngine.RunEntityCommunication` supports V2 routing via `UseV2 = true` and tags V1 bulk sends as `Message.MessageClass = 'Operational'`.
+  - `MessageClass = 'Transactional'` sends require Owner privileges or the `Communications: Send Transactional` authorization.
+  - A `Marketing` message must be sent under a preference (`Envelope.PreferenceID`); without one it is blocked with `PreferenceRequired` in every enforcement mode.
+  - Every `Marketing` email carries the one-click unsubscribe header (`List-Unsubscribe`, `List-Unsubscribe-Post`), whether or not a compliance regime is enabled. The unsubscribe footer still comes only from an enabled regime.
+  - A link whose click-tracked form would exceed 2,000 characters is left untracked.
+  - The `MJ: Users` principal's email mapping is seeded (`metadata/entity-communication-message-types`), so users are reachable on a new installation.
+  - `spDeleteEntityWithCoreDependencies` removes an entity's communication principals, endpoint links, preferences and principal-only suppressions with it, including the consent audit rows that reference them. A suppression that also names an endpoint (a hard bounce or complaint recorded against a principal) is kept with its entity link cleared, so the address stays blocked. Communication logs and sender types keep their rows with the entity link cleared.
+  - Delivery guarantee is a setting, not an accident: `DeliveryGuarantee` (`At Most Once` | `At Least Once`) on `MJ: Communication Providers` (default `At Most Once`), `MJ: Communication Senders`, `MJ: Communication Runs` and `Envelope.DeliveryGuarantee`, most specific first. A log stuck `In-Progress` for 15 minutes is never resent under At Most Once (reported `OutcomeUnknown`; the recipient may miss it) and is reclaimed and resent under At Least Once (the recipient may get it twice).
+  - Chunked runs are tracked in the new `MJ: Communication Run Chunks` table (one row per chunk, unique per run) and `CommunicationRun.ChunkCount`; the last chunk sets the run's `Status` to `Complete`, or `Failed` if any chunk was refused.
+  - `CommunicationLog.IsDryRun` marks dry-run sends, and `CommunicationLog.DeferredPayload` holds a deferred message until it is dispatched; `CorrelationData` holds only the caller's data.
+  - The database enforces one active `Admin Block` per address (filtered unique index) and keeps `MJ: Communication Consent Audit Logs` append-only (a trigger refuses updates and deletes, except the entity-delete cleanup in `spDeleteEntityWithCoreDependencies`).
+  - The log claim and scheduled-deferral sweep now write `OUTPUT ... INTO` a table variable; the previous bare `OUTPUT` clause is refused by SQL Server on a table with an enabled trigger, which stopped retries and deferred sends from being claimed.
+  - GDPR erasure clears a pending deferred message body and fails loudly if any log or activity cannot be scrubbed.
+
+- 916fe91: Add the extensible Chief of Staff skills platform, typed core actions, offered rhythms, suggestions, and Agent Channels (`V202611201630`):
+  - **Schema & CodeGen (`V202611201630`)**: Add `AISkillAction.Role` (`Tool` | `Briefing` | `Both`), `AIAgentSkill.AllowMetadataSyncUpdate`, `RowLevelSecurityFilter.PlatformVariants` (SQL Server + PostgreSQL dialect RLS), `MJ: AI Agent Rhythm Templates`, `MJ: AI Agent Suggestions`, `ConversationType` `AGENT_CHANNEL`, `MJ: Agent Channels` (IS-A `MJ: Conversations`), and `MJ: Agent Channel Participants`.
+  - **Policy & Briefing Engine**: Introduce `TypedActionPolicyGuard` in `@memberjunction/ai-core-plus` with sub-agent policy ceiling propagation across `BaseAgent` and `AgentUserPolicyEngine`, plus `AIEngine.GetBriefingActionsForAgent` / `GetSkillBriefingActionIDs` for dynamic cross-app briefing fan-out.
+  - **Core Typed Actions & Agent Channels**: Replace all raw SQL / generic CRUD actions on Chief of Staff with 13 scoped typed actions (including `Assemble My Briefing`, Offered Rhythms, Suggestions, Memory, and Agent Channel actions), add `AgentChannelConversationDriver` with loop-guard and hourly wake rate limits, and enforce recurring routine confirmation in `Schedule Next Agent Wake`.
+  - **Inbound Utility Mailbox Adapter**: Add `InboundUtilityMailboxIngestionService` and `EmailUtilityMailboxExtension` (`BaseServerExtension`) in `@memberjunction/messaging-adapters`.
+  - **Governance, Standards & UI**: Add `agent-skill-governance` repo standard, `ChiefOfStaffAgentChannelsComponent` and Governance `InstructionsOverride` size monitor in `@memberjunction/ng-dashboards`, and `IT157` (`COS9–COS12`) integration checks.
+
+- e6b15b9: Harden Chief of Staff security, governance, email ingestion, agent channels, wake policy enforcement, and briefing resilience:
+  - **Chief of Staff skill governance & SQL isolation (`@memberjunction/standards`, Chief of Staff metadata)**: Switched Chief of Staff `AcceptsSkills` from `All` to `Limited`, explicitly granted safe core skills (`Web Research`, `Data Visualization`, `Document Builder`) while excluding `Data Analysis & Queries`, and attached `Query Builder` as an explicit sub-agent bounded by the user's policy ceiling. Extended the `agent-skill-governance` repo standard to flag non-allow-listed agents setting `AcceptsSkills: 'All'` (or explicitly granting an SQL-bundling skill) when an active skill bundles `Run Ad-hoc Query`.
+  - **Server-verified approval & rhythm validation (`@memberjunction/core-actions`)**: Added `VerifyApprovedAgentRequest` and `VerifyActiveRhythmTemplate` helpers; hardened `ScheduleNextAgentWakeAction`, `EnableAgentRhythmAction`, and `SendInterAgentRequestAction` so agent-context execution rejects self-attested `ConfirmedByUser = true` and unverified/inactive/wrong-agent `RhythmTemplateID` values, requiring a server-verified `Approved` `MJ: AI Agent Requests` row (`ConfirmedApprovalRequestID`). Direct human/UI calls continue to work without requiring an approval request.
+  - **MS Graph & Gmail inbound mailbox ingestion + durable dedup (`@memberjunction/messaging-adapters`)**: Added `CommunicationProviderInboundMailboxFetcher` (supporting Microsoft Graph and Gmail via `CommunicationEngine`) and `InMemoryInboundMailboxFetcher`, auto-registered when `PollIntervalMs > 0`. Added native `POST <root>/inbound/msgraph` (including `validationToken` handshake) and `POST <root>/inbound/gmail` (Pub/Sub base64 payload) webhook normalizers and routes on `EmailUtilityMailboxExtension`. Added durable DB-backed deduplication in `InboundUtilityMailboxIngestionService` via `MJ: User Settings` under the System User so deduplication survives restarts and multi-instance concurrency.
+  - **Human replies in Agent Channels wake peer agents (`@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/ng-dashboards`)**: Added a decoupled `GetGlobalObjectStore()` hook (`RegisterAgentChannelHumanPostWakeHandler`) invoked by `AgentChannelConversationDriver.HandleHumanMessagePosted` and registered by `AgentWakeTriggerService`, ensuring human replies reopen paused channels and wake peer participant agents. Updated `ChiefOfStaffAgentChannelsComponent` to show clear resumed/notified confirmation banners.
+  - **Active policy enforcement for workstream wakes (`@memberjunction/ai-agents`)**: Updated `AgentWakeTriggerService.TriggerWakeForWorkstream` to require an `Active` `MJ: AI Agent User Policies` row for `(AgentID, UserID)`, cleanly suppressing wakes (`POLICY_DENIED`) for users who have not onboarded.
+  - **Briefing timeout/truncation & rhythm staggering (`@memberjunction/core-actions`, Chief of Staff metadata)**: Added per-contributor timeout (`ContributorTimeoutMs`, default 10s) and serialized payload truncation (`MaxContributorChars`, default 32,768 chars) to `AssembleMyBriefingAction`, and staggered the `Daily Calendar Guard & Conflict Check` rhythm template to `15 7 * * 1-5`.
+
+- 17406fc: Epic 4a Slice 2: add `Growth Coach` (`RequestedOnly`) core skill, biweekly `High`-tier `growth-coaching` rhythm template, bounded multi-source retrieval with budget/period deduplication writing private `ParentID` coaching side conversations, and conditional `Team` section in Chief of Staff briefings for managers with direct reports.
+- 9499d4b: Lists made in a conversation now keep themselves current.
+  - `ListOperations.MaterializeFromQuery` creates a list from a saved query's rows, linked to the query with its parameters, key column, refresh mode and current fingerprint; `CreateListFromRecords` creates a list with no source.
+  - `ListFromQuery` (shared by the action and the mutation) links a list to a saved query, or saves SQL written in a conversation as a Pending query in the user's own "User Lists" query category and links the list to it. When the user can't save queries, the list is still made and says why it won't refresh. When no list comes of a query just saved, the query is deleted. `UserListQueries` does the saving, without embeddings.
+  - Saved-query discoverability follows status: Approved queries are canon, Pending ones are drafts that still run (so a list refreshes from one) but are not offered on shared surfaces. The Query Builder's `ALL_QUERIES` data source is now Approved only and no longer retrieves SQL, and `#query` mentions offer Approved queries only. This is a discovery boundary, not access control: every run is still bounded by the user's entity permissions and field-level security.
+  - New action **Create List From Query**, added to the Lists & Audiences skill with instructions on when to offer a list and what to ask. SQL gets the same checks as Run Ad-hoc Query; those checks now live in a shared `CheckAdhocSQL`.
+  - New GraphQL mutation `CreateListFromQuery` (client: `GraphQLListsClient.CreateListFromQuery`), with the ExecuteAdhocQuery checks for SQL.
+  - The Data artifact has a **Save as List** button, offered when the result's rows are records.
+  - The list form's source badge reads "Definition unchanged" (it said "Matches approved version", which read as the query's own approval when the query is Pending).
+  - New "User Lists" query category in core metadata.
+  - Integration bundle IT179 (`list-from-query`).
+
+- a5dbc84: Add DefaultAgentConfigurationID on MJ: AI Agent Rhythm Templates and AgentConfigurationID on MJ: User Routines to assign default model tiers (Draft/Fast, Standard, High/High Power) per rhythm, seed routines from their template defaults, and pass resolved configuration overrides into agent wake runs.
+- 9fa004a: Enforce fail-closed Active coordination policy wake gating via batched Simple RunView lookups across all event-driven and scheduled wake paths, coalesce per-(UserID, ApplicationID) event wakes into single bounded wake keys within configurable coalescing windows, and add an AIDP server startup/deployment guard watermark preventing spurious startup or retroactive wakes while preserving recovery of pre-existing pending routines.
+
+### Patch Changes
+
+- ea470d1: The Agent Channel actions (open, post, read) now fail with `Entity <name> not found in metadata or could not be created` when they cannot create an `MJ: Agent Channels`, `MJ: Agent Channel Participants` or `MJ: Conversation Details` object, for example on a database whose migration for it has not run. Before, `GetEntityObject` logged that and returned null, and the action failed with "Cannot read properties of null (reading 'NewRecord')", which hid the cause.
+- 4d51997: Add personal and shared AI Agent instances via multi-level prototype inheritance (`AIAgent.BaseAgentID`, `MaxDepth = 5`), `InstantiationMode` (`None | Optional | Required`), `AdditionalInstructions`, exclusive `IsPrimaryInstance` sibling sync, 2x2 RBAC with SQL Row-Level Security (`UserAccessibleAIAgents`), ancestor policy/limit ceiling intersection, unified text + Realtime voice personas with audience-aware tone framing, `Manage My Agent Instance` action, `LocalJsonCommunicationProvider` for local JSON-backed Email & Calendar testing, Frecency + FK-style Smart `@Mention` autocomplete, per-user Default Chat Agent (`chat.defaultAgentId`), and the unified **My Agents** Explorer application (`Overview`, `Agents`, `Agent Channels`).
+- dfc0449: Add strongly-typed 5-tier `LimitsConfigResolver` with approved backstop defaults (`DEFAULT_MJ_LIMITS_CONFIG` / `CODE_FALLBACK_LIMITS`) in `@memberjunction/core`, migrate `RunawayGuard`, `ResourceGuard`, and `Tuning` work bounds across AI/TaskGraph/Actions/Bridge/Server to resolve through `LimitsConfigResolver.Instance`, commit the categorized `docs/limits-sweep-inventory.csv` sweep inventory, and enforce the `limits-literals` CI/Standards guard.
+- 346795c: Tests only: widen tight wall-clock ceilings added since v6.3.0-edge.1 so the publish gate's single shared runner doesn't flake. Pathological-input checks get 2 s; the fast-judge early-return and microtask coalescing checks stay below the timings they prove (500 ms).
+- c63e493: Optimize search, agent, and prompt hot paths and harden multi-tenant RunView deduplication:
+  - Partition `ProviderBase` RunView in-flight deduplication and linger cache keys by `contextUser` per-request isolation state (`TenantContext`, `MagicLinkScope`, `APIKeyActingContext`, `APIKeyRowFilters`, `WidgetGuestContext`, `AnonymousVisitorID`, and `IsMagicLinkAnonymous` roles) via an overridable `ComputeRunViewDedupContextScope(contextUser)` hook, preserving case sensitivity for non-UUID tenant IDs and bypassing dedup when unknown nested `TenantContext` object shapes are present.
+  - Add bounded 30s user-scoped LRU metadata caches (`UserScopedCacheKey`, max 100 entries) for `MJ: Vector Indexes` and `MJ: Vector Databases` plus non-colocated `VectorDBBase` client pooling in `VectorSearchProvider` with entity-mutation invalidation.
+  - Add `SearchParams.SkipNameEnrichment` and skip tag hydration in `FullTextSearchProvider` when no tag filter is active.
+  - Combine lane `ExtraFilter` and reader RLS into a single-pass `RunView` in `SearchEngine` using a non-serializable Symbol verification stamp while preserving `VerifyOriginRecords`, FLS projection, and per-reader audience isolation.
+  - Resolve Agent and Skill principals from `AIEngine.Instance` before falling back to `GetEntityObject.Load` in `ScopedSearchAction`.
+  - Coalesce and background intermediate `ConversationDetail.Save()` progress writes in `AgentRunner.RunAgentInConversation`, pass explicit `inputArtifacts: []` from `BaseAgent` sub-agent delegation to skip redundant `hydrateConversationArtifacts` scans without affecting realtime delegation, and defer `'System Only'` internal payload-only artifact persistence off the reply critical path when no `artifactDirective` is present (leaving `artifactInfo` undefined so no client artifact notification fires for internal payload state).
+  - Inherit `modelSelectionPrompt.ModelSpecificResponseFormat` in `AIPromptRunner` when `effectiveResponseFormat` is active and the executing prompt leaves `ModelSpecificResponseFormat` unset.
+- d498eb9: Security hardening across MCP Server, MJServer resolvers/dev-auth, eSignature webhooks, CoreActions, API keys, and Docker configurations.
+  - MCP Server: auth mode `none` is refused when `NODE_ENV=production` and binds strictly to `127.0.0.1` otherwise; session IDs are logged as truncated prefixes; API keys in URL query parameters log a warning and are ignored; API-key scope lookup escapes `apiKeyId` and passes `systemUser` as `contextUser`; OAuth `user_not_found` / `user_inactive` resolutions return a generic 403 `Access denied` without echoing the probed email.
+  - MJServer: `CheckEntityPermissionsSystemUser` is gated with `@RequireSystemUser()`; `UserFavoriteResolver` verifies that the requested `UserID` matches the caller (system user excepted); `SqlLoggingConfigResolver` rejects `fileName`s containing path separators or `..` and validates containment with `path.relative`; `localDevAuth` trusts Docker bridge source IPs only when `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true` is explicitly set (never inferred from `/.dockerenv`).
+  - eSignature: webhooks where `VerifyWebhookSignature === 'NotConfigured'` are refused by default unless `MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true` is explicitly enabled.
+  - CoreActions & APIKeys: `URLLinkValidatorAction.checkSSL` routes through `SafeFetch` for SSRF protection on redirects; `APIKeyEngine` escapes `apiKey.UserID` in its `RunView` filter.
+  - Angular AI Test Harness: `RenderMarkdown` restricts anchor emission to `http:`, `https:`, and `mailto:` URLs with `rel="noopener noreferrer"` before `bypassSecurityTrustHtml`.
+  - Docker: MJAPI image no longer bakes `root:Docker!` into image layers (set at container startup only when `WEBSITE_INSTANCE_ID` starts Azure App Service `sshd`); regression compose binds test SQL Server port `11433` to `127.0.0.1`.
+
+- 447f7fa: Security hardening sweep: Data Mapper refuses templates that reach JavaScript internals (SSTI defense) and drops nunjucks function globals; HTTP Request action strips credential headers on cross-origin redirects; /media serves only passive content types inline (attachment otherwise) and adds Referrer-Policy: no-referrer; /media/upload-stage verifies the upload token before buffering the request body; REST transport now enforces API-key scopes (entity:create/update/delete, view:run, view:batch) like GraphQL, including on the entity list route; multi-tenancy header mode rejects requests that omit the tenant header instead of degrading to an unscoped session (admin roles and the system user exempt); MCP server stops accepting API keys from query strings and compares the system key in constant time; CSV export neutralizes leading formula characters in text cells (signed numbers stay as they are); user-search terms refuse structural SQL characters when a UserSearchParamFormatAPI format splices the term outside a string literal.
+- 93dbc99: Implement Sub-Epic S3 runtime and configuration seams (zero SQL migrations): add structural `ScopeCommonReach` Audience mode for O(1) start without reader-list enumeration (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/actions-base`, `@memberjunction/actions`), enforce and document invite-only external `userHandling` safeguards (`@memberjunction/server`), carry originating scope attribution on `SearchResultItem` across RRF fusion and deduplication (`@memberjunction/search-engine`, `@memberjunction/ai-agents`), and add deterministic query unquoting/normalization in the Scoped Search action (`@memberjunction/core-actions`).
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [061fa06]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [2463948]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [17406fc]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [d6c032f]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [f3e942f]
+- Updated dependencies [59afb5f]
+- Updated dependencies [b428089]
+- Updated dependencies [3b2cd33]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [18a02db]
+- Updated dependencies [3d5adab]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [3651ef2]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [6757289]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [d498eb9]
+- Updated dependencies [447f7fa]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [9fa004a]
+  - @memberjunction/ai-agents@6.3.0-edge.2
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/communication-engine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core-entities-server@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/communication-types@6.3.0-edge.2
+  - @memberjunction/ai-agent-manager@6.3.0-edge.2
+  - @memberjunction/lists@6.3.0-edge.2
+  - @memberjunction/actions@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.2
+  - @memberjunction/integration-engine@6.3.0-edge.2
+  - @memberjunction/react-linter@6.3.0-edge.2
+  - @memberjunction/lists-base@6.3.0-edge.2
+  - @memberjunction/ai-prompts@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ai-vector-sync@6.3.0-edge.2
+  - @memberjunction/search-engine@6.3.0-edge.2
+  - @memberjunction/record-set-processor@6.3.0-edge.2
+  - @memberjunction/record-set-processor-base@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/esignature@6.3.0-edge.2
+  - @memberjunction/export-engine@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/clustering-engine@6.3.0-edge.2
+  - @memberjunction/content-autotagging@6.3.0-edge.2
+  - @memberjunction/ai-mcp-client@6.3.0-edge.2
+  - @memberjunction/credentials@6.3.0-edge.2
+  - @memberjunction/external-change-detection@6.3.0-edge.2
+  - @memberjunction/storage@6.3.0-edge.2
+  - @memberjunction/record-cloning@6.3.0-edge.2
+  - @memberjunction/web-search-engine@6.3.0-edge.2
+  - @memberjunction/geo-core@6.3.0-edge.2
+  - @memberjunction/code-execution@6.3.0-edge.2
+  - @memberjunction/interactive-component-types@6.3.0-edge.2
+  - @memberjunction/record-cloning-base@6.3.0-edge.2
+  - @memberjunction/ai-betty-bot@6.3.0-edge.2
+  - @memberjunction/ai-diagrams@6.3.0-edge.2
+  - @memberjunction/document-parsing@6.3.0-edge.2
+  - @memberjunction/network-utils@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

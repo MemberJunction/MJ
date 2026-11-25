@@ -1,5 +1,5 @@
 /**
- * ai-skills.checks.ts — the 'ai-skills' bundle (AS1–AS21): live, deterministic integration checks for
+ * ai-skills.checks.ts — the 'ai-skills' bundle (AS1–AS22): live, deterministic integration checks for
  * the AI Skills feature. Graduated VERBATIM from integration-test-scripts/ai-skills-tests.ts.
  *
  * Exercises real server componentry end-to-end against the live DB, WITHOUT any model calls:
@@ -11,6 +11,8 @@
  *   - GetSkillActionIDs / GetSkillSubAgentIDs bundle resolution, and GetSkillExposedActionIDs ⊆ bundled.
  *   - SkillImportExportService SKILL.md round-trip + unknown-name warnings.
  *   - AISkill.ExportMarkdown / AISkill.ImportMarkdown Remote Operations.
+ *   - Templated skill instructions rendered by BaseAgent's real activation path, with the real
+ *     template engine resolving a stored template through `{% template %}` (AS22).
  *
  * Deterministic (no LLM). The bundle lifecycle creates the four skills + junction/grant fixtures once
  * and tears them (plus any run/import fixtures the checks create) down in FK-safe order afterwards.
@@ -21,6 +23,8 @@ import type { UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAISkillEntity,
+    MJTemplateEntity,
+    MJTemplateContentEntity,
     MJAISkillActionEntity,
     MJAISkillSubAgentEntity,
     MJAIAgentSkillEntity,
@@ -31,10 +35,12 @@ import {
     AISkillImportMarkdownOperation,
 } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { SkillImportExportService, SkillMarkdownConverter } from '@memberjunction/ai-agents';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { BaseAgent, SkillImportExportService, SkillMarkdownConverter, SKILL_INSTRUCTIONS_TEMPLATE_MARKER } from '@memberjunction/ai-agents';
+import { TemplateEngineServer } from '@memberjunction/templates';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { AiSkillsFixture } from '@memberjunction/testing-integration';
@@ -76,6 +82,64 @@ async function makePermission(
 // A fabricated non-owner user with no roles — GetSkillsForAgent reads only .ID + .UserRoles, so a
 // stand-in suffices to exercise the permission filter without provisioning a second real account.
 const nonOwner = ({ ID: 'F0F0F0F0-1111-2222-3333-444455556666', UserRoles: [] }) as unknown as UserInfo;
+
+/**
+ * Runs BaseAgent's real request-time skill activation (`preActivateRequestedSkills`) outside an agent
+ * run. Only the activation-step record is skipped, since there is no run to attach it to.
+ */
+class SkillActivationProbeAgent extends BaseAgent {
+    protected override async recordSkillActivationStep(): Promise<void> {
+        // no agent run to record against
+    }
+
+    public async ActivateRequested(params: ExecuteAgentParams): Promise<void> {
+        await this.preActivateRequestedSkills(params);
+    }
+}
+
+/** Creates a stored template with one Text content row; returns the IDs to delete, children first. */
+async function makeEmbeddableTemplate(ctx: IntegrationCheckContext, name: string, text: string): Promise<{ templateID: string; contentID?: string }> {
+    const tpl = await ctx.Provider.GetEntityObject<MJTemplateEntity>('MJ: Templates', ctx.User);
+    // MJTemplateContentEntityServer.Save syncs template params inside a provider transaction, which
+    // only an in-process server provider has.
+    if (typeof (tpl.ProviderToUse as unknown as { BeginTransaction?: unknown }).BeginTransaction !== 'function') {
+        SkipCheck('provider has no BeginTransaction (client transport); saving template content requires an in-process server provider');
+    }
+    tpl.Name = name;
+    tpl.Description = TAG;
+    tpl.UserID = ctx.User.ID;
+    Assert(await tpl.Save(), `creating template failed: ${tpl.LatestResult?.CompleteMessage}`);
+    const typeRow = await new RunView().RunView<{ ID: string }>({
+        EntityName: 'MJ: Template Content Types', ExtraFilter: `Name='Text'`, MaxRows: 1, Fields: ['ID'], ResultType: 'simple',
+    }, ctx.User);
+    if (!typeRow.Success || typeRow.Results.length === 0) {
+        return { templateID: tpl.ID };
+    }
+    const content = await ctx.Provider.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', ctx.User);
+    content.TemplateID = tpl.ID;
+    content.TypeID = typeRow.Results[0].ID;
+    content.TemplateText = text;
+    content.Priority = 1;
+    content.IsActive = true;
+    Assert(await content.Save(), `creating template content failed: ${content.LatestResult?.CompleteMessage}`);
+    return { templateID: tpl.ID, contentID: content.ID };
+}
+
+/** Deletes a template made by {@link makeEmbeddableTemplate}: its synced params, its content, then the template. */
+async function deleteEmbeddableTemplate(ctx: IntegrationCheckContext, ids: { templateID: string; contentID?: string }): Promise<void> {
+    const del = async (entityName: string, id: string) => {
+        try {
+            const e = await ctx.Provider.GetEntityObject<BaseEntity>(entityName, ctx.User);
+            if (await e.InnerLoad(CompositeKey.FromID(id))) await e.Delete();
+        } catch { /* best-effort cleanup */ }
+    };
+    const params = await new RunView().RunView<{ ID: string }>({
+        EntityName: 'MJ: Template Params', ExtraFilter: `TemplateID='${ids.templateID}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true,
+    }, ctx.User);
+    for (const row of params.Results ?? []) await del('MJ: Template Params', row.ID);
+    if (ids.contentID) await del('MJ: Template Contents', ids.contentID);
+    await del('MJ: Templates', ids.templateID);
+}
 
 export const AiSkillsChecks: NamedCheck[] = [
     // ── Governance / resolution ────────────────────────────────────────────────────────────────
@@ -390,6 +454,58 @@ export const AiSkillsChecks: NamedCheck[] = [
             Assert(!!result.Output?.skillID, 'op returns the created skill ID');
             AssertEqual(result.Output?.skillName, `Remote Imported ${TAG}`, 'op returns the skill name');
             if (result.Output?.skillID) f.CreatedSkillIds.push(result.Output.skillID);
+        }
+    },
+    // ── Templated instructions (rendered at activation) ─────────────────────────────────────────
+    {
+        Id: 'ai-skills.AS22',
+        Name: 'A templated skill renders at activation with run data, a system placeholder and a stored template embed; a plain skill stays verbatim',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const f = fx(ctx);
+            const embedName = `IT Skill Embed ${Date.now().toString(36)} ${TAG}`;
+            const embed = await makeEmbeddableTemplate(ctx, embedName, 'EMBEDDED-STYLE-RULES for {{ agentName }}');
+            Assert(!!embed.contentID, "the instance needs a 'Text' Template Content Type for the embed fixture");
+            try {
+                const templated = await ctx.Provider.GetEntityObject<MJAISkillEntity>('MJ: AI Skills', ctx.User);
+                templated.NewRecord();
+                templated.Name = `Templated Skill ${TAG}`;
+                templated.Status = 'Active';
+                templated.Description = `Test skill ${TAG}`;
+                templated.CreatedByUserID = ctx.User.ID;
+                templated.Instructions = `${SKILL_INSTRUCTIONS_TEMPLATE_MARKER}\nBrand {{ brandColor }}. Owner [{{ _USER_NAME }}].\n` +
+                    `{% for e in entities %}[{{ e }}]{% endfor %}\n` +
+                    `{% if _CURRENT_PAYLOAD.phase == "design" %}PHASE-DESIGN{% else %}PHASE-OTHER{% endif %}\n` +
+                    `{% template "${embedName}" %}`;
+                Assert(await templated.Save(), `creating templated skill failed: ${templated.LatestResult?.CompleteMessage}`);
+                f.CreatedSkillIds.push(templated.ID);
+                await AIEngine.Instance.Config(true, ctx.User);
+                await TemplateEngineServer.Instance.Config(true, ctx.User);
+
+                // SkillOpen is a plain (unmarked) skill with no permission rows, so the user can always run it.
+                const agent = { ID: f.GrantTargetAgent.ID, Name: 'IT Skill Probe', Description: 'probe agent',
+                    AcceptsSkills: 'All', SkillActivationMode: 'RequestedOnly' } as MJAIAgentEntityExtended;
+                const params = {
+                    agent, contextUser: ctx.User, conversationMessages: [], payload: { phase: 'design' },
+                    requestedSkillIDs: [templated.ID, f.SkillOpen.ID],
+                    data: { brandColor: '#0055ff', entities: ['Accounts', 'Invoices'] },
+                } as unknown as ExecuteAgentParams;
+                await new SkillActivationProbeAgent().ActivateRequested(params);
+
+                const activation = (params.conversationMessages ?? []).find(
+                    m => (m as { metadata?: { messageType?: string } }).metadata?.messageType === 'skill-activation');
+                Assert(!!activation, 'activation appended a skill-activation message');
+                const text = String(activation!.content);
+                Assert(text.includes('Brand #0055ff.'), `params.data value rendered; got: ${text}`);
+                Assert(!text.includes('Owner [].') && !text.includes('_USER_NAME'), `the _USER_NAME system placeholder rendered from the acting user; got: ${text}`);
+                Assert(text.includes('[Accounts][Invoices]'), 'loop over params.data rendered');
+                Assert(text.includes('PHASE-DESIGN') && !text.includes('PHASE-OTHER'), 'payload conditional rendered');
+                Assert(text.includes('EMBEDDED-STYLE-RULES for IT Skill Probe'), `stored template embedded with the agent's data; got: ${text}`);
+                Assert(!text.includes('mj:template') && !text.includes('{%'), 'no template source left in the rendered text');
+                Assert(text.includes(f.SkillOpen.Instructions), 'the plain skill in the same activation is used verbatim');
+            } finally {
+                await deleteEmbeddableTemplate(ctx, embed);
+                await TemplateEngineServer.Instance.Config(true, ctx.User);
+            }
         }
     }
 ];

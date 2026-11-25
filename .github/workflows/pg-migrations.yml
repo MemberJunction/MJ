@@ -28,6 +28,14 @@ on:
       # The content detector runs in this workflow (self-test + verify steps), so a
       # PR that changes only the detector must still exercise it here.
       - 'scripts/check-pg-migration-content.mjs'
+      # The managed-host job (TLS, the migrate preflight, the extensions a migration needs).
+      - 'packages/PostgreSQLDataProvider/src/pgSsl.ts'
+      - 'packages/PostgreSQLDataProvider/src/pgCredentials.ts'
+      - 'packages/MJCLI/src/lib/pg-preflight/**'
+      - 'packages/MJCLI/src/lib/db-preflight.ts'
+      - 'packages/MJCLI/src/baseline/connection.ts'
+      - 'packages/MJCLI/src/config.ts'
+      - 'packages/MJInstaller/src/phases/DatabaseProvisionPhase.ts'
   push:
     branches: [next]
     paths:
@@ -57,6 +65,10 @@ concurrency:
 # Least-privilege token: nothing in this workflow writes to the repository.
 permissions:
   contents: read
+
+env:
+  # Pin turbo's local cache directory so the seed restore and turbo agree on its location.
+  TURBO_CACHE_DIR: .turbo/cache
 
 jobs:
   pg-parity:
@@ -92,14 +104,6 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v7
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-
       # ─── Step 1: Validate PG migration filenames ─────────────────────
       - name: Validate PG migration filenames
         run: |
@@ -116,8 +120,20 @@ jobs:
       # where `mj` is an UNRELATED package — inside a job holding DB credentials.
       # Turbo builds MJCLI's full transitive dep graph, which also covers
       # SQLConverter (so we don't need a second build step).
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: ./.github/actions/mj-setup
+        with:
+          ignore-scripts: 'true'
+          create-explorer-env: 'false'
+
+      # Restore next's turbo build seed on PR runs (PR jobs receive no remote-cache credentials).
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build MJ CLI + SQLConverter
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/sql-converter
@@ -537,6 +553,141 @@ jobs:
   # Push to `next` only: line branches (lts/**) and the scheduled lanes are not what the alarm's
   # title describes. `cancelled` counts as red, as in test.yml: a push run here is never cancelled
   # by concurrency, so a cancel means a timeout or a manual stop.
+  # ─── Managed-host lane ─────────────────────────────────────────────────────────
+  # What a managed PostgreSQL (RDS, Azure Flexible Server, HorizonDB) looks like to MJ:
+  # the server accepts TLS only, its certificate is signed by a CA Node does not trust,
+  # max_connections is small, and the migrate login is NOT a superuser. The parity job
+  # above runs as `postgres` over plain TCP, so it can see none of that.
+  #
+  # Asserts, in order:
+  #   1. With no TLS setting, `mj migrate` is refused (localhost defaults to plain TCP).
+  #   2. With PG_SSL_MODE=verify-full but no CA bundle, the certificate is rejected.
+  #   3. On an unprovisioned database the preflight refuses BEFORE any migration runs,
+  #      and prints remediation SQL (read from `mj doctor --db --format json`).
+  #   4. After an administrator runs exactly that SQL, `mj migrate` applies everything
+  #      over verified TLS as the unprivileged login, and every connection it left used TLS.
+  managed-host:
+    name: PG managed-host lane (TLS-only, unprivileged login)
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
+      DB_PLATFORM: postgresql
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_DATABASE: mj_managed
+      CODEGEN_DB_USERNAME: mj_codegen
+      CODEGEN_DB_PASSWORD: codegen-ci-pw
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: admin-ci-pw
+      # psql only (set per command): MJ's clients must get TLS from PG_SSL_MODE, and a job-wide
+      # PGSSLMODE would let node-postgres fall back to it and hide a client that ignores PG_SSL_MODE.
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - uses: ./.github/actions/mj-setup
+        with:
+          ignore-scripts: 'true'
+          create-explorer-env: 'false'
+
+      # Restore next's turbo build seed on PR runs (PR jobs receive no remote-cache credentials).
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
+      - name: Build MJ CLI
+        run: npx turbo build --filter=@memberjunction/cli
+
+      - name: Start a TLS-only PostgreSQL with a private CA
+        run: |
+          mkdir -p "$RUNNER_TEMP/pg"
+          cd "$RUNNER_TEMP/pg"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=MJ CI CA" -keyout ca.key -out ca.crt
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=localhost" -keyout server.key -out server.csr
+          printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > ext.cnf
+          openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 2 -extfile ext.cnf -out server.crt
+          printf 'local all all trust\nhostssl all all 0.0.0.0/0 scram-sha-256\nhostssl all all ::/0 scram-sha-256\n' > pg_hba.conf
+          chmod 600 server.key
+          sudo chown 999:999 server.key server.crt pg_hba.conf
+          docker run -d --name pg-managed -p 5432:5432 -e POSTGRES_PASSWORD="$PGPASSWORD" \
+            -v "$RUNNER_TEMP/pg:/certs:ro" postgres:16 \
+            -c ssl=on -c ssl_cert_file=/certs/server.crt -c ssl_key_file=/certs/server.key \
+            -c hba_file=/certs/pg_hba.conf -c max_connections=60
+          for _ in $(seq 1 30); do PGSSLMODE=require psql -tAc 'select 1' >/dev/null 2>&1 && break; sleep 2; done
+          PGSSLMODE=require psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE DATABASE mj_managed;
+          CREATE ROLE mj_codegen LOGIN PASSWORD 'codegen-ci-pw';
+          SQL
+          echo "PG_SSL_CA_FILE_PATH=$RUNNER_TEMP/pg/ca.crt" >> "$GITHUB_ENV"
+
+      - name: Plain TCP is refused
+        run: |
+          set +e
+          node packages/MJCLI/bin/run.js migrate > out.txt 2>&1; code=$?
+          set -e
+          cat out.txt
+          [ "$code" -ne 0 ] || { echo "::error::mj migrate connected without TLS to a TLS-only server"; exit 1; }
+          grep -q 'only accepts TLS' out.txt || { echo "::error::expected the TLS-only hint"; exit 1; }
+
+      - name: An untrusted certificate is refused under verify-full
+        env:
+          PG_SSL_MODE: verify-full
+        run: |
+          set +e
+          node packages/MJCLI/bin/run.js migrate > out.txt 2>&1; code=$?
+          set -e
+          cat out.txt
+          [ "$code" -ne 0 ] || { echo "::error::verify-full accepted a certificate from an untrusted CA"; exit 1; }
+          grep -q 'PG_SSL_CA_FILE' out.txt || { echo "::error::expected the PG_SSL_CA_FILE hint"; exit 1; }
+
+      - name: The preflight refuses an unprovisioned database and prints the fix
+        env:
+          PG_SSL_MODE: verify-full
+        run: |
+          export PG_SSL_CA_FILE="$PG_SSL_CA_FILE_PATH"
+          set +e
+          node packages/MJCLI/bin/run.js migrate > out.txt 2>&1; code=$?
+          node packages/MJCLI/bin/run.js doctor --db --format json > doctor.json 2>/dev/null
+          set -e
+          cat out.txt
+          [ "$code" -ne 0 ] || { echo "::error::mj migrate ran against an unprovisioned database"; exit 1; }
+          grep -q 'Nothing was migrated' out.txt || { echo "::error::expected the preflight refusal"; exit 1; }
+          if PGSSLMODE=require psql -d mj_managed -tAc "select 1 from pg_namespace where nspname='__mj'" | grep -q 1; then
+            echo "::error::the preflight refused, but schema __mj was created anyway"; exit 1
+          fi
+          sed -n '/^{/,$p' doctor.json | jq -r '.Checks[].Remediation[].Sql + ";"' > remediation.sql
+          echo "Remediation the preflight printed:"; cat remediation.sql
+          [ -s remediation.sql ] || { echo "::error::no remediation SQL"; exit 1; }
+
+      - name: An administrator runs the printed SQL
+        run: PGSSLMODE=require psql -d mj_managed -v ON_ERROR_STOP=1 -f remediation.sql
+
+      - name: mj migrate applies over verified TLS as the unprivileged login
+        env:
+          PG_SSL_MODE: verify-full
+        run: |
+          export PG_SSL_CA_FILE="$PG_SSL_CA_FILE_PATH"
+          node packages/MJCLI/bin/run.js migrate | tee out.txt
+          grep -q 'readiness preflight passed' out.txt || { echo "::error::expected the preflight to pass after remediation"; exit 1; }
+          grep -qE 'Migrations complete' out.txt || { echo "::error::migrations did not complete"; exit 1; }
+          owner=$(PGSSLMODE=require psql -d mj_managed -tAc "select nspowner::regrole from pg_namespace where nspname='__mj'")
+          echo "__mj owner: $owner"
+          [ "$owner" = "mj_codegen" ] || { echo "::error::__mj should be owned by mj_codegen, got $owner"; exit 1; }
+
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker rm -f pg-managed || true
+
   backstop-alarm:
     name: Backstop alarm
     needs: [pg-parity]
@@ -553,6 +704,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
           filter: blob:none
+          sparse-checkout: .github
 
       - name: Alert on backstop failure
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

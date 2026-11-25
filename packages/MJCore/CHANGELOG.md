@@ -1,5 +1,154 @@
 # Change Log - @memberjunction/core
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- f41ea95: AI model metadata refresh (weekly research run, 2026-11-23)
+
+  Adds four models to `metadata/ai-models/.ai-models.json`, corrects one price error, fills one missing
+  token limit and closes three price windows ahead of a published retirement:
+  - **GPT-6.2 Astra** (`gpt-6.2-astra`, released 2026-11-17) — 1,050,000-token context (922K input,
+    128K output), effort levels low/medium/high/xhigh. Priced at $8/$40 per 1M in/out, a 20% cut from
+    GPT-6 Astra, with cached input at $0.40 and cache writes at $10. OpenAI and Azure (Microsoft
+    Foundry, deployment version 2026-11-17) inference routes; the Azure route carries the usual
+    vendor-level `SupportsNativeToolCalling: false` because `AzureLLM` cannot send tools.
+  - **GPT-6.2 Sol** (`gpt-6.2-sol`, released 2026-11-17) — same context and effort levels, priced at
+    $2/$10 unchanged from GPT-6.1 Sol, cached input $0.10, cache writes $2.50. OpenAI and Azure routes.
+  - **Qwen4-Max** (`qwen4-max`, released 2026-11-16) — Alibaba's first Qwen 4 flagship, a 2.4T-parameter
+    MoE with ~71B active parameters, 991,808-token input and 131,072-token output, text/image/video
+    input. $1.50/$4.50 per 1M with cached input at $0.075 on the International deployment, a 25% cut
+    from Qwen 3.8 Max. Alibaba Cloud and OpenRouter routes.
+  - **Muse Ember** (`meta/muse-ember`, released 2026-11-09) — Meta's cheapest Muse tier for high-volume
+    agentic and routing work, 1M context, multimodal input. As with MJ's other Meta records there is no
+    Meta first-party driver, so the only inference route is OpenRouter and the record carries no cost
+    row; its $0.10/$0.50 rate card is recorded in the description.
+  - **Qwen 3.7 Plus** — the Alibaba Cloud cost row's output price is corrected from $1.16 to **$1.60**,
+    a digit transposition of the Model Studio list price that had been overstating cost accuracy by
+    ~38% on every output token since the record was created. Corrected in place, since the row was
+    never right, with the correction documented in its `Comments`. The paired OpenRouter row is left
+    alone.
+  - **Gemini 4 Carbon** — `MaxOutputTokens` is set to 65,536 on all three inference routes, from Google
+    AI Studio's developer guide, matching the sibling Gemini 4 Neon and Gemini 4 Hydrogen records.
+  - **GPT 5, GPT 5-mini, GPT 5-nano** — each OpenAI cost row gains `EndedAt: 2026-12-11`, OpenAI's
+    published retirement date for `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5-pro`, `o3` and `o3-pro`,
+    so cost reporting stops selecting the retired prices on the shutdown date with no further edit. The
+    vendor routes stay `Active` until the date passes, and the Azure and OpenRouter rows are deliberately
+    untouched — those platforms set their own lifecycle dates.
+
+  Anthropic's full list-price table was re-verified against all 26 Claude models MJ carries and matches
+  on every one, cache multipliers included; no new Claude model shipped this week. No record was
+  deleted, and the only existing price touched is the Qwen 3.7 Plus error correction. Full findings,
+  sourcing and the items flagged for human review:
+  `reports/ai-model-research/2026-11-23-weekly-report.md`.
+
+- 0360f3f: AI model metadata refresh (weekly research run, 2026-11-24)
+
+  Records Anthropic's 2026-11-23 deprecation of **Claude Opus 4.5** (`claude-opus-4-5-20251101`,
+  retiring 2027-01-22, replacement `claude-opus-5-5`) in `metadata/ai-models/.ai-models.json`:
+  - The Anthropic Inference Provider route is now `Deprecated`.
+  - The Anthropic cost row gets `EndedAt: 2027-01-22`, so its $5/$25 price stops being selected on that
+    date without another edit. `Status` stays `Active` until then. The row's `Comments`, which
+    described Gemini 3 Pro by mistake, have been corrected.
+  - The Bedrock and OpenRouter routes are not changed, because partner platforms set their own
+    retirement dates.
+
+  GPT-6.2 Astra, GPT-6.2 Sol and Qwen4 Max were researched but are not added here, because the open
+  PR #6854 already adds them. Full findings are in
+  `reports/ai-model-research/2026-11-24-weekly-report.md`.
+
+- 3c70bf7: Add AssemblyAI's current voice stack as a realtime model. `AssemblyAIVoiceRealtime` runs STT 3.7 Realtime Agent, an LLM Gateway model and TTS-1 as one voice agent inside MJAPI, and replaces the Voice Agent API that AssemblyAI retires on February 1, 2027 (`AssemblyAIRealtime`, unchanged here). Set `AI_VENDOR_API_KEY__AssemblyAIVoiceRealtime` to use it. MJAPI's realtime proxy can now connect a browser to an upstream that runs inside the process (`RealtimeProxyIssueParams.OpenInProcess`), so such a driver needs no host of its own and the prompt, tools and key stay on the server.
+- 2f41586: Default new AI agent user policies (`AIAgentUserPolicy`) to `Autonomous` coordination mode, `DraftOnly` email, `ProposeWithApproval` calendar changes requiring approval, and `Disabled` (Off) phone channel across database schema defaults, stored procedures, `AgentUserPolicyEngine`, `MJAIAgentUserPolicyEntityServer`, Chief of Staff actions, UI draft builders, and agent prompts, and verify the complete Epic 3 acceptance suite.
+- 30460b0: Canon unification phase U0 (findings F3, F4, F11) and three integration-check repairs.
+  - **Edge type registry (F3).** Seeds the edge types the derived providers emit (`Subsets`, `Is A`, `References`, `Reads`, `Composes`, `Field Of`) as provider-only rows, plus `Same As` and `Preferred Over`. Retires `NarrowerThan` as a stored type (it is BroaderThan's inverse label; `AllowStored = 0`). Seeds `MJ: Graph Edge Type Endpoints` rows for `Defines`, `Describes`, `Measures` and `Implements`. A unit test fails when a provider or the synthesizer emits an edge type name with no seeded row.
+  - **One direction for the concept edges (F4).** `Defines`, `Describes`, `Measures` and `Implements` run artifact to concept. The Content Pipeline synthesizer now writes them that way, so a pipeline-trained metric concept appears in `ExplainEntity`'s `MeasuringQueries`. Two on-demand FieldRules Record Processes (dry run first) flip edges stored the old way and retype `NarrowerThan` edges.
+  - **Proposers check the contract before writing.** `EntityGraphOverlayStore` refuses, logs and counts (`RejectedEdgeCount`) an edge whose type has no row or whose endpoints break the type's endpoint rows. `GraphEdgeEndpointAllows` is the shared rule.
+  - **Delete stages (F11).** `GraphEvidenceRetractor` already removes the `Inferred` edges both delete stages leave behind; `DeleteStage` now also keeps a chunk as a tombstone while a `Declared` graph edge still names it, so that edge never points at nothing.
+  - **Integration checks.** `fls-closeout-client` probes REST readiness on a scoped route, so CW7/CW8 no longer run before MJAPI's scope cache has the minted key's `full_access` rule (REST enforces key scopes since MJ 6817). `work-bus-core` gives the context user an active Chief of Staff policy for WBC10 (wakes need one since MJ 6825) and restores it in teardown.
+
+- 916fe91: Add the extensible Chief of Staff skills platform, typed core actions, offered rhythms, suggestions, and Agent Channels (`V202611201630`):
+  - **Schema & CodeGen (`V202611201630`)**: Add `AISkillAction.Role` (`Tool` | `Briefing` | `Both`), `AIAgentSkill.AllowMetadataSyncUpdate`, `RowLevelSecurityFilter.PlatformVariants` (SQL Server + PostgreSQL dialect RLS), `MJ: AI Agent Rhythm Templates`, `MJ: AI Agent Suggestions`, `ConversationType` `AGENT_CHANNEL`, `MJ: Agent Channels` (IS-A `MJ: Conversations`), and `MJ: Agent Channel Participants`.
+  - **Policy & Briefing Engine**: Introduce `TypedActionPolicyGuard` in `@memberjunction/ai-core-plus` with sub-agent policy ceiling propagation across `BaseAgent` and `AgentUserPolicyEngine`, plus `AIEngine.GetBriefingActionsForAgent` / `GetSkillBriefingActionIDs` for dynamic cross-app briefing fan-out.
+  - **Core Typed Actions & Agent Channels**: Replace all raw SQL / generic CRUD actions on Chief of Staff with 13 scoped typed actions (including `Assemble My Briefing`, Offered Rhythms, Suggestions, Memory, and Agent Channel actions), add `AgentChannelConversationDriver` with loop-guard and hourly wake rate limits, and enforce recurring routine confirmation in `Schedule Next Agent Wake`.
+  - **Inbound Utility Mailbox Adapter**: Add `InboundUtilityMailboxIngestionService` and `EmailUtilityMailboxExtension` (`BaseServerExtension`) in `@memberjunction/messaging-adapters`.
+  - **Governance, Standards & UI**: Add `agent-skill-governance` repo standard, `ChiefOfStaffAgentChannelsComponent` and Governance `InstructionsOverride` size monitor in `@memberjunction/ng-dashboards`, and `IT157` (`COS9–COS12`) integration checks.
+
+- d7a630c: MJ Docs feed the semantic graph as they are saved, and what the graph shows from a document follows the document's own permissions (minor: adds `MJ: Graph Concepts.Origin` and seeds a content source, graph and edge types).
+  - **Artifact indexing.** `ArtifactGraphIndexer` (started by `ContentPipelineStartup`) pushes the latest version of each artifact into every push-only Content Source whose `Configuration.Artifacts.ArtifactTypes` names its type: one Content Item per artifact, debounced per artifact, linked to the `MJ: Artifacts` record. A deleted or emptied artifact is taken out of the index. Seeded: content source "MJ Docs" (Markdown Document artifacts, deterministic concept synthesis, so no LLM key is required) feeding a new Knowledge graph, "Library Knowledge".
+  - **Text ingest.** `ContentUploadIngestor.IngestText` / `RemoveText` index text that belongs to an entity record without an `MJ: Files` row, at a `record://<entity>/<id>` URL; unchanged text keeps the item (updating its name and description if the record was renamed) and changed text replaces it. `Remove` accepts these items as well as `upload://` ones.
+  - **Links and relatedness.** `[[Name]]` in a document becomes a `LinksTo` `MJ: Record Links` row to the artifact of that name (reconciled on every save), projected by the graph's Record Link edge provider. Names are matched case-insensitively and resolved as the document's owner, so a link only points at an artifact its author can open. Deleting an artifact deletes the links to and from it. New `SharedConceptEdgeProvider` relates two records that were sources of the same concept (`SharesConceptWith`), derived on read as the viewer, from `Approved` evidence in the requested graph (plus `Proposed` when the request asks for it, through the new `GraphEdgeRequest.IncludeProposed`). New edge types `LinksTo` and `SharesConceptWith`.
+  - **Retraction.** Deleting a content item or chunk now retracts the `Inferred` edges the Graph stage wrote for it (inside a new pipeline retraction scope that `MJGraphEdgeEntityServer` honours for `Inferred` edges only), and deletes a synthesized concept left with no source unless it is `Approved` in a Canon graph, has children or carries a `Declared` edge.
+  - **Provenance.** `MJ: Graph Concepts` gains `Origin` (`Declared` | `Inferred`; existing concepts with `SourcedFrom` edges are backfilled `Inferred`). The Graph stage marks what it creates `Inferred`, and the provenance policy hides an `Inferred` concept with no source left instead of treating it as authored. A concept whose sources the viewer can read only in part is redacted.
+  - New deterministic integration test IT185 (`docs-semantic-graph`) proves the path against a live database, including that a document's items and chunks are visible exactly when `ArtifactPermissionEngine` lets the viewer read the document.
+
+- 2122c07: Add code-only `BaseRemotableOperation` contracts and server implementations (`Limits.GetDiagnostics`, `Limits.ResumePausedRun`, `Limits.PauseRun`), wire the `AdminLimitsResourceComponent` execution-limits governance dashboard into Explorer's Admin application navigation, add end-to-end 5,000-node workflow and 2,000-turn agent-channel plus synthetic runaway tests, and document the 5-tier limits configuration architecture and sweep inventory.
+- 0711e70: Add per-workflow and per-graph execution isolation levels (`InProcess`, `Worker`, `Process`, `Container`), dual-dialect `AIAgent.Isolation` schema migrations backfilling existing rows to `InProcess`, `Workflow.Draft` default of `Worker`, `LimitsConfigResolver` isolation defaults/ceilings, and Node `worker_threads` / `child_process` / container isolation execution runners with documented fault-boundary guarantees.
+- d7a630c: Semantic graph authority tiers are now fully metadata-driven, and the graph engine accepts pluggable access policies (minor: adds three `MJ: Graph Types` columns).
+  - `MJ: Graph Types` gains `DefaultAuthorityTierID`, `DefaultConceptTaxonomyMode` and `DefaultGroundingMode`. The Graph stage reads the target graph's real type and fills in what a content source leaves unset from it; `IsCanon` comes from the graph type, never from a configured type name. Seeded types keep their previous behaviour, and Network graphs now default to `Constrained` as documented.
+  - Authority tier precedence comes only from `MJ: Graph Authority Tiers` rows: `AuthorityTierPrecedence` is removed and `GetAuthorityTierRank` requires the tier rows. A source may name its tier by ID (`AuthorityTierID`) or name; a name that matches no active tier fails the stage. A source with no tier is unranked instead of silently `Reference`. The `IContentSourceGraphOverlayConfig` keys `Enabled`, `DefaultAuthorityTier` and `DefaultAuthorityTierID` are honoured.
+  - `GraphEngine` runs `BaseGraphNodeAccessPolicy` (per entity, `Extend` or `Replace`) and `BaseGraphEdgeAccessPolicy` (per edge type) registrations. Policies only narrow, run once per entity per viewer, and fail closed when they throw or cannot be created.
+  - Built-in provenance policies: a content item, its chunks and the concepts synthesized from them are visible only to someone who can read the source record. An `Approved` concept in a Canon graph stays visible to anyone who can read concepts.
+  - Edge type names are compared ignoring case and whitespace when filtering edges and when finding an edge access policy, matching how the content pipeline resolves them on write, so an edge cannot skip its policy because its name is spaced differently. Providers that name no edge type fall back to `RelatedTo`, the seeded type. `IsCanonGraph` decides from the graph type's `IsCanon` flag only, no longer from a graph named "MJ Canon".
+  - The seeded edge type `Broader Than` (inverse `Narrower Than`) is renamed `BroaderThan` (inverse `NarrowerThan`), so every seeded edge type name is CamelCase. The row keeps its ID, and the content pipeline now writes the CamelCase name.
+
+- 9499d4b: Lists made in a conversation now keep themselves current.
+  - `ListOperations.MaterializeFromQuery` creates a list from a saved query's rows, linked to the query with its parameters, key column, refresh mode and current fingerprint; `CreateListFromRecords` creates a list with no source.
+  - `ListFromQuery` (shared by the action and the mutation) links a list to a saved query, or saves SQL written in a conversation as a Pending query in the user's own "User Lists" query category and links the list to it. When the user can't save queries, the list is still made and says why it won't refresh. When no list comes of a query just saved, the query is deleted. `UserListQueries` does the saving, without embeddings.
+  - Saved-query discoverability follows status: Approved queries are canon, Pending ones are drafts that still run (so a list refreshes from one) but are not offered on shared surfaces. The Query Builder's `ALL_QUERIES` data source is now Approved only and no longer retrieves SQL, and `#query` mentions offer Approved queries only. This is a discovery boundary, not access control: every run is still bounded by the user's entity permissions and field-level security.
+  - New action **Create List From Query**, added to the Lists & Audiences skill with instructions on when to offer a list and what to ask. SQL gets the same checks as Run Ad-hoc Query; those checks now live in a shared `CheckAdhocSQL`.
+  - New GraphQL mutation `CreateListFromQuery` (client: `GraphQLListsClient.CreateListFromQuery`), with the ExecuteAdhocQuery checks for SQL.
+  - The Data artifact has a **Save as List** button, offered when the result's rows are records.
+  - The list form's source badge reads "Definition unchanged" (it said "Matches approved version", which read as the query's own approval when the query is Pending).
+  - New "User Lists" query category in core metadata.
+  - Integration bundle IT179 (`list-from-query`).
+
+- 5f514f2: Implement the MJ Peer Sync (`MemberJunctionConnector`) core and in-process pipeline (#6021 / #6502), including the `RecordChange` T-SQL migration (`CHK_RecordChange_Source` `'Sync'`, `spCreateRecordChange_Internal` `@IntegrationID`, and `IX_RecordChange_EntityID_ChangedAt`), server-only `BaseEntity.SetSyncContext` (`RecordChange.Source = 'Sync'`, `Integration.ID` FK binding, and `IRecordChangeSyncContext` provenance with optional `OriginUserEmail` for service accounts across `MJCore` and SQL Server / PostgreSQL data providers), Tarjan SCC + two-pass nullable FK cycle planning in `@memberjunction/record-graph`, per-record `EntityVectorSyncer.VectorizeRecords` and batch `DuplicateRecordDetector.FindCandidatesForValues`, `ComputeThreeWayFieldMerge` and the `BaseIntegrationConnector.RunPipeline` seam (plus incremental push `'MJ: Record Changes'` and `EntityID` record-map lookup fixes), and the `SchemaPlanner`, `ChangeSetPlanner`, `PeerIdentityGate`, `PeerSyncApplier`, `PeerSyncEndpointService` (`InProcessPeerSyncTransport` + per-run `FlushDeferredForeignKeys`), `PeerSyncDoorbell`, and `MemberJunctionConnector` modules.
+- 3d5adab: Add WebVTT/SubRip caption cue parsing (`ParseCaptionCues`, `LooksLikeCaptionText`) and raw caption text fallback to `TranscriptSegmenter`, register `VTT` and `SRT` in `MJ: Content File Types` metadata, persist multimodal chunk fields (`StartMs`, `EndMs`, `StartOffset`, `EndOffset`, `PageNumber`, `SegmentTitle`, `Transcript`, `SegmenterKey`, `ParentChunkID`) through `SegmentStage`, `PipelineProcessor`, `WorkingRecordHydrator`, and `EmbedStage`, export `UploadTokenManager` from `@memberjunction/server`, and add `EnableInlineMedia` support to `@memberjunction/ng-markdown` to upgrade `/media/:fileId` video tags into HTML5 `<video>` players with WebVTT caption tracks and a lazy click-to-seek transcript drawer.
+- 9471265: Honest serving for Predictive Studio: models reach production only through one lifecycle gate (`PredictiveStudio.PromoteModel` takes a `transition`), artifacts are stored durably with a verified SHA-256, every scoring call is a recorded `MJ: ML Scoring Runs` row, predictions are effective-dated `MJ: Feature Values` rows served by `MJ: Latest Feature Values` behind a view authorization, and published models are monitored on real outcomes with automatic rollback.
+
+  Deploy impact (one-time, on the first runs after upgrade):
+  - The registry job re-verifies each `Published` model trained by the previous release's trainer on its stored gate record; one that does not re-verify becomes `Unevaluated` and stops serving (scoring refused `model-not-published` until a retrain publishes through the gate). Older models without a `Delivery` that are `Draft`, `Validated` or `Published` become `Unevaluated`; the one that served each pipeline keeps serving, flagged, until its pipeline is retrained under a protocol. Expect a burst of training compute: auto-train processes retrain on their next run and the registry job retrains at most 3 other pipelines per run; schedules of non-auto-train Record Processes bound to a non-serving demoted model are disabled until re-evaluation publishes.
+  - The registry job copies legacy artifacts into file storage, 50 models per run, until none is `unverified`.
+  - Duplicate `(PipelineID, Version)` model rows are renumbered (the old number kept in `Lineage`).
+  - Existing scoring bindings are migrated (pipeline from their model, feature name from the pipeline name, their column kept as the optional copy); the "View Model Predictions" authorization (granted to Developer and Integration) is set on the daily prediction sweep's first run — until then their predictions are visible to no one through Feature Values. Grant it to the roles that should see predictions.
+  - `MJ: Feature Values` and `MJ: Latest Feature Values` carry a row-level security filter on every role's read permission; pipeline and human values are unaffected.
+  - Score Record Set returns `Success = false` for refusals and for runs with any failed record; direct `MJ: ML Models.Status` writes are refused (`status-changed-outside-gate`).
+  - `MJ: ML Model Publish Records` is append-only and written only by the sign-off operation and the lifecycle gate: a direct create, update or delete through GraphQL, an Action or any other save is refused, whatever the caller's entity permissions.
+  - A `PredictiveStudio.PromoteModel` call made with an API key, and a Promote ML Model Action run inside an agent run, are recorded as non-person initiators: they cannot roll back, and they publish a `KeepBaseline` model only under a protocol with `autoPublishKeepBaseline` (a person publishes it from the model detail). A scoring binding's `Status` changes only through Withdraw, and its view authorization only by a caller who holds the current one.
+  - Breaking: the promotion API (`targetStatus`/`signOff` → `transition`/`signOffId`), the "Promote ML Model" Action's inputs and result codes, the binding's `MLModelID`/`MaterializedResultID`/`'Materialized'` mode, and 217 `@deprecated` aliases are removed with no compatibility shim (see the PR description's list).
+
+- 942e220: Add the OpenAI GPT-Live 1.1 realtime model (`gpt-live-1.1`, released November 19, 2026). It runs on the existing `OpenAILiveRealtime` driver and `v1/live/sessions` endpoint, with the same voices and per-minute pricing as GPT-Live 1.
+- a5dbc84: Add DefaultAgentConfigurationID on MJ: AI Agent Rhythm Templates and AgentConfigurationID on MJ: User Routines to assign default model tiers (Draft/Fast, Standard, High/High Power) per rhythm, seed routines from their template defaults, and pass resolved configuration overrides into agent wake runs.
+- 6cd3f38: Unify result expiration, compaction, execution limits, and lazy `ArtifactToolManager` spillover across directly-attached (`AIAgentAction`) and skill-bundled (`AISkillAction`) actions via `Action.Config` (`IActionConfiguration`), preserve external-data trust wrapping across artifact spillover, workspace tools, pipelines, message compaction/recovery, and sub-agent boundaries, defer artifact spillover until compaction/expiry/recovery fires, cap Sage at 20 iterations per run with a 120k context compaction budget, and configure 1-turn result compaction defaults on `Run Ad-hoc Query` and `Run Stored Query` (#6395). Active per-agent `AIAgentAction` rows with `ResultExpirationTurns` configured continue to take precedence over `Action.Config` defaults (set `ResultExpirationMode = 'None'` with `ResultExpirationTurns = 0` to opt a specific agent out), and `ExecuteAgentParams.messageExpirationOverride` (including `expirationMode: 'None'`) overrides both.
+
+### Patch Changes
+
+- c6b3913: Pre-freeze AI Agents improvements (Epics B, C, D, and post-`#6852` Epic E hardening):
+  - **Chief of Staff routing parity (Epic B):** Enabled `"enableHandoff": true` on Chief of Staff (`metadata/agents/.chief-of-staff-agent.json`), extracted Section 4 ("Agent Delegation") into a shared `{@include ../_includes/agent-delegation.md}` fragment parameterized by `{{ agentName }}` with zero hard-coded `"Sage"` references, included it in both Sage and Chief of Staff system prompts while keeping each agent's own sub-agents separate, and verified `BaseAgentID` prototype inheritance passes `enableHandoff` cleanly to derived instances.
+  - **Per-user default agent (Epic C):** Extended `DefaultAgentResolver` (`ResolveWithDetails` + `Resolve`) with per-user `UserInfoEngine` preference (`Conversations.DefaultAgentID`, with read-only fallback to legacy `chat.defaultAgentId`) and automatic primary-instance (`IsPrimaryInstance = 1`) resolution for instantiable org/app default templates, validating `Active` status and full `BaseAgentID` ancestor `CanRun` permissions with graceful fallback and one-time non-blocking user notice. Added a "Default for new chats" toggle in `ConversationAgentPickerComponent` and unified Chat / My Agents default-agent settings and conversation-manager cache invalidation.
+  - **Remove hard-coded `'Sage'` assumptions (Epic D):** Updated `MemoryManagerAgent`, `LiveKitRoomResourceComponent`, Conversations UI (`conversation-chat-area`, `message-input`, `agent-handoff-card`, `agent-handoff-map`, `agent-turn-routing`, `realtime-*`), and `metadata/prompts/templates/sage/check-intent.template.md` (`{{ conversationManagerName }}`) to use the resolved conversation manager / default agent with neutral `'Assistant'` fallback, keeping `DefaultAgentResolver.FALLBACK_AGENT_NAME = 'Sage'` strictly as the last-resort safety net.
+  - **Post-`#6852` Agent Instances hardening (Epic E `E1`–`E5`):** Enforced `mj.config.cjs` (`MjConfig`) at the root ceiling of `LimitsConfigResolver` / `ResolveAgentRunLimits` so user policies can only narrow org ceilings unless an authorized admin override applies (`E2`/`F1`); resolved `Required` templates to the user's `IsPrimaryInstance = 1` across `AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage` and `UserRoutineDispatcherDriver` (`E1`); hid `"Set up My Chief of Staff"` / create CTAs in `MyAgentsSectionComponent` when the user lacks `CanCreate` on `MJ: AI Agents` (`E5`); and added unit tests covering `E1`–`E5` including derived-instance `ScopeCommonReach` / `SupportsAudience` enforcement and transitive ancestor `CanRun` validation.
+
+- dfc0449: Add strongly-typed 5-tier `LimitsConfigResolver` with approved backstop defaults (`DEFAULT_MJ_LIMITS_CONFIG` / `CODE_FALLBACK_LIMITS`) in `@memberjunction/core`, migrate `RunawayGuard`, `ResourceGuard`, and `Tuning` work bounds across AI/TaskGraph/Actions/Bridge/Server to resolve through `LimitsConfigResolver.Instance`, commit the categorized `docs/limits-sweep-inventory.csv` sweep inventory, and enforce the `limits-literals` CI/Standards guard.
+- 90174df: Implement Slice 2 queued graph execution (`Dispatch: 'Queue'`), recoverable terminal caller notifications across restarts, `Enqueue` step waiting-state coordination, and bounded 10,000-item `ForEach` + `Enqueue` WorkQueue fan-out with early-completion reconciliation, idempotent deduplication, and terminal failure propagation.
+- 4feb8ad: Fix peer metadata change notices being silently dropped or stalled during concurrent background saves on SQL Server, eliminate redundant timestamp reads and `set`-notice jitter, and run the cross-server invalidation CI rig with `MJ_SERVER_ROLE=api`.
+- 346795c: Tests only: widen tight wall-clock ceilings added since v6.3.0-edge.1 so the publish gate's single shared runner doesn't flake. Pathological-input checks get 2 s; the fast-judge early-return and microtask coalescing checks stay below the timings they prove (500 ms).
+- c63e493: Optimize search, agent, and prompt hot paths and harden multi-tenant RunView deduplication:
+  - Partition `ProviderBase` RunView in-flight deduplication and linger cache keys by `contextUser` per-request isolation state (`TenantContext`, `MagicLinkScope`, `APIKeyActingContext`, `APIKeyRowFilters`, `WidgetGuestContext`, `AnonymousVisitorID`, and `IsMagicLinkAnonymous` roles) via an overridable `ComputeRunViewDedupContextScope(contextUser)` hook, preserving case sensitivity for non-UUID tenant IDs and bypassing dedup when unknown nested `TenantContext` object shapes are present.
+  - Add bounded 30s user-scoped LRU metadata caches (`UserScopedCacheKey`, max 100 entries) for `MJ: Vector Indexes` and `MJ: Vector Databases` plus non-colocated `VectorDBBase` client pooling in `VectorSearchProvider` with entity-mutation invalidation.
+  - Add `SearchParams.SkipNameEnrichment` and skip tag hydration in `FullTextSearchProvider` when no tag filter is active.
+  - Combine lane `ExtraFilter` and reader RLS into a single-pass `RunView` in `SearchEngine` using a non-serializable Symbol verification stamp while preserving `VerifyOriginRecords`, FLS projection, and per-reader audience isolation.
+  - Resolve Agent and Skill principals from `AIEngine.Instance` before falling back to `GetEntityObject.Load` in `ScopedSearchAction`.
+  - Coalesce and background intermediate `ConversationDetail.Save()` progress writes in `AgentRunner.RunAgentInConversation`, pass explicit `inputArtifacts: []` from `BaseAgent` sub-agent delegation to skip redundant `hydrateConversationArtifacts` scans without affecting realtime delegation, and defer `'System Only'` internal payload-only artifact persistence off the reply critical path when no `artifactDirective` is present (leaving `artifactInfo` undefined so no client artifact notification fires for internal payload state).
+  - Inherit `modelSelectionPrompt.ModelSpecificResponseFormat` in `AIPromptRunner` when `effectiveResponseFormat` is active and the executing prompt leaves `ModelSpecificResponseFormat` unset.
+- 193d979: Implement SupportsAudience typed action/workflow seams, fail-closed server-side budget and audience controls, whole-workflow USD cost and wall-clock duration caps across agent trees and task graphs, and zero silent row-cap truncation enforcement on decision-critical RunView reads.
+- Updated dependencies [d635ec5]
+- Updated dependencies [8b8b278]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

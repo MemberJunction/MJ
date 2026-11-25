@@ -1,5 +1,68 @@
 # @memberjunction/open-app-engine
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 3bb566f: `mj app install` and `mj app upgrade` check an already-installed dependency against the dependencies of its installed version, read from the manifest recorded for it, instead of the `mj-app.json` on its default branch. An app whose default branch asks for an unreleased version of another app no longer blocks installs and upgrades that pass through it (#6877).
+- 5e78d71: Open Apps can declare `publicPages` in `mj-app.json`: pages the host serves before sign-in, at `/p/<slug>`. A page answers the addresses under its slug only with `"subPaths": true`. An entry with `"role": "error"` and a `scope` is an error page for a folder under `/p/` (empty scope: all of `/p/`). The manifest rejects reserved slugs such as `login`, `auth` and `admin`. `mj app install` and `mj app upgrade` write the entries to a top-level `publicPages` array in `mj.config.cjs` and fail when another installed app owns a slug; `mj app remove`, `enable` and `disable` remove or toggle them. `mj codegen manifest --open-app-client-bootstrap` now also writes the host's page list, `public-pages.generated.ts`, beside the class manifest, and warns when the host's `main.ts` does not call `StartExplorer()`. The new `mj explorer postbuild --dir <build folder>` is the host's `postbuild` script: it runs the service worker cache check and writes `public-pages/<slug>.html` for each page, with its title, link preview tags, a robots tag and a Content Security Policy that allows only the site's own scripts, and without the map library tags. It also writes `public-pages/_fallback.html`, with the same policy and a `noindex` robots tag, for the `/p/` addresses that have no page file. When the build folder has a `staticwebapp.config.json` (Azure Static Web Apps), it also adds a rewrite for each page and for the fallback file.
+- fdf5184: `mj app upgrade` now removes package pins that the new app version no longer places in a workspace. Before, the upgrade only added the new manifest's packages, so a package that moved between groups (bizapps-forms 1.0.0 moves `forms-actions` from `shared` to `server`) or was dropped kept its old pin, and a version that omits the `packages` block entirely skipped the package step and kept every pin, and the install put a second copy of the app's packages next to the new one. The previous version's packages come from the installed `ManifestJSON`; a package another installed app declares keeps its pin, and dependencies the old version did not declare are never touched. `AddAppPackages` takes the previous packages as the new `PreviousPackages` option and reports the removed pins in `Removed` (#6789). Integration check OLS11 (IT178) proves it against a live database and a real pnpm install.
+- d74bfbb: PostgreSQL fixes found by running the deterministic integration tier against PostgreSQL.
+  - **A commit that PostgreSQL rolled back no longer reports success.** Once a statement fails inside a PostgreSQL transaction, `COMMIT` does not error: the server rolls the transaction back and answers `ROLLBACK`. The PostgreSQL provider now checks that reply and throws `DoomedTransactionError`, so the caller learns its writes did not persist.
+  - **An aborted PostgreSQL transaction is recognized as doomed.** SQLSTATE `25P02` (`in_failed_sql_transaction`) now marks the ambient transaction doomed, as `25P01` and the SQL Server codes already did, so nested units and saves inside it refuse instead of failing with a raw driver error.
+  - **Saving a record whose nullable boolean is NULL no longer reports a false concurrency conflict.** The conflict check read the caller's `null` old value as `false` but compared it with the stored `NULL` as is, so on PostgreSQL (which stores NULL where SQL Server's column default stores 0) every edit of such a field was rejected as "Concurrent modification conflict". The stored side now gets the same rule.
+  - **`mj app install` and Open App migrations follow the PostgreSQL TLS and login settings.** The migration run and the metadata refresh after it now use the same `PG_SSL_*` and `PG_AUTH_MODE` resolution as `mj migrate`, through a new `SSL` option on the engine's database config. Before, both connected without TLS and failed against a server that requires it.
+  - Integration checks that assumed SQL Server: `ISNULL` in a filter, `[RecordChange]` bracket quoting, a constraint lookup that compared PostgreSQL's mixed-case names in lowercase, and the list-from-query fixture's bracket-quoted SQL, which the provider now quotes.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/record-cloning@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

@@ -1,5 +1,20 @@
 # @memberjunction/ng-ui-components
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 6e740d7: Expose Tier 3 `--mj-button-*` CSS custom properties across `mjButton` (`button.scss`), fix focus-ring and reduced-motion defects, and add `[FullWidth]` and `[Disabled]` inputs on `MJButtonDirective`:
+  - Every visual value in `button.scss` now reads `var(--mj-button-<...>, <stock default>)` across base, `sm`, `lg`, disabled, motion, `selected` (including `-selected-hover`), and all eight variants (`primary`, `secondary`, `outline`, `flat`, `danger`, `success`, `warning`, `icon`), unset on `:root` per `plans/ui-foundation/NAMING.md` so container-scoped overrides resolve on the button element.
+  - Wrap `:not(...)` exclusions on the base hover/active lift rules in `:where()`, lowering specificity from `(0,7,0)` to `(0,2,0)` so `:focus-visible` retains its focus ring when a focused button is hovered and downstream `.mj-btn:hover` rules no longer lose to a 7-class selector, while keeping variant hover/active rules at `(0,3,0)` via `:not(:disabled, [disabled], [aria-disabled="true"])` so existing emulated component overrides keep their hover state.
+  - Gate spatial `transform` lift/press behind `@media (prefers-reduced-motion: no-preference)` and add a `forced-colors: active` outline fallback on `:focus-visible`.
+  - Add `[FullWidth]` (`.mj-btn--full`) and `[Disabled]` (`booleanAttribute` inputs; sets `aria-disabled="true"`, `tabindex="-1"`, and pointer/keyboard suppression on `a[mjButton]`, forwarding cleanly on `<button>` without clobbering existing lowercase `[disabled]` bindings).
+  - Resolve button height into private `--_mj-button-height` (clamped with `max(44px, ...)` on `@media (pointer: coarse)` so compact desktop tokens never break the 44px touch target floor) so `Shape="circle"` stays square across sizes and pointer modes, and point `.mj-btn-group` outer corners at `--mj-button-radius`.
+
+- 66258b1: Implement UI Phase 0 Workstream 4 contract fixes: retoken the default MJ font family to Montserrat with a `--mj-font-family-display` seed/token (and Theme Studio heading-font control + seamless normalization for saved themes), bundle Font Awesome Free 6.7.2 from npm in `explorer-app`, remove hardcoded `Ubuntu`/`Inter` font stacks from Angular component stylesheets, and strip hardcoded hex fallbacks and the duplicated TS stylesheet from `card-grid`.
+
+  Note for standalone hosts (outside `explorer-app`) that render `<mj-card-grid>`: add `@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';` to your global stylesheet alongside the other `@memberjunction/ng-ui-components` global styles.
+
 ## 6.3.0-edge.1
 
 ## 6.3.0-edge.0

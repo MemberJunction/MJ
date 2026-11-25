@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { IndexByUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, LogError, RunView } from '@memberjunction/core';
-import { MJConversationEntity, MJMLModelEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJMLModelEntity, MJListEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { TrustVerdicts, AtRiskRules, ImportanceDisplay, JsonParse, type AtRiskRow, type OutcomeTitleText, type SemanticsCheckBinding, type TracedNumber, type TrustEvidence } from '@memberjunction/predictive-studio-core';
@@ -12,6 +12,7 @@ import { BusinessPredictions, type BusinessPredictionCard } from '../business-pr
 import { BuildPredictionsAgentContext, ResolvePSRecord, BuildPSNotFoundError } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
 import { BuildRecordIdFilter } from '../../shared/record-id-filter';
+import { CreateListsClient } from '../../shared/lists-client';
 import { BuildImprovePrompt, PS_CAPABILITY_CARDS, type PSCapabilityCard } from '../predictive-studio-copilot.view-models';
 
 const PREDICTIVE_STUDIO_APP_ID = '299C9272-8D38-40CA-85D4-0980F2C9FAD1';
@@ -698,7 +699,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   /**
    * P1 #4 — "Send to a list" as a one-click server action (no agent sentence to parse): create an MJ List
    * over the model's target entity and add the at-risk members (risk at least `AT_RISK_LIST_MIN_RISK_PCT`, highest
-   * first, at most {@link AtRiskListLimit}, in one transaction group) so a team can act on it immediately; the result
+   * first, at most {@link AtRiskListLimit}, in one server call) so a team can act on it immediately; the result
    * line says how many of the qualifying records were added. Does nothing for a list that is not a risk ranking
    * ({@link AtRiskListRanked}: its at-risk-list binding sorts by `none`).
    */
@@ -730,8 +731,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       }
       const qualifying = AtRiskRules.SelectAtRiskListMembers(this.AtRiskRows, this.AtRiskRows.length).length;
       const members = AtRiskRules.SelectAtRiskListMembers(this.AtRiskRows, PSPredictionsResourceComponent.AtRiskListLimit);
-      const { Added: added, FirstFailure: firstFailure } = await this.addListMembers(list.ID, members);
-      const failed = members.length - added;
+      const { Added: added, Failed: failed, FirstFailure: firstFailure } = await this.addListMembers(list.ID, members);
       this.ListResult =
         failed === 0
           ? `Added ${added} of ${qualifying} at-risk record${qualifying === 1 ? '' : 's'} (highest risk first) to “${list.Name}”.`
@@ -747,28 +747,19 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   }
 
   /**
-   * Adds the members to the list in one transaction group: one round trip, and all of them or none. A member whose save
-   * is refused before it joins the group is counted failed; when the group's submit fails, nothing was added.
+   * Adds the members to the list with one server call, as `Active` and in the given order. The first failure is the first per-record error, or the server
+   * message when nothing was added.
    */
-  private async addListMembers(listId: string, members: readonly AtRiskRow[]): Promise<{ Added: number; FirstFailure: string | null }> {
-    const p = this.ProviderToUse;
-    const user = p.CurrentUser || undefined;
-    const group = await p.CreateTransactionGroup();
-    const queued: MJListDetailEntity[] = [];
-    let firstFailure: string | null = null;
-    for (const [seq, r] of members.entries()) {
-      const ld = await p.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
-      ld.ListID = listId;
-      ld.RecordID = r.RecordID;
-      ld.Sequence = seq;
-      ld.Status = 'Active';
-      ld.TransactionGroup = group;
-      // In a transaction group Save() only queues the row: true once queued, false when refused before it joined.
-      if (await ld.Save()) queued.push(ld);
-      else firstFailure = firstFailure || ld.LatestResult?.CompleteMessage || 'unknown error';
-    }
-    if (queued.length === 0 || (await group.Submit())) return { Added: queued.length, FirstFailure: firstFailure };
-    return { Added: 0, FirstFailure: firstFailure || queued[0].LatestResult?.CompleteMessage || 'the batch failed and was rolled back' };
+  private async addListMembers(listId: string, members: readonly AtRiskRow[]): Promise<{ Added: number; Failed: number; FirstFailure: string | null }> {
+    const result = await CreateListsClient(this.ProviderToUse).AddRecordsToList(
+      listId,
+      members.map((m) => m.RecordID),
+      { Status: 'Active', SequenceFromOrder: true },
+    );
+    const added = result.Counts?.Added ?? 0;
+    if (result.Success) return { Added: added, Failed: 0, FirstFailure: null };
+    const failed = result.Counts?.Failed ?? members.length - added;
+    return { Added: added, Failed: failed, FirstFailure: result.Errors?.[0] ?? (result.Message || 'unknown error') };
   }
 
   /**

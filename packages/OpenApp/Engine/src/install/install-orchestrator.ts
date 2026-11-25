@@ -7,7 +7,7 @@
 import { join } from 'node:path';
 import { readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
+import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction, DependenciesFromHead } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest, ParseManifestDependencies } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
@@ -279,7 +279,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     // in leaf-first order. Skipped when this call is itself a pre-resolved member
     // of a parent's graph (the parent already resolved and installed our deps).
     if (!options._skipDependencyResolution) {
-      const depResult = await ResolveDependencyChain(manifest, context, appSource);
+      const depResult = await ResolveDependencyChain(manifest, context, appSource, options.DependenciesFromHead);
       if (!depResult.Success) {
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
       }
@@ -930,34 +930,32 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     }
 
     // Step 3: Check dependency compatibility
-    if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
-      const depResult = await ResolveDependencyChain(manifest, context, appSource);
-      if (!depResult.Success) {
+    const depResult = await ResolveDependencyChain(manifest, context, appSource, options.DependenciesFromHead);
+    if (!depResult.Success) {
+      return BuildFailureResult(
+        'Upgrade',
+        options.AppName,
+        targetVersion,
+        'Schema',
+        startTime,
+        depResult.ErrorMessage ?? 'Dependency check failed for upgrade',
+      );
+    }
+    // Install any new dependencies required by the upgraded version
+    if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
+      const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
+        AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+        Verbose: options.Verbose,
+      });
+      if (!installResult.Success) {
         return BuildFailureResult(
           'Upgrade',
           options.AppName,
           targetVersion,
           'Schema',
           startTime,
-          depResult.ErrorMessage ?? 'Dependency check failed for upgrade',
+          installResult.ErrorMessage ?? 'Failed to install new dependencies for upgrade',
         );
-      }
-      // Install any new dependencies required by the upgraded version
-      if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
-          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
-          Verbose: options.Verbose,
-        });
-        if (!installResult.Success) {
-          return BuildFailureResult(
-            'Upgrade',
-            options.AppName,
-            targetVersion,
-            'Schema',
-            startTime,
-            installResult.ErrorMessage ?? 'Failed to install new dependencies for upgrade',
-          );
-        }
       }
     }
 
@@ -1720,10 +1718,13 @@ interface InternalResult {
  * cross-repo cycle detection (A -> B -> A) possible before any install work begins. A
  * `file:` dependency is refused unless the app itself comes from a local folder. The
  * packages of every local dependency to install are checked against the workspace here,
- * before the first dependency installs.
+ * before the first dependency installs. The installed apps in `fromHead` are read from their
+ * default branches (a local app: its folder) first.
  */
-async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext, appSource: OpenAppSource): Promise<InternalResult> {
-  if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
+async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext, appSource: OpenAppSource, fromHead: DependenciesFromHead = []): Promise<InternalResult> {
+  // The names in `fromHead` are checked below, also for an app that has no dependencies to resolve.
+  const namesToCheck = fromHead === 'all' ? [] : fromHead;
+  if (Object.keys(manifest.dependencies ?? {}).length === 0 && namesToCheck.length === 0) {
     return { Success: true };
   }
   const localDependencyError = DescribeUntrustedLocalDependency(manifest.name, appSource.Locator, manifest.dependencies);
@@ -1749,12 +1750,19 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     if (app.Name === manifest.name) {
       continue;
     }
+    const appFromHead = fromHead === 'all' || fromHead.includes(app.Name);
     installedMap[app.Name] = {
       Version: app.Version,
       Repository: app.RepositoryURL,
       Subpath: app.Subpath,
-      Dependencies: ReadInstalledDependencies(app, context),
+      Dependencies: ReadInstalledDependencies(app, context, appFromHead),
+      FromHead: appFromHead,
     };
+  }
+
+  const unknown = namesToCheck.filter((name) => !installedMap[name]);
+  if (unknown.length > 0) {
+    return { Success: false, ErrorMessage: `Cannot read dependencies from the default branch of ${unknown.map((name) => `'${name}'`).join(', ')}: not another app that is installed (Active or Disabled)` };
   }
 
   // Zod infers object variant fields as optional; DependencyValue requires them.
@@ -1795,15 +1803,16 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 /**
  * What an installed app depends on, read from its persisted `ManifestJSON` (the documented source
  * of truth, saved in the same write as `Version`). Returns undefined, after a warning, when that
- * cannot be read: the graph then reads the installed version's manifest from the app's source. A
- * `file:` dependency the app may not declare is left out, after a warning.
+ * cannot be read: the graph then reads the manifest from the app's source, at the installed
+ * version or, with `fromHead`, on the default branch. A `file:` dependency the app may not declare
+ * is left out, after a warning.
  */
-function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorContext): Record<string, DependencyValue> | undefined {
+function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorContext, fromHead: boolean): Record<string, DependencyValue> | undefined {
   const recorded = ParseManifestDependencies(app.ManifestJSON);
   if (!recorded.Success || !recorded.Dependencies) {
     context.Callbacks?.OnWarn?.(
       'Dependencies',
-      `Could not read the recorded dependencies of installed app '${app.Name}' (${recorded.Errors?.join(', ')}). If this operation needs them, they are read from ${app.RepositoryURL} at version ${app.Version}.`,
+      `Could not read the recorded dependencies of installed app '${app.Name}' (${recorded.Errors?.join(', ')}). If this operation needs them, they are read from ${app.RepositoryURL} ${fromHead ? 'on its default branch' : `at version ${app.Version}`}.`,
     );
     return undefined;
   }

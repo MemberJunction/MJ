@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT193 - Messaging Adapters Security and Routing",
+    "Name": "IT194 - Messaging Adapters Security and Routing",
     "Description": "Verifies @memberjunction/messaging-adapters against live UserCache, AIEngineBase, and AIAgentPermissionHelper: fail-closed unmapped/inactive sender resolution, opt-in AllowFallbackUser, IsDirectlyDiscoverable filtering, AllowedAgentIDs allow-list enforcement, and live per-user CanView/CanRun RBAC on @mention and thread affinity.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

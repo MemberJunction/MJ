@@ -193,9 +193,19 @@ export interface MessagingAdapterSettings {
 
     /**
      * Microsoft App Tenant ID for single-tenant Bot Framework authentication.
-     * Required when the Azure Bot is configured as Single Tenant.
+     * Required when the Azure Bot is configured as Single Tenant, and also acts
+     * as the default trusted Entra ID tenant for Microsoft Teams identity mapping.
+     * Falls back to `MICROSOFT_APP_TENANT_ID` env var.
      */
     MicrosoftAppTenantId?: string;
+
+    /**
+     * Explicit list of Entra ID (Azure AD) tenant IDs trusted by the Microsoft Teams adapter.
+     * On `msteams` channels, activities (and resolved roster members) whose tenant ID is not
+     * equal to `MicrosoftAppTenantId` or present in `AllowedTenantIDs` are refused before
+     * email-to-user mapping — failing closed when neither is configured.
+     */
+    AllowedTenantIDs?: string[];
 
     /**
      * Microsoft App Type: 'SingleTenant', 'MultiTenant', or 'UserAssignedMsi'.

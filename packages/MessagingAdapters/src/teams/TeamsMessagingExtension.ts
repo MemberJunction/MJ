@@ -97,6 +97,9 @@ export class TeamsMessagingExtension extends BaseServerExtension {
             const appId = settings.MicrosoftAppId ?? process.env.MICROSOFT_APP_ID ?? '';
             const appPassword = settings.MicrosoftAppPassword ?? process.env.MICROSOFT_APP_PASSWORD ?? '';
             const appTenantId = settings.MicrosoftAppTenantId ?? process.env.MICROSOFT_APP_TENANT_ID ?? '';
+            if (appTenantId && !settings.MicrosoftAppTenantId) {
+                settings.MicrosoftAppTenantId = appTenantId;
+            }
             const appType = settings.MicrosoftAppType ?? process.env.MICROSOFT_APP_TYPE ?? (appTenantId ? 'SingleTenant' : 'MultiTenant');
 
             // Pre-flight: skip silently if the extension is enabled but not actually

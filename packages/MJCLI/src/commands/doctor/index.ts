@@ -9,6 +9,10 @@ import {
 } from '@memberjunction/installer';
 import { ResolveOutputFormat } from '@memberjunction/cli-core';
 import { CANONICAL_FORMAT_FLAG } from '../../lib/format-compat.js';
+import { GetSkywayConfig, GetValidatedConfig } from '../../config';
+import { VerifyDatabaseConnection } from '../../lib/db-preflight';
+import { RunPgPreflightForConfig } from '../../lib/pg-preflight/run-for-config';
+import { FormatPgPreflightReport, SummarizePgPreflightReport } from '../../lib/pg-preflight/render';
 
 export default class Doctor extends Command {
   static description = 'Diagnose a MemberJunction installation';
@@ -21,6 +25,7 @@ export default class Doctor extends Command {
     '<%= config.bin %> <%= command.id %> --verbose',
     '<%= config.bin %> <%= command.id %> --report',
     '<%= config.bin %> <%= command.id %> --report_extended',
+    '<%= config.bin %> <%= command.id %> --db',
   ];
 
   static flags = {
@@ -44,6 +49,11 @@ export default class Doctor extends Command {
     report_extended: Flags.boolean({
       description: 'Generate an extended report with config file snapshots and service startup log capture (~60s longer)',
     }),
+    db: Flags.boolean({
+      description:
+        'Check database readiness for `mj migrate` instead: the connection, and on PostgreSQL the server version, ' +
+        'group roles, extensions the pending migrations create, the login\'s privileges and TLS. Prints the SQL an administrator must run.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -52,6 +62,10 @@ export default class Doctor extends Command {
     const targetDir = path.resolve(flags.dir);
     const { format } = ResolveOutputFormat({ formatFlag: flags.format });
     const isJson = format === 'json';
+    if (flags.db) {
+      await this.runDatabaseReadiness(isJson);
+      return;
+    }
 
     if (!isJson) {
       this.log('');
@@ -131,6 +145,33 @@ export default class Doctor extends Command {
     if (result.HasFailures) {
       this.exit(1);
     }
+  }
+
+  /**
+   * `mj doctor --db`: the same readiness checks `mj migrate` runs before migrating, against the
+   * configured database, core schema and migration location. Exits 1 when a check fails.
+   */
+  private async runDatabaseReadiness(isJson: boolean): Promise<void> {
+    const config = GetValidatedConfig();
+    const connection = await VerifyDatabaseConnection(config);
+    if (!connection.Ok) {
+      const suggestion = connection.Suggestion ? `\n→ ${connection.Suggestion}` : '';
+      this.error(`Database connection failed: ${connection.Message ?? 'unknown error'}${suggestion}`, { exit: 1 });
+    }
+    if (config.dbPlatform !== 'postgresql') {
+      this.log(isJson ? JSON.stringify({ Platform: config.dbPlatform, Connection: 'ok' }) : `${this.formatStatusIcon('pass')} Database connection OK. Readiness checks beyond the connection cover PostgreSQL only.`);
+      return;
+    }
+    const report = await RunPgPreflightForConfig(config, await GetSkywayConfig(config));
+    if (isJson) {
+      this.log(JSON.stringify(report, null, 2));
+    } else {
+      this.log('');
+      for (const line of FormatPgPreflightReport(report)) this.log(line);
+      this.log('');
+      this.log(report.Passed ? chalk.green(`Ready for mj migrate (${SummarizePgPreflightReport(report)})`) : chalk.red(SummarizePgPreflightReport(report)));
+    }
+    if (!report.Passed) this.exit(1);
   }
 
   private formatStatusIcon(status: string): string {

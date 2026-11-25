@@ -105,12 +105,17 @@ vi.mock('@memberjunction/ai-agents', () => ({
 
 // ─── Test setup ──────────────────────────────────────────────────────────────
 
+const TRUSTED_TENANT_ID = '11111111-1111-1111-1111-111111111111';
+const FOREIGN_TENANT_ID = '22222222-2222-2222-2222-222222222222';
+const EXTRA_ALLOWED_TENANT_ID = '33333333-3333-3333-3333-333333333333';
+
 const defaultSettings: MessagingAdapterSettings = {
     DefaultAgentName: 'Sage',
     ContextUserEmail: 'bot@company.com',
     BotToken: '',
     MicrosoftAppId: 'ms-app-id-123',
     MicrosoftAppPassword: 'ms-app-password',
+    MicrosoftAppTenantId: TRUSTED_TENANT_ID,
     MaxThreadMessages: 50,
     ShowTypingIndicator: true,
     StreamingUpdateIntervalMs: 1000,
@@ -123,7 +128,7 @@ function createMockTurnContext(overrides: Record<string, unknown> = {}): Record<
             text: 'Hello Teams bot',
             from: { id: 'user-teams-1', name: 'Test User' },
             channelId: 'msteams',
-            conversation: { id: 'conv-1', conversationType: 'personal' },
+            conversation: { id: 'conv-1', conversationType: 'personal', tenantId: TRUSTED_TENANT_ID },
             timestamp: new Date().toISOString(),
             entities: [],
             ...overrides,
@@ -681,6 +686,99 @@ describe('TeamsAdapter', () => {
 
             const result = await lookup('user-err-1', msg);
             expect(result).toBeNull();
+        });
+    });
+
+    describe('tenant verification (fail closed)', () => {
+        it('refuses a foreign-tenant activity even when TeamsInfo.getMember email matches an active MJ user', async () => {
+            mocks.getMember.mockResolvedValue({ email: 'bot@company.com', userPrincipalName: 'bot@company.com' });
+            const adapter = await createInitializedAdapter({ AllowFallbackUser: true });
+            const foreignCtx = createMockTurnContext({
+                from: { id: 'attacker-1', name: 'Attacker', email: 'bot@company.com' },
+                conversation: { id: 'conv-foreign', conversationType: 'personal', tenantId: FOREIGN_TENANT_ID },
+            });
+
+            const msg = adapter.MapTeamsActivity(foreignCtx as never);
+            // MapTeamsActivity must not trust activity.from.email on a foreign tenant
+            expect(msg.SenderEmail).toBeUndefined();
+
+            // lookupUserEmail must fail closed without calling TeamsInfo.getMember
+            const lookup = (adapter as unknown as {
+                lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
+            }).lookupUserEmail.bind(adapter);
+            expect(await lookup('attacker-1', msg)).toBeNull();
+            expect(mocks.getMember).not.toHaveBeenCalled();
+
+            // HandleMessage must refuse the foreign-tenant activity (even with AllowFallbackUser: true)
+            await adapter.HandleMessage(msg);
+            const typingCall = mocks.sendActivity.mock.calls.find(
+                (call: Record<string, unknown>[]) => (call[0] as Record<string, unknown>).type === 'typing'
+            );
+            expect(typingCall).toBeUndefined();
+            expect(mocks.getMember).not.toHaveBeenCalled();
+            expect(mocks.sendActivity).toHaveBeenCalledTimes(1);
+            expect(JSON.stringify(mocks.sendActivity.mock.calls[0][0])).toContain('This bot is not authorized for your tenant.');
+        });
+
+        it('fails closed when neither MicrosoftAppTenantId nor AllowedTenantIDs is configured', async () => {
+            const origTenantEnv = process.env.MICROSOFT_APP_TENANT_ID;
+            delete process.env.MICROSOFT_APP_TENANT_ID;
+            try {
+                const adapter = await createInitializedAdapter({
+                    MicrosoftAppTenantId: undefined,
+                    AllowedTenantIDs: undefined,
+                });
+                const ctx = createMockTurnContext({
+                    conversation: { id: 'conv-1', conversationType: 'personal', tenantId: TRUSTED_TENANT_ID },
+                });
+                const msg = adapter.MapTeamsActivity(ctx as never);
+
+                const lookup = (adapter as unknown as {
+                    lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
+                }).lookupUserEmail.bind(adapter);
+                expect(await lookup('user-teams-1', msg)).toBeNull();
+                expect(mocks.getMember).not.toHaveBeenCalled();
+
+                await adapter.HandleMessage(msg);
+                expect(mocks.sendActivity).toHaveBeenCalledTimes(1);
+                expect(JSON.stringify(mocks.sendActivity.mock.calls[0][0])).toContain('This bot is not authorized for your tenant.');
+            } finally {
+                if (origTenantEnv !== undefined) {
+                    process.env.MICROSOFT_APP_TENANT_ID = origTenantEnv;
+                }
+            }
+        });
+
+        it('accepts channelData.tenant.id when present in AllowedTenantIDs and refuses foreign member.tenantId', async () => {
+            const adapter = await createInitializedAdapter({
+                AllowedTenantIDs: [EXTRA_ALLOWED_TENANT_ID],
+            });
+            const lookup = (adapter as unknown as {
+                lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
+            }).lookupUserEmail.bind(adapter);
+
+            // Allowed via channelData.tenant.id + AllowedTenantIDs
+            mocks.getMember.mockResolvedValueOnce({
+                email: 'partner@allowed.com',
+                tenantId: EXTRA_ALLOWED_TENANT_ID,
+            });
+            const allowedCtx = createMockTurnContext({
+                conversation: { id: 'conv-extra', conversationType: 'personal' },
+                channelData: { tenant: { id: EXTRA_ALLOWED_TENANT_ID.toUpperCase() } },
+            });
+            const allowedMsg = adapter.MapTeamsActivity(allowedCtx as never);
+            expect(await lookup('partner-1', allowedMsg)).toBe('partner@allowed.com');
+
+            // Federated/external guest whose member.tenantId is foreign inside a trusted conversation
+            mocks.getMember.mockResolvedValueOnce({
+                email: 'bot@company.com',
+                tenantId: FOREIGN_TENANT_ID,
+            });
+            const sharedCtx = createMockTurnContext({
+                conversation: { id: 'conv-shared', conversationType: 'channel', tenantId: TRUSTED_TENANT_ID },
+            });
+            const sharedMsg = adapter.MapTeamsActivity(sharedCtx as never);
+            expect(await lookup('external-guest-1', sharedMsg)).toBeNull();
         });
     });
 

@@ -490,7 +490,7 @@ export const AiCostChecks: NamedCheck[] = [
                 // correctly uncosted — ShouldCalculateCost declines it — so it must not be counted.
                 ExtraFilter:
                     'CompletedAt IS NOT NULL AND Cost IS NULL AND (' +
-                    'ISNULL(TokensUsed, 0) > 0 OR ISNULL(InputUnitsUsed, 0) > 0 OR ISNULL(OutputUnitsUsed, 0) > 0)',
+                    'COALESCE(TokensUsed, 0) > 0 OR COALESCE(InputUnitsUsed, 0) > 0 OR COALESCE(OutputUnitsUsed, 0) > 0)',
                 Fields: ['ID', 'ModelID', 'VendorID', 'UsageTypeID', 'TokensUsed', 'InputUnitsUsed', 'OutputUnitsUsed'],
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 500,

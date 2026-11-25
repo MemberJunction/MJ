@@ -2,7 +2,7 @@
  * agent-skills-live.checks.ts — the 'agent-skills-live' bundle (SL1–SL5), agents-extended-suite §9.1.
  *
  * LIVE-MODEL tier (ON by default; opt out with RUN_AGENT_TESTS=0). Covers the RUNTIME skill legs that
- * the data-layer ai-skills bundle (AS1–AS21) cannot reach:
+ * the data-layer ai-skills bundle (AS1–AS22) cannot reach:
  *   - requestedSkillIDs threading (RunAIAgentResolver → ExecuteAgentParams.requestedSkillIDs);
  *   - preActivateRequestedSkills (base-agent.ts:11449, root-only) → a real StepType='Skill' step whose
  *     AIAgentRunStep.Skills JSON records ActivationType='requested' provenance;

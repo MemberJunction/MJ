@@ -445,6 +445,36 @@ describe('SlackMessagingExtension', () => {
             expect(lines.some((l) => l.startsWith('Slack slash command:'))).toBe(true);
             expect(lines.some((l) => /[\r\n]/.test(l))).toBe(false);
         });
+
+        it('keeps slash-command ephemeral replies neutral without naming restricted agents before permission checks', async () => {
+            const app = createMockApp();
+            await extension.Initialize(app, createConfig({
+                SlashCommands: { '/secret': 'Secret Payroll Agent' },
+            }));
+            const handler = (extension as unknown as { handleSlashCommand: (req: Request, res: Response) => Promise<void> })
+                .handleSlashCommand.bind(extension);
+
+            // Unknown command must not enumerate configured agent names
+            const unknownRes = { json: vi.fn(), status: vi.fn().mockReturnThis(), send: vi.fn() } as unknown as Response;
+            await handler(
+                { body: { command: '/nope', text: '', user_id: 'U1', user_name: 'bob', channel_id: 'C1' } } as unknown as Request,
+                unknownRes
+            );
+            expect(unknownRes.json).toHaveBeenCalledWith({
+                response_type: 'ephemeral',
+                text: 'Unknown command `/nope`.',
+            });
+
+            // Known command ack must not reveal the target agent name before HandleMessage authorizes the sender
+            const knownRes = { json: vi.fn(), status: vi.fn().mockReturnThis(), send: vi.fn() } as unknown as Response;
+            await handler(
+                { body: { command: '/secret', text: 'run', user_id: 'U1', user_name: 'bob', channel_id: 'C1' } } as unknown as Request,
+                knownRes
+            );
+            const ackPayload = vi.mocked(knownRes.json).mock.calls[0][0] as { text: string };
+            expect(ackPayload.text).not.toContain('Secret Payroll Agent');
+            expect(ackPayload.text).toContain('/secret');
+        });
     });
 
     describe('processSlackEvent', () => {

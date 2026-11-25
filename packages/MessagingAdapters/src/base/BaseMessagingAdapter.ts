@@ -48,10 +48,11 @@ interface ConversationDetailHistoryRow {
     AgentID: string | null;
 }
 
-/** Stored thread-to-conversation mapping with sliding idle timestamp and last answering agent. */
+/** Stored thread-to-conversation mapping with sliding idle timestamp, timeout, and last answering agent. */
 interface ThreadConversationEntry {
     conversationId: string;
     lastActivityAt: number;
+    idleTimeoutMs: number;
     lastAgentId?: string;
 }
 
@@ -606,27 +607,28 @@ export abstract class BaseMessagingAdapter {
      * @param text - The raw message text.
      * @returns Array of matched agent names.
      */
-    protected matchAgentMentions(text: string): string[] {
+    protected matchAgentMentions(text: string, candidateAgents?: MJAIAgentEntityExtended[]): string[] {
         const cleanText = this.stripBotMention(text);
+        const agents = candidateAgents ?? this.availableAgents;
 
         // Pass 1: Exact full-name match with @ prefix (longest-first)
-        const exactMatched = this.matchExactAgentNames(cleanText);
+        const exactMatched = this.matchExactAgentNames(cleanText, agents);
         if (exactMatched.length > 0) return exactMatched;
 
         // Pass 2: First-word prefix match with @ prefix — "@Codesmith" matches "Codesmith Agent"
-        const prefixMatched = this.matchPrefixAgentNames(cleanText);
+        const prefixMatched = this.matchPrefixAgentNames(cleanText, agents);
         if (prefixMatched.length > 0) return prefixMatched;
 
         // Pass 3: Bare name match (no @ required) — handles "@Bot marketing agent help"
         // where the @ was consumed by the bot mention. Only matches at the start of
         // the message to avoid false positives in regular text.
-        const bareMatched = this.matchBareAgentNames(cleanText);
+        const bareMatched = this.matchBareAgentNames(cleanText, agents);
         if (bareMatched.length > 0) return bareMatched;
 
         // Pass 4: Agent name anywhere in the message — handles "write a blog for me marketing agent"
         // where the agent name is at the end or middle. Only matches full agent names
         // with word boundaries, longest-first, to avoid false positives.
-        const anywhereMatched = this.matchAnywhereAgentNames(cleanText);
+        const anywhereMatched = this.matchAnywhereAgentNames(cleanText, agents);
         if (anywhereMatched.length > 0) return anywhereMatched;
 
         return [];
@@ -635,9 +637,9 @@ export abstract class BaseMessagingAdapter {
     /**
      * Match @mentions against full agent names (exact match, case-insensitive).
      */
-    private matchExactAgentNames(text: string): string[] {
+    private matchExactAgentNames(text: string, agents: MJAIAgentEntityExtended[]): string[] {
         const matched: string[] = [];
-        for (const agent of this.availableAgents) {
+        for (const agent of agents) {
             const agentName = agent.Name;
             if (!agentName) continue;
             const pattern = new RegExp(`@${this.escapeRegex(agentName)}(?:\\b|$)`, 'i');
@@ -654,7 +656,7 @@ export abstract class BaseMessagingAdapter {
      * Extracts all `@word` tokens from the text and checks if any agent name starts with
      * that word. Only matches if exactly one agent matches to avoid ambiguity.
      */
-    private matchPrefixAgentNames(text: string): string[] {
+    private matchPrefixAgentNames(text: string, agents: MJAIAgentEntityExtended[]): string[] {
         // Extract @word tokens (single words after @)
         const mentionPattern = /@(\w+)/gi;
         const mentions: string[] = [];
@@ -665,7 +667,7 @@ export abstract class BaseMessagingAdapter {
 
         const matched: string[] = [];
         for (const mention of mentions) {
-            const candidates = this.availableAgents.filter(
+            const candidates = agents.filter(
                 a => a.Name != null && a.Name.toLowerCase().startsWith(mention.toLowerCase())
             );
             // Only accept unambiguous prefix matches
@@ -684,9 +686,9 @@ export abstract class BaseMessagingAdapter {
      * We check if the cleaned text starts with a known agent name (case-insensitive,
      * longest-first to avoid prefix collisions).
      */
-    private matchBareAgentNames(text: string): string[] {
+    private matchBareAgentNames(text: string, agents: MJAIAgentEntityExtended[]): string[] {
         const trimmed = text.trim().toLowerCase();
-        for (const agent of this.availableAgents) {
+        for (const agent of agents) {
             const agentName = agent.Name;
             if (!agentName) continue;
             const lowerName = agentName.toLowerCase();
@@ -709,10 +711,10 @@ export abstract class BaseMessagingAdapter {
      *
      * Only returns a match if exactly one agent is found, to avoid ambiguity.
      */
-    private matchAnywhereAgentNames(text: string): string[] {
+    private matchAnywhereAgentNames(text: string, agents: MJAIAgentEntityExtended[]): string[] {
         const lowerText = text.trim().toLowerCase();
         const matched: string[] = [];
-        for (const agent of this.availableAgents) {
+        for (const agent of agents) {
             const agentName = agent.Name;
             if (!agentName || agentName.length < 3) continue; // Skip very short names
             const lowerName = agentName.toLowerCase();
@@ -866,7 +868,36 @@ export abstract class BaseMessagingAdapter {
         threadHistory: IncomingMessage[] = [],
         rememberedAgentId?: string
     ): Promise<ResolveAgentResult> {
-        const mentionedNames = message.MentionedAgentNames ?? [];
+        const rawType = message.RawEvent?.['type'];
+        const isProgrammaticMention = rawType === 'slash_command' || rawType === 'form_submit';
+        let mentionedNames = message.MentionedAgentNames ?? [];
+
+        // Re-evaluate text mentions strictly against agents this user can view so:
+        // 1. Unviewable agents never match or leak their resolved names via any matcher pass.
+        // 2. Hidden agents never interfere with prefix/anywhere ambiguity counts for visible agents.
+        // Programmatic mentions (slash commands, form submits) and explicitly supplied unknown or
+        // non-discoverable names (not drawn from availableAgents) are preserved for authorization.
+        if (!isProgrammaticMention && message.Text) {
+            const allFromAvailable = mentionedNames.every(name =>
+                this.availableAgents.some(a => a.Name != null && a.Name.toLowerCase() === name.trim().toLowerCase())
+            );
+            if (mentionedNames.length === 0 || allFromAvailable) {
+                const viewableAgents = await this.getViewableAvailableAgents(contextUser);
+                const viewableMatches = this.matchAgentMentions(message.Text, viewableAgents);
+                if (viewableMatches.length > 0 || mentionedNames.length > 0) {
+                    // Only overwrite when text matching itself was what produced mentions (or could
+                    // recover a visible match previously suppressed by a hidden-agent ambiguity).
+                    const unfilteredTextMatches = this.matchAgentMentions(message.Text, this.availableAgents);
+                    const mentionsCameFromText =
+                        mentionedNames.length === 0 ||
+                        (mentionedNames.length === unfilteredTextMatches.length &&
+                            mentionedNames.every((m, idx) => m.toLowerCase() === unfilteredTextMatches[idx]?.toLowerCase()));
+                    if (mentionsCameFromText) {
+                        mentionedNames = viewableMatches;
+                    }
+                }
+            }
+        }
 
         if (mentionedNames.length === 0) {
             return this.resolveUnmentionedAgent(threadHistory, contextUser, rememberedAgentId);
@@ -940,38 +971,51 @@ export abstract class BaseMessagingAdapter {
      * allow-list checks without leaking the existence of agents `contextUser` cannot view.
      */
     private async resolveMentionedAgent(
-        message: IncomingMessage,
+        _message: IncomingMessage,
         mentionedNames: string[],
         threadHistory: IncomingMessage[],
         contextUser: UserInfo,
         rememberedAgentId?: string
     ): Promise<ResolveAgentResult> {
-        const firstAgentName = mentionedNames[0];
-        const lookupResult = await this.findAuthorizedAgentByName(firstAgentName, contextUser);
-
-        if (lookupResult.agent) {
-            const name = lookupResult.agent.Name ?? 'Agent';
-            const multiAgentNote = mentionedNames.length > 1
-                ? `_Note: Only one agent can be addressed per message. Routing to **${name}**. Other mentioned agents (${mentionedNames.slice(1).join(', ')}) were not invoked._`
-                : null;
-            return { agent: lookupResult.agent, multiAgentNote };
+        // Evaluate every mentioned name and drop entries that only matched an agent `contextUser`
+        // cannot view. Treating hidden agents identically to no match eliminates both full-name
+        // leaks (via prefix expansion or multi-mention notes) and existence oracles.
+        const evaluated: Array<{
+            requestedName: string;
+            lookup: { agent: MJAIAgentEntityExtended | null; refusalMessage?: string; matchedHiddenAgent?: boolean };
+        }> = [];
+        for (const name of mentionedNames) {
+            const lookup = await this.findAuthorizedAgentByName(name, contextUser);
+            if (lookup.matchedHiddenAgent) {
+                continue;
+            }
+            evaluated.push({ requestedName: name, lookup });
         }
 
-        if (lookupResult.refusalMessage) {
-            return { agent: null, multiAgentNote: null, refusalMessage: lookupResult.refusalMessage };
-        }
-
-        // Unviewable agent matched only by implicit bare/anywhere text scan (not an explicit @mention
-        // or slash command): silently ignore to avoid a side-channel leak of hidden agent names.
-        if (lookupResult.matchedHiddenAgent && !this.isExplicitMentionRequest(message, firstAgentName)) {
+        if (evaluated.length === 0) {
             return this.resolveUnmentionedAgent(threadHistory, contextUser, rememberedAgentId);
         }
 
-        // Agent not found (or unviewable explicit @mention) — fall back to default if permitted,
-        // listing ONLY agents this user may view and run.
+        const first = evaluated[0];
+        if (first.lookup.agent) {
+            const name = first.lookup.agent.Name ?? 'Agent';
+            const otherNames = evaluated.slice(1).map(e => e.lookup.agent?.Name ?? e.requestedName);
+            const multiAgentNote = otherNames.length > 0
+                ? `_Note: Only one agent can be addressed per message. Routing to **${name}**. Other mentioned agents (${otherNames.join(', ')}) were not invoked._`
+                : null;
+            return { agent: first.lookup.agent, multiAgentNote };
+        }
+
+        if (first.lookup.refusalMessage) {
+            return { agent: null, multiAgentNote: null, refusalMessage: first.lookup.refusalMessage };
+        }
+
+        // Genuinely unknown agent name — fall back to default if permitted, listing ONLY
+        // agents this user may view and run.
+        const firstAgentName = first.requestedName;
         const permittedAgents = await this.getPermittedAvailableAgents(contextUser);
         const agentNames = permittedAgents.map(a => a.Name ?? '').filter(Boolean).join(', ');
-        LogStatus(`Agent '${SanitizeForLog(firstAgentName)}' not found or not visible to user '${contextUser.ID}', checking default agent.`);
+        LogStatus(`Agent '${SanitizeForLog(firstAgentName)}' not found for user '${contextUser.ID}', checking default agent.`);
 
         const defaultName = this.defaultAgent!.Name ?? 'default agent';
         const helpNote = agentNames
@@ -1083,6 +1127,21 @@ export abstract class BaseMessagingAdapter {
         }
         // If text has no match at all, the caller supplied MentionedAgentNames programmatically (e.g. form/API).
         return !lowerText.includes(lowerName);
+    }
+
+    /**
+     * Filter `this.availableAgents` to agents `contextUser` is permitted to view (excluding
+     * unviewable or inactive agents, while keeping viewable agents that lack `CanRun` so an
+     * explicit `@mention` still yields a clear run-permission refusal).
+     */
+    private async getViewableAvailableAgents(contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
+        const viewable: MJAIAgentEntityExtended[] = [];
+        for (const agent of this.availableAgents) {
+            if ((await this.evaluateAgentAccess(agent, contextUser)) !== 'NotFound') {
+                viewable.push(agent);
+            }
+        }
+        return viewable;
     }
 
     /**
@@ -1199,8 +1258,9 @@ export abstract class BaseMessagingAdapter {
         const { result, progressMessageId, artifactId, conversationId } = agentResult;
 
         // Store the conversation ID + answering agent for future messages in this thread
+        const entryIdleTimeoutMs = this.resolveIdleTimeoutMs(message);
         if (conversationId) {
-            this.setThreadConversationId(threadKey, conversationId, agent.ID);
+            this.setThreadConversationId(threadKey, conversationId, agent.ID, entryIdleTimeoutMs);
         }
 
         // First-class Handoff step: follow the handoff chain via AgentRunner.FollowHandoffs
@@ -1343,7 +1403,7 @@ export abstract class BaseMessagingAdapter {
             } else {
                 const lastOutcome = outcomes[outcomes.length - 1];
                 if (conversationId && lastOutcome.targetAgent?.ID) {
-                    this.setThreadConversationId(threadKey, conversationId, lastOutcome.targetAgent.ID);
+                    this.setThreadConversationId(threadKey, conversationId, lastOutcome.targetAgent.ID, entryIdleTimeoutMs);
                 }
                 if (activeProgressMessageId != null && lastOutcome.agentResult) {
                     // A subsequent hop requested another handoff that was refused before OnHopStart ran;
@@ -1422,10 +1482,11 @@ export abstract class BaseMessagingAdapter {
 
         // When AllowedAgentIDs is configured, propagate it through ALL_AVAILABLE_AGENTS so
         // downstream BaseAgent decision discovery, task graph validation, and FollowHandoffs
-        // enforce the exact same host allow-list.
+        // enforce the exact same host allow-list, narrowed to agents this user can actually run
+        // (matching ConversationAgentRunner and keeping hidden agent descriptions out of data).
         const hostAllowedData = this.settings.AllowedAgentIDs !== undefined
             ? {
-                ALL_AVAILABLE_AGENTS: this.availableAgents.map(a => ({
+                ALL_AVAILABLE_AGENTS: (await this.getPermittedAvailableAgents(contextUser)).map(a => ({
                     ID: a.ID,
                     Name: a.Name,
                     Description: a.Description,
@@ -1686,15 +1747,18 @@ export abstract class BaseMessagingAdapter {
             return;
         }
 
-        // Resolve and validate the target agent via ResolveHandoffTarget (enforcing ParentID,
-        // IsDirectlyDiscoverable, AllowedAgentIDs, view/run permissions, cycle checks, and MAX_HANDOFF_HOPS).
+        // Resolve and validate the target agent via ResolveHandoffTarget (enforcing live Active
+        // status, ParentID, IsDirectlyDiscoverable, AllowedAgentIDs, view/run permissions, cycle
+        // checks, and MAX_HANDOFF_HOPS). Prefer live AIEngineBase.Instance.Agents so agents
+        // deactivated after Initialize() cannot be reached via fallback delegation.
+        const liveAgents = AIEngineBase.Instance.Agents;
         const resolution = await ResolveHandoffTarget({
             AgentName: targetAgentName,
             SourceAgentID: sourceAgent.ID,
             HandoffChain: currentChain,
             HostAllowedIDs: this.settings.AllowedAgentIDs,
             ContextUser: contextUser,
-            Agents: this.availableAgents,
+            Agents: liveAgents && liveAgents.length > 0 ? liveAgents : this.availableAgents,
         });
         if (resolution.Refusal || !resolution.Target) {
             LogError(
@@ -1736,7 +1800,12 @@ export abstract class BaseMessagingAdapter {
             );
             const resolvedTargetConvoId = targetAgentResult.conversationId ?? conversationId;
             if (resolvedTargetConvoId && targetAgent.ID) {
-                this.setThreadConversationId(this.getThreadKey(message), resolvedTargetConvoId, targetAgent.ID);
+                this.setThreadConversationId(
+                    this.getThreadKey(message),
+                    resolvedTargetConvoId,
+                    targetAgent.ID,
+                    this.resolveIdleTimeoutMs(message)
+                );
             }
 
             // Check if the target agent also delegates
@@ -2233,11 +2302,17 @@ export abstract class BaseMessagingAdapter {
      * Store or refresh a conversation ID (and optional answering agent ID) in the thread map,
      * updating the sliding `lastActivityAt` timestamp and running max-size/TTL eviction.
      */
-    private setThreadConversationId(threadKey: string, conversationId: string, lastAgentId?: string): void {
+    private setThreadConversationId(
+        threadKey: string,
+        conversationId: string,
+        lastAgentId?: string,
+        idleTimeoutMs?: number
+    ): void {
         const prev = this.threadConversationMap.get(threadKey);
         this.threadConversationMap.set(threadKey, {
             conversationId,
             lastActivityAt: Date.now(),
+            idleTimeoutMs: idleTimeoutMs ?? prev?.idleTimeoutMs ?? BaseMessagingAdapter.THREAD_MAP_TTL_MS,
             lastAgentId: lastAgentId ?? prev?.lastAgentId,
         });
         this.evictExpiredThreadEntries();
@@ -2250,11 +2325,13 @@ export abstract class BaseMessagingAdapter {
 
     /**
      * Evict expired and overflow entries from the thread conversation map.
+     * Respects each entry's own configured `idleTimeoutMs` so configured rolling timeouts
+     * above 24 hours are not prematurely evicted.
      */
     private evictExpiredThreadEntries(): void {
         const now = Date.now();
         for (const [key, entry] of this.threadConversationMap) {
-            if (now - entry.lastActivityAt > BaseMessagingAdapter.THREAD_MAP_TTL_MS) {
+            if (now - entry.lastActivityAt > entry.idleTimeoutMs) {
                 this.threadConversationMap.delete(key);
             }
         }

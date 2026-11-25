@@ -180,6 +180,12 @@ describe('SQLServerDialect.SplitStatements (quote- and comment-aware)', () => {
         const stmt2 = `ALTER TABLE "hubspot"."Deal's ""Row""" ADD [Amount] DECIMAL(18,2) NULL;`;
         expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
     });
+
+    it('keeps doubled-]] bracket identifiers intact when ;+newline and GO appear after ]]', () => {
+        const stmt1 = `ALTER TABLE [a]];\nGO\nb] ADD x INT;`;
+        const stmt2 = `SELECT 2;`;
+        expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
+    });
 });
 
 describe('SQLDialect.SplitBatches', () => {
@@ -195,6 +201,32 @@ describe('SQLDialect.SplitBatches', () => {
             `GOTO done;`;
         const script = `${batch1}\n  go  \r\n${batch2}\nGO`;
         expect(ss.SplitBatches(script)).toEqual([batch1, batch2]);
+    });
+
+    it('splits on a GO line immediately after a comment or multi-line string while ignoring inline GO after a block comment', () => {
+        const ss = new SQLServerDialect();
+        expect(ss.SplitBatches('SELECT 1\n-- end of block\nGO\nSELECT 2')).toEqual([
+            'SELECT 1\n-- end of block',
+            'SELECT 2',
+        ]);
+        expect(ss.SplitBatches("SELECT 'a\nb'\nGO\nSELECT 2")).toEqual([
+            "SELECT 'a\nb'",
+            'SELECT 2',
+        ]);
+        expect(ss.SplitBatches('SELECT 1\n/* end of block */\nGO\nSELECT 2')).toEqual([
+            'SELECT 1\n/* end of block */',
+            'SELECT 2',
+        ]);
+        expect(ss.SplitBatches('/* comment */ GO\nSELECT 2')).toEqual([
+            '/* comment */ GO\nSELECT 2',
+        ]);
+    });
+
+    it('keeps doubled-]] bracket identifiers intact when GO appears after ]]', () => {
+        const ss = new SQLServerDialect();
+        const batch1 = `ALTER TABLE [a]];\nGO\nb] ADD x INT;`;
+        const batch2 = `SELECT 2;`;
+        expect(ss.SplitBatches(`${batch1}\nGO\n${batch2}`)).toEqual([batch1, batch2]);
     });
 
     it('never splits PostgreSQL scripts on standalone GO lines (no batch separator)', () => {

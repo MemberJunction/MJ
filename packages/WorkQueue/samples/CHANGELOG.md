@@ -1,5 +1,23 @@
 # @memberjunction/work-queue-samples
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 0507590: Add Azure Service Bus WorkQueue transport (`@memberjunction/work-queue-azure`), `@memberjunction/work-queue-engine/azure` driver factory and SQL filter manifest enricher, `ServiceBusMessagePump`, `@memberjunction/work-queue-azure/functions` Azure Functions serverless adapter, full Azure samples suite, and opt-in live-cloud integration tests.
+- 8626f1c: Add Google Cloud Pub/Sub WorkQueue transport (`@memberjunction/work-queue-gcp`), `@memberjunction/work-queue-engine/gcp` driver factory and Pub/Sub filter manifest enricher, `PubSubMessagePump`, `@memberjunction/work-queue-gcp/cloudrun` Cloud Run HTTP Push adapter, full GCP samples suite, and opt-in live-cloud integration tests.
+- Updated dependencies [0507590]
+- Updated dependencies [8626f1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [9920c0b]
+  - @memberjunction/work-queue-azure@6.3.0-edge.2
+  - @memberjunction/work-queue-engine@6.3.0-edge.2
+  - @memberjunction/work-queue-gcp@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/work-queue-core@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

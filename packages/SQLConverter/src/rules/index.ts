@@ -43,8 +43,17 @@ export type { DialectCombination } from './RuleRegistry.js';
 export { GetTSQLToPostgresRules, getTSQLToPostgresRules, GetRulesForDialects, getRulesForDialects } from './TSQLToPostgresRules.js';
 
 // Dialect header builders
-export { PostgreSQLHeaderBuilder, GetHeaderBuilder, getHeaderBuilder, RegisterHeaderBuilder, registerHeaderBuilder } from './DialectHeaderBuilder.js';
-export type { DialectHeaderBuilder } from './DialectHeaderBuilder.js';
+export {
+  PostgreSQLHeaderBuilder,
+  GetHeaderBuilder,
+  getHeaderBuilder,
+  RegisterHeaderBuilder,
+  registerHeaderBuilder,
+  PG_EXTENSION_REQUIREMENTS,
+  RequiredPgExtensions,
+  BuildPgExtensionStatements,
+} from './DialectHeaderBuilder.js';
+export type { DialectHeaderBuilder, PgExtensionRequirement } from './DialectHeaderBuilder.js';
 
 // Centralized type resolution
 export { ResolveType, resolveType, ResolveInlineType, resolveInlineType, ParseTypeString, parseTypeString, MJ_OVERRIDES } from './TypeResolver.js';

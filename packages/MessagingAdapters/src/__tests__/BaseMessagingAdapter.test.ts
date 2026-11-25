@@ -252,6 +252,10 @@ class TestAdapter extends BaseMessagingAdapter {
         return this.resolveContextUser(msg);
     }
 
+    public testMatchAgentMentions(text: string): string[] {
+        return this.matchAgentMentions(text);
+    }
+
     public async testResolveAgent(
         msg: IncomingMessage,
         threadHistory: IncomingMessage[] = [],
@@ -1962,16 +1966,15 @@ describe('BaseMessagingAdapter', () => {
             const secAdapter = new TestAdapter(defaultSettings);
             await secAdapter.Initialize();
 
-            // Explicit @Secret Audit by Alice: indistinguishable from NotFound, and Secret Audit is omitted from available list
+            // Explicit @Secret Audit, prefix @sec, bare, anywhere, and forged form_submit by Alice:
+            // ALL are indistinguishable from no match (no note, never leaks Secret Audit).
             const explicitRes = await secAdapter.testResolveAgent(
                 createMessage({ Text: '@Secret Audit report', MentionedAgentNames: ['Secret Audit'] }),
                 [],
                 alice
             );
             expect(explicitRes.agent?.Name).toBe('Default Agent');
-            expect(explicitRes.multiAgentNote).toContain("couldn't find");
-            expect(explicitRes.multiAgentNote).toContain('Public Helper');
-            expect(explicitRes.multiAgentNote).not.toContain('Available agents: Default Agent, Public Helper, Secret Audit');
+            expect(explicitRes.multiAgentNote).toBeNull();
 
             // Implicit prose match (no '@') by Alice: silently ignored without a "couldn't find" side-channel note
             const proseRes = await secAdapter.testResolveAgent(
@@ -1981,6 +1984,180 @@ describe('BaseMessagingAdapter', () => {
             );
             expect(proseRes.agent?.Name).toBe('Default Agent');
             expect(proseRes.multiAgentNote).toBeNull();
+
+            // Genuinely nonexistent agent passed programmatically lists only viewable+runnable agents (never Secret Audit)
+            const unknownRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: 'hello', MentionedAgentNames: ['NonexistentBot'] }),
+                [],
+                alice
+            );
+            expect(unknownRes.agent?.Name).toBe('Default Agent');
+            expect(unknownRes.multiAgentNote).toContain("couldn't find");
+            expect(unknownRes.multiAgentNote).toContain('Public Helper');
+            expect(unknownRes.multiAgentNote).not.toContain('Secret Audit');
+        });
+
+        it('never leaks hidden agent names across all 4 matcher passes, multi-mention notes, ambiguity counts, or forged form submits', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'pub-id', Name: 'Public Helper', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'zebra-vis-id', Name: 'Zebra Public', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'zebra-hid-id', Name: 'Zebra Payroll Audit', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'onyx-hid-id', Name: 'Onyx Secret Vault', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'zebra-hid-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+                { AgentID: 'onyx-hid-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Pass 1 (exact @Full Name), Pass 2 (prefix @onyx), Pass 3 (bare start), Pass 4 (anywhere):
+            // Simulate MapTeamsActivity/MapSlackEvent pre-populating MentionedAgentNames with unfiltered matchAgentMentions.
+            for (const text of [
+                '@Onyx Secret Vault hi',
+                '@onyx hi',
+                'Onyx Secret Vault hi',
+                'please run onyx secret vault now',
+                '@nosuchthing hi',
+            ]) {
+                const preMatched = secAdapter.testMatchAgentMentions(text);
+                const res = await secAdapter.testResolveAgent(
+                    createMessage({ Text: text, MentionedAgentNames: preMatched }),
+                    [],
+                    alice
+                );
+                expect(res.agent?.Name).toBe('Default Agent');
+                expect(res.multiAgentNote).toBeNull();
+            }
+
+            // Multi-mention (@pub @onyx and @onyx @pub): never prints hidden agent name in "Other mentioned agents"
+            for (const text of ['@pub @onyx help', '@onyx @pub help']) {
+                const preMatched = secAdapter.testMatchAgentMentions(text);
+                const res = await secAdapter.testResolveAgent(
+                    createMessage({ Text: text, MentionedAgentNames: preMatched }),
+                    [],
+                    alice
+                );
+                expect(res.agent?.Name).toBe('Public Helper');
+                expect(res.multiAgentNote).toBeNull();
+            }
+
+            // Prefix ambiguity: hidden "Zebra Payroll Audit" must NOT break "@zeb" for visible "Zebra Public"
+            const ambigPreMatched = secAdapter.testMatchAgentMentions('@zeb help');
+            expect(ambigPreMatched).toEqual([]); // unfiltered matcher saw both Zebra agents as ambiguous
+            const ambigRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@zeb help', MentionedAgentNames: ambigPreMatched }),
+                [],
+                alice
+            );
+            expect(ambigRes.agent?.Name).toBe('Zebra Public');
+            expect(ambigRes.multiAgentNote).toBeNull();
+
+            // Forged Teams form_submit carrying a hidden mj_agent name: indistinguishable from no match
+            const formRes = await secAdapter.testResolveAgent(
+                createMessage({
+                    Text: '@{"_mode":"form","action":"formSubmit","fields":[]}',
+                    MentionedAgentNames: ['Onyx Secret Vault'],
+                    RawEvent: { type: 'form_submit' },
+                }),
+                [],
+                alice
+            );
+            expect(formRes.agent?.Name).toBe('Default Agent');
+            expect(formRes.multiAgentNote).toBeNull();
+        });
+
+        it('refuses agents deactivated after Initialize() and fails closed when GetEffectivePermissions throws', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'live-id', Name: 'Live Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            seedCatalog(catalog, []);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Confirm Live Agent works while Active
+            const before = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Live Agent hi', MentionedAgentNames: ['Live Agent'] }),
+                [],
+                alice
+            );
+            expect(before.agent?.Name).toBe('Live Agent');
+
+            // Deactivate Live Agent in live AIEngineBase cache AFTER Initialize()
+            aiEngineState.agents[1]['Status'] = 'Disabled';
+
+            const afterMention = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Live Agent hi', MentionedAgentNames: ['Live Agent'] }),
+                [],
+                alice
+            );
+            expect(afterMention.agent?.Name).toBe('Default Agent');
+            expect(afterMention.multiAgentNote).toBeNull();
+
+            // Restore Active, then simulate GetEffectivePermissions throwing -> must fail closed (NotFound, never Allowed)
+            aiEngineState.agents[1]['Status'] = 'Active';
+            const { AIAgentPermissionHelper } = await import('@memberjunction/ai-engine-base');
+            const origImpl = vi.mocked(AIAgentPermissionHelper.GetEffectivePermissions).getMockImplementation();
+            vi.mocked(AIAgentPermissionHelper.GetEffectivePermissions).mockRejectedValueOnce(new Error('DB transient failure'));
+            try {
+                const verdict = await (secAdapter as unknown as {
+                    evaluateAgentAccess(agent: unknown, user: unknown): Promise<string>;
+                }).evaluateAgentAccess(aiEngineState.agents[1], alice);
+                expect(verdict).toBe('NotFound');
+            } finally {
+                if (origImpl) {
+                    vi.mocked(AIAgentPermissionHelper.GetEffectivePermissions).mockImplementation(origImpl);
+                }
+            }
+        });
+
+        it('narrows ALL_AVAILABLE_AGENTS in ExecuteAgentParams.data to agents the calling user can view and run', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Description: 'Public default', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'secret-id', Name: 'Secret Agent', Description: 'Admin-only secret description', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'secret-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const capturedData: Array<Record<string, unknown> | undefined> = [];
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(async (params: { data?: Record<string, unknown> }) => {
+                    capturedData.push(params.data);
+                    return {
+                        agentResult: { success: true, agentRun: { Message: 'Ok.', Steps: [] } },
+                        conversationId: 'convo-narrow-1',
+                        userMessageDetailId: 'u-1',
+                        agentResponseDetailId: 'a-1',
+                        artifactInfo: undefined,
+                    };
+                }),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const scopedAdapter = new TestAdapter({
+                ...defaultSettings,
+                AllowedAgentIDs: ['default-id', 'secret-id'],
+            });
+            await scopedAdapter.Initialize();
+
+            await scopedAdapter.HandleMessage(createMessage({
+                IsDirectMessage: true,
+                SenderEmail: alice.Email,
+                Text: 'hello',
+            }));
+
+            expect(capturedData).toHaveLength(1);
+            const available = capturedData[0]?.['ALL_AVAILABLE_AGENTS'] as Array<{ ID: string; Name: string }>;
+            expect(available.map(a => a.ID)).toEqual(['default-id']);
+            expect(JSON.stringify(available)).not.toContain('Secret Agent');
         });
 
         it('enforces permissions on thread affinity when another user replies to an admin thread', async () => {
@@ -2076,7 +2253,7 @@ describe('BaseMessagingAdapter', () => {
                 alice
             );
             expect(aliceRes.agent?.Name).toBe('Default Agent');
-            expect(aliceRes.multiAgentNote).toContain("couldn't find");
+            expect(aliceRes.multiAgentNote).toBeNull();
         });
 
         it('stays silent when multi-bot thread gate declines an unmapped sender in another bot thread', async () => {
@@ -2361,6 +2538,53 @@ describe('BaseMessagingAdapter', () => {
                 await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-4', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 4' }));
 
                 expect(observedConvoIds).toEqual([undefined, 'idle-convo-1', 'idle-convo-1', undefined]);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('does not prematurely evict a rolling conversation whose ConversationIdleTimeoutMs exceeds 24 hours', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2026-11-24T12:00:00.000Z'));
+
+                const { AgentRunner } = await import('@memberjunction/ai-agents');
+                const observedConvoIds: Array<string | undefined> = [];
+                let createdCount = 0;
+
+                vi.mocked(AgentRunner).mockImplementation(() => ({
+                    RunAgentInConversation: vi.fn().mockImplementation(
+                        async (_params: Record<string, unknown>, opts: { conversationId?: string }) => {
+                            observedConvoIds.push(opts.conversationId);
+                            return {
+                                agentResult: { success: true, agentRun: { Message: 'Ok.', Steps: [] } },
+                                conversationId: opts.conversationId ?? `long-convo-${++createdCount}`,
+                                userMessageDetailId: 'u-det',
+                                agentResponseDetailId: 'a-det',
+                                artifactInfo: undefined,
+                            };
+                        }
+                    ),
+                    FollowHandoffs: vi.fn().mockResolvedValue([]),
+                }) as ReturnType<typeof vi.fn>);
+
+                const longAdapter = new DBHistoryTestAdapter({
+                    ...defaultSettings,
+                    ConversationIdleTimeoutMs: 48 * 60 * 60 * 1000, // 48 hours
+                });
+                await longAdapter.Initialize();
+
+                // T=0: creates long-convo-1 for thread A
+                await longAdapter.HandleMessage(createMessage({ MessageID: 'l-1', ThreadID: 'dm-long-a', IsDirectMessage: true, Text: 'turn 1' }));
+
+                // T=30h (> 24h default TTL, < 48h configured timeout): another thread triggers evictExpiredThreadEntries()
+                vi.advanceTimersByTime(30 * 60 * 60 * 1000);
+                await longAdapter.HandleMessage(createMessage({ MessageID: 'l-b1', ThreadID: 'dm-long-b', IsDirectMessage: true, Text: 'other chat' }));
+
+                // Thread A must still reuse long-convo-1 (not evicted at 24h)
+                await longAdapter.HandleMessage(createMessage({ MessageID: 'l-2', ThreadID: 'dm-long-a', IsDirectMessage: true, Text: 'turn 2' }));
+
+                expect(observedConvoIds).toEqual([undefined, undefined, 'long-convo-1']);
             } finally {
                 vi.useRealTimers();
             }

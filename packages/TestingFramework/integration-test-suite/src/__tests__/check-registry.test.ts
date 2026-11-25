@@ -40,6 +40,7 @@ import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.che
 import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
 import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
+import { ListsMembersClientChecks } from '../checks/lists-members-client.checks';
 import { ListRefreshChecks } from '../checks/list-refresh.checks';
 import { ListFromQueryChecks } from '../checks/list-from-query.checks';
 import { OpenAppLocalSourceChecks } from '../checks/open-app-local-source.checks';
@@ -219,7 +220,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['scheduled-jobs', ScheduledJobsChecks, 2],
         ['field-rules-bulk-update', FieldRulesBulkUpdateChecks, 3],
         ['remote-operations', RemoteOperationsChecks, 7],
-        ['ai-skills', AiSkillsChecks, 21],
+        ['ai-skills', AiSkillsChecks, 22],
         ['api-keys', ApiKeysChecks, 3],
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
@@ -234,7 +235,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
-        ['lists', ListsChecks, 3],
+        ['lists', ListsChecks, 4],
+        ['lists-members-client', ListsMembersClientChecks, 1], // LC1 add, move, remove over the API (IT193)
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
@@ -242,7 +244,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT188)
         ['comms-v2-send', CommsV2SendChecks, 7], // CV2S1-CV2S7 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider, run-chunk completion, delivery guarantee on a stuck log, Admin Block uniqueness and append-only audit log on SQL Server (IT189)
         ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT190)
-        ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT191)
+        ['comms-v2-wire', CommsV2WireChecks, 6], // CV2W1-CV2W6 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT191)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
@@ -351,7 +353,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 5], // ISP1-ISP5 live SQL native typing, key capping, Soft PK/FK/Organic Key auto-indexing, and ADD COLUMN descriptions (IT165)
         ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
-        ['messaging-adapters', MessagingAdaptersChecks, 6], // MA1-MA6 UserCache singleton integrity, fail-closed sender resolution, IsDirectlyDiscoverable, AllowedAgentIDs, and live RBAC on @mention & thread affinity (IT193)
+        ['messaging-adapters', MessagingAdaptersChecks, 6], // MA1-MA6 UserCache singleton integrity, fail-closed sender resolution, IsDirectlyDiscoverable, AllowedAgentIDs, and live RBAC on @mention & thread affinity (IT194)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -428,7 +430,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
-        'ai-skills': 21,
+        'ai-skills': 22,
         'ai-vendor-effort': 2,
         'alternate-base-views': 6,
         'api-keys': 3,
@@ -454,10 +456,10 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'comms-v2-compliance': 4,
         'comms-v2-core': 3,
         'comms-v2-send': 7,
-        'comms-v2-wire': 5,
+        'comms-v2-wire': 6,
         'concurrency-conflict-client': 5,
         'concurrent': 2,
-        'content-pipeline': 21,
+        'content-pipeline': 22,
         'content-vectorization': 10,
         'conversation-authorship-client': 13,
         'conversation-delete-client': 3,
@@ -498,7 +500,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'layered-base-views': 6,
         'list-from-query': 5,
         'list-refresh': 7,
-        'lists': 3,
+        'lists': 4,
+        'lists-members-client': 1,
         'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
@@ -618,7 +621,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-prediction-serving': 8,
         'ps-truth-datasets': 68,
         'query-api-lifecycle': 12,
-        'query-approvals': 5,
+        'query-approvals': 8,
         'query-extraction': 15,
         'query-metadata-client': 3,
         'query-refresh': 16,
@@ -714,7 +717,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(292);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(293);
     });
 });
 
@@ -812,6 +815,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-pipeline.CP20',
         'content-pipeline.CP21',
         'content-pipeline.CP22',
+        'content-pipeline.CP23',
         'content-pipeline.CP3',
         'content-pipeline.CP4',
         'content-pipeline.CP5',

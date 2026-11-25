@@ -35,6 +35,10 @@
           }
         }
       ]
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:48.477Z",
+      "checksum": "b22b1364aeddfd144b6b04bf50feb4b465f963dbbf805fe36873fe9bde44c4e8"
     }
   },
   {
@@ -73,6 +77,10 @@
           }
         }
       ]
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:48.602Z",
+      "checksum": "28f56af702a8db5aeeeac67327923872ded72f92fcb8c485e6ca9243e0707b0b"
     }
   },
   {
@@ -111,6 +119,10 @@
           }
         }
       ]
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:48.723Z",
+      "checksum": "6a8bef6d3c6accc499c27031946c177bb9ad60c21915b85eff5676db0f80d173"
     }
   },
   {
@@ -165,6 +177,10 @@
           }
         }
       ]
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:48.877Z",
+      "checksum": "a85e4077138f1efa0a2e36e1a99831f397e49d4b56377a7dd771858245b64509"
     }
   },
   {
@@ -203,6 +219,10 @@
           }
         }
       ]
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:48.990Z",
+      "checksum": "ac9b8f16ae2c72eaa7432450ee8b9245b194599c11ca8e39aa7747013a933a3f"
     }
   }
 ]
