@@ -1,5 +1,105 @@
 # @memberjunction/integration-test-suite
 
+## 6.2.3
+
+### Patch Changes
+
+- 5cbf19b: API-key scope, application and key-binding rows are re-read from the database every `scopeCacheTTLMs` (default 60 s), so a scope removed or an application deactivated by another process stops granting within one TTL instead of at restart. A `BaseEngine` expiry tick now reads the database instead of the server cache, a failed tick re-arms the timer instead of ending the refresh, a failed first load still starts it, setting the interval to 0 stops it, and expiry timers no longer keep a Node process alive.
+- 66406eb: Archive runs process every eligible record in one run, one batch in memory at a time.
+  - `ArchiveProcessor` loads records a page of `BatchSize` at a time, ordered by primary key, until a page comes back empty. A run used to read one query capped at the entity's `UserViewMaxRows` (1,000 by default) and stop. Each page starts after the last key of the previous page, copied when the page loads: single-key entities use `AfterKey`; composite-key entities seek with `(k1 > v1) OR (k1 = v1 AND k2 > v2) ...` and must have only string or number key columns (otherwise the entity is refused before any record is read). Paging never depends on what the driver did to a record, so deleted, stripped, skipped and failed records are each loaded once.
+  - `BaseArchiveDriver.BuildEligibilityFilter(context)` (new, default null) lets a driver add a SQL filter matching the records its `ShouldArchiveRecord` accepts. `DefaultArchiveDriver` returns an OR of `[field] IS NOT NULL` (nullable) and, in StripFields mode, `[field] LIKE '_%'` (NOT NULL string) over `SkipIfAllNullFields` or the active fields, so records a StripFields run already cleared are no longer loaded or counted as skipped on every later run. `FilterExpression` still applies.
+  - In StripFields mode `DefaultArchiveDriver.ShouldArchiveRecord` treats an empty string in a NOT NULL column as no value, since that is what StripFields writes there; such records (for example stripped Record Changes) were archived again on every run. Other modes are unchanged.
+  - The configured `DateField` must be a field of the entity and is written in square brackets.
+  - New deterministic integration test IT182 (`archive-paging`).
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [66406eb]
+- Updated dependencies [488f8e1]
+- Updated dependencies [2882b4c]
+- Updated dependencies [f7368de]
+- Updated dependencies [20791da]
+  - @memberjunction/api-keys@6.2.3
+  - @memberjunction/core@6.2.3
+  - @memberjunction/archiving-engine@6.2.3
+  - @memberjunction/open-app-engine@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/postgresql-dataprovider@6.2.3
+  - @memberjunction/sqlserver-dataprovider@6.2.3
+  - @memberjunction/work-queue-server@6.2.3
+  - @memberjunction/ai-agent-harness@6.2.3
+  - @memberjunction/ai-agents@6.2.3
+  - @memberjunction/ai-engine-base@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/aiengine@6.2.3
+  - @memberjunction/feature-pipelines@6.2.3
+  - @memberjunction/feature-pipelines-engine@6.2.3
+  - @memberjunction/predictive-studio@6.2.3
+  - @memberjunction/predictive-studio-truth-suite@6.2.3
+  - @memberjunction/ai-prompts@6.2.3
+  - @memberjunction/ai-bridge-base@6.2.3
+  - @memberjunction/ai-bridge-server@6.2.3
+  - @memberjunction/ai-vectordb@6.2.3
+  - @memberjunction/ai-vector-dupe@6.2.3
+  - @memberjunction/video-studio@6.2.3
+  - @memberjunction/actions-base@6.2.3
+  - @memberjunction/actions@6.2.3
+  - @memberjunction/auth-providers@6.2.3
+  - @memberjunction/codegen-lib@6.2.3
+  - @memberjunction/communication-types@6.2.3
+  - @memberjunction/communication-engine@6.2.3
+  - @memberjunction/notifications@6.2.3
+  - @memberjunction/communication-ms-graph@6.2.3
+  - @memberjunction/communication-expo-push@6.2.3
+  - @memberjunction/communication-gmail@6.2.3
+  - @memberjunction/communication-sendgrid@6.2.3
+  - @memberjunction/communication-twilio@6.2.3
+  - @memberjunction/content-autotagging@6.2.3
+  - @memberjunction/content-pipeline-base@6.2.3
+  - @memberjunction/content-pipeline@6.2.3
+  - @memberjunction/conversations-runtime@6.2.3
+  - @memberjunction/credentials@6.2.3
+  - @memberjunction/diagnostics-server@6.2.3
+  - @memberjunction/encryption@6.2.3
+  - @memberjunction/external-data-sources@6.2.3
+  - @memberjunction/graphql-dataprovider@6.2.3
+  - @memberjunction/livekit-room-server@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/core-entities-server@6.2.3
+  - @memberjunction/queue@6.2.3
+  - @memberjunction/storage@6.2.3
+  - @memberjunction/metadata-sync@6.2.3
+  - @memberjunction/query-processor@6.2.3
+  - @memberjunction/record-set-processor-base@6.2.3
+  - @memberjunction/record-set-processor@6.2.3
+  - @memberjunction/redis-provider@6.2.3
+  - @memberjunction/rubrics-base@6.2.3
+  - @memberjunction/rubrics@6.2.3
+  - @memberjunction/scheduling-engine@6.2.3
+  - @memberjunction/search-engine@6.2.3
+  - @memberjunction/server-bootstrap-lite@6.2.3
+  - @memberjunction/task-graph@6.2.3
+  - @memberjunction/telephony-adapters@6.2.3
+  - @memberjunction/templates-base-types@6.2.3
+  - @memberjunction/templates@6.2.3
+  - @memberjunction/testing-engine@6.2.3
+  - @memberjunction/testing-engine-base@6.2.3
+  - @memberjunction/testing-integration@6.2.3
+  - @memberjunction/unit-testing@6.2.3
+  - @memberjunction/work-queue-engine@6.2.3
+  - @memberjunction/ai-anthropic@6.2.3
+  - @memberjunction/ai-gemini@6.2.3
+  - @memberjunction/ai-openai@6.2.3
+  - @memberjunction/ai-openrouter@6.2.3
+  - @memberjunction/ai@6.2.3
+  - @memberjunction/predictive-studio-core@6.2.3
+  - @memberjunction/ai-cloudflare@6.2.3
+  - @memberjunction/ai-inception@6.2.3
+  - @memberjunction/ai-systemone@6.2.3
+  - @memberjunction/video-studio-core@6.2.3
+  - @memberjunction/diagnostics@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/work-queue-core@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

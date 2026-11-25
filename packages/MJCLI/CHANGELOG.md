@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/cli
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [2882b4c]
+- Updated dependencies [f7368de]
+- Updated dependencies [20791da]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/open-app-engine@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/sqlserver-dataprovider@6.2.3
+  - @memberjunction/ai-cli@6.2.3
+  - @memberjunction/aiengine@6.2.3
+  - @memberjunction/codegen-lib@6.2.3
+  - @memberjunction/db-auto-doc@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/core-entities-server@6.2.3
+  - @memberjunction/metadata-sync@6.2.3
+  - @memberjunction/query-gen@6.2.3
+  - @memberjunction/record-cloning@6.2.3
+  - @memberjunction/redis-provider@6.2.3
+  - @memberjunction/server-bootstrap-lite@6.2.3
+  - @memberjunction/testing-cli@6.2.3
+  - @memberjunction/work-queue-engine@6.2.3
+  - @memberjunction/cli-core@6.2.3
+  - @memberjunction/config@6.2.3
+  - @memberjunction/diagnostics@6.2.3
+  - @memberjunction/dynamic-packages@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/installer@6.2.3
+  - @memberjunction/sql-converter@6.2.3
+  - @memberjunction/sqlglot-ts@6.2.3
+  - @memberjunction/standards@6.2.3
+  - @memberjunction/work-queue-core@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

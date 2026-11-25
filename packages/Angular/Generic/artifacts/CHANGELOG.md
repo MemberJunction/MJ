@@ -1,5 +1,32 @@
 # @memberjunction/ng-artifacts
 
+## 6.2.3
+
+### Patch Changes
+
+- 6e8d459: Fix the artifact viewer failing with "No artifact version found" for users whose read of MJ: Artifact Versions is row-level-security filtered. The viewer now filters collection and conversation-link rows by the version IDs it already holds instead of a subquery on the Artifact Versions base view, which the API refuses for those users.
+- Updated dependencies [5cbf19b]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/ng-base-forms@6.2.3
+  - @memberjunction/ng-base-types@6.2.3
+  - @memberjunction/ng-code-editor@6.2.3
+  - @memberjunction/ng-export-service@6.2.3
+  - @memberjunction/ng-media-player@6.2.3
+  - @memberjunction/ng-notifications@6.2.3
+  - @memberjunction/ng-query-viewer@6.2.3
+  - @memberjunction/ng-react@6.2.3
+  - @memberjunction/ng-shared-generic@6.2.3
+  - @memberjunction/ng-trees@6.2.3
+  - @memberjunction/graphql-dataprovider@6.2.3
+  - @memberjunction/interactive-component-types@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/ng-markdown@6.2.3
+  - @memberjunction/ng-ui-components@6.2.3
+  - @memberjunction/ai-diagrams@6.2.3
+  - @memberjunction/video-studio-core@6.2.3
+  - @memberjunction/ng-pagination@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

@@ -1,5 +1,24 @@
 # @memberjunction/diagnostics-server
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/server@6.2.3
+  - @memberjunction/actions-base@6.2.3
+  - @memberjunction/actions@6.2.3
+  - @memberjunction/credentials@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/storage@6.2.3
+  - @memberjunction/scheduling-engine@6.2.3
+  - @memberjunction/diagnostics@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/scheduling-base-types@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @memberjunction/ng-livekit-room
 
+## 6.2.3
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@6.2.3
+- @memberjunction/ng-realtime-media@6.2.3
+- @memberjunction/ng-ui-components@6.2.3
+- @memberjunction/ai-realtime-client@6.2.3
+- @memberjunction/livekit-room-core@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

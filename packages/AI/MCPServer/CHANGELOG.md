@@ -1,5 +1,36 @@
 # @memberjunction/ai-mcp-server
 
+## 6.2.3
+
+### Patch Changes
+
+- 619d7e2: Add `mcpServerSettings.trustProxy` and `mcpServerSettings.auth.proxy.rateLimit` (`windowMs`, `limit`). `trustProxy` is applied as Express's `trust proxy` setting. Behind CloudFront or a load balancer, the OAuth proxy's per-IP rate limit, which also covers `/mcp`, now counts each client by its own address instead of making everyone share one 60-per-minute limit, and the limit can be sized (#6497).
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+- Updated dependencies [20791da]
+  - @memberjunction/api-keys@6.2.3
+  - @memberjunction/core@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/sqlserver-dataprovider@6.2.3
+  - @memberjunction/server@6.2.3
+  - @memberjunction/ai-agent-manager@6.2.3
+  - @memberjunction/ai-agents@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/aiengine@6.2.3
+  - @memberjunction/ai-prompts@6.2.3
+  - @memberjunction/actions-base@6.2.3
+  - @memberjunction/actions@6.2.3
+  - @memberjunction/auth-providers@6.2.3
+  - @memberjunction/credentials@6.2.3
+  - @memberjunction/encryption@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/server-bootstrap-lite@6.2.3
+  - @memberjunction/ai-provider-bundle@6.2.3
+  - @memberjunction/ai@6.2.3
+  - @memberjunction/config@6.2.3
+  - @memberjunction/dynamic-packages@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

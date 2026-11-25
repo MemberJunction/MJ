@@ -1,5 +1,23 @@
 # @memberjunction/ng-realtime-widget
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [53c0ffe]
+- Updated dependencies [1a73c82]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/ng-conversations@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/ng-realtime-channels@6.2.3
+  - @memberjunction/ng-shared-generic@6.2.3
+  - @memberjunction/graphql-dataprovider@6.2.3
+  - @memberjunction/realtime-runtime@6.2.3
+  - @memberjunction/ng-ui-components@6.2.3
+  - @memberjunction/ai@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

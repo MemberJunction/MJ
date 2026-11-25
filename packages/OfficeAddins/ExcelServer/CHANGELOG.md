@@ -1,5 +1,18 @@
 # @memberjunction/excel-addin-server
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+  - @memberjunction/api-keys@6.2.3
+  - @memberjunction/api-keys-base@6.2.3
+  - @memberjunction/core@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/excel-addin@6.2.3
+  - @memberjunction/server-extensions-core@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

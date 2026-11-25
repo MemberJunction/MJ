@@ -1,5 +1,18 @@
 # @memberjunction/archiving-action
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [66406eb]
+- Updated dependencies [488f8e1]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/archiving-engine@6.2.3
+  - @memberjunction/actions-base@6.2.3
+  - @memberjunction/actions@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

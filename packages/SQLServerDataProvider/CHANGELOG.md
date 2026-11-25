@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 6.2.3
+
+### Patch Changes
+
+- f7368de: Loading a record (including its relationships), checking record dependencies, and the row-level security check on a record now refuse a value for a numeric primary key that is not a number, with a clear error, instead of failing later in the database. Cleaning up geocodes after a delete and loading relationships now handle a key containing a quote, and numeric SET values in SQL Server save statements are validated as decimal/scientific number literals.
+- 20791da: A save or query refused by a `THROW` or `RAISERROR` in a trigger or procedure (SQL Server error number 50000 and up) now reports only that message to the caller. Before, the provider appended the whole executed statement and its parameters to every SQL error, so a business refusal such as "this line cannot be changed once its order is confirmed" reached the user with the SQL behind it. The statement and parameters are still written to the server log. Engine errors (numbers below 50000) keep the full detail as before.
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/aiengine@6.2.3
+  - @memberjunction/ai-vectordb@6.2.3
+  - @memberjunction/ai-vector-dupe@6.2.3
+  - @memberjunction/actions-base@6.2.3
+  - @memberjunction/actions@6.2.3
+  - @memberjunction/encryption@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/queue@6.2.3
+  - @memberjunction/query-processor@6.2.3
+  - @memberjunction/ai-provider-bundle@6.2.3
+  - @memberjunction/ai@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/sql-dialect@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

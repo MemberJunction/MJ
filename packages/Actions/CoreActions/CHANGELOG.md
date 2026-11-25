@@ -1,5 +1,57 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+- Updated dependencies [20791da]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/sqlserver-dataprovider@6.2.3
+  - @memberjunction/ai-agent-manager@6.2.3
+  - @memberjunction/ai-agents@6.2.3
+  - @memberjunction/ai-engine-base@6.2.3
+  - @memberjunction/clustering-engine@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/aiengine@6.2.3
+  - @memberjunction/ai-mcp-client@6.2.3
+  - @memberjunction/ai-prompts@6.2.3
+  - @memberjunction/ai-vector-sync@6.2.3
+  - @memberjunction/actions-base@6.2.3
+  - @memberjunction/code-execution@6.2.3
+  - @memberjunction/actions@6.2.3
+  - @memberjunction/communication-types@6.2.3
+  - @memberjunction/communication-engine@6.2.3
+  - @memberjunction/content-autotagging@6.2.3
+  - @memberjunction/credentials@6.2.3
+  - @memberjunction/external-change-detection@6.2.3
+  - @memberjunction/integration-engine@6.2.3
+  - @memberjunction/interactive-component-types@6.2.3
+  - @memberjunction/lists@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/core-entities-server@6.2.3
+  - @memberjunction/storage@6.2.3
+  - @memberjunction/react-linter@6.2.3
+  - @memberjunction/record-cloning-base@6.2.3
+  - @memberjunction/record-cloning@6.2.3
+  - @memberjunction/record-set-processor-base@6.2.3
+  - @memberjunction/record-set-processor@6.2.3
+  - @memberjunction/search-engine@6.2.3
+  - @memberjunction/web-search-engine@6.2.3
+  - @memberjunction/esignature@6.2.3
+  - @memberjunction/geo-core@6.2.3
+  - @memberjunction/ai@6.2.3
+  - @memberjunction/ai-diagrams@6.2.3
+  - @memberjunction/ai-betty-bot@6.2.3
+  - @memberjunction/document-parsing@6.2.3
+  - @memberjunction/lists-base@6.2.3
+  - @memberjunction/export-engine@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/network-utils@6.2.3
+  - @memberjunction/sql-dialect@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

@@ -1,5 +1,29 @@
 # @memberjunction/content-pipeline
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/aiengine@6.2.3
+  - @memberjunction/tag-engine@6.2.3
+  - @memberjunction/ai-prompts@6.2.3
+  - @memberjunction/ai-segmentation@6.2.3
+  - @memberjunction/ai-vectors@6.2.3
+  - @memberjunction/ai-vectordb@6.2.3
+  - @memberjunction/content-autotagging@6.2.3
+  - @memberjunction/content-pipeline-base@6.2.3
+  - @memberjunction/credentials@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/storage@6.2.3
+  - @memberjunction/record-set-processor-base@6.2.3
+  - @memberjunction/record-set-processor@6.2.3
+  - @memberjunction/document-parsing@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/network-utils@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

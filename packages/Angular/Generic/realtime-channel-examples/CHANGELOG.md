@@ -1,5 +1,15 @@
 # @memberjunction/ng-realtime-channel-examples
 
+## 6.2.3
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@6.2.3
+- @memberjunction/ng-realtime-channels@6.2.3
+- @memberjunction/realtime-runtime@6.2.3
+- @memberjunction/ai@6.2.3
+- @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

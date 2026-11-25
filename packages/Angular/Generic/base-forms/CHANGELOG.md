@@ -1,5 +1,29 @@
 # @memberjunction/ng-base-forms
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/ng-base-types@6.2.3
+  - @memberjunction/ng-code-editor@6.2.3
+  - @memberjunction/ng-entity-viewer@6.2.3
+  - @memberjunction/ng-file-storage@6.2.3
+  - @memberjunction/ng-list-management@6.2.3
+  - @memberjunction/ng-notifications@6.2.3
+  - @memberjunction/ng-react@6.2.3
+  - @memberjunction/ng-record-changes@6.2.3
+  - @memberjunction/ng-record-clone@6.2.3
+  - @memberjunction/ng-record-tags@6.2.3
+  - @memberjunction/ng-shared-generic@6.2.3
+  - @memberjunction/graphql-dataprovider@6.2.3
+  - @memberjunction/interactive-component-types@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/ng-markdown@6.2.3
+  - @memberjunction/ng-ui-components@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

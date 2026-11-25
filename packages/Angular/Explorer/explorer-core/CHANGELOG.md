@@ -1,5 +1,69 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [53c0ffe]
+- Updated dependencies [6e8d459]
+- Updated dependencies [1a73c82]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/ng-conversations@6.2.3
+  - @memberjunction/ng-artifacts@6.2.3
+  - @memberjunction/ng-dashboards@6.2.3
+  - @memberjunction/ai-engine-base@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/ng-auth-services@6.2.3
+  - @memberjunction/ng-base-application@6.2.3
+  - @memberjunction/ng-entity-form-dialog@6.2.3
+  - @memberjunction/ng-entity-permissions@6.2.3
+  - @memberjunction/ng-explorer-settings@6.2.3
+  - @memberjunction/ng-list-detail-grid@6.2.3
+  - @memberjunction/ng-shared@6.2.3
+  - @memberjunction/ng-ai-test-harness@6.2.3
+  - @memberjunction/ng-base-forms@6.2.3
+  - @memberjunction/ng-base-types@6.2.3
+  - @memberjunction/ng-composer@6.2.3
+  - @memberjunction/ng-container-directives@6.2.3
+  - @memberjunction/ng-conversation-offers@6.2.3
+  - @memberjunction/ng-dashboard-viewer@6.2.3
+  - @memberjunction/ng-diagnostics@6.2.3
+  - @memberjunction/ng-entity-viewer@6.2.3
+  - @memberjunction/ng-export-service@6.2.3
+  - @memberjunction/ng-feedback@6.2.3
+  - @memberjunction/ng-file-storage@6.2.3
+  - @memberjunction/ng-list-management@6.2.3
+  - @memberjunction/ng-mj-livekit-room@6.2.3
+  - @memberjunction/ng-notifications@6.2.3
+  - @memberjunction/ng-query-viewer@6.2.3
+  - @memberjunction/ng-react@6.2.3
+  - @memberjunction/ng-record-changes@6.2.3
+  - @memberjunction/ng-record-selector@6.2.3
+  - @memberjunction/ng-record-tags@6.2.3
+  - @memberjunction/ng-resource-permissions@6.2.3
+  - @memberjunction/ng-search@6.2.3
+  - @memberjunction/ng-shared-generic@6.2.3
+  - @memberjunction/ng-user-avatar@6.2.3
+  - @memberjunction/communication-types@6.2.3
+  - @memberjunction/entity-communications-client@6.2.3
+  - @memberjunction/conversations-runtime@6.2.3
+  - @memberjunction/graphql-dataprovider@6.2.3
+  - @memberjunction/interactive-component-types@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/excel-addin@6.2.3
+  - @memberjunction/templates-base-types@6.2.3
+  - @memberjunction/ng-generic-dialog@6.2.3
+  - @memberjunction/ng-markdown@6.2.3
+  - @memberjunction/ng-realtime-media@6.2.3
+  - @memberjunction/ng-ui-components@6.2.3
+  - @memberjunction/ng-word-cloud@6.2.3
+  - @memberjunction/ng-pagination@6.2.3
+  - @memberjunction/lists-base@6.2.3
+  - @memberjunction/export-engine@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/theme-engine@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

@@ -1,5 +1,21 @@
 # @memberjunction/notifications
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+- Updated dependencies [20791da]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/sqlserver-dataprovider@6.2.3
+  - @memberjunction/communication-types@6.2.3
+  - @memberjunction/communication-engine@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/templates@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

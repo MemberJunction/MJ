@@ -1,5 +1,17 @@
 # @memberjunction/open-app-engine
 
+## 6.2.3
+
+### Patch Changes
+
+- 2882b4c: `mj app install` and `mj app upgrade` check an already-installed dependency against the dependencies of its installed version, read from the manifest recorded for it, instead of the `mj-app.json` on its default branch. An app whose default branch asks for an unreleased version of another app no longer blocks installs and upgrades that pass through it (#6877).
+- Updated dependencies [5cbf19b]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/record-cloning@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/sql-dialect@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

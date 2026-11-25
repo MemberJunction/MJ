@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+- Updated dependencies [20791da]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/sqlserver-dataprovider@6.2.3
+  - @memberjunction/encryption@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/sql-dialect@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

@@ -1,5 +1,48 @@
 # @memberjunction/ng-conversations
 
+## 6.2.3
+
+### Patch Changes
+
+- 53c0ffe: `ConversationAgentService` reads an agent's output artifact links from `MJ: Conversation Detail Artifacts` with its own `RunView` instead of a subquery over `[__mj].[vwConversationDetailArtifacts]`. MJ 6.2's `ClientClauseScreen` refused that subquery for any user whose read of conversation detail artifacts is row-filtered, so their follow-up turns lost the agent's previous output (`FindLatestAgentOutputVersion`, `FindAgentArtifacts` and the continuity intent check returned nothing). The intent check now calls the public `FindAgentArtifacts`, so a subclass override applies, and `FindArtifactVersionById` escapes its ID.
+- 1a73c82: Realtime call: the compact dock's closed "•••" sheet is now inert, so its invisible buttons (Type, Details, Camera, Share) are no longer reachable with Tab or by screen readers, and a click where they sit no longer lands on a hidden control (#6545).
+- Updated dependencies [5cbf19b]
+- Updated dependencies [6e8d459]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/ng-artifacts@6.2.3
+  - @memberjunction/ai-agent-client@6.2.3
+  - @memberjunction/ai-engine-base@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/ng-testing@6.2.3
+  - @memberjunction/ng-base-forms@6.2.3
+  - @memberjunction/ng-base-types@6.2.3
+  - @memberjunction/ng-code-editor@6.2.3
+  - @memberjunction/ng-composer@6.2.3
+  - @memberjunction/ng-container-directives@6.2.3
+  - @memberjunction/ng-media-player@6.2.3
+  - @memberjunction/ng-notifications@6.2.3
+  - @memberjunction/ng-react@6.2.3
+  - @memberjunction/ng-realtime-channels@6.2.3
+  - @memberjunction/ng-resource-permissions@6.2.3
+  - @memberjunction/ng-shared-generic@6.2.3
+  - @memberjunction/ng-task-graph-editor@6.2.3
+  - @memberjunction/ng-tasks@6.2.3
+  - @memberjunction/ng-user-routines@6.2.3
+  - @memberjunction/conversations-runtime@6.2.3
+  - @memberjunction/graphql-dataprovider@6.2.3
+  - @memberjunction/interactive-component-types@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/realtime-runtime@6.2.3
+  - @memberjunction/ng-agent-client@6.2.3
+  - @memberjunction/ng-forms@6.2.3
+  - @memberjunction/ng-whiteboard@6.2.3
+  - @memberjunction/ng-markdown@6.2.3
+  - @memberjunction/ng-realtime-media@6.2.3
+  - @memberjunction/ng-ui-components@6.2.3
+  - @memberjunction/ai@6.2.3
+  - @memberjunction/ai-realtime-client@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

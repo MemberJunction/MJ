@@ -1,5 +1,31 @@
 # @memberjunction/ai-agents
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/ai-engine-base@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/aiengine@6.2.3
+  - @memberjunction/ai-prompts@6.2.3
+  - @memberjunction/ai-reranker@6.2.3
+  - @memberjunction/ai-vector-dupe@6.2.3
+  - @memberjunction/ai-vector-sync@6.2.3
+  - @memberjunction/actions-base@6.2.3
+  - @memberjunction/actions@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/storage@6.2.3
+  - @memberjunction/rubrics@6.2.3
+  - @memberjunction/search-engine@6.2.3
+  - @memberjunction/templates@6.2.3
+  - @memberjunction/context-crush@6.2.3
+  - @memberjunction/ai@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

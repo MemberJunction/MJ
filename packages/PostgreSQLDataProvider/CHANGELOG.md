@@ -1,5 +1,19 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.2.3
+
+### Patch Changes
+
+- f7368de: Loading a record (including its relationships), checking record dependencies, and the row-level security check on a record now refuse a value for a numeric primary key that is not a number, with a clear error, instead of failing later in the database. Cleaning up geocodes after a delete and loading relationships now handle a key containing a quote, and numeric SET values in SQL Server save statements are validated as decimal/scientific number literals.
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/ai-vectordb@6.2.3
+  - @memberjunction/query-processor@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/sql-dialect@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

@@ -1,5 +1,22 @@
 # @memberjunction/ng-mj-livekit-room
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/ng-base-types@6.2.3
+  - @memberjunction/ng-media-player@6.2.3
+  - @memberjunction/graphql-dataprovider@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/ng-livekit-room@6.2.3
+  - @memberjunction/ng-realtime-media@6.2.3
+  - @memberjunction/ng-ui-components@6.2.3
+  - @memberjunction/ai-realtime-client@6.2.3
+  - @memberjunction/livekit-room-core@6.2.3
+  - @memberjunction/global@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

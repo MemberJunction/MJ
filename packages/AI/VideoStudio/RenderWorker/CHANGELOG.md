@@ -1,5 +1,12 @@
 # @memberjunction/video-studio-render-worker
 
+## 6.2.3
+
+### Patch Changes
+
+- e62bd66: Find installed `@hyperframes/*` packages through Node's lookup folders, so the render worker health check no longer reports them missing on npm (hoisted) installs.
+  - @memberjunction/video-studio-core@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

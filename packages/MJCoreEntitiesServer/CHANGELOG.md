@@ -1,5 +1,42 @@
 # @memberjunction/core-entities-server
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+- Updated dependencies [f7368de]
+- Updated dependencies [20791da]
+  - @memberjunction/core@6.2.3
+  - @memberjunction/generic-database-provider@6.2.3
+  - @memberjunction/sqlserver-dataprovider@6.2.3
+  - @memberjunction/ai-engine-base@6.2.3
+  - @memberjunction/ai-core-plus@6.2.3
+  - @memberjunction/aiengine@6.2.3
+  - @memberjunction/feature-pipelines@6.2.3
+  - @memberjunction/tag-engine@6.2.3
+  - @memberjunction/ai-prompts@6.2.3
+  - @memberjunction/ai-vectordb@6.2.3
+  - @memberjunction/ai-vector-dupe@6.2.3
+  - @memberjunction/ai-vectors-memory@6.2.3
+  - @memberjunction/actions-base@6.2.3
+  - @memberjunction/communication-types@6.2.3
+  - @memberjunction/communication-engine@6.2.3
+  - @memberjunction/doc-utils@6.2.3
+  - @memberjunction/integration-engine@6.2.3
+  - @memberjunction/integration-pk-classifier@6.2.3
+  - @memberjunction/core-entities@6.2.3
+  - @memberjunction/rubrics-base@6.2.3
+  - @memberjunction/scheduling-engine@6.2.3
+  - @memberjunction/templates@6.2.3
+  - @memberjunction/ai-provider-bundle@6.2.3
+  - @memberjunction/ai@6.2.3
+  - @memberjunction/predictive-studio-core@6.2.3
+  - @memberjunction/global@6.2.3
+  - @memberjunction/sql-converter@6.2.3
+  - @memberjunction/sql-dialect@6.2.3
+  - @memberjunction/sql-parser@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes

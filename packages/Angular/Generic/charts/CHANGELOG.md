@@ -1,5 +1,12 @@
 # @memberjunction/ng-charts
 
+## 6.2.3
+
+### Patch Changes
+
+- Updated dependencies [5cbf19b]
+  - @memberjunction/core@6.2.3
+
 ## 6.2.2
 
 ### Patch Changes
