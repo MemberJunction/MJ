@@ -27,9 +27,9 @@
     "zod": "^3.25.0"
   },
   "optionalDependencies": {
-    "@memberjunction/skyway-core": "^0.7.1",
-    "@memberjunction/skyway-postgres": "^0.7.1",
-    "@memberjunction/skyway-sqlserver": "^0.7.1",
+    "@memberjunction/skyway-core": "^0.9.0",
+    "@memberjunction/skyway-postgres": "^0.9.0",
+    "@memberjunction/skyway-sqlserver": "^0.9.0",
     "mssql": "^11.0.1",
     "pg": "^8.13.1"
   },

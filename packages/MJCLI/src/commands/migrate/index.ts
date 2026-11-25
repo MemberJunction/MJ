@@ -436,7 +436,7 @@ export default class Migrate extends Command {
           Port: config.dbPort,
           Database: config.dbDatabase,
           User: config.codeGenLogin,
-          Password: pgSecurity?.Password ?? config.codeGenPassword,
+          Password: config.codeGenPassword,
           Encrypt: config.dbEncrypt,
           TrustServerCertificate: config.dbTrustServerCertificate,
           ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
