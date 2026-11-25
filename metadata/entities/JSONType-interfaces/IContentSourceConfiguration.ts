@@ -184,8 +184,9 @@ export interface IContentSourceConfiguration {
     /**
      * When {@link PageRenderer} is used. `Always` (default): every page is rendered, except an address whose HEAD names a
      * document file (a PDF, Word, Excel, PowerPoint, an image...), which is fetched plainly. `WhenEmpty`: a page is
-     * fetched plainly first and rendered only when that finds an empty, script-only page, or when the site refused
-     * the plain fetch (a 401, 403 or 5xx; not a 404, 410 or 429).
+     * fetched plainly first and rendered only when that finds an empty, script-only page (under
+     * `Tuning.EmptyPageTextChars` characters of text, default 200), or when the site refused the plain fetch (a 401,
+     * 403 or 5xx; not a 404, 410 or 429).
      */
     PageRenderMode?: 'Always' | 'WhenEmpty';
     /** How {@link PageRenderer} loads a page and when it counts as settled. Unset: the renderer's defaults. */
@@ -393,12 +394,19 @@ export interface IContentSourceWebsiteConfiguration {
      */
     Concurrency?: number;
     /**
-     * How a host that answers 429 (or 503 with Retry-After) is handled: the fetch waits for the longer of what the
-     * host asks and an exponential backoff, is retried, and the host is then paced. A page still limited after its
-     * retries is tried once more at the end of the crawl rather than losing its links.
+     * Fetch a page whose links will not be read (one level past {@link MaxDepth}, a sibling path, any page past
+     * {@link MaxPages}) to know it is alive before reporting it. Default true: a dead link never becomes an item.
+     * `false` reports such pages unfetched, saving the crawl one request per page (Extract fetches each one anyway),
+     * at the cost of dead links becoming items that fail in Extract.
+     */
+    CheckLeafPages?: boolean;
+    /**
+     * How a host that answers 429 (or 503 with Retry-After) is handled: the host is slowed (its rate limiter halves), and
+     * the fetch is retried after the longer of what the host asks and an exponential backoff. A page still limited after
+     * its retries is tried once more at the end of the crawl rather than losing its links.
      */
     RateLimit?: IContentSourceRateLimitConfiguration;
-    /** The `User-Agent` the crawl's and Extract's plain HTTP requests send. Unset: the runtime's own. */
+    /** The `User-Agent` the crawl's and Extract's plain HTTP requests send. Default `Mozilla/5.0 (compatible; MemberJunction/1.0)`. */
     UserAgent?: string;
     /**
      * The most bytes of one response read (a page, an item Extract fetches). An item past it fails as a lasting
@@ -439,16 +447,21 @@ export interface IContentSourceWebsiteConfiguration {
     ExcludePatterns?: string[];
 }
 
-/** How the website crawl backs off a host that rate-limits it. Every field is optional. */
+/**
+ * How the website crawl backs off and paces a host that rate-limits it. Every field is optional. Each host has its own
+ * rate limiter (network-utils `RateLimiter`); a rate-limited fetch is retried with exponential backoff (`WithRetry`).
+ */
 export interface IContentSourceRateLimitConfiguration {
     /** How many times a rate-limited fetch is retried. Default 3. */
     MaxRetries?: number;
     /** The first backoff wait, in ms; it doubles with each retry (with jitter). Default 2000. */
     BackoffMs?: number;
-    /** The longest any one wait or pacing interval may be, in ms. Default 60000. */
+    /** The longest any one wait may be, in ms. Default 60000. */
     MaxBackoffMs?: number;
-    /** The interval between fetches to a host once it has rate-limited the crawl, in ms; doubles with each further limit. Default 1000. */
-    LimitedIntervalMs?: number;
+    /** The most requests a second to one host; a host that rate-limits the crawl is halved, then recovers. Default 10. */
+    RequestsPerSecond?: number;
+    /** The slowest a rate-limited host is paced, in requests a second. Default 0.5. */
+    MinRequestsPerSecond?: number;
 }
 
 /** How the page renderer (e.g. `Headless`) loads a page. Every field is optional. */

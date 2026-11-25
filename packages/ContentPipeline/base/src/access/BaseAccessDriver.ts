@@ -23,8 +23,8 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { ResolveRegistered } from '../ResolveRegistered.js';
 
 /** What a driver is told in order to open a session. */
 export interface AccessRequest {
@@ -183,14 +183,7 @@ export abstract class BaseAccessDriver {
 
     /** Resolve a registered driver by key, returning null rather than a hollow base instance. */
     public static Resolve(key: string): BaseAccessDriver | null {
-        if (!key || key.trim().length === 0) {
-            return null;
-        }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAccessDriver>(
-            BaseAccessDriver,
-            key.trim(),
-        );
-        return result.Resolved ? result.Instance : null;
+        return ResolveRegistered<BaseAccessDriver>(BaseAccessDriver, key);
     }
 }
 

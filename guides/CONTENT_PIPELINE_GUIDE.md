@@ -293,6 +293,8 @@ Each stage resolves its driver keys (`ExtractorKey`, `SegmenterKey`, `Classifier
 
 *(Note: For archive unpacking limits — `MaxArchiveMembers`, `MaxArchiveBytes`, and `MaxArchiveDepth` — explicit `MJ: Content Source Params` rows passed via `Parameters` take precedence over the `Tuning` cascade.)*
 
+**Settings read from a source's layers** (web settings, `AccessDriverKey`, `AccessCredentials`, `MultiModalEnabled`, `ObjectKeyTemplate`, `Tuning`...) all use one precedence order, implemented once in `ConfigurationLayers.ts` (`@memberjunction/content-pipeline-base`: `ConfiguredValue`, `ConfiguredPath`, `MergedWebsiteConfiguration`, `TuningFor`), so Extract, Discover drivers and access agree on them. Each key comes from the first layer that sets it: the run's `Configuration`, then the source's `Configuration`, then its `SourceSpecificConfiguration`, then the source type's `Configuration`. (`Tuning` now follows this order too; before, a source's `SourceSpecificConfiguration.Tuning` outranked its own `Configuration.Tuning`.) `ResolveWebFetchSettings` reads the web settings from them. An object (`PageRendererOptions`, `Website.RateLimit`) is taken whole from that layer, not merged; a value of the wrong shape is ignored rather than passed through to a lower layer. `DiscoverStage` hands a driver the run's and the source type's configuration (`DiscoverRequest.RunConfiguration`, `TypeConfiguration`) for this.
+
 ---
 
 ## 6. Stage-by-Stage Reference
@@ -320,6 +322,20 @@ Each stage resolves its driver keys (`ExtractorKey`, `SegmenterKey`, `Classifier
 - **Driver Channels (`Columns` and `Request`)**:
   - `DiscoveredItem.Columns`: Whitelisted entity columns on `MJ: Content Items` (`EntityRecordDocumentID` and custom schema columns; framework-owned status, checksum, and audit columns are blocked by `FRAMEWORK_OWNED_COLUMNS`).
   - `DiscoveredItem.Request`: Explicit reprocessing hint (`'MetadataChanged' | 'Reextract' | 'Reprocess'`) telling the committer how far back in the pipeline to reset an existing item.
+
+#### The Website Crawl (`AutotagWebsite`)
+
+`AutotagWebsite.Discover` walks a site breadth-first within its root URL and `URLPattern` ([`WebsiteCrawl`](../packages/ContentAutotagging/src/Websites/generic/WebsiteCrawl.ts)), optionally seeded from its sitemaps, and returns a resume token when its walk budget runs out.
+
+- **Only live pages are reported.** A link is fetched before it becomes an item. A lasting client error (a 4xx other than 408, 425 and 429) marks it dead and it is never reported; a bot challenge (`cf-mitigated`), a server error or no answer is tried once more at the end of the queue and then reported, for Extract and its retry schedule to decide. A file that is not HTML is reported without its links being read. The start page is depth 0, pages up to `MaxDepth` have their links read, and the pages one level deeper are fetched (to know they are alive) but not read. `Website.CheckLeafPages: false` reports those deeper pages unfetched instead, as found: one request fewer per page, but a dead link becomes an item that fails in Extract.
+- **`MaxPages`** is the most pages whose links one walk reads. Once reached, the pages already found are still checked and reported, unread; dead pages, files and retries do not count.
+- **Incremental.** A page whose `Last-Modified` (or sitemap `lastmod`) is at or before the walk's `Since` is not reported; its links are still followed.
+- **Politeness**, with `@memberjunction/network-utils`' shared `RateLimiter` (one bucket per host) and `WithRetry`. A host that answers 429, or 503 with `Retry-After`, is slowed (its rate halves, and refills stop for as long as `Retry-After` asks), and the fetch is retried after the longer of that and an exponential backoff. A page still limited goes to the back of the queue rather than losing its links. `Website.RateLimit` (`MaxRetries` 3, `BackoffMs` 2000, `MaxBackoffMs` 60000, `RequestsPerSecond` 10, `MinRequestsPerSecond` 0.5) tunes it; `Website.Concurrency` (default 1) fetches that many pages at a time.
+- **Scope** ([`CrawlScope`](../packages/ContentAutotagging/src/Websites/generic/CrawlScope.ts)), every option off by default: `MergeWwwAndScheme`, `StripTrackingParams` / `StripQueryParams`, `DedupCanonical`, `DedupRedirects`, `LoopLimit` (distinct query strings per path), `SkipCalendarPaths`, `IncludePatterns` / `ExcludePatterns` (substrings, or `re:` regular expressions; the start page is always visited for its links). `Website.UserAgent` and `Website.MaxResponseBytes` apply to its plain requests; a sitemap is held to the protocol's 50 MB instead.
+- **Rendering**: pages go through the source's `PageRenderer` as its render policy decides (see Stage 2, *Page rendering*).
+- **Resume tokens** are version 2; a token from an earlier crawler restarts the walk from the start page.
+
+**Extension points.** A product changes the crawl by subclassing, not forking: `AutotagWebsite.CreateCrawl(options, fetchers)` returns the crawl a walk runs and `CreateCrawlFetchers(request, web, tuning)` how it reads the web; a `WebsiteCrawl` subclass overrides `ParsePage` (how a page's links are read, e.g. links a script builds), `CreateScope` or `CreateRateLimiter`.
 
 #### Registering a Custom Source Driver
 
@@ -376,6 +392,28 @@ Before fetching bytes, `AccessResolver` resolves any `AccessCredentials` configu
 - Session artifacts (Bearer tokens, Basic auth headers, API key headers/query params, cookies) are cached in memory per `(ContentSourceID, AccessDriverKey, CredentialID)` for the duration of the run and **never written to `MJ: Content Items`**.
 - **Origin-Scoped Header Security**: `ContentFetcher` attaches session headers only when the target URL's origin matches the `ContentSource.URL` origin, and strips session headers if an HTTP redirect crosses to a different origin. All outbound HTTP requests pass through `@memberjunction/network-utils` (`SafeFetch` / `HttpGet`) to block SSRF against private/loopback networks.
 
+#### Signing In: the `FormLogin` and `BrowserLogin` Access Drivers
+
+For a members-only site, `Configuration.AccessDriverKey` selects a login driver; the user name and password come from `MJ: Credentials` (mapped by `Configuration.AccessCredentials`, as for `Credential`), everything else from the source's settings (`SourceSpecificConfiguration`). Both return the session as a `Cookie` header sent only to `SessionOrigins` (default: the source URL's origin), expiring with its first cookie or `SessionTtlMinutes`, whichever is sooner, so the run signs in again before the site starts answering with its login page.
+
+- **`FormLogin`** ([`FormLoginAccessDriver`](../packages/ContentPipeline/engine/src/FormLoginAccessDriver.ts)) posts the login form: `LoginURL`, `LoginActionURL`, `LoginSeedGet` (GET the page first for its cookies), `LoginHiddenFields` (carry a CSRF token), `LoginUsernameField` / `LoginPasswordField`, `LoginBodyFormat` (`form` or `json`), `LoginExtraFields`, `LoginSuccessMarker` / `LoginFailureMarker`, `LoginUserAgent`, `LoginTimeoutMs`. Every hop goes through the SSRF guard and its cookies are kept; a 307/308 that would carry the posted credentials to another origin is refused. Set a success marker: a site that answers a refused login with its login page still hands out anonymous cookies.
+- **`BrowserLogin`** ([`BrowserLoginAccessDriver`](../packages/ContentPipeline/engine/src/BrowserLoginAccessDriver.ts)) drives the login page in the Headless renderer's browser, for script-built forms and single sign-on: `LoginPreClickSelector`, `LoginUsernameSelector`, `LoginContinueSelector` (two-step forms), `LoginPasswordSelector`, `LoginSubmitSelector`, `LoginConfirmSelector`, `LoginSuccessSelector`, `LoginCookieMarker`, `LoginStorageState`. Every request and every redirect hop is checked by the SSRF guard (a redirected navigation is replaced by a checked one). Besides the `Cookie` header it returns the browser's state for the session's origins (their cookies and `localStorage`; an identity provider's own cookies stay behind) in `AccessArtifact.Extensions.StorageState`, which the `Headless` renderer restores into each page it renders.
+
+Both are registered `BaseAccessDriver` classes; another login method is another registered driver.
+
+#### Page Rendering: `PageRenderer`, `PageRenderMode` and `PageRendererOptions`
+
+A source naming `PageRenderer: 'Headless'` loads its pages in a headless Chromium (Playwright, an optional peer dependency), for sites built by script. When a page is rendered is the source's **render policy**, a [`BasePageRenderPolicy`](../packages/ContentPipeline/base/src/render/PageRenderPolicy.ts) selected by `PageRenderMode`; Extract and the website crawl ask the same policy:
+
+| `PageRenderMode` | What happens |
+|---|---|
+| `Always` (default) | A HEAD asks what the address is; a document file (`IsDocumentContentType` in `@memberjunction/network-utils`: PDF, Word, Excel, PowerPoint, OpenDocument, an image...) is fetched plainly, anything else is rendered |
+| `WhenEmpty` | The page is fetched plainly; it is rendered only when that finds an empty, script-only page (under `Tuning.EmptyPageTextChars` characters of text, default 200) or when the site refused the plain fetch (a 401, 403 or 5xx; not a 404, 410 or 429) |
+
+Any other value is treated as `Always`. `PageRendererOptions` (`WaitUntil`, `WaitSelector`, `WaitSelectorTimeoutMs`, `ScrollToBottom`, `UserAgent`) tune how the renderer loads a page; Chromium's launch arguments (e.g. `--no-sandbox` in a container) come from `MJ_HEADLESS_CHROMIUM_ARGS`. A rendered page reaches the extractor as UTF-8.
+
+Plain fetches send `Website.UserAgent` (default `Mozilla/5.0 (compatible; MemberJunction/1.0)`, since many sites refuse a runtime's own) and read at most `Website.MaxResponseBytes`: a successful answer past it fails as a lasting error, while an error answer past it keeps its status (a large 503 page is still retried).
+
 #### Step 2: File-Type Detection & `ExtractorCascade`
 
 If the driver did not already supply inline text, `ExtractStage` inspects magic byte signatures (`DetectByteSignature`) and filename extension mappings (`ResolveFileType`) loaded from the 39 rows in `MJ: Content File Types` (`DetectionCatalog`), then selects an extractor via `ExtractorCascade` (HTTP `content-type` headers captured by `ContentFetcher` are used only as the `mimeType` when saving a durable copy, not as file-type detection input):
@@ -386,6 +424,10 @@ If the driver did not already supply inline text, `ExtractStage` inspects magic 
 | `Html` | `HtmlExtractor` | HTML / XHTML pages (strips script/style chrome, extracts title & structural text) |
 | `Pdf` / `Word` / `Spreadsheet` | `DocumentExtractor` | PDF, `.docx`, and `.xlsx` via [`@memberjunction/document-parsing`](../packages/DocumentParsing/src/index.ts) |
 | `Archive` | `ArchiveExtractor` | `.zip` and `.gz` archives — recursively extracts members as child `WorkingRecord` items under a shared whole-tree `ArchiveBudget` (`MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`; `MaxArchiveMembers` and `MaxArchiveBytes` have no default and must be configured on the source `Parameters` or run/source `Tuning`, failing closed if unset or exceeded) |
+
+- **`Html`** decodes a page by its byte-order mark, else the charset it was served with (`ExtractRequest.ContentType`), else its own `<meta charset>`, else UTF-8, so a `windows-1252` page keeps its accented letters. `ExtractorOptions.Html.TitleSelector` takes the title from an element when a site's `<title>` is the same on every page; a selector that is not valid CSS is reported.
+- **`Manifest`** reads a CSV or TSV listing documents (`ExtractorOptions.Manifest`: `LinkColumn`, `TextColumn`, `TitleColumn`, `DateColumn`, `DecoratorColumn`, `KeyColumn`, `Columns`, `Delimiter`), one child item per row with a `ParentID`. Selected through `Configuration.Extractors` (e.g. `{ "csv": "Manifest" }`). `DetectByHeader` (with `DetectionColumns`) reads a CSV whose header names no manifest column as one ordinary document, so a source can receive both; `FallbackLinkColumns` give a row without text more columns to fetch from; `KeyColumns` identify a row without a link by the first column (or composite of columns joined by `KeySeparator`) that has a value; `KeyAsURL` makes that key the child's URL instead of `<manifest URL>#<key>`.
+- **A single document's `Fields`.** An extractor that reads one document can return its `Date`, `Decorator` or other well-known fields as the block's `Fields`; Extract proposes each on the item at its own confidence (`Extract.Block`), so a re-extraction replaces them and another stage's value competes on confidence. A container's `Fields` go to its children instead.
 
 Non-text binary media (images, audio, video) that are not archives can be persisted as durable copies in `FileStorageEngine` (`ExtractStage.persistDurableCopy` using `ResolveObjectKey` from `@memberjunction/content-pipeline-base`) and routed down the multimodal path.
 
@@ -549,14 +591,16 @@ Each `MJ: Content Sources` record has a `Configuration` JSON column that control
 |---|---|---|---|
 | `ExtractorKey` / `SegmenterKey` / `ClassifierKey` / `AccessDriverKey` | `string` | stage default | Per-source stage driver overrides (level 3 in the 5-level cascade) |
 | `Confidence` | `Partial<Record<ConfidenceScaleKey, number>>` | `ConfidenceScale` | Per-source confidence score overrides |
-| `Tuning` | `PipelineTuning` | `DefaultPipelineTuning` | Per-source operational tuning (`ClockSkewOverlapMs`, `MaxSyncRemovalShare`, `MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`, `MinimumPrintableRatio`) |
+| `Tuning` | `PipelineTuning` | `DefaultPipelineTuning` | Per-source operational tuning (`ClockSkewOverlapMs`, `MaxSyncRemovalShare`, `MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`, `MinimumPrintableRatio`, `EmptyPageTextChars`) |
 | `TagTaxonomyMode` | `'constrained' \| 'auto-grow' \| 'free-flow'` | `'auto-grow'` | Controls how unmatched tags are handled in `AutotagEntity` (`ContentItemTagBridge` in `TagStage` always uses `'auto-grow'`) |
 | `TagRootID` | `string \| null` | `null` | Root `MJ: Tags` ID for taxonomy scoping in `AutotagEntity` (`ContentItemTagBridge` searches globally with `rootID = null`) |
 | `TagMatchThreshold` | `number` | `0.9` (`0.8` in `ContentItemTagBridge`) | Minimum cosine similarity score (`0`–`1`) for semantic tag matching (`0.9` in `AutotagEntity`, fixed at `0.8` in `ContentItemTagBridge`) |
 | `ShareTaxonomyWithLLM` | `boolean` | `true` | Whether `AutotagEntity` injects the existing tag taxonomy into its classification prompt |
 | `MaxItemsPerRun` / `MaxNewTagsPerRun` / `MaxNewTagsPerItem` / `MaxTokensPerRun` / `MaxCostPerRun` | `number` | unlimited | Per-run / per-item budget caps used by `AutotagEntity` (`RunBudget`) |
 | `GraphOverlay` | `ContentSourceGraphOverlayConfig` | — | Opt-in Semantic Graph / Canon overlay settings (`EnableGraphOverlay`, `GraphID`, `TargetGraphType` = `'Canon' \| 'Knowledge' \| 'Network' \| 'Custom'`, `ConceptTaxonomyMode` = `'constrained' \| 'propose-only' \| 'auto-grow'`, `AuthorityTier`, `GroundingMode` = `'none' \| 'schema-and-queries' \| 'full-canon'`, `ConceptMatchThreshold`, `MaxNewConceptsPerRun`, `SynthesizerKey`) |
-| `Website` | `IContentSourceWebsiteConfiguration` | — | Website crawler settings (`MaxDepth`, `CrawlSitesInLowerLevelDomain`, `CrawlOtherSitesInTopLevelDomain`, `URLPattern`, `RootURL`) |
+| `Website` | `IContentSourceWebsiteConfiguration` | — | Website crawler settings: `MaxDepth`, `CrawlSitesInLowerLevelDomain`, `CrawlOtherSitesInTopLevelDomain`, `URLPattern`, `RootURL`, `UseSitemaps` / `SitemapURLs`, `CrawlDelayMs`, `MaxPages`, `RenderTimeoutMs`, `Concurrency`, `CheckLeafPages`, `RateLimit`, `UserAgent`, `MaxResponseBytes` and the scope options (see Stage 1, *The Website Crawl*) |
+| `PageRenderer` / `PageRenderMode` / `PageRendererOptions` | `string` / `string` / `IContentSourcePageRendererOptions` | plain HTTP / `Always` / renderer defaults | Page rendering (see Stage 2, *Page Rendering*) |
+| `ExtractorOptions` | `Record<string, Record<string, unknown>>` | — | Per-extractor options by extractor key, e.g. `Manifest`, `Html` |
 
 In MJ Explorer, these settings are surfaced automatically on the `MJ: Content Sources` form via two dynamically injected `BaseFormPanel` components in `@memberjunction/ng-core-entity-forms`:
 - **`TagPipelineConfigurationPanel`** (`sortKey: 100`) — taxonomy mode, root scope, match thresholds, and run-budget caps.

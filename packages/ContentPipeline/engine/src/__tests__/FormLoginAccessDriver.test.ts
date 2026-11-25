@@ -7,14 +7,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@memberjunction/network-utils', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@memberjunction/network-utils')>();
-    return { ...actual, AssertPublicUrl: vi.fn(async (url: string) => new URL(url)) };
-});
+// The site is at public IP addresses: the real SSRF guard checks every hop (an IP needs no DNS lookup).
+const SITE = 'https://93.184.216.34';
+const ELSEWHERE = 'https://93.184.216.35';
 
 import { AccessRequest } from '@memberjunction/content-pipeline-base';
 import { ExtraFields, FormLoginAccessDriver, HiddenInputs } from '../FormLoginAccessDriver.js';
-import { CookieJar, CookieSessionArtifact, ParseSetCookie, SessionOrigins } from '../LoginSession.js';
+import { CookieJar } from 'tough-cookie';
+import { CookieSessionArtifact, SessionOrigins } from '../LoginSession.js';
 
 interface Sent {
     url: string;
@@ -52,10 +52,10 @@ function site(post: (body: string) => Response): void {
 function request(parameters: Record<string, string> = {}, secret: Record<string, string> = { username: 'member', password: 'pw' }): AccessRequest {
     return {
         ContentSourceID: 'S1',
-        URL: 'https://members.site.test/library',
+        URL: `${SITE}/library`,
         Role: 'Default',
         Secret: secret,
-        Parameters: { LoginURL: 'https://members.site.test/login', ...parameters },
+        Parameters: { LoginURL: `${SITE}/login`, ...parameters },
         ContextUser: {} as never,
         Provider: {} as never,
         Signal: new AbortController().signal,
@@ -81,9 +81,9 @@ describe('FormLoginAccessDriver', () => {
         const post = sent.find((s) => s.method === 'POST')!;
         expect(Object.fromEntries(new URLSearchParams(post.body))).toEqual({ csrf: 't&1', remember: 'true', username: 'member', password: 'pw' });
         expect(post.headers.Cookie).toBe('pre=1');
-        expect(sent.at(-1)).toMatchObject({ url: 'https://members.site.test/home', method: 'GET' });
+        expect(sent.at(-1)).toMatchObject({ url: `${SITE}/home`, method: 'GET' });
         expect(artifact.Headers?.Cookie).toBe('pre=1; sid=abc');
-        expect(artifact.Origins).toEqual(['https://members.site.test']);
+        expect(artifact.Origins).toEqual([SITE]);
         expect(artifact.ExpiresAt!.getTime()).toBeGreaterThanOrEqual(before + 3_600_000 - 1000);
     });
 
@@ -105,9 +105,9 @@ describe('FormLoginAccessDriver', () => {
     });
 
     it('refuses a 307 that would carry the posted credentials to another origin, and never sends them there', async () => {
-        site(() => answer(307, '', [['location', 'https://collector.elsewhere.test/take']]));
+        site(() => answer(307, '', [['location', `${ELSEWHERE}/take`]]));
         await expect(new FormLoginAccessDriver().Connect(request())).rejects.toThrow(/to another origin/);
-        expect(sent.some((s) => s.url.startsWith('https://collector.elsewhere.test'))).toBe(false);
+        expect(sent.some((s) => s.url.startsWith(ELSEWHERE))).toBe(false);
     });
 
     it('needs a user name and a password from the credential', async () => {
@@ -123,34 +123,32 @@ describe('FormLoginAccessDriver', () => {
 });
 
 describe('the cookie session', () => {
-    it('parses Set-Cookie: domain, path, Max-Age over Expires, flags', () => {
-        const cookie = ParseSetCookie('a=1; Domain=.site.test; Path=/docs; Expires=Wed, 01 Jan 2031 00:00:00 GMT; Max-Age=60; Secure; SameSite=None', 'https://www.site.test/x', 1000);
-        expect(cookie).toMatchObject({ Name: 'a', Value: '1', Domain: 'site.test', HostOnly: false, Path: '/docs', ExpiresAt: 61_000, Secure: true, SameSite: 'None' });
-        // A domain the response did not come from is ignored: the cookie stays host-only.
-        expect(ParseSetCookie('b=2; Domain=evil.test', 'https://www.site.test/', 0)).toMatchObject({ Domain: 'www.site.test', HostOnly: true });
+    it("holds the session origins' cookies, every path, the more specific domain first; refuses a login that set none", () => {
+        const jar = new CookieJar();
+        const set = (url: string, headers: string[]) => headers.forEach((h) => jar.setCookieSync(h, url, { ignoreError: true }));
+        set('https://idp.test/', ['idp=1']);
+        set('https://www.site.test/', ['sid=2; Domain=site.test', 'docs=3; Path=/docs', 'sid=4']);
+        expect(CookieSessionArtifact(jar, ['https://www.site.test'], null, 'X').Headers?.Cookie).toBe('sid=4; docs=3');
+        expect(() => CookieSessionArtifact(jar, ['https://other.test'], null, 'X')).toThrow(/set no cookie/);
     });
 
-    it("sends a jar's cookies only where they belong", () => {
+    it('takes no cookie a browser would refuse: a public suffix as its domain, or a domain it did not come from', () => {
         const jar = new CookieJar();
-        jar.SetFromResponse('https://login.site.test/', ['wide=1; Domain=site.test', 'narrow=2', 'secure=3; Secure', 'docs=4; Path=/docs']);
-        expect(jar.HeaderFor('https://www.site.test/docs/a')).toBe('wide=1');
-        expect(jar.HeaderFor('https://login.site.test/docs/a')).toBe('wide=1; narrow=2; secure=3; docs=4');
-        expect(jar.HeaderFor('http://login.site.test/other')).toBe('wide=1; narrow=2');
-        jar.SetFromResponse('https://login.site.test/', ['narrow=; Max-Age=0']);
-        expect(jar.HeaderFor('http://login.site.test/')).toBe('wide=1');
+        ['wide=1; Domain=com', 'foreign=2; Domain=evil.test'].forEach((h) => jar.setCookieSync(h, 'https://www.site.test/', { ignoreError: true }));
+        expect(jar.getCookieStringSync('https://www.site.test/')).toBe('');
     });
 
-    it("holds only the cookies for the session's origins, and refuses a login that set none for them", () => {
+    it('expires with its first cookie, or the TTL when sooner', () => {
         const jar = new CookieJar();
-        jar.SetFromResponse('https://idp.test/', ['idp=1']);
-        jar.SetFromResponse('https://www.site.test/', ['sid=2; Domain=site.test']);
-        expect(CookieSessionArtifact(jar.Cookies, ['https://www.site.test'], null, 'X').Headers?.Cookie).toBe('sid=2');
-        expect(() => CookieSessionArtifact(jar.Cookies, ['https://other.test'], null, 'X')).toThrow(/set no cookie/);
+        jar.setCookieSync('sid=1; Max-Age=3600', 'https://www.site.test/');
+        const now = Date.now();
+        expect(CookieSessionArtifact(jar, ['https://www.site.test'], null, 'X', now).ExpiresAt!.getTime()).toBeGreaterThan(now + 3_500_000);
+        expect(CookieSessionArtifact(jar, ['https://www.site.test'], 60_000, 'X', now).ExpiresAt!.getTime()).toBe(now + 60_000);
     });
 
     it('reads SessionOrigins, else the source origin', () => {
         expect(SessionOrigins(request({ SessionOrigins: 'https://a.test/x, https://b.test' }))).toEqual(['https://a.test', 'https://b.test']);
-        expect(SessionOrigins(request())).toEqual(['https://members.site.test']);
+        expect(SessionOrigins(request())).toEqual([SITE]);
     });
 
     it('reads extra fields as JSON or a query string, and hidden inputs by name', () => {

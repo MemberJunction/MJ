@@ -14,7 +14,7 @@ export interface FetchRequest {
     SourceURL?: string;
     /** The run's session for the source, if it has one. */
     Access?: AccessArtifact | null;
-    /** The `User-Agent` to send (`Configuration.Website.UserAgent`). Unset: the runtime's own. */
+    /** The `User-Agent` to send (`Configuration.Website.UserAgent`). Extract always sets one (`ResolveWebFetchSettings` defaults it). */
     UserAgent?: string;
     /**
      * The most bytes to read (`Configuration.Website.MaxResponseBytes`). A body past it fails the fetch while it is

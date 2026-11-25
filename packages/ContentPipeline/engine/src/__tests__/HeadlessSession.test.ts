@@ -60,6 +60,14 @@ const PAGES: Record<string, string> = {
         '<html><body><form method="post" action="/do-login-sso">' +
         '<input type="email" name="email"><input type="password" name="password"><button type="submit">Sign in</button>' +
         '</form></body></html>',
+    '/login-307':
+        '<html><body><form method="post" action="/do-login-307">' +
+        '<input type="email" name="email"><input type="password" name="password"><button type="submit">Sign in</button>' +
+        '</form></body></html>',
+    '/login-ws':
+        '<html><body><form method="post" action="/do-login">' +
+        '<input type="email" name="email"><input type="password" name="password"><button type="submit">Sign in</button>' +
+        '</form><script>new WebSocket(location.origin.replace("http", "ws") + "/sock")</script></body></html>',
     '/internal': '<html><body><input type="email" name="email"><p>internal</p></body></html>',
     '/home': '<html><body><div id="welcome">Welcome</div><script>localStorage.setItem("token", "local-token")</script></body></html>',
     '/session':
@@ -91,6 +99,14 @@ beforeAll(async () => {
             });
             return;
         }
+        if (path === '/do-login-307' && req.method === 'POST') {
+            req.resume();
+            req.on('end', () => {
+                res.writeHead(307, { location: `${idpURL}/collect` });
+                res.end();
+            });
+            return;
+        }
         if (path === '/sso-done') {
             res.writeHead(302, { location: '/home', 'set-cookie': 'sid=sso-session; Path=/; HttpOnly' });
             res.end();
@@ -108,6 +124,10 @@ beforeAll(async () => {
         }
         res.setHeader('content-type', 'text/html');
         res.end(PAGES[path] ?? '<html><body>missing</body></html>');
+    });
+    site.on('upgrade', (req, socket) => {
+        seen.push({ path: `ws:${req.url ?? ''}`, headers: req.headers });
+        socket.destroy();
     });
     siteURL = await new Promise((resolve) => site.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(site.address() as AddressInfo).port}`)));
     idp = createServer((req, res) => {
@@ -188,6 +208,26 @@ describe('the BrowserLogin access driver', () => {
         const state = SessionStorageStateOf(artifact);
         expect(state?.Cookies.map((c) => c.Name)).toEqual(['sid']);
         expect(state?.Origins.every((o) => o.Origin === siteURL)).toBe(true);
+    }, 60_000);
+
+    it('does not re-post the credentials to another site: a posted login redirected (307) to another origin fails', async (ctx) => {
+        if (!available) {
+            ctx.skip();
+        }
+        seen.length = 0;
+        await expect(new LocalBrowserLogin().Connect(loginRequest({ LoginURL: `${siteURL}/login-307`, LoginSuccessSelector: '#welcome', LoginTimeoutMs: '2000' }))).rejects.toThrow();
+        expect(seen.some((s) => s.path === '/do-login-307')).toBe(true);
+        expect(seen.some((s) => s.path.startsWith('idp:'))).toBe(false);
+    }, 60_000);
+
+    it('refuses the login page a WebSocket (request routing does not see one)', async (ctx) => {
+        if (!available) {
+            ctx.skip();
+        }
+        seen.length = 0;
+        const artifact = await new LocalBrowserLogin().Connect(loginRequest({ LoginURL: `${siteURL}/login-ws`, LoginSuccessSelector: '#welcome' }));
+        expect(artifact.Headers?.Cookie).toBe('sid=member-session');
+        expect(seen.some((s) => s.path.startsWith('ws:'))).toBe(false);
     }, 60_000);
 
     it('needs a user name and a password from the credential', async () => {

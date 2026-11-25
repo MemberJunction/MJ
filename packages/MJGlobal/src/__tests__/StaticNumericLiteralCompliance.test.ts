@@ -324,7 +324,6 @@ const UNDOCUMENTED_STATIC_NUMERIC_BASELINE: Record<string, number> = {
     'Health/src/MJHealthEngine.ts': 1,
     'Health/src/otel/OtelSpanBridge.ts': 1,
     'Health/src/telemetry/LocalTelemetrySignalBridge.ts': 2,
-    'Integration/engine/src/RateLimiter.ts': 2,
     'Integration/engine/src/RecordFlatten.ts': 1,
     'Integration/engine/src/auth-helpers/OAuth2TokenManager.ts': 2,
     'Integration/engine/src/peer-sync/PeerSyncEndpointService.ts': 1,

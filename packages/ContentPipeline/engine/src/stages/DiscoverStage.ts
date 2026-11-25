@@ -15,7 +15,8 @@ import {
     FatalStageError,
     Outcome,
     ResolveConfidence,
-    ResolveTuning,
+    SourceLayers,
+    TuningFor,
     StageContext,
     StageDeclaration,
     StageOutcome,
@@ -141,7 +142,7 @@ export class DiscoverStage extends BasePipelineStage {
         const resuming = saved?.Mode === mode ? saved : null;
         const segmentStartedAt = new Date();
         const walkStartedAt = resuming ? new Date(resuming.WalkStartedAt) : segmentStartedAt;
-        const tuning = ResolveTuning(resolved.TypeConfiguration, resolved.Configuration, resolved.Settings, context.Configuration);
+        const tuning = TuningFor(SourceLayers(resolved, context.Configuration));
         record.SetExtension(DISCOVER_STAGE, 'tuning', tuning);
         const lastDiscoveredAt = record.GetExtension<Date>('Pipeline', 'lastDiscoveredAt') ?? null;
         const since = isSync || !lastDiscoveredAt ? null : new Date(lastDiscoveredAt.getTime() - tuning.ClockSkewOverlapMs);
@@ -263,6 +264,8 @@ export class DiscoverStage extends BasePipelineStage {
             URL: resolved.URL,
             Parameters: resolved.Parameters,
             Configuration: resolved.Configuration,
+            RunConfiguration: context.Configuration,
+            TypeConfiguration: resolved.TypeConfiguration,
             Access: await context.ResolveAccess(resolved.ContentSourceID),
             Since: options.Since,
             ResumeToken: options.ResumeToken,

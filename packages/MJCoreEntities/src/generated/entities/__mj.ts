@@ -53744,7 +53744,8 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * `SourceSpecificConfiguration`, then the source's own, then a run's `Options`. For example the
      * `Manifest` extractor (a CSV or TSV listing documents) reads `{ "Manifest": { "LinkColumn": "Link",
      * "TextColumn": "Body", "TitleColumn": "Title", "DateColumn": "Published", "DecoratorColumn": "Journal",
-     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`.
+     * "KeyColumn": "ID", "Columns": { "Member Type": "Audience" }, "Delimiter": "," } }`, and the `Html` extractor
+     * reads `{ "Html": { "TitleSelector": "h1.article-title" } }` (the element whose text is the page's title).
      */
     ExtractorOptions?: Record<string, Record<string, unknown>>;
 
@@ -53754,6 +53755,16 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * `playwright` package). Used by the website crawler and by Extract. Unset: a plain HTTP GET.
      */
     PageRenderer?: string;
+    /**
+     * When {@link PageRenderer} is used. `Always` (default): every page is rendered, except an address whose HEAD names a
+     * document file (a PDF, Word, Excel, PowerPoint, an image...), which is fetched plainly. `WhenEmpty`: a page is
+     * fetched plainly first and rendered only when that finds an empty, script-only page (under
+     * `Tuning.EmptyPageTextChars` characters of text, default 200), or when the site refused the plain fetch (a 401,
+     * 403 or 5xx; not a 404, 410 or 429).
+     */
+    PageRenderMode?: 'Always' | 'WhenEmpty';
+    /** How {@link PageRenderer} loads a page and when it counts as settled. Unset: the renderer's defaults. */
+    PageRendererOptions?: MJContentSourceEntity_IContentSourcePageRendererOptions;
     /**
      * Website-crawler settings — only meaningful for content sources whose ContentSourceType is
      * "Website". Replaces the legacy per-key ContentSourceParam rows; AutotagWebsite reads from
@@ -53943,10 +53954,105 @@ export interface MJContentSourceEntity_IContentSourceWebsiteConfiguration {
     SitemapURLs?: string[];
     /** Pause after reading each page, in ms, to be polite to the site. Default 1000. */
     CrawlDelayMs?: number;
-    /** The most pages whose links one walk reads (across all its parts). Unset: no limit. */
+    /**
+     * The most pages whose links one walk reads (across all its parts). The pages already found when it is reached
+     * are still checked and reported, but their links are not read; dead pages, files and retries do not count.
+     * Unset: no limit.
+     */
     MaxPages?: number;
     /** How long the page renderer may take to load and settle a page, in ms. Default 30000. */
     RenderTimeoutMs?: number;
+    /**
+     * How many pages the crawl fetches at a time. Default 1. Politeness (below) still applies per host, so a host
+     * that rate-limits the crawl is paced however many fetches are in flight.
+     */
+    Concurrency?: number;
+    /**
+     * Fetch a page whose links will not be read (one level past {@link MaxDepth}, a sibling path, any page past
+     * {@link MaxPages}) to know it is alive before reporting it. Default true: a dead link never becomes an item.
+     * `false` reports such pages unfetched, saving the crawl one request per page (Extract fetches each one anyway),
+     * at the cost of dead links becoming items that fail in Extract.
+     */
+    CheckLeafPages?: boolean;
+    /**
+     * How a host that answers 429 (or 503 with Retry-After) is handled: the host is slowed (its rate limiter halves), and
+     * the fetch is retried after the longer of what the host asks and an exponential backoff. A page still limited after
+     * its retries is tried once more at the end of the crawl rather than losing its links.
+     */
+    RateLimit?: MJContentSourceEntity_IContentSourceRateLimitConfiguration;
+    /** The `User-Agent` the crawl's and Extract's plain HTTP requests send. Default `Mozilla/5.0 (compatible; MemberJunction/1.0)`. */
+    UserAgent?: string;
+    /**
+     * The most bytes of one response read (a page, an item Extract fetches). An item past it fails as a lasting
+     * error (an error answer past it keeps its status); a page read for its links is read up to it. A sitemap is
+     * held to the sitemap protocol's own 50 MB instead. Unset: no limit.
+     */
+    MaxResponseBytes?: number;
+    /** Treat `www.` and the bare host, and `http` and `https`, as one site: one page, one scope. Default false. */
+    MergeWwwAndScheme?: boolean;
+    /**
+     * Remove tracking and back-link query parameters (`utm_*`, `gclid`, `fbclid`, `msclkid`, `mc_cid`, `mc_eid`,
+     * `_ga`, `_gl`, `_gac_*`, `redirect`, `_token`) from every URL, so one page is not found as many. Default false.
+     */
+    StripTrackingParams?: boolean;
+    /** The query parameters to remove instead of the default list (names; a trailing `*` is a prefix). Setting it turns stripping on. */
+    StripQueryParams?: string[];
+    /** A page whose `<link rel="canonical">` names a page already found is a duplicate and is not reported. Default false. */
+    DedupCanonical?: boolean;
+    /** A page that redirects to a page already found is a duplicate and is not reported, and the target is not read again. Default false. */
+    DedupRedirects?: boolean;
+    /**
+     * More than this many distinct query strings on one path and the crawl stops following that path (filters,
+     * paginators and calendars that never end). Unset: no limit.
+     */
+    LoopLimit?: number;
+    /** Do not follow links whose path is a date (`/2026/05/01/`, `/01-05-2026/`): an endless calendar. Default false. */
+    SkipCalendarPaths?: boolean;
+    /**
+     * Only pages matching one of these are visited and reported; the start page is always visited for its links.
+     * Each entry is a substring of the URL, or a regular expression when written `re:<pattern>`. Applies on top of
+     * {@link URLPattern}. Unset: everything in scope.
+     */
+    IncludePatterns?: string[];
+    /**
+     * Pages matching one of these are neither visited nor reported; the start page is still visited for its links,
+     * but not reported. Same syntax as {@link IncludePatterns}.
+     */
+    ExcludePatterns?: string[];
+}
+
+/**
+ * How the website crawl backs off and paces a host that rate-limits it. Every field is optional. Each host has its own
+ * rate limiter (network-utils `RateLimiter`); a rate-limited fetch is retried with exponential backoff (`WithRetry`).
+ */
+export interface MJContentSourceEntity_IContentSourceRateLimitConfiguration {
+    /** How many times a rate-limited fetch is retried. Default 3. */
+    MaxRetries?: number;
+    /** The first backoff wait, in ms; it doubles with each retry (with jitter). Default 2000. */
+    BackoffMs?: number;
+    /** The longest any one wait may be, in ms. Default 60000. */
+    MaxBackoffMs?: number;
+    /** The most requests a second to one host; a host that rate-limits the crawl is halved, then recovers. Default 10. */
+    RequestsPerSecond?: number;
+    /** The slowest a rate-limited host is paced, in requests a second. Default 0.5. */
+    MinRequestsPerSecond?: number;
+}
+
+/** How the page renderer (e.g. `Headless`) loads a page. Every field is optional. */
+export interface MJContentSourceEntity_IContentSourcePageRendererOptions {
+    /**
+     * When navigation counts as done: `load`, `domcontentloaded`, `networkidle` (default) or `commit`. A site that
+     * polls forever never goes network-idle; use `load` with a {@link WaitSelector} there.
+     */
+    WaitUntil?: 'load' | 'domcontentloaded' | 'networkidle' | 'commit';
+    /** A CSS selector that must be visible before the page is read, for content that arrives after load. */
+    WaitSelector?: string;
+    /** How long to wait for {@link WaitSelector}, in ms. Default 10000; a selector that never appears fails the render. */
+    WaitSelectorTimeoutMs?: number;
+    /** Scroll to the bottom before reading, so content loaded on scroll is there. Default false. */
+    ScrollToBottom?: boolean;
+    /** The `User-Agent` the browser presents. Unset: the browser's own. */
+    UserAgent?: string;
 }
 
 /**

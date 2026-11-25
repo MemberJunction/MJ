@@ -174,12 +174,14 @@ export class ManifestExtractor extends BaseContentExtractor {
                 throw new TransientStageError('manifest extraction stopped before finishing all rows');
             }
             const text = at(row, options.TextColumn);
-            const link = this.resolveLink(this.rowLink(row, options, at, text !== null), request.URL);
+            // A row with text is complete as listed and never takes a fallback link (see FallbackLinkColumns).
+            const linkColumns = [options.LinkColumn, ...(text === null ? (options.FallbackLinkColumns ?? []) : [])];
+            const link = this.resolveLink(this.firstValue(row, linkColumns, at), request.URL);
             if (!link && !text) {
                 request.ReportProgress(`row ${index + 2}: no link and no text, skipped`);
                 continue;
             }
-            const key = this.rowKey(row, options, at);
+            const key = this.firstValue(row, [options.KeyColumn, ...(options.KeyColumns ?? [])], at, options.KeySeparator);
             blocks.push({
                 Text: text ?? '',
                 URL: link ?? (key !== null && options.KeyAsURL ? key : undefined),
@@ -191,30 +193,13 @@ export class ManifestExtractor extends BaseContentExtractor {
         return blocks;
     }
 
-    /** The row's link column, then, for a row without text, its fallback link columns in turn. */
-    private rowLink(row: string[], options: ManifestOptions, at: CellReader, hasText: boolean): string | null {
-        const link = at(row, options.LinkColumn);
-        if (link || hasText) {
-            return link;
-        }
-        for (const name of options.FallbackLinkColumns ?? []) {
-            const fallback = at(row, name);
-            if (fallback) {
-                return fallback;
-            }
-        }
-        return null;
-    }
-
-    /** The key column, then the first {@link ManifestOptions.KeyColumns} entry that yields a value; null when none does. */
-    private rowKey(row: string[], options: ManifestOptions, at: CellReader): string | null {
-        const key = at(row, options.KeyColumn);
-        if (key) {
-            return key;
-        }
-        const separator = options.KeySeparator ?? DEFAULT_MANIFEST_KEY_SEPARATOR;
-        for (const entry of options.KeyColumns ?? []) {
-            const names = Array.isArray(entry) ? entry : [entry];
+    /**
+     * The first entry that yields a value: a column name, or (for a key) an array of names joined by `separator`, used
+     * only when every one has a value. Null when none does.
+     */
+    private firstValue(row: string[], entries: ReadonlyArray<string | string[] | undefined>, at: CellReader, separator = DEFAULT_MANIFEST_KEY_SEPARATOR): string | null {
+        for (const entry of entries) {
+            const names = entry === undefined ? [] : Array.isArray(entry) ? entry : [entry];
             const values = names.map((name) => at(row, name));
             if (names.length > 0 && values.every((value) => value !== null)) {
                 return values.join(separator);

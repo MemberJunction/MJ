@@ -194,3 +194,38 @@ describe('SafeFetch cross-origin redirects', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('SafeFetch OnRedirect', () => {
+  beforeEach(() => {
+    resolutions.set('source.example.com', ['93.184.216.34']);
+    resolutions.set('elsewhere.example.net', ['93.184.216.35']);
+  });
+
+  it('lets the caller see each hop and change the next request (a 303 POST becomes a GET with a cookie)', async () => {
+    const calls: { url: string; method?: string; body?: unknown; headers: unknown }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, method: init.method, body: init.body, headers: init.headers });
+      return calls.length === 1
+        ? new Response(null, { status: 303, headers: { location: '/home', 'set-cookie': 'sid=1' } })
+        : new Response('ok', { status: 200 });
+    }));
+    const hops: string[] = [];
+    await SafeFetch('https://source.example.com/login', {
+      method: 'POST',
+      body: 'user=a',
+      OnRedirect: (hop) => {
+        hops.push(`${hop.From.pathname}->${hop.To.pathname} ${hop.Method} ${hop.Response.headers.getSetCookie().join()}`);
+        return { Method: 'GET', Body: null, Headers: { Cookie: 'sid=1' } };
+      },
+    });
+    expect(hops).toEqual(['/login->/home POST sid=1']);
+    expect(calls[1]).toMatchObject({ url: 'https://source.example.com/home', method: 'GET', body: null, headers: { Cookie: 'sid=1' } });
+    vi.unstubAllGlobals();
+  });
+
+  it('still checks every hop: a redirect to a private address is refused whatever the hook says', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 302, headers: { location: 'http://169.254.169.254/' } })));
+    await expect(SafeFetch('https://source.example.com/a', { OnRedirect: () => undefined })).rejects.toBeInstanceOf(SSRFError);
+    vi.unstubAllGlobals();
+  });
+});

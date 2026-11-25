@@ -19,7 +19,7 @@ import type {
 } from '../BaseIntegrationConnector.js';
 import type { ExternalRecord } from '../types.js';
 import { IntegrationEngine } from '../IntegrationEngine.js';
-import { RateLimiter } from '../RateLimiter.js';
+import { RateLimiter } from '@memberjunction/network-utils';
 
 // ---- Mock harness (copied from IntegrationEngine.test.ts) ----
 //

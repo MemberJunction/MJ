@@ -19,7 +19,8 @@
     "@memberjunction/global": "6.3.0-edge.2",
     "@memberjunction/integration-engine-base": "6.3.0-edge.2",
     "@memberjunction/integration-pk-classifier": "6.3.0-edge.2",
-    "@memberjunction/integration-progress-artifacts": "6.3.0-edge.2"
+    "@memberjunction/integration-progress-artifacts": "6.3.0-edge.2",
+    "@memberjunction/network-utils": "6.3.0-edge.2"
   },
   "devDependencies": {
     "tsc-alias": "^1.8.16",

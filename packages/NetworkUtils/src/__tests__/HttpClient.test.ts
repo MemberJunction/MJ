@@ -516,3 +516,19 @@ describe('HttpRequest MaxResponseBytes', () => {
         expect(response.Data).toEqual({ a: 1 });
     });
 });
+
+describe('HttpRequest SetCookies', () => {
+    it("hands each Set-Cookie header back on its own, an Expires date's comma and all", async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => {
+                const headers = new Headers({ 'content-type': 'text/plain' });
+                headers.append('set-cookie', 'sid=abc; Path=/; Expires=Wed, 21 Oct 2026 07:28:00 GMT');
+                headers.append('set-cookie', 'pref=1; Path=/');
+                return new Response('ok', { status: 200, headers });
+            }),
+        );
+        const response = await HttpGet<string>('https://api.example.com/x', { ResponseType: 'text' });
+        expect(response.SetCookies).toEqual(['sid=abc; Path=/; Expires=Wed, 21 Oct 2026 07:28:00 GMT', 'pref=1; Path=/']);
+    });
+});

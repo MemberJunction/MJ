@@ -261,6 +261,27 @@ Each knob has a sensible default so newly-created sources work without configura
 
 **URL normalization (always on).** Before any visited-set check, URLs are normalized: fragments (`#section`) stripped, single trailing slash collapsed (except root `/`), query parameters sorted. Path case is preserved (RFC 3986). This catches the common variants (`/page` vs `/page/`, `?a=1&b=2` vs `?b=2&a=1`) without merging genuinely distinct case-sensitive paths.
 
+### The crawl behind `Discover`
+
+`AutotagWebsite.Discover` runs [`WebsiteCrawl`](src/Websites/generic/WebsiteCrawl.ts). Its settings are read like
+every web setting (run, then source, then `SourceSpecificConfiguration`, then the source type), and all of these are
+optional:
+
+| Key | Default | Purpose |
+|---|---|---|
+| `UseSitemaps` / `SitemapURLs` | off | Seed from the site's sitemaps (robots.txt's, else `/sitemap.xml`, or those listed) |
+| `CrawlDelayMs` | `1000` | Pause between batches of pages |
+| `MaxPages` | unlimited | The most pages whose links one walk reads; pages already found are still checked and reported |
+| `Concurrency` | `1` | Pages fetched at a time |
+| `CheckLeafPages` | `true` | Fetch a page whose links will not be read, so a dead link is never reported; `false` reports it unfetched |
+| `RateLimit` | `MaxRetries` 3, `BackoffMs` 2000, `MaxBackoffMs` 60000, `RequestsPerSecond` 10, `MinRequestsPerSecond` 0.5 | How a host answering 429 (or 503 with `Retry-After`) is slowed and retried (network-utils `RateLimiter` per host, `WithRetry`) |
+| `UserAgent` / `MaxResponseBytes` | `Mozilla/5.0 (compatible; MemberJunction/1.0)` / unlimited | Plain requests' User-Agent and size cap (a sitemap is held to 50 MB) |
+| `MergeWwwAndScheme`, `StripTrackingParams` / `StripQueryParams`, `DedupCanonical`, `DedupRedirects`, `LoopLimit`, `SkipCalendarPaths`, `IncludePatterns` / `ExcludePatterns` | off | What one page is, and which pages are visited (`IncludePatterns` / `ExcludePatterns` take substrings or `re:` regular expressions) |
+
+Only pages fetched and found alive are reported; a lasting 4xx is dead. Pages go through the source's
+`PageRenderer` as its `PageRenderMode` policy decides. To change the crawl, subclass: `AutotagWebsite.CreateCrawl` /
+`CreateCrawlFetchers`, and `WebsiteCrawl.ParsePage` / `CreateScope` / `CreateRateLimiter`.
+
 **Change detection.** Each discovered URL is fetched once. The SHA-256 hash is computed over the **extracted body text** (not raw HTML), so incidental markup churn — server-rendered timestamps, CSRF tokens, build hashes, ad rotators — doesn't trigger spurious re-classification. The hash query is scoped to the current `ContentSourceID` so 404 boilerplate on one site can't silently skip a real page on another.
 
 ## Run Budgets

@@ -2,10 +2,9 @@
  * @fileoverview {@link WebsiteCrawlFetchers} — how `AutotagWebsite.Discover`'s crawl reads pages and sitemaps.
  *
  * A page is fetched over HTTP (through the SSRF guard, with the source's session for its own origins), or through
- * the source's page renderer. A renderer is never handed a document file: in `Always` render mode a HEAD asks first
- * what the address is, and only a known document type (`IsDocumentContentType`: PDF, Word, ...) is fetched plainly;
- * in `WhenEmpty` mode the page is fetched plainly and rendered only when that finds an empty, script-only page, or
- * when the site refused the plain fetch (`RendersAfterRefusal`: a 403 to clients that are not browsers).
+ * the source's page renderer, as the source's render policy decides (`BasePageRenderPolicy`, selected by
+ * `PageRenderMode`; Extract asks the same policy). A policy that probes first is told what a HEAD says the address
+ * is; one that does not is shown the plain fetch's answer, a refusal included, and may render instead.
  *
  * A plain page is read as a stream: a file that is not HTML is not downloaded at all (its body is cancelled once
  * the headers say what it is), and an HTML page is read up to the source's `MaxResponseBytes`. A sitemap or
@@ -16,21 +15,23 @@
  */
 
 import { LogStatus } from '@memberjunction/core';
-import { HttpGet, HttpHead } from '@memberjunction/network-utils';
+import { CharsetOfContentType, HttpGet, HttpHead } from '@memberjunction/network-utils';
 import {
     AccessArtifact,
     BasePageRenderer,
-    IsDocumentContentType,
+    BasePageRenderPolicy,
     IsHtmlContentType,
-    LooksLikeEmptyPage,
-    PageRenderMode,
     PageRenderOptions,
-    RendersAfterRefusal,
 } from '@memberjunction/content-pipeline-base';
 import { CrawlFetchers, CrawlPage } from './WebsiteCrawl';
 
 /** The most bytes of a sitemap or robots.txt read: the sitemap protocol's own limit for one uncompressed file. */
 export const MAX_SITEMAP_BYTES = 50 * 1024 * 1024; // 50 MB (sitemaps.org)
+/**
+ * How long a page's body may take to arrive once its headers have. A streamed body is read after `HttpGet` returns,
+ * outside its own timeout, so a server that trickles a page would otherwise hold the walk forever.
+ */
+export const PAGE_BODY_TIMEOUT_MS = 30_000; // HttpRequest's own default timeout, for the body as for the headers
 
 /** The HTTP options a request to one URL gets: the SSRF guard, the signal, and the session when it belongs there. */
 export interface CrawlHttpOptions {
@@ -47,13 +48,16 @@ export interface WebsiteCrawlFetcherSettings {
     HttpOptions: (url: string) => CrawlHttpOptions;
     /** The source's renderer, or null for plain HTTP. */
     Renderer: BasePageRenderer | null;
-    RenderMode: PageRenderMode;
+    /** When a page is rendered rather than fetched plainly (the source's `PageRenderMode`). */
+    RenderPolicy: BasePageRenderPolicy;
+    /** `Tuning.EmptyPageTextChars`, for a policy that renders empty pages. */
+    EmptyPageTextChars?: number;
     RenderOptions?: PageRenderOptions;
     RenderTimeoutMs?: number;
     /** The session to hand the renderer for a URL (null when it does not belong there), and the origins it may go to. */
     RenderAccess: (url: string) => { Access: AccessArtifact | null; AccessOrigins: readonly string[] };
-    /** The `User-Agent` plain requests send. Unset: the runtime's own. */
-    UserAgent?: string;
+    /** The `User-Agent` plain requests send. */
+    UserAgent: string;
     /** The most bytes of a page or sitemap read. Unset: no limit. */
     MaxResponseBytes?: number;
     Signal: AbortSignal;
@@ -69,13 +73,17 @@ export class WebsiteCrawlFetchers implements CrawlFetchers {
             if (!this.settings.Renderer) {
                 return await this.plainPage(url);
             }
-            if (this.settings.RenderMode === 'WhenEmpty') {
+            const policy = this.settings.RenderPolicy;
+            if (!policy.ProbesFirst) {
                 const plain = await this.plainPage(url);
-                const empty = plain.Status >= 200 && plain.Status < 300 && IsHtmlContentType(plain.ContentType) && LooksLikeEmptyPage(plain.Html);
-                return empty || RendersAfterRefusal(plain.Status) ? await this.render(url, this.settings.Renderer) : plain;
+                const renders = policy.RendersAfterPlainFetch(plain, { EmptyPageTextChars: this.settings.EmptyPageTextChars });
+                return renders ? await this.render(url, this.settings.Renderer, plain) : plain;
             }
-            const file = await this.nonHtmlByHead(url);
-            return file ?? (await this.render(url, this.settings.Renderer));
+            const head = await this.head(url);
+            if (head && !policy.RendersAfterProbe(head.ContentType)) {
+                return head;
+            }
+            return await this.render(url, this.settings.Renderer, head);
         } catch (error) {
             LogStatus(`AutotagWebsite: could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
             return null;
@@ -122,27 +130,30 @@ export class WebsiteCrawlFetchers implements CrawlFetchers {
             await response.Data?.cancel().catch(() => undefined);
             return { ...page, Html: '' };
         }
-        return { ...page, Html: await ReadStreamText(response.Data, contentType, this.settings.MaxResponseBytes) };
+        return { ...page, Html: await ReadStreamText(response.Data, contentType, this.settings.MaxResponseBytes, this.settings.Signal) };
     }
 
     /**
-     * What a HEAD says, when it says the address is a document file; null otherwise (HTML, a type servers also send for
-     * pages, or no answer), and the page is rendered.
+     * What a HEAD says the address is (its status, type and headers, no body), or null when the server did not answer
+     * HEAD; the policy then decides as for an address of no known type.
      */
-    private async nonHtmlByHead(url: string): Promise<CrawlPage | null> {
+    private async head(url: string): Promise<CrawlPage | null> {
         try {
             const response = await HttpHead(url, { ThrowOnError: false, UserAgent: this.settings.UserAgent, ...this.settings.HttpOptions(url) });
-            const contentType = response.Headers['content-type'];
-            if (response.Ok && IsDocumentContentType(contentType)) {
-                return { Html: '', FinalURL: response.Url || url, Status: response.Status, ContentType: contentType, Headers: response.Headers };
+            if (!response.Ok) {
+                return null;
             }
+            return { Html: '', FinalURL: response.Url || url, Status: response.Status, ContentType: response.Headers['content-type'], Headers: response.Headers };
         } catch {
-            // A server that refuses HEAD is rendered, as before.
+            return null;
         }
-        return null;
     }
 
-    private async render(url: string, renderer: BasePageRenderer): Promise<CrawlPage> {
+    /**
+     * The page through the renderer. A rendered page has no response headers, so the `Last-Modified` of the HEAD or
+     * plain fetch that came first (when it answered) is kept: the walk's `Since` filters a rendered page as a plain one.
+     */
+    private async render(url: string, renderer: BasePageRenderer, before: CrawlPage | null): Promise<CrawlPage> {
         const { Access, AccessOrigins } = this.settings.RenderAccess(url);
         const rendered = await renderer.Render({
             URL: url,
@@ -152,47 +163,66 @@ export class WebsiteCrawlFetchers implements CrawlFetchers {
             Options: this.settings.RenderOptions,
             Signal: this.settings.Signal,
         });
-        return { Html: rendered.Html, FinalURL: rendered.FinalURL, Status: rendered.Status, ContentType: 'text/html' };
+        const lastModified = before && before.Status >= 200 && before.Status < 300 ? before.Headers?.['last-modified'] : undefined;
+        return {
+            Html: rendered.Html,
+            FinalURL: rendered.FinalURL,
+            Status: rendered.Status,
+            ContentType: 'text/html',
+            ...(lastModified ? { Headers: { 'last-modified': lastModified } } : {}),
+        };
     }
 }
 
 /**
  * A response stream as text, decoded by its charset, reading at most `maxBytes` (what is past them is not read:
- * enough of a page for its links). Unset: all of it.
+ * enough of a page for its links). Unset: all of it. The read is abandoned (and throws) when `signal` aborts or the
+ * body takes longer than `timeoutMs`.
  */
-export async function ReadStreamText(stream: ReadableStream<Uint8Array> | null, contentType: string | undefined, maxBytes?: number): Promise<string> {
+export async function ReadStreamText(
+    stream: ReadableStream<Uint8Array> | null,
+    contentType: string | undefined,
+    maxBytes?: number,
+    signal?: AbortSignal,
+    timeoutMs: number = PAGE_BODY_TIMEOUT_MS,
+): Promise<string> {
     if (!stream) {
         return '';
     }
     const reader = stream.getReader();
+    let stopped: string | null = null;
+    const stop = (reason: string) => {
+        stopped ??= reason;
+        void reader.cancel(reason).catch(() => undefined);
+    };
+    const timer = setTimeout(() => stop(`the page's body took longer than ${timeoutMs} ms`), timeoutMs);
+    const onAbort = () => stop('the walk was cancelled');
+    if (signal?.aborted) {
+        onAbort();
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
     const parts: Uint8Array[] = [];
     let total = 0;
-    for (;;) {
-        const { done, value } = await reader.read();
-        if (done) {
-            break;
+    try {
+        while (!stopped) {
+            const { done, value } = await reader.read();
+            if (done) {
+                break;
+            }
+            const room = maxBytes === undefined ? value.byteLength : Math.max(0, maxBytes - total);
+            parts.push(room < value.byteLength ? value.subarray(0, room) : value);
+            total += Math.min(room, value.byteLength);
+            if (maxBytes !== undefined && total >= maxBytes) {
+                await reader.cancel().catch(() => undefined);
+                break;
+            }
         }
-        const room = maxBytes === undefined ? value.byteLength : Math.max(0, maxBytes - total);
-        parts.push(room < value.byteLength ? value.subarray(0, room) : value);
-        total += Math.min(room, value.byteLength);
-        if (maxBytes !== undefined && total >= maxBytes) {
-            await reader.cancel().catch(() => undefined);
-            break;
-        }
+    } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
     }
-    return new TextDecoder(CharsetOf(contentType), { fatal: false }).decode(Buffer.concat(parts));
-}
-
-/** The charset a `Content-Type` names when `TextDecoder` knows it; else utf-8. */
-function CharsetOf(contentType: string | undefined): string {
-    const charset = /charset\s*=\s*"?([^";\s]+)/i.exec(contentType ?? '')?.[1];
-    if (charset) {
-        try {
-            new TextDecoder(charset);
-            return charset;
-        } catch {
-            // An unknown label reads as utf-8.
-        }
+    if (stopped) {
+        throw new Error(stopped);
     }
-    return 'utf-8';
+    return new TextDecoder(CharsetOfContentType(contentType) ?? 'utf-8', { fatal: false }).decode(Buffer.concat(parts));
 }

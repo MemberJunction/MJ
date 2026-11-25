@@ -25,7 +25,7 @@
  * Without a success marker, a site that answers a refused login with 200 and its login page again still hands out
  * (anonymous) cookies, and every page is then read as the login wall: set one.
  *
- * Every request and redirect goes through MJ's SSRF guard, and the cookies are collected across redirects (a login
+ * Every request and redirect goes through MJ's HTTP client and its SSRF guard, and the cookies are collected across redirects (a login
  * that answers 302 with its session cookie is the common case). A 307/308 that would carry the posted credentials to
  * another origin is refused.
  *
@@ -33,9 +33,11 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { AssertPublicUrl, DrainResponseBody } from '@memberjunction/network-utils';
+import * as cheerio from 'cheerio';
+import { HttpMethod, HttpRequest } from '@memberjunction/network-utils';
 import { AccessArtifact, AccessRequest, BaseAccessDriver } from '@memberjunction/content-pipeline-base';
-import { CookieJar, CookieSessionArtifact, LoginCredentials, SessionOrigins, SessionTtlMs } from './LoginSession.js';
+import { CookieJar } from 'tough-cookie';
+import { CookieSessionArtifact, LoginCredentials, SessionOrigins, SessionTtlMs } from './LoginSession.js';
 
 /** The registered key. */
 export const FORM_LOGIN_ACCESS_DRIVER = 'FormLogin';
@@ -44,7 +46,7 @@ export const FORM_LOGIN_ACCESS_DRIVER = 'FormLogin';
 const MAX_LOGIN_REDIRECTS = 20;
 /** How long a login request may take when the source sets no `LoginTimeoutMs`. */
 const DEFAULT_LOGIN_TIMEOUT_MS = 30_000; // a login page is one page; half a minute is generous
-/** The most of a login page or answer read (for hidden fields and markers); a login page is small. */
+/** The most of a login page or answer read (for hidden fields and markers); a login page is small, so a larger answer is refused. */
 const MAX_LOGIN_BODY_BYTES = 2 * 1024 * 1024; // 2 MB
 
 /** One answer at the end of a login request's redirects. */
@@ -91,51 +93,49 @@ export class FormLoginAccessDriver extends BaseAccessDriver {
             signal,
         );
         this.assertSignedIn(answer, request);
-        return CookieSessionArtifact(jar.Cookies, SessionOrigins(request), SessionTtlMs(request), this.Key);
+        return CookieSessionArtifact(jar, SessionOrigins(request), SessionTtlMs(request), this.Key);
     }
 
     /**
-     * One request with the jar's cookies, its redirects followed here (each hop through the SSRF guard, its cookies
-     * kept). A 303, and a 301/302 answering a POST, go on as a GET without the body, as browsers do.
+     * One request with the jar's cookies, through MJ's HTTP client with the SSRF guard on every hop (`ValidateUrl`). Each
+     * redirect is seen before it is followed (`OnRedirect`): its cookies are kept, a 303 (and a 301/302 answering a POST)
+     * goes on as a GET without the body, as browsers do, and the next hop gets the jar's cookies for its own URL.
      */
     protected async Send(url: string, init: { method: string; body?: string; headers?: Record<string, string> }, jar: CookieJar, request: AccessRequest, signal: AbortSignal): Promise<LoginAnswer> {
-        let method = init.method;
-        let body = init.body;
-        let target = url;
-        for (let hops = 0; ; hops++) {
-            const checked = await AssertPublicUrl(target);
-            const cookie = jar.HeaderFor(checked.href);
-            const response = await fetch(checked.href, {
-                method,
-                body,
-                redirect: 'manual',
-                signal,
-                headers: {
-                    ...(body !== undefined ? init.headers : {}),
-                    ...(cookie ? { Cookie: cookie } : {}),
-                    ...(request.Parameters.LoginUserAgent ? { 'User-Agent': request.Parameters.LoginUserAgent } : {}),
-                },
-            });
-            jar.SetFromResponse(checked.href, response.headers.getSetCookie());
-            const location = response.headers.get('location');
-            if (response.status < 300 || response.status > 399 || !location) {
-                return { Status: response.status, URL: checked.href, Body: await ReadText(response) };
-            }
-            await DrainResponseBody(response);
-            if (hops >= MAX_LOGIN_REDIRECTS) {
-                throw new Error(`${this.Key}: '${url}' redirected more than ${MAX_LOGIN_REDIRECTS} times`);
-            }
-            if (response.status === 303 || ((response.status === 301 || response.status === 302) && method === 'POST')) {
-                method = 'GET';
-                body = undefined;
-            }
-            const next = new URL(location, checked.href);
-            // A 307/308 keeps the body, and a login's body is the password: it goes on only to the same origin.
-            if (body !== undefined && next.origin !== new URL(checked.href).origin) {
-                throw new Error(`${this.Key}: the login at '${checked.href}' redirected its posted credentials to another origin (${next.origin}); refused`);
-            }
-            target = next.href;
-        }
+        const userAgent = request.Parameters.LoginUserAgent;
+        let carriesBody = init.body !== undefined;
+        const headersFor = (target: string): Record<string, string> => {
+            const cookie = jar.getCookieStringSync(target);
+            return { ...(carriesBody ? init.headers : {}), ...(cookie ? { Cookie: cookie } : {}), ...(userAgent ? { 'User-Agent': userAgent } : {}) };
+        };
+        // A cookie a browser would refuse (a public suffix, a foreign domain) is skipped, not an error.
+        const keep = (from: string, headers: readonly string[]) => headers.forEach((h) => jar.setCookieSync(h, from, { ignoreError: true }));
+        const response = await HttpRequest<string>({
+            Url: url,
+            Method: init.method as HttpMethod,
+            Body: init.body,
+            Headers: headersFor(url),
+            ValidateUrl: true,
+            MaxRedirects: MAX_LOGIN_REDIRECTS,
+            ThrowOnError: false,
+            ResponseType: 'text',
+            MaxResponseBytes: MAX_LOGIN_BODY_BYTES,
+            Timeout: 0, // the login's own deadline is the signal (LoginTimeoutMs)
+            Signal: signal,
+            OnRedirect: (hop) => {
+                keep(hop.From.href, hop.Response.headers.getSetCookie());
+                const status = hop.Response.status;
+                const toGet = status === 303 || ((status === 301 || status === 302) && hop.Method === 'POST');
+                carriesBody &&= !toGet;
+                // A 307/308 keeps the body, and a login's body is the password: it goes on only to the same origin.
+                if (carriesBody && hop.To.origin !== hop.From.origin) {
+                    throw new Error(`${this.Key}: the login at '${hop.From.href}' redirected its posted credentials to another origin (${hop.To.origin}); refused`);
+                }
+                return { Method: toGet ? 'GET' : hop.Method, ...(toGet ? { Body: null } : {}), Headers: headersFor(hop.To.href) };
+            },
+        });
+        keep(response.Url, response.SetCookies ?? []);
+        return { Status: response.Status, URL: response.Url, Body: typeof response.Data === 'string' ? response.Data : '' };
     }
 
     /** The login counts when the answer has the success marker (when set), lacks the failure marker, and is not an error. */
@@ -159,29 +159,6 @@ export class FormLoginAccessDriver extends BaseAccessDriver {
     }
 }
 
-/** A response's text, reading at most {@link MAX_LOGIN_BODY_BYTES}. */
-async function ReadText(response: Response): Promise<string> {
-    if (!response.body) {
-        return '';
-    }
-    const reader = response.body.getReader();
-    const parts: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-        const { done, value } = await reader.read();
-        if (done) {
-            break;
-        }
-        parts.push(value);
-        total += value.byteLength;
-        if (total >= MAX_LOGIN_BODY_BYTES) {
-            await reader.cancel().catch(() => undefined);
-            break;
-        }
-    }
-    return new TextDecoder('utf-8', { fatal: false }).decode(Buffer.concat(parts));
-}
-
 /** `LoginExtraFields` as fields: a JSON object, or `a=1&b=2`. */
 export function ExtraFields(value: string | undefined): Record<string, string> {
     const text = value?.trim();
@@ -195,32 +172,12 @@ export function ExtraFields(value: string | undefined): Record<string, string> {
     return Object.fromEntries(new URLSearchParams(text));
 }
 
-/** The `<input type="hidden">` fields of a page (a CSRF token), by name. A structural scan, not a parse. */
+/** The `<input type="hidden">` fields of a page (a CSRF token), by name. */
 export function HiddenInputs(html: string): Record<string, string> {
+    const $ = cheerio.load(html);
     const fields: Record<string, string> = {};
-    for (const match of html.matchAll(/<input\b[^>]*>/gi)) {
-        const tag = match[0];
-        if (!/\btype\s*=\s*["']?hidden\b/i.test(tag)) {
-            continue;
-        }
-        const name = AttributeOf(tag, 'name');
-        if (name) {
-            fields[name] = DecodeEntities(AttributeOf(tag, 'value') ?? '');
-        }
-    }
+    $('input[type="hidden" i][name]').each((_, input) => {
+        fields[$(input).attr('name')!] = $(input).attr('value') ?? '';
+    });
     return fields;
-}
-
-function AttributeOf(tag: string, attribute: string): string | null {
-    const match = new RegExp(`\\s${attribute}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i').exec(tag);
-    return match ? (match[1] ?? match[2] ?? match[3] ?? '') : null;
-}
-
-function DecodeEntities(value: string): string {
-    return value
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;|&apos;/g, "'")
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&');
 }

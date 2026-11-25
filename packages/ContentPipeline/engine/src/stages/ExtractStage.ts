@@ -19,20 +19,15 @@ import {
     AccessArtifact,
     ArchiveBudget,
     BasePageRenderer,
+    BasePageRenderPolicy,
     BasePipelineStage,
     ContentBlock,
     DetectByteSignature,
     ExtractResult,
     FatalStageError,
     FileTypeEvidenceConfidenceKey,
-    IsDocumentContentType,
-    IsHtmlContentType,
     IsPlausibleText,
-    LooksLikeEmptyPage,
-    PageRenderMode,
-    PageRenderOptions,
-    RendersAfterRefusal,
-    ResolvePageRenderMode,
+    ResolveWebFetchSettings,
     LocatorBatchFetchResult,
     ObjectKeyResolutionError,
     Outcome,
@@ -40,12 +35,17 @@ import {
     ResolvedConfidenceScale,
     ResolveFileType,
     ResolveObjectKey,
-    ResolveTuning,
+    ConfiguredValue,
+    NonEmptyString,
+    SourceConfigurationLayers,
+    SourceLayers,
+    TuningFor,
     Signature,
     StageContext,
     StageDeclaration,
     StageOutcome,
     TransientStageError,
+    WebFetchSettings,
     WorkingRecord,
     WorkingRecordEntity,
     WorkingRecordIdentity,
@@ -206,12 +206,7 @@ export class ExtractStage extends BasePipelineStage {
         if (!selected) {
             return { Kind: 'NoExtractor', FileType: fileType };
         }
-        const tuning = ResolveTuning(
-            source.Resolved?.TypeConfiguration,
-            source.Resolved?.Configuration,
-            source.Resolved?.Settings,
-            context.Configuration,
-        );
+        const tuning = TuningFor(source.Layers);
         const isArchive = selected.Key === 'Archive';
         const budget = isArchive ? this.prepareArchiveBudget(archiveState, source.Parameters, tuning, archiveDepth + 1) : archiveState.Budget;
         const result = await selected.Extractor.Extract({
@@ -237,7 +232,7 @@ export class ExtractStage extends BasePipelineStage {
     private prepareArchiveBudget(
         archiveState: ArchiveTreeState,
         parameters: Readonly<Record<string, string>>,
-        tuning: ReturnType<typeof ResolveTuning>,
+        tuning: ReturnType<typeof TuningFor>,
         nextDepth: number,
     ): ArchiveBudget | undefined {
         if (archiveState.Budget) {
@@ -397,12 +392,7 @@ export class ExtractStage extends BasePipelineStage {
     /** The last-resort plain-text read, sanity-checked so mojibake never reaches tags, chunks and vectors. */
     private fallbackText(record: WorkingRecord, content: Uint8Array, source: ResolvedSource, context: StageContext): boolean {
         const text = new TextDecoder('utf-8', { fatal: false }).decode(content);
-        const tuning = ResolveTuning(
-            source.Resolved?.TypeConfiguration,
-            source.Resolved?.Configuration,
-            source.Resolved?.Settings,
-            context.Configuration,
-        );
+        const tuning = TuningFor(source.Layers);
         if (!IsPlausibleText(text, tuning.MinimumPrintableRatio)) {
             return false;
         }
@@ -461,7 +451,7 @@ export class ExtractStage extends BasePipelineStage {
             const resolved = source.Resolved;
             const access = resolved ? await context.ResolveAccess(source.ContentSourceID) : null;
             const driver = resolved?.DriverClass ? ResolveSourceDriver(resolved.DriverClass) : null;
-            if (source.PageRenderer && !driver?.Fetch && /^https?:/i.test(url)) {
+            if (source.Web.PageRenderer && !driver?.Fetch && /^https?:/i.test(url)) {
                 return await this.renderIfHtml(url, source, access, context);
             }
             if (resolved && driver?.Fetch) {
@@ -488,42 +478,37 @@ export class ExtractStage extends BasePipelineStage {
             URL: url,
             SourceURL: source.Resolved?.URL,
             Access: access,
-            UserAgent: source.UserAgent,
-            MaxBytes: source.MaxResponseBytes,
+            UserAgent: source.Web.UserAgent,
+            MaxBytes: source.Web.MaxResponseBytes,
             Signal: context.Signal,
         };
     }
 
     /**
-     * A web page of a source with a renderer: rendered unless it is a document file. A PDF or Word file on a rendered
-     * site is fetched plainly (a browser would download it, not render it).
-     * - `Always` mode: a HEAD says what the address is. Only a known document type ({@link IsDocumentContentType}) is
-     *   fetched plainly; anything else is rendered, as before, including a server that will not answer HEAD or that
-     *   labels its pages loosely (`application/octet-stream`).
-     * - `WhenEmpty` mode: the page is fetched plainly and rendered only when that finds an empty, script-only page,
-     *   or when the site refused the plain fetch ({@link RendersAfterRefusal}: a 403 to clients that are not browsers).
+     * A web page of a source with a renderer: rendered or fetched plainly as the source's render policy decides
+     * (`BasePageRenderPolicy`, selected by `PageRenderMode`; the website crawl asks the same policy). A policy that
+     * probes first is told what a HEAD says the address is; one that does not is shown the plain fetch's answer,
+     * a refusal included, and may render instead.
      */
     private async renderIfHtml(url: string, source: ResolvedSource, access: AccessArtifact | null, context: StageContext): Promise<FetchResponse> {
         const request = this.fetchRequest(url, source, access, context);
-        if (source.PageRenderMode === 'WhenEmpty') {
-            let plain: FetchResponse;
-            try {
-                plain = await FetchContent(request);
-            } catch (error) {
-                if (IsHttpError(error) && RendersAfterRefusal(error.Status)) {
-                    return this.render(url, source, access, context);
-                }
-                throw error;
-            }
-            if (!IsHtmlContentType(plain.ContentType) || !LooksLikeEmptyPage(new TextDecoder('utf-8', { fatal: false }).decode(plain.Content))) {
-                return plain;
-            }
-            return this.render(url, source, access, context);
+        const policy = BasePageRenderPolicy.Resolve(source.Web.PageRenderMode);
+        if (policy.ProbesFirst) {
+            return policy.RendersAfterProbe(await ProbeContentType(request)) ? this.render(url, source, access, context) : FetchContent(request);
         }
-        if (IsDocumentContentType(await ProbeContentType(request))) {
-            return FetchContent(request);
+        const tuning = TuningFor(source.Layers);
+        let plain: FetchResponse;
+        try {
+            plain = await FetchContent(request);
+        } catch (error) {
+            const refused = IsHttpError(error) && error.Status > 0 && policy.RendersAfterPlainFetch({ Status: error.Status, Html: '' }, tuning);
+            if (refused) {
+                return this.render(url, source, access, context);
+            }
+            throw error;
         }
-        return this.render(url, source, access, context);
+        const answer = { Status: 200, ContentType: plain.ContentType, Html: new TextDecoder('utf-8', { fatal: false }).decode(plain.Content) };
+        return policy.RendersAfterPlainFetch(answer, tuning) ? this.render(url, source, access, context) : plain;
     }
 
     /**
@@ -531,9 +516,9 @@ export class ExtractStage extends BasePipelineStage {
      * then read like any fetched page; a page that answers with an error status fails as an HTTP fetch would.
      */
     private async render(url: string, source: ResolvedSource, access: AccessArtifact | null, context: StageContext): Promise<FetchResponse> {
-        const renderer = BasePageRenderer.Resolve(source.PageRenderer!);
+        const renderer = BasePageRenderer.Resolve(source.Web.PageRenderer!);
         if (!renderer) {
-            throw new FatalStageError(`PageRenderer '${source.PageRenderer}' is not registered. Check that the package registering it has been loaded.`);
+            throw new FatalStageError(`PageRenderer '${source.Web.PageRenderer}' is not registered. Check that the package registering it has been loaded.`);
         }
         const sourceOrigin = source.Resolved?.URL && /^https?:/i.test(source.Resolved.URL) ? [new URL(source.Resolved.URL).origin] : [];
         const accessOrigins = access?.Origins?.length ? access.Origins : sourceOrigin;
@@ -541,8 +526,8 @@ export class ExtractStage extends BasePipelineStage {
             URL: url,
             Access: access,
             AccessOrigins: accessOrigins,
-            TimeoutMs: source.RenderTimeoutMs,
-            Options: source.PageRendererOptions,
+            TimeoutMs: source.Web.RenderTimeoutMs,
+            Options: source.Web.PageRendererOptions,
             Signal: context.Signal,
         });
         if (result.Status >= 400) {
@@ -636,7 +621,7 @@ export class ExtractStage extends BasePipelineStage {
             record.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ExtractorTitle, setBy);
         }
         // After the block Title: within one run the first proposal keeps a tie, so a Fields Title replaces it only when more confident.
-        this.applyBlockFields(record, block);
+        this.proposeFields(record, block.Fields, `${EXTRACT_STAGE}.Block`);
         this.applyExtractExtensions(record, block.Columns, block.Request);
     }
 
@@ -647,10 +632,10 @@ export class ExtractStage extends BasePipelineStage {
      * (Discover's listing date, say) still competes on confidence. A child's Fields, by contrast, are its
      * container's listing data (`Listing.Block`) and must compete with the child's own later Extract.
      */
-    private applyBlockFields(record: WorkingRecord, block: ContentBlock): void {
-        for (const field of block.Fields ?? []) {
+    private proposeFields(record: WorkingRecord, fields: ContentBlock['Fields'], setBy: string): void {
+        for (const field of fields ?? []) {
             if (field.Value != null) {
-                record.Propose(field.Field, field.Value, field.Confidence, `${EXTRACT_STAGE}.Block`);
+                record.Propose(field.Field, field.Value, field.Confidence, setBy);
             }
         }
     }
@@ -673,13 +658,9 @@ export class ExtractStage extends BasePipelineStage {
         if (parentDate && !ownDate) {
             child.Propose('Date', parentDate, parent.GetConfidence('Date'), `${EXTRACT_STAGE}.InheritedFromParent`);
         }
-        for (const field of block.Fields ?? []) {
-            if (field.Value != null) {
-                // Listing metadata competes on confidence against the child's own later Extract pass, so its
-                // stage prefix must stay distinct from Extract.
-                child.Propose(field.Field, field.Value, field.Confidence, 'Listing.Block');
-            }
-        }
+        // Listing metadata competes on confidence against the child's own later Extract pass, so its stage prefix must
+        // stay distinct from Extract.
+        this.proposeFields(child, block.Fields, 'Listing.Block');
         if (block.FileType) {
             child.Propose('FileType', block.FileType, confidence.FileTypeExtension, `${EXTRACT_STAGE}.Split`);
         }
@@ -759,12 +740,8 @@ export class ExtractStage extends BasePipelineStage {
         const typeConfig = resolved?.TypeConfiguration ?? {};
         const sourceConfig = resolved?.Configuration ?? {};
         const settings = resolved?.Settings ?? {};
-        const configured = (key: string) =>
-            (context.Configuration[key] as string | undefined) ??
-            (sourceConfig[key] as string | undefined) ??
-            (settings[key] as string | undefined) ??
-            (typeConfig[key] as string | undefined) ??
-            null;
+        const layers = SourceLayers(resolved, context.Configuration);
+        const configured = (key: string) => NonEmptyString(ConfiguredValue(layers, key)) ?? null;
         const runExtractors = context.Configuration.Extractors as Record<string, string> | undefined;
         const sourceExtractors = {
             ...(settings.Extractors as Record<string, string> | undefined),
@@ -784,59 +761,15 @@ export class ExtractStage extends BasePipelineStage {
             TypeExtractors: typeExtractors && Object.keys(typeExtractors).length > 0 ? typeExtractors : undefined,
             ContentTypeExtractorKey:
                 (await this.contentTypeExtractorKey(contentSourceID, context)) ?? (typeConfig.ExtractorKey as string | undefined) ?? null,
-            MultiModalEnabled:
-                typeof context.Configuration.MultiModalEnabled === 'boolean'
-                    ? context.Configuration.MultiModalEnabled
-                    : typeof sourceConfig.MultiModalEnabled === 'boolean'
-                      ? sourceConfig.MultiModalEnabled
-                      : typeof settings.MultiModalEnabled === 'boolean'
-                        ? settings.MultiModalEnabled
-                        : typeof typeConfig.MultiModalEnabled === 'boolean'
-                          ? typeConfig.MultiModalEnabled
-                          : context.Configuration.SupportsMultiModal === true || typeConfig.SupportsMultiModal === true,
+            MultiModalEnabled: typeof ConfiguredValue(layers, 'MultiModalEnabled') === 'boolean'
+                ? (ConfiguredValue(layers, 'MultiModalEnabled') as boolean)
+                : context.Configuration.SupportsMultiModal === true || typeConfig.SupportsMultiModal === true,
             FileStorageAccountID: configured('FileStorageAccountID'),
             ObjectKeyTemplate: configured('ObjectKeyTemplate'),
             ObjectKeyValues: (context.Configuration.ObjectKeyValues as Record<string, string> | undefined) ?? {},
-            PageRenderer: configured('PageRenderer'),
-            PageRenderMode: ResolvePageRenderMode(configured('PageRenderMode')),
-            PageRendererOptions: this.renderOptions(sourceConfig, context.Configuration),
-            RenderTimeoutMs: this.websiteNumber('RenderTimeoutMs', sourceConfig, context.Configuration),
-            UserAgent: this.websiteString('UserAgent', sourceConfig, context.Configuration),
-            MaxResponseBytes: this.websiteNumber('MaxResponseBytes', sourceConfig, context.Configuration),
+            Layers: layers,
+            Web: ResolveWebFetchSettings(layers),
         };
-    }
-
-    /** A positive `Website.<key>` number from the run, else the source's Configuration. */
-    private websiteNumber(key: string, sourceConfig: Readonly<Record<string, unknown>>, runConfig: Readonly<Record<string, unknown>>): number | undefined {
-        for (const config of [runConfig, sourceConfig]) {
-            const value = (config.Website as Record<string, unknown> | undefined)?.[key];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        }
-        return undefined;
-    }
-
-    /** A non-empty `Website.<key>` string from the run, else the source's Configuration. */
-    private websiteString(key: string, sourceConfig: Readonly<Record<string, unknown>>, runConfig: Readonly<Record<string, unknown>>): string | undefined {
-        for (const config of [runConfig, sourceConfig]) {
-            const value = (config.Website as Record<string, unknown> | undefined)?.[key];
-            if (typeof value === 'string' && value.trim().length > 0) {
-                return value.trim();
-            }
-        }
-        return undefined;
-    }
-
-    /** `PageRendererOptions` from the run, else the source's Configuration. */
-    private renderOptions(sourceConfig: Readonly<Record<string, unknown>>, runConfig: Readonly<Record<string, unknown>>): PageRenderOptions | undefined {
-        for (const config of [runConfig, sourceConfig]) {
-            const options = config.PageRendererOptions;
-            if (options && typeof options === 'object' && !Array.isArray(options)) {
-                return options as PageRenderOptions;
-            }
-        }
-        return undefined;
     }
 
     /** `ContentType.ExtractorKey` for the source's content type, from the cached metadata. */
@@ -887,15 +820,11 @@ interface ResolvedSource {
     ObjectKeyTemplate: string | null;
     /** Values for placeholders the pipeline does not know itself, such as a tenant id. */
     ObjectKeyValues: Readonly<Record<string, string>>;
-    /** The registered page renderer this source's web pages are loaded through (`PageRenderer`); null for a plain GET. */
-    PageRenderer: string | null;
-    /** When the renderer is used: every HTML page, or only one a plain fetch finds empty. */
-    PageRenderMode: PageRenderMode;
-    /** How the renderer loads a page (`PageRendererOptions`). */
-    PageRendererOptions?: PageRenderOptions;
-    RenderTimeoutMs?: number;
-    /** `Website.UserAgent`: the User-Agent plain fetches send. */
-    UserAgent?: string;
-    /** `Website.MaxResponseBytes`: the most bytes a fetch reads. */
-    MaxResponseBytes?: number;
+    /** The source's configuration layers under this run (`SourceLayers`), for settings and `Tuning`. */
+    Layers: SourceConfigurationLayers;
+    /**
+     * How this source's web pages are fetched and rendered (`PageRenderer`, `PageRenderMode`, `PageRendererOptions`,
+     * `Website.*`), resolved as the website crawl resolves them (`ResolveWebFetchSettings`).
+     */
+    Web: WebFetchSettings;
 }

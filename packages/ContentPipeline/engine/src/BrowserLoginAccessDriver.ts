@@ -27,13 +27,17 @@
  * is restored by the `Headless` renderer into each page it renders, for a site whose session is not cookie-only.
  *
  * Every request the login page makes to a private or reserved address is refused (MJ's SSRF guard, by name), and
- * so is every redirect hop. Playwright routes only the first request of a redirect, and a redirect answer handed to
- * the browser is followed without the route too, so each request is fetched here without following redirects
- * ({@link BrowserLoginAccessDriver.RouteLogin}):
+ * so is every redirect hop; WebSockets, which Playwright's request routing does not see, are refused outright (as the
+ * `Headless` renderer refuses them). Playwright routes only the first request of a redirect, and a redirect answer
+ * handed to the browser is followed without the route too, so each request is fetched here without following
+ * redirects ({@link BrowserLoginAccessDriver.RouteLogin}):
  * - a page navigation that is redirected is answered with a page that navigates on to the checked target (carrying
- *   the redirect's cookies); that navigation comes through the route again, so every hop of a sign-on is checked;
- * - any other request (a script's, a 307/308 that keeps a posted body) has its redirects followed in the route,
- *   each hop checked, and the browser gets the last answer.
+ *   the redirect's cookies); that navigation comes through the route again, so every hop of a sign-on is checked.
+ *   A navigation whose 307/308 keeps a posted body (the form) is followed in the route only to its own origin: the
+ *   browser shows the answer under the first address, and the login's credentials are not re-posted to another
+ *   site (as `FormLogin` refuses them), so a hop to another origin fails the login;
+ * - any other request (a script's) has its redirects followed in the route, each hop checked, and the browser gets
+ *   the last answer.
  *
  * The artifact keeps only what belongs to the session's origins: the cookies that go to their hosts and their
  * `localStorage`. An identity provider's own cookies (a single sign-on hop's) stay in the login's browser.
@@ -52,7 +56,8 @@ import {
     SessionStorageState,
 } from '@memberjunction/content-pipeline-base';
 import { HeadlessPageRenderer } from './HeadlessPageRenderer.js';
-import { CookieMatchesHost, CookieSessionArtifact, LoginCredentials, SessionCookie, SessionOrigins, SessionTtlMs } from './LoginSession.js';
+import { Cookie, CookieJar } from 'tough-cookie';
+import { CookieSessionArtifact, LoginCredentials, SessionCookies, SessionOrigins, SessionTtlMs } from './LoginSession.js';
 
 /** The registered key. */
 export const BROWSER_LOGIN_ACCESS_DRIVER = 'BrowserLogin';
@@ -85,6 +90,7 @@ export class BrowserLoginAccessDriver extends BaseAccessDriver {
             request.Signal.addEventListener('abort', abort, { once: true });
             try {
                 await context.route('**/*', (route) => this.RouteLogin(route, context.request));
+                await context.routeWebSocket(/.*/, (socket) => socket.close({ code: 1008, reason: 'WebSockets are not allowed during a login' }));
                 const page = await context.newPage();
                 await this.SignIn(page, loginURL, credentials, request);
                 return await this.artifactOf(context, request);
@@ -123,13 +129,18 @@ export class BrowserLoginAccessDriver extends BaseAccessDriver {
                     return await route.abort('blockedbyclient');
                 }
                 const status = response.status();
-                const keepsBody = status === 307 || status === 308;
-                if (sent.isNavigationRequest() && !keepsBody) {
-                    return await route.fulfill({ status: 200, headers: NavigateOnHeaders(response), body: NavigateOnPage(next) });
+                const keepsMethod = status === 307 || status === 308;
+                const body = keepsMethod ? sent.postDataBuffer() : null;
+                if (sent.isNavigationRequest()) {
+                    if (!body) {
+                        return await route.fulfill({ status: 200, headers: NavigateOnHeaders(response), body: NavigateOnPage(next) });
+                    }
+                    if (new URL(next).origin !== new URL(url).origin) {
+                        return await route.abort('blockedbyclient');
+                    }
                 }
-                method = keepsBody ? method : 'GET';
+                method = keepsMethod ? method : 'GET';
                 target = next;
-                const body = keepsBody ? sent.postDataBuffer() : null;
                 response = await requests.fetch(target, { method, headers, ...(body ? { data: body } : {}), maxRedirects: 0 });
             }
         } catch {
@@ -201,39 +212,37 @@ export class BrowserLoginAccessDriver extends BaseAccessDriver {
      */
     private async artifactOf(context: BrowserContext, request: AccessRequest): Promise<AccessArtifact> {
         const state = await context.storageState();
-        const origins = SessionOrigins(request);
-        const hosts = origins.map((o) => new URL(o).hostname);
-        const cookies: SessionCookie[] = state.cookies.map((c) => ({
-            Name: c.name,
-            Value: c.value,
-            Domain: c.domain.replace(/^\./, '').toLowerCase(),
-            HostOnly: !c.domain.startsWith('.'),
-            Path: c.path,
-            ...(c.expires > 0 ? { ExpiresAt: c.expires * 1000 } : {}),
-            Secure: c.secure,
-            HttpOnly: c.httpOnly,
-            SameSite: c.sameSite,
-        }));
         const marker = request.Parameters.LoginCookieMarker;
-        if (marker && !cookies.some((c) => c.Name === marker)) {
-            throw new Error(`${this.Key}: the login did not succeed (no '${marker}' cookie; got ${cookies.map((c) => c.Name).join(', ') || 'none'})`);
+        if (marker && !state.cookies.some((c) => c.name === marker)) {
+            throw new Error(`${this.Key}: the login did not succeed (no '${marker}' cookie; got ${state.cookies.map((c) => c.name).join(', ') || 'none'})`);
         }
-        const artifact = CookieSessionArtifact(cookies, origins, SessionTtlMs(request), this.Key);
+        // The browser's cookies in a jar, so the session's cookies are chosen by the same RFC 6265 rules as a form login's.
+        const jar = new CookieJar();
+        for (const c of state.cookies) {
+            const domain = c.domain.replace(/^\./, '');
+            // A host-only cookie names no domain (the jar takes it from the URL, as for a Set-Cookie without one).
+            const cookie = new Cookie({
+                key: c.name,
+                value: c.value,
+                ...(c.domain.startsWith('.') ? { domain } : {}),
+                path: c.path,
+                expires: c.expires > 0 ? new Date(c.expires * 1000) : 'Infinity',
+                secure: c.secure,
+                httpOnly: c.httpOnly,
+                sameSite: c.sameSite.toLowerCase(),
+            });
+            jar.setCookieSync(cookie, `https://${domain}${c.path}`, { ignoreError: true });
+        }
+        const origins = SessionOrigins(request);
+        const artifact = CookieSessionArtifact(jar, origins, SessionTtlMs(request), this.Key);
         if (request.Parameters.LoginStorageState?.toLowerCase() === 'false') {
             return artifact;
         }
-        const forSession = (c: SessionCookie) => hosts.some((h) => CookieMatchesHost(c, h));
+        const kept = new Set(SessionCookies(jar, origins).map((c) => `${c.domain}|${c.path}|${c.key}`));
         const storage: SessionStorageState = {
-            Cookies: state.cookies.filter((_, i) => forSession(cookies[i])).map((c) => ({
-                Name: c.name,
-                Value: c.value,
-                Domain: c.domain,
-                Path: c.path,
-                Expires: c.expires,
-                HttpOnly: c.httpOnly,
-                Secure: c.secure,
-                SameSite: c.sameSite,
-            })),
+            Cookies: state.cookies
+                .filter((c) => kept.has(`${c.domain.replace(/^\./, '')}|${c.path}|${c.name}`))
+                .map((c) => ({ Name: c.name, Value: c.value, Domain: c.domain, Path: c.path, Expires: c.expires, HttpOnly: c.httpOnly, Secure: c.secure, SameSite: c.sameSite })),
             Origins: state.origins
                 .filter((o) => origins.includes(o.origin))
                 .map((o) => ({ Origin: o.origin, LocalStorage: o.localStorage.map((e) => ({ Name: e.name, Value: e.value })) })),

@@ -10,8 +10,8 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-import { MJGlobal } from '@memberjunction/global';
 import { AccessArtifact } from '../access/BaseAccessDriver.js';
+import { ResolveRegistered } from '../ResolveRegistered.js';
 
 /** What a renderer is asked to load. */
 export interface PageRenderRequest {
@@ -52,14 +52,7 @@ export interface PageRenderOptions {
     UserAgent?: string;
 }
 
-/**
- * When a source's pages go through its renderer (`Configuration.PageRenderMode`):
- * - `Always` (the default): every page is rendered, except an address whose HEAD names a document file
- *   ({@link IsDocumentContentType}: a PDF, a Word file), which is fetched plainly.
- * - `WhenEmpty`: a page is fetched plainly first and rendered only when that finds an empty or script-only
- *   page ({@link LooksLikeEmptyPage}), or when the site refused the plain fetch ({@link RendersAfterRefusal}),
- *   so a mostly static site pays for a browser only where it needs one.
- */
+/** When a source's pages go through its renderer (`Configuration.PageRenderMode`); see `PageRenderPolicy.ts`. */
 export type PageRenderMode = 'Always' | 'WhenEmpty';
 
 /** The render mode a configured value names; anything else is the default, `Always`. */
@@ -77,42 +70,6 @@ export function IsHtmlContentType(contentType: string | null | undefined): boole
 }
 
 /**
- * Whether a `Content-Type` names a document file a browser would download rather than render: PDF, Word, Excel,
- * PowerPoint, OpenDocument, RTF, EPUB, CSV, a zip, or an image, audio or video file. A renderer source fetches such
- * an address plainly. Anything else, `application/octet-stream` and `text/plain` included, is not known to be a
- * file (servers send those for pages too), so the page is rendered as before.
- */
-export function IsDocumentContentType(contentType: string | null | undefined): boolean {
-    const type = (contentType ?? '').split(';')[0].trim().toLowerCase();
-    return (
-        DOCUMENT_CONTENT_TYPES.has(type) ||
-        DOCUMENT_CONTENT_TYPE_PREFIXES.some((prefix) => type.startsWith(prefix))
-    );
-}
-
-/** Exact document types {@link IsDocumentContentType} recognises. */
-const DOCUMENT_CONTENT_TYPES: ReadonlySet<string> = new Set([
-    'application/pdf',
-    'application/msword',
-    'application/rtf',
-    'text/rtf',
-    'application/epub+zip',
-    'application/zip',
-    'text/csv',
-    'application/vnd.ms-excel',
-    'application/vnd.ms-powerpoint',
-]);
-
-/** Document type families {@link IsDocumentContentType} recognises by prefix. */
-const DOCUMENT_CONTENT_TYPE_PREFIXES: readonly string[] = [
-    'application/vnd.openxmlformats-officedocument.',
-    'application/vnd.oasis.opendocument.',
-    'image/',
-    'audio/',
-    'video/',
-];
-
-/**
  * Whether a plain fetch's error status is worth a render in `WhenEmpty` mode: a site that refuses a plain client
  * (401, 403, 406, a 5xx from bot protection) often serves the page to a browser. Not a 404 or 410, which a browser
  * would get too (rendering every dead link would cost a browser each), nor a 429, which is the site asking the
@@ -125,20 +82,49 @@ export function RendersAfterRefusal(status: number): boolean {
 /** Below this much visible text a page counts as empty: a shell that a script fills in. */
 export const DEFAULT_EMPTY_PAGE_TEXT_CHARS = 200; // a few words of real content; a script shell's noscript/nav text is shorter
 
+/** Elements whose content is never visible text. */
+const INVISIBLE_ELEMENTS = new Set(['script', 'style', 'noscript', 'template', 'svg']);
+
 /**
  * Whether an HTML page is a shell its scripts fill in: under `minChars` characters of visible text once scripts,
- * styles, `<noscript>`, `<template>`, comments and tags are removed. A cheap structural test, not a parse.
+ * styles, `<noscript>`, `<template>`, `<svg>`, comments and tags are removed. A cheap structural scan, not a parse,
+ * and linear in the page's length whatever it holds (an unclosed comment or element swallows the rest of the page,
+ * as a browser would, rather than being searched for again); it stops as soon as there is enough text.
  */
 export function LooksLikeEmptyPage(html: string, minChars: number = DEFAULT_EMPTY_PAGE_TEXT_CHARS): boolean {
-    const body = /<body\b[^>]*>([\s\S]*)/i.exec(html)?.[1] ?? html;
-    const text = body
-        .replace(/<!--[\s\S]*?-->/g, ' ')
-        .replace(/<(script|style|noscript|template|svg)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/&nbsp;|&#160;/gi, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    return text.length < minChars;
+    // Lower-cased once so tag names match without regard to case; the text's length is all that is counted.
+    const lower = html.toLowerCase();
+    const body = lower.search(/<body\b/);
+    let i = body < 0 ? 0 : lower.indexOf('>', body) + 1 || lower.length;
+    const text: string[] = [];
+    let visible = 0;
+    while (i < lower.length) {
+        const tag = lower.indexOf('<', i);
+        const segment = lower.slice(i, tag < 0 ? lower.length : tag);
+        text.push(segment);
+        visible += segment.replace(/\s+|&nbsp;|&#160;/gi, '').length;
+        if (visible >= minChars || tag < 0) {
+            break;
+        }
+        text.push(' ');
+        if (lower.startsWith('<!--', tag)) {
+            const end = lower.indexOf('-->', tag + 4);
+            i = end < 0 ? lower.length : end + 3;
+            continue;
+        }
+        const close = lower.indexOf('>', tag);
+        const name = /^<([a-z][a-z0-9-]*)/.exec(lower.slice(tag, tag + 32))?.[1];
+        if (close < 0) {
+            break;
+        }
+        i = close + 1;
+        if (name && INVISIBLE_ELEMENTS.has(name)) {
+            const end = lower.indexOf(`</${name}`, i);
+            const endClose = end < 0 ? -1 : lower.indexOf('>', end);
+            i = endClose < 0 ? lower.length : endClose + 1;
+        }
+    }
+    return text.join('').replace(/&nbsp;|&#160;/gi, ' ').replace(/\s+/g, ' ').trim().length < minChars;
 }
 
 /** A rendered page. */
@@ -166,10 +152,6 @@ export abstract class BasePageRenderer {
 
     /** Resolve a registered renderer by key, or null; never a hollow base instance. */
     public static Resolve(key: string): BasePageRenderer | null {
-        if (!key || key.trim().length === 0) {
-            return null;
-        }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BasePageRenderer>(BasePageRenderer, key.trim());
-        return result.Resolved ? result.Instance : null;
+        return ResolveRegistered<BasePageRenderer>(BasePageRenderer, key);
     }
 }

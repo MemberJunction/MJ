@@ -40,4 +40,17 @@ describe('HtmlExtractor', () => {
         expect((await new HtmlExtractor().Extract(request(page, { Options: { TitleSelector: '.missing' } }))).Blocks[0].Title).toBe('Site name');
         expect((await new HtmlExtractor().Extract(request(page))).Blocks[0].Title).toBe('Site name');
     });
+
+    it('lets a byte-order mark outrank every label', () => {
+        const bom = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('<html><head><meta charset="windows-1252"></head></html>')]);
+        expect(HtmlCharset(bom, 'text/html; charset=ISO-8859-1')).toBe('utf-8');
+    });
+
+    it('reports a TitleSelector that is not valid CSS, and uses the <title>', async () => {
+        const page = new TextEncoder().encode('<html><head><title>Site name</title></head><body><p>Body text.</p></body></html>');
+        const progress: string[] = [];
+        const result = await new HtmlExtractor().Extract(request(page, { Options: { TitleSelector: 'h1[' }, ReportProgress: (m: string) => progress.push(m) }));
+        expect(result.Blocks[0].Title).toBe('Site name');
+        expect(progress.some((m) => /not a valid CSS selector/.test(m))).toBe(true);
+    });
 });

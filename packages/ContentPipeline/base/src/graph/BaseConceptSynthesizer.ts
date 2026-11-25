@@ -8,7 +8,6 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { ConceptSeedCluster } from './ConceptSeedClustering.js';
 import type {
@@ -17,6 +16,7 @@ import type {
     GraphConceptType,
     ResolvedGraphOverlayConfig,
 } from './GraphOverlay.types.js';
+import { ResolveRegistered } from '../ResolveRegistered.js';
 
 /** Citation linking a synthesized concept or specification rule back to a `Content Item Chunk`. */
 export interface ConceptChunkCitation {
@@ -120,13 +120,6 @@ export abstract class BaseConceptSynthesizer {
 
     /** Resolves a registered synthesizer by key, returning `null` if unregistered. */
     public static Resolve(key: string): BaseConceptSynthesizer | null {
-        if (!key || key.trim().length === 0) {
-            return null;
-        }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseConceptSynthesizer>(
-            BaseConceptSynthesizer,
-            key.trim(),
-        );
-        return result.Resolved ? result.Instance : null;
+        return ResolveRegistered<BaseConceptSynthesizer>(BaseConceptSynthesizer, key);
     }
 }

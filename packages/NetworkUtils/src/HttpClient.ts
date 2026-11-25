@@ -18,7 +18,8 @@
  * wherever the URL is caller-controlled.
  */
 
-import { SafeFetch } from "./SSRFGuard.js";
+import { SafeFetch, SafeFetchInit } from "./SSRFGuard.js";
+import { CharsetOfContentType } from "./Charset.js";
 
 /** HTTP methods supported by {@link HttpRequest}. */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
@@ -66,8 +67,13 @@ export interface HttpResponse<T = unknown> {
     Status: number;
     /** HTTP status text. */
     StatusText: string;
-    /** Response headers, lower-cased keys. */
+    /** Response headers, lower-cased keys. A repeated header is one comma-joined value; see {@link SetCookies}. */
     Headers: Record<string, string>;
+    /**
+     * Each `Set-Cookie` header on its own. They cannot be read from {@link Headers}: repeated headers are joined with
+     * commas there, and a cookie's `Expires` date holds a comma of its own. Always set by {@link HttpRequest}.
+     */
+    SetCookies?: string[];
     /** The final URL the response came from (after any redirects). */
     Url: string;
     /** True when `Status` is in the 2xx range. */
@@ -148,6 +154,8 @@ export interface HttpRequestConfig {
      * `arraybuffer` and `blob` response types; a `stream` is the caller's to bound. Unset: no limit.
      */
     MaxResponseBytes?: number;
+    /** With `ValidateUrl`, called at each redirect hop before it is followed (see `SafeFetchInit.OnRedirect`). */
+    OnRedirect?: SafeFetchInit["OnRedirect"];
 }
 
 /**
@@ -422,20 +430,6 @@ async function ReadBodyCapped(response: Response, maxBytes: number): Promise<Arr
     return buffer;
 }
 
-/** The charset a `Content-Type` names, when it names one `TextDecoder` knows; else utf-8 (what `Response.text()` uses). */
-function CharsetOf(contentType: string | null): string {
-    const charset = /charset\s*=\s*"?([^";\s]+)/i.exec(contentType ?? "")?.[1];
-    if (charset) {
-        try {
-            new TextDecoder(charset);
-            return charset;
-        } catch {
-            // An unknown label falls back to utf-8, as Response.text() would.
-        }
-    }
-    return "utf-8";
-}
-
 /** Reads and interprets a response body per the requested {@link HttpResponseType}, refusing more than `maxBytes` when set. */
 async function ReadBody(response: Response, responseType: HttpResponseType, maxBytes?: number): Promise<unknown> {
     if (maxBytes !== undefined && maxBytes >= 0 && responseType !== "none" && responseType !== "stream") {
@@ -446,7 +440,7 @@ async function ReadBody(response: Response, responseType: HttpResponseType, maxB
             case "blob":
                 return new Blob([bytes], { type: response.headers.get("content-type") ?? "" });
             case "text":
-                return new TextDecoder(CharsetOf(response.headers.get("content-type"))).decode(bytes);
+                return new TextDecoder(CharsetOfContentType(response.headers.get("content-type")) ?? "utf-8").decode(bytes);
             case "json":
             default:
                 return ParseJsonText(new TextDecoder("utf-8").decode(bytes));
@@ -588,6 +582,7 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
                 signal: controller.signal,
                 MaxRedirects: maxRedirects,
                 StripHeadersOnCrossOriginRedirect: config.StripHeadersOnCrossOriginRedirect,
+                OnRedirect: config.OnRedirect,
             });
         } else {
             response = await fetch(url, {
@@ -608,6 +603,7 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
             Status: response.status,
             StatusText: response.statusText,
             Headers: responseHeaders,
+            SetCookies: response.headers.getSetCookie(),
             Url: response.url || url,
             Ok: response.status >= 200 && response.status < 300,
         };

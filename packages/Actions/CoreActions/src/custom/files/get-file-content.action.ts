@@ -2,16 +2,8 @@ import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunctio
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { BaseFileStorageAction } from "./base-file-storage.action";
-import {
-    IsImageContentType,
-    IsPdfContentType,
-    IsSpreadsheetContentType,
-    IsTextContentType,
-    IsWordContentType,
-    ParsePdf,
-    ParseSpreadsheet,
-    ParseWord,
-} from '@memberjunction/document-parsing';
+import { ParsePdf, ParseSpreadsheet, ParseWord } from '@memberjunction/document-parsing';
+import { IsImageContentType, IsPdfContentType, IsSpreadsheetContentType, IsTextContentType, IsWordContentType } from '@memberjunction/network-utils';
 
 /**
  * Smart file content retrieval action that automatically handles content extraction

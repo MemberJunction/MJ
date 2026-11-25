@@ -3,8 +3,9 @@
  * and the source's render mode; and the browser state a session may carry.
  */
 import { describe, expect, it } from 'vitest';
-import { IsDocumentContentType, IsHtmlContentType, LooksLikeEmptyPage, RendersAfterRefusal, ResolvePageRenderMode } from '../render/BasePageRenderer.js';
+import { IsHtmlContentType, LooksLikeEmptyPage, RendersAfterRefusal, ResolvePageRenderMode } from '../render/BasePageRenderer.js';
 import { ACCESS_STORAGE_STATE_EXTENSION, SessionStorageStateOf } from '../access/BaseAccessDriver.js';
+import { AlwaysRenderPolicy, BasePageRenderPolicy, WhenEmptyRenderPolicy } from '../render/PageRenderPolicy.js';
 
 describe('IsHtmlContentType', () => {
     it('is HTML for text/html, XHTML, and no content type at all', () => {
@@ -33,14 +34,56 @@ describe('LooksLikeEmptyPage', () => {
     it('takes the threshold it is given', () => {
         expect(LooksLikeEmptyPage('<body><p>Hello there</p></body>', 5)).toBe(false);
     });
+
+    it('treats an unclosed comment or element as the rest of the page, and matches tag names without regard to case', () => {
+        expect(LooksLikeEmptyPage(`<body><p>Hi</p><!-- ${'hidden '.repeat(100)}`)).toBe(true);
+        expect(LooksLikeEmptyPage(`<body><SCRIPT>${'x();'.repeat(100)}</Script><p>Hi</p></body>`)).toBe(true);
+    });
+
+    it('stays linear on a page built to make a scan backtrack (unclosed comments and elements, a megabyte of them)', () => {
+        const started = Date.now();
+        for (const opener of ['<!--', '<svg>', '<script>', '<body', '<p']) {
+            LooksLikeEmptyPage('<body>' + opener.repeat(250_000));
+        }
+        expect(Date.now() - started).toBeLessThan(1000);
+    });
 });
 
-describe('ResolvePageRenderMode', () => {
-    it('is WhenEmpty only when asked, case aside; anything else is Always', () => {
-        expect(ResolvePageRenderMode('whenempty')).toBe('WhenEmpty');
-        expect(ResolvePageRenderMode('Always')).toBe('Always');
+describe('BasePageRenderPolicy', () => {
+    const html = (text: string) => `<html><body><p>${text}</p></body></html>`;
+
+    it('reads the configured mode, and the default for anything else', () => {
+        expect(ResolvePageRenderMode(' whenempty ')).toBe('WhenEmpty');
         expect(ResolvePageRenderMode(undefined)).toBe('Always');
-        expect(ResolvePageRenderMode('sometimes')).toBe('Always');
+        expect(ResolvePageRenderMode('Sometimes')).toBe('Always');
+        expect(BasePageRenderPolicy.Resolve('WhenEmpty')).toBeInstanceOf(WhenEmptyRenderPolicy);
+        expect(BasePageRenderPolicy.Resolve('Always')).toBeInstanceOf(AlwaysRenderPolicy);
+    });
+
+    it('Always: probes first, and renders anything a HEAD does not name a document file', () => {
+        const policy = new AlwaysRenderPolicy();
+        expect(policy.ProbesFirst).toBe(true);
+        expect(policy.RendersAfterProbe('text/html')).toBe(true);
+        expect(policy.RendersAfterProbe(undefined)).toBe(true);
+        expect(policy.RendersAfterProbe('application/octet-stream')).toBe(true);
+        expect(policy.RendersAfterProbe('application/pdf')).toBe(false);
+    });
+
+    it('WhenEmpty: renders an empty shell or a refused page, keeps a page with text, a missing page or a file', () => {
+        const policy = new WhenEmptyRenderPolicy();
+        expect(policy.ProbesFirst).toBe(false);
+        expect(policy.RendersAfterPlainFetch({ Status: 200, ContentType: 'text/html', Html: html('') }, {})).toBe(true);
+        expect(policy.RendersAfterPlainFetch({ Status: 200, ContentType: 'text/html', Html: html('words '.repeat(50)) }, {})).toBe(false);
+        expect(policy.RendersAfterPlainFetch({ Status: 403, Html: '' }, {})).toBe(true);
+        expect(policy.RendersAfterPlainFetch({ Status: 404, Html: '' }, {})).toBe(false);
+        expect(policy.RendersAfterPlainFetch({ Status: 200, ContentType: 'application/pdf', Html: '' }, {})).toBe(false);
+    });
+
+    it('WhenEmpty: the empty-page threshold is the Tuning value when set', () => {
+        const policy = new WhenEmptyRenderPolicy();
+        const short = { Status: 200, ContentType: 'text/html', Html: html('just a few words here') };
+        expect(policy.RendersAfterPlainFetch(short, {})).toBe(true);
+        expect(policy.RendersAfterPlainFetch(short, { EmptyPageTextChars: 10 })).toBe(false);
     });
 });
 
@@ -50,20 +93,6 @@ describe('SessionStorageStateOf', () => {
         expect(SessionStorageStateOf({ Extensions: { [ACCESS_STORAGE_STATE_EXTENSION]: state } })).toBe(state);
         expect(SessionStorageStateOf({ Extensions: { [ACCESS_STORAGE_STATE_EXTENSION]: 'junk' } })).toBeNull();
         expect(SessionStorageStateOf(null)).toBeNull();
-    });
-});
-
-describe('IsDocumentContentType', () => {
-    it('knows the document files a browser downloads rather than renders', () => {
-        for (const type of ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'image/png', 'text/csv; charset=utf-8']) {
-            expect(IsDocumentContentType(type)).toBe(true);
-        }
-    });
-
-    it('does not count a type servers also send for pages, or none at all', () => {
-        for (const type of ['text/html', 'application/octet-stream', 'text/plain', 'application/json', '', undefined]) {
-            expect(IsDocumentContentType(type)).toBe(false);
-        }
     });
 });
 

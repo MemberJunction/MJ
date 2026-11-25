@@ -20,7 +20,9 @@
  */
 
 import * as cheerio from 'cheerio';
+import { LogError } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
+import { CharsetOfContentType, KnownCharset } from '@memberjunction/network-utils';
 import { TextExtractor } from '@memberjunction/ai-vectors';
 import { BaseContentExtractor, ExtractRequest, ExtractResult } from '@memberjunction/content-pipeline-base';
 
@@ -46,7 +48,7 @@ export class HtmlExtractor extends BaseContentExtractor {
             return { Blocks: [] };
         }
         const titleSelector = request.Options?.TitleSelector;
-        const title = (typeof titleSelector === 'string' && titleSelector.trim() ? this.selectedTitle(html, titleSelector.trim()) : null) ?? this.titleOf(html);
+        const title = (typeof titleSelector === 'string' && titleSelector.trim() ? this.selectedTitle(html, titleSelector.trim(), request) : null) ?? this.titleOf(html);
         return {
             Blocks: [
                 {
@@ -57,13 +59,19 @@ export class HtmlExtractor extends BaseContentExtractor {
         };
     }
 
-    /** The text of the first element `selector` matches, or null when none does (or the selector is not valid CSS). */
-    private selectedTitle(html: string, selector: string): string | null {
+    /**
+     * The text of the first element `selector` matches, or null when none does: the page's `<title>` is then used. A
+     * selector that is not valid CSS is reported (it never matches anything, so the setting would do nothing unseen).
+     */
+    private selectedTitle(html: string, selector: string, request: ExtractRequest): string | null {
         try {
             const $ = cheerio.load(html);
             const text = $(selector).first().text().replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE_CHARS).trim();
             return text.length > 0 ? text : null;
-        } catch {
+        } catch (error) {
+            const message = `ExtractorOptions.Html.TitleSelector '${selector}' is not a valid CSS selector: ${error instanceof Error ? error.message : String(error)}`;
+            LogError(`HtmlExtractor: ${message}`);
+            request.ReportProgress(message);
             return null;
         }
     }
@@ -116,29 +124,22 @@ export class HtmlExtractor extends BaseContentExtractor {
 }
 
 /**
- * The charset to decode an HTML page with: the served `Content-Type`'s, else the page's own `<meta charset>` or
+ * The charset to decode an HTML page with: its byte-order mark's, else the served `Content-Type`'s, else the page's own `<meta charset>` or
  * `<meta http-equiv="Content-Type" content="...; charset=...">` within its first bytes, else UTF-8. A label
  * `TextDecoder` does not know is passed over.
  */
 export function HtmlCharset(content: Uint8Array, contentType?: string): string {
-    const fromHeader = Known(/charset\s*=\s*["']?([\w.:-]+)/i.exec(contentType ?? '')?.[1]);
+    // A byte-order mark outranks every label (the HTML standard's encoding sniffing).
+    if (content[0] === 0xef && content[1] === 0xbb && content[2] === 0xbf) {
+        return 'utf-8';
+    }
+    if ((content[0] === 0xfe && content[1] === 0xff) || (content[0] === 0xff && content[1] === 0xfe)) {
+        return content[0] === 0xfe ? 'utf-16be' : 'utf-16le';
+    }
+    const fromHeader = CharsetOfContentType(contentType);
     if (fromHeader) {
         return fromHeader;
     }
     const head = new TextDecoder('latin1').decode(content.subarray(0, CHARSET_PRESCAN_BYTES));
-    const meta =
-        /<meta[^>]+charset\s*=\s*["']?([\w.:-]+)/i.exec(head)?.[1];
-    return Known(meta) ?? 'utf-8';
-}
-
-/** The label when `TextDecoder` knows it, else null. */
-function Known(label: string | undefined): string | null {
-    if (!label) {
-        return null;
-    }
-    try {
-        return new TextDecoder(label).encoding;
-    } catch {
-        return null;
-    }
+    return KnownCharset(/<meta[^>]+charset\s*=\s*["']?([\w.:-]+)/i.exec(head)?.[1]) ?? 'utf-8';
 }

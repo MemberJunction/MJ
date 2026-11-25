@@ -4,10 +4,10 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-import { MJGlobal } from '@memberjunction/global';
 import { ResolvedConfidenceScale } from '../ConfidenceScale.js';
 import { DiscoveredField, PipelineStageRequest } from '../discover/SourceDriver.js';
 import { ResolvedPipelineTuning } from '../PipelineTuning.js';
+import { ResolveRegistered } from '../ResolveRegistered.js';
 
 /** Mutable tree-wide budget shared across a top-level archive and any nested archives unpacked inside it. */
 export interface ArchiveBudget {
@@ -143,13 +143,6 @@ export abstract class BaseContentExtractor {
 
     /** Resolve a registered extractor by key, returning null rather than a hollow base instance. */
     public static Resolve(key: string): BaseContentExtractor | null {
-        if (!key || key.trim().length === 0) {
-            return null;
-        }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseContentExtractor>(
-            BaseContentExtractor,
-            key.trim(),
-        );
-        return result.Resolved ? result.Instance : null;
+        return ResolveRegistered<BaseContentExtractor>(BaseContentExtractor, key);
     }
 }

@@ -50,8 +50,9 @@ export type {
 // Error classification helpers
 export { IsRetryableError, ClassifyError } from './types.js';
 // Standard Retry-After extraction — exported so a connector overriding ExtractRetryAfterMs for a
-// non-standard vendor signal can still fall back to the header when the vendor sends one.
-export { ExtractRetryAfterFromError, ParseRetryAfterValue, MAX_HONORED_RETRY_AFTER_MS } from './RetryAfter.js';
+// non-standard vendor signal can still fall back to the header when the vendor sends one. It lives in
+// @memberjunction/network-utils (shared with the website crawl) and is re-exported here for existing imports.
+export { ExtractRetryAfterFromError, ParseRetryAfterValue, MAX_HONORED_RETRY_AFTER_MS } from '@memberjunction/network-utils';
 
 // Transforms
 export type {
@@ -99,9 +100,9 @@ export { SerializeKeyValue, serializeKeyValue } from './KeySerialization.js';
 // Services
 export { WatermarkService } from './WatermarkService.js';
 
-// Retry
-export { WithRetry, DEFAULT_RETRY_CONFIG } from './RetryRunner.js';
-export type { RetryConfig } from './RetryRunner.js';
+// Retry (in @memberjunction/network-utils; re-exported for existing imports)
+export { WithRetry, DEFAULT_RETRY_CONFIG } from '@memberjunction/network-utils';
+export type { RetryConfig } from '@memberjunction/network-utils';
 
 // Action Metadata Generator
 export { ActionMetadataGenerator } from './ActionMetadataGenerator.js';
@@ -151,8 +152,8 @@ export { MostRecentWinner, mostRecentWinner, ParseTimestamp, parseTimestamp } fr
 export type { RecencyWinner } from './ConflictRecency.js';
 export { EnrichSchemaConstraints } from './EnrichSchemaConstraints.js';
 export type { EnrichOptions, EnrichResult, DescribeFn } from './EnrichSchemaConstraints.js';
-export { RateLimiter } from './RateLimiter.js';
-export type { RateLimiterOptions, RateLimiterKeyState, NowFn, SleepFn } from './RateLimiter.js';
+export { RateLimiter } from '@memberjunction/network-utils';
+export type { RateLimiterOptions, RateLimiterKeyState, NowFn, SleepFn } from '@memberjunction/network-utils';
 export { IntegrationConnectorCreationPipeline } from './IntegrationConnectorCreationPipeline.js';
 export type { ConnectorCreationPipelineOptions, ConnectorCreationPipelineResult } from './IntegrationConnectorCreationPipeline.js';
 export { DiscoveryWatchdog, ResolveWatchdogIntervalMs } from './DiscoveryWatchdog.js';

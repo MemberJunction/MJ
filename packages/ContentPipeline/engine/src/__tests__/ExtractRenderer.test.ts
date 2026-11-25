@@ -48,14 +48,14 @@ function page(): WorkingRecord {
     return record;
 }
 
-function source(configuration: Record<string, unknown>): void {
+function source(configuration: Record<string, unknown>, typeConfiguration: Record<string, unknown> = {}): void {
     vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
         ContentSourceID: 'SRC-1',
         URL: 'https://site.test/app',
         Settings: {},
         Parameters: {},
         Configuration: configuration,
-        TypeConfiguration: {},
+        TypeConfiguration: typeConfiguration,
         Problems: [],
         IsValid: true,
     } as never);
@@ -170,5 +170,13 @@ describe('Extract through a page renderer', () => {
         fetchContent.mockRejectedValue(new HttpError('Request failed with status code 404', { Status: 404, Url: 'https://site.test/app/page', Method: 'GET' }));
         await expect(new ExtractStage().Run(page(), context())).rejects.toThrow(/404/);
         expect(renders).toHaveLength(1);
+    });
+
+    it("reads the render settings as the crawl does: a renderer and mode named on the source type apply", async () => {
+        source({}, { PageRenderer: 'FakeRenderer', PageRenderMode: 'WhenEmpty', Website: { UserAgent: 'Type-UA' } });
+        fetchContent.mockResolvedValue({ Content: new TextEncoder().encode('<html><body><div id="root"></div></body></html>'), ContentType: 'text/html' });
+        await new ExtractStage().Run(page(), context());
+        expect(renders).toHaveLength(1);
+        expect(fetchContent.mock.calls[0][0]).toMatchObject({ UserAgent: 'Type-UA' });
     });
 });

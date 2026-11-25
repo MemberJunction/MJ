@@ -1,37 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import ExcelJS from 'exceljs';
-import {
-    IsImageContentType,
-    ParseSpreadsheet,
-    IsPdfContentType,
-    IsSpreadsheetContentType,
-    IsTextContentType,
-    IsWordContentType,
-    SheetsToText,
-} from '../index.js';
-
-describe('content types', () => {
-    it('recognises every Office format in both generations', () => {
-        // The pair that drifted when this knowledge lived in two places.
-        expect(IsWordContentType('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(true);
-        expect(IsWordContentType('application/msword')).toBe(true);
-        expect(IsSpreadsheetContentType('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe(true);
-        expect(IsSpreadsheetContentType('application/vnd.ms-excel')).toBe(true);
-    });
-
-    it('treats json and xml as text, because they decode without a parser', () => {
-        expect(IsTextContentType('text/html')).toBe(true);
-        expect(IsTextContentType('application/json')).toBe(true);
-        expect(IsTextContentType('application/xml')).toBe(true);
-        expect(IsTextContentType('application/pdf')).toBe(false);
-    });
-
-    it('separates images and PDFs from each other', () => {
-        expect(IsImageContentType('image/png')).toBe(true);
-        expect(IsImageContentType('application/pdf')).toBe(false);
-        expect(IsPdfContentType('application/pdf')).toBe(true);
-    });
-});
+import { ParseSpreadsheet, SheetsToText } from '../index.js';
 
 describe('rendering sheets as text', () => {
     it('joins cells with tabs and rows with newlines', () => {

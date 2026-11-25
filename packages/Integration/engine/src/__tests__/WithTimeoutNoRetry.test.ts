@@ -16,7 +16,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { WithTimeout, OperationTimeoutError } from '../BaseIntegrationConnector.js';
-import { WithRetry, type RetryConfig } from '../RetryRunner.js';
+import { WithRetry, type RetryConfig } from '@memberjunction/network-utils';
 import { ClassifyError, IsRetryableError } from '../types.js';
 
 /**

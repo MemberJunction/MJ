@@ -7,7 +7,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CrawlFetchers, CrawlOptions, CrawlPage, DecodeCrawlState, EncodeCrawlState, ParseSitemap, WebsiteCrawl } from '../Websites/generic/WebsiteCrawl';
-import { CrawlPoliteness, RetryAfterMs } from '../Websites/generic/CrawlPoliteness';
 import { CrawlScope, IsCalendarURL } from '../Websites/generic/CrawlScope';
 
 const ROOT = 'https://site.test/docs';
@@ -98,6 +97,21 @@ describe('the crawl', () => {
         expect(found).toEqual([at('/docs/start'), at('/docs/a'), at('/docs/b')]);
         // The sibling paths are fetched to know they are alive, but their links are not followed.
         expect(reads).toEqual([at('/docs/start'), at('/docs/a'), at('/docs/b')]);
+    });
+
+    it('with CheckLeafPages off, reports the pages whose links it will not read unfetched, dead ones included', async () => {
+        const reads: string[] = [];
+        const { found } = await drain(new WebsiteCrawl(options({ MaxDepth: 0, CheckLeafPages: false }), fetchers({}, reads)));
+        // start is read for its links; a and b (one level past MaxDepth) are reported as found, never fetched.
+        expect(reads).toEqual([at('/docs/start')]);
+        expect(found).toEqual([at('/docs/start'), at('/docs/a'), at('/docs/b')]);
+    });
+
+    it('by default fetches those pages to know they are alive, so a dead one is not reported', async () => {
+        const reads: string[] = [];
+        const { found } = await drain(new WebsiteCrawl(options({ MaxDepth: 1 }), fetchers({}, reads)));
+        expect(reads).toContain(at('/docs/missing'));
+        expect(found).not.toContain(at('/docs/missing'));
     });
 
     it('reads the links of at most MaxPages pages, and still checks and reports the pages they linked to', async () => {
@@ -328,7 +342,7 @@ describe('politeness', () => {
                 siteFetchers(
                     {
                         [at('/docs/start')]: { Links: ['/docs/paused', '/docs/blocked'] },
-                        [at('/docs/paused')]: (attempt) => (attempt === 0 ? { Status: 503, Headers: { 'retry-after': '0' } } : {}),
+                        [at('/docs/paused')]: (attempt) => (attempt === 0 ? { Status: 503, Headers: { 'retry-after': '1' } } : {}),
                         [at('/docs/blocked')]: { Status: 503 },
                     },
                     reads,
@@ -358,29 +372,20 @@ describe('politeness', () => {
         expect(found).toEqual([at('/docs/start'), at('/docs/b'), at('/docs/busy'), at('/docs/deep')]);
     });
 
-    it('paces a host that limited it, and slows further with each limit', async () => {
-        let clock = 0;
+    it("holds the whole host back after a 429, not just the page that got it (the shared rate limiter)", async () => {
         const waits: number[] = [];
-        const politeness = new CrawlPoliteness({ BackoffMs: 100, LimitedIntervalMs: 50 }, async (ms) => {
-            waits.push(ms);
-            clock += ms;
-        }, () => clock, () => 0.5);
-        const signal = new AbortController().signal;
-        await politeness.WaitTurn('h', signal);
-        expect(waits).toEqual([]); // never limited: never slowed
-        expect(politeness.OnLimited('h', undefined, 0)).toBe(100);
-        await politeness.WaitTurn('h', signal);
-        expect(waits).toEqual([100]); // the pause
-        await politeness.WaitTurn('h', signal);
-        expect(waits).toEqual([100, 50]); // then paced
-        politeness.OnLimited('h', 0, 1);
-        expect(politeness.IsPaced('h')).toBe(true);
-    });
-
-    it('reads Retry-After as seconds or a date', () => {
-        expect(RetryAfterMs('2')).toBe(2000);
-        expect(RetryAfterMs('Thu, 01 Jan 1970 00:00:10 GMT', 4000)).toBe(6000);
-        expect(RetryAfterMs('soon')).toBeUndefined();
+        await drain(
+            new WebsiteCrawl(
+                options({ ...fakeTime(waits), Politeness: { BackoffMs: 1 } }),
+                siteFetchers({
+                    [at('/docs/start')]: { Links: ['/docs/a', '/docs/b'] },
+                    [at('/docs/a')]: (attempt) => (attempt === 0 ? { Status: 429, Headers: { 'retry-after': '5' } } : {}),
+                    [at('/docs/b')]: {},
+                }),
+            ),
+        );
+        // The retry of a waits out the 5 s; the host's bucket was frozen for it, so nothing reached the host sooner.
+        expect(waits.reduce((sum, ms) => sum + ms, 0)).toBeGreaterThanOrEqual(5000);
     });
 
     it('fetches up to Concurrency pages at a time and finds the same pages', async () => {

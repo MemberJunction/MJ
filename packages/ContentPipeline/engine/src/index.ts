@@ -16,6 +16,7 @@ export * from './LoginSession.js';
 export * from './FormLoginAccessDriver.js';
 export * from './BrowserLoginAccessDriver.js';
 export * from './ContentFetcher.js';
+export * from './ConfigurationTypeChecks.js';
 export * from './ContentPipelineDeleteMarker.js';
 export * from './ExtractorCascade.js';
 export * from './PipelineStageRegistration.js';

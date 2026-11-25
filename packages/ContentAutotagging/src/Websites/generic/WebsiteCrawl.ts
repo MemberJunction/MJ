@@ -9,9 +9,10 @@
  * once more at the end of the queue and then reported, for Extract (and its retry schedule) to decide. A page
  * that is not HTML (a PDF, a Word file) is reported without its links being read.
  *
- * **Politely.** A host that answers 429 (or 503 with `Retry-After`) is backed off, retried and then paced (see
- * {@link CrawlPoliteness}); a page still limited after its retries goes to the back of the queue once rather than
- * losing its links. With `Concurrency` above 1, that many pages are fetched at a time.
+ * **Politely.** Every fetch to a host goes through that host's rate limiter (network-utils `RateLimiter`); a host that
+ * answers 429 (or 503 with `Retry-After`) is slowed, and the fetch is retried after the longer of what it asks and an
+ * exponential backoff (`WithRetry`). A page still limited after its retries goes to the back of the queue once rather
+ * than losing its links. With `Concurrency` above 1, that many pages are fetched at a time.
  *
  * The crawl keeps its frontier (pages still to read, with their depth) and every URL it has seen. When the walk's
  * deadline arrives it stops between pages and hands that state back as a resume token; the next walk picks up
@@ -28,7 +29,8 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
 import * as cheerio from 'cheerio';
 import { IsHtmlContentType } from '@memberjunction/content-pipeline-base';
-import { CrawlPoliteness, CrawlPolitenessOptions, CrawlSleep, AbortableSleep, RateLimitOf } from './CrawlPoliteness';
+import { AbortableDelay } from '@memberjunction/ai';
+import { ParseRetryAfterValue, RateLimiter, RetryConfig, WithRetry } from '@memberjunction/network-utils';
 import { CrawlScope, CrawlScopeOptions, NormalizeCrawlURL } from './CrawlScope';
 
 /** A page as the crawl needs it. */
@@ -80,16 +82,23 @@ export interface CrawlOptions extends CrawlScopeOptions {
     DelayMs: number;
     /** How many pages are fetched at a time. Default 1. */
     Concurrency?: number;
-    /** How a host that rate-limits the crawl is backed off. */
-    Politeness?: CrawlPolitenessOptions;
+    /**
+     * Fetch a page whose links will not be read (one level past `MaxDepth`, a sibling path, any page past `MaxPages`)
+     * to know it is alive before reporting it. Default true: a dead link never becomes an item. `false` reports such
+     * pages unfetched, as found, which saves the crawl one request per page (Extract fetches each one anyway) at the
+     * cost of dead links becoming items that fail in Extract.
+     */
+    CheckLeafPages?: boolean;
+    /** How a host that rate-limits the crawl is backed off and paced (`Website.RateLimit`). */
+    Politeness?: CrawlRateLimitOptions;
     /** A page last modified at or before this (its sitemap `lastmod`, or its `Last-Modified`) is not reported; its links are still followed. */
     Since?: Date | null;
     /** Stop between pages at this time and return a resume token. */
     Deadline?: Date | null;
     Signal: AbortSignal;
-    /** How the crawl waits (backoff, pacing, the delay); tests pass a fake. */
-    Sleep?: CrawlSleep;
-    /** The clock the politeness paces by (epoch ms); tests pass a fake that {@link Sleep} advances. */
+    /** How the crawl waits (backoff, pacing, the delay). Default: a timer the signal cuts short. Tests pass a fake. */
+    Sleep?: (ms: number) => Promise<void>;
+    /** The clock the rate limiter paces by (epoch ms); tests pass a fake that {@link Sleep} advances. */
     Now?: () => number;
 }
 
@@ -143,25 +152,84 @@ type PageOutcome =
     | { Kind: 'Unknown'; Reason: string };
 
 /** What a live HTML page holds for the crawl. */
-interface ParsedPage {
+export interface ParsedPage {
     Links: { URL: string; Follow: boolean }[];
     Canonical: string | null;
 }
 
+/**
+ * How the crawl backs off and paces a host that rate-limits it (`Website.RateLimit`). Every field is optional. The
+ * pacing is network-utils' `RateLimiter`, one bucket per host; the retries are its `WithRetry`.
+ */
+export interface CrawlRateLimitOptions {
+    /** How many times a rate-limited fetch is retried. Default 3. */
+    MaxRetries?: number;
+    /** The first backoff wait, in ms; it doubles with each retry (with jitter). Default 2000. */
+    BackoffMs?: number;
+    /** The longest any one wait may be, in ms. Default 60000. */
+    MaxBackoffMs?: number;
+    /** The most requests a second to one host; a host that rate-limits the crawl is halved, then recovers. Default 10. */
+    RequestsPerSecond?: number;
+    /** The slowest a rate-limited host is paced, in requests a second. Default 0.5. */
+    MinRequestsPerSecond?: number;
+}
+
+/** Retries of a rate-limited fetch when the source sets none: enough to ride out a typical CDN window. */
+const DEFAULT_CRAWL_MAX_RETRIES = 3;
+/** First backoff when the source sets none, in ms: 2s, doubled per retry (2s, 4s, 8s). */
+const DEFAULT_CRAWL_BACKOFF_MS = 2_000;
+/** Cap on any one wait when the source sets none, in ms: a minute; longer than that and the walk's deadline is the better judge. */
+const DEFAULT_CRAWL_MAX_BACKOFF_MS = 60_000;
+/** Jitter added to each backoff, as a fraction of it, so parallel fetches do not retry in step. */
+const CRAWL_BACKOFF_JITTER = 0.5;
+/** Per-host ceiling when the source sets none, in requests a second: far above a polite crawl's pace, so an unlimited host is not slowed in practice. */
+const DEFAULT_CRAWL_REQUESTS_PER_SECOND = 10;
+/** The slowest a rate-limited host is paced when the source sets none: one request every two seconds. */
+const DEFAULT_CRAWL_MIN_REQUESTS_PER_SECOND = 0.5;
+
+/** Thrown inside a fetch attempt when the host asked the crawl to slow down, so `WithRetry` retries it. */
+class RateLimitedAnswer extends Error {
+    constructor(
+        public readonly Status: number,
+        public readonly RetryAfterMs: number | undefined,
+    ) {
+        super(`rate-limited (${Status})`);
+    }
+}
+
 export class WebsiteCrawl {
     private readonly scope: CrawlScope;
-    private readonly politeness: CrawlPoliteness;
-    private readonly sleep: CrawlSleep;
+    private readonly limiter: RateLimiter;
+    private readonly sleep: (ms: number) => Promise<void>;
     private readonly seedKey: string;
 
+    /**
+     * A subclass changes what one page is and which pages are visited ({@link CreateScope}), how a host is paced
+     * ({@link CreateRateLimiter}) or how a page's links are read ({@link ParsePage}); the walk itself is the same.
+     */
     constructor(
-        private readonly options: CrawlOptions,
-        private readonly fetchers: CrawlFetchers,
+        protected readonly options: CrawlOptions,
+        protected readonly fetchers: CrawlFetchers,
     ) {
-        this.scope = new CrawlScope(options);
-        this.sleep = options.Sleep ?? AbortableSleep;
-        this.politeness = new CrawlPoliteness(options.Politeness, this.sleep, options.Now ?? Date.now);
+        this.sleep = options.Sleep ?? ((ms) => AbortableDelay(ms, options.Signal));
+        this.scope = this.CreateScope(options);
+        this.limiter = this.CreateRateLimiter(options, this.sleep);
         this.seedKey = this.scope.Key(this.scope.Clean(options.SeedURL));
+    }
+
+    /** What one page is and which pages are visited. Called from the constructor: an override must not read its own fields. */
+    protected CreateScope(options: CrawlOptions): CrawlScope {
+        return new CrawlScope(options);
+    }
+
+    /** How each host is paced: one bucket per host. Called from the constructor, like {@link CreateScope}. */
+    protected CreateRateLimiter(options: CrawlOptions, sleep: (ms: number) => Promise<void>): RateLimiter {
+        return new RateLimiter({
+            TokensPerSec: options.Politeness?.RequestsPerSecond ?? DEFAULT_CRAWL_REQUESTS_PER_SECOND,
+            MinTokensPerSec: options.Politeness?.MinRequestsPerSecond ?? DEFAULT_CRAWL_MIN_REQUESTS_PER_SECOND,
+            now: options.Now,
+            sleep,
+        });
     }
 
     /**
@@ -187,6 +255,12 @@ export class WebsiteCrawl {
             if (readThisPart > 0 && this.options.Deadline && Date.now() >= this.options.Deadline.getTime()) {
                 return { ResumeToken: EncodeCrawlState(this.snapshot(state, seen, identities)) };
             }
+            if (this.options.CheckLeafPages === false && !this.readsLinks(state.Queue[0][1], state.Queue[0][2], state)) {
+                // A page whose links will not be read is reported as found, unfetched, for Extract to read (and fail).
+                const [url, , flags, lastModified] = state.Queue.shift()!;
+                yield* this.report(url, url, null, flags, lastModified ? new Date(lastModified) : undefined, identities);
+                continue;
+            }
             const batch = state.Queue.splice(0, this.concurrency());
             const outcomes = await Promise.all(batch.map(([url]) => this.fetchPage(url)));
             readThisPart += batch.length;
@@ -194,7 +268,7 @@ export class WebsiteCrawl {
                 yield* this.settle(batch[i], outcomes[i], state, seen, identities);
             }
             if (this.options.DelayMs > 0 && state.Queue.length > 0) {
-                await this.sleep(this.options.DelayMs, this.options.Signal);
+                await this.sleep(this.options.DelayMs).catch(() => undefined); // a stopped walk ends at the loop's check
             }
         }
         return {};
@@ -245,7 +319,7 @@ export class WebsiteCrawl {
             seen.add(this.scope.Key(finalURL));
         }
         const html = IsHtmlContentType(page.ContentType);
-        const parsed = html ? this.parse(page, depth === 0 && this.options.SiblingFanOut) : null;
+        const parsed = html ? this.ParsePage(page, depth === 0 && this.options.SiblingFanOut) : null;
         const modified = lastModified ? new Date(lastModified) : this.lastModifiedOf(page);
         const unchanged = !!(this.options.Since && modified && modified.getTime() <= this.options.Since.getTime());
         yield* this.report(url, finalURL, parsed?.Canonical ?? null, unchanged ? flags | QueueFlags.Silent : flags, modified, identities);
@@ -328,27 +402,65 @@ export class WebsiteCrawl {
         return true;
     }
 
-    /**
-     * Fetch a page politely: a rate-limited answer is retried after the backoff the host's pacing chooses, up to
-     * the retry limit. Then classify it.
-     */
+    /** Fetch a page politely (see `politely`), then classify it. */
     private async fetchPage(url: string): Promise<PageOutcome> {
-        const host = this.hostOf(url);
-        for (let attempt = 0; ; attempt++) {
-            await this.politeness.WaitTurn(host, this.options.Signal);
-            const page = await this.fetchers.Page(url);
-            if (!page) {
-                return { Kind: 'Unknown', Reason: 'no response' };
-            }
-            const limit = RateLimitOf(page.Status, page.Headers);
-            if (!limit.Limited) {
-                return this.classify(page);
-            }
-            if (attempt >= this.politeness.MaxRetries || this.options.Signal.aborted) {
-                return { Kind: 'Retry', Reason: `still rate-limited (${page.Status}) after ${attempt} retries` };
-            }
-            this.politeness.OnLimited(host, limit.RetryAfterMs, attempt);
+        const page = await this.politely(url, () => this.fetchers.Page(url));
+        if (page === 'limited') {
+            return { Kind: 'Retry', Reason: 'still rate-limited after its retries' };
         }
+        return page ? this.classify(page) : { Kind: 'Unknown', Reason: 'no response' };
+    }
+
+    /**
+     * One fetch through the host's rate limiter, a rate-limited answer (429, or 503 with `Retry-After`) retried after
+     * the longer of what the host asks and the backoff, the host slowed meanwhile. Returns the answer, `'limited'` when
+     * it is still limited after the retries, or null when there was no answer (or the walk was stopped).
+     */
+    private async politely(url: string, fetch: () => Promise<CrawlPage | null>): Promise<CrawlPage | null | 'limited'> {
+        const host = this.hostOf(url);
+        const maxBackoffMs = this.retryConfig().MaxBackoffMs;
+        try {
+            return await WithRetry(
+                async () => {
+                    await this.limiter.Acquire(host);
+                    const answer = await fetch();
+                    const retryAfterMs = ParseRetryAfterValue(answer?.Headers?.['retry-after']);
+                    if (answer && (answer.Status === 429 || (answer.Status === 503 && retryAfterMs !== undefined))) {
+                        throw new RateLimitedAnswer(answer.Status, retryAfterMs);
+                    }
+                    this.limiter.ReportSuccess(host);
+                    return answer;
+                },
+                this.retryConfig(),
+                (error) => error instanceof RateLimitedAnswer && !this.options.Signal.aborted,
+                (_attempt, error) => this.limiter.ReportThrottle(host, (error as RateLimitedAnswer).RetryAfterMs),
+                {
+                    // Never sooner than the backoff, even when Retry-After says 0: the burst is what got the crawl limited.
+                    DelayForError: (error, _attempt, backoffMs) => Math.min(maxBackoffMs, Math.max((error as RateLimitedAnswer).RetryAfterMs ?? 0, backoffMs)),
+                    Sleep: this.sleep,
+                },
+            );
+        } catch (error) {
+            if (error instanceof RateLimitedAnswer) {
+                this.limiter.ReportThrottle(host, error.RetryAfterMs);
+                return 'limited';
+            }
+            if (this.options.Signal.aborted) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    /** `Website.RateLimit` as `WithRetry`'s configuration. */
+    private retryConfig(): RetryConfig {
+        const limits = this.options.Politeness ?? {};
+        return {
+            MaxAttempts: NonNegative(limits.MaxRetries, DEFAULT_CRAWL_MAX_RETRIES) + 1,
+            InitialBackoffMs: NonNegative(limits.BackoffMs, DEFAULT_CRAWL_BACKOFF_MS),
+            MaxBackoffMs: NonNegative(limits.MaxBackoffMs, DEFAULT_CRAWL_MAX_BACKOFF_MS),
+            JitterFraction: CRAWL_BACKOFF_JITTER,
+        };
     }
 
     /** Alive (2xx), dead (a lasting client error), or not known (a challenge, a server error, a timeout). */
@@ -381,15 +493,18 @@ export class WebsiteCrawl {
         return parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
     }
 
-    /** The page's in-scope links (with its sibling paths, unfollowed, for the start page when asked) and its canonical. */
-    private parse(page: CrawlPage, siblings: boolean): ParsedPage {
+    /**
+     * The page's in-scope links (with its sibling paths, unfollowed, for the start page when asked) and its canonical.
+     * A subclass reads links its own way (links a script builds, a form's action) and may call this for the rest.
+     */
+    protected ParsePage(page: CrawlPage, siblings: boolean): ParsedPage {
         const $ = cheerio.load(page.Html);
         const base = page.FinalURL;
         const self = this.scope.Key(this.scope.Clean(base));
         const siblingRoot = siblings ? SiblingRoot(this.options.SeedURL) : null;
         const links: { URL: string; Follow: boolean }[] = [];
         $('a[href]').each((_, element) => {
-            const url = this.resolve($(element).attr('href'), base);
+            const url = this.Resolve($(element).attr('href'), base);
             if (!url || this.scope.Key(url) === self || !/^https?:/i.test(url) || !this.options.Pattern.test(url)) {
                 return;
             }
@@ -403,11 +518,11 @@ export class WebsiteCrawl {
             .filter((_, el) => ($(el).attr('rel') ?? '').toLowerCase().split(/\s+/).includes('canonical'))
             .first()
             .attr('href');
-        return { Links: links, Canonical: this.resolve(canonicalHref, base) };
+        return { Links: links, Canonical: this.Resolve(canonicalHref, base) };
     }
 
     /** An href resolved against the page and cleaned, or null when it is not a URL. */
-    private resolve(href: string | undefined, base: string): string | null {
+    protected Resolve(href: string | undefined, base: string): string | null {
         if (!href) {
             return null;
         }
@@ -453,22 +568,11 @@ export class WebsiteCrawl {
 
     /** A text resource, politely: a rate-limited answer is retried like a page. Null unless it answered 200. */
     private async readText(url: string): Promise<string | null> {
-        const host = this.hostOf(url);
-        for (let attempt = 0; ; attempt++) {
-            await this.politeness.WaitTurn(host, this.options.Signal);
-            const answer: CrawlPage | string | null = await this.fetchers.Text(url);
-            if (answer === null) {
-                return null;
-            }
-            if (typeof answer === 'string') {
-                return answer;
-            }
-            const limit = RateLimitOf(answer.Status, answer.Headers);
-            if (!limit.Limited || attempt >= this.politeness.MaxRetries || this.options.Signal.aborted) {
-                return answer.Status === 200 ? answer.Html : null;
-            }
-            this.politeness.OnLimited(host, limit.RetryAfterMs, attempt);
-        }
+        const answer = await this.politely(url, async () => {
+            const text = await this.fetchers.Text(url);
+            return typeof text === 'string' ? { Html: text, FinalURL: url, Status: 200 } : text;
+        });
+        return answer && answer !== 'limited' && answer.Status === 200 ? answer.Html : null;
     }
 
     /** The sitemaps robots.txt names, else the conventional /sitemap.xml. */
@@ -537,4 +641,9 @@ export function DecodeCrawlState(token: string): CrawlState {
         throw new Error(`the website crawl resume token is version ${String(state.v)}, written by an earlier crawler; this one writes version ${CRAWL_STATE_VERSION}`);
     }
     return state;
+}
+
+/** A non-negative number, else `fallback`. */
+function NonNegative(value: number | undefined, fallback: number): number {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
 }
