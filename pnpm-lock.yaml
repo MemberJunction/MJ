@@ -4919,6 +4919,9 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.3.0-edge.1
         version: link:../../../GraphQLDataProvider
+      '@memberjunction/lists-base':
+        specifier: 6.3.0-edge.1
+        version: link:../../../Lists/base
       '@memberjunction/ng-action-gallery':
         specifier: 6.3.0-edge.1
         version: link:../../Generic/action-gallery

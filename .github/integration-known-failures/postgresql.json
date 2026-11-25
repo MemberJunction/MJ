@@ -35,6 +35,7 @@
         "fls-enforcement-client.FC5": "PG metadata gap: no EntityField row for MJ: Entities.EnableFieldLevelSecurity, so enabling field security over GraphQL never persists and the wire fixture cannot be provisioned.",
         "fls-enforcement-client.FC6": "PG metadata gap: no EntityField row for MJ: Entities.EnableFieldLevelSecurity, so enabling field security over GraphQL never persists and the wire fixture cannot be provisioned.",
         "fls-enforcement.fixtures": "PG metadata gap: the v5.46 PG baseline has no EntityField row for MJ: Entities.ExternalDataSourceID (the T-SQL baseline does), so the fixture fails with \"Field ExternalDataSourceID does not exist on MJ: Entities\".",
+        "lists.LS4": "Since #6809 (list bulk actions): deleting a list relies on FK_ListDetail_List ON DELETE CASCADE, which V202611231202__v6.3.x__ListDetail_Cascade_Delete_With_List.sql adds on SQL Server. Its PostgreSQL twin has not been converted, so PostgreSQL rejects the delete of a list that has members.",
         "materialized-entity-read.EMR1": "SQL Server only: the snapshot fixtures are fabricated in T-SQL, and the skip is not on the skip allowlist.",
         "materialized-entity-read.EMR2": "SQL Server only: the snapshot fixtures are fabricated in T-SQL, and the skip is not on the skip allowlist.",
         "materialized-read.MR1": "The check needs a SQL Server pool or T-SQL fixture and has no PostgreSQL implementation yet.",
