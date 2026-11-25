@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- User and Visitor Information Section -->
+    <!-- Tour Execution Section -->
     <mj-collapsible-panel
-        SectionKey="userAndVisitorInformation"
-        SectionName="User and Visitor Information"
-        Icon="fa fa-user"
+        SectionKey="tourExecution"
+        SectionName="Tour Execution"
+        Icon="fa fa-play-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -34,16 +34,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Tour Context Section -->
-    <mj-collapsible-panel
-        SectionKey="tourContext"
-        SectionName="Tour Context"
-        Icon="fa fa-map"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -71,16 +61,6 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Execution and Progress Section -->
-    <mj-collapsible-panel
-        SectionKey="executionAndProgress"
-        SectionName="Execution and Progress"
-        Icon="fa fa-tasks"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -132,11 +112,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Launch and Trigger Details Section -->
+    <!-- Launch and Context Section -->
     <mj-collapsible-panel
-        SectionKey="launchAndTriggerDetails"
-        SectionName="Launch and Trigger Details"
-        Icon="fa fa-play-circle"
+        SectionKey="launchAndContext"
+        SectionName="Launch and Context"
+        Icon="fa fa-bullseye"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -159,10 +139,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Timeline and Metrics Section -->
+    <!-- Timeline and Milestones Section -->
     <mj-collapsible-panel
-        SectionKey="timelineAndMetrics"
-        SectionName="Timeline and Metrics"
+        SectionKey="timelineAndMilestones"
+        SectionName="Timeline and Milestones"
         Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
@@ -201,11 +181,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Associated Integrations Section -->
+    <!-- Integrations and References Section -->
     <mj-collapsible-panel
-        SectionKey="associatedIntegrations"
-        SectionName="Associated Integrations"
-        Icon="fa fa-plug"
+        SectionKey="integrationsAndReferences"
+        SectionName="Integrations and References"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

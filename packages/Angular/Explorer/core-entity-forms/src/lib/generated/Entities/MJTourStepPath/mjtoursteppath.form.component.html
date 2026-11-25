@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Relationships Section -->
+    <!-- Path Endpoints Section -->
     <mj-collapsible-panel
-        SectionKey="relationships"
-        SectionName="Relationships"
-        Icon="fa fa-link"
+        SectionKey="pathEndpoints"
+        SectionName="Path Endpoints"
+        Icon="fa fa-route"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -47,11 +47,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Path Settings Section -->
+    <!-- Branching Logic Section -->
     <mj-collapsible-panel
-        SectionKey="pathSettings"
-        SectionName="Path Settings"
-        Icon="fa fa-sliders-h"
+        SectionKey="branchingLogic"
+        SectionName="Branching Logic"
+        Icon="fa fa-random"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -94,9 +94,19 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="configuration"
+        SectionName="Configuration"
+        Icon="fa fa-cogs"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="Configuration"
             Type="textarea"
             [EditMode]="EditMode"

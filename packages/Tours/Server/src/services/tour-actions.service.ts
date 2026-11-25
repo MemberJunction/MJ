@@ -11,9 +11,9 @@ import {
     type UserInfo,
 } from '@memberjunction/core';
 import {
-    MJLearningPathEntity,
-    MJLearningPathTourEntity,
     MJTourEntity,
+    MJTourLearningPathEntity,
+    MJTourLearningPathTourLinkEntity,
     MJTourOverrideEntity,
     MJTourPrerequisiteEntity,
     MJTourRunEntity,
@@ -413,14 +413,14 @@ export class TourActionsService {
                     ResultType: 'entity_object',
                 },
                 {
-                    EntityName: 'MJ: Learning Paths',
+                    EntityName: 'MJ: Tour Learning Paths',
                     ExtraFilter: req.LearningPathKey?.trim()
                         ? `PathKey='${EscapeSQLString(req.LearningPathKey.trim())}'`
                         : `Status='Active'`,
                     ResultType: 'entity_object',
                 },
                 {
-                    EntityName: 'MJ: Learning Path Tours',
+                    EntityName: 'MJ: Tour Learning Path Tour Links',
                     OrderBy: 'Sequence ASC',
                     ResultType: 'entity_object',
                 },
@@ -444,8 +444,8 @@ export class TourActionsService {
 
         const tours = (toursRes.Results ?? []) as MJTourEntity[];
         const runs = (runsRes.Results ?? []) as MJTourRunEntity[];
-        const paths = (pathsRes.Results ?? []) as MJLearningPathEntity[];
-        const pathTours = (pathToursRes.Results ?? []) as MJLearningPathTourEntity[];
+        const paths = (pathsRes.Results ?? []) as MJTourLearningPathEntity[];
+        const pathTours = (pathToursRes.Results ?? []) as MJTourLearningPathTourLinkEntity[];
 
         const runsByTourId = new Map<string, MJTourRunEntity[]>();
         for (const run of runs) {
@@ -489,11 +489,11 @@ export class TourActionsService {
             runs.filter((r) => r.Status === 'Completed').map((r) => r.TourID.toLowerCase()),
         );
 
-        const membersByLearningPathId = new UUIDMap<MJLearningPathTourEntity[]>();
+        const membersByLearningPathId = new UUIDMap<MJTourLearningPathTourLinkEntity[]>();
         for (const pt of pathTours) {
-            const list = membersByLearningPathId.Get(pt.LearningPathID) ?? [];
+            const list = membersByLearningPathId.Get(pt.TourLearningPathID) ?? [];
             list.push(pt);
-            membersByLearningPathId.Set(pt.LearningPathID, list);
+            membersByLearningPathId.Set(pt.TourLearningPathID, list);
         }
 
         const learningPathSummaries: LearningPathProgressSummary[] = paths.map((lp) => {
@@ -548,9 +548,9 @@ export class TourActionsService {
         }
 
         const rv = RunView.FromMetadataProvider(this.provider);
-        const pathRes = await rv.RunView<MJLearningPathEntity>(
+        const pathRes = await rv.RunView<MJTourLearningPathEntity>(
             {
-                EntityName: 'MJ: Learning Paths',
+                EntityName: 'MJ: Tour Learning Paths',
                 ExtraFilter: `PathKey='${EscapeSQLString(pathKey)}'`,
                 MaxRows: 1,
                 ResultType: 'entity_object',
@@ -568,10 +568,10 @@ export class TourActionsService {
         }
         const learningPath = pathRes.Results[0];
 
-        const membersRes = await rv.RunView<MJLearningPathTourEntity>(
+        const membersRes = await rv.RunView<MJTourLearningPathTourLinkEntity>(
             {
-                EntityName: 'MJ: Learning Path Tours',
-                ExtraFilter: `LearningPathID='${EscapeSQLString(learningPath.ID)}'`,
+                EntityName: 'MJ: Tour Learning Path Tour Links',
+                ExtraFilter: `TourLearningPathID='${EscapeSQLString(learningPath.ID)}'`,
                 OrderBy: 'Sequence ASC',
                 ResultType: 'entity_object',
             },

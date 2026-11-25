@@ -111,7 +111,7 @@ Tours open with a clean, focused Welcome Hero modal (`Variant: "welcome"`) — s
 | `@memberjunction/graph` | Portable TS (`packages/Graph`) | Zero-MJ-core graph primitives: `DetectCycle`, `RankGraphNodes`, Sugiyama `LayoutGraphNodes`, `IGraphRepository`, `IConditionEvaluator`. |
 | `@memberjunction/tours-runtime` | Portable TS (`packages/Tours/Runtime`) | Framework-agnostic `TourSession` state machine, `CompileTourGraph`, `EvaluateTourCondition`, `TourEligibilityEvaluator`, `TourTriggerCoordinator`, `TourSignals`, `TourAgentToolkit`. |
 | `@memberjunction/ng-tours` | Generic Angular (`packages/Angular/Generic/tours`) | `<mj-tour-host>` (and `<mj-tour-host-element>` custom element), `Overlay` / `SidePanel` / `Embedded` presenters, step renderers (`Modal`, `Spotlight`, `Action`, `Beacon`, `Banner`, `Choice`, `Media`, `EmbeddedComponent`), `DomTourAnchorBridge`, `mjTourAnchor` directive, Light DOM `--mj-*` styles. Zero `@angular/router` or Explorer dependencies. |
-| `@memberjunction/core-entities` (`TourEngine`) | Client + Server Metadata Engine | Loads and caches `Tour`, `TourStep`, `TourStepPath`, `TourVersion`, `TourTrigger`, `TourPrerequisite`, `TourOverride`, `LearningPath`, and `TourRun` metadata; resolves precedence overrides; exposes `IsSageVoiceGuideEnabled`. |
+| `@memberjunction/core-entities` (`TourEngine`) | Client + Server Metadata Engine | Loads and caches `Tour`, `TourStep`, `TourStepPath`, `TourVersion`, `TourTrigger`, `TourPrerequisite`, `TourOverride`, `TourLearningPath`, `TourLearningPathTourLink`, and `TourRun` metadata; backs `RelatedRecordCollection` views (`lp.LearningPathTours.Items`, `tour.Steps.Items`, etc.); resolves precedence overrides; exposes `IsSageVoiceGuideEnabled`. |
 | `@memberjunction/tours-server` | Server (`packages/Tours/Server`) | `TourPublisherService` (DAG validation + canonical SHA-256 `TourVersion` snapshotting), `Tours.PublishTour` action, anonymous `VisitorKey` guest run claiming (`Tours.ClaimGuestRuns`). |
 | `@memberjunction/ng-explorer-core` (`ExplorerTourHost`) | Explorer Host Adapter | Bridges `ApplicationManager`, `WorkspaceStateManager`, `NavigationService` (`Prepare` app/tab/record navigation), `OmnibarSemanticIndexService`, and the User Avatar Menu launcher. |
 | `@memberjunction/ng-dashboards` (`TourStudioDashboard`) | Visual Authoring & Analytics | Sugiyama DAG visual pathway viewer/editor, role simulation preview, anchor health diagnostics, and completion/goal conversion analytics. |
@@ -123,7 +123,7 @@ Tours open with a clean, focused Welcome Hero modal (`Variant: "welcome"`) — s
 Both MemberJunction Core and downstream OpenApps author tours declaratively in three metadata folders registered in `metadata/.mj-sync.json` (`directoryOrder`):
 
 1. `metadata/tours/` (`MJ: Tours` + nested `MJ: Tour Steps`, `MJ: Tour Step Paths`, `MJ: Tour Prerequisites`, `MJ: Tour Triggers`) — authored with `"Status": "Draft"` so steps and paths insert cleanly before activation.
-2. `metadata/learning-paths/` (`MJ: Learning Paths` + nested `MJ: Learning Path Tours`).
+2. `metadata/learning-paths/` (`MJ: Tour Learning Paths` + nested `MJ: Tour Learning Path Tour Links`).
 3. `metadata/tour-publications/` (`MJ: Tours` override setting `"Status": "Active"` after steps/paths exist).
 
 ### Required `.mj-sync.json` Files for OpenApp Repositories
@@ -150,10 +150,10 @@ When adding Guided Tours to any OpenApp repository:
 ```json
 // metadata/learning-paths/.mj-sync.json
 {
-  "entity": "MJ: Learning Paths",
+  "entity": "MJ: Tour Learning Paths",
   "filePattern": "**/.*.json",
   "relatedEntities": {
-    "MJ: Learning Path Tours": { "entity": "MJ: Learning Path Tours", "foreignKey": "LearningPathID" }
+    "MJ: Tour Learning Path Tour Links": { "entity": "MJ: Tour Learning Path Tour Links", "foreignKey": "TourLearningPathID" }
   }
 }
 ```
@@ -285,7 +285,7 @@ When an app wants to hand off to a downstream or sibling app that **might or mig
 - At runtime, `<mj-tour-host>` passes `AvailableTourKeys` (`ReadonlySet<string>`) into `ModalStepRenderer.ShowNextTourButton`. If `bizapps-accounting` is installed and eligible, the **"Start next tour"** CTA renders automatically; if not installed, the button hides cleanly with zero broken links!
 
 ### 3. Cross-App Federation Learning Paths
-Higher-level apps and federated hosts assemble multi-app onboarding curricula in `MJ: Learning Paths`:
+Higher-level apps and federated hosts assemble multi-app onboarding curricula in `MJ: Tour Learning Paths` (with member links in `MJ: Tour Learning Path Tour Links`, exposed on `MJTourLearningPathEntity` via the generated `lp.LearningPathTours` `RelatedRecordCollection`):
 - **`sales.revenue-chain`** (`bizapps-sales` — *Quote-to-Cash Revenue Chain*): Chains `core.welcome` → `sales.pipeline-deals` → `sales.accounts-buying-roles` → `sales.close-won-forecasting` → `contracts.lifecycle` → `orders.order-to-cash`.
 - **`cheese.icf-onboarding`** (`more-cheese` — *ICF Staff Federation Onboarding*): Chains `core.welcome` → `sonar.overview-portfolio` → `cheese.grand-tour-icf` → `cheese.member-360`.
 

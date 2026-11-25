@@ -62,9 +62,6 @@ import {
 } from '@memberjunction/tours-runtime';
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import {
-    MJLearningPathEntity,
-    MJLearningPathEntity_ILearningPathConfiguration,
-    MJLearningPathTourEntity,
     MJTourEntity,
     MJTourEntity_ITourConfiguration,
     MJTourEntity_ITourGoal,
@@ -72,6 +69,9 @@ import {
     MJTourEntity_ITourGoalSimpleFilter,
     MJTourEntity_ITourLaunchPolicy,
     MJTourEntity_ITourStartLocation,
+    MJTourLearningPathEntity,
+    MJTourLearningPathEntity_ILearningPathConfiguration,
+    MJTourLearningPathTourLinkEntity,
     MJTourOverrideEntity,
     MJTourPrerequisiteEntity,
     MJTourRunEntity,
@@ -235,8 +235,8 @@ export class TourEngine
     private _tourStepPaths: MJTourStepPathEntity[] = [];
     private _tourPrerequisites: MJTourPrerequisiteEntity[] = [];
     private _tourTriggers: MJTourTriggerEntity[] = [];
-    private _learningPaths: MJLearningPathEntity[] = [];
-    private _learningPathTours: MJLearningPathTourEntity[] = [];
+    private _learningPaths: MJTourLearningPathEntity[] = [];
+    private _learningPathTours: MJTourLearningPathTourLinkEntity[] = [];
     private _tourOverrides: MJTourOverrideEntity[] = [];
     private _tourSurfaces: MJTourSurfaceEntity[] = [];
     private _tourSurfaceTours: MJTourSurfaceTourEntity[] = [];
@@ -304,8 +304,8 @@ export class TourEngine
             { Type: 'entity', EntityName: 'MJ: Tour Step Paths', PropertyName: '_tourStepPaths', CacheLocal: true },
             { Type: 'entity', EntityName: 'MJ: Tour Prerequisites', PropertyName: '_tourPrerequisites', CacheLocal: true },
             { Type: 'entity', EntityName: 'MJ: Tour Triggers', PropertyName: '_tourTriggers', CacheLocal: true },
-            { Type: 'entity', EntityName: 'MJ: Learning Paths', PropertyName: '_learningPaths', CacheLocal: true },
-            { Type: 'entity', EntityName: 'MJ: Learning Path Tours', PropertyName: '_learningPathTours', CacheLocal: true },
+            { Type: 'entity', EntityName: 'MJ: Tour Learning Paths', PropertyName: '_learningPaths', CacheLocal: true },
+            { Type: 'entity', EntityName: 'MJ: Tour Learning Path Tour Links', PropertyName: '_learningPathTours', CacheLocal: true },
             overridesConfig,
             { Type: 'entity', EntityName: 'MJ: Tour Surfaces', PropertyName: '_tourSurfaces', CacheLocal: true },
             { Type: 'entity', EntityName: 'MJ: Tour Surface Tours', PropertyName: '_tourSurfaceTours', CacheLocal: true },
@@ -439,20 +439,35 @@ export class TourEngine
         return this.GetConfigData<MJTourTriggerEntity>('_tourTriggers');
     }
 
-    /** Cached `MJ: Learning Paths` rows (empty when `IsEnabled` is false). */
-    public get LearningPaths(): MJLearningPathEntity[] {
+    /** Cached `MJ: Tour Learning Paths` rows (empty when `IsEnabled` is false). */
+    public get TourLearningPaths(): MJTourLearningPathEntity[] {
         if (!this.IsEnabled) return [];
-        return this.GetConfigData<MJLearningPathEntity>('_learningPaths');
+        return this.GetConfigData<MJTourLearningPathEntity>('_learningPaths');
     }
 
-    /** Reactive stream of cached `MJ: Learning Paths` rows. */
-    public get LearningPaths$(): Observable<MJLearningPathEntity[]> {
-        return this.ObserveProperty<MJLearningPathEntity>('_learningPaths');
+    /** Cached `MJ: Tour Learning Paths` rows (alias for `TourLearningPaths`). */
+    public get LearningPaths(): MJTourLearningPathEntity[] {
+        return this.TourLearningPaths;
     }
 
-    /** Cached `MJ: Learning Path Tours` rows. */
-    public get LearningPathTours(): MJLearningPathTourEntity[] {
-        return this.GetConfigData<MJLearningPathTourEntity>('_learningPathTours');
+    /** Reactive stream of cached `MJ: Tour Learning Paths` rows. */
+    public get TourLearningPaths$(): Observable<MJTourLearningPathEntity[]> {
+        return this.ObserveProperty<MJTourLearningPathEntity>('_learningPaths');
+    }
+
+    /** Reactive stream of cached `MJ: Tour Learning Paths` rows (alias for `TourLearningPaths$`). */
+    public get LearningPaths$(): Observable<MJTourLearningPathEntity[]> {
+        return this.TourLearningPaths$;
+    }
+
+    /** Cached `MJ: Tour Learning Path Tour Links` rows. */
+    public get TourLearningPathTourLinks(): MJTourLearningPathTourLinkEntity[] {
+        return this.GetConfigData<MJTourLearningPathTourLinkEntity>('_learningPathTours');
+    }
+
+    /** Cached `MJ: Tour Learning Path Tour Links` rows (alias for `TourLearningPathTourLinks`). */
+    public get LearningPathTours(): MJTourLearningPathTourLinkEntity[] {
+        return this.TourLearningPathTourLinks;
     }
 
     /** Cached `MJ: Tour Overrides` rows. */
@@ -665,25 +680,28 @@ export class TourEngine
         return MergeTourOverrides(baseDefinition, overrideDefs, principal ?? this.buildCurrentPrincipal());
     }
 
-    /** Compiles all `Active` `LearningPath` records into runtime `LearningPathDefinition`s. */
+    /** Compiles all `Active` `MJ: Tour Learning Paths` records into runtime `LearningPathDefinition`s. */
     public GetCompiledLearningPaths(): LearningPathDefinition[] {
         if (!this.IsEnabled) {
             return [];
         }
-        return this.LearningPaths
+        return this.TourLearningPaths
             .filter((lp) => lp.Status === 'Active')
             .map((lp) => this.CompileLearningPathDefinition(lp));
     }
 
-    /** Compiles a single `MJLearningPathEntity` and its `MJ: Learning Path Tours` members. */
-    public CompileLearningPathDefinition(path: MJLearningPathEntity): LearningPathDefinition {
+    /** Compiles a single `MJTourLearningPathEntity` and its `LearningPathTours` related-record collection. */
+    public CompileLearningPathDefinition(path: MJTourLearningPathEntity): LearningPathDefinition {
         const tourKeyById = new Map<string, string>();
         for (const t of this.Tours) {
             tourKeyById.set(NormalizeUUID(t.ID), t.TourKey);
         }
 
-        const tours: LearningPathTourDefinition[] = this.LearningPathTours
-            .filter((m) => UUIDsEqual(m.LearningPathID, path.ID))
+        const memberLinks: readonly MJTourLearningPathTourLinkEntity[] = path.LearningPathTours?.IsAvailable
+            ? path.LearningPathTours.Items
+            : this.TourLearningPathTourLinks.filter((m) => UUIDsEqual(m.TourLearningPathID, path.ID));
+
+        const tours: LearningPathTourDefinition[] = [...memberLinks]
             .sort((a, b) => a.Sequence - b.Sequence)
             .map((m) => ({
                 TourKey: tourKeyById.get(NormalizeUUID(m.TourID)) ?? '',
@@ -1388,7 +1406,7 @@ export class TourEngine
     }
 
     private mapLearningPathConfiguration(
-        raw: MJLearningPathEntity_ILearningPathConfiguration | null | undefined,
+        raw: MJTourLearningPathEntity_ILearningPathConfiguration | null | undefined,
     ): ILearningPathConfiguration | null {
         if (!raw) return null;
         let localizations: Record<string, ILearningPathLocalizationEntry> | undefined;

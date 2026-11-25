@@ -15,13 +15,13 @@
       "ID": "AB7DDB7A-A80B-4231-B171-1205A89FE506"
     },
     "relatedEntities": {
-      "MJ: Learning Path Tours": [
+      "MJ: Tour Learning Path Tour Links": [
         {
           "fields": {
-            "LearningPathID": "@parent:ID",
             "TourID": "@lookup:MJ: Tours.TourKey=ps.problem-pipelines",
             "Sequence": 1,
-            "IsRequired": true
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
           },
           "primaryKey": {
             "ID": "2D9C3815-16AD-48DD-9437-A624370C1E9E"
@@ -29,10 +29,10 @@
         },
         {
           "fields": {
-            "LearningPathID": "@parent:ID",
             "TourID": "@lookup:MJ: Tours.TourKey=ps.training-compare",
             "Sequence": 2,
-            "IsRequired": true
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
           },
           "primaryKey": {
             "ID": "B6FBDBBA-11AE-4475-BB70-7022EAF0D884"
@@ -40,10 +40,10 @@
         },
         {
           "fields": {
-            "LearningPathID": "@parent:ID",
             "TourID": "@lookup:MJ: Tours.TourKey=ps.serving-explainability",
             "Sequence": 3,
-            "IsRequired": true
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
           },
           "primaryKey": {
             "ID": "DDCF2865-EF69-49C2-9BC6-A203482E6C05"

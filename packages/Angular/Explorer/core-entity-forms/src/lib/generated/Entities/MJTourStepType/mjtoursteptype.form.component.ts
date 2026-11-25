@@ -16,9 +16,9 @@ export class MJTourStepTypeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'stepTypeDetails', sectionName: 'Step Type Details', isExpanded: true },
+            { sectionKey: 'stepTypeDefinition', sectionName: 'Step Type Definition', isExpanded: true },
             { sectionKey: 'implementationRuntime', sectionName: 'Implementation & Runtime', isExpanded: true },
-            { sectionKey: 'configurationCapabilities', sectionName: 'Configuration & Capabilities', isExpanded: true },
+            { sectionKey: 'configurationSchema', sectionName: 'Configuration & Schema', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTourSteps', sectionName: 'Tour Steps', isExpanded: false }
         ]);

@@ -11,9 +11,9 @@ import {
 } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
-  MJLearningPathEntity,
-  MJLearningPathTourEntity,
   MJTourEntity,
+  MJTourLearningPathEntity,
+  MJTourLearningPathTourLinkEntity,
   MJTourRunEntity,
   TourEngine,
   UserInfoEngine,
@@ -1019,13 +1019,13 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
 
     const [pathsResult, pathToursResult, toursResult, runsResult] = await rv.RunViews([
       {
-        EntityName: 'MJ: Learning Paths',
+        EntityName: 'MJ: Tour Learning Paths',
         ExtraFilter: `Status = 'Active'`,
         OrderBy: 'Name ASC',
         ResultType: 'entity_object',
       },
       {
-        EntityName: 'MJ: Learning Path Tours',
+        EntityName: 'MJ: Tour Learning Path Tour Links',
         OrderBy: 'Sequence ASC',
         ResultType: 'entity_object',
       },
@@ -1047,8 +1047,8 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
           },
     ]);
 
-    const paths = (pathsResult?.Results ?? []) as MJLearningPathEntity[];
-    const pathTours = (pathToursResult?.Results ?? []) as MJLearningPathTourEntity[];
+    const paths = (pathsResult?.Results ?? []) as MJTourLearningPathEntity[];
+    const pathTours = (pathToursResult?.Results ?? []) as MJTourLearningPathTourLinkEntity[];
     const tours = (toursResult?.Results ?? []) as MJTourEntity[];
     const runs = (runsResult?.Results ?? []) as MJTourRunEntity[];
 
@@ -1068,10 +1068,13 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
       }
     }
 
-    const pathToursByPathId = GroupByUUID(pathTours, (pt) => pt.LearningPathID);
+    const pathToursByPathId = GroupByUUID(pathTours, (pt) => pt.TourLearningPathID);
     const summaries: ExplorerLearningPathSummary[] = [];
     for (const lp of paths) {
-      const members = [...(pathToursByPathId.Get(lp.ID) ?? [])]
+      const sourceMembers: readonly MJTourLearningPathTourLinkEntity[] = lp.LearningPathTours?.IsAvailable
+        ? lp.LearningPathTours.Items
+        : (pathToursByPathId.Get(lp.ID) ?? []);
+      const members = [...sourceMembers]
         .sort((a, b) => a.Sequence - b.Sequence);
 
       const resolvedTours: ExplorerLearningPathSummary['Tours'] = [];

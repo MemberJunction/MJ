@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Surface Details Section -->
+    <!-- Surface Information Section -->
     <mj-collapsible-panel
-        SectionKey="surfaceDetails"
-        SectionName="Surface Details"
+        SectionKey="surfaceInformation"
+        SectionName="Surface Information"
         Icon="fa fa-desktop"
         [Form]="this"
         [FormContext]="formContext">
@@ -60,10 +60,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Access and Security Section -->
+    <!-- Security and Access Section -->
     <mj-collapsible-panel
-        SectionKey="accessAndSecurity"
-        SectionName="Access and Security"
+        SectionKey="securityAndAccess"
+        SectionName="Security and Access"
         Icon="fa fa-shield-alt"
         [Form]="this"
         [FormContext]="formContext">
@@ -111,10 +111,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Integrations and Configuration Section -->
+    <!-- Integrations and Settings Section -->
     <mj-collapsible-panel
-        SectionKey="integrationsAndConfiguration"
-        SectionName="Integrations and Configuration"
+        SectionKey="integrationsAndSettings"
+        SectionName="Integrations and Settings"
         Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
@@ -178,6 +178,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- Tour Surface Tours Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTourSurfaceTours"
+        SectionName="Tour Surface Tours"
+        Icon="fa fa-random"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTourSurfaceTours')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tour Surface Tours','SurfaceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tour Surface Tours','SurfaceID')"
+                [AllowLoad]="IsSectionExpanded('mJTourSurfaceTours')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTourSurfaceTours', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Tour Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJTourRuns"
@@ -197,31 +222,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTourRuns', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Tour Surface Tours Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTourSurfaceTours"
-        SectionName="Tour Surface Tours"
-        Icon="fa fa-map-marked-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTourSurfaceTours')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tour Surface Tours','SurfaceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tour Surface Tours','SurfaceID')"
-                [AllowLoad]="IsSectionExpanded('mJTourSurfaceTours')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTourSurfaceTours', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

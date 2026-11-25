@@ -10,22 +10,32 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Trigger Configuration Section -->
+    <!-- Tour Association Section -->
     <mj-collapsible-panel
-        SectionKey="triggerConfiguration"
-        SectionName="Trigger Configuration"
-        Icon="fa fa-cogs"
+        SectionKey="tourAssociation"
+        SectionName="Tour Association"
+        Icon="fa fa-map"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="TourID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Trigger Rules Section -->
+    <mj-collapsible-panel
+        SectionKey="triggerRules"
+        SectionName="Trigger Rules"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -42,16 +52,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Behavior and Delivery Section -->
-    <mj-collapsible-panel
-        SectionKey="behaviorAndDelivery"
-        SectionName="Behavior and Delivery"
-        Icon="fa fa-sliders-h"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

@@ -8,8 +8,8 @@ import type {
   MJTourSurfaceTourEntity,
   MJTourVersionEntity,
   MJTourOverrideEntity,
-  MJLearningPathEntity,
-  MJLearningPathTourEntity,
+  MJTourLearningPathEntity,
+  MJTourLearningPathTourLinkEntity,
 } from '@memberjunction/core-entities';
 import {
   HostSatisfiesCapabilities,
@@ -156,12 +156,12 @@ export interface TourAnalyticsSummary {
 }
 
 export interface LearningPathMemberView {
-  Membership: MJLearningPathTourEntity;
+  Membership: MJTourLearningPathTourLinkEntity;
   Tour: MJTourEntity | null;
 }
 
 export interface LearningPathView {
-  Path: MJLearningPathEntity;
+  Path: MJTourLearningPathEntity;
   Members: LearningPathMemberView[];
 }
 

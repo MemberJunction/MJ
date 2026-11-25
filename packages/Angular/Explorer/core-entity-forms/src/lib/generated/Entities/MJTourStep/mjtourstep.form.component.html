@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Tour Step Details Section -->
+    <!-- Tour and Step Definition Section -->
     <mj-collapsible-panel
-        SectionKey="tourStepDetails"
-        SectionName="Tour Step Details"
-        Icon="fa fa-list-ol"
+        SectionKey="tourAndStepDefinition"
+        SectionName="Tour and Step Definition"
+        Icon="fa fa-sitemap"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -62,11 +62,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Content and Copy Section -->
+    <!-- Content and Guidance Section -->
     <mj-collapsible-panel
-        SectionKey="contentAndCopy"
-        SectionName="Content and Copy"
-        Icon="fa fa-font"
+        SectionKey="contentAndGuidance"
+        SectionName="Content and Guidance"
+        Icon="fa fa-file-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -104,10 +104,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Configuration and Actions Section -->
+    <!-- Advanced Configuration and Logic Section -->
     <mj-collapsible-panel
-        SectionKey="configurationAndActions"
-        SectionName="Configuration and Actions"
+        SectionKey="advancedConfigurationAndLogic"
+        SectionName="Advanced Configuration and Logic"
         Icon="fa fa-code"
         [Form]="this"
         [FormContext]="formContext">
@@ -115,14 +115,6 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Configuration"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Anchor"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -143,16 +135,32 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SkipWhen"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Behavior and Execution Section -->
+    <!-- UI and Interaction Behavior Section -->
     <mj-collapsible-panel
-        SectionKey="behaviorAndExecution"
-        SectionName="Behavior and Execution"
-        Icon="fa fa-sliders-h"
+        SectionKey="uIAndInteractionBehavior"
+        SectionName="UI and Interaction Behavior"
+        Icon="fa fa-mouse-pointer"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Anchor"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -166,14 +174,6 @@
             [ShowLabel]="true"
             FieldName="Mode"
             Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="SkipWhen"
-            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -232,7 +232,7 @@
     <mj-collapsible-panel
         SectionKey="mJTourStepPathsFromStepID"
         SectionName="Tour Step Paths (From Step)"
-        Icon="fa fa-route"
+        Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -257,7 +257,7 @@
     <mj-collapsible-panel
         SectionKey="mJTourStepPathsToStepID"
         SectionName="Tour Step Paths (To Step)"
-        Icon="fa fa-route"
+        Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

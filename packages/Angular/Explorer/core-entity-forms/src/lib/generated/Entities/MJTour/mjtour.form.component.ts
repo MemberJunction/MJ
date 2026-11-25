@@ -17,19 +17,20 @@ export class MJTourFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'tourDetails', sectionName: 'Tour Details', isExpanded: true },
-            { sectionKey: 'launchPolicyAudience', sectionName: 'Launch Policy & Audience', isExpanded: true },
-            { sectionKey: 'guidanceBehavior', sectionName: 'Guidance & Behavior', isExpanded: true },
+            { sectionKey: 'launchPolicyAndRules', sectionName: 'Launch Policy and Rules', isExpanded: true },
+            { sectionKey: 'guidanceConfiguration', sectionName: 'Guidance Configuration', isExpanded: true },
+            { sectionKey: 'advancedConfiguration', sectionName: 'Advanced Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTourStepPaths', sectionName: 'Tour Step Paths', isExpanded: false },
-            { sectionKey: 'mJTourRuns', sectionName: 'Tour Runs', isExpanded: false },
             { sectionKey: 'mJTourOverrides', sectionName: 'Tour Overrides', isExpanded: false },
-            { sectionKey: 'mJTourTriggers', sectionName: 'Tour Triggers', isExpanded: false },
             { sectionKey: 'mJTourVersions', sectionName: 'Tour Versions', isExpanded: false },
-            { sectionKey: 'mJTourSteps', sectionName: 'Tour Steps', isExpanded: false },
-            { sectionKey: 'mJLearningPathTours', sectionName: 'Learning Path Tours', isExpanded: false },
-            { sectionKey: 'mJTourPrerequisitesTourID', sectionName: 'Tour Prerequisites (Tour)', isExpanded: false },
+            { sectionKey: 'mJTourLearningPathTourLinks', sectionName: 'Tour Learning Path Tour Links', isExpanded: false },
+            { sectionKey: 'mJTourSurfaceTours', sectionName: 'Tour Surface Tours', isExpanded: false },
+            { sectionKey: 'mJTourPrerequisitesTourID', sectionName: 'Tour Prerequisites (Tour ID)', isExpanded: false },
             { sectionKey: 'mJTourPrerequisitesRequiredTourID', sectionName: 'Tour Prerequisites (Required Tour ID)', isExpanded: false },
-            { sectionKey: 'mJTourSurfaceTours', sectionName: 'Tour Surface Tours', isExpanded: false }
+            { sectionKey: 'mJTourTriggers', sectionName: 'Tour Triggers', isExpanded: false },
+            { sectionKey: 'mJTourStepPaths', sectionName: 'Tour Step Paths', isExpanded: false },
+            { sectionKey: 'mJTourSteps', sectionName: 'Tour Steps', isExpanded: false },
+            { sectionKey: 'mJTourRuns', sectionName: 'Tour Runs', isExpanded: false }
         ]);
     }
 }

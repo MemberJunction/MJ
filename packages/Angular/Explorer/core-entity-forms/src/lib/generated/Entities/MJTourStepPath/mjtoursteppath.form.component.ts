@@ -15,8 +15,9 @@ export class MJTourStepPathFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'relationships', sectionName: 'Relationships', isExpanded: true },
-            { sectionKey: 'pathSettings', sectionName: 'Path Settings', isExpanded: true },
+            { sectionKey: 'pathEndpoints', sectionName: 'Path Endpoints', isExpanded: true },
+            { sectionKey: 'branchingLogic', sectionName: 'Branching Logic', isExpanded: true },
+            { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

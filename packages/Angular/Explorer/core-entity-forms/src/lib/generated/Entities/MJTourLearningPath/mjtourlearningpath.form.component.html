@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Path Details Section -->
+    <!-- Learning Path Details Section -->
     <mj-collapsible-panel
-        SectionKey="pathDetails"
-        SectionName="Path Details"
-        Icon="fa fa-route"
+        SectionKey="learningPathDetails"
+        SectionName="Learning Path Details"
+        Icon="fa fa-graduation-cap"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -44,15 +44,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ApplicationID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="Status"
             Type="select"
             [EditMode]="EditMode"
@@ -68,6 +59,15 @@
         Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ApplicationID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -119,25 +119,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Learning Path Tours Section -->
+    <!-- Tour Learning Path Tour Links Section -->
     <mj-collapsible-panel
-        SectionKey="mJLearningPathTours"
-        SectionName="Learning Path Tours"
-        Icon="fa fa-route"
+        SectionKey="mJTourLearningPathTourLinks"
+        SectionName="Tour Learning Path Tour Links"
+        Icon="fa fa-link"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJLearningPathTours')"
+        [BadgeCount]="GetSectionRowCount('mJTourLearningPathTourLinks')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Learning Path Tours','LearningPathID')"
-                [NewRecordValues]="NewRecordValues('MJ: Learning Path Tours','LearningPathID')"
-                [AllowLoad]="IsSectionExpanded('mJLearningPathTours')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tour Learning Path Tour Links','TourLearningPathID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tour Learning Path Tour Links','TourLearningPathID')"
+                [AllowLoad]="IsSectionExpanded('mJTourLearningPathTourLinks')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJLearningPathTours', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJTourLearningPathTourLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

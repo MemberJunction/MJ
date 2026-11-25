@@ -10,17 +10,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Tour Membership Section -->
+    <!-- Relationships Section -->
     <mj-collapsible-panel
-        SectionKey="tourMembership"
-        SectionName="Tour Membership"
+        SectionKey="relationships"
+        SectionName="Relationships"
         Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="LearningPathID"
+            FieldName="TourLearningPathID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -35,6 +35,16 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Tour Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="tourConfiguration"
+        SectionName="Tour Configuration"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

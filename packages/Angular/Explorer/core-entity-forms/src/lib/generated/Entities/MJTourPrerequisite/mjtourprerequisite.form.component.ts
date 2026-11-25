@@ -15,8 +15,8 @@ export class MJTourPrerequisiteFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'prerequisiteConfiguration', sectionName: 'Prerequisite Configuration', isExpanded: true },
-            { sectionKey: 'ruleLogic', sectionName: 'Rule Logic', isExpanded: true },
+            { sectionKey: 'tourAssociations', sectionName: 'Tour Associations', isExpanded: true },
+            { sectionKey: 'prerequisiteDetails', sectionName: 'Prerequisite Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

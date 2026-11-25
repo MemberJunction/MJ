@@ -16,12 +16,10 @@ export class MJTourRunFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'userAndVisitorInformation', sectionName: 'User and Visitor Information', isExpanded: true },
-            { sectionKey: 'tourContext', sectionName: 'Tour Context', isExpanded: true },
-            { sectionKey: 'executionAndProgress', sectionName: 'Execution and Progress', isExpanded: true },
-            { sectionKey: 'launchAndTriggerDetails', sectionName: 'Launch and Trigger Details', isExpanded: true },
-            { sectionKey: 'timelineAndMetrics', sectionName: 'Timeline and Metrics', isExpanded: true },
-            { sectionKey: 'associatedIntegrations', sectionName: 'Associated Integrations', isExpanded: true },
+            { sectionKey: 'tourExecution', sectionName: 'Tour Execution', isExpanded: true },
+            { sectionKey: 'launchAndContext', sectionName: 'Launch and Context', isExpanded: true },
+            { sectionKey: 'timelineAndMilestones', sectionName: 'Timeline and Milestones', isExpanded: true },
+            { sectionKey: 'integrationsAndReferences', sectionName: 'Integrations and References', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTourRunSteps', sectionName: 'Tour Run Steps', isExpanded: false }
         ]);

@@ -15,8 +15,8 @@ export class MJTourTriggerFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'triggerConfiguration', sectionName: 'Trigger Configuration', isExpanded: true },
-            { sectionKey: 'behaviorAndDelivery', sectionName: 'Behavior and Delivery', isExpanded: true },
+            { sectionKey: 'tourAssociation', sectionName: 'Tour Association', isExpanded: true },
+            { sectionKey: 'triggerRules', sectionName: 'Trigger Rules', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

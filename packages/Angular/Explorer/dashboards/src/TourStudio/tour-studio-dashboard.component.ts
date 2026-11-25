@@ -11,10 +11,10 @@ import { RunView } from '@memberjunction/core';
 import {
   MJApplicationEntity,
   MJComponentEntity,
-  MJLearningPathEntity,
-  MJLearningPathTourEntity,
   MJRoleEntity,
   MJTourEntity,
+  MJTourLearningPathEntity,
+  MJTourLearningPathTourLinkEntity,
   MJTourOverrideEntity,
   MJTourRunEntity,
   MJTourRunStepEntity,
@@ -137,8 +137,8 @@ export class TourStudioDashboardComponent extends BaseResourceComponent implemen
   public Overrides: MJTourOverrideEntity[] = [];
   public Surfaces: MJTourSurfaceEntity[] = [];
   public SurfaceTours: MJTourSurfaceTourEntity[] = [];
-  public LearningPaths: MJLearningPathEntity[] = [];
-  public LearningPathTours: MJLearningPathTourEntity[] = [];
+  public LearningPaths: MJTourLearningPathEntity[] = [];
+  public LearningPathTours: MJTourLearningPathTourLinkEntity[] = [];
   public Runs: MJTourRunEntity[] = [];
   public RunSteps: MJTourRunStepEntity[] = [];
   public Applications: MJApplicationEntity[] = [];
@@ -417,8 +417,8 @@ export class TourStudioDashboardComponent extends BaseResourceComponent implemen
         { EntityName: 'MJ: Tour Overrides', OrderBy: 'Precedence DESC', ResultType: 'entity_object' },
         { EntityName: 'MJ: Tour Surfaces', OrderBy: 'Name ASC', ResultType: 'entity_object' },
         { EntityName: 'MJ: Tour Surface Tours', OrderBy: 'Sequence ASC', ResultType: 'entity_object' },
-        { EntityName: 'MJ: Learning Paths', OrderBy: 'Name ASC', ResultType: 'entity_object' },
-        { EntityName: 'MJ: Learning Path Tours', OrderBy: 'Sequence ASC', ResultType: 'entity_object' },
+        { EntityName: 'MJ: Tour Learning Paths', OrderBy: 'Name ASC', ResultType: 'entity_object' },
+        { EntityName: 'MJ: Tour Learning Path Tour Links', OrderBy: 'Sequence ASC', ResultType: 'entity_object' },
         { EntityName: 'MJ: Tour Runs', OrderBy: '__mj_CreatedAt DESC', MaxRows: 5000, ResultType: 'entity_object' },
         { EntityName: 'MJ: Tour Run Steps', OrderBy: 'EnteredAt DESC', MaxRows: 10000, ResultType: 'entity_object' },
         { EntityName: 'MJ: Applications', OrderBy: 'Name ASC', ResultType: 'entity_object' },
@@ -435,8 +435,8 @@ export class TourStudioDashboardComponent extends BaseResourceComponent implemen
       this.Overrides = (results[5]?.Results ?? []) as MJTourOverrideEntity[];
       this.Surfaces = (results[6]?.Results ?? []) as MJTourSurfaceEntity[];
       this.SurfaceTours = (results[7]?.Results ?? []) as MJTourSurfaceTourEntity[];
-      this.LearningPaths = (results[8]?.Results ?? []) as MJLearningPathEntity[];
-      this.LearningPathTours = (results[9]?.Results ?? []) as MJLearningPathTourEntity[];
+      this.LearningPaths = (results[8]?.Results ?? []) as MJTourLearningPathEntity[];
+      this.LearningPathTours = (results[9]?.Results ?? []) as MJTourLearningPathTourLinkEntity[];
       this.Runs = (results[10]?.Results ?? []) as MJTourRunEntity[];
       this.RunSteps = (results[11]?.Results ?? []) as MJTourRunStepEntity[];
       this.Applications = (results[12]?.Results ?? []) as MJApplicationEntity[];
@@ -1376,8 +1376,8 @@ export class TourStudioDashboardComponent extends BaseResourceComponent implemen
     this.IsSaving = true;
     this.cdr.markForCheck();
     try {
-      const lp = await this.ProviderToUse.GetEntityObject<MJLearningPathEntity>(
-        'MJ: Learning Paths',
+      const lp = await this.ProviderToUse.GetEntityObject<MJTourLearningPathEntity>(
+        'MJ: Tour Learning Paths',
         this.ProviderToUse.CurrentUser,
       );
       lp.Name = this.NewPathName.trim();
@@ -1406,12 +1406,12 @@ export class TourStudioDashboardComponent extends BaseResourceComponent implemen
     this.IsSaving = true;
     this.cdr.markForCheck();
     try {
-      const existing = this.LearningPathTours.filter((m) => UUIDsEqual(m.LearningPathID, this.AddMemberPathId));
-      const member = await this.ProviderToUse.GetEntityObject<MJLearningPathTourEntity>(
-        'MJ: Learning Path Tours',
+      const existing = this.LearningPathTours.filter((m) => UUIDsEqual(m.TourLearningPathID, this.AddMemberPathId));
+      const member = await this.ProviderToUse.GetEntityObject<MJTourLearningPathTourLinkEntity>(
+        'MJ: Tour Learning Path Tour Links',
         this.ProviderToUse.CurrentUser,
       );
-      member.LearningPathID = this.AddMemberPathId;
+      member.TourLearningPathID = this.AddMemberPathId;
       member.TourID = this.AddMemberTourId;
       member.Sequence = existing.reduce((max, m) => Math.max(max, m.Sequence), 0) + 1;
       member.IsRequired = this.AddMemberRequired;
@@ -1428,7 +1428,7 @@ export class TourStudioDashboardComponent extends BaseResourceComponent implemen
     }
   }
 
-  public async RemoveLearningPathMember(member: MJLearningPathTourEntity): Promise<void> {
+  public async RemoveLearningPathMember(member: MJTourLearningPathTourLinkEntity): Promise<void> {
     if (this.IsSaving) return;
     this.IsSaving = true;
     this.cdr.markForCheck();
@@ -1443,7 +1443,7 @@ export class TourStudioDashboardComponent extends BaseResourceComponent implemen
     }
   }
 
-  public async ToggleLearningPathMemberRequired(member: MJLearningPathTourEntity): Promise<void> {
+  public async ToggleLearningPathMemberRequired(member: MJTourLearningPathTourLinkEntity): Promise<void> {
     if (this.IsSaving) return;
     member.IsRequired = !member.IsRequired;
     if (!(await member.Save())) {
@@ -1511,7 +1511,7 @@ export class TourStudioDashboardComponent extends BaseResourceComponent implemen
   }
 
   private rebuildGovernanceViews(): void {
-    const membersByPathId = GroupByUUID(this.LearningPathTours, (m) => m.LearningPathID);
+    const membersByPathId = GroupByUUID(this.LearningPathTours, (m) => m.TourLearningPathID);
     this.LearningPathViews = this.LearningPaths.map((lp) => {
       const members = [...(membersByPathId.Get(lp.ID) ?? [])]
         .sort((a, b) => a.Sequence - b.Sequence)

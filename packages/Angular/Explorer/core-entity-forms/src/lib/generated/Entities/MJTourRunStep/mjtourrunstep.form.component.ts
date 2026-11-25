@@ -15,9 +15,10 @@ export class MJTourRunStepFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'stepExecution', sectionName: 'Step Execution', isExpanded: true },
-            { sectionKey: 'timingAndOutcomes', sectionName: 'Timing and Outcomes', isExpanded: true },
-            { sectionKey: 'diagnosticsAndMetrics', sectionName: 'Diagnostics and Metrics', isExpanded: true },
+            { sectionKey: 'runExecution', sectionName: 'Run Execution', isExpanded: true },
+            { sectionKey: 'timingAndTimeline', sectionName: 'Timing and Timeline', isExpanded: true },
+            { sectionKey: 'stepOutcomes', sectionName: 'Step Outcomes', isExpanded: true },
+            { sectionKey: 'diagnostics', sectionName: 'Diagnostics', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

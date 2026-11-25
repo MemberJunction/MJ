@@ -318,8 +318,6 @@ import { MJInteractionOfferFormComponent } from "./Entities/MJInteractionOffer/m
 import { MJJurisdictionFormComponent } from "./Entities/MJJurisdiction/mjjurisdiction.form.component";
 import { MJJurisdictionMemberFormComponent } from "./Entities/MJJurisdictionMember/mjjurisdictionmember.form.component";
 import { MJKnowledgeHubSavedSearchFormComponent } from "./Entities/MJKnowledgeHubSavedSearch/mjknowledgehubsavedsearch.form.component";
-import { MJLearningPathFormComponent } from "./Entities/MJLearningPath/mjlearningpath.form.component";
-import { MJLearningPathTourFormComponent } from "./Entities/MJLearningPathTour/mjlearningpathtour.form.component";
 import { MJLibraryFormComponent } from "./Entities/MJLibrary/mjlibrary.form.component";
 import { MJLibraryItemFormComponent } from "./Entities/MJLibraryItem/mjlibraryitem.form.component";
 import { MJListCategoryFormComponent } from "./Entities/MJListCategory/mjlistcategory.form.component";
@@ -470,6 +468,8 @@ import { MJTestSuiteTestFormComponent } from "./Entities/MJTestSuiteTest/mjtests
 import { MJTestTypeFormComponent } from "./Entities/MJTestType/mjtesttype.form.component";
 import { MJThemeFormComponent } from "./Entities/MJTheme/mjtheme.form.component";
 import { MJTourFormComponent } from "./Entities/MJTour/mjtour.form.component";
+import { MJTourLearningPathFormComponent } from "./Entities/MJTourLearningPath/mjtourlearningpath.form.component";
+import { MJTourLearningPathTourLinkFormComponent } from "./Entities/MJTourLearningPathTourLink/mjtourlearningpathtourlink.form.component";
 import { MJTourOverrideFormComponent } from "./Entities/MJTourOverride/mjtouroverride.form.component";
 import { MJTourPrerequisiteFormComponent } from "./Entities/MJTourPrerequisite/mjtourprerequisite.form.component";
 import { MJTourRunFormComponent } from "./Entities/MJTourRun/mjtourrun.form.component";
@@ -592,7 +592,6 @@ declarations: [
     MJEntityAIActionFormComponent,
     MJEntityFormComponent,
     MJIntegrationSourceTypeFormComponent,
-    MJLearningPathTourFormComponent,
     MJMLEvaluationProtocolFormComponent,
     MJScopedPromptPartFormComponent,
     MJSearchScopePermissionFormComponent,
@@ -660,7 +659,8 @@ declarations: [
     MJDiagnosticSessionFormComponent,
     MJEntityRelationshipFormComponent,
     MJExperimentSessionFormComponent,
-    MJMCPServerConnectionToolFormComponent
+    MJMCPServerConnectionToolFormComponent,
+    MJTourLearningPathTourLinkFormComponent
 ],
 imports: [
     CommonModule,
@@ -731,7 +731,8 @@ declarations: [
     MJJurisdictionMemberFormComponent,
     MJOAuthAuthServerMetadataCacheFormComponent,
     MJResourcePermissionFormComponent,
-    MJRubricVersionFormComponent
+    MJRubricVersionFormComponent,
+    MJTourLearningPathFormComponent
 ],
 imports: [
     CommonModule,
@@ -1318,7 +1319,6 @@ declarations: [
     MJEntityFormOverrideFormComponent,
     MJFileStorageAccountPermissionFormComponent,
     MJGraphEdgeFormComponent,
-    MJLearningPathFormComponent,
     MJMCPServerToolFormComponent,
     MJMLAlgorithmUseCaseRankingFormComponent,
     MJMLTrainingPipelineFormComponent,

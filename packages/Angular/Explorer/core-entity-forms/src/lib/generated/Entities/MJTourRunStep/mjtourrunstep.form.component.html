@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Step Execution Section -->
+    <!-- Run Execution Section -->
     <mj-collapsible-panel
-        SectionKey="stepExecution"
-        SectionName="Step Execution"
-        Icon="fa fa-shoe-prints"
+        SectionKey="runExecution"
+        SectionName="Run Execution"
+        Icon="fa fa-play-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -45,10 +45,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Timing and Outcomes Section -->
+    <!-- Timing and Timeline Section -->
     <mj-collapsible-panel
-        SectionKey="timingAndOutcomes"
-        SectionName="Timing and Outcomes"
+        SectionKey="timingAndTimeline"
+        SectionName="Timing and Timeline"
         Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
@@ -68,6 +68,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Step Outcomes Section -->
+    <mj-collapsible-panel
+        SectionKey="stepOutcomes"
+        SectionName="Step Outcomes"
+        Icon="fa fa-flag-checkered"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -76,16 +86,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Diagnostics and Metrics Section -->
-    <mj-collapsible-panel
-        SectionKey="diagnosticsAndMetrics"
-        SectionName="Diagnostics and Metrics"
-        Icon="fa fa-chart-line"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -102,9 +102,19 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Diagnostics Section -->
+    <mj-collapsible-panel
+        SectionKey="diagnostics"
+        SectionName="Diagnostics"
+        Icon="fa fa-code"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="Details"
             Type="textarea"
             [EditMode]="EditMode"

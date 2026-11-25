@@ -3,7 +3,7 @@
     "_comments": [
       "JSONType metadata for Guided Tours structured JSON columns.",
       "Entities covered: MJ: Tours, MJ: Tour Versions, MJ: Tour Steps, MJ: Tour Step Paths,",
-      "MJ: Tour Triggers, MJ: Learning Paths, MJ: Tour Surface Tours, and MJ: Tour Runs."
+      "MJ: Tour Triggers, MJ: Tour Learning Paths, MJ: Tour Surface Tours, and MJ: Tour Runs."
     ],
     "fields": {
       "Name": "MJ: Tours"
@@ -176,7 +176,7 @@
   },
   {
     "fields": {
-      "Name": "MJ: Learning Paths"
+      "Name": "MJ: Tour Learning Paths"
     },
     "relatedEntities": {
       "MJ: Entity Fields": [
@@ -187,13 +187,13 @@
             "JSONTypeDefinition": "@file:JSONType-interfaces/ILearningPathConfiguration.ts"
           },
           "primaryKey": {
-            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Learning Paths&Name=Configuration"
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Learning Paths&Name=Configuration"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Learning Paths"
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Learning Paths"
     }
   },
   {

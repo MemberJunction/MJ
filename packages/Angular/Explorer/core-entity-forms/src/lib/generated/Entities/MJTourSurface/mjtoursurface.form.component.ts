@@ -16,12 +16,12 @@ export class MJTourSurfaceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'surfaceDetails', sectionName: 'Surface Details', isExpanded: true },
-            { sectionKey: 'accessAndSecurity', sectionName: 'Access and Security', isExpanded: true },
-            { sectionKey: 'integrationsAndConfiguration', sectionName: 'Integrations and Configuration', isExpanded: true },
+            { sectionKey: 'surfaceInformation', sectionName: 'Surface Information', isExpanded: true },
+            { sectionKey: 'securityAndAccess', sectionName: 'Security and Access', isExpanded: true },
+            { sectionKey: 'integrationsAndSettings', sectionName: 'Integrations and Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTourRuns', sectionName: 'Tour Runs', isExpanded: false },
-            { sectionKey: 'mJTourSurfaceTours', sectionName: 'Tour Surface Tours', isExpanded: false }
+            { sectionKey: 'mJTourSurfaceTours', sectionName: 'Tour Surface Tours', isExpanded: false },
+            { sectionKey: 'mJTourRuns', sectionName: 'Tour Runs', isExpanded: false }
         ]);
     }
 }

@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Step Type Details Section -->
+    <!-- Step Type Definition Section -->
     <mj-collapsible-panel
-        SectionKey="stepTypeDetails"
-        SectionName="Step Type Details"
-        Icon="fa fa-info-circle"
+        SectionKey="stepTypeDefinition"
+        SectionName="Step Type Definition"
+        Icon="fa fa-puzzle-piece"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -84,24 +84,6 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Configuration & Capabilities Section -->
-    <mj-collapsible-panel
-        SectionKey="configurationCapabilities"
-        SectionName="Configuration & Capabilities"
-        Icon="fa fa-sliders-h"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ConfigSchema"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -121,11 +103,29 @@
 
     </mj-collapsible-panel>
 
+    <!-- Configuration & Schema Section -->
+    <mj-collapsible-panel
+        SectionKey="configurationSchema"
+        SectionName="Configuration & Schema"
+        Icon="fa fa-code"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="ConfigSchema"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -157,7 +157,7 @@
     <mj-collapsible-panel
         SectionKey="mJTourSteps"
         SectionName="Tour Steps"
-        Icon="fa fa-shoe-prints"
+        Icon="fa fa-list-ol"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

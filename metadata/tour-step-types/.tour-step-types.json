@@ -9,14 +9,30 @@
       "ConfigSchema": {
         "type": "object",
         "properties": {
-          "NextButtonText": { "type": "string" },
-          "BackButtonText": { "type": "string" },
-          "DismissButtonText": { "type": "string" },
-          "ShowProgress": { "type": "boolean" },
-          "PaddingPx": { "type": "number" },
-          "AllowTargetClick": { "type": "boolean" },
-          "ExtraAnchors": { "type": "array" },
-          "localizations": { "type": "object" }
+          "NextButtonText": {
+            "type": "string"
+          },
+          "BackButtonText": {
+            "type": "string"
+          },
+          "DismissButtonText": {
+            "type": "string"
+          },
+          "ShowProgress": {
+            "type": "boolean"
+          },
+          "PaddingPx": {
+            "type": "number"
+          },
+          "AllowTargetClick": {
+            "type": "boolean"
+          },
+          "ExtraAnchors": {
+            "type": "array"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide",
@@ -38,11 +54,21 @@
       "ConfigSchema": {
         "type": "object",
         "properties": {
-          "ShowWaitingIndicator": { "type": "boolean" },
-          "WaitingMessage": { "type": "string" },
-          "AllowManualSkip": { "type": "boolean" },
-          "SkipButtonText": { "type": "string" },
-          "localizations": { "type": "object" }
+          "ShowWaitingIndicator": {
+            "type": "boolean"
+          },
+          "WaitingMessage": {
+            "type": "string"
+          },
+          "AllowManualSkip": {
+            "type": "boolean"
+          },
+          "SkipButtonText": {
+            "type": "string"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide,Do",
@@ -64,10 +90,18 @@
       "ConfigSchema": {
         "type": "object",
         "properties": {
-          "PulseDurationMs": { "type": "number" },
-          "DismissButtonText": { "type": "string" },
-          "OpenOnHover": { "type": "boolean" },
-          "localizations": { "type": "object" }
+          "PulseDurationMs": {
+            "type": "number"
+          },
+          "DismissButtonText": {
+            "type": "string"
+          },
+          "OpenOnHover": {
+            "type": "boolean"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide",
@@ -89,13 +123,27 @@
       "ConfigSchema": {
         "type": "object",
         "properties": {
-          "Variant": { "type": "string" },
-          "PrimaryButtonText": { "type": "string" },
-          "SecondaryButtonText": { "type": "string" },
-          "NextTourKey": { "type": "string" },
-          "LearningPathKey": { "type": "string" },
-          "ShowProgress": { "type": "boolean" },
-          "localizations": { "type": "object" }
+          "Variant": {
+            "type": "string"
+          },
+          "PrimaryButtonText": {
+            "type": "string"
+          },
+          "SecondaryButtonText": {
+            "type": "string"
+          },
+          "NextTourKey": {
+            "type": "string"
+          },
+          "LearningPathKey": {
+            "type": "string"
+          },
+          "ShowProgress": {
+            "type": "boolean"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide",
@@ -117,12 +165,24 @@
       "ConfigSchema": {
         "type": "object",
         "properties": {
-          "Tone": { "type": "string" },
-          "CtaText": { "type": "string" },
-          "CtaUrl": { "type": "string" },
-          "CtaSignalKey": { "type": "string" },
-          "Dismissible": { "type": "boolean" },
-          "localizations": { "type": "object" }
+          "Tone": {
+            "type": "string"
+          },
+          "CtaText": {
+            "type": "string"
+          },
+          "CtaUrl": {
+            "type": "string"
+          },
+          "CtaSignalKey": {
+            "type": "string"
+          },
+          "Dismissible": {
+            "type": "boolean"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide",
@@ -143,13 +203,25 @@
       "ComponentID": null,
       "ConfigSchema": {
         "type": "object",
-        "required": ["Options"],
+        "required": [
+          "Options"
+        ],
         "properties": {
-          "Question": { "type": "string" },
-          "Options": { "type": "array" },
-          "IsKnowledgeCheck": { "type": "boolean" },
-          "ShowFeedbackBeforeAdvance": { "type": "boolean" },
-          "localizations": { "type": "object" }
+          "Question": {
+            "type": "string"
+          },
+          "Options": {
+            "type": "array"
+          },
+          "IsKnowledgeCheck": {
+            "type": "boolean"
+          },
+          "ShowFeedbackBeforeAdvance": {
+            "type": "boolean"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide",
@@ -170,16 +242,36 @@
       "ComponentID": null,
       "ConfigSchema": {
         "type": "object",
-        "required": ["MediaType", "SourceUrl", "AltText"],
+        "required": [
+          "MediaType",
+          "SourceUrl",
+          "AltText"
+        ],
         "properties": {
-          "MediaType": { "type": "string" },
-          "SourceUrl": { "type": "string" },
-          "CaptionsUrl": { "type": "string" },
-          "AltText": { "type": "string" },
-          "PosterUrl": { "type": "string" },
-          "AutoAdvanceOnEnd": { "type": "boolean" },
-          "NextButtonText": { "type": "string" },
-          "localizations": { "type": "object" }
+          "MediaType": {
+            "type": "string"
+          },
+          "SourceUrl": {
+            "type": "string"
+          },
+          "CaptionsUrl": {
+            "type": "string"
+          },
+          "AltText": {
+            "type": "string"
+          },
+          "PosterUrl": {
+            "type": "string"
+          },
+          "AutoAdvanceOnEnd": {
+            "type": "boolean"
+          },
+          "NextButtonText": {
+            "type": "string"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide",
@@ -201,13 +293,27 @@
       "ConfigSchema": {
         "type": "object",
         "properties": {
-          "ComponentID": { "type": "string" },
-          "ComponentName": { "type": "string" },
-          "ComponentSpec": { "type": "object" },
-          "InputProps": { "type": "object" },
-          "CompletionEventName": { "type": "string" },
-          "AllowNextButtonFallback": { "type": "boolean" },
-          "localizations": { "type": "object" }
+          "ComponentID": {
+            "type": "string"
+          },
+          "ComponentName": {
+            "type": "string"
+          },
+          "ComponentSpec": {
+            "type": "object"
+          },
+          "InputProps": {
+            "type": "object"
+          },
+          "CompletionEventName": {
+            "type": "string"
+          },
+          "AllowNextButtonFallback": {
+            "type": "boolean"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide",
@@ -228,14 +334,28 @@
       "ComponentID": null,
       "ConfigSchema": {
         "type": "object",
-        "required": ["SeedPrompt"],
+        "required": [
+          "SeedPrompt"
+        ],
         "properties": {
-          "SeedPrompt": { "type": "string" },
-          "AgentID": { "type": "string" },
-          "PreferVoice": { "type": "boolean" },
-          "AllowNextButtonFallback": { "type": "boolean" },
-          "NextButtonText": { "type": "string" },
-          "localizations": { "type": "object" }
+          "SeedPrompt": {
+            "type": "string"
+          },
+          "AgentID": {
+            "type": "string"
+          },
+          "PreferVoice": {
+            "type": "boolean"
+          },
+          "AllowNextButtonFallback": {
+            "type": "boolean"
+          },
+          "NextButtonText": {
+            "type": "string"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Show,Guide",
@@ -257,10 +377,18 @@
       "ConfigSchema": {
         "type": "object",
         "properties": {
-          "InputProps": { "type": "object" },
-          "CompletionEventName": { "type": "string" },
-          "AllowNextButtonFallback": { "type": "boolean" },
-          "localizations": { "type": "object" }
+          "InputProps": {
+            "type": "object"
+          },
+          "CompletionEventName": {
+            "type": "string"
+          },
+          "AllowNextButtonFallback": {
+            "type": "boolean"
+          },
+          "localizations": {
+            "type": "object"
+          }
         }
       },
       "SupportedModes": "Guide",

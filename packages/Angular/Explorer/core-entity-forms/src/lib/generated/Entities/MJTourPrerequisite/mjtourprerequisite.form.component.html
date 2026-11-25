@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Prerequisite Configuration Section -->
+    <!-- Tour Associations Section -->
     <mj-collapsible-panel
-        SectionKey="prerequisiteConfiguration"
-        SectionName="Prerequisite Configuration"
-        Icon="fa fa-tasks"
+        SectionKey="tourAssociations"
+        SectionName="Tour Associations"
+        Icon="fa fa-route"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -29,6 +29,25 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="RequiredTourID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Prerequisite Details Section -->
+    <mj-collapsible-panel
+        SectionKey="prerequisiteDetails"
+        SectionName="Prerequisite Details"
+        Icon="fa fa-list-check"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="PrerequisiteType"
             Type="select"
             [EditMode]="EditMode"
@@ -37,11 +56,10 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="RequiredTourID"
-            Type="textbox"
+            FieldName="Condition"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
@@ -56,24 +74,6 @@
             [ShowLabel]="true"
             FieldName="Sequence"
             Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Rule Logic Section -->
-    <mj-collapsible-panel
-        SectionKey="ruleLogic"
-        SectionName="Rule Logic"
-        Icon="fa fa-code"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="Condition"
-            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

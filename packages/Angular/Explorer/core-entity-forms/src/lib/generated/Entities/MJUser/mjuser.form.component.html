@@ -3695,31 +3695,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Tour Runs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTourRuns"
-        SectionName="Tour Runs"
-        Icon="fa fa-route"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTourRuns')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tour Runs','UserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tour Runs','UserID')"
-                [AllowLoad]="IsSectionExpanded('mJTourRuns')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTourRuns', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Tour Overrides Section -->
     <mj-collapsible-panel
         SectionKey="mJTourOverrides"
@@ -3749,7 +3724,7 @@
     <mj-collapsible-panel
         SectionKey="mJTourVersions"
         SectionName="Tour Versions"
-        Icon="fa fa-code-branch"
+        Icon="fa fa-history"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -3764,6 +3739,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTourVersions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tour Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTourRuns"
+        SectionName="Tour Runs"
+        Icon="fa fa-route"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTourRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tour Runs','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tour Runs','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJTourRuns')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTourRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

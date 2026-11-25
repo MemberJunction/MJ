@@ -5122,7 +5122,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: int`),
     RootBaseAgentID: z.string().nullable().describe(`
         * * Field Name: RootBaseAgentID
-        * * Display Name: Root Base Agent
+        * * Display Name: Root Base Agent ID
         * * SQL Data Type: uniqueidentifier`),
     BaseAgentIDDepth: z.number().nullable().describe(`
         * * Field Name: BaseAgentIDDepth
@@ -20008,19 +20008,19 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
     ParentIDDepth: z.number().nullable().describe(`
         * * Field Name: ParentIDDepth
-        * * Display Name: Parent Depth
+        * * Display Name: Parent ID Depth
         * * SQL Data Type: int`),
     ParentIDPath: z.string().nullable().describe(`
         * * Field Name: ParentIDPath
-        * * Display Name: Parent Path
+        * * Display Name: Parent ID Path
         * * SQL Data Type: nvarchar(MAX)`),
     ParentIDIsLeaf: z.boolean().nullable().describe(`
         * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
+        * * Display Name: Parent ID Is Leaf
         * * SQL Data Type: bit`),
     ParentIDChildCount: z.number().nullable().describe(`
         * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
+        * * Display Name: Parent ID Child Count
         * * SQL Data Type: int`),
 });
 
@@ -29811,133 +29811,6 @@ export const MJvwLatestFeatureValuesSchema = z.object({
 });
 
 export type MJvwLatestFeatureValuesEntityType = z.infer<typeof MJvwLatestFeatureValuesSchema>;
-
-/**
- * zod schema definition for the entity MJ: Learning Path Tours
- */
-export const MJLearningPathTourSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        * * Description: Unique identifier of the learning path membership row.`),
-    LearningPathID: z.string().describe(`
-        * * Field Name: LearningPathID
-        * * Display Name: Learning Path
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Learning Paths (vwLearningPaths.ID)
-        * * Description: Parent learning path.`),
-    TourID: z.string().describe(`
-        * * Field Name: TourID
-        * * Display Name: Tour
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
-        * * Description: Member tour included in the learning path.`),
-    Sequence: z.number().describe(`
-        * * Field Name: Sequence
-        * * Display Name: Sequence
-        * * SQL Data Type: int
-        * * Default Value: 0
-        * * Description: Display and progression order of this tour within the learning path.`),
-    IsRequired: z.boolean().describe(`
-        * * Field Name: IsRequired
-        * * Display Name: Is Required
-        * * SQL Data Type: bit
-        * * Default Value: 1
-        * * Description: When 1, this tour is mandatory and cannot be skipped in the checklist.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    LearningPath: z.string().nullable().describe(`
-        * * Field Name: LearningPath
-        * * Display Name: Learning Path Name
-        * * SQL Data Type: nvarchar(255)`),
-    Tour: z.string().nullable().describe(`
-        * * Field Name: Tour
-        * * Display Name: Tour Name
-        * * SQL Data Type: nvarchar(255)`),
-});
-
-export type MJLearningPathTourEntityType = z.infer<typeof MJLearningPathTourSchema>;
-
-/**
- * zod schema definition for the entity MJ: Learning Paths
- */
-export const MJLearningPathSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-        * * Description: Unique identifier of the learning path.`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Display title of the learning path.`),
-    PathKey: z.string().describe(`
-        * * Field Name: PathKey
-        * * Display Name: Path Key
-        * * SQL Data Type: nvarchar(150)
-        * * Description: Stable unique key identifying the learning path (for example mj.essentials).`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Summary of the curriculum and who it is designed for.`),
-    ApplicationID: z.string().nullable().describe(`
-        * * Field Name: ApplicationID
-        * * Display Name: Application ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
-        * * Description: Owning MJ Application. NULL indicates a framework-wide learning path.`),
-    AudienceFilter: z.string().nullable().describe(`
-        * * Field Name: AudienceFilter
-        * * Display Name: Audience Filter
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: CompositeFilter JSON expression restricting which users see this learning path.`),
-    Status: z.union([z.literal('Active'), z.literal('Draft'), z.literal('Retired')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Active
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Draft
-    *   * Retired
-        * * Description: Lifecycle status of the learning path: Draft, Active, or Retired.`),
-    Configuration: z.any().nullable().describe(`
-        * * Field Name: Configuration
-        * * Display Name: Configuration
-        * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: MJLearningPathEntity_ILearningPathConfiguration
-        * * Description: JSON ILearningPathConfiguration holding localizations, icon, and checklist presentation options.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Application: z.string().nullable().describe(`
-        * * Field Name: Application
-        * * Display Name: Application
-        * * SQL Data Type: nvarchar(100)`),
-});
-
-export type MJLearningPathEntityType = z.infer<typeof MJLearningPathSchema>;
 
 /**
  * zod schema definition for the entity MJ: Libraries
@@ -43842,6 +43715,133 @@ export const MJThemeSchema = z.object({
 export type MJThemeEntityType = z.infer<typeof MJThemeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Tour Learning Path Tour Links
+ */
+export const MJTourLearningPathTourLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier of the learning path membership row.`),
+    TourLearningPathID: z.string().describe(`
+        * * Field Name: TourLearningPathID
+        * * Display Name: Tour Learning Path
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tour Learning Paths (vwTourLearningPaths.ID)
+        * * Description: Parent learning path.`),
+    TourID: z.string().describe(`
+        * * Field Name: TourID
+        * * Display Name: Tour
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+        * * Description: Member tour included in the learning path.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display and progression order of this tour within the learning path.`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, this tour is mandatory and cannot be skipped in the checklist.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    TourLearningPath: z.string().nullable().describe(`
+        * * Field Name: TourLearningPath
+        * * Display Name: Tour Learning Path
+        * * SQL Data Type: nvarchar(255)`),
+    Tour: z.string().nullable().describe(`
+        * * Field Name: Tour
+        * * Display Name: Tour
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJTourLearningPathTourLinkEntityType = z.infer<typeof MJTourLearningPathTourLinkSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Tour Learning Paths
+ */
+export const MJTourLearningPathSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier of the learning path.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display title of the learning path.`),
+    PathKey: z.string().describe(`
+        * * Field Name: PathKey
+        * * Display Name: Path Key
+        * * SQL Data Type: nvarchar(150)
+        * * Description: Stable unique key identifying the learning path (for example mj.essentials).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Summary of the curriculum and who it is designed for.`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Owning MJ Application. NULL indicates a framework-wide learning path.`),
+    AudienceFilter: z.string().nullable().describe(`
+        * * Field Name: AudienceFilter
+        * * Display Name: Audience Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: CompositeFilter JSON expression restricting which users see this learning path.`),
+    Status: z.union([z.literal('Active'), z.literal('Draft'), z.literal('Retired')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Draft
+    *   * Retired
+        * * Description: Lifecycle status of the learning path: Draft, Active, or Retired.`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJTourLearningPathEntity_ILearningPathConfiguration
+        * * Description: JSON ILearningPathConfiguration holding localizations, icon, and checklist presentation options.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Application: z.string().nullable().describe(`
+        * * Field Name: Application
+        * * Display Name: Application
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJTourLearningPathEntityType = z.infer<typeof MJTourLearningPathSchema>;
+
+/**
  * zod schema definition for the entity MJ: Tour Overrides
  */
 export const MJTourOverrideSchema = z.object({
@@ -43955,7 +43955,7 @@ export const MJTourPrerequisiteSchema = z.object({
         * * Description: Unique identifier of the tour prerequisite.`),
     TourID: z.string().describe(`
         * * Field Name: TourID
-        * * Display Name: Tour
+        * * Display Name: Tour ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
         * * Description: Tour that declares this prerequisite.`),
@@ -44010,11 +44010,11 @@ export const MJTourPrerequisiteSchema = z.object({
         * * Default Value: getutcdate()`),
     Tour: z.string().nullable().describe(`
         * * Field Name: Tour
-        * * Display Name: Tour Name
+        * * Display Name: Tour
         * * SQL Data Type: nvarchar(255)`),
     RequiredTour: z.string().nullable().describe(`
         * * Field Name: RequiredTour
-        * * Display Name: Required Tour Name
+        * * Display Name: Required Tour
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -44121,7 +44121,7 @@ export const MJTourRunSchema = z.object({
         * * Description: Unique identifier of the tour run.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Authenticated MJ user taking the tour. NULL for unauthenticated guest visitors.`),
@@ -44132,19 +44132,19 @@ export const MJTourRunSchema = z.object({
         * * Description: Guest visitor identifier (or mj_sid fallback when returning-visitor memory is off) from verified surface JWT claims.`),
     SurfaceID: z.string().nullable().describe(`
         * * Field Name: SurfaceID
-        * * Display Name: Surface
+        * * Display Name: Surface ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tour Surfaces (vwTourSurfaces.ID)
         * * Description: Optional FK to MJ: Tour Surfaces when the run occurred on an external or embed surface.`),
     TourID: z.string().describe(`
         * * Field Name: TourID
-        * * Display Name: Tour
+        * * Display Name: Tour ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
         * * Description: Tour being executed.`),
     TourVersionID: z.string().describe(`
         * * Field Name: TourVersionID
-        * * Display Name: Tour Version
+        * * Display Name: Tour Version ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tour Versions (vwTourVersions.ID)
         * * Description: Pinned immutable Tour Version snapshot this run executes against.`),
@@ -44208,7 +44208,7 @@ export const MJTourRunSchema = z.object({
         * * Description: Entry point that initiated the run: Launcher, Omnibar, Agent, Trigger, Notification, Link, Learning Path, or Empty State.`),
     LaunchedByAgentRunID: z.string().nullable().describe(`
         * * Field Name: LaunchedByAgentRunID
-        * * Display Name: Launched By Agent Run
+        * * Display Name: Launched By Agent Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Optional FK to MJ: AI Agent Runs when an agent initiated this tour run.`),
@@ -44234,13 +44234,13 @@ export const MJTourRunSchema = z.object({
         * * Description: Timestamp until which a Snoozed run should not be re-offered.`),
     ConversationID: z.string().nullable().describe(`
         * * Field Name: ConversationID
-        * * Display Name: Conversation
+        * * Display Name: Conversation ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
         * * Description: Optional FK to MJ: Conversations linking a Chat-guided run to its conversation thread.`),
     AgentSessionID: z.string().nullable().describe(`
         * * Field Name: AgentSessionID
-        * * Display Name: Agent Session
+        * * Display Name: Agent Session ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
         * * Description: Optional FK to MJ: AI Agent Sessions linking a Voice-guided run to its realtime session.`),
@@ -44262,23 +44262,23 @@ export const MJTourRunSchema = z.object({
         * * Default Value: getutcdate()`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Details
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Surface: z.string().nullable().describe(`
         * * Field Name: Surface
-        * * Display Name: Surface Details
+        * * Display Name: Surface
         * * SQL Data Type: nvarchar(255)`),
     Tour: z.string().nullable().describe(`
         * * Field Name: Tour
-        * * Display Name: Tour Details
+        * * Display Name: Tour
         * * SQL Data Type: nvarchar(255)`),
     LaunchedByAgentRun: z.string().nullable().describe(`
         * * Field Name: LaunchedByAgentRun
-        * * Display Name: Launched By Agent Run Details
+        * * Display Name: Launched By Agent Run
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Details
+        * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -44296,7 +44296,7 @@ export const MJTourStepPathSchema = z.object({
         * * Description: Unique identifier of the tour step path.`),
     TourID: z.string().describe(`
         * * Field Name: TourID
-        * * Display Name: Tour ID
+        * * Display Name: Tour
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
         * * Description: Parent tour containing both endpoints.`),
@@ -44358,7 +44358,7 @@ export const MJTourStepPathSchema = z.object({
         * * Default Value: getutcdate()`),
     Tour: z.string().nullable().describe(`
         * * Field Name: Tour
-        * * Display Name: Tour
+        * * Display Name: Tour Name
         * * SQL Data Type: nvarchar(255)`),
     FromStep: z.string().nullable().describe(`
         * * Field Name: FromStep
@@ -44404,7 +44404,7 @@ export const MJTourStepTypeSchema = z.object({
         * * Description: ClassFactory key of the BaseTourStepRenderer UI subclass. When NULL, resolution falls back to the step type Name.`),
     ComponentID: z.string().nullable().describe(`
         * * Field Name: ComponentID
-        * * Display Name: Component
+        * * Display Name: Component ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
         * * Description: Optional FK to MJ: Components enabling zero-deploy runtime ComponentSpec interactive step types.`),
@@ -44453,7 +44453,7 @@ export const MJTourStepTypeSchema = z.object({
         * * Default Value: getutcdate()`),
     Component: z.string().nullable().describe(`
         * * Field Name: Component
-        * * Display Name: Component Name
+        * * Display Name: Component
         * * SQL Data Type: nvarchar(500)`),
 });
 
@@ -44471,7 +44471,7 @@ export const MJTourStepSchema = z.object({
         * * Description: Unique identifier of the tour step.`),
     TourID: z.string().describe(`
         * * Field Name: TourID
-        * * Display Name: Tour
+        * * Display Name: Tour ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
         * * Description: Parent tour this step belongs to.`),
@@ -44488,7 +44488,7 @@ export const MJTourStepSchema = z.object({
         * * Description: Default linear display order of the step when no explicit Tour Step Paths override traversal.`),
     StepTypeID: z.string().describe(`
         * * Field Name: StepTypeID
-        * * Display Name: Step Type
+        * * Display Name: Step Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tour Step Types (vwTourStepTypes.ID)
         * * Description: FK to MJ: Tour Step Types determining the visual primitive or plugin behavior.`),
@@ -44558,12 +44558,12 @@ export const MJTourStepSchema = z.object({
         * * Description: JSON ITourCompletion defining the checks that mark this step done.`),
     SkipWhen: z.string().nullable().describe(`
         * * Field Name: SkipWhen
-        * * Display Name: Skip Condition
+        * * Display Name: Skip When
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON condition or check specification evaluated to skip the step automatically when its outcome is already satisfied.`),
     OnMissing: z.union([z.literal('Agent Recover'), z.literal('Center'), z.literal('Skip'), z.literal('Stall')]).describe(`
         * * Field Name: OnMissing
-        * * Display Name: On Missing Anchor
+        * * Display Name: On Missing
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Center
     * * Value List Type: List
@@ -44601,11 +44601,11 @@ export const MJTourStepSchema = z.object({
         * * Default Value: getutcdate()`),
     Tour: z.string().nullable().describe(`
         * * Field Name: Tour
-        * * Display Name: Tour Name
+        * * Display Name: Tour
         * * SQL Data Type: nvarchar(255)`),
     StepType: z.string().nullable().describe(`
         * * Field Name: StepType
-        * * Display Name: Step Type Name
+        * * Display Name: Step Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -44732,13 +44732,13 @@ export const MJTourSurfaceSchema = z.object({
         * * Description: Authentication strategy accepted on this surface: MJ User, Guest, or Either.`),
     GuestRoleID: z.string().nullable().describe(`
         * * Field Name: GuestRoleID
-        * * Display Name: Guest Role
+        * * Display Name: Guest Role ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
         * * Description: Isolated MJ Role used when minting guest sessions for this surface (for example Tour Guest).`),
     ConversationWidgetInstanceID: z.string().nullable().describe(`
         * * Field Name: ConversationWidgetInstanceID
-        * * Display Name: Conversation Widget Instance
+        * * Display Name: Conversation Widget Instance ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Widget Instances (vwConversationWidgetInstances.ID)
         * * Description: Optional FK to MJ: Conversation Widget Instances providing an embedded chat or voice guide that shares the guest session.`),
@@ -44781,11 +44781,11 @@ export const MJTourSurfaceSchema = z.object({
         * * Default Value: getutcdate()`),
     GuestRole: z.string().nullable().describe(`
         * * Field Name: GuestRole
-        * * Display Name: Guest Role Name
+        * * Display Name: Guest Role
         * * SQL Data Type: nvarchar(50)`),
     ConversationWidgetInstance: z.string().nullable().describe(`
         * * Field Name: ConversationWidgetInstance
-        * * Display Name: Conversation Widget Instance Name
+        * * Display Name: Conversation Widget Instance
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -44882,7 +44882,7 @@ export const MJTourVersionSchema = z.object({
         * * Description: Unique identifier of the published tour version.`),
     TourID: z.string().describe(`
         * * Field Name: TourID
-        * * Display Name: Tour ID
+        * * Display Name: Tour
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
         * * Description: Parent tour this snapshot belongs to.`),
@@ -44931,7 +44931,7 @@ export const MJTourVersionSchema = z.object({
         * * Default Value: getutcdate()`),
     Tour: z.string().nullable().describe(`
         * * Field Name: Tour
-        * * Display Name: Tour
+        * * Display Name: Tour Reference
         * * SQL Data Type: nvarchar(255)`),
     PublishedByUser: z.string().nullable().describe(`
         * * Field Name: PublishedByUser
@@ -44968,7 +44968,7 @@ export const MJTourSchema = z.object({
         * * Description: Summary of what the user accomplishes by taking this tour.`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application
+        * * Display Name: Application ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
         * * Description: Owning MJ Application. NULL indicates a framework core tour.`),
@@ -44991,7 +44991,7 @@ export const MJTourSchema = z.object({
         * * Description: Tour lifecycle status: Draft, Active, or Retired.`),
     CurrentVersionID: z.string().nullable().describe(`
         * * Field Name: CurrentVersionID
-        * * Display Name: Current Version
+        * * Display Name: Current Version ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tour Versions (vwTourVersions.ID)
         * * Description: FK to the currently published immutable snapshot in MJ: Tour Versions.`),
@@ -45042,7 +45042,7 @@ export const MJTourSchema = z.object({
         * * Description: When 1, steps marked Mode = Do may execute confirmed agent mutations (subject to hard-banned action guards).`),
     GuideAgentID: z.string().nullable().describe(`
         * * Field Name: GuideAgentID
-        * * Display Name: Guide Agent
+        * * Display Name: Guide Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Optional FK to MJ: AI Agents specifying the agent that guides this tour in Chat/Voice mode. NULL uses the app or instance default.`),
@@ -45091,11 +45091,11 @@ export const MJTourSchema = z.object({
         * * Default Value: getutcdate()`),
     Application: z.string().nullable().describe(`
         * * Field Name: Application
-        * * Display Name: Application Name
+        * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
     GuideAgent: z.string().nullable().describe(`
         * * Field Name: GuideAgent
-        * * Display Name: Guide Agent Name
+        * * Display Name: Guide Agent
         * * SQL Data Type: nvarchar(255)`),
 });
 

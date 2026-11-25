@@ -16,11 +16,12 @@ export class MJTourVersionFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'versionDetails', sectionName: 'Version Details', isExpanded: true },
-            { sectionKey: 'publishingInformation', sectionName: 'Publishing Information', isExpanded: true },
+            { sectionKey: 'tourDetails', sectionName: 'Tour Details', isExpanded: true },
+            { sectionKey: 'versionDefinition', sectionName: 'Version Definition', isExpanded: true },
+            { sectionKey: 'publicationDetails', sectionName: 'Publication Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTourRuns', sectionName: 'Tour Runs', isExpanded: false },
-            { sectionKey: 'mJTours', sectionName: 'Tours', isExpanded: false }
+            { sectionKey: 'mJTours', sectionName: 'Tours', isExpanded: false },
+            { sectionKey: 'mJTourRuns', sectionName: 'Tour Runs', isExpanded: false }
         ]);
     }
 }

@@ -16,10 +16,10 @@ export class MJTourStepFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'tourStepDetails', sectionName: 'Tour Step Details', isExpanded: true },
-            { sectionKey: 'contentAndCopy', sectionName: 'Content and Copy', isExpanded: true },
-            { sectionKey: 'configurationAndActions', sectionName: 'Configuration and Actions', isExpanded: true },
-            { sectionKey: 'behaviorAndExecution', sectionName: 'Behavior and Execution', isExpanded: true },
+            { sectionKey: 'tourAndStepDefinition', sectionName: 'Tour and Step Definition', isExpanded: true },
+            { sectionKey: 'contentAndGuidance', sectionName: 'Content and Guidance', isExpanded: true },
+            { sectionKey: 'advancedConfigurationAndLogic', sectionName: 'Advanced Configuration and Logic', isExpanded: true },
+            { sectionKey: 'uIAndInteractionBehavior', sectionName: 'UI and Interaction Behavior', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTourStepPathsFromStepID', sectionName: 'Tour Step Paths (From Step)', isExpanded: false },
             { sectionKey: 'mJTourStepPathsToStepID', sectionName: 'Tour Step Paths (To Step)', isExpanded: false }

@@ -15,7 +15,7 @@ export class MJTourOverrideFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'tourAndScopeConfiguration', sectionName: 'Tour and Scope Configuration', isExpanded: true },
+            { sectionKey: 'overrideConfiguration', sectionName: 'Override Configuration', isExpanded: true },
             { sectionKey: 'customizationPayloads', sectionName: 'Customization Payloads', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);

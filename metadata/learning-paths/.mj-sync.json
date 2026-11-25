@@ -1,10 +1,10 @@
 {
-  "entity": "MJ: Learning Paths",
+  "entity": "MJ: Tour Learning Paths",
   "filePattern": "**/.*.json",
   "relatedEntities": {
-    "MJ: Learning Path Tours": {
-      "entity": "MJ: Learning Path Tours",
-      "foreignKey": "LearningPathID"
+    "MJ: Tour Learning Path Tour Links": {
+      "entity": "MJ: Tour Learning Path Tour Links",
+      "foreignKey": "TourLearningPathID"
     }
   }
 }

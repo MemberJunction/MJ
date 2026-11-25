@@ -110,7 +110,7 @@
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Learning Paths",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Learning Paths",
           "Sequence": 9,
           "DefaultForNewUser": false
         },
@@ -121,7 +121,7 @@
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Learning Path Tours",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Learning Path Tour Links",
           "Sequence": 10,
           "DefaultForNewUser": false
         },

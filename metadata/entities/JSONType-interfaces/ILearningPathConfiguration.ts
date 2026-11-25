@@ -1,5 +1,5 @@
 /**
- * Learning path configuration and localization overrides stored on `MJ: Learning Paths.Configuration`.
+ * Learning path configuration and localization overrides stored on `MJ: Tour Learning Paths.Configuration`.
  *
  * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
  * verbatim, and CodeGen emits it inline, so it cannot import another file.
@@ -13,7 +13,7 @@ export interface ILearningPathLocalization {
     description?: string;
 }
 
-/** LearningPath.Configuration — localizations and checklist presentation options. */
+/** TourLearningPath.Configuration — localizations and checklist presentation options. */
 export interface ILearningPathConfiguration {
     /** Locale-keyed overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
     localizations?: Record<string, ILearningPathLocalization>;
@@ -23,7 +23,7 @@ export interface ILearningPathConfiguration {
     showOnHome?: boolean;
     /** Whether this learning path appears inside the Tours & Help launcher. */
     showInLauncher?: boolean;
-    /** When true, tours must be completed in `LearningPathTour.Sequence` order. */
+    /** When true, tours must be completed in `TourLearningPathTourLink.Sequence` order. */
     enforceOrder?: boolean;
     /** Optional badge label awarded upon completing all required tours in the path. */
     completionBadge?: string;

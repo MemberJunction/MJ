@@ -432,8 +432,6 @@ import {
     MJJurisdictionEntity,
     MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
-    MJLearningPathEntity,
-    MJLearningPathTourEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
@@ -591,6 +589,8 @@ import {
     MJThemeEntity,
     MJThemeEntityExtended,
     MJTourEntity,
+    MJTourLearningPathEntity,
+    MJTourLearningPathTourLinkEntity,
     MJTourOverrideEntity,
     MJTourPrerequisiteEntity,
     MJTourRunEntity,
@@ -1300,13 +1300,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJJurisdictionEntity,
     MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
-    MJLearningPathEntity,
+    MJLibraryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJLearningPathTourEntity,
-    MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
     MJListDetailEntity,
@@ -1463,6 +1461,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJThemeEntity,
     MJThemeEntityExtended,
     MJTourEntity,
+    MJTourLearningPathEntity,
+    MJTourLearningPathTourLinkEntity,
     MJTourOverrideEntity,
     MJTourPrerequisiteEntity,
     MJTourRunEntity,

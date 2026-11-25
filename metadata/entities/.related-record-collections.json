@@ -245,5 +245,219 @@
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: API Keys"
     }
+  },
+  {
+    "_comments": [
+      "MJ: Tour Learning Paths -> LearningPathTours: cache-backed lazy live view over TourEngine's",
+      "TourLearningPathTourLinks array, ordered by Sequence."
+    ],
+    "fields": {
+      "Name": "MJ: Tour Learning Paths"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "LearningPathTours",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Sequence ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Learning Paths&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Learning Path Tour Links&RelatedEntityJoinField=TourLearningPathID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Learning Paths"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Tours collections: Steps, StepPaths, Prerequisites, Triggers, Versions, SurfaceTours,",
+      "and LearningPathLinks resolve from TourEngine's unfiltered caches (Source: cache, Load: lazy).",
+      "Overrides is filtered on client providers so it uses Source: database, Load: explicit."
+    ],
+    "fields": {
+      "Name": "MJ: Tours"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Steps",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Sequence ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Steps&RelatedEntityJoinField=TourID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "StepPaths",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Sequence ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Step Paths&RelatedEntityJoinField=TourID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Prerequisites",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Sequence ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Prerequisites&RelatedEntityJoinField=TourID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Triggers",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Priority DESC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Triggers&RelatedEntityJoinField=TourID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Versions",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "VersionNumber DESC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Versions&RelatedEntityJoinField=TourID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "SurfaceTours",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Sequence ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Surface Tours&RelatedEntityJoinField=TourID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "LearningPathLinks",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Sequence ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Learning Path Tour Links&RelatedEntityJoinField=TourID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Overrides",
+              "Source": "database",
+              "ReadOnly": false,
+              "Load": "explicit",
+              "OnRemove": "delete",
+              "OrderBy": "Precedence DESC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Overrides&RelatedEntityJoinField=TourID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tours"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Tour Surfaces -> SurfaceTours: cache-backed lazy live view over TourEngine's TourSurfaceTours cache."
+    ],
+    "fields": {
+      "Name": "MJ: Tour Surfaces"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "SurfaceTours",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Sequence ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Surfaces&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Surface Tours&RelatedEntityJoinField=SurfaceID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Surfaces"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Tour Runs -> Steps: database-backed writable composition of telemetry step rows."
+    ],
+    "fields": {
+      "Name": "MJ: Tour Runs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Steps",
+              "Source": "database",
+              "ReadOnly": false,
+              "Load": "explicit",
+              "OnRemove": "delete",
+              "OrderBy": "Sequence ASC",
+              "Sequence": {
+                "Field": "Sequence",
+                "From": 1
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Runs&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Tour Run Steps&RelatedEntityJoinField=TourRunID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Runs"
+    }
   }
 ]
