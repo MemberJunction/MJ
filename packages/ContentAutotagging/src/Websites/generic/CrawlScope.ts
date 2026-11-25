@@ -6,6 +6,8 @@
  * @module @memberjunction/content-autotagging
  */
 
+import { LogStatus } from '@memberjunction/core';
+
 /**
  * The query parameters {@link CrawlScopeOptions.StripTrackingParams} removes: campaign tags and back-links that
  * make one page look like many. A name ending in `*` is a prefix.
@@ -36,13 +38,14 @@ export interface CrawlScopeOptions {
     DedupCanonical?: boolean;
     /** A page that redirects to a page already found is a duplicate and is not reported, and the target is not read again. Default false. */
     DedupRedirects?: boolean;
-    /** More than this many distinct query strings on one path and the crawl stops following that path. Unset: no limit. */
+    /** More than this many distinct query strings on one path and the crawl stops following that path (links and sitemap pages alike). Unset: no limit. */
     LoopLimit?: number | null;
     /** Do not follow links whose path is a date (`/2026/05/01/`, `/01-05-2026/`): the classic endless calendar. Default false. */
     SkipCalendarPaths?: boolean;
     /**
      * Only pages matching one of these are visited and reported (the start page is always visited, for its links).
-     * Each entry is a substring of the URL, or a regular expression when written `re:<pattern>`. Unset: everything.
+     * Each entry is a substring of the URL, or a regular expression when written `re:<pattern>` (a blank `re:` is
+     * ignored). Unset: everything.
      */
     IncludePatterns?: readonly string[];
     /**
@@ -61,23 +64,31 @@ const REGEX_PREFIX = 're:';
 /** One include/exclude entry, compiled. */
 type UrlMatcher = (url: string) => boolean;
 
-/** Compile include/exclude entries; an invalid `re:` entry throws, naming it, so a typo fails loudly at the start. */
+/**
+ * Compile include/exclude entries; an invalid `re:` entry throws, naming it, so a typo fails loudly at the start. A blank
+ * `re:` entry (`re:` alone) is left out, with one log line naming it: compiled, it would match every URL.
+ */
 export function CompileUrlPatterns(patterns: readonly string[] | undefined): UrlMatcher[] {
-    return (patterns ?? [])
-        .filter((p) => typeof p === 'string' && p.trim().length > 0)
-        .map((p) => {
-            const pattern = p.trim();
-            if (pattern.startsWith(REGEX_PREFIX)) {
-                let regex: RegExp;
-                try {
-                    regex = new RegExp(pattern.slice(REGEX_PREFIX.length));
-                } catch (error) {
-                    throw new Error(`The URL pattern '${pattern}' is not a valid regular expression: ${error instanceof Error ? error.message : String(error)}`);
-                }
-                return (url: string) => regex.test(url);
-            }
-            return (url: string) => url.includes(pattern);
-        });
+    const entries = (patterns ?? []).filter((p) => typeof p === 'string' && p.trim().length > 0).map((p) => p.trim());
+    const blank = entries.filter((p) => p.startsWith(REGEX_PREFIX) && p.slice(REGEX_PREFIX.length).trim().length === 0);
+    if (blank.length > 0) {
+        LogStatus(`Website crawl: ignoring the URL pattern(s) ${blank.map((p) => `'${p}'`).join(', ')}: an empty regular expression would match every URL`);
+    }
+    return entries.filter((p) => !blank.includes(p)).map(CompileUrlPattern);
+}
+
+/** One include/exclude entry: a substring, or a regular expression when written `re:<pattern>`. */
+function CompileUrlPattern(pattern: string): UrlMatcher {
+    if (!pattern.startsWith(REGEX_PREFIX)) {
+        return (url: string) => url.includes(pattern);
+    }
+    let regex: RegExp;
+    try {
+        regex = new RegExp(pattern.slice(REGEX_PREFIX.length));
+    } catch (error) {
+        throw new Error(`The URL pattern '${pattern}' is not a valid regular expression: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return (url: string) => regex.test(url);
 }
 
 /** The crawl's scope rules, compiled once per crawl. */
@@ -154,18 +165,30 @@ export class CrawlScope {
         }
     }
 
-    /** Whether a cleaned URL is under the root: a plain prefix, or a prefix of the merged identity when merging. */
+    /**
+     * Whether a cleaned URL is under the root: the same origin (www/apex and http/https as one when merging) and the
+     * root's path or a path below it, segment by segment (a root of `/docs` covers `/docs` and `/docs/a`, not
+     * `/docs-private`; a root of `https://site.test` does not cover `https://site.test.evil.com` or
+     * `https://site.test:8443`). The root's query string, if any, is not compared. A URL that does not parse is not
+     * under any root.
+     */
     public UnderRoot(cleanURL: string, rootURL: string): boolean {
-        if (cleanURL.startsWith(rootURL)) {
-            return true;
-        }
-        if (!this.options.MergeWwwAndScheme) {
+        const url = this.parsedIdentity(cleanURL);
+        const root = this.parsedIdentity(rootURL);
+        if (!url || !root || url.origin !== root.origin) {
             return false;
         }
-        const root = this.Key(rootURL);
-        const key = this.Key(cleanURL);
-        // A root of a bare origin normalizes with its "/"; compare without it so "https://x.test" covers "https://x.test/a".
-        return key.startsWith(root.endsWith('/') ? root.slice(0, -1) : root);
+        const rootPath = root.pathname.endsWith('/') ? root.pathname.slice(0, -1) : root.pathname;
+        return rootPath.length === 0 || url.pathname === rootPath || url.pathname.startsWith(`${rootPath}/`);
+    }
+
+    /** A URL parsed for a scope comparison: with www/apex and http/https merged when merging; null when it does not parse. */
+    private parsedIdentity(href: string): URL | null {
+        try {
+            return new URL(this.Key(href));
+        } catch {
+            return null;
+        }
     }
 
     /** Whether a found link may be visited at all (exclusions, the include list, the calendar guard). */

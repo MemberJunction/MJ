@@ -46,6 +46,28 @@ describe('HtmlExtractor', () => {
         expect(HtmlCharset(bom, 'text/html; charset=ISO-8859-1')).toBe('utf-8');
     });
 
+    it('reads a meta-declared UTF-16 as UTF-8, and x-user-defined as windows-1252 (the HTML standard)', () => {
+        const page = (meta: string) => new TextEncoder().encode(`<html><head>${meta}</head><body>café</body></html>`);
+        expect(HtmlCharset(page('<meta charset="utf-16">'))).toBe('utf-8');
+        expect(HtmlCharset(page('<meta http-equiv="Content-Type" content="text/html; charset=UTF-16BE">'))).toBe('utf-8');
+        expect(HtmlCharset(page('<meta charset="x-user-defined">'))).toBe('windows-1252');
+    });
+
+    it('counts only a meta tag\'s own charset: not one in a comment, another attribute\'s text, or another tag', () => {
+        const page = (head: string) => new TextEncoder().encode(`<html><head>${head}</head></html>`);
+        expect(HtmlCharset(page('<!-- <meta charset="windows-1252"> -->'))).toBe('utf-8');
+        expect(HtmlCharset(page('<meta name="description" content="charset=windows-1252">'))).toBe('utf-8');
+        expect(HtmlCharset(page('<metadata charset="windows-1252">'))).toBe('utf-8');
+        expect(HtmlCharset(page('<!-- x --><meta name="x" content="y"><META CHARSET=ISO-8859-1>'))).toBe('windows-1252');
+    });
+
+    it('scans a hostile head in linear time (many unclosed <meta openers)', () => {
+        const started = Date.now();
+        HtmlCharset(new TextEncoder().encode('<meta'.repeat(200_000)));
+        HtmlCharset(new TextEncoder().encode('<meta charset'.repeat(100_000) + '>'));
+        expect(Date.now() - started).toBeLessThan(1000);
+    });
+
     it('reports a TitleSelector that is not valid CSS, and uses the <title>', async () => {
         const page = new TextEncoder().encode('<html><head><title>Site name</title></head><body><p>Body text.</p></body></html>');
         const progress: string[] = [];

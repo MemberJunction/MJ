@@ -47,6 +47,15 @@ describe('FetchContent session binding', () => {
         expect(httpGet.mock.calls[0][1].Headers).toEqual({ 'x-api-key': 'secret' });
     });
 
+    it("sends a login session's cookies for the URL's own origin only", async () => {
+        const Access = {
+            OriginHeaders: { 'https://a.source.test': { Cookie: 'sid=a' }, 'https://b.source.test': { Cookie: 'sid=b' } },
+            Origins: ['https://a.source.test', 'https://b.source.test'],
+        };
+        await FetchContent(request('https://b.source.test/doc', { Access }));
+        expect(httpGet.mock.calls[0][1].Headers).toEqual({ Cookie: 'sid=b' });
+    });
+
     it('always validates the URL and drops the session on a cross-origin redirect', async () => {
         await FetchContent(request('https://api.source.test/items/1'));
         expect(httpGet.mock.calls[0][1]).toMatchObject({ ValidateUrl: true, StripHeadersOnCrossOriginRedirect: true });

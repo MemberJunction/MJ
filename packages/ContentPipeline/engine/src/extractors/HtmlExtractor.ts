@@ -141,5 +141,68 @@ export function HtmlCharset(content: Uint8Array, contentType?: string): string {
         return fromHeader;
     }
     const head = new TextDecoder('latin1').decode(content.subarray(0, CHARSET_PRESCAN_BYTES));
-    return KnownCharset(/<meta[^>]+charset\s*=\s*["']?([\w.:-]+)/i.exec(head)?.[1]) ?? 'utf-8';
+    return MetaDeclaredCharset(head) ?? 'utf-8';
+}
+
+/** One attribute of a tag: its name, and its value (quoted or not). Each part is a disjoint character class, so linear. */
+const TAG_ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+
+/**
+ * The charset a page's own `<meta>` declares within `head` (the HTML standard's prescan, simplified): comments are
+ * skipped, only a `<meta>` tag's `charset` attribute or an `http-equiv="Content-Type"` meta's `content` counts (not
+ * `charset=` inside another attribute's text), and a declared UTF-16 means UTF-8: a page whose ASCII prescan could
+ * read the declaration is not UTF-16 (real UTF-16 is found by its byte-order mark). One pass over `head`.
+ */
+export function MetaDeclaredCharset(head: string): string | null {
+    const lower = head.toLowerCase();
+    let i = 0;
+    while (i < lower.length) {
+        const tag = lower.indexOf('<', i);
+        if (tag < 0) {
+            return null;
+        }
+        if (lower.startsWith('<!--', tag)) {
+            const end = lower.indexOf('-->', tag + 4);
+            if (end < 0) {
+                return null;
+            }
+            i = end + 3;
+            continue;
+        }
+        const close = lower.indexOf('>', tag);
+        if (close < 0) {
+            return null;
+        }
+        i = close + 1;
+        if (lower.startsWith('<meta', tag) && /[\s/]/.test(lower.charAt(tag + 5))) {
+            const declared = metaCharset(head.slice(tag + 5, close));
+            if (declared) {
+                return declared;
+            }
+        }
+    }
+    return null;
+}
+
+/** The charset one `<meta>` tag's attributes declare, as the decoder should use it; null when it declares none it knows. */
+function metaCharset(attributes: string): string | null {
+    const values = new Map<string, string>();
+    for (const match of attributes.matchAll(TAG_ATTRIBUTE)) {
+        const name = match[1].toLowerCase();
+        if (!values.has(name)) {
+            values.set(name, match[2] ?? match[3] ?? match[4] ?? '');
+        }
+    }
+    const label = values.get('charset')
+        ?? (values.get('http-equiv')?.trim().toLowerCase() === 'content-type' ? charsetLabelOf(values.get('content')) : undefined);
+    const known = KnownCharset(label);
+    if (known === 'utf-16le' || known === 'utf-16be') {
+        return 'utf-8';
+    }
+    return known === 'x-user-defined' ? 'windows-1252' : known;
+}
+
+/** The raw `charset=` label in a `Content-Type` value, known to the decoder or not. */
+function charsetLabelOf(contentType: string | undefined): string | undefined {
+    return /charset\s*=\s*["']?([^"';\s]+)/i.exec(contentType ?? '')?.[1];
 }

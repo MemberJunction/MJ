@@ -77,6 +77,12 @@ export interface AccessArtifact {
      */
     Origins?: readonly string[];
     /**
+     * Headers that differ by origin, keyed by origin (`https://host[:port]`), sent with {@link Headers} to that origin
+     * only. A login session's cookies travel here: each origin gets exactly the cookies RFC 6265 sends it, so a
+     * host-only or `Secure` cookie never reaches another origin. Read through {@link AccessHeadersFor}.
+     */
+    OriginHeaders?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+    /**
      * When this stops being valid.
      *
      * The resolver renews on expiry rather than on failure, so a long run does not discover its
@@ -89,6 +95,28 @@ export interface AccessArtifact {
      * Headless renderer restores it per render.
      */
     Extensions?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The headers a session sends to `url`: its {@link AccessArtifact.Headers} plus, for the URL's origin, its
+ * {@link AccessArtifact.OriginHeaders}. Undefined when there are none. Call it only once the session is known to
+ * belong on the URL (its origin is one of the session's).
+ */
+export function AccessHeadersFor(access: AccessArtifact | null | undefined, url: string): Record<string, string> | undefined {
+    if (!access) {
+        return undefined;
+    }
+    let origin: string | null = null;
+    try {
+        origin = new URL(url).origin;
+    } catch {
+        origin = null;
+    }
+    const perOrigin = origin && access.OriginHeaders && Object.hasOwn(access.OriginHeaders, origin) ? access.OriginHeaders[origin] : undefined;
+    if (!access.Headers && !perOrigin) {
+        return undefined;
+    }
+    return { ...(access.Headers ?? {}), ...(perOrigin ?? {}) };
 }
 
 /** The {@link AccessArtifact.Extensions} key a browser session's {@link SessionStorageState} travels under. */

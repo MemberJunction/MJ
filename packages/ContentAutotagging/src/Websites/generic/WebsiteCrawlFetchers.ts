@@ -4,7 +4,15 @@
  * A page is fetched over HTTP (through the SSRF guard, with the source's session for its own origins), or through
  * the source's page renderer, as the source's render policy decides (`BasePageRenderPolicy`, selected by
  * `PageRenderMode`; Extract asks the same policy). A policy that probes first is told what a HEAD says the address
- * is; one that does not is shown the plain fetch's answer, a refusal included, and may render instead.
+ * is; one that does not is shown the plain fetch's answer, a refusal included, and may render instead. A HEAD or plain
+ * fetch that says the host is rate-limiting the crawl (429, 503 with `Retry-After`), or a HEAD that says it is
+ * challenging it (`cf-mitigated`), is returned as it is, never followed by a render: the crawl backs off instead. (A
+ * plain fetch that was challenged is the render policy's to decide, as a browser may pass.) A rendered page carries the
+ * `Retry-After` and `cf-mitigated` of the answer before it when the browser got no further, so a challenged page is
+ * not taken for a dead one.
+ *
+ * An address the SSRF guard refuses (a private or reserved address, or a redirect to one) is never rendered or
+ * retried: {@link WebsiteCrawlFetchers.Page} returns it as {@link CrawlPage.Blocked}, and the crawl drops it.
  *
  * A plain page is read as a stream: a file that is not HTML is not downloaded at all (its body is cancelled once
  * the headers say what it is), and an HTML page is read up to the source's `MaxResponseBytes`. A sitemap or
@@ -15,7 +23,7 @@
  */
 
 import { LogStatus } from '@memberjunction/core';
-import { CharsetOfContentType, HttpGet, HttpHead } from '@memberjunction/network-utils';
+import { CharsetOfContentType, HttpGet, HttpHead, SSRFError } from '@memberjunction/network-utils';
 import {
     AccessArtifact,
     BasePageRenderer,
@@ -23,7 +31,7 @@ import {
     IsHtmlContentType,
     PageRenderOptions,
 } from '@memberjunction/content-pipeline-base';
-import { CrawlFetchers, CrawlPage } from './WebsiteCrawl';
+import { CrawlFetchers, CrawlPage, IsHoldingOff, IsRateLimitedAnswer } from './WebsiteCrawl';
 
 /** The most bytes of a sitemap or robots.txt read: the sitemap protocol's own limit for one uncompressed file. */
 export const MAX_SITEMAP_BYTES = 50 * 1024 * 1024; // 50 MB (sitemaps.org)
@@ -67,27 +75,44 @@ export interface WebsiteCrawlFetcherSettings {
 export class WebsiteCrawlFetchers implements CrawlFetchers {
     constructor(private readonly settings: WebsiteCrawlFetcherSettings) {}
 
-    /** A page, through the renderer when the source has one and the address is HTML; otherwise plainly. */
+    /**
+     * A page, through the renderer when the source has one and the address is HTML; otherwise plainly. An address the
+     * SSRF guard refuses comes back {@link CrawlPage.Blocked}; one that could not be read at all, null.
+     */
     public async Page(url: string): Promise<CrawlPage | null> {
         try {
-            if (!this.settings.Renderer) {
-                return await this.plainPage(url);
-            }
-            const policy = this.settings.RenderPolicy;
-            if (!policy.ProbesFirst) {
-                const plain = await this.plainPage(url);
-                const renders = policy.RendersAfterPlainFetch(plain, { EmptyPageTextChars: this.settings.EmptyPageTextChars });
-                return renders ? await this.render(url, this.settings.Renderer, plain) : plain;
-            }
-            const head = await this.head(url);
-            if (head && !policy.RendersAfterProbe(head.ContentType)) {
-                return head;
-            }
-            return await this.render(url, this.settings.Renderer, head);
+            return await this.readPage(url);
         } catch (error) {
+            if (IsSSRFRefusal(error)) {
+                LogStatus(`AutotagWebsite: ${url} is not read: ${error.message}`);
+                return { Html: '', FinalURL: url, Status: 0, Blocked: true };
+            }
             LogStatus(`AutotagWebsite: could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
+    }
+
+    private async readPage(url: string): Promise<CrawlPage> {
+        const renderer = this.settings.Renderer;
+        if (!renderer) {
+            return this.plainPage(url);
+        }
+        const policy = this.settings.RenderPolicy;
+        if (!policy.ProbesFirst) {
+            const plain = await this.plainPage(url);
+            // A host asking the crawl to slow down is backed off, not sent a browser. (A challenge is the policy's to
+            // decide: a browser may pass it, and when it does not, the render carries the challenge.)
+            if (IsRateLimitedAnswer(plain)) {
+                return plain;
+            }
+            const renders = policy.RendersAfterPlainFetch(plain, { EmptyPageTextChars: this.settings.EmptyPageTextChars });
+            return renders ? this.render(url, renderer, plain) : plain;
+        }
+        const head = await this.head(url);
+        if (head && (IsHoldingOff(head) || !policy.RendersAfterProbe(head.ContentType))) {
+            return head;
+        }
+        return this.render(url, renderer, head);
     }
 
     /** A sitemap or robots.txt, with its status and headers so a rate-limited answer is retried. */
@@ -134,24 +159,27 @@ export class WebsiteCrawlFetchers implements CrawlFetchers {
     }
 
     /**
-     * What a HEAD says the address is (its status, type and headers, no body), or null when the server did not answer
-     * HEAD; the policy then decides as for an address of no known type.
+     * What a HEAD says the address is (its status, type and headers, no body): a 2xx answer, or one that says the host
+     * is rate-limiting or challenging the crawl ({@link IsHoldingOff}). Null when the server did not answer HEAD
+     * usefully; the policy then decides as for an address of no known type.
+     * @throws The SSRF guard's refusal, which no render may get around.
      */
     private async head(url: string): Promise<CrawlPage | null> {
         try {
             const response = await HttpHead(url, { ThrowOnError: false, UserAgent: this.settings.UserAgent, ...this.settings.HttpOptions(url) });
-            if (!response.Ok) {
-                return null;
+            const page = { Html: '', FinalURL: response.Url || url, Status: response.Status, ContentType: response.Headers['content-type'], Headers: response.Headers };
+            return response.Ok || IsHoldingOff(page) ? page : null;
+        } catch (error) {
+            if (IsSSRFRefusal(error)) {
+                throw error;
             }
-            return { Html: '', FinalURL: response.Url || url, Status: response.Status, ContentType: response.Headers['content-type'], Headers: response.Headers };
-        } catch {
             return null;
         }
     }
 
     /**
-     * The page through the renderer. A rendered page has no response headers, so the `Last-Modified` of the HEAD or
-     * plain fetch that came first (when it answered) is kept: the walk's `Since` filters a rendered page as a plain one.
+     * The page through the renderer. A rendered page has no response headers, so those of the HEAD or plain fetch that
+     * came first are carried where they still say something ({@link CarriedHeaders}).
      */
     private async render(url: string, renderer: BasePageRenderer, before: CrawlPage | null): Promise<CrawlPage> {
         const { Access, AccessOrigins } = this.settings.RenderAccess(url);
@@ -163,15 +191,44 @@ export class WebsiteCrawlFetchers implements CrawlFetchers {
             Options: this.settings.RenderOptions,
             Signal: this.settings.Signal,
         });
-        const lastModified = before && before.Status >= 200 && before.Status < 300 ? before.Headers?.['last-modified'] : undefined;
+        const headers = CarriedHeaders(before, rendered.Status);
         return {
             Html: rendered.Html,
             FinalURL: rendered.FinalURL,
             Status: rendered.Status,
             ContentType: 'text/html',
-            ...(lastModified ? { Headers: { 'last-modified': lastModified } } : {}),
+            ...(headers ? { Headers: headers } : {}),
         };
     }
+}
+
+/**
+ * The headers of the answer before a render that still apply to the rendered page: its `Last-Modified` when it was a
+ * 2xx (the walk's `Since` filters a rendered page as a plain one), and, when the browser got no 2xx either, its
+ * `cf-mitigated` and `Retry-After` (a challenge the browser did not pass is still a challenge, not a dead page).
+ */
+export function CarriedHeaders(before: CrawlPage | null, renderedStatus: number): Record<string, string> | undefined {
+    const from = before?.Headers;
+    if (!before || !from) {
+        return undefined;
+    }
+    const carried: Record<string, string> = {};
+    if (before.Status >= 200 && before.Status < 300 && from['last-modified']) {
+        carried['last-modified'] = from['last-modified'];
+    }
+    if (renderedStatus < 200 || renderedStatus >= 300) {
+        for (const name of ['cf-mitigated', 'retry-after']) {
+            if (from[name]) {
+                carried[name] = from[name];
+            }
+        }
+    }
+    return Object.keys(carried).length > 0 ? carried : undefined;
+}
+
+/** Whether an error is the SSRF guard refusing an address (as itself, or as another copy of the class by name). */
+export function IsSSRFRefusal(error: unknown): error is Error {
+    return error instanceof SSRFError || (error instanceof Error && error.name === 'SSRFError');
 }
 
 /**

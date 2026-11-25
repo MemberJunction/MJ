@@ -17,16 +17,21 @@
  * - the page's own navigation stops at a redirect; {@link HeadlessPageRenderer.Render} checks where it points
  *   and navigates there, a new navigation that goes through the route again (and keeps the page's URL right);
  * - anything else (scripts, images, frames, the page's own fetches) has its redirects followed by the route,
- *   each hop checked, and the browser is handed the last answer.
+ *   each hop checked, and the browser is handed the last answer. Each hop goes as a browser's would
+ *   ({@link NextHopRequest}): the browser's `Cookie` is for the first address only (the context adds each hop's
+ *   own), a hop to another origin carries no `Authorization`, and a request turned into a GET drops its body.
  *
  * WebSockets do not go through the route at all, so the page may open none: reading a page never needs a live
  * connection.
  *
  * A session whose artifact carries a browser storage state (`AccessArtifact.Extensions.StorageState`, from the
  * `BrowserLogin` Access driver) is restored into each page's context, cookies and `localStorage` both, when the
- * page is on one of the session's origins; its `Cookie` header is then not added again. How a page is loaded is
- * the source's `PageRendererOptions` (`WaitUntil`, `WaitSelector`, `ScrollToBottom`, `UserAgent`); how Chromium is
- * launched is the deployment's ({@link HeadlessPageRenderer.LaunchArgs}, or `MJ_HEADLESS_CHROMIUM_ARGS`).
+ * page is on one of the session's origins. Only what belongs to the render's access origins is restored, and every
+ * cookie as a host-only cookie of one of their hosts ({@link RestorableStorageState}), so Chromium sends none to
+ * another subdomain; an origin whose cookies were restored is not sent the session's `Cookie` header again. How a
+ * page is loaded is the source's `PageRendererOptions` (`WaitUntil`, `WaitSelector`, `ScrollToBottom`, `UserAgent`),
+ * all of it within the render's `TimeoutMs`; how Chromium is launched is the deployment's
+ * ({@link HeadlessPageRenderer.LaunchArgs}, or `MJ_HEADLESS_CHROMIUM_ARGS`).
  *
  * Not covered: the address is checked by name before each request is fetched, so a DNS server that answers
  * differently between the check and the fetch could still reach a private address. Closing that needs every
@@ -40,10 +45,12 @@ import { LogError } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { AssertPublicUrl } from '@memberjunction/network-utils';
 import {
+    AccessHeadersFor,
     BasePageRenderer,
     PageRenderOptions,
     PageRenderRequest,
     PageRenderResult,
+    SessionStorageCookie,
     SessionStorageState,
     SessionStorageStateOf,
 } from '@memberjunction/content-pipeline-base';
@@ -61,6 +68,12 @@ const MAX_REDIRECTS = 20;
 const DEFAULT_WAIT_SELECTOR_TIMEOUT_MS = 10_000; // content that arrives after load usually does within seconds
 /** The most scroll steps `ScrollToBottom` takes, so an endless feed cannot hold a render forever. */
 const MAX_SCROLL_STEPS = 50; // fifty screens of lazy content; the render's own timeout still bounds it
+/** The longest pause between scroll steps, for content loaded on scroll to arrive. */
+const SCROLL_PAUSE_MS = 250;
+/** Headers that carry the browser's credentials, dropped on a hop to another origin. `Cookie` and `Host` are dropped on every hop. */
+const CROSS_ORIGIN_DROPPED_HEADERS: readonly string[] = ['authorization', 'proxy-authorization'];
+/** Headers that describe a body, dropped with it when a redirect turns the request into a GET. */
+const BODY_HEADERS: readonly string[] = ['content-type', 'content-length'];
 /** The environment variable that adds Chromium launch arguments (space-separated), e.g. `--no-sandbox` in a container. */
 export const HEADLESS_CHROMIUM_ARGS_ENV = 'MJ_HEADLESS_CHROMIUM_ARGS';
 
@@ -72,6 +85,19 @@ export interface HeadlessRenderState {
     RedirectTo: string | null;
     /** Fetches a redirect's later hops, with the context's cookies. */
     Requests: APIRequestContext;
+    /**
+     * The hosts whose session cookies were restored into the context: their requests already carry the cookies, so
+     * the session's `Cookie` header is not added for them. Unset: none was restored.
+     */
+    RestoredCookieHosts?: ReadonlySet<string>;
+}
+
+/** One request of a redirect chain followed by hand: where it goes, how, and with what. */
+export interface RedirectHopRequest {
+    URL: string;
+    Method: string;
+    Body: Buffer | null;
+    Headers: Record<string, string>;
 }
 
 @RegisterClass(BasePageRenderer, HEADLESS_PAGE_RENDERER)
@@ -93,6 +119,8 @@ export class HeadlessPageRenderer extends BasePageRenderer {
             throw new Error('Render aborted before starting');
         }
         await this.AssertAllowed(request.URL);
+        // One deadline for loading and settling both, so the options cannot hold a render past TimeoutMs.
+        const deadline = Date.now() + (request.TimeoutMs ?? DEFAULT_TIMEOUT_MS);
         const browser = await HeadlessPageRenderer.acquire();
         let context: Awaited<ReturnType<Browser['newContext']>> | null = null;
         const abort = () => void context?.close().catch(() => undefined);
@@ -101,14 +129,20 @@ export class HeadlessPageRenderer extends BasePageRenderer {
             if (request.Signal.aborted) {
                 throw new Error('Render aborted before navigation');
             }
-            context = await browser.newContext(this.contextOptions(request));
-            const state: HeadlessRenderState = { Page: null, RedirectTo: null, Requests: context.request };
+            const storage = this.storageStateFor(request);
+            context = await browser.newContext(this.contextOptions(request, storage));
+            const state: HeadlessRenderState = {
+                Page: null,
+                RedirectTo: null,
+                Requests: context.request,
+                RestoredCookieHosts: new Set(storage?.Cookies.map((c) => c.Domain) ?? []),
+            };
             await context.route('**/*', (route) => this.RouteRequest(route, request, state));
             await context.routeWebSocket(/.*/, (socket) => socket.close({ code: 1008, reason: 'WebSockets are not allowed when rendering a page' }));
             const page = await context.newPage();
             state.Page = page;
-            const response = await this.navigate(page, this.withAccessQuery(request), request, state);
-            await this.settle(page, request.Options);
+            const response = await this.navigate(page, this.withAccessQuery(request), request, state, deadline);
+            await this.settle(page, request, deadline);
             const finalUrl = page.url();
             if (/^https?:/i.test(finalUrl)) {
                 await this.AssertAllowed(finalUrl);
@@ -125,8 +159,7 @@ export class HeadlessPageRenderer extends BasePageRenderer {
      * Load the page, following its redirects one navigation at a time: the route stops the page's navigation at
      * a redirect and says where it points, and each hop is checked here before the page goes there.
      */
-    private async navigate(page: Page, url: string, request: PageRenderRequest, state: HeadlessRenderState) {
-        const deadline = Date.now() + (request.TimeoutMs ?? DEFAULT_TIMEOUT_MS);
+    private async navigate(page: Page, url: string, request: PageRenderRequest, state: HeadlessRenderState, deadline: number) {
         for (let hops = 0; ; hops++) {
             state.RedirectTo = null;
             const response = await page.goto(url, { waitUntil: request.Options?.WaitUntil ?? 'networkidle', timeout: Math.max(1, deadline - Date.now()) });
@@ -143,8 +176,7 @@ export class HeadlessPageRenderer extends BasePageRenderer {
     }
 
     /** The page's context: no service workers, the source's User-Agent, and the session's browser state when it is for this page. */
-    private contextOptions(request: PageRenderRequest): BrowserContextOptions {
-        const storage = this.storageStateFor(request);
+    private contextOptions(request: PageRenderRequest, storage: SessionStorageState | null): BrowserContextOptions {
         return {
             serviceWorkers: 'block',
             ...(request.Options?.UserAgent ? { userAgent: request.Options.UserAgent } : {}),
@@ -152,26 +184,36 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         };
     }
 
-    /** The session's browser state, when it carries one and the page is on one of the session's origins. */
+    /**
+     * The session's browser state, when it carries one and the page is on one of the session's origins, cut to the
+     * render's access origins ({@link RestorableStorageState}).
+     */
     private storageStateFor(request: PageRenderRequest): SessionStorageState | null {
         const state = SessionStorageStateOf(request.Access);
         if (!state) {
             return null;
         }
         try {
-            return this.isAccessOrigin(new URL(request.URL).origin, request) ? state : null;
+            return this.isAccessOrigin(new URL(request.URL).origin, request) ? RestorableStorageState(state, request.AccessOrigins) : null;
         } catch {
             return null;
         }
     }
 
-    /** After navigation: wait for the source's selector, and scroll to the bottom when asked, so late content is there. */
-    private async settle(page: Page, options: PageRenderOptions | undefined): Promise<void> {
+    /**
+     * After navigation: wait for the source's selector, and scroll to the bottom when asked, so late content is
+     * there; both within the render's deadline and its signal.
+     */
+    private async settle(page: Page, request: PageRenderRequest, deadline: number): Promise<void> {
+        const options: PageRenderOptions | undefined = request.Options;
         if (options?.WaitSelector) {
-            await page.waitForSelector(options.WaitSelector, { state: 'visible', timeout: options.WaitSelectorTimeoutMs ?? DEFAULT_WAIT_SELECTOR_TIMEOUT_MS });
+            const configured = options.WaitSelectorTimeoutMs;
+            // 0 or less would turn Playwright's timeout off: treat it as unset.
+            const timeout = configured !== undefined && configured > 0 ? configured : DEFAULT_WAIT_SELECTOR_TIMEOUT_MS;
+            await page.waitForSelector(options.WaitSelector, { state: 'visible', timeout: Math.max(1, Math.min(timeout, deadline - Date.now())) });
         }
         if (options?.ScrollToBottom) {
-            await ScrollToBottom(page);
+            await ScrollToBottom(page, deadline, request.Signal);
         }
     }
 
@@ -228,11 +270,10 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         const pageNavigation = sent.isNavigationRequest() && state.Page !== null && this.frameOf(route) === state.Page.mainFrame();
         let response: APIResponse;
         try {
-            response = await route.fetch({ maxRedirects: 0, headers: this.headersFor(target, sent.headers(), request) });
-            let url = target;
-            let method = sent.method();
+            response = await route.fetch({ maxRedirects: 0, headers: this.headersFor(target, sent.headers(), request, state) });
+            let hop = FirstHopRequest(target, sent.method(), sent.postDataBuffer(), sent.headers());
             let hops = 0;
-            for (let next = this.redirectOf(response, url); next; next = this.redirectOf(response, url)) {
+            for (let next = this.redirectOf(response, hop.URL); next; next = this.redirectOf(response, hop.URL)) {
                 if (pageNavigation) {
                     // An empty page, not an abort: an abort sends the browser to its error page, which races
                     // the navigation to the next hop.
@@ -242,15 +283,11 @@ export class HeadlessPageRenderer extends BasePageRenderer {
                 if (++hops > MAX_REDIRECTS || !(await this.allowed(next))) {
                     return route.abort('blockedbyclient');
                 }
-                // A 303, and a 301/302 answering a POST, go on as a GET without the body (as browsers do).
-                const status = response.status();
-                const keepsBody = status === 307 || status === 308 || (method !== 'POST' && status !== 303);
-                method = keepsBody ? method : 'GET';
-                url = next;
-                response = await state.Requests.fetch(url, {
-                    method,
-                    headers: this.headersFor(url, sent.headers(), request),
-                    ...(keepsBody && sent.postDataBuffer() ? { data: sent.postDataBuffer()! } : {}),
+                hop = NextHopRequest(hop, response.status(), next);
+                response = await state.Requests.fetch(hop.URL, {
+                    method: hop.Method,
+                    headers: this.headersFor(hop.URL, hop.Headers, request, state),
+                    ...(hop.Body ? { data: hop.Body } : {}),
                     maxRedirects: 0,
                 });
             }
@@ -283,22 +320,25 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         }
     }
 
-    /** The request's headers, with the session's added when the address is one of the session's own origins. */
-    private headersFor(url: string, headers: Record<string, string>, request: PageRenderRequest): Record<string, string> {
-        let origin: string;
+    /**
+     * The request's headers, with the session's for this address's origin ({@link AccessHeadersFor}) added when it
+     * is one of the session's own origins; a session header replaces the browser's of the same name.
+     */
+    private headersFor(url: string, headers: Record<string, string>, request: PageRenderRequest, state: HeadlessRenderState): Record<string, string> {
+        let parsed: URL;
         try {
-            origin = new URL(url).origin;
+            parsed = new URL(url);
         } catch {
             return headers;
         }
-        if (!request.Access?.Headers || !this.isAccessOrigin(origin, request)) {
+        const sessionHeaders = this.isAccessOrigin(parsed.origin, request) ? AccessHeadersFor(request.Access, url) : undefined;
+        if (!sessionHeaders) {
             return headers;
         }
-        // With the browser state restored the context holds the cookies; a Cookie header would replace them.
-        const session = SessionStorageStateOf(request.Access)
-            ? Object.fromEntries(Object.entries(request.Access.Headers).filter(([name]) => name.toLowerCase() !== 'cookie'))
-            : request.Access.Headers;
-        return { ...headers, ...session };
+        // Where the browser state's cookies were restored the context sends them; a Cookie header would replace them.
+        const restored = state.RestoredCookieHosts?.has(parsed.hostname) ?? false;
+        const session = restored ? WithoutHeaders(sessionHeaders, ['cookie']) : sessionHeaders;
+        return { ...WithoutHeaders(headers, Object.keys(session).map((name) => name.toLowerCase())), ...session };
     }
 
     /** The frame a request came from; a request with none (a service worker's) is never the page's. */
@@ -394,20 +434,90 @@ export class HeadlessPageRenderer extends BasePageRenderer {
     }
 }
 
-/** Scroll a page to its bottom a screen at a time until it stops growing (or {@link MAX_SCROLL_STEPS}), for content loaded on scroll. */
-async function ScrollToBottom(page: Page): Promise<void> {
+/**
+ * Scroll a page to its bottom a screen at a time until it stops growing (or {@link MAX_SCROLL_STEPS}), for content
+ * loaded on scroll. Stops at the render's deadline (the page is read as far as it got); an abort fails the render.
+ */
+async function ScrollToBottom(page: Page, deadline: number, signal: AbortSignal): Promise<void> {
     let height = -1;
-    for (let step = 0; step < MAX_SCROLL_STEPS; step++) {
-        const next = await page.evaluate(() => {
+    for (let step = 0; step < MAX_SCROLL_STEPS && Date.now() < deadline; step++) {
+        if (signal.aborted) {
+            throw new Error('Render aborted while scrolling');
+        }
+        const { Height, AtBottom } = await page.evaluate(() => {
             window.scrollBy(0, window.innerHeight);
-            return document.body.scrollHeight;
+            // An XML or SVG document has no body; a frameset's does not scroll.
+            const scroller = document.scrollingElement ?? document.body ?? document.documentElement;
+            const scrollHeight = scroller ? scroller.scrollHeight : 0;
+            return { Height: scrollHeight, AtBottom: window.scrollY + window.innerHeight >= scrollHeight - 2 };
         });
-        const atBottom = await page.evaluate(() => window.scrollY + window.innerHeight >= document.body.scrollHeight - 2);
-        if (atBottom && next === height) {
+        if (AtBottom && Height === height) {
             return;
         }
-        height = next;
-        await page.waitForTimeout(250);
+        height = Height;
+        await page.waitForTimeout(Math.max(0, Math.min(SCROLL_PAUSE_MS, deadline - Date.now())));
+    }
+}
+
+/** The first request of a chain the route follows: the browser's `Cookie` and `Host` are for its address alone. */
+export function FirstHopRequest(url: string, method: string, body: Buffer | null, headers: Record<string, string>): RedirectHopRequest {
+    return { URL: url, Method: method, Body: body, Headers: WithoutHeaders(headers, ['cookie', 'host']) };
+}
+
+/**
+ * The request a redirect leads to, as a browser sends it: a 303 (and a 301/302 answering a POST) goes on as a GET
+ * without the body or the headers describing it; a 307/308 keeps both, but only if the request still has its body
+ * (a POST turned into a GET stays bodiless). A hop to another origin drops the credentials
+ * ({@link CROSS_ORIGIN_DROPPED_HEADERS}), and they stay dropped for the rest of the chain.
+ */
+export function NextHopRequest(previous: RedirectHopRequest, status: number, next: string): RedirectHopRequest {
+    const toGet = status === 303 ? previous.Method !== 'HEAD' : (status === 301 || status === 302) && previous.Method === 'POST';
+    const crossOrigin = new URL(next).origin !== new URL(previous.URL).origin;
+    const dropped = [...(crossOrigin ? CROSS_ORIGIN_DROPPED_HEADERS : []), ...(toGet ? BODY_HEADERS : [])];
+    return {
+        URL: next,
+        Method: toGet ? 'GET' : previous.Method,
+        Body: toGet ? null : previous.Body,
+        Headers: WithoutHeaders(previous.Headers, dropped),
+    };
+}
+
+/** `headers` without the named ones (lower-case names; matched without case). */
+function WithoutHeaders(headers: Record<string, string>, names: readonly string[]): Record<string, string> {
+    return Object.fromEntries(Object.entries(headers).filter(([name]) => !names.includes(name.toLowerCase())));
+}
+
+/**
+ * The part of a session's browser state a render may restore: the `localStorage` of its access origins, and the
+ * cookies that go to their hosts, each as a host-only cookie of that host. A `.example.com` cookie restored as it is
+ * would go to every subdomain, including ones not in the access origins; so it becomes one host-only copy per
+ * access host it covers. A host-only cookie of the same host, path and name wins over such a copy.
+ */
+export function RestorableStorageState(state: SessionStorageState, accessOrigins: readonly string[]): SessionStorageState {
+    const origins = accessOrigins.map((o) => OriginOrNull(o)).filter((o): o is URL => o !== null);
+    const hosts = [...new Set(origins.map((o) => o.hostname))];
+    const kept = new Map<string, SessionStorageCookie>();
+    const keep = (cookie: SessionStorageCookie) => kept.set(`${cookie.Domain}|${cookie.Path}|${cookie.Name}`, cookie);
+    for (const cookie of state.Cookies.filter((c) => !c.Domain.startsWith('.') && hosts.includes(c.Domain))) {
+        keep(cookie);
+    }
+    for (const cookie of state.Cookies.filter((c) => c.Domain.startsWith('.'))) {
+        const domain = cookie.Domain.slice(1);
+        for (const host of hosts.filter((h) => h === domain || h.endsWith(`.${domain}`))) {
+            if (!kept.has(`${host}|${cookie.Path}|${cookie.Name}`)) {
+                keep({ ...cookie, Domain: host });
+            }
+        }
+    }
+    const originNames = new Set(origins.map((o) => o.origin));
+    return { Cookies: [...kept.values()], Origins: state.Origins.filter((o) => originNames.has(o.Origin)) };
+}
+
+function OriginOrNull(url: string): URL | null {
+    try {
+        return new URL(url);
+    } catch {
+        return null;
     }
 }
 

@@ -17,7 +17,6 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/network-utils": "6.3.0-edge.2",
     "exceljs": "^4.4.0",
     "mammoth": "^1.11.0",
     "pdf-parse": "^1.1.4"

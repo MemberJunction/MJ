@@ -12,7 +12,7 @@
  */
 
 import { IsPlainObject } from '@memberjunction/global';
-import { ResolvedPipelineTuning, ResolveTuning } from './PipelineTuning.js';
+import { IsSetValue, ResolvedPipelineTuning, ResolveTuning } from './PipelineTuning.js';
 
 /** A source's configuration layers; see the file header for their order. */
 export interface SourceConfigurationLayers {
@@ -36,9 +36,9 @@ export function ConfiguredPath(layers: SourceConfigurationLayers, path: readonly
     for (const layer of Ordered(layers)) {
         let value: unknown = layer;
         for (const key of path) {
-            value = IsPlainObject(value) ? (value as Record<string, unknown>)[key] : undefined;
+            value = IsPlainObject(value) && Object.hasOwn(value as object, key) ? (value as Record<string, unknown>)[key] : undefined;
         }
-        if (value !== undefined && value !== null && !(typeof value === 'string' && value.trim().length === 0)) {
+        if (IsSetValue(value)) {
             return value;
         }
     }
@@ -61,7 +61,7 @@ export function MergedWebsiteConfiguration(layers: SourceConfigurationLayers): R
     return Object.fromEntries([...keys].map((key) => [key, WebsiteValue(layers, key)]).filter(([, value]) => value !== undefined));
 }
 
-/** `Tuning` resolved across the layers in the same order (`ResolveTuning` takes them lowest first). */
+/** `Tuning` resolved across the layers in the same order, key by key (`ResolveTuning` takes them lowest first; a null or blank value falls through). */
 export function TuningFor(layers: SourceConfigurationLayers): ResolvedPipelineTuning {
     return ResolveTuning(layers.Type, layers.Settings, layers.Source, layers.Run);
 }

@@ -9,8 +9,8 @@
  * | Parameter | Meaning | Default |
  * |---|---|---|
  * | `LoginURL` | The login page | the source URL |
- * | `LoginActionURL` | Where the form posts (absolute, or relative to `LoginURL`) | `LoginURL` |
- * | `LoginSeedGet` | GET the login page first, for the cookies (and hidden fields) it sets | `true` |
+ * | `LoginActionURL` | Where the form posts (absolute, or relative to the login page where its redirects ended) | `LoginURL` |
+ * | `LoginSeedGet` | GET the login page first, for the cookies (and hidden fields) it sets; an error answer fails the login before anything is posted | `true` |
  * | `LoginHiddenFields` | Carry the login page's hidden inputs (a CSRF token) into the post | `false` |
  * | `LoginUsernameField` / `LoginPasswordField` | The field names | `username` / `password` |
  * | `LoginBodyFormat` | `form` (urlencoded) or `json` | `form` |
@@ -64,16 +64,22 @@ export class FormLoginAccessDriver extends BaseAccessDriver {
         const { Username, Password } = LoginCredentials(request, this.Key);
         const p = request.Parameters;
         const loginURL = p.LoginURL || request.URL;
-        const actionURL = new URL(p.LoginActionURL || loginURL, loginURL).href;
         const jar = new CookieJar();
-        const signal = AbortSignal.any([request.Signal, AbortSignal.timeout(this.timeoutMs(request))]);
+        const deadline = Date.now() + this.timeoutMs(request);
         let hidden: Record<string, string> = {};
+        // A relative action resolves against where the login page ended up, as the browser's form would.
+        let pageURL = loginURL;
         if (p.LoginSeedGet?.toLowerCase() !== 'false') {
-            const seed = await this.Send(loginURL, { method: 'GET' }, jar, request, signal);
+            const seed = await this.Send(loginURL, { method: 'GET' }, jar, request, deadline);
+            if (seed.Status >= 400) {
+                throw new Error(`${this.Key}: the login page answered ${seed.Status} from ${seed.URL}; the credentials were not posted`);
+            }
+            pageURL = seed.URL;
             if (p.LoginHiddenFields?.toLowerCase() === 'true') {
                 hidden = HiddenInputs(seed.Body);
             }
         }
+        const actionURL = new URL(p.LoginActionURL || loginURL, pageURL).href;
         const fields: Record<string, string> = {
             ...hidden,
             ...ExtraFields(p.LoginExtraFields),
@@ -90,7 +96,7 @@ export class FormLoginAccessDriver extends BaseAccessDriver {
             },
             jar,
             request,
-            signal,
+            deadline,
         );
         this.assertSignedIn(answer, request);
         return CookieSessionArtifact(jar, SessionOrigins(request), SessionTtlMs(request), this.Key);
@@ -100,8 +106,9 @@ export class FormLoginAccessDriver extends BaseAccessDriver {
      * One request with the jar's cookies, through MJ's HTTP client with the SSRF guard on every hop (`ValidateUrl`). Each
      * redirect is seen before it is followed (`OnRedirect`): its cookies are kept, a 303 (and a 301/302 answering a POST)
      * goes on as a GET without the body, as browsers do, and the next hop gets the jar's cookies for its own URL.
+     * `deadline` (epoch ms) is the whole login's (`LoginTimeoutMs`); this request gets what is left of it.
      */
-    protected async Send(url: string, init: { method: string; body?: string; headers?: Record<string, string> }, jar: CookieJar, request: AccessRequest, signal: AbortSignal): Promise<LoginAnswer> {
+    protected async Send(url: string, init: { method: string; body?: string; headers?: Record<string, string> }, jar: CookieJar, request: AccessRequest, deadline: number): Promise<LoginAnswer> {
         const userAgent = request.Parameters.LoginUserAgent;
         let carriesBody = init.body !== undefined;
         const headersFor = (target: string): Record<string, string> => {
@@ -120,8 +127,9 @@ export class FormLoginAccessDriver extends BaseAccessDriver {
             ThrowOnError: false,
             ResponseType: 'text',
             MaxResponseBytes: MAX_LOGIN_BODY_BYTES,
-            Timeout: 0, // the login's own deadline is the signal (LoginTimeoutMs)
-            Signal: signal,
+            // The client's own timeout, not an aborting signal, so running out of time is reported as a timeout.
+            Timeout: Math.max(1, deadline - Date.now()),
+            Signal: request.Signal,
             OnRedirect: (hop) => {
                 keep(hop.From.href, hop.Response.headers.getSetCookie());
                 const status = hop.Response.status;

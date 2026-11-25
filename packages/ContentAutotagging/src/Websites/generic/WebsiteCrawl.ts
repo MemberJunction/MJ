@@ -7,21 +7,30 @@
  * remembered as dead and never reported, so a site's broken links do not become items that fail in Extract. A
  * Cloudflare challenge (`cf-mitigated`) is not dead, nor is a server error or no answer at all: those are tried
  * once more at the end of the queue and then reported, for Extract (and its retry schedule) to decide. A page
- * that is not HTML (a PDF, a Word file) is reported without its links being read.
+ * that is not HTML (a PDF, a Word file) is reported without its links being read. An address the SSRF guard refuses
+ * is dropped like a dead one: never retried, never reported. A page that redirects out of the crawl's scope (another
+ * site, another path, an excluded URL) is neither reported nor read for links.
  *
  * **Politely.** Every fetch to a host goes through that host's rate limiter (network-utils `RateLimiter`); a host that
  * answers 429 (or 503 with `Retry-After`) is slowed, and the fetch is retried after the longer of what it asks and an
- * exponential backoff (`WithRetry`). A page still limited after its retries goes to the back of the queue once rather
- * than losing its links. With `Concurrency` above 1, that many pages are fetched at a time.
+ * exponential backoff (`WithRetry`), no wait (nor the host's pause) longer than `MaxBackoffMs`. Only a real answer
+ * (2xx or 3xx, not a challenge) lets the host's pace recover. A page still limited after its retries goes to the back
+ * of the queue once rather than losing its links. With `Concurrency` above 1, that many pages are fetched at a time.
  *
  * The crawl keeps its frontier (pages still to read, with their depth) and every URL it has seen. When the walk's
  * deadline arrives it stops between pages and hands that state back as a resume token; the next walk picks up
  * exactly there. How a page or a sitemap is fetched is the caller's: plain HTTP, or a page renderer for sites
  * built by script (see `BasePageRenderer`), with the source's session applied by the caller.
  *
- * Scope and depth: a link is in scope when it starts with the root URL and matches the pattern (and the
- * {@link CrawlScopeOptions} lists, when set); the start page is depth 0, every page up to `MaxDepth` has its links
- * read, and the pages one level deeper are fetched (to know they are alive) but their links are not read.
+ * Scope and depth: a link is in scope when it is under the root URL (the same site, and the root's path or below it,
+ * segment by segment: see `CrawlScope.UnderRoot`) and matches the pattern (and the {@link CrawlScopeOptions} lists,
+ * when set); the start page is depth 0, every page up to `MaxDepth` has its links read, and the pages one level deeper
+ * are fetched (to know they are alive) but their links are not read. A page that duplicates one already found (see
+ * `DedupCanonical`, `DedupRedirects`) is not reported, its links are not read and it does not count toward `MaxPages`.
+ *
+ * Sitemaps: those the source lists are read wherever they are; those robots.txt or a sitemap index names are read
+ * only on the start page's own site. A sitemap answering as an HTML page (a soft 404) is ignored. Reading them stops
+ * at the deadline like reading pages, and carries on in the next part.
  *
  * @module @memberjunction/content-autotagging
  */
@@ -45,6 +54,18 @@ export interface CrawlPage {
     ContentType?: string;
     /** Response headers, lower-cased keys (`retry-after`, `cf-mitigated`, `last-modified`), when the caller has them. */
     Headers?: Readonly<Record<string, string>>;
+    /** The address was refused before any request (the SSRF guard): it is dropped, never retried or reported. */
+    Blocked?: boolean;
+}
+
+/** Whether an answer is the host asking the crawl to slow down: a 429, or a 503 with a readable `Retry-After`. */
+export function IsRateLimitedAnswer(page: CrawlPage): boolean {
+    return page.Status === 429 || (page.Status === 503 && ParseRetryAfterValue(page.Headers?.['retry-after']) !== undefined);
+}
+
+/** Whether an answer is the host holding the crawl off: rate-limiting it ({@link IsRateLimitedAnswer}) or challenging it (`cf-mitigated`). */
+export function IsHoldingOff(page: CrawlPage): boolean {
+    return IsRateLimitedAnswer(page) || !!page.Headers?.['cf-mitigated'];
 }
 
 /** How the crawl reads the web. Both return null when the address cannot be read at all. */
@@ -53,14 +74,15 @@ export interface CrawlFetchers {
     Page(url: string): Promise<CrawlPage | null>;
     /**
      * A plain-text resource: robots.txt or a sitemap. A {@link CrawlPage} (its `Html` the text) lets the crawl see
-     * the status, so a rate-limited sitemap is retried; a bare string is taken as a 200.
+     * the status, so a rate-limited sitemap is retried, and the content type, so an HTML page is not taken for a
+     * sitemap; a bare string is taken as a 200 of no stated type.
      */
     Text(url: string): Promise<CrawlPage | string | null>;
 }
 
 export interface CrawlOptions extends CrawlScopeOptions {
     SeedURL: string;
-    /** A link is in scope when it starts with this. */
+    /** A link is in scope when it is under this: the same site, and this path or below it (see `CrawlScope.UnderRoot`). */
     RootURL: string;
     /** ...and matches this. */
     Pattern: RegExp;
@@ -75,7 +97,8 @@ export interface CrawlOptions extends CrawlScopeOptions {
     SitemapURLs?: readonly string[];
     /**
      * The most pages whose links one whole walk reads (across its parts). The pages already found when it is reached
-     * are still fetched and reported; dead pages, files and retries do not count. Unset: no limit.
+     * are still fetched and reported; dead pages, files, duplicates and retries do not count. Unset, or 0 or less: no
+     * limit.
      */
     MaxPages?: number | null;
     /** Pause after each batch of pages, to be polite to the site. */
@@ -86,7 +109,9 @@ export interface CrawlOptions extends CrawlScopeOptions {
      * Fetch a page whose links will not be read (one level past `MaxDepth`, a sibling path, any page past `MaxPages`)
      * to know it is alive before reporting it. Default true: a dead link never becomes an item. `false` reports such
      * pages unfetched, as found, which saves the crawl one request per page (Extract fetches each one anyway) at the
-     * cost of dead links becoming items that fail in Extract.
+     * cost of dead links becoming items that fail in Extract. Decided page by page, whatever `Concurrency` is; a page
+     * reported unfetched counts toward the walk's deadline like a fetched one, and one a sitemap dates at or before
+     * `Since` is not reported.
      */
     CheckLeafPages?: boolean;
     /** How a host that rate-limits the crawl is backed off and paced (`Website.RateLimit`). */
@@ -136,6 +161,8 @@ interface CrawlState {
     Identities?: string[];
     /** Distinct query strings followed per path, kept only with a `LoopLimit`. */
     QueryCounts?: Record<string, number>;
+    /** The sitemaps still to read and those read, while a walk stopped part-way through reading them. */
+    Sitemaps?: { Pending: string[]; Read: string[] };
 }
 
 /** The token version this crawler writes; a token of any other version restarts the walk. */
@@ -243,8 +270,11 @@ export class WebsiteCrawl {
         const seen = new Set(state.Seen);
         const identities = new Set(state.Identities ?? []);
         if (this.options.UseSitemaps && !state.SitemapsDone) {
-            await this.seedFromSitemaps(state, seen);
+            if (!(await this.seedFromSitemaps(state, seen))) {
+                return this.options.Signal.aborted ? {} : { ResumeToken: EncodeCrawlState(this.snapshot(state, seen, identities)) };
+            }
             state.SitemapsDone = true;
+            delete state.Sitemaps;
         }
         let readThisPart = 0;
         while (state.Queue.length > 0) {
@@ -252,26 +282,53 @@ export class WebsiteCrawl {
                 return {};
             }
             // Each part reads at least one page, so a walk whose budget is smaller than one page still moves on.
-            if (readThisPart > 0 && this.options.Deadline && Date.now() >= this.options.Deadline.getTime()) {
+            if (readThisPart > 0 && this.pastDeadline()) {
                 return { ResumeToken: EncodeCrawlState(this.snapshot(state, seen, identities)) };
             }
-            if (this.options.CheckLeafPages === false && !this.readsLinks(state.Queue[0][1], state.Queue[0][2], state)) {
-                // A page whose links will not be read is reported as found, unfetched, for Extract to read (and fail).
-                const [url, , flags, lastModified] = state.Queue.shift()!;
-                yield* this.report(url, url, null, flags, lastModified ? new Date(lastModified) : undefined, identities);
-                continue;
-            }
             const batch = state.Queue.splice(0, this.concurrency());
-            const outcomes = await Promise.all(batch.map(([url]) => this.fetchPage(url)));
-            readThisPart += batch.length;
-            for (let i = 0; i < batch.length; i++) {
-                yield* this.settle(batch[i], outcomes[i], state, seen, identities);
+            const outcomes = await this.fetchBatch(batch, state);
+            if (this.options.Signal.aborted) {
+                return {}; // what was in flight when the walk was stopped is not reported
             }
-            if (this.options.DelayMs > 0 && state.Queue.length > 0) {
+            readThisPart += batch.length;
+            for (const entry of batch) {
+                const outcome = outcomes.get(entry);
+                yield* outcome ? this.settle(entry, outcome, state, seen, identities) : this.reportUnchecked(entry, identities);
+            }
+            if (outcomes.size > 0 && this.options.DelayMs > 0 && state.Queue.length > 0) {
                 await this.sleep(this.options.DelayMs).catch(() => undefined); // a stopped walk ends at the loop's check
             }
         }
         return {};
+    }
+
+    /**
+     * Fetch a batch's pages at once, each entry decided on its own: with `CheckLeafPages` off, a page whose links will
+     * not be read is not fetched (it has no outcome, and is reported unchecked).
+     */
+    private async fetchBatch(batch: QueueEntry[], state: CrawlState): Promise<Map<QueueEntry, PageOutcome>> {
+        const fetched = batch.filter(([, depth, flags]) => this.options.CheckLeafPages !== false || this.readsLinks(depth, flags, state));
+        const outcomes = await Promise.all(fetched.map(([url]) => this.fetchPage(url)));
+        return new Map(fetched.map((entry, i) => [entry, outcomes[i]]));
+    }
+
+    /**
+     * A page whose links will not be read, reported as found, unfetched, for Extract to read (and fail, when it is
+     * dead). One its sitemap dates at or before `Since` is not reported.
+     */
+    private *reportUnchecked(entry: QueueEntry, identities: Set<string>): Generator<CrawlFound, void, undefined> {
+        const [url, , flags, lastModified] = entry;
+        const modified = lastModified ? new Date(lastModified) : undefined;
+        yield* this.report(url, url, null, this.isUnchanged(modified) ? flags | QueueFlags.Silent : flags, modified, identities);
+    }
+
+    /** Whether a page last modified at `modified` is unchanged since the walk's `Since`. */
+    private isUnchanged(modified: Date | undefined): boolean {
+        return !!(this.options.Since && modified && modified.getTime() <= this.options.Since.getTime());
+    }
+
+    private pastDeadline(): boolean {
+        return !!this.options.Deadline && Date.now() >= this.options.Deadline.getTime();
     }
 
     private freshState(seed: string): CrawlState {
@@ -315,21 +372,41 @@ export class WebsiteCrawl {
         }
         const page = outcome.Page;
         const finalURL = this.scope.Clean(page.FinalURL || url);
+        // A link that redirects out of the crawl (another site, an excluded page) is neither reported nor read. The
+        // start page is the source's own address, wherever it lands.
+        if (depth > 0 && finalURL !== url && !this.mayLandOn(finalURL)) {
+            return;
+        }
         if (this.scope.DedupRedirects && finalURL !== url) {
             seen.add(this.scope.Key(finalURL));
         }
         const html = IsHtmlContentType(page.ContentType);
         const parsed = html ? this.ParsePage(page, depth === 0 && this.options.SiblingFanOut) : null;
         const modified = lastModified ? new Date(lastModified) : this.lastModifiedOf(page);
-        const unchanged = !!(this.options.Since && modified && modified.getTime() <= this.options.Since.getTime());
-        yield* this.report(url, finalURL, parsed?.Canonical ?? null, unchanged ? flags | QueueFlags.Silent : flags, modified, identities);
-        if (parsed && this.readsLinks(depth, flags, state)) {
+        const reportFlags = this.isUnchanged(modified) ? flags | QueueFlags.Silent : flags;
+        const duplicate = yield* this.report(url, finalURL, parsed?.Canonical ?? null, reportFlags, modified, identities);
+        // A duplicate's links are the page it duplicates; it is not read, and does not count toward MaxPages.
+        if (!duplicate && parsed && this.readsLinks(depth, flags, state)) {
             state.Read++;
             this.enqueueLinks(parsed, depth, state, seen);
         }
     }
 
-    /** Report a page, unless it is silent, out of the results, or a duplicate of one already reported. */
+    /** Whether a page may be where a link ended up after its redirects: in scope, matching the pattern, and visited. */
+    private mayLandOn(finalURL: string): boolean {
+        return this.options.Pattern.test(finalURL) && this.scope.MayVisit(finalURL) && (this.scope.UnderRoot(finalURL, this.options.RootURL) || this.underSiblingRoot(finalURL));
+    }
+
+    /** Whether a URL is one of the start page's sibling paths, when the crawl takes them. */
+    private underSiblingRoot(url: string): boolean {
+        return this.options.SiblingFanOut && this.scope.UnderRoot(url, SiblingRoot(this.options.SeedURL));
+    }
+
+    /**
+     * Report a page, unless it is a duplicate of one already found, silent, or out of the results. Returns whether it
+     * was a duplicate. A silent or excluded page's identities are still kept, so a page whose canonical names it (on an
+     * incremental walk, where it is silent) is known for a duplicate.
+     */
     private *report(
         url: string,
         finalURL: string,
@@ -337,30 +414,37 @@ export class WebsiteCrawl {
         flags: number,
         lastModified: Date | undefined,
         identities: Set<string>,
-    ): Generator<CrawlFound, void, undefined> {
-        if (flags & QueueFlags.Silent || !this.scope.MayReport(url)) {
-            return;
+    ): Generator<CrawlFound, boolean, undefined> {
+        if (this.scope.Dedups && !this.claimIdentity(url, finalURL, canonical, identities)) {
+            return true;
         }
-        if (this.scope.Dedups) {
-            const own = this.scope.Key(url);
-            const aliases: string[] = [];
-            if (this.scope.DedupRedirects && finalURL !== url) {
-                aliases.push(this.scope.Key(finalURL));
-            }
-            if (this.scope.DedupCanonical && canonical) {
-                const key = this.scope.Key(canonical);
-                // A template that names the home page as every page's canonical would make every page a duplicate.
-                if (!(key === this.seedKey && own !== this.seedKey)) {
-                    aliases.push(key);
-                }
-            }
-            if ([own, ...aliases].some((k) => identities.has(k))) {
-                return;
-            }
-            identities.add(own);
-            aliases.forEach((k) => identities.add(k));
+        if (flags & QueueFlags.Silent || !this.scope.MayReport(url)) {
+            return false;
         }
         yield lastModified ? { URL: url, LastModified: lastModified } : { URL: url };
+        return false;
+    }
+
+    /** Record a page's identities (itself, its redirect target, its canonical); false when one was already found. */
+    private claimIdentity(url: string, finalURL: string, canonical: string | null, identities: Set<string>): boolean {
+        const own = this.scope.Key(url);
+        const aliases: string[] = [];
+        if (this.scope.DedupRedirects && finalURL !== url) {
+            aliases.push(this.scope.Key(finalURL));
+        }
+        if (this.scope.DedupCanonical && canonical) {
+            const key = this.scope.Key(canonical);
+            // A template that names the home page as every page's canonical would make every page a duplicate.
+            if (!(key === this.seedKey && own !== this.seedKey)) {
+                aliases.push(key);
+            }
+        }
+        if ([own, ...aliases].some((k) => identities.has(k))) {
+            return false;
+        }
+        identities.add(own);
+        aliases.forEach((k) => identities.add(k));
+        return true;
     }
 
     /**
@@ -369,7 +453,9 @@ export class WebsiteCrawl {
      * fetched and reported (as the links of the pages read were reported before), but no new links are taken.
      */
     private readsLinks(depth: number, flags: number, state: CrawlState): boolean {
-        const underLimit = !this.options.MaxPages || state.Read < this.options.MaxPages;
+        const maxPages = this.options.MaxPages;
+        // 0 or less is no limit, as unset is (a limit of no pages would read nothing past the start page's own fetch).
+        const underLimit = typeof maxPages !== 'number' || !Number.isFinite(maxPages) || maxPages <= 0 || state.Read < maxPages;
         return this.options.FollowLinks && depth <= this.options.MaxDepth && !(flags & QueueFlags.NoLinks) && underLimit;
     }
 
@@ -424,16 +510,17 @@ export class WebsiteCrawl {
                 async () => {
                     await this.limiter.Acquire(host);
                     const answer = await fetch();
-                    const retryAfterMs = ParseRetryAfterValue(answer?.Headers?.['retry-after']);
-                    if (answer && (answer.Status === 429 || (answer.Status === 503 && retryAfterMs !== undefined))) {
-                        throw new RateLimitedAnswer(answer.Status, retryAfterMs);
+                    if (answer && IsRateLimitedAnswer(answer)) {
+                        throw new RateLimitedAnswer(answer.Status, ParseRetryAfterValue(answer.Headers?.['retry-after']));
                     }
-                    this.limiter.ReportSuccess(host);
+                    if (answer && IsRealAnswer(answer)) {
+                        this.limiter.ReportSuccess(host); // a timeout, a server error or a challenge is no sign the host has recovered
+                    }
                     return answer;
                 },
                 this.retryConfig(),
                 (error) => error instanceof RateLimitedAnswer && !this.options.Signal.aborted,
-                (_attempt, error) => this.limiter.ReportThrottle(host, (error as RateLimitedAnswer).RetryAfterMs),
+                (_attempt, error) => this.limiter.ReportThrottle(host, CappedWait((error as RateLimitedAnswer).RetryAfterMs, maxBackoffMs)),
                 {
                     // Never sooner than the backoff, even when Retry-After says 0: the burst is what got the crawl limited.
                     DelayForError: (error, _attempt, backoffMs) => Math.min(maxBackoffMs, Math.max((error as RateLimitedAnswer).RetryAfterMs ?? 0, backoffMs)),
@@ -442,7 +529,7 @@ export class WebsiteCrawl {
             );
         } catch (error) {
             if (error instanceof RateLimitedAnswer) {
-                this.limiter.ReportThrottle(host, error.RetryAfterMs);
+                this.limiter.ReportThrottle(host, CappedWait(error.RetryAfterMs, maxBackoffMs));
                 return 'limited';
             }
             if (this.options.Signal.aborted) {
@@ -463,9 +550,12 @@ export class WebsiteCrawl {
         };
     }
 
-    /** Alive (2xx), dead (a lasting client error), or not known (a challenge, a server error, a timeout). */
+    /** Alive (2xx), dead (a lasting client error, or refused by the SSRF guard), or not known (a challenge, a server error, a timeout). */
     private classify(page: CrawlPage): PageOutcome {
         const status = page.Status;
+        if (page.Blocked) {
+            return { Kind: 'Dead', Status: status };
+        }
         if (page.Headers?.['cf-mitigated']) {
             return { Kind: 'Unknown', Reason: `a bot challenge (cf-mitigated: ${page.Headers['cf-mitigated']})` };
         }
@@ -501,7 +591,6 @@ export class WebsiteCrawl {
         const $ = cheerio.load(page.Html);
         const base = page.FinalURL;
         const self = this.scope.Key(this.scope.Clean(base));
-        const siblingRoot = siblings ? SiblingRoot(this.options.SeedURL) : null;
         const links: { URL: string; Follow: boolean }[] = [];
         $('a[href]').each((_, element) => {
             const url = this.Resolve($(element).attr('href'), base);
@@ -510,7 +599,7 @@ export class WebsiteCrawl {
             }
             if (this.scope.UnderRoot(url, this.options.RootURL)) {
                 links.push({ URL: url, Follow: true });
-            } else if (siblingRoot && url.startsWith(siblingRoot)) {
+            } else if (siblings && this.underSiblingRoot(url)) {
                 links.push({ URL: url, Follow: false });
             }
         });
@@ -533,26 +622,47 @@ export class WebsiteCrawl {
         }
     }
 
-    /** Queue each in-scope page the site's sitemaps list; each is fetched and reported like any other page. */
-    private async seedFromSitemaps(state: CrawlState, seen: Set<string>): Promise<void> {
-        const pending = [...(this.options.SitemapURLs?.length ? this.options.SitemapURLs : await this.discoverSitemaps())];
-        const read = new Set<string>();
-        while (pending.length > 0 && read.size < MAX_SITEMAPS && !this.options.Signal.aborted) {
-            const sitemapURL = pending.shift()!;
-            if (read.has(sitemapURL)) {
+    /**
+     * Queue each in-scope page the site's sitemaps list; each is fetched and reported like any other page. Returns
+     * false when it stopped before reading them all (the signal, or the deadline once it has read one): what is left
+     * is in the state, for the next part.
+     */
+    private async seedFromSitemaps(state: CrawlState, seen: Set<string>): Promise<boolean> {
+        const progress = (state.Sitemaps ??= { Pending: await this.firstSitemaps(), Read: [] });
+        let readThisPart = 0;
+        while (progress.Pending.length > 0 && progress.Read.length < MAX_SITEMAPS) {
+            if (this.options.Signal.aborted || (readThisPart > 0 && this.pastDeadline())) {
+                return false;
+            }
+            const sitemapURL = progress.Pending.shift()!;
+            if (progress.Read.includes(sitemapURL)) {
                 continue;
             }
-            read.add(sitemapURL);
-            const xml = await this.readText(sitemapURL);
+            progress.Read.push(sitemapURL);
+            readThisPart++;
+            const xml = await this.readText(sitemapURL, IsSitemapContentType);
             if (!xml) {
                 continue;
             }
             const parsed = ParseSitemap(xml);
-            pending.push(...parsed.Sitemaps);
+            progress.Pending.push(...this.sameSiteSitemaps(parsed.Sitemaps));
             for (const entry of parsed.Pages) {
                 this.enqueueSitemapPage(entry, state, seen);
             }
         }
+        return !this.options.Signal.aborted;
+    }
+
+    /** The sitemaps to start from: those the source lists (wherever they are), else those the site names. */
+    private async firstSitemaps(): Promise<string[]> {
+        const listed = this.options.SitemapURLs?.filter((u) => typeof u === 'string' && u.trim().length > 0) ?? [];
+        return listed.length > 0 ? listed.map((u) => NormalizeCrawlURL(u.trim())) : this.discoverSitemaps();
+    }
+
+    /** The sitemap URLs a site named that are on the start page's own site, normalized (no fragment). */
+    private sameSiteSitemaps(urls: readonly string[]): string[] {
+        const site = `${new URL(this.options.SeedURL).origin}/`;
+        return urls.map((u) => NormalizeCrawlURL(u)).filter((u) => this.scope.UnderRoot(u, site));
     }
 
     private enqueueSitemapPage(entry: { URL: string; LastModified?: Date }, state: CrawlState, seen: Set<string>): void {
@@ -561,29 +671,38 @@ export class WebsiteCrawl {
         if (seen.has(key) || !this.scope.UnderRoot(url, this.options.RootURL) || !this.options.Pattern.test(url) || !this.scope.MayVisit(url)) {
             return;
         }
+        if (!this.withinLoopLimit(url, state)) {
+            return;
+        }
         seen.add(key);
-        const unchanged = !!(this.options.Since && entry.LastModified && entry.LastModified.getTime() <= this.options.Since.getTime());
-        state.Queue.push([url, 1, unchanged ? QueueFlags.Silent : 0, entry.LastModified?.getTime() ?? 0]);
+        state.Queue.push([url, 1, this.isUnchanged(entry.LastModified) ? QueueFlags.Silent : 0, entry.LastModified?.getTime() ?? 0]);
     }
 
-    /** A text resource, politely: a rate-limited answer is retried like a page. Null unless it answered 200. */
-    private async readText(url: string): Promise<string | null> {
+    /**
+     * A text resource, politely: a rate-limited answer is retried like a page. Null unless it answered 200 with a
+     * content type `accepts` takes.
+     */
+    private async readText(url: string, accepts: (contentType: string | undefined) => boolean): Promise<string | null> {
         const answer = await this.politely(url, async () => {
             const text = await this.fetchers.Text(url);
             return typeof text === 'string' ? { Html: text, FinalURL: url, Status: 200 } : text;
         });
-        return answer && answer !== 'limited' && answer.Status === 200 ? answer.Html : null;
+        if (!answer || answer === 'limited' || answer.Blocked || answer.Status !== 200) {
+            return null;
+        }
+        return accepts(answer.ContentType) ? answer.Html : null;
     }
 
-    /** The sitemaps robots.txt names, else the conventional /sitemap.xml. */
+    /** The sitemaps robots.txt names on the start page's own site, else the conventional /sitemap.xml. */
     private async discoverSitemaps(): Promise<string[]> {
         const origin = new URL(this.options.SeedURL).origin;
-        const robots = await this.readText(`${origin}/robots.txt`);
+        const robots = await this.readText(`${origin}/robots.txt`, (type) => !IsHtmlType(type));
         const listed = (robots ?? '')
             .split(/\r?\n/)
             .map((line) => /^\s*sitemap\s*:\s*(\S+)/i.exec(line)?.[1])
             .filter((url): url is string => !!url);
-        return listed.length > 0 ? listed : [`${origin}/sitemap.xml`];
+        const sameSite = this.sameSiteSitemaps(listed);
+        return sameSite.length > 0 ? sameSite : [`${origin}/sitemap.xml`];
     }
 }
 
@@ -641,6 +760,33 @@ export function DecodeCrawlState(token: string): CrawlState {
         throw new Error(`the website crawl resume token is version ${String(state.v)}, written by an earlier crawler; this one writes version ${CRAWL_STATE_VERSION}`);
     }
     return state;
+}
+
+/** Whether an answer is the host really answering (2xx or 3xx, not a challenge or a refusal): what lets its pace recover. */
+function IsRealAnswer(page: CrawlPage): boolean {
+    return !page.Blocked && page.Status >= 200 && page.Status < 400 && !page.Headers?.['cf-mitigated'];
+}
+
+/** A host's requested wait, no longer than `maxMs`; undefined when it asked none. */
+function CappedWait(ms: number | undefined, maxMs: number): number | undefined {
+    return ms === undefined ? undefined : Math.min(ms, maxMs);
+}
+
+/** The media type of a `Content-Type`, lower-cased, without its parameters; '' when unset. */
+function MediaType(contentType: string | undefined): string {
+    return (contentType ?? '').split(';')[0].trim().toLowerCase();
+}
+
+/** Whether a `Content-Type` names an HTML page (an unset one does not). */
+function IsHtmlType(contentType: string | undefined): boolean {
+    const type = MediaType(contentType);
+    return type === 'text/html' || type === 'application/xhtml+xml';
+}
+
+/** Whether a `Content-Type` may be a sitemap: unset, XML of any kind (not XHTML), or plain text. */
+function IsSitemapContentType(contentType: string | undefined): boolean {
+    const type = MediaType(contentType);
+    return type.length === 0 || type === 'text/plain' || (!IsHtmlType(type) && (type.endsWith('/xml') || type.endsWith('+xml')));
 }
 
 /** A non-negative number, else `fallback`. */

@@ -7,6 +7,9 @@
  * does not depend on the generated entities, so it cannot derive the one from the other; this file, in a package that
  * sees both, fails the build when either changes without the other.
  *
+ * Not part of the package's public API (not exported from `index.ts`): `tsc` compiles every file under `src/`, which is
+ * all the check needs.
+ *
  * @module @memberjunction/content-pipeline
  */
 

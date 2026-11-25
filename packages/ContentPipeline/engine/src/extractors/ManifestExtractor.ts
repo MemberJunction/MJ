@@ -139,12 +139,13 @@ export class ManifestExtractor extends BaseContentExtractor {
         }
         const delimiter = options.Delimiter ?? (request.FileType.toLowerCase() === 'tsv' ? '\t' : ',');
         const text = new TextDecoder('utf-8', { fatal: false }).decode(request.Content);
-        const [header, ...rows] = ParseDelimited(text, delimiter);
-        const column = this.columnIndex(header ?? []);
-        if (options.DetectByHeader && !this.isManifest(options, column)) {
+        // The header alone decides whether this is a manifest: a dataset is not parsed row by row only to be dropped.
+        if (options.DetectByHeader && !this.isManifest(options, this.columnIndex(ParseDelimited(text, delimiter, 1)[0] ?? []))) {
             request.ReportProgress('the header names no manifest column: read as a document');
             return this.asDocument(text, request);
         }
+        const [header, ...rows] = ParseDelimited(text, delimiter);
+        const column = this.columnIndex(header ?? []);
         if (!header) {
             return { Blocks: [], IsContainer: true };
         }
@@ -323,9 +324,9 @@ export class ManifestExtractor extends BaseContentExtractor {
 
 /**
  * Rows of a delimited text file (RFC 4180): quoted fields may hold the delimiter, line breaks and doubled
- * quotes; lines may end in LF or CRLF. Wholly empty lines are dropped.
+ * quotes; lines may end in LF or CRLF. Wholly empty lines are dropped. Stops after `maxRows` rows (default: all).
  */
-export function ParseDelimited(text: string, delimiter = ','): string[][] {
+export function ParseDelimited(text: string, delimiter = ',', maxRows = Number.POSITIVE_INFINITY): string[][] {
     const rows: string[][] = [];
     let row: string[] = [];
     let field = '';
@@ -356,6 +357,9 @@ export function ParseDelimited(text: string, delimiter = ','): string[][] {
             field = '';
             if (row.some((value) => value.length > 0)) {
                 rows.push(row);
+                if (rows.length >= maxRows) {
+                    return rows;
+                }
             }
             row = [];
         } else {

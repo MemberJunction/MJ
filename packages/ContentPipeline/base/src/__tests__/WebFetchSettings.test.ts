@@ -71,6 +71,14 @@ describe('the configuration layers', () => {
         expect(ResolveWebFetchSettings(layers).UserAgent).toBe('Type-UA');
     });
 
+    it('lets a null or blank Tuning value fall through to a lower layer, and reads only own keys', () => {
+        const tuning = TuningFor({ Run: { Tuning: { EmptyPageTextChars: null, MaxArchiveDepth: '' } }, Type: { Tuning: { EmptyPageTextChars: 50, MaxArchiveDepth: 4 } } });
+        expect(tuning.EmptyPageTextChars).toBe(50);
+        expect(tuning.MaxArchiveDepth).toBe(4);
+        const inherited = Object.create({ PageRenderer: 'Inherited' }) as Record<string, unknown>;
+        expect(ConfiguredValue({ Source: inherited, Type: { PageRenderer: 'Headless' } }, 'PageRenderer')).toBe('Headless');
+    });
+
     it('sends a MemberJunction User-Agent unless a layer sets one', () => {
         expect(ResolveWebFetchSettings({}).UserAgent).toBe(DEFAULT_USER_AGENT);
         expect(ResolveWebFetchSettings({ Type: { Website: { UserAgent: 'Acme-Bot/2' } } }).UserAgent).toBe('Acme-Bot/2');

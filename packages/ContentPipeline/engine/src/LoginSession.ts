@@ -3,10 +3,12 @@
  * secret, the session's origins, and the {@link AccessArtifact} a cookie session becomes. Cookies are kept in a
  * `tough-cookie` jar (RFC 6265 parsing and matching, public suffixes included).
  *
- * A login produces cookies; the pipeline's fetchers take headers. So a session is handed on as one `Cookie`
- * header, sent only to the session's origins (`SessionOrigins`, else the source URL's origin), and it expires
- * with the first of its cookies to expire or after `SessionTtlMinutes`, whichever is sooner, so the resolver
- * logs in again before the site starts answering with its login page.
+ * A login produces cookies; the pipeline's fetchers take headers. So a session is handed on as a `Cookie` header per
+ * origin (`AccessArtifact.OriginHeaders`, read through `AccessHeadersFor`), for the session's origins only
+ * (`SessionOrigins`, else the source URL's origin): each origin gets the cookies RFC 6265 sends it, so a host-only or
+ * `Secure` cookie never reaches another origin or plain http. It expires with the first of its cookies to expire or
+ * after `SessionTtlMinutes`, whichever is sooner, so the resolver logs in again before the site starts answering with
+ * its login page.
  *
  * @module @memberjunction/content-pipeline
  */
@@ -57,42 +59,55 @@ export function SessionTtlMs(request: AccessRequest): number | null {
 }
 
 /**
- * The cookies a jar holds for the session's origins (`tough-cookie`'s RFC 6265 matching: domain, public suffixes,
- * `Secure`; every path), one per name: the more specific domain wins, as a browser would send it first.
+ * The cookies one or more jars send to one origin (`tough-cookie`'s RFC 6265 matching: domain, public suffixes,
+ * `Secure` only over https, expiry; every path). Several jars hold cookies one jar cannot: a jar keeps one cookie per
+ * domain, path and name, where a browser keeps a host-only and a domain cookie of the same name apart.
  */
-export function SessionCookies(jar: CookieJar, origins: readonly string[]): Cookie[] {
-    const byName = new Map<string, Cookie>();
-    for (const origin of origins) {
-        for (const cookie of jar.getCookiesSync(origin, { allPaths: true })) {
-            const existing = byName.get(cookie.key);
-            if (!existing || (cookie.domain?.length ?? 0) > (existing.domain?.length ?? 0)) {
-                byName.set(cookie.key, cookie);
-            }
-        }
-    }
-    return [...byName.values()];
+export function OriginCookies(jar: CookieJar | readonly CookieJar[], origin: string): Cookie[] {
+    return JarsOf(jar).flatMap((j) => j.getCookiesSync(origin, { allPaths: true }));
 }
 
 /**
- * A cookie session as an artifact: one `Cookie` header holding the session's cookies (see {@link SessionCookies}; the
- * header is sent to every one of the origins), expiring with its first cookie or the TTL.
- *
- * @throws When no cookie goes to any of the origins: the login did not produce a session for the site.
+ * A cookie session as an artifact: each of the session's origins gets its own `Cookie` header in
+ * {@link AccessArtifact.OriginHeaders} (see {@link OriginCookies}), none in the shared `Headers`, so same-named cookies
+ * of different origins both survive and none reaches an origin it was not set for. Expires with its first cookie or
+ * the TTL. Carries no header at all when no cookie goes to any origin (see {@link CookieSessionArtifact}).
  */
-export function CookieSessionArtifact(jar: CookieJar, origins: readonly string[], ttlMs: number | null, driver: string, now: number = Date.now()): AccessArtifact {
-    const cookies = SessionCookies(jar, origins);
-    if (cookies.length === 0) {
-        throw new Error(`${driver}: the login set no cookie for ${origins.join(', ') || 'the source'}; check the login settings and the credential`);
+export function SessionArtifact(jar: CookieJar | readonly CookieJar[], origins: readonly string[], ttlMs: number | null, now: number = Date.now()): AccessArtifact {
+    const originHeaders: Record<string, Record<string, string>> = {};
+    const expiries: number[] = [];
+    for (const origin of origins) {
+        const cookies = OriginCookies(jar, origin);
+        if (cookies.length > 0) {
+            originHeaders[origin] = { Cookie: cookies.map((c) => c.cookieString()).join('; ') };
+            expiries.push(...cookies.map((c) => c.expiryTime()).filter((e): e is number => e !== undefined && Number.isFinite(e)));
+        }
     }
-    const expiries = cookies.map((c) => c.expiryTime()).filter((e): e is number => e !== undefined && Number.isFinite(e));
     if (ttlMs !== null) {
         expiries.push(now + ttlMs);
     }
     return {
-        Headers: { Cookie: cookies.map((c) => c.cookieString()).join('; ') },
+        ...(Object.keys(originHeaders).length > 0 ? { OriginHeaders: originHeaders } : {}),
         Origins: [...origins],
         ...(expiries.length > 0 ? { ExpiresAt: new Date(Math.min(...expiries)) } : {}),
     };
+}
+
+/**
+ * {@link SessionArtifact}, for a session that must be cookies.
+ *
+ * @throws When no cookie goes to any of the origins: the login did not produce a session for the site.
+ */
+export function CookieSessionArtifact(jar: CookieJar | readonly CookieJar[], origins: readonly string[], ttlMs: number | null, driver: string, now: number = Date.now()): AccessArtifact {
+    const artifact = SessionArtifact(jar, origins, ttlMs, now);
+    if (!artifact.OriginHeaders) {
+        throw new Error(`${driver}: the login set no cookie for ${origins.join(', ') || 'the source'}; check the login settings and the credential`);
+    }
+    return artifact;
+}
+
+function JarsOf(jar: CookieJar | readonly CookieJar[]): readonly CookieJar[] {
+    return jar instanceof CookieJar ? [jar] : jar;
 }
 
 /** A URL's origin, or null when it is not an http(s) URL. */

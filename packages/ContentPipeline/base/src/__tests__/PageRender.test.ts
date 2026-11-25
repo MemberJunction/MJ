@@ -40,6 +40,10 @@ describe('LooksLikeEmptyPage', () => {
         expect(LooksLikeEmptyPage(`<body><SCRIPT>${'x();'.repeat(100)}</Script><p>Hi</p></body>`)).toBe(true);
     });
 
+    it('reads the text after a self-closing <svg/>', () => {
+        expect(LooksLikeEmptyPage(`<body><svg class="icon"/><p>${'Words a reader came for. '.repeat(20)}</p></body>`)).toBe(false);
+    });
+
     it('stays linear on a page built to make a scan backtrack (unclosed comments and elements, a megabyte of them)', () => {
         const started = Date.now();
         for (const opener of ['<!--', '<svg>', '<script>', '<body', '<p']) {

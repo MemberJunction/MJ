@@ -3,7 +3,7 @@
  *
  * A stand-in site answers the login: its login page sets a cookie and holds a CSRF token in a hidden field, and the
  * post answers 302 with the session cookie. The driver must carry the token and the cookie through, follow the
- * redirect as a GET, and hand back one `Cookie` header for the session's origins that expires with its cookies.
+ * redirect as a GET, and hand back a `Cookie` header per session origin that expires with its cookies.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,10 +11,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const SITE = 'https://93.184.216.34';
 const ELSEWHERE = 'https://93.184.216.35';
 
-import { AccessRequest } from '@memberjunction/content-pipeline-base';
+import { AccessHeadersFor, AccessRequest } from '@memberjunction/content-pipeline-base';
+import { HttpError } from '@memberjunction/network-utils';
 import { ExtraFields, FormLoginAccessDriver, HiddenInputs } from '../FormLoginAccessDriver.js';
 import { CookieJar } from 'tough-cookie';
-import { CookieSessionArtifact, SessionOrigins } from '../LoginSession.js';
+import { CookieSessionArtifact, SessionArtifact, SessionOrigins } from '../LoginSession.js';
 
 interface Sent {
     url: string;
@@ -82,7 +83,8 @@ describe('FormLoginAccessDriver', () => {
         expect(Object.fromEntries(new URLSearchParams(post.body))).toEqual({ csrf: 't&1', remember: 'true', username: 'member', password: 'pw' });
         expect(post.headers.Cookie).toBe('pre=1');
         expect(sent.at(-1)).toMatchObject({ url: `${SITE}/home`, method: 'GET' });
-        expect(artifact.Headers?.Cookie).toBe('pre=1; sid=abc');
+        expect(artifact.Headers).toBeUndefined();
+        expect(AccessHeadersFor(artifact, `${SITE}/library`)?.Cookie).toBe('pre=1; sid=abc');
         expect(artifact.Origins).toEqual([SITE]);
         expect(artifact.ExpiresAt!.getTime()).toBeGreaterThanOrEqual(before + 3_600_000 - 1000);
     });
@@ -110,6 +112,52 @@ describe('FormLoginAccessDriver', () => {
         expect(sent.some((s) => s.url.startsWith(ELSEWHERE))).toBe(false);
     });
 
+    it('fails without posting the credentials when the login page answers an error', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string, init: RequestInit) => {
+                sent.push({ url, method: String(init.method), body: String(init.body ?? ''), headers: {} });
+                return answer(503, 'down');
+            }),
+        );
+        await expect(new FormLoginAccessDriver().Connect(request())).rejects.toThrow(/answered 503.*not posted/);
+        expect(sent.some((s) => s.method === 'POST')).toBe(false);
+    });
+
+    it('resolves a relative LoginActionURL against where the login page redirected to', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string, init: RequestInit) => {
+                sent.push({ url, method: String(init.method), body: String(init.body ?? ''), headers: {} });
+                const path = new URL(url).pathname;
+                if (path === '/login') {
+                    return answer(302, '', [['location', '/auth/signin']]);
+                }
+                if (path === '/auth/signin') {
+                    // A real fetch answer says where it came from; the stand-in's must too, for the final URL.
+                    return Object.defineProperty(answer(200, '<form></form>'), 'url', { value: url });
+                }
+                return path === '/auth/do' ? signedIn() : answer(200, '<p>Welcome</p>');
+            }),
+        );
+        await new FormLoginAccessDriver().Connect(request({ LoginActionURL: 'do' }));
+        expect(sent.find((s) => s.method === 'POST')?.url).toBe(`${SITE}/auth/do`);
+    });
+
+    it('reports running out of LoginTimeoutMs as a timeout, not a cancellation', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                (_url: string, init: RequestInit) =>
+                    new Promise<Response>((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))),
+            ),
+        );
+        const error = await new FormLoginAccessDriver().Connect(request({ LoginTimeoutMs: '50' })).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(HttpError);
+        expect((error as HttpError).IsTimeout).toBe(true);
+        expect((error as HttpError).IsCancelled).toBe(false);
+    });
+
     it('needs a user name and a password from the credential', async () => {
         site(signedIn);
         await expect(new FormLoginAccessDriver().Connect(request({}, { apiKey: 'k' }))).rejects.toThrow(/needs a username and a password/);
@@ -123,13 +171,27 @@ describe('FormLoginAccessDriver', () => {
 });
 
 describe('the cookie session', () => {
-    it("holds the session origins' cookies, every path, the more specific domain first; refuses a login that set none", () => {
+    it("holds each session origin's own cookies, every path, as a browser sends them; refuses a login that set none", () => {
         const jar = new CookieJar();
         const set = (url: string, headers: string[]) => headers.forEach((h) => jar.setCookieSync(h, url, { ignoreError: true }));
         set('https://idp.test/', ['idp=1']);
         set('https://www.site.test/', ['sid=2; Domain=site.test', 'docs=3; Path=/docs', 'sid=4']);
-        expect(CookieSessionArtifact(jar, ['https://www.site.test'], null, 'X').Headers?.Cookie).toBe('sid=4; docs=3');
+        const artifact = CookieSessionArtifact(jar, ['https://www.site.test'], null, 'X');
+        expect(artifact.Headers).toBeUndefined();
+        expect(artifact.OriginHeaders?.['https://www.site.test']?.Cookie).toBe('sid=2; docs=3; sid=4');
         expect(() => CookieSessionArtifact(jar, ['https://other.test'], null, 'X')).toThrow(/set no cookie/);
+    });
+
+    it('gives each origin only its own cookies: same-named cookies both survive, host-only and Secure ones stay home', () => {
+        const jar = new CookieJar();
+        jar.setCookieSync('sid=a', 'https://a.site.test/');
+        jar.setCookieSync('sid=b', 'https://b.site.test/');
+        jar.setCookieSync('tok=s; Secure', 'https://a.site.test/');
+        const artifact = SessionArtifact(jar, ['https://a.site.test', 'https://b.site.test', 'http://a.site.test'], null);
+        expect(AccessHeadersFor(artifact, 'https://a.site.test/x')?.Cookie).toBe('sid=a; tok=s');
+        expect(AccessHeadersFor(artifact, 'https://b.site.test/x')?.Cookie).toBe('sid=b');
+        expect(AccessHeadersFor(artifact, 'http://a.site.test/x')?.Cookie).toBe('sid=a');
+        expect(AccessHeadersFor(artifact, 'https://c.site.test/x')).toBeUndefined();
     });
 
     it('takes no cookie a browser would refuse: a public suffix as its domain, or a domain it did not come from', () => {

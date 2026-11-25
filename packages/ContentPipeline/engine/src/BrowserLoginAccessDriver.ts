@@ -23,8 +23,10 @@
  * | `LoginStorageState` | `false` leaves the browser state out of the artifact | `true` |
  * | `SessionOrigins` / `SessionTtlMinutes` | As for `FormLogin` | the source URL's origin / the cookies' expiry |
  *
- * The artifact's `Cookie` header serves plain fetches; its `Extensions.StorageState` (cookies and `localStorage`)
- * is restored by the `Headless` renderer into each page it renders, for a site whose session is not cookie-only.
+ * The artifact's `Cookie` header per session origin (`OriginHeaders`) serves plain fetches; its
+ * `Extensions.StorageState` (cookies and `localStorage`) is restored by the `Headless` renderer into each page it
+ * renders, for a site whose session is not cookie-only. A login whose session is only in `localStorage` (a script
+ * login that sets no cookie) hands on the browser state alone.
  *
  * Every request the login page makes to a private or reserved address is refused (MJ's SSRF guard, by name), and
  * so is every redirect hop; WebSockets, which Playwright's request routing does not see, are refused outright (as the
@@ -33,13 +35,17 @@
  * redirects ({@link BrowserLoginAccessDriver.RouteLogin}):
  * - a page navigation that is redirected is answered with a page that navigates on to the checked target (carrying
  *   the redirect's cookies); that navigation comes through the route again, so every hop of a sign-on is checked.
- *   A navigation whose 307/308 keeps a posted body (the form) is followed in the route only to its own origin: the
- *   browser shows the answer under the first address, and the login's credentials are not re-posted to another
- *   site (as `FormLogin` refuses them), so a hop to another origin fails the login;
+ *   The driver waits past these stand-in pages for a real document before it goes on;
  * - any other request (a script's) has its redirects followed in the route, each hop checked, and the browser gets
  *   the last answer.
  *
- * The artifact keeps only what belongs to the session's origins: the cookies that go to their hosts and their
+ * A request that still carries its body at a 307/308 (a posted form, a script's posted credentials) is followed only
+ * to its own origin: the login's credentials are not re-posted to another site (as `FormLogin` refuses them), so such
+ * a hop fails the request. Each hop goes as a browser's would (the renderer's `NextHopRequest`): a POST turned into a
+ * GET stays bodiless, and a hop to another origin carries no `Authorization`.
+ *
+ * The artifact keeps only what belongs to the session's origins: the cookies that go to their hosts (each as a
+ * host-only cookie of a session host, so a `.example.com` cookie cannot reach another subdomain) and their
  * `localStorage`. An identity provider's own cookies (a single sign-on hop's) stay in the login's browser.
  *
  * @module @memberjunction/content-pipeline
@@ -53,11 +59,12 @@ import {
     AccessArtifact,
     AccessRequest,
     BaseAccessDriver,
+    SessionStorageCookie,
     SessionStorageState,
 } from '@memberjunction/content-pipeline-base';
-import { HeadlessPageRenderer } from './HeadlessPageRenderer.js';
+import { FirstHopRequest, HeadlessPageRenderer, NextHopRequest } from './HeadlessPageRenderer.js';
 import { Cookie, CookieJar } from 'tough-cookie';
-import { CookieSessionArtifact, LoginCredentials, SessionCookies, SessionOrigins, SessionTtlMs } from './LoginSession.js';
+import { LoginCredentials, OriginCookies, SessionArtifact, SessionOrigins, SessionTtlMs } from './LoginSession.js';
 
 /** The registered key. */
 export const BROWSER_LOGIN_ACCESS_DRIVER = 'BrowserLogin';
@@ -72,6 +79,11 @@ const OPTIONAL_STEP_TIMEOUT_MS = 5_000; // long enough for a script to draw it, 
 const DEFAULT_USERNAME_SELECTOR = "input[type='email'], input[name='username'], input[name='email'], input[name='Email'], #username, #email";
 const DEFAULT_PASSWORD_SELECTOR = "input[type='password']";
 const DEFAULT_SUBMIT_SELECTOR = "button[type='submit'], input[type='submit']";
+/** The `<meta name>` that marks a page standing in for a redirect (see {@link NavigateOnPage}). */
+const REDIRECT_STAND_IN_MARKER = 'mj-login-redirect';
+
+/** One cookie of a Playwright browser's storage state. */
+type BrowserCookie = Awaited<ReturnType<BrowserContext['storageState']>>['cookies'][number];
 
 @RegisterClass(BaseAccessDriver, BROWSER_LOGIN_ACCESS_DRIVER)
 export class BrowserLoginAccessDriver extends BaseAccessDriver {
@@ -79,6 +91,7 @@ export class BrowserLoginAccessDriver extends BaseAccessDriver {
 
     public async Connect(request: AccessRequest): Promise<AccessArtifact> {
         const credentials = LoginCredentials(request, this.Key);
+        this.assertNotAborted(request);
         const loginURL = request.Parameters.LoginURL || request.URL;
         await this.AssertAllowed(loginURL);
         return this.WithBrowser(async (browser) => {
@@ -89,6 +102,8 @@ export class BrowserLoginAccessDriver extends BaseAccessDriver {
             const abort = () => void context.close().catch(() => undefined);
             request.Signal.addEventListener('abort', abort, { once: true });
             try {
+                // An abort while the browser was starting fired no listener: check again before the login page loads.
+                this.assertNotAborted(request);
                 await context.route('**/*', (route) => this.RouteLogin(route, context.request));
                 await context.routeWebSocket(/.*/, (socket) => socket.close({ code: 1008, reason: 'WebSockets are not allowed during a login' }));
                 const page = await context.newPage();
@@ -116,32 +131,26 @@ export class BrowserLoginAccessDriver extends BaseAccessDriver {
         }
         try {
             let response = await route.fetch({ maxRedirects: 0 });
-            let target = url;
-            let method = sent.method();
             // The browser's own Cookie header is for the first address only; the request context adds each hop's.
-            const headers = Object.fromEntries(Object.entries(sent.headers()).filter(([name]) => name.toLowerCase() !== 'cookie'));
+            let hop = FirstHopRequest(url, sent.method(), sent.postDataBuffer(), sent.headers());
             for (let hops = 0; ; hops++) {
-                const next = RedirectTarget(response, target);
+                const next = RedirectTarget(response, hop.URL);
                 if (!next) {
                     return await route.fulfill({ response });
                 }
                 if (hops >= MAX_LOGIN_REDIRECTS || !(await this.allowed(next))) {
                     return await route.abort('blockedbyclient');
                 }
-                const status = response.status();
-                const keepsMethod = status === 307 || status === 308;
-                const body = keepsMethod ? sent.postDataBuffer() : null;
-                if (sent.isNavigationRequest()) {
-                    if (!body) {
-                        return await route.fulfill({ status: 200, headers: NavigateOnHeaders(response), body: NavigateOnPage(next) });
-                    }
-                    if (new URL(next).origin !== new URL(url).origin) {
-                        return await route.abort('blockedbyclient');
-                    }
+                const following = NextHopRequest(hop, response.status(), next);
+                if (sent.isNavigationRequest() && !following.Body) {
+                    return await route.fulfill({ status: 200, headers: NavigateOnHeaders(response), body: NavigateOnPage(next) });
                 }
-                method = keepsMethod ? method : 'GET';
-                target = next;
-                response = await requests.fetch(target, { method, headers, ...(body ? { data: body } : {}), maxRedirects: 0 });
+                // A body still carried (a form's, a script's fetch) holds the credentials: never to another origin.
+                if (following.Body && new URL(next).origin !== new URL(hop.URL).origin) {
+                    return await route.abort('blockedbyclient');
+                }
+                hop = following;
+                response = await requests.fetch(hop.URL, { method: hop.Method, headers: hop.Headers, ...(hop.Body ? { data: hop.Body } : {}), maxRedirects: 0 });
             }
         } catch {
             return route.abort('failed');
@@ -173,6 +182,7 @@ export class BrowserLoginAccessDriver extends BaseAccessDriver {
         const p = request.Parameters;
         const timeout = this.stepTimeout(request);
         await page.goto(loginURL, { waitUntil: 'domcontentloaded', timeout });
+        await this.landed(page, timeout);
         if (p.LoginPreClickSelector) {
             await this.clickAndSettle(page, FirstVisible(page, p.LoginPreClickSelector), timeout);
         }
@@ -198,56 +208,66 @@ export class BrowserLoginAccessDriver extends BaseAccessDriver {
         }
     }
 
-    /** Click, and wait for the navigation it may start (a form post) or for the page to go quiet (a script login). */
+    /**
+     * Click, and wait for the navigation it may start (a form post) to land on a real document, past the pages that
+     * stand in for its redirects, or for the page to go quiet (a script login).
+     */
     private async clickAndSettle(page: Page, target: Locator, timeout: number): Promise<void> {
         const navigated = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: OPTIONAL_STEP_TIMEOUT_MS }).catch(() => null);
         await target.click({ timeout });
         await navigated;
+        await this.landed(page, timeout);
         await page.waitForLoadState('networkidle', { timeout: OPTIONAL_STEP_TIMEOUT_MS }).catch(() => undefined);
     }
 
     /**
+     * Wait until the page is a parsed document that is not a stand-in for a redirect ({@link NavigateOnPage}): a
+     * stand-in's own load says nothing about where the sign-on ends. Playwright re-runs the check in each new document.
+     */
+    private async landed(page: Page, timeout: number): Promise<void> {
+        await page
+            .waitForFunction((marker) => document.readyState !== 'loading' && !document.querySelector(`meta[name="${marker}"]`), REDIRECT_STAND_IN_MARKER, { timeout })
+            .catch((error: unknown) => {
+                throw new Error(`${this.Key}: the login's redirects did not finish (at ${page.url()}): ${error instanceof Error ? error.message : String(error)}`);
+            });
+    }
+
+    /**
      * The signed-in context as an artifact: its cookies for the session's origins and (unless turned off) its browser
-     * state, cut to those origins: the cookies that go to their hosts and their own `localStorage`.
+     * state, cut to those origins: the cookies that go to their hosts and their own `localStorage`. A session needs
+     * one or the other: cookies, or (with the browser state kept) `localStorage`.
      */
     private async artifactOf(context: BrowserContext, request: AccessRequest): Promise<AccessArtifact> {
         const state = await context.storageState();
-        const marker = request.Parameters.LoginCookieMarker;
-        if (marker && !state.cookies.some((c) => c.name === marker)) {
-            throw new Error(`${this.Key}: the login did not succeed (no '${marker}' cookie; got ${state.cookies.map((c) => c.name).join(', ') || 'none'})`);
-        }
-        // The browser's cookies in a jar, so the session's cookies are chosen by the same RFC 6265 rules as a form login's.
-        const jar = new CookieJar();
-        for (const c of state.cookies) {
-            const domain = c.domain.replace(/^\./, '');
-            // A host-only cookie names no domain (the jar takes it from the URL, as for a Set-Cookie without one).
-            const cookie = new Cookie({
-                key: c.name,
-                value: c.value,
-                ...(c.domain.startsWith('.') ? { domain } : {}),
-                path: c.path,
-                expires: c.expires > 0 ? new Date(c.expires * 1000) : 'Infinity',
-                secure: c.secure,
-                httpOnly: c.httpOnly,
-                sameSite: c.sameSite.toLowerCase(),
-            });
-            jar.setCookieSync(cookie, `https://${domain}${c.path}`, { ignoreError: true });
-        }
         const origins = SessionOrigins(request);
-        const artifact = CookieSessionArtifact(jar, origins, SessionTtlMs(request), this.Key);
-        if (request.Parameters.LoginStorageState?.toLowerCase() === 'false') {
-            return artifact;
+        const jars = BrowserCookieJars(state.cookies);
+        this.assertCookieMarker(jars, origins, request);
+        const artifact = SessionArtifact(jars, origins, SessionTtlMs(request));
+        const storage = request.Parameters.LoginStorageState?.toLowerCase() === 'false' ? null : SessionStorage(jars, origins, state.origins);
+        const hasLocalStorage = storage?.Origins.some((o) => o.LocalStorage.length > 0) ?? false;
+        if (!artifact.OriginHeaders && !hasLocalStorage) {
+            const what = storage ? 'no cookie and no localStorage' : 'no cookie';
+            throw new Error(`${this.Key}: the login set ${what} for ${origins.join(', ') || 'the source'}; check the login settings and the credential`);
         }
-        const kept = new Set(SessionCookies(jar, origins).map((c) => `${c.domain}|${c.path}|${c.key}`));
-        const storage: SessionStorageState = {
-            Cookies: state.cookies
-                .filter((c) => kept.has(`${c.domain.replace(/^\./, '')}|${c.path}|${c.name}`))
-                .map((c) => ({ Name: c.name, Value: c.value, Domain: c.domain, Path: c.path, Expires: c.expires, HttpOnly: c.httpOnly, Secure: c.secure, SameSite: c.sameSite })),
-            Origins: state.origins
-                .filter((o) => origins.includes(o.origin))
-                .map((o) => ({ Origin: o.origin, LocalStorage: o.localStorage.map((e) => ({ Name: e.name, Value: e.value })) })),
-        };
-        return { ...artifact, Extensions: { [ACCESS_STORAGE_STATE_EXTENSION]: storage } };
+        return storage ? { ...artifact, Extensions: { [ACCESS_STORAGE_STATE_EXTENSION]: storage } } : artifact;
+    }
+
+    /** `LoginCookieMarker` must be among the cookies that go to the session's origins (an identity provider's does not count). */
+    private assertCookieMarker(jars: readonly CookieJar[], origins: readonly string[], request: AccessRequest): void {
+        const marker = request.Parameters.LoginCookieMarker;
+        if (!marker) {
+            return;
+        }
+        const names = [...new Set(origins.flatMap((origin) => OriginCookies(jars, origin).map((c) => c.key)))];
+        if (!names.includes(marker)) {
+            throw new Error(`${this.Key}: the login did not succeed (no '${marker}' cookie for ${origins.join(', ')}; got ${names.join(', ') || 'none'})`);
+        }
+    }
+
+    private assertNotAborted(request: AccessRequest): void {
+        if (request.Signal.aborted) {
+            throw new Error(`${this.Key}: the login was cancelled before it started`);
+        }
     }
 
     private stepTimeout(request: AccessRequest): number {
@@ -280,8 +300,78 @@ function NavigateOnHeaders(redirect: APIResponse): Record<string, string> {
     return { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...(cookies.length > 0 ? { 'set-cookie': cookies.join('\n') } : {}) };
 }
 
-/** A page that navigates on to `target` at once: a new navigation, which the route sees and checks. */
+/**
+ * A page that navigates on to `target` at once: a new navigation, which the route sees and checks. Marked (before its
+ * script) so the driver can tell it from the page the sign-on lands on.
+ */
 function NavigateOnPage(target: string): string {
     const literal = JSON.stringify(target).replace(/</g, '\\u003c');
-    return `<!doctype html><html><head><script>location.replace(${literal});</script></head><body></body></html>`;
+    return `<!doctype html><html><head><meta name="${REDIRECT_STAND_IN_MARKER}"><script>location.replace(${literal});</script></head><body></body></html>`;
+}
+
+/**
+ * The browser's cookies in `tough-cookie` jars, so the session's cookies are chosen by the same RFC 6265 rules as a
+ * form login's. Two jars: one for host-only cookies and one for domain cookies, since a jar keeps one cookie per
+ * domain, path and name, and a browser can hold a host-only `example.com` cookie and a `.example.com` one of the same
+ * name (only the second goes to a subdomain).
+ */
+function BrowserCookieJars(cookies: readonly BrowserCookie[]): CookieJar[] {
+    const hostOnly = new CookieJar();
+    const domainWide = new CookieJar();
+    for (const c of cookies) {
+        const isDomain = c.domain.startsWith('.');
+        const host = isDomain ? c.domain.slice(1) : c.domain;
+        // A host-only cookie names no domain (the jar takes it from the URL, as for a Set-Cookie without one).
+        const cookie = new Cookie({
+            key: c.name,
+            value: c.value,
+            ...(isDomain ? { domain: host } : {}),
+            path: c.path,
+            expires: c.expires > 0 ? new Date(c.expires * 1000) : 'Infinity',
+            secure: c.secure,
+            httpOnly: c.httpOnly,
+            sameSite: c.sameSite.toLowerCase(),
+        });
+        (isDomain ? domainWide : hostOnly).setCookieSync(cookie, `https://${host}${c.path}`, { ignoreError: true });
+    }
+    return [hostOnly, domainWide];
+}
+
+/**
+ * The browser state the artifact keeps: each session origin's own cookies as host-only cookies of its host (so a
+ * domain cookie cannot reach a subdomain outside the session, and same-named cookies of different hosts are both kept;
+ * of two of one host, path and name the host-only one wins), and the session origins' `localStorage`.
+ */
+function SessionStorage(jars: readonly CookieJar[], origins: readonly string[], browserOrigins: Awaited<ReturnType<BrowserContext['storageState']>>['origins']): SessionStorageState {
+    const cookies = new Map<string, SessionStorageCookie>();
+    for (const origin of origins) {
+        const host = new URL(origin).hostname;
+        for (const c of OriginCookies(jars, origin)) {
+            const key = `${host}|${c.path}|${c.key}`;
+            if (!cookies.has(key)) {
+                cookies.set(key, StorageCookie(c, host));
+            }
+        }
+    }
+    return {
+        Cookies: [...cookies.values()],
+        Origins: browserOrigins
+            .filter((o) => origins.includes(o.origin))
+            .map((o) => ({ Origin: o.origin, LocalStorage: o.localStorage.map((e) => ({ Name: e.name, Value: e.value })) })),
+    };
+}
+
+/** A jar's cookie as a host-only cookie of `host`, in the storage state's shape. */
+function StorageCookie(c: Cookie, host: string): SessionStorageCookie {
+    const sameSite = (c.sameSite ?? '').toLowerCase();
+    return {
+        Name: c.key,
+        Value: c.value,
+        Domain: host,
+        Path: c.path ?? '/',
+        Expires: c.expires instanceof Date ? Math.floor(c.expires.getTime() / 1000) : -1,
+        HttpOnly: c.httpOnly,
+        Secure: c.secure,
+        SameSite: sameSite === 'strict' ? 'Strict' : sameSite === 'none' ? 'None' : 'Lax',
+    };
 }

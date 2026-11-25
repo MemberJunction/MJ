@@ -365,25 +365,32 @@ export interface IContentSourceWebsiteConfiguration {
      */
     URLPattern?: string;
     /**
-     * URL prefix used for the in-domain check. When unset, derived as the parent directory of
-     * the seed URL. Override to expand or constrain the crawl boundary (e.g., set to the bare
-     * origin to crawl the whole site).
+     * The crawl boundary for the in-domain check. When unset, derived as the parent directory of
+     * the seed URL. Override to expand or constrain it (e.g., set to the bare origin to crawl the
+     * whole site). A page is inside when it has the same origin (another port or a look-alike host
+     * such as `site.test.evil.com` is not; www/apex and http/https count as one only with
+     * {@link MergeWwwAndScheme}) and its path is the root's path or under it at a `/` boundary
+     * (`/docs` covers `/docs/a`, not `/docs-private`).
      */
     RootURL?: string;
     /**
      * Seed the crawl from the site's sitemaps: those in {@link SitemapURLs}, else the ones robots.txt
      * names, else `/sitemap.xml`. Each in-scope page a sitemap lists is found (unless its `lastmod` is
-     * older than the walk's `Since`) and its links are followed like any other page's. Default false.
+     * older than the walk's `Since`) and its links are followed like any other page's. A sitemap that
+     * robots.txt or a sitemap index names is read only on the start page's own site; an answer that is
+     * HTML is not a sitemap and is ignored. Sitemap pages count toward {@link LoopLimit}. Reading
+     * stops at the walk's deadline and carries on in its next part. Default false.
      */
     UseSitemaps?: boolean;
-    /** Sitemaps to read instead of looking in robots.txt. A sitemap index is followed. */
+    /** Sitemaps to read instead of looking in robots.txt, wherever they are. A sitemap index is followed. */
     SitemapURLs?: string[];
     /** Pause after reading each page, in ms, to be polite to the site. Default 1000. */
     CrawlDelayMs?: number;
     /**
      * The most pages whose links one walk reads (across all its parts). The pages already found when it is reached
-     * are still checked and reported, but their links are not read; dead pages, files and retries do not count.
-     * Unset: no limit.
+     * are still checked and reported, but their links are not read; dead pages, files, retries and pages found to
+     * be duplicates ({@link DedupCanonical} / {@link DedupRedirects}, whose links are not read) do not count.
+     * Unset, or 0 or less: no limit.
      */
     MaxPages?: number;
     /** How long the page renderer may take to load and settle a page, in ms. Default 30000. */
@@ -397,7 +404,9 @@ export interface IContentSourceWebsiteConfiguration {
      * Fetch a page whose links will not be read (one level past {@link MaxDepth}, a sibling path, any page past
      * {@link MaxPages}) to know it is alive before reporting it. Default true: a dead link never becomes an item.
      * `false` reports such pages unfetched, saving the crawl one request per page (Extract fetches each one anyway),
-     * at the cost of dead links becoming items that fail in Extract.
+     * at the cost of dead links becoming items that fail in Extract. Decided page by page, whatever
+     * {@link Concurrency} is; unchecked pages count toward the walk's deadline, and a sitemap page dated at or
+     * before the walk's `Since` is not reported.
      */
     CheckLeafPages?: boolean;
     /**
@@ -437,7 +446,7 @@ export interface IContentSourceWebsiteConfiguration {
     /**
      * Only pages matching one of these are visited and reported; the start page is always visited for its links.
      * Each entry is a substring of the URL, or a regular expression when written `re:<pattern>`. Applies on top of
-     * {@link URLPattern}. Unset: everything in scope.
+     * {@link URLPattern}. A blank `re:` entry is ignored (and logged). Unset: everything in scope.
      */
     IncludePatterns?: string[];
     /**
@@ -456,7 +465,7 @@ export interface IContentSourceRateLimitConfiguration {
     MaxRetries?: number;
     /** The first backoff wait, in ms; it doubles with each retry (with jitter). Default 2000. */
     BackoffMs?: number;
-    /** The longest any one wait may be, in ms. Default 60000. */
+    /** The longest any one wait may be, in ms, and the longest a rate-limited host is paused. Default 60000. */
     MaxBackoffMs?: number;
     /** The most requests a second to one host; a host that rate-limits the crawl is halved, then recovers. Default 10. */
     RequestsPerSecond?: number;

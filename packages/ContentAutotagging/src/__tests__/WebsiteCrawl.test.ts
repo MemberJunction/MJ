@@ -5,7 +5,8 @@
  * A walk stopped at its deadline hands back its frontier and what it has seen; carried on from that token it
  * finds exactly what one uninterrupted walk finds, with nothing reported twice.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { RateLimiter } from '@memberjunction/network-utils';
 import { CrawlFetchers, CrawlOptions, CrawlPage, DecodeCrawlState, EncodeCrawlState, ParseSitemap, WebsiteCrawl } from '../Websites/generic/WebsiteCrawl';
 import { CrawlScope, IsCalendarURL } from '../Websites/generic/CrawlScope';
 
@@ -230,6 +231,7 @@ function siteFetchers(answers: Record<string, Answer | ((attempt: number) => Ans
                 Status: answer.Status ?? 200,
                 ContentType: answer.ContentType,
                 Headers: answer.Headers,
+                ...(answer.Blocked ? { Blocked: true } : {}),
             };
         },
         Text: async () => null,
@@ -511,5 +513,290 @@ describe('crawl traps and lists', () => {
 
     it('refuses an invalid re: pattern, naming it', () => {
         expect(() => new CrawlScope({ ExcludePatterns: ['re:('] })).toThrow(/re:\(/);
+    });
+});
+
+describe('the root a crawl stays under (review #5)', () => {
+    it('is the same origin and the root path or below it, segment by segment', () => {
+        const scope = new CrawlScope();
+        expect(scope.UnderRoot('https://site.test/docs', 'https://site.test/docs')).toBe(true);
+        expect(scope.UnderRoot('https://site.test/docs/a', 'https://site.test/docs')).toBe(true);
+        expect(scope.UnderRoot('https://site.test/docs/a', 'https://site.test/docs/')).toBe(true);
+        expect(scope.UnderRoot('https://site.test/docs-private', 'https://site.test/docs')).toBe(false);
+        expect(scope.UnderRoot('https://site.test.evil.com/docs/a', 'https://site.test/docs')).toBe(false);
+        expect(scope.UnderRoot('https://site.test:8443/docs/a', 'https://site.test/docs')).toBe(false);
+        expect(scope.UnderRoot('https://site.test.evil.com/', 'https://site.test')).toBe(false);
+        expect(scope.UnderRoot('https://site.test/anything', 'https://site.test')).toBe(true);
+        expect(scope.UnderRoot('http://site.test/docs/a', 'https://site.test/docs')).toBe(false);
+    });
+
+    it('with www/apex and http/https merged, still only that site and that path', () => {
+        const scope = new CrawlScope({ MergeWwwAndScheme: true });
+        expect(scope.UnderRoot('http://www.site.test/docs/a', 'https://site.test/docs')).toBe(true);
+        expect(scope.UnderRoot('https://site.test/docs/a', 'https://www.site.test/')).toBe(true);
+        expect(scope.UnderRoot('https://site.test.evil.com/docs/a', 'https://site.test/')).toBe(false);
+        expect(scope.UnderRoot('https://site.test-cdn.com/docs/a', 'https://site.test/')).toBe(false);
+        expect(scope.UnderRoot('https://site.test:8443/docs/a', 'https://site.test/')).toBe(false);
+        expect(scope.UnderRoot('https://www.site.test/docs-private', 'https://site.test/docs/')).toBe(false);
+    });
+
+    it('takes no link on a look-alike host or a look-alike path', async () => {
+        const { found } = await drain(
+            new WebsiteCrawl(
+                options({ MergeWwwAndScheme: true, ...fakeTime() }),
+                siteFetchers({
+                    [at('/docs/start')]: { Links: ['https://site.test.evil.com/docs/x', 'https://site.test:8443/docs/y', '/docs-private/z', '/docs/a'] },
+                    [at('/docs/a')]: {},
+                    'https://site.test.evil.com/docs/x': {},
+                    'https://site.test:8443/docs/y': {},
+                    [at('/docs-private/z')]: {},
+                }),
+            ),
+        );
+        expect(found).toEqual([at('/docs/start'), at('/docs/a')]);
+    });
+
+    it("takes the start page's sibling paths by the same rules, www/apex merged", async () => {
+        const { found } = await drain(
+            new WebsiteCrawl(
+                options({ MaxDepth: 0, SiblingFanOut: true, RootURL: `${ROOT}/a`, MergeWwwAndScheme: true, ...fakeTime() }),
+                siteFetchers({
+                    [at('/docs/start')]: { Links: ['http://www.site.test/docs/b', '/docs-private/c'] },
+                    'http://www.site.test/docs/b': {},
+                    [at('/docs-private/c')]: {},
+                }),
+            ),
+        );
+        expect(found).toEqual([at('/docs/start'), 'http://www.site.test/docs/b']);
+    });
+});
+
+describe('include/exclude nits', () => {
+    it('ignores a blank re: pattern rather than matching every URL', () => {
+        const scope = new CrawlScope({ IncludePatterns: ['re:', 're:   ', '/docs/a'], ExcludePatterns: ['re:'] });
+        expect(scope.MayVisit(at('/docs/a'))).toBe(true);
+        expect(scope.MayVisit(at('/docs/b'))).toBe(false);
+    });
+
+    it('takes a MaxPages of 0 (or less) as no limit, as unset is', async () => {
+        const unset = await drain(new WebsiteCrawl(options({ MaxDepth: 5 }), fetchers()));
+        const zero = await drain(new WebsiteCrawl(options({ MaxDepth: 5, MaxPages: 0 }), fetchers()));
+        const negative = await drain(new WebsiteCrawl(options({ MaxDepth: 5, MaxPages: -1 }), fetchers()));
+        expect(zero.found).toEqual(unset.found);
+        expect(negative.found).toEqual(unset.found);
+    });
+});
+
+describe('an address the SSRF guard refuses (review #6)', () => {
+    it('is dropped: fetched once, never retried, never reported', async () => {
+        const reads: string[] = [];
+        const { found } = await drain(
+            new WebsiteCrawl(
+                options({ ...fakeTime() }),
+                siteFetchers({ [at('/docs/start')]: { Links: ['/docs/internal', '/docs/a'] }, [at('/docs/internal')]: { Status: 0, Blocked: true }, [at('/docs/a')]: {} }, reads),
+            ),
+        );
+        expect(found).toEqual([at('/docs/start'), at('/docs/a')]);
+        expect(reads.filter((r) => r === at('/docs/internal'))).toHaveLength(1);
+    });
+});
+
+/** A crawl whose rate limiter is a spy, to see what it is told. */
+function spiedLimiter(): { limiter: RateLimiter; Crawl: typeof WebsiteCrawl } {
+    const limiter = new RateLimiter({ TokensPerSec: 1000, MinTokensPerSec: 1000 });
+    vi.spyOn(limiter, 'Acquire').mockResolvedValue(undefined);
+    vi.spyOn(limiter, 'ReportSuccess');
+    vi.spyOn(limiter, 'ReportThrottle');
+    class SpiedCrawl extends WebsiteCrawl {
+        protected override CreateRateLimiter(): RateLimiter {
+            return limiter;
+        }
+    }
+    return { limiter, Crawl: SpiedCrawl };
+}
+
+describe('the rate limiter is told the truth (review #7)', () => {
+    it('hears of success only for a real answer: not no answer, a server error, a challenge or a refusal', async () => {
+        const { limiter, Crawl } = spiedLimiter();
+        const base = siteFetchers({
+            [at('/docs/start')]: { Links: ['/docs/down', '/docs/challenged', '/docs/internal', '/docs/gone-quiet'] },
+            [at('/docs/down')]: { Status: 502 },
+            [at('/docs/challenged')]: { Status: 403, Headers: { 'cf-mitigated': 'challenge' } },
+            [at('/docs/internal')]: { Status: 0, Blocked: true },
+        });
+        const quiet: CrawlFetchers = { ...base, Page: async (url) => (url.endsWith('/gone-quiet') ? null : base.Page(url)) };
+        await drain(new Crawl(options({ ...fakeTime() }), quiet));
+        // Only the start page answered for real.
+        expect(limiter.ReportSuccess).toHaveBeenCalledTimes(1);
+    });
+
+    it("never pauses the host longer than MaxBackoffMs, whatever Retry-After asks", async () => {
+        const { limiter, Crawl } = spiedLimiter();
+        await drain(
+            new Crawl(
+                options({ ...fakeTime(), Politeness: { BackoffMs: 1, MaxBackoffMs: 1000, MaxRetries: 1 } }),
+                siteFetchers({ [at('/docs/start')]: { Status: 429, Headers: { 'retry-after': '300' } } }),
+            ),
+        );
+        const asked = vi.mocked(limiter.ReportThrottle).mock.calls.map(([, ms]) => ms);
+        expect(asked.length).toBeGreaterThan(0);
+        expect(asked.every((ms) => ms === 1000)).toBe(true);
+    });
+});
+
+describe('leaf pages, batches and stopping (review #15a/b)', () => {
+    it('with CheckLeafPages off and Concurrency above 1, fetches no leaf page in any batch', async () => {
+        const reads: string[] = [];
+        // The start page's links are a (under the root, followed) and b (a sibling path, not followed): one batch holds
+        // a page to read and a leaf behind it.
+        const { found } = await drain(
+            new WebsiteCrawl(options({ MaxDepth: 1, SiblingFanOut: true, RootURL: `${ROOT}/a`, CheckLeafPages: false, Concurrency: 3 }), fetchers({}, reads)),
+        );
+        expect(reads).toEqual([at('/docs/start'), at('/docs/a')]);
+        expect(found).toEqual([at('/docs/start'), at('/docs/a'), at('/docs/b')]);
+    });
+
+    it('counts unfetched leaf pages toward the deadline, so a leaf-only resumed queue still yields', async () => {
+        const first = await drain(new WebsiteCrawl(options({ MaxDepth: 0, CheckLeafPages: false, Deadline: new Date(0) }), fetchers()));
+        expect(first.found).toEqual([at('/docs/start')]);
+        const second = await drain(new WebsiteCrawl(options({ MaxDepth: 0, CheckLeafPages: false, Deadline: new Date(0) }), fetchers()), first.token);
+        // One leaf per part (Concurrency 1), then the token: not the whole queue past the deadline.
+        expect(second.found).toEqual([at('/docs/a')]);
+        expect(second.token).toBeTruthy();
+    });
+
+    it('does not report an unfetched leaf page its sitemap dates at or before Since', async () => {
+        const text = { 'https://site.test/sitemap.xml': '<urlset><url><loc>https://site.test/docs/b1</loc><lastmod>2025-01-01</lastmod></url></urlset>' };
+        const { found } = await drain(
+            new WebsiteCrawl(options({ MaxDepth: 0, CheckLeafPages: false, UseSitemaps: true, SitemapURLs: ['https://site.test/sitemap.xml'], Since: new Date('2026-01-01') }), fetchers(text)),
+        );
+        expect(found).not.toContain(at('/docs/b1'));
+    });
+
+    it('reports nothing that was in flight when the walk was stopped', async () => {
+        const stop = new AbortController();
+        const base = siteFetchers({ [at('/docs/start')]: { Links: ['/docs/a'] }, [at('/docs/a')]: {} });
+        const stopping: CrawlFetchers = {
+            ...base,
+            Page: async (url) => {
+                if (url.endsWith('/docs/a')) {
+                    stop.abort();
+                }
+                return base.Page(url);
+            },
+        };
+        const { found, token } = await drain(new WebsiteCrawl(options({ ...fakeTime(), Signal: stop.signal }), stopping));
+        expect(found).toEqual([at('/docs/start')]);
+        expect(token).toBeUndefined();
+    });
+});
+
+describe('redirects and duplicates (review #15c)', () => {
+    it('neither reports nor reads a link that redirects off the site or onto an excluded page', async () => {
+        const reads: string[] = [];
+        const { found } = await drain(
+            new WebsiteCrawl(
+                options({ ExcludePatterns: ['/docs/private'], MaxDepth: 2, ...fakeTime() }),
+                siteFetchers(
+                    {
+                        [at('/docs/start')]: { Links: ['/docs/out', '/docs/hidden', '/docs/moved'] },
+                        [at('/docs/out')]: { FinalURL: 'https://elsewhere.test/docs/x', Links: ['https://elsewhere.test/docs/y'] },
+                        [at('/docs/hidden')]: { FinalURL: at('/docs/private'), Links: ['/docs/secret-child'] },
+                        [at('/docs/moved')]: { FinalURL: at('/docs/new') },
+                        [at('/docs/secret-child')]: {},
+                    },
+                    reads,
+                ),
+            ),
+        );
+        expect(found).toEqual([at('/docs/start'), at('/docs/moved')]);
+        expect(reads).not.toContain(at('/docs/secret-child'));
+    });
+
+    it('knows an unchanged (silent) page on an incremental walk, so a page whose canonical names it is a duplicate', async () => {
+        const { found } = await drain(
+            new WebsiteCrawl(
+                options({ DedupCanonical: true, Since: new Date('2026-01-01'), ...fakeTime() }),
+                siteFetchers({
+                    [at('/docs/start')]: { Links: ['/docs/a', '/docs/a-print'] },
+                    [at('/docs/a')]: { Headers: { 'last-modified': 'Wed, 01 Jan 2025 00:00:00 GMT' } },
+                    [at('/docs/a-print')]: { Html: '<link rel="canonical" href="/docs/a">', Headers: { 'last-modified': 'Fri, 01 May 2026 00:00:00 GMT' } },
+                }),
+            ),
+        );
+        expect(found).not.toContain(at('/docs/a-print'));
+    });
+
+    it('does not count a duplicate toward MaxPages', async () => {
+        const { found } = await drain(
+            new WebsiteCrawl(
+                options({ DedupCanonical: true, MaxDepth: 5, MaxPages: 3, ...fakeTime() }),
+                siteFetchers({
+                    [at('/docs/start')]: { Links: ['/docs/a', '/docs/a-copy', '/docs/b'] },
+                    [at('/docs/a')]: {},
+                    [at('/docs/a-copy')]: { Html: '<link rel="canonical" href="/docs/a"><a href="/docs/from-copy">x</a>' },
+                    [at('/docs/b')]: { Links: ['/docs/b1'] },
+                    [at('/docs/b1')]: {},
+                    [at('/docs/from-copy')]: {},
+                }),
+            ),
+        );
+        // start, a and b have their links read (3); a-copy is a duplicate, so neither counted nor read.
+        expect(found).toEqual([at('/docs/start'), at('/docs/a'), at('/docs/b'), at('/docs/b1')]);
+    });
+});
+
+describe('sitemaps stay on the site (review #15d)', () => {
+    function textFetchers(text: Record<string, CrawlPage | string>, reads: string[], pageReads: string[] = []): CrawlFetchers {
+        return { ...fetchers({}, pageReads), Text: async (url) => (reads.push(url), text[url] ?? null) };
+    }
+    const urlset = (...paths: string[]) => `<urlset>${paths.map((p) => `<url><loc>https://site.test${p}</loc></url>`).join('')}</urlset>`;
+
+    it("reads no sitemap robots.txt or an index names on another site, and reads one named twice (with a fragment) once", async () => {
+        const reads: string[] = [];
+        const text = {
+            'https://site.test/robots.txt': 'Sitemap: https://evil.test/sitemap.xml\nSitemap: https://site.test/index.xml\n',
+            'https://site.test/index.xml':
+                '<sitemapindex><sitemap><loc>https://site.test.evil.com/s.xml</loc></sitemap><sitemap><loc>https://site.test/docs.xml#top</loc></sitemap><sitemap><loc>https://site.test/docs.xml</loc></sitemap></sitemapindex>',
+            'https://site.test/docs.xml': urlset('/docs/b1'),
+        };
+        const { found } = await drain(new WebsiteCrawl(options({ UseSitemaps: true, FollowLinks: false }), textFetchers(text, reads)));
+        expect(reads).toEqual(['https://site.test/robots.txt', 'https://site.test/index.xml', 'https://site.test/docs.xml']);
+        expect(found).toEqual([at('/docs/start'), at('/docs/b1')]);
+    });
+
+    it('ignores a sitemap that answers as an HTML page', async () => {
+        const reads: string[] = [];
+        const text = { 'https://site.test/sitemap.xml': { Html: urlset('/docs/b1'), FinalURL: 'https://site.test/sitemap.xml', Status: 200, ContentType: 'text/html' } };
+        const { found } = await drain(new WebsiteCrawl(options({ UseSitemaps: true, SitemapURLs: ['https://site.test/sitemap.xml'], FollowLinks: false }), textFetchers(text, reads)));
+        expect(found).toEqual([at('/docs/start')]);
+    });
+
+    it('stops reading sitemaps at the deadline and carries on in the next part, finding what one walk finds', async () => {
+        const text = { 'https://site.test/one.xml': urlset('/docs/a1'), 'https://site.test/two.xml': urlset('/docs/b1') };
+        const opts = (deadline?: Date) => options({ UseSitemaps: true, SitemapURLs: ['https://site.test/one.xml', 'https://site.test/two.xml'], FollowLinks: false, Deadline: deadline ?? null });
+        const whole = await drain(new WebsiteCrawl(opts(), textFetchers(text, [])));
+
+        const reads: string[] = [];
+        const first = await drain(new WebsiteCrawl(opts(new Date(0)), textFetchers(text, reads)));
+        expect(reads).toEqual(['https://site.test/one.xml']);
+        expect(first.found).toEqual([]);
+        expect(first.token).toBeTruthy();
+        const parts = [...first.found];
+        let token = first.token;
+        for (let i = 0; token && i < 10; i++) {
+            const part = await drain(new WebsiteCrawl(opts(new Date(0)), textFetchers(text, reads)), token);
+            parts.push(...part.found);
+            token = part.token;
+        }
+        expect(parts).toEqual(whole.found);
+        expect(reads.filter((r) => r === 'https://site.test/one.xml')).toHaveLength(1);
+    });
+
+    it('holds sitemap pages to LoopLimit too', async () => {
+        const text = { 'https://site.test/s.xml': urlset('/docs/list?page=1', '/docs/list?page=2', '/docs/list?page=3') };
+        const pageReads: string[] = [];
+        await drain(new WebsiteCrawl(options({ UseSitemaps: true, SitemapURLs: ['https://site.test/s.xml'], LoopLimit: 1, FollowLinks: false }), textFetchers(text, [], pageReads)));
+        expect(pageReads.filter((u) => u.includes('/docs/list'))).toEqual([at('/docs/list?page=1')]);
     });
 });

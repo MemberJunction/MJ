@@ -70,6 +70,11 @@ export const DefaultPipelineTuning: Omit<ResolvedPipelineTuning, 'MaxArchiveMemb
     RetryBackoffMaxMs: 3_600_000,
 };
 
+/** Whether a configured value sets anything: not null, undefined or a blank string. */
+export function IsSetValue(value: unknown): boolean {
+    return value !== undefined && value !== null && !(typeof value === 'string' && value.trim().length === 0);
+}
+
 /**
  * Read a run's tuning, merging one or more configuration objects from lowest precedence to highest
  * (e.g. Content Source Type → Content Source → Run Configuration). An invalid value falls back to its
@@ -83,8 +88,13 @@ export function ResolveTuning(...configurations: (Readonly<Record<string, unknow
         }
         const optionsObj = configuration.Options as Record<string, unknown> | undefined;
         const candidate = (configuration.Tuning ?? optionsObj?.Tuning) as PipelineTuning | undefined;
-        if (candidate && typeof candidate === 'object') {
-            Object.assign(raw, candidate);
+        if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+            // Only what a layer actually sets: a null or blank value leaves the layers below to decide.
+            for (const [key, value] of Object.entries(candidate)) {
+                if (IsSetValue(value)) {
+                    (raw as Record<string, unknown>)[key] = value;
+                }
+            }
         }
     }
     return {

@@ -5,7 +5,7 @@
  */
 
 import { HttpGet, HttpHead } from '@memberjunction/network-utils';
-import { AccessArtifact } from '@memberjunction/content-pipeline-base';
+import { AccessArtifact, AccessHeadersFor } from '@memberjunction/content-pipeline-base';
 
 /** What to fetch. */
 export interface FetchRequest {
@@ -65,14 +65,15 @@ export async function ProbeContentType(request: FetchRequest): Promise<string | 
     }
 }
 
-/** The SSRF guard, the signal, the User-Agent and the session (when it belongs on this URL). */
+/** The SSRF guard, the signal, the User-Agent and the session (when it belongs on this URL): its headers for this URL's origin. */
 function requestOptions(request: FetchRequest, access: AccessArtifact | null | undefined) {
+    const headers = AccessHeadersFor(access, request.URL);
     return {
         ValidateUrl: true,
         StripHeadersOnCrossOriginRedirect: true,
         Signal: request.Signal,
         UserAgent: request.UserAgent,
-        Headers: access?.Headers ? { ...access.Headers } : undefined,
+        Headers: headers,
         Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
     };
 }

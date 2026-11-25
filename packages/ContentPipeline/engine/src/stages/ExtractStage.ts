@@ -20,6 +20,7 @@ import {
     ArchiveBudget,
     BasePageRenderer,
     BasePageRenderPolicy,
+    IsHtmlContentType,
     BasePipelineStage,
     ContentBlock,
     DetectByteSignature,
@@ -507,7 +508,9 @@ export class ExtractStage extends BasePipelineStage {
             }
             throw error;
         }
-        const answer = { Status: 200, ContentType: plain.ContentType, Html: new TextDecoder('utf-8', { fatal: false }).decode(plain.Content) };
+        // Only an HTML answer is decoded for the policy to read: a 20 MB PDF is never turned into a string to be dropped.
+        const html = IsHtmlContentType(plain.ContentType) ? new TextDecoder('utf-8', { fatal: false }).decode(plain.Content) : '';
+        const answer = { Status: 200, ContentType: plain.ContentType, Html: html };
         return policy.RendersAfterPlainFetch(answer, tuning) ? this.render(url, source, access, context) : plain;
     }
 

@@ -118,7 +118,8 @@ export function LooksLikeEmptyPage(html: string, minChars: number = DEFAULT_EMPT
             break;
         }
         i = close + 1;
-        if (name && INVISIBLE_ELEMENTS.has(name)) {
+        // A self-closing tag (`<svg ... />`) has no content to skip.
+        if (name && INVISIBLE_ELEMENTS.has(name) && lower.charAt(close - 1) !== '/') {
             const end = lower.indexOf(`</${name}`, i);
             const endClose = end < 0 ? -1 : lower.indexOf('>', end);
             i = endClose < 0 ? lower.length : endClose + 1;

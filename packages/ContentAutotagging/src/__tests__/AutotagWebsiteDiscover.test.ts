@@ -69,6 +69,7 @@ import { AutotagWebsite } from '../Websites/generic/AutotagWebsite';
 import { CrawlFetchers, CrawlOptions, CrawlPage, ParsedPage, WebsiteCrawl } from '../Websites/generic/WebsiteCrawl';
 import { MAX_SITEMAP_BYTES, ReadStreamText, WebsiteCrawlFetchers } from '../Websites/generic/WebsiteCrawlFetchers';
 import { BasePageRenderer, BasePageRenderPolicy, DiscoverRequest, PageRenderRequest } from '@memberjunction/content-pipeline-base';
+import { SSRFError } from '@memberjunction/network-utils';
 
 /**
  * The driver's Discover over the crawl (5.9): pages through the source's page renderer with the session for
@@ -320,5 +321,180 @@ describe('the crawl fetchers: what is rendered, and what a sitemap may weigh', (
         mockHttpGet.mockResolvedValue({ Data: '<urlset/>', Status: 200, Ok: true, Url: '', Headers: {} });
         await fetchersFor('Always').Text('https://site.test/sitemap.xml');
         expect(mockHttpGet.mock.calls[0][1]).toMatchObject({ MaxResponseBytes: MAX_SITEMAP_BYTES });
+    });
+});
+
+/** A plain answer with its own headers, as `HttpGet` (stream) or `HttpHead` returns it. */
+function answered(status: number, headers: Record<string, string>, body = '') {
+    return { Data: new Response(body).body, Status: status, Ok: status >= 200 && status < 300, Url: '', Headers: { 'content-type': 'text/html', ...headers } };
+}
+
+describe('the crawl fetchers: refusals, rate limits and challenges (review #6, #7)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockHttpHead.mockReset();
+        mockHttpGet.mockReset();
+        renders.length = 0;
+    });
+
+    function fetchersFor(mode: 'Always' | 'WhenEmpty'): WebsiteCrawlFetchers {
+        return new WebsiteCrawlFetchers({
+            HttpOptions: () => ({ ValidateUrl: true }),
+            Renderer: renderer,
+            RenderPolicy: BasePageRenderPolicy.Resolve(mode),
+            RenderAccess: () => ({ Access: null, AccessOrigins: [] }),
+            UserAgent: 'MJ-Test',
+            Signal: new AbortController().signal,
+        });
+    }
+
+    it('never renders an address the SSRF guard refused, and says it was refused', async () => {
+        mockHttpHead.mockRejectedValue(new SSRFError('URL resolves to a private or reserved address and was blocked'));
+        const probed = await fetchersFor('Always').Page('https://internal.test/docs/a');
+        expect(probed?.Blocked).toBe(true);
+
+        mockHttpGet.mockRejectedValue(new SSRFError('URL resolves to a private or reserved address and was blocked'));
+        const plain = await fetchersFor('WhenEmpty').Page('https://internal.test/docs/a');
+        expect(plain?.Blocked).toBe(true);
+        expect(renders).toHaveLength(0);
+    });
+
+    it('in Always mode backs off a HEAD that says 429, 503 with Retry-After, or a challenge, rather than sending a browser', async () => {
+        for (const [status, headers] of [
+            [429, {}],
+            [503, { 'retry-after': '5' }],
+            [403, { 'cf-mitigated': 'challenge' }],
+        ] as const) {
+            mockHttpHead.mockResolvedValueOnce({ Ok: false, Status: status, Url: '', Headers: headers });
+            const page = await fetchersFor('Always').Page('https://site.test/docs/a');
+            expect(page?.Status).toBe(status);
+        }
+        expect(renders).toHaveLength(0);
+        // A server that does not answer HEAD (405) is rendered as before.
+        mockHttpHead.mockResolvedValueOnce({ Ok: false, Status: 405, Url: '', Headers: {} });
+        await fetchersFor('Always').Page('https://site.test/docs/a');
+        expect(renders).toHaveLength(1);
+    });
+
+    it('in WhenEmpty mode backs off a plain fetch the host rate-limited, rather than rendering it', async () => {
+        mockHttpGet.mockResolvedValue(answered(503, { 'retry-after': '5' }));
+        const page = await fetchersFor('WhenEmpty').Page('https://site.test/docs/a');
+        expect(renders).toHaveLength(0);
+        expect(page?.Status).toBe(503);
+    });
+
+    it('carries a challenge onto a render the browser could not get past either, not onto one it could', async () => {
+        mockHttpGet.mockResolvedValue(answered(403, { 'cf-mitigated': 'challenge', 'retry-after': '7' }));
+        const walled = await fetchersFor('WhenEmpty').Page('https://site.test/docs/walled'); // the fake renderer gets 404 here
+        expect(renders).toHaveLength(1);
+        expect(walled?.Headers).toEqual({ 'cf-mitigated': 'challenge', 'retry-after': '7' });
+
+        const passed = await fetchersFor('WhenEmpty').Page('https://site.test/docs/a'); // renders 200
+        expect(passed?.Status).toBe(200);
+        expect(passed?.Headers?.['cf-mitigated']).toBeUndefined();
+    });
+});
+
+describe('AutotagWebsite.Discover: each walk its own session (review #8)', () => {
+    const SITES: Record<string, string> = {
+        'https://a.test/docs/start': '<a href="/docs/x">x</a>',
+        'https://a.test/docs/x': '',
+        'https://b.test/docs/start': '<a href="/docs/y">y</a>',
+        'https://b.test/docs/y': '',
+    };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockHttpGet.mockImplementation(async (url: string) =>
+            SITES[url] === undefined ? answered(404, {}) : answered(200, {}, `<html><body>${SITES[url]}</body></html>`),
+        );
+    });
+
+    function plain(url: string, access: DiscoverRequest['Access']): DiscoverRequest {
+        return request({ URL: url, Configuration: { Website: { MaxDepth: 1, CrawlDelayMs: 0 } }, Access: access });
+    }
+
+    it('keeps the SSRF guard and its own session on every request, however two walks on one instance interleave', async () => {
+        const driver = new AutotagWebsite();
+        const first = driver.Discover(plain('https://a.test/docs/start', { Headers: { Authorization: 'A' } })) as AsyncGenerator<{ URL: string }, unknown>;
+        const second = driver.Discover(plain('https://b.test/docs/start', { Headers: { Authorization: 'B' } })) as AsyncGenerator<{ URL: string }, unknown>;
+        await first.next();
+        for await (const _ of second) {
+            /* drain the second walk while the first is part-way through */
+        }
+        for await (const _ of first) {
+            /* finish the first */
+        }
+        const calls = mockHttpGet.mock.calls as [string, { ValidateUrl?: boolean; Headers?: Record<string, string> }][];
+        expect(calls.map(([url]) => url)).toContain('https://a.test/docs/x');
+        for (const [url, options] of calls) {
+            expect(options.ValidateUrl).toBe(true);
+            expect(options.Headers?.Authorization).toBe(url.startsWith('https://a.test') ? 'A' : 'B');
+        }
+    });
+
+    it("sends a session's per-origin headers (a login's cookies) to that origin only", async () => {
+        const access = { Headers: { 'X-Key': '1' }, OriginHeaders: { 'https://a.test': { Cookie: 'sid=a' }, 'https://other.test': { Cookie: 'sid=other' } } };
+        for await (const _ of new AutotagWebsite().Discover(plain('https://a.test/docs/start', access)) as AsyncGenerator<unknown, unknown>) {
+            /* drain */
+        }
+        const [, options] = mockHttpGet.mock.calls[0] as [string, { Headers?: Record<string, string> }];
+        expect(options.Headers).toEqual({ 'X-Key': '1', Cookie: 'sid=a' });
+    });
+});
+
+describe('AutotagWebsite.Discover: the crawl settings rank as the layers do (review #9)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockHttpHead.mockReset();
+        mockHttpGet.mockReset();
+        renders.length = 0;
+        vi.spyOn(BasePageRenderer, 'Resolve').mockImplementation((key: string) => (key === 'FakeRenderer' ? renderer : null));
+    });
+
+    const DEPTH_0 = ['https://site.test/docs/start', 'https://site.test/docs/a', 'https://site.test/docs/b'];
+    const DEPTH_1 = [...DEPTH_0, 'https://site.test/docs/a1'];
+
+    it("ranks the source's Configuration.Website above its settings (SourceSpecificConfiguration)", async () => {
+        const { found } = await walk(
+            request({
+                Configuration: { PageRenderer: 'FakeRenderer', Website: { MaxDepth: 0, CrawlDelayMs: 0 }, SourceSpecificConfiguration: { MaxDepth: '2' } },
+                Parameters: { MaxDepth: '2' },
+            }),
+        );
+        expect(found).toEqual(DEPTH_0);
+    });
+
+    it("ranks the run's Website above the source's settings", async () => {
+        const { found } = await walk(
+            request({
+                Configuration: { PageRenderer: 'FakeRenderer', Website: { CrawlDelayMs: 0 }, SourceSpecificConfiguration: { MaxDepth: '2' } },
+                Parameters: { MaxDepth: '2' },
+                RunConfiguration: { Website: { MaxDepth: 0 } },
+            }),
+        );
+        expect(found).toEqual(DEPTH_0);
+    });
+
+    it("ranks the source's settings above the source type's Website", async () => {
+        const { found } = await walk(
+            request({
+                Configuration: { PageRenderer: 'FakeRenderer', Website: { CrawlDelayMs: 0 }, SourceSpecificConfiguration: { MaxDepth: '1' } },
+                Parameters: { MaxDepth: '1' },
+                TypeConfiguration: { Website: { MaxDepth: 0 } },
+            }),
+        );
+        expect(found).toEqual(DEPTH_1);
+    });
+
+    it("ranks a source type's declared default (filled into Parameters) lowest of all", async () => {
+        const { found } = await walk(
+            request({
+                Configuration: { PageRenderer: 'FakeRenderer', Website: { CrawlDelayMs: 0 }, SourceSpecificConfiguration: {} },
+                Parameters: { MaxDepth: '2' },
+                TypeConfiguration: { Website: { MaxDepth: 0 } },
+            }),
+        );
+        expect(found).toEqual(DEPTH_0);
     });
 });

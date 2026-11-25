@@ -60,6 +60,7 @@ describe('reading delimited text', () => {
     });
 
     it('reads tab-separated text and drops empty lines', () => {
+        expect(ParseDelimited('a,b\n1,2\n3,4', ',', 1)).toEqual([['a', 'b']]);
         expect(ParseDelimited('a\tb\n\n1\t2', '\t')).toEqual([
             ['a', 'b'],
             ['1', '2'],
