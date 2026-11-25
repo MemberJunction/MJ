@@ -5,10 +5,22 @@
       "ParentID": null,
       "IsActive": true,
       "UseAuditLog": true,
-      "Description": "Grants permission to temporarily view the application as another active non-system user via a short-lived scoped API key. Granted to no roles by default; an administrator must explicitly assign an Allow grant in MJ: Authorization Roles."
+      "Description": "Grants permission to temporarily view the application in server-enforced Read-Only ('View As User') mode as an eligible non-privileged user when MJ_ENABLE_USER_IMPERSONATION is also enabled on the server. Granted to zero roles by default."
     },
     "primaryKey": {
       "ID": "062370F4-DAEC-4E5E-BD0A-4AF2A28968EE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "User Impersonation: Act As (Allow Writes)",
+      "ParentID": "@lookup:MJ: Authorizations.Name=User Impersonation",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants optional write-enabled ('Act As') impersonation for non-production QA/Dev troubleshooting ONLY when MJ_ENABLE_USER_IMPERSONATION=true AND MJ_USER_IMPERSONATION_ALLOW_WRITES=true AND the caller holds an explicit direct Allow grant on this authorization (never inherited from parent 'User Impersonation'). Granted to zero roles by default."
+    },
+    "primaryKey": {
+      "ID": "C0D0BBD6-74B8-4CE3-ADF6-4081358EE0B9"
     }
   }
 ]

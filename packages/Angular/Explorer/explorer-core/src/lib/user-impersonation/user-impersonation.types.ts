@@ -1,8 +1,15 @@
 import { InjectionToken } from '@angular/core';
 import type { UserInfo } from '@memberjunction/core';
 
-/** Canonical `MJ: Authorizations` name required to impersonate another user. */
+/** Canonical `MJ: Authorizations` name required for Read-Only (`ViewAs`) user impersonation. */
 export const MJ_USER_IMPERSONATION_AUTHORIZATION_NAME = 'User Impersonation';
+
+/** Canonical child `MJ: Authorizations` name required for optional write-enabled (`ActAs`) impersonation. */
+export const MJ_USER_IMPERSONATION_WRITE_AUTHORIZATION_NAME =
+    'User Impersonation: Act As (Allow Writes)';
+
+/** Impersonation mode: `'ViewAs'` (server-enforced Read-Only default) or `'ActAs'` (dual-gated writes). */
+export type MJImpersonationMode = 'ViewAs' | 'ActAs';
 
 /** Semantic badge tones rendered on app-enriched candidates and quick presets. */
 export type MJImpersonationBadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'brand';
@@ -99,9 +106,14 @@ export interface MJImpersonationActorIdentity {
 /** Observable state emitted by {@link MJUserImpersonationService}. */
 export interface MJImpersonationState {
     readonly canImpersonate: boolean;
+    readonly canImpersonateWithWrites: boolean;
     readonly activeTarget: MJImpersonationCandidate | null;
+    readonly mode: MJImpersonationMode;
+    readonly readOnly: boolean;
     readonly apiKeyId: string | null;
     readonly expiresAt: string | null;
+    readonly defaultTtlMinutes: number;
+    readonly maxTtlMinutes: number;
     readonly switching: boolean;
     readonly errorMessage: string | null;
     readonly actorIdentity: MJImpersonationActorIdentity | null;
@@ -117,6 +129,7 @@ export interface MJImpersonationActionResult {
 export interface MJImpersonationProviderLike {
     readonly CurrentUser?: UserInfo | null;
     readonly ConfigData?: {
+        readonly Token?: string;
         readonly URL?: string;
         readonly WSURL?: string;
         readonly MJCoreSchemaName?: string;

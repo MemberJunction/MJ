@@ -3,6 +3,7 @@ import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHt
 import { Disposable } from 'graphql-ws';
 import { Server } from 'http';
 import { enableIntrospection } from '../config.js';
+import { CreateImpersonationApolloPlugin } from '../auth/impersonationGuard.js';
 import { AppContext } from '../types.js';
 import { Metadata } from '@memberjunction/core';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
@@ -75,10 +76,11 @@ const integrationOperationTracer: ApolloServerPlugin = {
 const buildApolloServer = (
   configOverride: ApolloServerOptions<AppContext>,
   { httpServer, serverCleanup }: { httpServer: Server; serverCleanup: Disposable },
-  additionalPlugins?: ApolloServerPlugin[]
+  additionalPlugins?: ApolloServerPlugin<AppContext>[]
 ) => {
-  const builtInPlugins: ApolloServerPlugin[] = [
+  const builtInPlugins: ApolloServerPlugin<AppContext>[] = [
     ApolloServerPluginDrainHttpServer({ httpServer }),
+    CreateImpersonationApolloPlugin(),
     integrationOperationTracer,
     {
       async serverWillStart() {
@@ -91,11 +93,11 @@ const buildApolloServer = (
     }
   ];
 
-  const allPlugins = additionalPlugins
+  const allPlugins: ApolloServerPlugin<AppContext>[] = additionalPlugins
     ? [...builtInPlugins, ...additionalPlugins]
     : builtInPlugins;
 
-  return new ApolloServer({
+  return new ApolloServer<AppContext>({
     csrfPrevention: true,
     cache: 'bounded',
     plugins: allPlugins,

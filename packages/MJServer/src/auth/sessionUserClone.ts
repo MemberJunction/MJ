@@ -23,6 +23,7 @@
  * catch precisely that, because dropping a RESTRICTING context fails open.
  */
 import { Metadata, UserInfo } from '@memberjunction/core';
+import { CopyImpersonationSessionToClone } from './impersonationGuard.js';
 
 /**
  * Returns a fresh UserInfo carrying the same identity, fields, roles, and all
@@ -47,5 +48,6 @@ export function CloneUserForSessionContext(user: UserInfo): UserInfo {
   clone.AnonymousVisitorID = user.AnonymousVisitorID;
   clone.APIKeyActingContext = user.APIKeyActingContext;
   clone.APIKeyRowFilters = user.APIKeyRowFilters;
+  CopyImpersonationSessionToClone(user, clone);
   return clone;
 }

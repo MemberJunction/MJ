@@ -14,6 +14,7 @@ import type { MJImpersonationState } from './user-impersonation.types';
 /**
  * Compact persistent shell banner rendered whenever the Explorer session is actively
  * impersonating another user via {@link MJUserImpersonationService}.
+ * Surfaces `[Read-Only]` vs high-visibility `[Write Mode Enabled]` (`ActAs`) clearly.
  */
 @Component({
     selector: 'mj-user-impersonation-banner',
@@ -21,14 +22,27 @@ import type { MJImpersonationState } from './user-impersonation.types';
     imports: [MJButtonDirective],
     template: `
         @if (State.activeTarget; as target) {
-            <div class="impersonation-banner" role="status" aria-live="polite">
+            <div
+                class="impersonation-banner"
+                [class.is-write-mode]="!State.readOnly"
+                role="status"
+                aria-live="polite">
                 <div class="impersonation-banner-info">
-                    <i class="fa-solid fa-masks-theater impersonation-banner-icon" aria-hidden="true"></i>
+                    <i
+                        [class]="State.readOnly ? 'fa-solid fa-masks-theater impersonation-banner-icon' : 'fa-solid fa-triangle-exclamation impersonation-banner-icon'"
+                        aria-hidden="true"></i>
                     <span class="impersonation-banner-text">
-                        Viewing as <strong>{{ target.name }}</strong>
+                        @if (State.readOnly) {
+                            Viewing as <strong>{{ target.name }}</strong>
+                        } @else {
+                            Acting as <strong>{{ target.name }}</strong>
+                        }
                         @if (target.email) {
                             <span class="impersonation-banner-email">({{ target.email }})</span>
                         }
+                        <span class="impersonation-banner-mode-pill">
+                            {{ State.readOnly ? '[Read-Only]' : '[Write Mode Enabled]' }}
+                        </span>
                         @if (State.actorIdentity?.email) {
                             <span class="impersonation-banner-actor">
                                 · Real session: {{ State.actorIdentity?.email }}
@@ -81,6 +95,12 @@ import type { MJImpersonationState } from './user-impersonation.types';
             font-size: 13px;
         }
 
+        .impersonation-banner.is-write-mode {
+            background: var(--mj-status-error-bg);
+            color: var(--mj-status-error-text);
+            border-bottom-color: var(--mj-status-error-border);
+        }
+
         .impersonation-banner-info {
             display: flex;
             align-items: center;
@@ -95,6 +115,13 @@ import type { MJImpersonationState } from './user-impersonation.types';
 
         .impersonation-banner-text {
             line-height: 1.35;
+        }
+
+        .impersonation-banner-mode-pill {
+            display: inline-block;
+            margin-left: 6px;
+            font-weight: 700;
+            font-size: 12px;
         }
 
         .impersonation-banner-email,

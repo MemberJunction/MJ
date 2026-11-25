@@ -1,8 +1,9 @@
-import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver, AuthorizationError } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, DatasetItemFilterType, DatasetItemResultType, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { GetImpersonationSession, IsEntityForbiddenDuringImpersonation } from '../auth/impersonationGuard.js';
 
 @ObjectType()
 export class DatasetResultType {
@@ -81,9 +82,20 @@ export abstract class DatasetResolverBase extends ResolverBase {
     items: DatasetItemResultType[],
     provider: DatabaseProviderBase,
     user: UserInfo,
+    datasetName?: string,
   ): Promise<DatasetItemResultType[]> {
+    const isImpersonating = GetImpersonationSession(user) !== null;
+    const isSystemMetadataDataset = (datasetName ?? '').trim().toLowerCase() === 'mj_metadata';
     return Promise.all(
       items.map(async (item) => {
+        if (isImpersonating && IsEntityForbiddenDuringImpersonation(item.EntityName, user)) {
+          if (!isSystemMetadataDataset) {
+            throw new AuthorizationError(
+              `Dataset item '${item.EntityName}' is prohibited during user impersonation sessions.`
+            );
+          }
+          return { ...item, Results: [] };
+        }
         const entity = provider.EntityByName(item.EntityName);
         if (!item.Results?.length || !entity?.EncryptedFields.some((field) => !field.AllowDecryptInAPI)) {
           return item;
@@ -166,7 +178,7 @@ export class DatasetResolverExtended extends DatasetResolverBase {
           Success: result.Success,
           Status: result.Status,
           LatestUpdateDate: result.LatestUpdateDate,
-          Results: this.SerializeDatasetItems(await this.ProtectEncryptedFields(result.Results, md, user)),
+          Results: this.SerializeDatasetItems(await this.ProtectEncryptedFields(result.Results, md, user, DatasetName)),
         };
       } else {
         throw new Error('Error retrieving Dataset: ' + DatasetName);

@@ -1,9 +1,11 @@
-import { CompositeKey, DatabaseProviderBase } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
+import { GetImpersonationSession } from '../auth/impersonationGuard.js';
 
 @InputType()
 export class EntityRecordNameInput {
@@ -85,6 +87,34 @@ export class EntityRecordNameResolver extends ResolverBase {
     const e = md.Entities.find((e) => e.Name === EntityName);
     if (e) {
       const contextUser = userPayload ? this.GetUserFromPayload(userPayload) : undefined;
+      if (
+        contextUser &&
+        GetImpersonationSession(userPayload) &&
+        (e.Name === 'MJ: Conversations' || e.Name === 'MJ: Conversation Details')
+      ) {
+        const idPair = pk.KeyValuePairs.find((kv) => kv.FieldName.toLowerCase() === 'id');
+        const idValue = idPair?.Value ? String(idPair.Value).trim() : '';
+        const rv = RunView.FromMetadataProvider(md);
+        const visRes = await rv.RunView<{ ID: string }>(
+          {
+            EntityName: e.Name,
+            ExtraFilter: `ID = '${EscapeSQLString(idValue)}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+          },
+          contextUser
+        );
+        if (!visRes.Success || !visRes.Results?.length) {
+          return {
+            Success: false,
+            Status: `Name for record, or record ${pk.ToString()} itself not found, could be an access issue`,
+            CompositeKey: pk,
+            EntityName,
+          };
+        }
+      }
       // The acting user is what field- and row-level security are applied for.
       const recordName = contextUser ? await md.GetEntityRecordName(e.Name, pk, contextUser) : '';
       if (recordName) return { Success: true, Status: 'OK', CompositeKey: pk, RecordName: recordName, EntityName };

@@ -64,6 +64,11 @@ import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { RefusalExtensions } from './refusalExtensions.js';
 import { AssertAPIKeyScopeForRequest } from '../auth/APIKeyRequestScope.js';
+import {
+  GetImpersonationSession,
+  IMPERSONATION_FORBIDDEN_ENTITY_NAMES,
+  IsEntityForbiddenDuringImpersonation,
+} from '../auth/impersonationGuard.js';
 import sql from 'mssql';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
@@ -354,10 +359,57 @@ export class ResolverBase {
       ArtifactID?: string | null;
       CollectionID?: string | null;
       ArtifactVersionID?: string | null;
+      ConversationID?: string | null;
+      AnchorType?: string | null;
+      UserID?: string | null;
     },
     contextUser?: UserInfo,
     provider?: IMetadataProvider
   ): Promise<boolean> {
+    const impersonationSession = GetImpersonationSession(contextUser);
+    if (impersonationSession) {
+      if (IsEntityForbiddenDuringImpersonation(entityName, contextUser)) {
+        return false;
+      }
+      if (entityName === 'MJ: Conversations') {
+        if (
+          !dataObject.AnchorType &&
+          (!dataObject.UserID || !UUIDsEqual(dataObject.UserID, impersonationSession.targetUserId))
+        ) {
+          return false;
+        }
+      } else if (entityName === 'MJ: Conversation Details') {
+        const convId = typeof dataObject.ConversationID === 'string' ? dataObject.ConversationID.trim() : '';
+        if (!IsValidUUID(convId)) {
+          return false;
+        }
+        const aclProvider = provider ?? contextUser?.OwningProvider ?? Metadata.Provider;
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!aclProvider || !systemUser) {
+          return false;
+        }
+        const rv = RunView.FromMetadataProvider(aclProvider);
+        const convRes = await rv.RunView<{ ID: string; UserID?: string | null; AnchorType?: string | null }>(
+          {
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: `ID='${EscapeSQLString(convId)}'`,
+            Fields: ['ID', 'UserID', 'AnchorType'],
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+          },
+          systemUser
+        );
+        const parentConv = convRes.Success ? convRes.Results?.[0] : undefined;
+        if (
+          !parentConv ||
+          (!parentConv.AnchorType &&
+            (!parentConv.UserID || !UUIDsEqual(parentConv.UserID, impersonationSession.targetUserId)))
+        ) {
+          return false;
+        }
+      }
+    }
+
     if (
       entityName === 'MJ: Artifact Working States' ||
       entityName === 'MJ: Artifact Guest Share Links'
@@ -619,6 +671,23 @@ export class ResolverBase {
     }
     if (entityName === 'MJ: Artifact Working States') {
       return [];
+    }
+    if (GetImpersonationSession(contextUser)) {
+      if (IsEntityForbiddenDuringImpersonation(entityName, contextUser)) {
+        return [];
+      }
+      if (entityName === 'MJ: Conversations' || entityName === 'MJ: Conversation Details') {
+        const permittedRows: typeof dataObjectArray = [];
+        for (let i = 0; i < dataObjectArray.length; i++) {
+          if (await this.canMapEntityRecordForUser(entityName, dataObjectArray[i], contextUser, provider)) {
+            permittedRows.push(dataObjectArray[i]);
+          }
+        }
+        if (permittedRows.length === 0) {
+          return [];
+        }
+        dataObjectArray = permittedRows;
+      }
     }
     const isGuestShareLinks = entityName === 'MJ: Artifact Guest Share Links';
     let isSystem = false;
@@ -1318,6 +1387,12 @@ export class ResolverBase {
         throw new Error(`User ${userPayload.email} not found in metadata`);
       }
 
+      if (GetImpersonationSession(userPayload) && IsEntityForbiddenDuringImpersonation(entityInfo.Name, userInfo)) {
+        throw new AuthorizationError(
+          `Access to '${entityInfo.Name}' is prohibited during user impersonation sessions.`
+        );
+      }
+
       const userPermissions = entityInfo.GetUserPermisions(userInfo);
       if (!userPermissions.CanRead) {
         throw new Error(`User ${userPayload.email} does not have read permissions on ${entityInfo.Name}`);
@@ -1414,6 +1489,51 @@ export class ResolverBase {
     }
 
     ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, provider?.Entities ?? [], dialect, user, options);
+    this.assertClauseSubqueriesAllowedForImpersonation(clause, dialect, provider, user, label);
+  }
+
+  /**
+   * Blocks SQL subquery smuggling (e.g. `ExtraFilter: "EXISTS (SELECT 1 FROM __mj.vwCredentials ...)"`)
+   * against sensitive entities during user impersonation sessions, even if the target user's role
+   * otherwise holds unscoped `CanRead` on that entity.
+   */
+  private assertClauseSubqueriesAllowedForImpersonation(
+    clause: string,
+    dialect: SQLParserDialect,
+    provider: IMetadataProvider | undefined,
+    user: UserInfo | undefined,
+    label: string
+  ): void {
+    if (!GetImpersonationSession(user) || !/\bselect\b/i.test(clause)) {
+      return;
+    }
+    const wrapped = `SELECT 1 WHERE (${clause})`;
+    const parsed = StrictFragmentValidator.ValidateReadOnlyStatement(wrapped, dialect, { CollectReads: true });
+    if (!parsed.IsValid || !parsed.Reads) {
+      throw new Error(`Invalid ${label}: subquery rejected under user impersonation`);
+    }
+    const allowed = this.entityBaseViewAllowList(provider);
+    for (const relation of parsed.Reads.Relations) {
+      if (relation.IsCTEReference) continue;
+      this.assertRelationNotForbiddenForImpersonation(allowed, relation, user, label);
+    }
+  }
+
+  private assertRelationNotForbiddenForImpersonation(
+    allowed: EntityBaseViewAllowList,
+    relation: StrictStatementReads['Relations'][number],
+    user: UserInfo | undefined,
+    label: string
+  ): void {
+    if (!GetImpersonationSession(user)) {
+      return;
+    }
+    const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+    if (entity && IsEntityForbiddenDuringImpersonation(entity.Name, user)) {
+      throw new Error(
+        `Invalid ${label}: reading '${entity.Name}' is prohibited during user impersonation sessions`
+      );
+    }
   }
 
   /**
@@ -1453,6 +1573,11 @@ export class ResolverBase {
     for (const relation of reads.Relations) {
       if (relation.IsCTEReference) continue;
       const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+      if (entity && GetImpersonationSession(user) && IsEntityForbiddenDuringImpersonation(entity.Name, user)) {
+        throw new Error(
+          `Invalid ${label}: reading '${entity.Name}' is prohibited during user impersonation sessions`
+        );
+      }
       if (entity) this.assertUnscopedRead(entity, user, label);
     }
   }

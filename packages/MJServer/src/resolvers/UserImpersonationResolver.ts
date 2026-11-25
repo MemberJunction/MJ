@@ -1,9 +1,7 @@
 import { GetAPIKeyEngine, type APIKeyEngine } from '@memberjunction/api-keys';
 import {
-    AuthorizationEvaluator,
     AuthorizationInfo,
     AuthorizationRoleInfo,
-    AuthorizationRoleType,
     LogError,
     RunView,
     WellKnownUserSource,
@@ -11,13 +9,14 @@ import {
     type UserInfo,
 } from '@memberjunction/core';
 import type {
+    MJAPIKeyApplicationEntity,
     MJAPIKeyEntity,
     MJAPIKeyScopeEntity,
     MJAuditLogEntity,
 } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     EscapeSQLString,
-    IndexByUUID,
     IsValidUUID,
     NormalizeUUID,
     UUIDsEqual,
@@ -33,26 +32,47 @@ import {
     Query,
     Resolver,
 } from 'type-graphql';
+import {
+    BuildActorImpersonationKeyLikePattern,
+    BuildImpersonationKeyLabel,
+    DoRolesHoldImpersonationReadAuthorization,
+    DoRolesHoldImpersonationWriteAuthorization,
+    EvaluateTargetImpersonationEligibility,
+    GetImpersonationSession,
+    IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES,
+    IMPERSONATION_ENTITY_DENY_SCOPE_PATHS,
+    IMPERSONATION_READ_ONLY_ALLOWED_SCOPES,
+    ParseImpersonationKeyLabel,
+    USER_IMPERSONATION_AUTHORIZATION_NAME,
+    USER_IMPERSONATION_KEY_LABEL_PREFIX,
+    USER_IMPERSONATION_KEY_LABEL_V1_PREFIX,
+    USER_IMPERSONATION_WRITE_AUTHORIZATION_NAME,
+    type ImpersonationMode,
+} from '../auth/impersonationGuard.js';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
+import {
+    ClampUserImpersonationTtlMinutes,
+    IsUserImpersonationEnabled,
+    IsUserImpersonationWritesEnabled,
+    ResolveUserImpersonationConfig,
+    USER_IMPERSONATION_DEFAULT_TTL_MINUTES,
+    USER_IMPERSONATION_MAX_TTL_MINUTES,
+    USER_IMPERSONATION_MIN_TTL_MINUTES,
+} from '../userImpersonationConfigUnits.js';
 import { GetReadWriteProvider } from '../util.js';
 
-/** Canonical `MJ: Authorizations` name required to impersonate another user. Granted to nobody by default. */
-export const USER_IMPERSONATION_AUTHORIZATION_NAME = 'User Impersonation';
-
-/** Label prefix stamped onto every temporary API key minted by {@link UserImpersonationResolver}. */
-export const USER_IMPERSONATION_KEY_LABEL_PREFIX = 'MJ-Impersonation:';
-
-/** Default lifetime (minutes) for temporary impersonation API keys (2 hours). */
-export const USER_IMPERSONATION_DEFAULT_TTL_MINUTES = 120;
-
-/** Minimum allowed lifetime (minutes) for temporary impersonation API keys. */
-export const USER_IMPERSONATION_MIN_TTL_MINUTES = 5;
-
-/** Maximum allowed lifetime (minutes) for temporary impersonation API keys (4 hours). */
-export const USER_IMPERSONATION_MAX_TTL_MINUTES = 240;
+export {
+    USER_IMPERSONATION_AUTHORIZATION_NAME,
+    USER_IMPERSONATION_WRITE_AUTHORIZATION_NAME,
+    USER_IMPERSONATION_KEY_LABEL_PREFIX,
+    USER_IMPERSONATION_KEY_LABEL_V1_PREFIX,
+    USER_IMPERSONATION_MIN_TTL_MINUTES,
+    USER_IMPERSONATION_DEFAULT_TTL_MINUTES,
+    USER_IMPERSONATION_MAX_TTL_MINUTES,
+};
 
 /** Default page size returned by `MJListImpersonatableUsers`. */
 export const USER_IMPERSONATION_DEFAULT_LIMIT = 100;
@@ -67,7 +87,14 @@ export const USER_IMPERSONATION_AUDIT_LOG_TYPES = {
     Denied: 'User Impersonation Denied',
 } as const;
 
-const MAX_KEY_LABEL_LENGTH = 240;
+/**
+ * Comma-separated glob pattern attached as `Priority = 1000, IsDeny = true` on `MJ: API Key Scopes`
+ * (`view:run`, `entity:read`, `entity:create`, `entity:update`, `entity:delete`, `entity:merge`)
+ * so `APIKeyEngine` denies sensitive entities at the key-scope tier in addition to `MJServer`'s
+ * `PreRunView`/`PreSave`/`PreDelete`/`ResolverBase` data-layer isolation.
+ */
+export const IMPERSONATION_SENSITIVE_ENTITY_DENY_PATTERN =
+    'MJ: API Key*,MJ: Credential*,MJ: AI *Credential*,MJ: Encryption*,MJ: O Auth*,MJ: Audit Log*,MJ: Users,MJ: Roles,MJ: User Roles,MJ: Authorization*,MJ: Entity *Permissions,MJ: Authentication Providers,MJ: Magic Link*,MJ: Artifact Guest Share Links';
 
 interface UserQueryRow {
     ID: string;
@@ -82,6 +109,7 @@ interface UserQueryRow {
 
 interface UserRoleQueryRow {
     UserID: string;
+    RoleID?: string | null;
     Role: string | null;
 }
 
@@ -95,6 +123,21 @@ interface ApiKeyLabelRow {
 interface AuditLogTypeRow {
     ID: string;
     Name: string | null;
+}
+
+interface AuthorizationQueryRow {
+    ID: string;
+    Name: string | null;
+    ParentID?: string | null;
+    IsActive?: boolean | null;
+    UseAuditLog?: boolean | null;
+}
+
+interface AuthorizationRoleQueryRow {
+    ID: string;
+    AuthorizationID: string;
+    RoleID: string;
+    Type: string;
 }
 
 interface ImpersonationCallerAuthorization {
@@ -111,7 +154,7 @@ interface ImpersonationCallerAuthorization {
  *
  * Strictly fails closed:
  * - Never auto-allows `Owner`, `Administrator`, or `Developer` without an explicit `MJ: Authorization Roles` grant.
- * - Any `Deny` on the `User Impersonation` row itself immediately rejects, even if an ancestor grants `Allow`.
+ * - Any `Deny` on the `User Impersonation` row or ancestor immediately rejects.
  * - Inactive authorization rows are never honored.
  */
 export function EvaluateUserImpersonationAuthorization(
@@ -121,92 +164,45 @@ export function EvaluateUserImpersonationAuthorization(
     if (!user) {
         return { Allowed: false, Reason: 'An authenticated user session is required.' };
     }
-    if (IsScopeLimitedPrincipal(user)) {
-        return { Allowed: false, Reason: 'Scope-limited sessions are not permitted to impersonate users.' };
+    if (IsScopeLimitedPrincipal(user) || GetImpersonationSession(user) !== null) {
+        return { Allowed: false, Reason: 'Scope-limited or impersonated sessions are not permitted to impersonate users.' };
     }
 
-    const authorizations = provider?.Authorizations ?? [];
-    const targetAuth = authorizations.find(
-        (a) => a.Name?.trim().toLowerCase() === USER_IMPERSONATION_AUTHORIZATION_NAME.toLowerCase()
+    const userRoleIds = new Set(
+        (user.UserRoles ?? [])
+            .map((ur) => (ur.RoleID ? NormalizeUUID(ur.RoleID) : ''))
+            .filter(Boolean)
     );
-    if (!targetAuth) {
-        return {
-            Allowed: false,
-            Reason: `Authorization "${USER_IMPERSONATION_AUTHORIZATION_NAME}" is not configured.`,
-        };
-    }
-    if (!targetAuth.IsActive) {
-        return {
-            Allowed: false,
-            Reason: `Authorization "${USER_IMPERSONATION_AUTHORIZATION_NAME}" is inactive.`,
-        };
-    }
-
-    const authorizationRoles = provider?.AuthorizationRoles ?? [];
-    const userRoleIds = new Set((user.UserRoles ?? []).map((ur) => NormalizeUUID(ur.RoleID)));
-    if (userRoleIds.size === 0) {
-        return {
-            Allowed: false,
-            Reason: `User holds no roles granted the "${USER_IMPERSONATION_AUTHORIZATION_NAME}" authorization.`,
-        };
-    }
-
-    // Use provider-scoped AuthorizationRoles whenever present (multi-provider safe);
-    // fall back to AuthorizationEvaluator when a minimal test stub overrides UserCanExecute directly.
-    if (authorizationRoles.length > 0) {
-        if (hasDirectGrantType(targetAuth.ID, userRoleIds, authorizationRoles, AuthorizationRoleType.Deny)) {
-            return {
-                Allowed: false,
-                Reason: `User is explicitly denied the "${USER_IMPERSONATION_AUTHORIZATION_NAME}" authorization.`,
-            };
-        }
-
-        const authById = IndexByUUID(authorizations);
-        const visited = new Set<string>();
-        let node: AuthorizationInfo | undefined = targetAuth;
-        while (node && !visited.has(NormalizeUUID(node.ID))) {
-            visited.add(NormalizeUUID(node.ID));
-            const hasDeny = hasDirectGrantType(node.ID, userRoleIds, authorizationRoles, AuthorizationRoleType.Deny);
-            const hasAllow = hasDirectGrantType(node.ID, userRoleIds, authorizationRoles, AuthorizationRoleType.Allow);
-            if (node.IsActive && hasAllow && !hasDeny) {
-                return {
-                    Allowed: true,
-                    Reason: `Authorized via "${node.Name}".`,
-                };
-            }
-            node = node.ParentID ? authById.Get(node.ParentID) : undefined;
-        }
-        return {
-            Allowed: false,
-            Reason: `None of the caller's roles holds an Allow grant for "${USER_IMPERSONATION_AUTHORIZATION_NAME}".`,
-        };
-    }
-
-    // Fallback path when provider.AuthorizationRoles is empty (e.g., stubbed AuthorizationInfo.UserCanExecute).
-    const evaluator = new AuthorizationEvaluator();
-    if (evaluator.UserCanExecuteWithAncestors(targetAuth, user, authorizations)) {
-        return {
-            Allowed: true,
-            Reason: `Authorized via "${targetAuth.Name}".`,
-        };
-    }
-    return {
-        Allowed: false,
-        Reason: `None of the caller's roles holds an Allow grant for "${USER_IMPERSONATION_AUTHORIZATION_NAME}".`,
-    };
+    return DoRolesHoldImpersonationReadAuthorization(
+        userRoleIds,
+        provider?.Authorizations ?? [],
+        provider?.AuthorizationRoles ?? [],
+        user
+    );
 }
 
-function hasDirectGrantType(
-    authorizationId: string,
-    userRoleIds: ReadonlySet<string>,
-    grants: readonly AuthorizationRoleInfo[],
-    expectedType: AuthorizationRoleType
-): boolean {
-    return grants.some(
-        (grant) =>
-            UUIDsEqual(grant.AuthorizationID, authorizationId) &&
-            userRoleIds.has(NormalizeUUID(grant.RoleID)) &&
-            grant.AuthorizationType() === expectedType
+/**
+ * Pure helper evaluating whether `user` holds BOTH `User Impersonation` AND a DIRECT `Allow` grant
+ * (never inherited from parent `User Impersonation`!) on `User Impersonation: Act As (Allow Writes)`.
+ */
+export function EvaluateUserImpersonationWriteAuthorization(
+    user: UserInfo | null | undefined,
+    provider: Pick<IMetadataProvider, 'Authorizations' | 'AuthorizationRoles'> | null | undefined
+): { readonly Allowed: boolean; readonly Reason: string } {
+    const baseEval = EvaluateUserImpersonationAuthorization(user, provider);
+    if (!baseEval.Allowed || !user) {
+        return baseEval;
+    }
+
+    const userRoleIds = new Set(
+        (user.UserRoles ?? [])
+            .map((ur) => (ur.RoleID ? NormalizeUUID(ur.RoleID) : ''))
+            .filter(Boolean)
+    );
+    return DoRolesHoldImpersonationWriteAuthorization(
+        userRoleIds,
+        provider?.Authorizations ?? [],
+        provider?.AuthorizationRoles ?? []
     );
 }
 
@@ -218,38 +214,11 @@ function parseCleanUuid(raw: string | null | undefined): string | null {
     return IsValidUUID(trimmed) ? trimmed : null;
 }
 
-function isSystemUserRecord(
-    user: { readonly ID: string; readonly Name?: string | null; readonly Type?: string | null },
-    systemUserId: string | null
-): boolean {
-    if (systemUserId && UUIDsEqual(user.ID, systemUserId)) {
-        return true;
-    }
-    const nameLower = (user.Name ?? '').trim().toLowerCase();
-    const typeLower = (user.Type ?? '').trim().toLowerCase();
-    return nameLower === 'system' || typeLower === 'system';
-}
-
-function clampTtlMinutes(rawMinutes: number | null | undefined): number {
-    if (typeof rawMinutes !== 'number' || !Number.isFinite(rawMinutes)) {
-        return USER_IMPERSONATION_DEFAULT_TTL_MINUTES;
-    }
-    return Math.min(
-        USER_IMPERSONATION_MAX_TTL_MINUTES,
-        Math.max(USER_IMPERSONATION_MIN_TTL_MINUTES, Math.round(rawMinutes))
-    );
-}
-
 function clampListLimit(rawLimit: number | null | undefined): number {
     if (typeof rawLimit !== 'number' || !Number.isFinite(rawLimit)) {
         return USER_IMPERSONATION_DEFAULT_LIMIT;
     }
     return Math.min(USER_IMPERSONATION_MAX_LIMIT, Math.max(1, Math.round(rawLimit)));
-}
-
-function buildImpersonationKeyLabel(actorEmail: string, targetEmail: string): string {
-    const raw = `${USER_IMPERSONATION_KEY_LABEL_PREFIX}${actorEmail}->${targetEmail}`;
-    return raw.length <= MAX_KEY_LABEL_LENGTH ? raw : raw.slice(0, MAX_KEY_LABEL_LENGTH);
 }
 
 function formatUserDisplayName(user: UserQueryRow): string {
@@ -288,8 +257,20 @@ export class MJCanImpersonateUsersPayload {
     @Field(() => Boolean)
     CanImpersonate: boolean;
 
+    @Field(() => Boolean)
+    CanImpersonateWithWrites: boolean;
+
     @Field(() => String)
     AuthorizationName: string;
+
+    @Field(() => String)
+    WriteAuthorizationName: string;
+
+    @Field(() => Int)
+    DefaultTTLMinutes: number;
+
+    @Field(() => Int)
+    MaxTTLMinutes: number;
 
     @Field(() => String)
     ResultCode: string;
@@ -359,6 +340,12 @@ export class MJStartUserImpersonationInput {
 
     @Field(() => Int, { nullable: true })
     TTLMinutes?: number;
+
+    @Field(() => String, {
+        nullable: true,
+        description: "Impersonation mode: 'ViewAs' (default, server-enforced Read-Only) or 'ActAs' (write-enabled; requires server allowWrites + direct 'User Impersonation: Act As (Allow Writes)' grant).",
+    })
+    Mode?: string;
 }
 
 @ObjectType()
@@ -380,6 +367,12 @@ export class MJStartUserImpersonationPayload {
 
     @Field(() => String, { nullable: true })
     ExpiresAt?: string;
+
+    @Field(() => String, { nullable: true })
+    Mode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    ReadOnly?: boolean;
 
     @Field(() => MJImpersonatableUser, { nullable: true })
     TargetUser?: MJImpersonatableUser;
@@ -411,24 +404,29 @@ export class MJEndUserImpersonationPayload {
 // ============================================================================
 
 /**
- * Built-in GraphQL control plane for MemberJunction Authorization-gated User Impersonation.
+ * Built-in GraphQL control plane for MemberJunction Dual-Key, Read-Only-by-Default User Impersonation.
  *
- * Security invariants (fail-closed):
- * 1. Requires an explicit active `Allow` grant (and no `Deny`) on the `User Impersonation`
- *    `MJ: Authorizations` row. Granted to NOBODY by default — `Owner`, `Administrator`, and
- *    `Developer` roles are NOT auto-allowed unless an administrator explicitly grants the
- *    authorization in `MJ: Authorization Roles`.
- * 2. Strictly rejects any request authenticated via an `MJ-Impersonation:` API key so an
- *    impersonated session can never list users or mint chained impersonation keys.
- * 3. Refuses scope-limited principals via `@RefuseScopeLimitedPrincipals()` and inline checks.
- * 4. Excludes and refuses `System` users, inactive users (`IsActive = 0`), and self-impersonation.
- * 5. Mints short-lived (`2h` default, `4h` max) scoped `MJ: API Keys` tokens labeled
- *    `MJ-Impersonation:<ActorEmail>-><TargetEmail>`, writes `MJ: Audit Logs` entries, and
- *    revokes/deletes the key and its scopes immediately on `MJEndUserImpersonation`.
+ * Security invariants (fail-closed across all 6 layers):
+ * 1. Dual-key kill switch: requires BOTH `MJ_ENABLE_USER_IMPERSONATION=true` (`userImpersonation.enabled=true`,
+ *    off by default) AND an explicit active `Allow` grant on `User Impersonation` (`0` roles by default).
+ *    `MJEndUserImpersonation` remains operational even when the kill switch is flipped `false` mid-incident.
+ * 2. Read-Only `ViewAs` by default: mints narrow read-only scoped keys (`MJ-Impersonation:v1:RO:...`),
+ *    never `full_access`, and blocks 100% of mutations at the Apollo/WS/HTTP/DataHook layers. Optional `ActAs`
+ *    write mode requires a triple gate (`enabled`, `allowWrites`, and direct `Allow` on child authorization).
+ * 3. Strict target privilege ceiling (live DB `BypassCache: true` + `UserCache` cross-check): blocks `System`,
+ *    `Owner`, inactive accounts, self-impersonation, `Administrator`/`Developer`/`Integration` (`protectedTargetRoles`),
+ *    and any peer user holding `User Impersonation` privileges.
+ * 4. Sensitive-entity isolation: attaches `Priority = 1000, IsDeny = true` scope rules AND data-layer blocks
+ *    against API keys, credentials, encryption keys, OAuth tokens, audit logs, users/roles/permissions, and
+ *    other users' private 1:1 conversations.
+ * 5. Short blast-radius TTL (`15m` default, `5m..60m` bounds), UUID-keyed single-active-session per actor,
+ *    and mandatory fail-closed audit logging (`AUDIT_LOG_FAILED` revokes & deletes the key before returning).
  */
 @RefuseScopeLimitedPrincipals()
 @Resolver()
 export class UserImpersonationResolver extends ResolverBase {
+    private static readonly actorMintLocks = new Map<string, Promise<void>>();
+
     protected getApiKeyEngine(): APIKeyEngine {
         return GetAPIKeyEngine();
     }
@@ -438,6 +436,26 @@ export class UserImpersonationResolver extends ResolverBase {
         fallbackUser: UserInfo
     ): Promise<UserInfo> {
         return (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? fallbackUser;
+    }
+
+    private async withActorMintLock<T>(actorUserId: string, fn: () => Promise<T>): Promise<T> {
+        const lockKey = NormalizeUUID(actorUserId);
+        const prior = UserImpersonationResolver.actorMintLocks.get(lockKey) ?? Promise.resolve();
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const chained = prior.then(() => gate, () => gate);
+        UserImpersonationResolver.actorMintLocks.set(lockKey, chained);
+        await prior.catch(() => undefined);
+        try {
+            return await fn();
+        } finally {
+            release();
+            if (UserImpersonationResolver.actorMintLocks.get(lockKey) === chained) {
+                UserImpersonationResolver.actorMintLocks.delete(lockKey);
+            }
+        }
     }
 
     protected async isImpersonationApiKey(
@@ -450,7 +468,6 @@ export class UserImpersonationResolver extends ResolverBase {
         }
         const cleanKeyId = parseCleanUuid(apiKeyId);
         if (!cleanKeyId) {
-            // Fail closed: a malformed apiKeyId must not bypass the anti-chaining check.
             return true;
         }
         const rv = RunView.FromMetadataProvider(provider);
@@ -460,15 +477,15 @@ export class UserImpersonationResolver extends ResolverBase {
                 ExtraFilter: `ID = '${EscapeSQLString(cleanKeyId)}'`,
                 Fields: ['ID', 'Label'],
                 MaxRows: 1,
+                BypassCache: true,
                 ResultType: 'simple',
             },
             privilegedUser
         );
         if (!keyRes.Success || !keyRes.Results?.[0]) {
-            // Fail closed: if the active API key cannot be verified, refuse impersonation escalation.
             return true;
         }
-        return (keyRes.Results[0].Label ?? '').startsWith(USER_IMPERSONATION_KEY_LABEL_PREFIX);
+        return ParseImpersonationKeyLabel(keyRes.Results[0].Label) !== null;
     }
 
     protected async authorizeImpersonationCaller(
@@ -486,7 +503,17 @@ export class UserImpersonationResolver extends ResolverBase {
 
         const privilegedUser = await this.resolvePrivilegedUser(provider, actorUser);
 
-        // Anti-chaining check FIRST: never allow an impersonated session to invoke impersonation APIs.
+        // 1. Anti-chaining & dual-credential smuggling check FIRST so impersonation keys can never probe state.
+        if (GetImpersonationSession(context.userPayload) !== null) {
+            return {
+                authorized: false,
+                code: 'FORBIDDEN_IMPERSONATION_CHAIN',
+                message: 'Impersonation sessions cannot list users or start nested impersonation sessions.',
+                actorUser,
+                privilegedUser,
+            };
+        }
+
         const usingImpersonationKey = await this.isImpersonationApiKey(
             provider,
             context.userPayload?.apiKeyId,
@@ -502,6 +529,29 @@ export class UserImpersonationResolver extends ResolverBase {
             };
         }
 
+        // Refuse non-impersonation API keys and dual-header smuggled requests (Bearer + x-api-key).
+        if (context.userPayload?.apiKeyId || context.HasRawApiKeyHeader) {
+            return {
+                authorized: false,
+                code: 'FORBIDDEN',
+                message: 'API key credentials and dual-header requests are not permitted to invoke user impersonation.',
+                actorUser,
+                privilegedUser,
+            };
+        }
+
+        // 2. Dual-key infrastructure kill switch (strictly off by default everywhere).
+        if (!IsUserImpersonationEnabled()) {
+            return {
+                authorized: false,
+                code: 'FEATURE_DISABLED',
+                message: 'User impersonation is disabled on this server (MJ_ENABLE_USER_IMPERSONATION is off).',
+                actorUser,
+                privilegedUser,
+            };
+        }
+
+        // 3. Explicit active Allow grant on "User Impersonation" (zero roles granted by default).
         const evalResult = EvaluateUserImpersonationAuthorization(actorUser, provider);
         if (!evalResult.Allowed) {
             return {
@@ -527,10 +577,24 @@ export class UserImpersonationResolver extends ResolverBase {
         @Ctx() context: AppContext
     ): Promise<MJCanImpersonateUsersPayload> {
         const provider = GetReadWriteProvider(context.providers);
+        const resolvedCfg = ResolveUserImpersonationConfig();
         const auth = await this.authorizeImpersonationCaller(provider, context);
+
+        let canImpersonateWithWrites = false;
+        if (auth.authorized && auth.actorUser && resolvedCfg.allowWrites) {
+            canImpersonateWithWrites = EvaluateUserImpersonationWriteAuthorization(
+                auth.actorUser,
+                provider
+            ).Allowed;
+        }
+
         return {
             CanImpersonate: auth.authorized,
+            CanImpersonateWithWrites: canImpersonateWithWrites,
             AuthorizationName: USER_IMPERSONATION_AUTHORIZATION_NAME,
+            WriteAuthorizationName: USER_IMPERSONATION_WRITE_AUTHORIZATION_NAME,
+            DefaultTTLMinutes: resolvedCfg.defaultTtlMinutes,
+            MaxTTLMinutes: resolvedCfg.maxTtlMinutes,
             ResultCode: auth.code,
             Message: auth.message,
         };
@@ -546,7 +610,7 @@ export class UserImpersonationResolver extends ResolverBase {
         const auth = await this.authorizeImpersonationCaller(provider, context);
         if (!auth.authorized || !auth.actorUser || !auth.privilegedUser) {
             if (auth.actorUser && auth.privilegedUser) {
-                await this.tryWriteAuditLog(provider, auth.privilegedUser, {
+                await this.tryWriteAuditLog(provider, auth.privilegedUser, context, {
                     auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
                     status: 'Failed',
                     actorUserId: auth.actorUser.ID,
@@ -608,7 +672,7 @@ export class UserImpersonationResolver extends ResolverBase {
         const auth = await this.authorizeImpersonationCaller(provider, context);
         if (!auth.authorized || !auth.actorUser || !auth.privilegedUser) {
             if (auth.actorUser && auth.privilegedUser) {
-                await this.tryWriteAuditLog(provider, auth.privilegedUser, {
+                await this.tryWriteAuditLog(provider, auth.privilegedUser, context, {
                     auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
                     status: 'Failed',
                     actorUserId: auth.actorUser.ID,
@@ -619,6 +683,7 @@ export class UserImpersonationResolver extends ResolverBase {
                         resultCode: auth.code,
                         actorUserId: auth.actorUser.ID,
                         requestedTargetUserId: input?.TargetUserID ?? null,
+                        requestedMode: input?.Mode ?? 'ViewAs',
                         reason: auth.message,
                     },
                 });
@@ -639,8 +704,68 @@ export class UserImpersonationResolver extends ResolverBase {
             };
         }
 
+        const rawMode = input.Mode?.trim() || 'ViewAs';
+        if (rawMode !== 'ViewAs' && rawMode !== 'ActAs') {
+            return {
+                Success: false,
+                ResultCode: 'VALIDATION_ERROR',
+                Message: "Invalid Mode: must be 'ViewAs' (Read-Only) or 'ActAs'.",
+            };
+        }
+        const effectiveMode: ImpersonationMode = rawMode;
+        const effectiveReadOnly = effectiveMode !== 'ActAs';
+
         const actorUser = auth.actorUser;
         const privilegedUser = auth.privilegedUser;
+
+        // Triple-gate check when caller requests write-enabled ActAs mode
+        if (effectiveMode === 'ActAs') {
+            if (!IsUserImpersonationWritesEnabled()) {
+                await this.tryWriteAuditLog(provider, privilegedUser, context, {
+                    auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
+                    status: 'Failed',
+                    actorUserId: actorUser.ID,
+                    targetUserId: cleanTargetUserId,
+                    description: 'Denied ActAs impersonation: server allowWrites flag is disabled.',
+                    details: {
+                        action: 'MJStartUserImpersonation',
+                        resultCode: 'WRITES_DISABLED',
+                        actorUserId: actorUser.ID,
+                        targetUserId: cleanTargetUserId,
+                        requestedMode: effectiveMode,
+                    },
+                });
+                return {
+                    Success: false,
+                    ResultCode: 'WRITES_DISABLED',
+                    Message: "Write-mode user impersonation ('ActAs') is disabled on this server.",
+                };
+            }
+
+            const writeAuthEval = EvaluateUserImpersonationWriteAuthorization(actorUser, provider);
+            if (!writeAuthEval.Allowed) {
+                await this.tryWriteAuditLog(provider, privilegedUser, context, {
+                    auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
+                    status: 'Failed',
+                    actorUserId: actorUser.ID,
+                    targetUserId: cleanTargetUserId,
+                    description: `Denied ActAs impersonation: ${writeAuthEval.Reason}`,
+                    details: {
+                        action: 'MJStartUserImpersonation',
+                        resultCode: 'FORBIDDEN_WRITE_MODE',
+                        actorUserId: actorUser.ID,
+                        targetUserId: cleanTargetUserId,
+                        requestedMode: effectiveMode,
+                        reason: writeAuthEval.Reason,
+                    },
+                });
+                return {
+                    Success: false,
+                    ResultCode: 'FORBIDDEN_WRITE_MODE',
+                    Message: writeAuthEval.Reason,
+                };
+            }
+        }
 
         if (UUIDsEqual(cleanTargetUserId, actorUser.ID)) {
             return {
@@ -650,16 +775,52 @@ export class UserImpersonationResolver extends ResolverBase {
             };
         }
 
+        return this.withActorMintLock(actorUser.ID, () =>
+            this.mintImpersonationSessionLocked({
+                provider,
+                context,
+                actorUser,
+                privilegedUser,
+                cleanTargetUserId,
+                requestedTtlMinutes: input.TTLMinutes,
+                effectiveMode,
+                effectiveReadOnly,
+            })
+        );
+    }
+
+    private async mintImpersonationSessionLocked(params: {
+        readonly provider: IMetadataProvider;
+        readonly context: AppContext;
+        readonly actorUser: UserInfo;
+        readonly privilegedUser: UserInfo;
+        readonly cleanTargetUserId: string;
+        readonly requestedTtlMinutes: number | undefined;
+        readonly effectiveMode: ImpersonationMode;
+        readonly effectiveReadOnly: boolean;
+    }): Promise<MJStartUserImpersonationPayload> {
+        const {
+            provider,
+            context,
+            actorUser,
+            privilegedUser,
+            cleanTargetUserId,
+            requestedTtlMinutes,
+            effectiveMode,
+            effectiveReadOnly,
+        } = params;
         const rv = RunView.FromMetadataProvider(provider);
 
         try {
-            const [targetUserRes, targetRolesRes] = await Promise.all([
+            // Live DB read (BypassCache: true) to defeat stale UserCache / role-grant TOCTOU races!
+            const [targetUserRes, targetRolesRes, liveAuthMeta] = await Promise.all([
                 rv.RunView<UserQueryRow>(
                     {
                         EntityName: 'MJ: Users',
                         ExtraFilter: `ID = '${EscapeSQLString(cleanTargetUserId)}'`,
                         Fields: ['ID', 'Name', 'FirstName', 'LastName', 'Email', 'Title', 'Type', 'IsActive'],
                         MaxRows: 1,
+                        BypassCache: true,
                         ResultType: 'simple',
                     },
                     privilegedUser
@@ -668,11 +829,13 @@ export class UserImpersonationResolver extends ResolverBase {
                     {
                         EntityName: 'MJ: User Roles',
                         ExtraFilter: `UserID = '${EscapeSQLString(cleanTargetUserId)}'`,
-                        Fields: ['UserID', 'Role'],
+                        Fields: ['UserID', 'RoleID', 'Role'],
+                        BypassCache: true,
                         ResultType: 'simple',
                     },
                     privilegedUser
                 ),
+                this.loadLiveAuthorizationMetadata(provider, privilegedUser),
             ]);
 
             const targetRow = targetUserRes.Success ? targetUserRes.Results?.[0] : undefined;
@@ -684,50 +847,137 @@ export class UserImpersonationResolver extends ResolverBase {
                 };
             }
 
-            if (isSystemUserRecord(targetRow, privilegedUser.ID)) {
-                await this.tryWriteAuditLog(provider, privilegedUser, {
-                    auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
-                    status: 'Failed',
-                    actorUserId: actorUser.ID,
-                    targetUserId: cleanTargetUserId,
-                    description: 'Denied attempt to impersonate the System user.',
-                    details: {
-                        action: 'MJStartUserImpersonation',
-                        resultCode: 'FORBIDDEN_TARGET',
-                        actorUserId: actorUser.ID,
-                        targetUserId: cleanTargetUserId,
-                    },
-                });
+            // Merge live DB roles with UserCache roles so privilege promotion in EITHER store fails closed.
+            const cachedTarget = UserCache.Instance?.UserByID?.(cleanTargetUserId);
+            if (cachedTarget && cachedTarget.IsActive === false) {
                 return {
                     Success: false,
-                    ResultCode: 'FORBIDDEN_TARGET',
-                    Message: 'Impersonating the System user is prohibited.',
+                    ResultCode: 'NOT_FOUND',
+                    Message: 'Target user was not found or is inactive.',
+                };
+            }
+
+            const roleNameSet = new Set<string>();
+            const roleIdSet = new Set<string>();
+            const roleIdsByLowerName = new Map<string, string>();
+            for (const r of provider.Roles ?? []) {
+                if (r.Name && r.ID) {
+                    roleIdsByLowerName.set(r.Name.trim().toLowerCase(), NormalizeUUID(r.ID));
+                }
+            }
+
+            for (const r of targetRolesRes.Success ? targetRolesRes.Results ?? [] : []) {
+                const rn = r.Role?.trim();
+                if (rn) {
+                    roleNameSet.add(rn);
+                    const mappedId = roleIdsByLowerName.get(rn.toLowerCase());
+                    if (mappedId) {
+                        roleIdSet.add(mappedId);
+                    }
+                }
+                if (r.RoleID && IsValidUUID(r.RoleID)) {
+                    roleIdSet.add(NormalizeUUID(r.RoleID));
+                }
+            }
+            for (const ur of cachedTarget?.UserRoles ?? []) {
+                const rn = ur.Role?.trim();
+                if (rn) {
+                    roleNameSet.add(rn);
+                }
+                if (ur.RoleID && IsValidUUID(ur.RoleID)) {
+                    roleIdSet.add(NormalizeUUID(ur.RoleID));
+                }
+            }
+
+            const roleNames = Array.from(roleNameSet).sort((a, b) => a.localeCompare(b));
+            const effectiveType =
+                (cachedTarget?.Type ?? '').trim().toLowerCase() === 'owner' ||
+                (cachedTarget?.Type ?? '').trim().toLowerCase() === 'system'
+                    ? cachedTarget?.Type
+                    : targetRow.Type;
+
+            const eligibility = EvaluateTargetImpersonationEligibility(
+                {
+                    ID: targetRow.ID,
+                    Name: targetRow.Name,
+                    Email: targetRow.Email,
+                    Type: effectiveType,
+                    IsActive: targetRow.IsActive,
+                    RoleNames: roleNames,
+                    RoleIDs: roleIdSet,
+                },
+                {
+                    actorUserId: actorUser.ID,
+                    systemUserId: privilegedUser.ID,
+                    authorizations: liveAuthMeta.authorizations,
+                    authorizationRoles: liveAuthMeta.authorizationRoles,
+                }
+            );
+
+            if (!eligibility.Eligible) {
+                if (eligibility.Code === 'FORBIDDEN_TARGET') {
+                    await this.tryWriteAuditLog(provider, privilegedUser, context, {
+                        auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
+                        status: 'Failed',
+                        actorUserId: actorUser.ID,
+                        targetUserId: cleanTargetUserId,
+                        description: `Denied MJStartUserImpersonation: ${eligibility.Reason}`,
+                        details: {
+                            action: 'MJStartUserImpersonation',
+                            resultCode: eligibility.Code,
+                            actorUserId: actorUser.ID,
+                            targetUserId: cleanTargetUserId,
+                            targetRoles: roleNames,
+                            reason: eligibility.Reason,
+                        },
+                    });
+                }
+                return {
+                    Success: false,
+                    ResultCode: eligibility.Code,
+                    Message: eligibility.Reason,
                 };
             }
 
             const engine = this.getApiKeyEngine();
             await engine.Config(false, privilegedUser, provider);
 
-            const fullAccessScope = engine.Scopes.find((s) => s.FullPath === 'full_access');
-            if (!fullAccessScope) {
+            // Resolve least-privilege scopes (NEVER full_access!)
+            const desiredScopePaths = effectiveReadOnly
+                ? [...IMPERSONATION_READ_ONLY_ALLOWED_SCOPES]
+                : [...IMPERSONATION_READ_ONLY_ALLOWED_SCOPES, ...IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES];
+            const scopeByPath = new Map<string, string>();
+            for (const s of engine.Scopes ?? []) {
+                if (s.FullPath && s.ID && s.FullPath !== 'full_access') {
+                    scopeByPath.set(s.FullPath, s.ID);
+                }
+            }
+            const allowScopeIds = desiredScopePaths
+                .map((p) => scopeByPath.get(p))
+                .filter((id): id is string => Boolean(id));
+
+            if (allowScopeIds.length === 0) {
                 return {
                     Success: false,
                     ResultCode: 'CONFIGURATION_ERROR',
-                    Message: "Required 'full_access' API scope is not configured in APIKeyEngine.",
+                    Message: 'Required read/entity API scopes are not configured in APIKeyEngine.',
                 };
             }
 
-            const ttlMinutes = clampTtlMinutes(input.TTLMinutes);
+            // Single-active-key enforcement per actor: revoke & delete any prior impersonation keys minted by actorUser.
+            await this.revokeExistingActorImpersonationKeys(engine, provider, privilegedUser, actorUser.ID);
+
+            const ttlMinutes = ClampUserImpersonationTtlMinutes(requestedTtlMinutes);
             const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
             const actorEmail = (actorUser.Email ?? actorUser.Name ?? actorUser.ID).trim();
             const targetEmail = (targetRow.Email ?? targetRow.Name ?? cleanTargetUserId).trim();
-            const label = buildImpersonationKeyLabel(actorEmail, targetEmail);
+            const label = BuildImpersonationKeyLabel(effectiveMode, actorUser.ID, cleanTargetUserId);
 
             const created = await engine.CreateAPIKey(
                 {
                     UserId: cleanTargetUserId,
                     Label: label,
-                    Description: `Temporary user impersonation session initiated by ${actorEmail}.`,
+                    Description: `Temporary ${effectiveMode} (${effectiveReadOnly ? 'Read-Only' : 'Write-Enabled'}) user impersonation session initiated by ${actorUser.ID}.`,
                     ExpiresAt: expiresAt,
                 },
                 privilegedUser,
@@ -742,41 +992,88 @@ export class UserImpersonationResolver extends ResolverBase {
                 };
             }
 
-            const scopeEntity = await provider.GetEntityObject<MJAPIKeyScopeEntity>(
-                'MJ: API Key Scopes',
-                privilegedUser
+            // Bind exclusively to MJAPI when MJAPI application is present so the key cannot replay on MCP/A2A servers.
+            const mjApiApp = (engine.Applications ?? []).find(
+                (app) => app.Name?.trim().toLowerCase() === 'mjapi' && app.IsActive !== false
             );
-            scopeEntity.NewRecord();
-            scopeEntity.APIKeyID = created.APIKeyId;
-            scopeEntity.ScopeID = fullAccessScope.ID;
-            scopeEntity.ResourcePattern = '*';
-            scopeEntity.PatternType = 'Include';
-            scopeEntity.IsDeny = false;
-            scopeEntity.Priority = 0;
+            if (mjApiApp?.ID) {
+                const appBinding = await provider.GetEntityObject<MJAPIKeyApplicationEntity>(
+                    'MJ: API Key Applications',
+                    privilegedUser
+                );
+                appBinding.NewRecord();
+                appBinding.APIKeyID = created.APIKeyId;
+                appBinding.ApplicationID = mjApiApp.ID;
+                if (!(await appBinding.Save())) {
+                    await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
+                    return {
+                        Success: false,
+                        ResultCode: 'KEY_SCOPE_FAILED',
+                        Message: 'Failed to bind temporary impersonation key to MJAPI application.',
+                    };
+                }
+            }
 
-            const scopeSaved = await scopeEntity.Save();
-            if (!scopeSaved) {
-                await this.cleanupOrphanedImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
-                return {
-                    Success: false,
-                    ResultCode: 'KEY_SCOPE_FAILED',
-                    Message: 'Failed to attach full_access scope to temporary impersonation key.',
-                };
+            // 1. Attach explicit least-privilege Allow scope rules (Priority = 10, IsDeny = false)
+            for (const scopeId of allowScopeIds) {
+                const scopeEntity = await provider.GetEntityObject<MJAPIKeyScopeEntity>(
+                    'MJ: API Key Scopes',
+                    privilegedUser
+                );
+                scopeEntity.NewRecord();
+                scopeEntity.APIKeyID = created.APIKeyId;
+                scopeEntity.ScopeID = scopeId;
+                scopeEntity.ResourcePattern = '*';
+                scopeEntity.PatternType = 'Include';
+                scopeEntity.IsDeny = false;
+                scopeEntity.Priority = 10;
+
+                if (!(await scopeEntity.Save())) {
+                    await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
+                    return {
+                        Success: false,
+                        ResultCode: 'KEY_SCOPE_FAILED',
+                        Message: 'Failed to attach least-privilege scopes to temporary impersonation key.',
+                    };
+                }
+            }
+
+            // 2. Attach high-priority Deny scope rules (Priority = 1000, IsDeny = true) for sensitive entities
+            const denyScopePathsToAttach = effectiveReadOnly
+                ? ['view:run', 'entity:read']
+                : [...IMPERSONATION_ENTITY_DENY_SCOPE_PATHS];
+            for (const denyPath of denyScopePathsToAttach) {
+                const denyScopeId = scopeByPath.get(denyPath);
+                if (!denyScopeId) {
+                    continue;
+                }
+                const denyEntity = await provider.GetEntityObject<MJAPIKeyScopeEntity>(
+                    'MJ: API Key Scopes',
+                    privilegedUser
+                );
+                denyEntity.NewRecord();
+                denyEntity.APIKeyID = created.APIKeyId;
+                denyEntity.ScopeID = denyScopeId;
+                denyEntity.ResourcePattern = IMPERSONATION_SENSITIVE_ENTITY_DENY_PATTERN;
+                denyEntity.PatternType = 'Include';
+                denyEntity.IsDeny = true;
+                denyEntity.Priority = 1000;
+
+                if (!(await denyEntity.Save())) {
+                    await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
+                    return {
+                        Success: false,
+                        ResultCode: 'KEY_SCOPE_FAILED',
+                        Message: 'Failed to attach sensitive-entity deny scopes to temporary impersonation key.',
+                    };
+                }
             }
 
             try {
                 await engine.RefreshCache(privilegedUser);
             } catch {
-                // Non-fatal: cache refresh is best-effort in isolated/mock environments.
+                // Non-fatal in mock environments
             }
-
-            const roleNames = Array.from(
-                new Set(
-                    (targetRolesRes.Success ? targetRolesRes.Results ?? [] : [])
-                        .map((r) => r.Role?.trim())
-                        .filter((r): r is string => Boolean(r))
-                )
-            ).sort((a, b) => a.localeCompare(b));
 
             const targetUser: MJImpersonatableUser = {
                 UserID: targetRow.ID,
@@ -789,12 +1086,17 @@ export class UserImpersonationResolver extends ResolverBase {
                 RoleNames: roleNames,
             };
 
-            await this.tryWriteAuditLog(provider, privilegedUser, {
+            // 3. MANDATORY FAIL-CLOSED AUDIT LOG: must succeed BEFORE returning RawApiKey!
+            // NOTE: RawApiKey is NEVER written to audit details or logs.
+            const auditSucceeded = await this.writeAuditLogStrict(provider, privilegedUser, context, {
                 auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Started,
                 status: 'Success',
                 actorUserId: actorUser.ID,
                 targetUserId: cleanTargetUserId,
-                description: `Started user impersonation as ${targetUser.Name} (${targetEmail})`,
+                authorizationName: effectiveReadOnly
+                    ? USER_IMPERSONATION_AUTHORIZATION_NAME
+                    : USER_IMPERSONATION_WRITE_AUTHORIZATION_NAME,
+                description: `Started ${effectiveMode} (${effectiveReadOnly ? 'Read-Only' : 'Write-Enabled'}) user impersonation as ${targetUser.Name} (${targetEmail})`,
                 details: {
                     action: 'MJStartUserImpersonation',
                     actorUserId: actorUser.ID,
@@ -802,18 +1104,33 @@ export class UserImpersonationResolver extends ResolverBase {
                     targetUserId: cleanTargetUserId,
                     targetEmail,
                     apiKeyId: created.APIKeyId,
+                    mode: effectiveMode,
+                    readOnly: effectiveReadOnly,
                     ttlMinutes,
                     expiresAt: expiresAt.toISOString(),
                 },
             });
 
+            if (!auditSucceeded) {
+                await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
+                return {
+                    Success: false,
+                    ResultCode: 'AUDIT_LOG_FAILED',
+                    Message: 'Impersonation session aborted because mandatory audit log persistence failed.',
+                };
+            }
+
             return {
                 Success: true,
                 ResultCode: 'IMPERSONATION_STARTED',
-                Message: `Now viewing as ${targetUser.Name}.`,
+                Message: effectiveReadOnly
+                    ? `Now viewing as ${targetUser.Name} (Read-Only).`
+                    : `Now acting as ${targetUser.Name} (Write Mode Enabled).`,
                 RawApiKey: created.RawKey,
                 APIKeyID: created.APIKeyId,
                 ExpiresAt: expiresAt.toISOString(),
+                Mode: effectiveMode,
+                ReadOnly: effectiveReadOnly,
                 TargetUser: targetUser,
             };
         } catch (err) {
@@ -828,6 +1145,12 @@ export class UserImpersonationResolver extends ResolverBase {
         }
     }
 
+    /**
+     * Revokes and deletes a temporary `MJ-Impersonation:` key.
+     *
+     * Deliberately NOT gated on `MJ_ENABLE_USER_IMPERSONATION`: if an operator flips the kill switch
+     * off mid-incident, active impersonation keys can STILL be cleanly revoked and purged!
+     */
     @Mutation(() => MJEndUserImpersonationPayload)
     async MJEndUserImpersonation(
         @Arg('input', () => MJEndUserImpersonationInput) input: MJEndUserImpersonationInput,
@@ -862,6 +1185,7 @@ export class UserImpersonationResolver extends ResolverBase {
                     ExtraFilter: `ID = '${EscapeSQLString(cleanApiKeyId)}'`,
                     Fields: ['ID', 'Label', 'Status', 'UserID'],
                     MaxRows: 1,
+                    BypassCache: true,
                     ResultType: 'simple',
                 },
                 privilegedUser
@@ -876,7 +1200,8 @@ export class UserImpersonationResolver extends ResolverBase {
                 };
             }
 
-            if (!(keyRow.Label ?? '').startsWith(USER_IMPERSONATION_KEY_LABEL_PREFIX)) {
+            const parsedLabel = ParseImpersonationKeyLabel(keyRow.Label);
+            if (!parsedLabel) {
                 return {
                     Success: false,
                     ResultCode: 'FORBIDDEN',
@@ -886,10 +1211,25 @@ export class UserImpersonationResolver extends ResolverBase {
 
             const callerApiKeyId = parseCleanUuid(context.userPayload?.apiKeyId);
             const isSameImpersonationKey = Boolean(callerApiKeyId && UUIDsEqual(callerApiKeyId, cleanApiKeyId));
-            const callerAuth = await this.authorizeImpersonationCaller(provider, context);
 
-            if (!callerAuth.authorized && !isSameImpersonationKey) {
-                await this.tryWriteAuditLog(provider, privilegedUser, {
+            // Allow revocation when:
+            // 1. Caller is self-revoking the exact active impersonation key, OR
+            // 2. Caller is a non-API-key human session who EITHER originally minted this key (actorUserId match)
+            //    OR holds `Allow` on `User Impersonation` — even if `MJ_ENABLE_USER_IMPERSONATION` was just turned off!
+            let isAuthorizedActorSession = false;
+            if (!callerApiKeyId && !context.HasRawApiKeyHeader && !GetImpersonationSession(context.userPayload)) {
+                const isOriginalMintingActor = Boolean(
+                    parsedLabel.actorUserId && UUIDsEqual(parsedLabel.actorUserId, actorUser.ID)
+                );
+                const holdsImpersonationGrant = EvaluateUserImpersonationAuthorization(
+                    actorUser,
+                    provider
+                ).Allowed;
+                isAuthorizedActorSession = isOriginalMintingActor || holdsImpersonationGrant;
+            }
+
+            if (!isSameImpersonationKey && !isAuthorizedActorSession) {
+                await this.tryWriteAuditLog(provider, privilegedUser, context, {
                     auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
                     status: 'Failed',
                     actorUserId: actorUser.ID,
@@ -909,69 +1249,21 @@ export class UserImpersonationResolver extends ResolverBase {
                 };
             }
 
-            // 1. Delete all MJ: API Key Scopes bound to this temporary key
-            const scopesRes = await rv.RunView<{ ID: string }>(
-                {
-                    EntityName: 'MJ: API Key Scopes',
-                    ExtraFilter: `APIKeyID = '${EscapeSQLString(cleanApiKeyId)}'`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                },
-                privilegedUser
-            );
-            for (const scopeRow of scopesRes.Success ? scopesRes.Results ?? [] : []) {
-                try {
-                    const scopeEntity = await provider.GetEntityObject<MJAPIKeyScopeEntity>(
-                        'MJ: API Key Scopes',
-                        privilegedUser
-                    );
-                    if (await scopeEntity.Load(scopeRow.ID)) {
-                        await scopeEntity.Delete();
-                    }
-                } catch (err) {
-                    LogError(
-                        `MJEndUserImpersonation: failed to delete scope ${scopeRow.ID}: ${err instanceof Error ? err.message : String(err)}`
-                    );
-                }
-            }
-
-            // 2. Revoke via APIKeyEngine (immediately marks Revoked and evicts validation cache)
             const engine = this.getApiKeyEngine();
-            try {
-                await engine.RevokeAPIKey(cleanApiKeyId, privilegedUser, provider);
-            } catch (err) {
-                LogError(
-                    `MJEndUserImpersonation: RevokeAPIKey failed for ${cleanApiKeyId}: ${err instanceof Error ? err.message : String(err)}`
-                );
-            }
+            await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, cleanApiKeyId);
 
-            // 3. Delete the MJ: API Keys row when possible (if usage-log FK retains it, Status is already Revoked)
-            try {
-                const keyEntity = await provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', privilegedUser);
-                if (await keyEntity.Load(cleanApiKeyId)) {
-                    await keyEntity.Delete();
-                }
-            } catch {
-                // Non-fatal: key is already Revoked with 0 scopes and cache-evicted.
-            }
-
-            try {
-                await engine.RefreshCache(privilegedUser);
-            } catch {
-                // Best-effort cache refresh
-            }
-
-            await this.tryWriteAuditLog(provider, privilegedUser, {
+            await this.tryWriteAuditLog(provider, privilegedUser, context, {
                 auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Ended,
                 status: 'Success',
-                actorUserId: actorUser.ID,
-                targetUserId: keyRow.UserID ?? actorUser.ID,
+                actorUserId: parsedLabel.actorUserId ?? actorUser.ID,
+                targetUserId: keyRow.UserID ?? parsedLabel.targetUserId ?? actorUser.ID,
                 description: `Ended user impersonation session (key ${cleanApiKeyId})`,
                 details: {
                     action: 'MJEndUserImpersonation',
-                    actorUserId: actorUser.ID,
+                    actorUserId: parsedLabel.actorUserId ?? actorUser.ID,
+                    invokedByUserId: actorUser.ID,
                     apiKeyId: cleanApiKeyId,
-                    targetUserId: keyRow.UserID ?? null,
+                    targetUserId: keyRow.UserID ?? parsedLabel.targetUserId ?? null,
                 },
             });
 
@@ -994,18 +1286,70 @@ export class UserImpersonationResolver extends ResolverBase {
         }
     }
 
+    private async loadLiveAuthorizationMetadata(
+        provider: IMetadataProvider,
+        privilegedUser: UserInfo
+    ): Promise<{
+        readonly authorizations: readonly AuthorizationInfo[];
+        readonly authorizationRoles: readonly AuthorizationRoleInfo[];
+    }> {
+        const rv = RunView.FromMetadataProvider(provider);
+        try {
+            const [authRes, authRolesRes] = await Promise.all([
+                rv.RunView<AuthorizationQueryRow>(
+                    {
+                        EntityName: 'MJ: Authorizations',
+                        Fields: ['ID', 'Name', 'ParentID', 'IsActive', 'UseAuditLog'],
+                        BypassCache: true,
+                        ResultType: 'simple',
+                    },
+                    privilegedUser
+                ),
+                rv.RunView<AuthorizationRoleQueryRow>(
+                    {
+                        EntityName: 'MJ: Authorization Roles',
+                        Fields: ['ID', 'AuthorizationID', 'RoleID', 'Type'],
+                        BypassCache: true,
+                        ResultType: 'simple',
+                    },
+                    privilegedUser
+                ),
+            ]);
+
+            const liveAuths =
+                authRes.Success && authRes.Results && authRes.Results.length > 0
+                    ? authRes.Results.map((r) => new AuthorizationInfo(r))
+                    : (provider.Authorizations ?? []);
+            const liveAuthRoles =
+                authRolesRes.Success && authRolesRes.Results && authRolesRes.Results.length > 0
+                    ? authRolesRes.Results.map((r) => new AuthorizationRoleInfo(r))
+                    : (provider.AuthorizationRoles ?? []);
+
+            return {
+                authorizations: liveAuths,
+                authorizationRoles: liveAuthRoles,
+            };
+        } catch {
+            return {
+                authorizations: provider.Authorizations ?? [],
+                authorizationRoles: provider.AuthorizationRoles ?? [],
+            };
+        }
+    }
+
     private async loadImpersonatableUsers(
         provider: IMetadataProvider,
         privilegedUser: UserInfo,
         actorUserId: string
     ): Promise<MJImpersonatableUser[]> {
         const rv = RunView.FromMetadataProvider(provider);
-        const [usersRes, userRolesRes] = await Promise.all([
+        const [usersRes, userRolesRes, liveAuthMeta] = await Promise.all([
             rv.RunView<UserQueryRow>(
                 {
                     EntityName: 'MJ: Users',
                     ExtraFilter: 'IsActive = 1',
                     Fields: ['ID', 'Name', 'FirstName', 'LastName', 'Email', 'Title', 'Type', 'IsActive'],
+                    BypassCache: true,
                     ResultType: 'simple',
                 },
                 privilegedUser
@@ -1013,47 +1357,92 @@ export class UserImpersonationResolver extends ResolverBase {
             rv.RunView<UserRoleQueryRow>(
                 {
                     EntityName: 'MJ: User Roles',
-                    Fields: ['UserID', 'Role'],
+                    Fields: ['UserID', 'RoleID', 'Role'],
+                    BypassCache: true,
                     ResultType: 'simple',
                 },
                 privilegedUser
             ),
+            this.loadLiveAuthorizationMetadata(provider, privilegedUser),
         ]);
 
         if (!usersRes.Success) {
             throw new Error(usersRes.ErrorMessage || 'Failed to query active users.');
         }
 
+        const roleIdsByLowerName = new Map<string, string>();
+        for (const r of provider.Roles ?? []) {
+            if (r.Name && r.ID) {
+                roleIdsByLowerName.set(r.Name.trim().toLowerCase(), NormalizeUUID(r.ID));
+            }
+        }
+
         const rolesByUserId = new Map<string, Set<string>>();
+        const roleIdsByUserId = new Map<string, Set<string>>();
         for (const row of userRolesRes.Success ? userRolesRes.Results ?? [] : []) {
-            const roleName = row.Role?.trim();
-            if (!row.UserID || !roleName) {
+            if (!row.UserID || !IsValidUUID(row.UserID)) {
                 continue;
             }
-            const key = NormalizeUUID(row.UserID);
-            let set = rolesByUserId.get(key);
-            if (!set) {
-                set = new Set<string>();
-                rolesByUserId.set(key, set);
+            const userKey = NormalizeUUID(row.UserID);
+            const roleName = row.Role?.trim();
+            if (roleName) {
+                let nameSet = rolesByUserId.get(userKey);
+                if (!nameSet) {
+                    nameSet = new Set<string>();
+                    rolesByUserId.set(userKey, nameSet);
+                }
+                nameSet.add(roleName);
+
+                const mappedRoleId = roleIdsByLowerName.get(roleName.toLowerCase());
+                if (mappedRoleId) {
+                    let idSet = roleIdsByUserId.get(userKey);
+                    if (!idSet) {
+                        idSet = new Set<string>();
+                        roleIdsByUserId.set(userKey, idSet);
+                    }
+                    idSet.add(mappedRoleId);
+                }
             }
-            set.add(roleName);
+            if (row.RoleID && IsValidUUID(row.RoleID)) {
+                let idSet = roleIdsByUserId.get(userKey);
+                if (!idSet) {
+                    idSet = new Set<string>();
+                    roleIdsByUserId.set(userKey, idSet);
+                }
+                idSet.add(NormalizeUUID(row.RoleID));
+            }
         }
 
         const results: MJImpersonatableUser[] = [];
         for (const row of usersRes.Results ?? []) {
-            if (row.IsActive === false) {
+            if (!row.ID || !IsValidUUID(row.ID)) {
                 continue;
             }
-            if (isSystemUserRecord(row, privilegedUser.ID)) {
-                continue;
-            }
-            if (UUIDsEqual(row.ID, actorUserId)) {
+            const normId = NormalizeUUID(row.ID);
+            const roles = Array.from(rolesByUserId.get(normId) ?? []).sort((a, b) => a.localeCompare(b));
+            const roleIds = roleIdsByUserId.get(normId) ?? new Set<string>();
+
+            const eligibility = EvaluateTargetImpersonationEligibility(
+                {
+                    ID: row.ID,
+                    Name: row.Name,
+                    Email: row.Email,
+                    Type: row.Type,
+                    IsActive: row.IsActive,
+                    RoleNames: roles,
+                    RoleIDs: roleIds,
+                },
+                {
+                    actorUserId,
+                    systemUserId: privilegedUser.ID,
+                    authorizations: liveAuthMeta.authorizations,
+                    authorizationRoles: liveAuthMeta.authorizationRoles,
+                }
+            );
+            if (!eligibility.Eligible) {
                 continue;
             }
 
-            const roles = Array.from(rolesByUserId.get(NormalizeUUID(row.ID)) ?? []).sort((a, b) =>
-                a.localeCompare(b)
-            );
             results.push({
                 UserID: row.ID,
                 Name: formatUserDisplayName(row),
@@ -1073,39 +1462,167 @@ export class UserImpersonationResolver extends ResolverBase {
         return results;
     }
 
-    private async cleanupOrphanedImpersonationKey(
+    /**
+     * Enforces single-active-key per actor: revokes and deletes any existing `MJ-Impersonation:v1:`
+     * keys previously minted by `actorUserId` before minting a new key.
+     */
+    private async revokeExistingActorImpersonationKeys(
+        engine: APIKeyEngine,
+        provider: IMetadataProvider,
+        privilegedUser: UserInfo,
+        actorUserId: string
+    ): Promise<void> {
+        const likePattern = BuildActorImpersonationKeyLikePattern(actorUserId);
+        if (!likePattern) {
+            return;
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const existingRes = await rv.RunView<ApiKeyLabelRow>(
+            {
+                EntityName: 'MJ: API Keys',
+                ExtraFilter: `Label LIKE '${likePattern}'`,
+                Fields: ['ID', 'Label', 'Status'],
+                BypassCache: true,
+                ResultType: 'simple',
+            },
+            privilegedUser
+        );
+        if (!existingRes.Success) {
+            return;
+        }
+        for (const existing of existingRes.Results ?? []) {
+            const parsed = ParseImpersonationKeyLabel(existing.Label);
+            if (
+                existing.ID &&
+                parsed?.format === 'v1' &&
+                parsed.actorUserId &&
+                UUIDsEqual(parsed.actorUserId, actorUserId)
+            ) {
+                await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, existing.ID);
+            }
+        }
+    }
+
+    private async revokeAndDeleteImpersonationKey(
         engine: APIKeyEngine,
         provider: IMetadataProvider,
         privilegedUser: UserInfo,
         apiKeyId: string
     ): Promise<void> {
+        const cleanId = parseCleanUuid(apiKeyId);
+        if (!cleanId) {
+            return;
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+
+        // 1. Delete all MJ: API Key Scopes bound to this temporary key
         try {
-            await engine.RevokeAPIKey(apiKeyId, privilegedUser, provider);
+            const scopesRes = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: API Key Scopes',
+                    ExtraFilter: `APIKeyID = '${EscapeSQLString(cleanId)}'`,
+                    Fields: ['ID'],
+                    BypassCache: true,
+                    ResultType: 'simple',
+                },
+                privilegedUser
+            );
+            for (const scopeRow of scopesRes.Success ? scopesRes.Results ?? [] : []) {
+                try {
+                    const scopeEntity = await provider.GetEntityObject<MJAPIKeyScopeEntity>(
+                        'MJ: API Key Scopes',
+                        privilegedUser
+                    );
+                    if (await scopeEntity.Load(scopeRow.ID)) {
+                        await scopeEntity.Delete();
+                    }
+                } catch (err) {
+                    LogError(
+                        `Impersonation key cleanup: failed to delete scope ${scopeRow.ID}: ${err instanceof Error ? err.message : String(err)}`
+                    );
+                }
+            }
+        } catch {
+            // Continue revocation
+        }
+
+        // 2. Delete all MJ: API Key Applications bound to this temporary key
+        try {
+            const appBindingsRes = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: API Key Applications',
+                    ExtraFilter: `APIKeyID = '${EscapeSQLString(cleanId)}'`,
+                    Fields: ['ID'],
+                    BypassCache: true,
+                    ResultType: 'simple',
+                },
+                privilegedUser
+            );
+            for (const appRow of appBindingsRes.Success ? appBindingsRes.Results ?? [] : []) {
+                try {
+                    const appEntity = await provider.GetEntityObject<MJAPIKeyApplicationEntity>(
+                        'MJ: API Key Applications',
+                        privilegedUser
+                    );
+                    if (await appEntity.Load(appRow.ID)) {
+                        await appEntity.Delete();
+                    }
+                } catch {
+                    // Continue revocation
+                }
+            }
+        } catch {
+            // Continue revocation
+        }
+
+        // 3. Revoke via APIKeyEngine (immediately marks Revoked and evicts validation cache)
+        try {
+            await engine.RevokeAPIKey(cleanId, privilegedUser, provider);
+        } catch (err) {
+            LogError(
+                `Impersonation key cleanup: RevokeAPIKey failed for ${cleanId}: ${err instanceof Error ? err.message : String(err)}`
+            );
+        }
+
+        // 4. Delete the MJ: API Keys row when possible (if usage-log FK retains it, Status is already Revoked)
+        try {
             const keyEntity = await provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', privilegedUser);
-            if (await keyEntity.Load(apiKeyId)) {
+            if (await keyEntity.Load(cleanId)) {
                 await keyEntity.Delete();
             }
         } catch {
-            // Best-effort cleanup of partially minted key
+            // Non-fatal: key is already Revoked with 0 scopes and cache-evicted.
+        }
+
+        try {
+            await engine.RefreshCache(privilegedUser);
+        } catch {
+            // Best-effort cache refresh
         }
     }
 
-    private async tryWriteAuditLog(
+    /**
+     * Strict fail-closed audit log writer used by `MJStartUserImpersonation`.
+     * Returns `true` ONLY if the `MJ: Audit Logs` row is resolved and persisted (`Save() === true`).
+     */
+    private async writeAuditLogStrict(
         provider: IMetadataProvider,
         privilegedUser: UserInfo,
+        context: AppContext,
         params: {
             readonly auditTypeName: string;
             readonly status: 'Success' | 'Failed';
             readonly actorUserId: string;
             readonly targetUserId: string;
+            readonly authorizationName?: string;
             readonly description: string;
             readonly details: Record<string, unknown>;
         }
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
             const auditEntityMeta = provider.Entities?.find((e) => e.Name === 'MJ: Audit Logs');
             if (!auditEntityMeta) {
-                return;
+                return false;
             }
 
             let auditTypeId: string | undefined = provider.AuditLogTypes?.find(
@@ -1118,35 +1635,76 @@ export class UserImpersonationResolver extends ResolverBase {
                     {
                         EntityName: 'MJ: Audit Log Types',
                         Fields: ['ID', 'Name'],
-                        MaxRows: 100,
+                        MaxRows: 200,
+                        BypassCache: true,
                         ResultType: 'simple',
                     },
                     privilegedUser
                 );
                 const types = typesRes.Success ? typesRes.Results ?? [] : [];
-                auditTypeId =
-                    types.find((t) => t.Name?.trim().toLowerCase() === params.auditTypeName.toLowerCase())?.ID ??
-                    types.find((t) => /impersonat|authorization|security|auth/i.test(t.Name ?? ''))?.ID ??
-                    types[0]?.ID;
+                auditTypeId = types.find(
+                    (t) => t.Name?.trim().toLowerCase() === params.auditTypeName.toLowerCase()
+                )?.ID;
             }
 
             if (!auditTypeId) {
-                return;
+                return false;
             }
+
+            const sanitizedDetails: Record<string, unknown> = {
+                ...params.details,
+                ipAddress: context.ClientIp ?? null,
+                userAgent: context.UserAgent ?? null,
+                requestOrigin: context.RequestOrigin ?? null,
+            };
+            // Defense-in-depth: guarantee raw key fields can NEVER enter AuditLog.Details
+            delete sanitizedDetails['RawApiKey'];
+            delete sanitizedDetails['rawApiKey'];
+            delete sanitizedDetails['RawKey'];
 
             const auditLog = await provider.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', privilegedUser);
             auditLog.NewRecord();
             auditLog.UserID = params.actorUserId;
             auditLog.AuditLogTypeID = auditTypeId;
+            if (params.authorizationName) {
+                const matchedAuth = provider.Authorizations?.find(
+                    (a) => a.Name?.trim().toLowerCase() === params.authorizationName!.toLowerCase()
+                );
+                if (matchedAuth?.ID) {
+                    auditLog.AuthorizationID = matchedAuth.ID;
+                }
+            }
             auditLog.Status = params.status;
             auditLog.Description = params.description;
-            auditLog.Details = JSON.stringify(params.details);
+            auditLog.Details = JSON.stringify(sanitizedDetails);
             const usersEntity = provider.Entities?.find((e) => e.Name === 'MJ: Users');
             auditLog.EntityID = usersEntity?.ID ?? null;
             auditLog.RecordID = params.targetUserId;
-            await auditLog.Save();
-        } catch {
-            // Audit log write is best-effort and must not block revocation or mask caller errors.
+            return Boolean(await auditLog.Save());
+        } catch (err) {
+            LogError(
+                `UserImpersonationResolver mandatory audit log write failed: ${err instanceof Error ? err.message : String(err)}`
+            );
+            return false;
         }
+    }
+
+    /**
+     * Best-effort audit writer for Denied / Ended events (must not block revocation or mask denials).
+     */
+    private async tryWriteAuditLog(
+        provider: IMetadataProvider,
+        privilegedUser: UserInfo,
+        context: AppContext,
+        params: {
+            readonly auditTypeName: string;
+            readonly status: 'Success' | 'Failed';
+            readonly actorUserId: string;
+            readonly targetUserId: string;
+            readonly description: string;
+            readonly details: Record<string, unknown>;
+        }
+    ): Promise<void> {
+        await this.writeAuditLogStrict(provider, privilegedUser, context, params);
     }
 }

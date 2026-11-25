@@ -6,6 +6,7 @@ import {
     MJUserImpersonationService,
     UserImpersonationBannerComponent,
     UserImpersonationDialogComponent,
+    type MJImpersonationMode,
     type MJImpersonationProviderLike,
     type MJImpersonationTransportAdapter,
 } from './index';
@@ -15,16 +16,25 @@ const USER_A_ID = '22222222-2222-4222-8222-222222222222';
 const USER_B_ID = '33333333-3333-4333-8333-333333333333';
 const KEY_A_ID = 'aaaa1111-1111-4111-8111-111111111111';
 
-function setupImpersonationTestingModule() {
+function setupImpersonationTestingModule(opts?: { canImpersonateWithWrites?: boolean }) {
+    const canImpersonateWithWrites = opts?.canImpersonateWithWrites ?? false;
     const actorProvider: MJImpersonationProviderLike = {
         CurrentUser: {
             ID: ACTOR_USER_ID,
             Name: 'Alice Admin',
             Email: 'alice@example.com',
         } as MJImpersonationProviderLike['CurrentUser'],
-        ExecuteGQL: vi.fn().mockImplementation(async (query: string) => {
+        ExecuteGQL: vi.fn().mockImplementation(async (query: string, variables?: Record<string, unknown>) => {
             if (query.includes('MJCanImpersonateUsers')) {
-                return { MJCanImpersonateUsers: { CanImpersonate: true, ResultCode: 'OK' } };
+                return {
+                    MJCanImpersonateUsers: {
+                        CanImpersonate: true,
+                        CanImpersonateWithWrites: canImpersonateWithWrites,
+                        DefaultTTLMinutes: 15,
+                        MaxTTLMinutes: 60,
+                        ResultCode: 'OK',
+                    },
+                };
             }
             if (query.includes('MJListImpersonatableUsers')) {
                 return {
@@ -52,12 +62,16 @@ function setupImpersonationTestingModule() {
                 };
             }
             if (query.includes('MJStartUserImpersonation')) {
+                const input = (variables?.['input'] ?? {}) as { Mode?: MJImpersonationMode };
+                const mode: MJImpersonationMode = input.Mode === 'ActAs' ? 'ActAs' : 'ViewAs';
                 return {
                     MJStartUserImpersonation: {
                         Success: true,
                         ResultCode: 'IMPERSONATION_STARTED',
                         RawApiKey: 'mj_sk_test',
                         APIKeyID: KEY_A_ID,
+                        Mode: mode,
+                        ReadOnly: mode !== 'ActAs',
                         TargetUser: {
                             UserID: USER_A_ID,
                             Name: 'Bob Analyst',
@@ -68,7 +82,13 @@ function setupImpersonationTestingModule() {
                 };
             }
             if (query.includes('MJEndUserImpersonation')) {
-                return { MJEndUserImpersonation: { Success: true, ResultCode: 'IMPERSONATION_ENDED', APIKeyID: KEY_A_ID } };
+                return {
+                    MJEndUserImpersonation: {
+                        Success: true,
+                        ResultCode: 'IMPERSONATION_ENDED',
+                        APIKeyID: KEY_A_ID,
+                    },
+                };
             }
             return {};
         }),
@@ -100,14 +120,14 @@ describe('UserImpersonationDialogComponent & UserImpersonationBannerComponent (D
         vi.restoreAllMocks();
     });
 
-    it('renders searchable users, adapter quick presets, and category filters inside the dialog', async () => {
-        const { service } = setupImpersonationTestingModule();
+    it('renders Read-Only mode chip by default, sanitizes unsafe icon classes, and filters by category/search', async () => {
+        const { service } = setupImpersonationTestingModule({ canImpersonateWithWrites: false });
         service.RegisterAppAdapter({
             id: 'test-adapter',
             title: 'Custom Switcher Title',
             categories: [
-                { key: 'analysts', label: 'Analysts' },
-                { key: 'execs', label: 'Executives' },
+                { key: 'analysts', label: 'Analysts', icon: 'fa-solid fa-chart-line' },
+                { key: 'execs', label: 'Executives', icon: '"><img src=x onerror=alert(1)>' },
             ],
             quickPresets: [
                 {
@@ -129,7 +149,6 @@ describe('UserImpersonationDialogComponent & UserImpersonationBannerComponent (D
         const fixture = TestBed.createComponent(UserImpersonationDialogComponent);
         fixture.detectChanges();
 
-        // Hidden until opened
         expect(fixture.nativeElement.querySelector('.impersonation-dialog')).toBeNull();
 
         service.OpenDialog();
@@ -139,8 +158,13 @@ describe('UserImpersonationDialogComponent & UserImpersonationBannerComponent (D
         const dialogEl = fixture.nativeElement.querySelector('.impersonation-dialog') as HTMLElement | null;
         expect(dialogEl).not.toBeNull();
         expect(dialogEl?.textContent).toContain('Custom Switcher Title');
-        expect(dialogEl?.textContent).toContain('Quick Analyst');
-        expect(dialogEl?.querySelectorAll('.impersonation-user-row')).toHaveLength(2);
+        expect(dialogEl?.textContent).toContain('Read-Only');
+        expect(dialogEl?.textContent).toContain('15m session TTL');
+        // Write mode bar is hidden when canImpersonateWithWrites is false
+        expect(dialogEl?.querySelector('.impersonation-mode-bar')).toBeNull();
+        // Unsafe icon payload rejected cleanly
+        expect(fixture.componentInstance.SanitizeIconClass('"><img src=x>')).toBe('');
+        expect(fixture.componentInstance.SanitizeIconClass('fa-solid fa-eye')).toBe('fa-solid fa-eye');
 
         // Filter by category pill
         fixture.componentInstance.SelectCategory('execs');
@@ -155,31 +179,55 @@ describe('UserImpersonationDialogComponent & UserImpersonationBannerComponent (D
         expect(dialogEl?.querySelectorAll('.impersonation-user-row')).toHaveLength(1);
         expect(dialogEl?.textContent).toContain('Bob Analyst');
 
-        // Escape closes dialog
         fixture.componentInstance.OnEscapeKey();
         fixture.detectChanges();
         expect(fixture.nativeElement.querySelector('.impersonation-dialog')).toBeNull();
     });
 
-    it('shows the active impersonation banner while impersonating and hides it after exit', async () => {
-        const { service } = setupImpersonationTestingModule();
+    it('surfaces [Read-Only] vs high-visibility [Write Mode Enabled] in dialog and banner when write mode is permitted', async () => {
+        const { service } = setupImpersonationTestingModule({ canImpersonateWithWrites: true });
         await service.CheckCanImpersonate();
 
-        const fixture = TestBed.createComponent(UserImpersonationBannerComponent);
-        fixture.detectChanges();
-        expect(fixture.nativeElement.querySelector('.impersonation-banner')).toBeNull();
+        const dialogFixture = TestBed.createComponent(UserImpersonationDialogComponent);
+        const bannerFixture = TestBed.createComponent(UserImpersonationBannerComponent);
+        dialogFixture.detectChanges();
+        bannerFixture.detectChanges();
 
+        // Start in default Read-Only mode -> Banner shows Viewing as ... [Read-Only]
         await service.StartImpersonation(USER_A_ID);
-        fixture.detectChanges();
+        bannerFixture.detectChanges();
+        let bannerEl = bannerFixture.nativeElement.querySelector('.impersonation-banner') as HTMLElement | null;
+        expect(bannerEl?.textContent).toContain('Viewing as');
+        expect(bannerEl?.textContent).toContain('[Read-Only]');
+        expect(bannerEl?.classList.contains('is-write-mode')).toBe(false);
 
-        const bannerEl = fixture.nativeElement.querySelector('.impersonation-banner') as HTMLElement | null;
-        expect(bannerEl).not.toBeNull();
-        expect(bannerEl?.textContent).toContain('Bob Analyst');
-        expect(bannerEl?.textContent).toContain('bob@example.com');
+        // Open dialog -> mode bar is rendered, defaults to ViewAs, switch to ActAs shows warning alert
+        service.OpenDialog();
+        await service.LoadUsers('', true);
+        dialogFixture.detectChanges();
+        expect(dialogFixture.componentInstance.SelectedMode).toBe('ViewAs');
+        expect(dialogFixture.nativeElement.querySelector('.impersonation-mode-bar')).not.toBeNull();
 
-        await fixture.componentInstance.OnExit();
-        fixture.detectChanges();
-        expect(fixture.nativeElement.querySelector('.impersonation-banner')).toBeNull();
+        dialogFixture.componentInstance.SelectMode('ActAs');
+        dialogFixture.detectChanges();
+        expect(dialogFixture.nativeElement.querySelector('.impersonation-write-warning')).not.toBeNull();
+
+        // Start in ActAs mode -> Banner switches to high-visibility Acting as ... [Write Mode Enabled]
+        await service.StartImpersonation(USER_A_ID, undefined, 'ActAs');
+        bannerFixture.detectChanges();
+        bannerEl = bannerFixture.nativeElement.querySelector('.impersonation-banner') as HTMLElement | null;
+        expect(bannerEl?.textContent).toContain('Acting as');
+        expect(bannerEl?.textContent).toContain('[Write Mode Enabled]');
+        expect(bannerEl?.classList.contains('is-write-mode')).toBe(true);
+
+        // Re-opening dialog ALWAYS resets SelectedMode back to safe ViewAs default
+        service.OpenDialog();
+        dialogFixture.detectChanges();
+        expect(dialogFixture.componentInstance.SelectedMode).toBe('ViewAs');
+
+        await bannerFixture.componentInstance.OnExit();
+        bannerFixture.detectChanges();
+        expect(bannerFixture.nativeElement.querySelector('.impersonation-banner')).toBeNull();
     });
 });
 

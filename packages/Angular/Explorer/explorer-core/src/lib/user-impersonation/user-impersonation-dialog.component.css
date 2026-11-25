@@ -39,7 +39,27 @@
 .impersonation-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--mj-space-2, 8px);
+}
+
+.impersonation-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full, 999px);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+  border: 1px solid var(--mj-status-info-border);
+}
+
+.impersonation-mode-chip[data-mode='ActAs'] {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border-color: var(--mj-status-error-border);
 }
 
 .impersonation-title-icon {
@@ -78,6 +98,61 @@
   color: var(--mj-status-warning-text);
   border-bottom: 1px solid var(--mj-status-warning-border);
   font-size: var(--mj-text-sm, 13px);
+}
+
+.impersonation-active-callout.is-write-mode {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border-bottom-color: var(--mj-status-error-border);
+}
+
+.impersonation-mode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2, 8px);
+  padding: var(--mj-space-2, 10px) var(--mj-space-5, 20px);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.impersonation-mode-option {
+  flex: 1 1 200px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--mj-radius-md, 8px);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.impersonation-mode-option.active {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-brand-primary);
+}
+
+.impersonation-mode-option.is-danger.active {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border-color: var(--mj-status-error-border);
+}
+
+.impersonation-write-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2, 8px);
+  padding: var(--mj-space-2, 8px) var(--mj-space-5, 20px);
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border-bottom: 1px solid var(--mj-status-error-border);
+  font-size: 12px;
 }
 
 .impersonation-controls {

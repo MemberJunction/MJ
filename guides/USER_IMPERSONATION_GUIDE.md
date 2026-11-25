@@ -1,109 +1,154 @@
 # User Impersonation Guide ("View As User...")
 
-MemberJunction provides a built-in, authorization-gated **User Impersonation** mechanism that lets explicitly permitted administrators temporarily experience Explorer and its GraphQL APIs with another user's exact permissions, roles, Field-Level Security (FLS), and Row-Level Security (RLS) scope — without logging out of their Identity Provider (IdP) session and without storing passwords or long-lived tokens.
+MemberJunction provides a built-in, defense-in-depth **User Impersonation** mechanism that lets explicitly permitted operators temporarily inspect Explorer and its APIs with an end user's exact permissions, roles, Field-Level Security (FLS), and Row-Level Security (RLS) scope — **server-enforced Read-Only (`ViewAs`) by default**, without signing out of their Identity Provider (IdP) session, and without storing passwords or long-lived tokens.
 
 > [!IMPORTANT]
-> **Locked down by default.** The `User Impersonation` authorization ships with **zero role assignments**. Nobody — not even `Owner`, `Administrator`, or `Developer` users — can list impersonatable users, mint an impersonation session, or see the `"View As User..."` avatar menu item until an administrator explicitly grants an `Allow` row in `MJ: Authorization Roles`.
+> **Dual-Key Locked Down by Default.** User impersonation is **completely disabled everywhere out of the box** (`MJ_ENABLE_USER_IMPERSONATION=false` AND **zero** role assignments on `User Impersonation`). Nobody — not even `Owner`, `Administrator`, or `Developer` users — can list impersonatable users, mint an impersonation session, or see `"View As User..."` in the avatar menu unless **BOTH** the server infrastructure opt-in flag (`MJ_ENABLE_USER_IMPERSONATION=true`) **AND** an explicit `Allow` row in `MJ: Authorization Roles` are configured.
 
 ---
 
-## Architecture Overview
+## 6-Layer Security Architecture
 
-User impersonation spans three layers:
+User impersonation enforces six independent server + client security layers:
 
-1. **Metadata (`metadata/authorizations/` & `metadata/audit-log-types/`)**
-   - `MJ: Authorizations` row **`User Impersonation`** (`062370F4-DAEC-4E5E-BD0A-4AF2A28968EE`, `IsActive = true`, `UseAuditLog = true`), with **no** rows in `metadata/authorization-roles/`.
-   - `MJ: Audit Log Types` rows: **`User Impersonation Started`**, **`User Impersonation Ended`**, and **`User Impersonation Denied`**.
-2. **Server Control Plane (`@memberjunction/server` → `UserImpersonationResolver`)**
-   - GraphQL operations `MJCanImpersonateUsers`, `MJListImpersonatableUsers`, `MJStartUserImpersonation`, and `MJEndUserImpersonation`.
-   - Mints a short-lived (`2h` default, `4h` max) scoped `MJ: API Keys` token labeled `MJ-Impersonation:<ActorEmail>-><TargetEmail>` bound to the target user with `full_access` scope, and immediately revokes/deletes it on exit or switch.
-3. **Explorer Shell & Extension Hook (`@memberjunction/ng-explorer-core`)**
-   - `MJUserImpersonationService` preserves the real authenticated `GraphQLDataProvider` (Bearer JWT) for all control-plane calls while swapping the active provider to the impersonated API key provider.
-   - `BaseUserMenu` conditionally displays **View As User...** (and **Switch Impersonated User...** / **Exit Impersonation** while active) under the User Avatar menu.
-   - `<mj-user-impersonation-dialog>` provides a responsive searchable picker (centered modal on desktop, bottom sheet on mobile) and `<mj-user-impersonation-banner>` pins an always-visible indicator across the top of the shell while active.
-   - `MJImpersonationAppAdapter` lets any downstream application enrich users, add one-click Quick Switch presets, add category filter pills, and run custom post-switch navigation.
+1. **Layer 1 — Dual-Key Infrastructure Kill Switch (Off by Default Everywhere)**
+   - Requires **BOTH** `process.env.MJ_ENABLE_USER_IMPERSONATION === 'true'` (or `userImpersonation.enabled: true` in `mj.config.cjs`, default `false`) **AND** an active `Allow` grant on the **`User Impersonation`** `MJ: Authorizations` row (`0` roles granted by default).
+   - Setting `MJ_ENABLE_USER_IMPERSONATION=false` acts as an instant emergency kill switch overriding `mj.config.cjs`: `MJCanImpersonateUsers`, `MJListImpersonatableUsers`, `MJStartUserImpersonation`, and active impersonation queries immediately fail closed (`FEATURE_DISABLED`), while `MJEndUserImpersonation` **remains operational** so operators and clients can still revoke and purge previously minted `MJ-Impersonation:` keys mid-incident.
+
+2. **Layer 2 — Server-Enforced Read-Only (`ViewAs`) by Default + Optional Triple-Gated `ActAs`**
+   - Default mode is **`ViewAs` (`ReadOnly: true`)**, eliminating non-repudiation and user-framing risk.
+   - Enforced across **every transport and data path** in `MJServer`:
+     - **Apollo Server (`CreateImpersonationApolloPlugin`)**: `didResolveOperation` rejects 100% of GraphQL `mutation` operations (except standalone `MJEndUserImpersonation` self-revocation, blocking batched-mutation smuggling) with `IMPERSONATION_READ_ONLY`.
+     - **WebSocket `graphql-ws` (`ValidateImpersonationWebSocketSubscribe`)**: re-validates key revocation/expiry and rejects WebSocket mutations on `onSubscribe`, plus closes sockets automatically at `ExpiresAt`.
+     - **Express Post-Auth HTTP Guard (`CreateImpersonationHttpGuardMiddleware`)**: blocks non-read REST `/api/v1/*` requests and blocks `/oauth/*`, `/magic-link/*`, and `/widget/*` capability routes.
+     - **Core DataHooks (`ImpersonationPreSaveHook`, `ImpersonationPreDeleteHook`, `ImpersonationPreRunViewHook`)**: rejects client `BaseEntity.Save()` and `BaseEntity.Delete()` calls and forces `SaveViewResults = false`.
+   - **Optional Write Mode (`Mode: 'ActAs'`)** for controlled QA/dev environments requires **ALL THREE**:
+     1. `MJ_ENABLE_USER_IMPERSONATION=true` (`userImpersonation.enabled: true`),
+     2. `MJ_USER_IMPERSONATION_ALLOW_WRITES=true` (`userImpersonation.allowWrites: true`, default `false`), **AND**
+     3. A **direct** `Allow` grant (never inherited from parent `User Impersonation`!) on child authorization **`User Impersonation: Act As (Allow Writes)`** (`C0D0BBD6-74B8-4CE3-ADF6-4081358EE0B9`, `0` roles granted by default).
+
+3. **Layer 3 — Strict Anti-Escalation & Live Target Privilege Ceiling**
+   - Hard-blocks listing or impersonating any account that:
+     - Is `System` (`Type = 'System'`, `Name = 'System'`, well-known system user, or synthetic anonymous guest),
+     - Is `Owner` (`Type = 'Owner'`),
+     - Is inactive (`IsActive = false`),
+     - Is the caller themselves (`TargetUserID === ActorUserID`),
+     - Holds any role in `userImpersonation.protectedTargetRoles` (default: `['Administrator', 'Developer', 'Integration']`),
+     - Holds `Allow` on `User Impersonation` or `User Impersonation: Act As (Allow Writes)` (peer impersonators can never impersonate one another).
+   - Verified **live against the database (`BypassCache: true`)**, cross-checked with `UserCache`, and re-verified on **every incoming request** in `context.ts` (`GetUserPayload`) to defeat mid-session promotion TOCTOU races.
+
+4. **Layer 4 — Sensitive Entity, Secret & Private Conversation Isolation (Even in `ActAs` Mode)**
+   - Impersonation keys **never** receive `full_access`, `apikey:*`, or `agent:trusted` scopes; they receive narrow scopes bound to the `MJAPI` application plus `Priority = 1000, IsDeny = true` scope rules.
+   - Additionally enforced at `PreRunView`, `PostRunView`, `PreSave`, `PreDelete`, `ResolverBase` (`CheckUserReadPermissions`, `canMapEntityRecordForUser`, `ArrayMapFieldNamesToCodeNames`, `ExtraFilter` SQL subquery screening), `AdhocQueryResolver`, `QueryResolver`, `DatasetResolver`, `UserResolver`, and `EntityRecordNameResolver`:
+     - **Blocked completely (`ViewAs` & `ActAs`)**: `MJ: API Keys*`, `MJ: Credentials*`, `MJ: AI *Credentials*`, `MJ: Encryption Keys*`, `MJ: O Auth*`, `MJ: Audit Logs*`, `MJ: Users` (except resolving own `CurrentUser` at session bootstrap via `AsyncLocalStorage`), `MJ: Roles`, `MJ: User Roles`, `MJ: Authorizations*`, `MJ: Entity *Permissions`, `MJ: Authentication Providers`, `MJ: Magic Link*`, and `MJ: Artifact Guest Share Links`.
+     - **Private 1:1 Conversation Isolation**: Unanchored `MJ: Conversations` (`AnchorType IS NULL`) and their `MJ: Conversation Details` are restricted strictly to `UserID = targetUserId`.
+
+5. **Layer 5 — Short Blast-Radius TTL, UUID Single-Active-Session & Fail-Closed Audit Trail**
+   - **Short TTL**: Default **`15` minutes**, minimum **`5` minutes**, hard maximum **`60` minutes** (configurable downward via `userImpersonation.maxTtlMinutes` or `MJ_USER_IMPERSONATION_MAX_TTL_MINUTES`).
+   - **Collision-Proof Label & Single Active Key per Actor**: Keys are labeled `MJ-Impersonation:v1:<RO|RW>:<actorUserUUID>:<targetUserUUID>` (fixed-width UUIDs immune to email changes or delimiter injection). Minting a new session serializes per actor and automatically revokes & deletes any prior `MJ-Impersonation:` key minted by that actor.
+   - **Mandatory Fail-Closed Audit Logging**: `MJStartUserImpersonation` persists the `MJ: Audit Logs` (`User Impersonation Started`) record — capturing caller `ipAddress`, `userAgent`, `requestOrigin`, `mode`, `readOnly`, `ttlMinutes`, and `expiresAt` (never `RawApiKey`!) — **before** returning `RawApiKey`. If the audit write fails or throws, the newly minted key is immediately revoked and deleted and the mutation returns `ResultCode: 'AUDIT_LOG_FAILED'` (`Success: false`).
+
+6. **Layer 6 — Header Anti-Smuggling & Client-Side Hygiene**
+   - `context.ts` rejects duplicate conflicting auth headers (`HTTP 400`) and `UserImpersonationResolver` rejects any API-key principal or dual-header (`Authorization: Bearer` + `X-API-Key` / `x-mj-user-api-key`) request.
+   - `MJUserImpersonationService` holds `rawApiKey` only in a transient local variable during `GraphQLDataProvider` initialization (never stored on service fields, observable state, DOM attributes, URLs, `UserInfoEngine`, or browser storage), flushes pending actor `UserInfoEngine` settings before switching, suppresses `UserInfoEngine.SetSetting*` mutations during Read-Only impersonation, auto-exits at `ExpiresAt`, and sends a best-effort `keepalive` revocation request on `window.pagehide`.
+
+---
 
 ### End-to-End Sequence
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Admin as Authorized User
+    actor Admin as Authorized Operator
     participant Shell as Explorer Shell / Avatar Menu
     participant Svc as MJUserImpersonationService
     participant Orig as Original Provider (Bearer JWT)
     participant API as MJServer UserImpersonationResolver
     participant Keys as APIKeyEngine & Audit Logs
-    participant Imp as Impersonated Provider (x-api-key)
+    participant Imp as Impersonated Provider (X-API-Key)
 
     Shell->>Svc: CheckCanImpersonate() after login
     Svc->>Orig: query MJCanImpersonateUsers
-    Orig->>API: Bearer JWT
-    API->>API: Verify non-impersonation session + Allow on "User Impersonation"
-    API-->>Svc: CanImpersonate: true
+    Orig->>API: Bearer JWT (no API key headers)
+    API->>API: Verify MJ_ENABLE_USER_IMPERSONATION=true + Allow on "User Impersonation"
+    API-->>Svc: { CanImpersonate: true, CanImpersonateWithWrites, DefaultTTLMinutes: 15 }
     Shell->>Shell: Show "View As User..." in User Avatar Menu
 
-    Admin->>Shell: Click "View As User..." & select Target User
-    Svc->>Orig: mutation MJStartUserImpersonation(TargetUserID)
+    Admin->>Shell: Click "View As User..." & select Eligible Target User
+    Svc->>Svc: Flush pending actor UserInfoEngine settings
+    Svc->>Orig: mutation MJStartUserImpersonation(TargetUserID, Mode: "ViewAs")
     Orig->>API: Bearer JWT
-    API->>API: Reject chained impersonation, System, inactive, or self
-    API->>Keys: CreateAPIKey("MJ-Impersonation:admin->target", TTL <= 4h) + full_access scope
-    API->>Keys: Write Audit Log ("User Impersonation Started")
-    API-->>Svc: { RawApiKey, APIKeyID, ExpiresAt, TargetUser }
+    API->>API: Live DB BypassCache check: reject System/Owner/Admin/Dev/Integration/Peer/Self
+    API->>Keys: Revoke prior actor keys + CreateAPIKey("MJ-Impersonation:v1:RO:<actorUUID>:<targetUUID>", TTL=15m)
+    API->>Keys: Bind MJAPI app + attach narrow scopes + Priority=1000 IsDeny rules
+    API->>Keys: Mandatory Audit Log ("User Impersonation Started" + IP/UA) — rollback key if save fails!
+    API-->>Svc: { RawApiKey, APIKeyID, ExpiresAt, Mode: "ViewAs", ReadOnly: true, TargetUser }
 
-    Svc->>Imp: new GraphQLDataProvider(true) + Config(RawApiKey) + RefreshCurrentUser()
-    Svc->>Svc: Swap Metadata.Provider, GlobalObjectStore, AppManager/Workspace/SharedService
-    Svc->>Shell: Close stale tabs + emit MJEventType.TenantChanged (flush ComponentCacheManager)
-    Svc->>Shell: Invoke active MJImpersonationAppAdapter.afterSwitch(target)
-    Shell->>Admin: Pin <mj-user-impersonation-banner> ("Viewing as Target · Switch · Exit")
+    Svc->>Imp: new GraphQLDataProvider(true) + Config(RawApiKey) + RefreshCurrentUser() (zero RawApiKey ref)
+    Svc->>Svc: Suppress RO UserInfoEngine writes + swap Metadata.Provider & app/workspace refs
+    Svc->>Shell: Close stale tabs + emit MJEventType.TenantChanged + schedule ExpiresAt auto-exit
+    Shell->>Admin: Pin <mj-user-impersonation-banner> ("Viewing as Target [Read-Only] · Switch · Exit")
 
-    Admin->>Shell: Click "Exit" (or switch to another user)
+    Admin->>Shell: Click "Exit" (or switch user / TTL expiry / pagehide)
     Svc->>Orig: mutation MJEndUserImpersonation(APIKeyID)
     Orig->>API: Bearer JWT
-    API->>Keys: Delete APIKeyScopes + RevokeAPIKey() + Delete key + Audit ("User Impersonation Ended")
-    Svc->>Svc: Restore Original Provider + Dispose Impersonated Provider + TenantChanged
+    API->>Keys: Delete scopes & app bindings + RevokeAPIKey() + Delete key + Audit ("User Impersonation Ended")
+    Svc->>Svc: Restore Original Provider & UserInfoEngine writes + Dispose Impersonated Provider + TenantChanged
 ```
 
 ---
 
-## Security Invariants (Fail-Closed)
+## Enabling User Impersonation
 
-| Invariant | Enforcement |
-|---|---|
-| **Zero default access** | `metadata/authorizations/.user-impersonation-authorizations.json` creates `User Impersonation` with zero `MJ: Authorization Roles` grants. `EvaluateUserImpersonationAuthorization()` **never** auto-allows `Owner`, `Administrator`, or `Developer` users without an explicit `Allow` grant. |
-| **Deny overrides Allow** | If any role held by the caller has a `Deny` grant on `User Impersonation`, access is denied even if another role holds `Allow` on `User Impersonation` or a parent authorization. |
-| **Anti-chaining** | Any request whose `context.userPayload.apiKeyId` resolves to an `MJ-Impersonation:` API key (or cannot be verified) is rejected fail-closed with `FORBIDDEN_IMPERSONATION_CHAIN`. An impersonated session can never list users or mint another impersonation key. |
-| **Scope-limited refusal** | `UserImpersonationResolver` is decorated with `@RefuseScopeLimitedPrincipals()` and checks `IsScopeLimitedPrincipal(user)`, blocking anonymous or resource-scoped magic-link sessions. |
-| **Forbidden targets** | `System` users (`Type = 'System'`, `Name = 'System'`, or the resolved well-known System user), inactive users (`IsActive = 0`), and self-impersonation are excluded from `MJListImpersonatableUsers` and rejected by `MJStartUserImpersonation`. |
-| **Bounded short-lived keys** | Every minted key is clamped to **5–240 minutes** (default **120 minutes / 2 hours**), prefixed with `MJ-Impersonation:`, and immediately stripped of scopes, revoked via `APIKeyEngine.RevokeAPIKey()`, and deleted on exit or switch. `MJEndUserImpersonation` refuses to revoke keys without the `MJ-Impersonation:` prefix. |
-| **No IdP credential storage** | Impersonation keys exist only in memory inside the active browser tab (`MJUserImpersonationService`) — never persisted to `localStorage`, `sessionStorage`, or cookies. Refreshing the browser tab cleanly returns to the real authenticated session. |
-| **Full RLS / FLS fidelity** | Every GraphQL query and mutation executed by the impersonated `GraphQLDataProvider` authenticates over `X-API-Key` as the target user, passing through MJServer's real `UserCache`, `EntityPermissions`, `RowLevelSecurityFilters`, and `FieldLevelSecurity` pipelines. |
+Because both keys of the dual-key gate are **off by default**, enabling `"View As User..."` requires two explicit steps:
 
----
+### Step 1: Server Infrastructure Opt-In
 
-## Enabling User Impersonation for an Admin Role
+Set the environment variable on `MJAPI` (or configure `userImpersonation` in `mj.config.cjs`):
 
-Because nobody has access by default, an administrator must explicitly opt a role into the **`User Impersonation`** authorization.
+```bash
+MJ_ENABLE_USER_IMPERSONATION=true
+# Optional: cap TTL below the 60-minute hard ceiling (default is 15 minutes)
+# MJ_USER_IMPERSONATION_MAX_TTL_MINUTES=30
+```
 
-### Option 1: Via MJ Explorer Admin UI
+Or in `mj.config.cjs`:
 
-1. Open **Admin → Security → Authorizations** (or browse the `MJ: Authorizations` entity).
-2. Locate **`User Impersonation`** (`IsActive = true`).
+```javascript
+module.exports = {
+  // ...
+  userImpersonation: {
+    enabled: true,              // env override: MJ_ENABLE_USER_IMPERSONATION
+    allowWrites: false,         // keep false in production! env override: MJ_USER_IMPERSONATION_ALLOW_WRITES
+    defaultTtlMinutes: 15,      // 5..60
+    maxTtlMinutes: 60,          // 5..60
+    protectedTargetRoles: ['Administrator', 'Developer', 'Integration'],
+  },
+};
+```
+
+> [!WARNING]
+> Leave `allowWrites: false` (`MJ_USER_IMPERSONATION_ALLOW_WRITES` unset or `false`) in production environments so every impersonation session is strictly Read-Only (`ViewAs`). Only enable `allowWrites: true` alongside a dedicated role granted **`User Impersonation: Act As (Allow Writes)`** in controlled QA/staging environments when interactive write testing is explicitly required.
+
+### Step 2: Grant the `User Impersonation` Authorization to a Dedicated Operator Role
+
+#### Option A: Via MJ Explorer Admin UI
+
+1. Open **Admin → Security → Authorizations** (`MJ: Authorizations`).
+2. Locate **`User Impersonation`** (`062370F4-DAEC-4E5E-BD0A-4AF2A28968EE`).
 3. Under **Authorization Roles** (`MJ: Authorization Roles`), add a row:
-   - **Role**: the dedicated role you want to permit (for example, `Administrator` or a dedicated `Support Impersonator` role)
+   - **Role**: a dedicated operator role (for example, `Support Impersonator`)
    - **Type**: `Allow`
-4. Save. Once metadata refreshes (or on next sign-in), users holding that role will see **View As User...** under the User Avatar menu.
+4. *(Note: Because peer impersonators and holders of `protectedTargetRoles` cannot be impersonated, granting `User Impersonation` to a narrow support/operator role keeps end-user accounts impersonatable while protecting all privileged accounts.)*
 
-### Option 2: Declarative Metadata (`mj sync push`)
-
-In your deployment or application metadata repository, add a file under `metadata/authorization-roles/`:
+#### Option B: Declarative Metadata (`mj sync push`)
 
 ```json
 [
   {
     "fields": {
       "AuthorizationID": "@lookup:MJ: Authorizations.Name=User Impersonation",
-      "RoleID": "@lookup:MJ: Roles.Name=Administrator",
+      "RoleID": "@lookup:MJ: Roles.Name=Support Impersonator",
       "Type": "Allow"
     },
     "primaryKey": {
@@ -115,17 +160,15 @@ In your deployment or application metadata repository, add a file under `metadat
 
 Push via `mj sync push --dir=metadata --include="authorization-roles"`.
 
-To explicitly block a specific role even if its members also hold a parent authorization, add a row with `"Type": "Deny"`.
-
 ---
 
 ## Auditing Impersonation Activity
 
-Every impersonation lifecycle event is recorded in `MJ: Audit Logs` using the seeded audit log types:
+Every impersonation lifecycle event is recorded in `MJ: Audit Logs`:
 
-- **`User Impersonation Started`** (`Status = 'Success'`) — `UserID` is the real actor, `RecordID` is the target user, and `Details` JSON contains `actorUserId`, `actorEmail`, `targetUserId`, `targetEmail`, `apiKeyId`, `ttlMinutes`, and `expiresAt`.
-- **`User Impersonation Ended`** (`Status = 'Success'`) — `Details` JSON contains `actorUserId`, `targetUserId`, and `apiKeyId`.
-- **`User Impersonation Denied`** (`Status = 'Failed'`) — written whenever an unauthorized list/start/end request, chained impersonation attempt, or forbidden target (`System`) is blocked.
+- **`User Impersonation Started`** (`Status = 'Success'`, **mandatory fail-closed**): `UserID` is the real actor, `RecordID` is the target user, `AuthorizationID` links to `User Impersonation` (or `User Impersonation: Act As (Allow Writes)`), and `Details` JSON records `actorUserId`, `actorEmail`, `targetUserId`, `targetEmail`, `apiKeyId`, `mode`, `readOnly`, `ttlMinutes`, `expiresAt`, `ipAddress`, `userAgent`, and `requestOrigin`.
+- **`User Impersonation Ended`** (`Status = 'Success'`): `Details` JSON records `actorUserId`, `invokedByUserId`, `targetUserId`, and `apiKeyId`.
+- **`User Impersonation Denied`** (`Status = 'Failed'`): written whenever a disabled-feature probe, unauthorized list/start/end call, `ActAs` write-mode refusal, chained impersonation attempt, or forbidden target (`System`/`Owner`/`Administrator`/peer impersonator) is blocked.
 
 Example audit query (SQL Server):
 
@@ -155,7 +198,7 @@ ORDER BY al.__mj_CreatedAt DESC;
 
 ## Building App-Specific Extensions (`MJImpersonationAppAdapter`)
 
-The core Explorer dialog works out of the box for any MemberJunction deployment with zero app code. Applications that want richer domain context — such as tenant/organization labels, entitlement badges, one-click persona presets, category filter pills, hiding domain service accounts, or landing on a specific dashboard after switching — can register an `MJImpersonationAppAdapter` with `MJUserImpersonationService`:
+The core Explorer dialog works out of the box for any MemberJunction deployment with zero application code. Applications that want richer domain context — such as tenant/organization labels, entitlement badges, one-click persona presets, category filter pills, hiding domain service accounts, or landing on a specific dashboard after switching — can register an `MJImpersonationAppAdapter` with `MJUserImpersonationService`:
 
 ```typescript
 import { Injectable, inject } from '@angular/core';
@@ -174,11 +217,10 @@ export class WorkspaceImpersonationExtension {
   public Initialize(): () => void {
     const adapter: MJImpersonationAppAdapter = {
       id: 'my-app-impersonation',
-      // Scope to specific app path(s) or omit to apply globally across Explorer
       appPaths: ['my-app'],
       priority: 10,
       title: 'View Workspace As User',
-      subtitle: 'Preview customer-facing workspaces and RLS policies as any active user.',
+      subtitle: 'Preview customer-facing workspaces and RLS policies in Read-Only mode.',
       categories: [
         { key: 'internal', label: 'Internal Team', icon: 'fa-solid fa-building' },
         { key: 'external', label: 'External Members', icon: 'fa-solid fa-user-group' },
@@ -220,16 +262,7 @@ export class WorkspaceImpersonationExtension {
 }
 ```
 
-Non-DI application drivers (such as class-factory UI drivers) can also look up the active service instance via `GetActiveUserImpersonationService()` from `@memberjunction/ng-explorer-core`.
-
-### Provider Swap Implementation Notes
-
-When switching into or out of an impersonated session, `MJUserImpersonationService` handles four subtle runtime details automatically:
-
-1. **Refresh target identity after `Config()`**: `ProviderBase.Config()` fast-copies entity metadata from the active global provider, so `MJUserImpersonationService` explicitly calls `await provider.RefreshCurrentUser()` on the impersonated `GraphQLDataProvider` before installing it.
-2. **In-place provider reference sync**: Updates `SetProvider(provider)`, the `GraphQLDataProvider` Global Object Store slot, `ApplicationManager` (and system apps), `WorkspaceStateManager`, and `SharedService.Instance`, and invalidates the `RunView` dedup cache — deliberately avoiding `UserInfoEngine.Instance.Config(true)` so Explorer's shell does not tear down or re-provision default apps as a restricted user.
-3. **Cache flush**: Closes non-active tabs and raises `MJEventType.TenantChanged` on `MJGlobal.Instance`, causing `ComponentCacheManager` to destroy detached resource components so previous-user data never leaks across switches.
-4. **Error rollback**: If connecting the new impersonated provider fails, `MJUserImpersonationService` immediately revokes the newly minted key over the preserved original provider and keeps the caller on their existing session.
+Non-DI application drivers can also look up the active service instance via `GetActiveUserImpersonationService()` from `@memberjunction/ng-explorer-core`.
 
 ---
 

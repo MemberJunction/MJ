@@ -124,6 +124,9 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_COMMS_HMAC_SECRET` | Secret that signs and verifies Communications V2 click-tracking links and open pixels. Long random value, identical on every instance. Unset: links are not rewritten, `/comms/click` rejects every request, and open pixels are unsigned — see [Communications V2](#communications-v2) | (optional) |
 | `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` | SendGrid Event Webhook public verification key for `POST /comms/webhooks/sendgrid`. Unset: that route answers `401` | (optional) |
 | `MJ_COMMS_PREFERENCE_ELEMENT_SRC` | URL of the `<mj-comms-preference-center>` element bundle used by `GET /comms/preferences/:token` | bundle from `@memberjunction/ng-communications`, else the built-in page |
+| `MJ_ENABLE_USER_IMPERSONATION` | Infrastructure opt-in for Generic User Impersonation (`'true'` enables; `'false'` emergency kill switch overrides `mj.config.cjs`) — see [User Impersonation](#user-impersonation) | `false` |
+| `MJ_USER_IMPERSONATION_ALLOW_WRITES` | Opt-in allowing triple-gated `ActAs` write mode when `MJ_ENABLE_USER_IMPERSONATION=true` and caller holds direct `User Impersonation: Act As (Allow Writes)` | `false` |
+| `MJ_USER_IMPERSONATION_MAX_TTL_MINUTES` | Upper TTL bound (minutes, clamped to `5..60`) for temporary impersonation API keys | `60` |
 
 ### Configuration File (`mj.config.cjs`)
 
@@ -587,21 +590,22 @@ The server supports two types of API key authentication:
 
 ### User Impersonation
 
-`UserImpersonationResolver` (`src/resolvers/UserImpersonationResolver.ts`) provides a built-in, fail-closed GraphQL control plane that lets explicitly authorized administrators temporarily view the application as another active user without signing out of their IdP session.
+`UserImpersonationResolver` (`src/resolvers/UserImpersonationResolver.ts`) and `src/auth/impersonationGuard.ts` provide a built-in, 6-layer fail-closed control plane that lets explicitly authorized operators temporarily inspect the application as an eligible end user (**server-enforced Read-Only `ViewAs` by default**) without signing out of their IdP session.
 
 | GraphQL Operation | Kind | Purpose |
 |---|---|---|
-| `MJCanImpersonateUsers` | Query | Returns `{ CanImpersonate, AuthorizationName, ResultCode, Message }` for the current non-impersonated session |
-| `MJListImpersonatableUsers(input)` | Query | Lists active, non-system users excluding the caller; supports case-insensitive `Search` across name/email/title/roles and `Limit` (default `100`, max `500`) |
-| `MJStartUserImpersonation(input)` | Mutation | Mints a temporary scoped `MJ: API Keys` token (`full_access`, default `120` min TTL, clamped to `5..240` min) labeled `MJ-Impersonation:<ActorEmail>-><TargetEmail>` and returns `{ RawApiKey, APIKeyID, ExpiresAt, TargetUser }` |
-| `MJEndUserImpersonation(input)` | Mutation | Deletes all `MJ: API Key Scopes` for the key, revokes it via `APIKeyEngine.RevokeAPIKey()`, deletes the key row when no FK retains it, and refreshes the engine cache |
+| `MJCanImpersonateUsers` | Query | Returns `{ CanImpersonate, CanImpersonateWithWrites, AuthorizationName, WriteAuthorizationName, DefaultTTLMinutes, MaxTTLMinutes, ResultCode, Message }` |
+| `MJListImpersonatableUsers(input)` | Query | Lists eligible active non-privileged users (live DB `BypassCache: true`) excluding `System`, `Owner`, `protectedTargetRoles`, peer impersonators, and self |
+| `MJStartUserImpersonation(input)` | Mutation | Revokes any prior key for the actor, mints a narrow-scoped key (`MJ-Impersonation:v1:<RO\|RW>:<actorUUID>:<targetUUID>`, default `15` min TTL, clamped to `5..60` min, bound to `MJAPI`, `Priority=1000` `IsDeny` rules, **never `full_access`**), persists mandatory fail-closed audit log (`AUDIT_LOG_FAILED` rolls back the key), and returns `{ RawApiKey, APIKeyID, ExpiresAt, Mode, ReadOnly, TargetUser }` |
+| `MJEndUserImpersonation(input)` | Mutation | Deletes all `MJ: API Key Scopes` & `MJ: API Key Applications`, revokes via `APIKeyEngine.RevokeAPIKey()`, deletes the key row, and logs `User Impersonation Ended` (remains operational even when `MJ_ENABLE_USER_IMPERSONATION=false` for incident response) |
 
 **Security invariants (fail-closed):**
 
-- **Locked down to nobody by default**: Every operation checks `EvaluateUserImpersonationAuthorization()` against the `MJ: Authorizations` row named **`User Impersonation`** (`metadata/authorizations/.user-impersonation-authorizations.json`). Zero `MJ: Authorization Roles` rows ship by default, and `Owner`, `Administrator`, and `Developer` accounts are **not** auto-allowed. An administrator must explicitly grant an `Allow` row in `MJ: Authorization Roles` (and any `Deny` grant takes precedence).
-- **Anti-chaining protection**: Any request authenticated with an `MJ-Impersonation:` API key (`context.userPayload.apiKeyId`) is rejected with `FORBIDDEN_IMPERSONATION_CHAIN`, preventing nested impersonation or user directory enumeration from an impersonated session. Scope-limited principals are also refused via `@RefuseScopeLimitedPrincipals()`.
-- **Target safety**: `System` users (`Type = 'System'`, `Name = 'System'`, or the resolved system user), inactive users (`IsActive = 0`), and self-impersonation are excluded from listing and rejected on `MJStartUserImpersonation`.
-- **Full audit trail**: Writes `MJ: Audit Logs` records under `User Impersonation Started`, `User Impersonation Ended`, and `User Impersonation Denied` (`metadata/audit-log-types/.user-impersonation-audit-types.json`) capturing `actorUserId`, `actorEmail`, `targetUserId`, `targetEmail`, `apiKeyId`, `ttlMinutes`, and `expiresAt`.
+- **Dual-key kill switch (off by default everywhere)**: Requires **BOTH** `MJ_ENABLE_USER_IMPERSONATION=true` (`userImpersonation.enabled: true`, default `false`) **AND** an explicit `Allow` grant on **`User Impersonation`** (`0` roles granted by default).
+- **Server-enforced Read-Only (`ViewAs`) by default**: Apollo `CreateImpersonationApolloPlugin` (`didResolveOperation`), WebSocket `ValidateImpersonationWebSocketSubscribe` (`onSubscribe`), `CreateImpersonationHttpGuardMiddleware`, and `PreSave`/`PreDelete`/`PreRunView` DataHooks block 100% of client write operations (allowing only standalone `MJEndUserImpersonation` self-revocation). Optional `ActAs` write mode requires `enabled: true` + `allowWrites: true` (`MJ_USER_IMPERSONATION_ALLOW_WRITES=true`) + a **direct** `Allow` grant on child authorization **`User Impersonation: Act As (Allow Writes)`** (never inherited from parent).
+- **Anti-escalation & live target ceiling**: Hard-blocks `System`, `Owner`, inactive accounts, self, `Administrator`/`Developer`/`Integration` (`protectedTargetRoles`), and peer `User Impersonation` holders — checked live against the DB at mint time and re-verified on every request in `context.ts`.
+- **Sensitive-entity & private conversation isolation**: Blocks reading and writing API keys, credentials, encryption keys, OAuth tokens, audit logs, users (except own `CurrentUser` bootstrap), roles, authorizations, entity permissions, magic links, and other users' unanchored 1:1 conversations across scopes, DataHooks, `ResolverBase`, SQL subqueries, `AdhocQueryResolver`, `QueryResolver`, `DatasetResolver`, and `EntityRecordNameResolver`.
+- **Mandatory fail-closed audit trail**: Captures `actorUserId`, `targetUserId`, `apiKeyId`, `mode`, `readOnly`, `ttlMinutes`, `expiresAt`, `ipAddress`, and `userAgent` (never `RawApiKey`). If persisting `User Impersonation Started` fails, the minted key is immediately revoked and deleted (`AUDIT_LOG_FAILED`).
 
 See the full end-to-end guide in [guides/USER_IMPERSONATION_GUIDE.md](../../guides/USER_IMPERSONATION_GUIDE.md).
 

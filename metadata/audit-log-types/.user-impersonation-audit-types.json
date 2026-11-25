@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "User Impersonation Started",
-      "Description": "An authorized user started a temporary impersonation session viewing the system as another user. Details JSON captures actorUserId, actorEmail, targetUserId, targetEmail, apiKeyId, and expiresAt.",
+      "Description": "An authorized user started a temporary impersonation session. Fail-closed: if this audit row fails to save, the minted key is immediately revoked and deleted before returning. Details JSON captures actorUserId, actorEmail, targetUserId, targetEmail, apiKeyId, mode ('ViewAs' | 'ActAs'), readOnly, ttlMinutes, expiresAt, ipAddress, and userAgent (never rawApiKey).",
       "ParentID": null,
       "AuthorizationID": null
     },
@@ -13,7 +13,7 @@
   {
     "fields": {
       "Name": "User Impersonation Ended",
-      "Description": "A temporary user impersonation session ended and its scoped API key was revoked and cleaned up. Details JSON captures actorUserId, targetUserId, and apiKeyId.",
+      "Description": "A temporary user impersonation session ended and its scoped API key was revoked and cleaned up. Details JSON captures actorUserId, targetUserId, apiKeyId, ipAddress, and userAgent.",
       "ParentID": null,
       "AuthorizationID": null
     },
@@ -24,7 +24,7 @@
   {
     "fields": {
       "Name": "User Impersonation Denied",
-      "Description": "A user impersonation request was denied by server-side authorization or anti-escalation checks (missing authorization grant, nested impersonation attempt, or forbidden target user).",
+      "Description": "A user impersonation request was denied by server-side infrastructure kill-switch, authorization, anti-chaining, header-smuggling, or target privilege-ceiling checks.",
       "ParentID": null,
       "AuthorizationID": null
     },

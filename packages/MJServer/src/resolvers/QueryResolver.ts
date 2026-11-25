@@ -1,6 +1,6 @@
-import { Arg, Ctx, ObjectType, Query, Resolver, Field, Int, InputType } from 'type-graphql';
+import { Arg, Ctx, ObjectType, Query, Resolver, Field, Int, InputType, AuthorizationError } from 'type-graphql';
 import { RunQuery, IRunQueryProvider, IMetadataProvider, RunQueryParams, LogError, RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult, RunQueryEnrichment } from '@memberjunction/core';
-import { AppContext } from '../types.js';
+import { AppContext, UserPayload } from '../types.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { Metadata } from '@memberjunction/core';
@@ -9,6 +9,7 @@ import { GetReadOnlyProvider } from '../util.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { GetImpersonationSession, IsSavedQueryForbiddenDuringImpersonation } from '../auth/impersonationGuard.js';
 
 /**
  * Input type for batch query execution - allows running multiple queries in a single network call
@@ -199,6 +200,39 @@ export class RunQueryResolver extends ResolverBase {
       return queries[0];
     }
   }
+
+  private assertSavedQueryAllowedForImpersonation(
+    md: IMetadataProvider,
+    userPayload: UserPayload | undefined,
+    ref: { QueryID?: string; QueryName?: string; CategoryID?: string; CategoryPath?: string }
+  ): void {
+    if (!GetImpersonationSession(userPayload)) {
+      return;
+    }
+    const allQueries = md.Queries ?? [];
+    const matched = allQueries.find((q) => {
+      if (ref.QueryID) {
+        return q.ID.trim().toLowerCase() === ref.QueryID.trim().toLowerCase();
+      }
+      if (ref.QueryName) {
+        let ok = q.Name.trim().toLowerCase() === ref.QueryName.trim().toLowerCase();
+        if (ref.CategoryID) {
+          ok = ok && q.CategoryID?.trim().toLowerCase() === ref.CategoryID.trim().toLowerCase();
+        }
+        if (ref.CategoryPath) {
+          ok = ok && q.CategoryPath?.trim().toLowerCase() === ref.CategoryPath.trim().toLowerCase();
+        }
+        return ok;
+      }
+      return false;
+    });
+    if (IsSavedQueryForbiddenDuringImpersonation(matched, md.Entities)) {
+      throw new AuthorizationError(
+        `Saved query '${matched?.Name ?? ref.QueryName ?? ref.QueryID ?? ''}' touches security/credential entities prohibited during user impersonation.`
+      );
+    }
+  }
+
   @Query(() => RunQueryResultType)
   async GetQueryData(@Arg('QueryID', () => String) QueryID: string,
                      @Ctx() context: AppContext,
@@ -216,6 +250,7 @@ export class RunQueryResolver extends ResolverBase {
 
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const md = provider as unknown as IMetadataProvider;
+    this.assertSavedQueryAllowedForImpersonation(md, context.userPayload, { QueryID, CategoryID, CategoryPath });
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
     const result = await rq.RunQuery(
       {
@@ -280,6 +315,11 @@ export class RunQueryResolver extends ResolverBase {
     await this.CheckAPIKeyScopeAuthorization('query:run', QueryName, context.userPayload);
 
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, {
+      QueryName,
+      CategoryID,
+      CategoryPath,
+    });
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
     const result = await rq.RunQuery(
       {
@@ -443,6 +483,9 @@ export class RunQueryResolver extends ResolverBase {
     await this.CheckAPIKeyScopeAuthorization('query:run', '*', context.userPayload);
 
     const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+    for (const item of input) {
+      this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, item);
+    }
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
 
     // Convert input to RunQueryParams array
@@ -496,6 +539,9 @@ export class RunQueryResolver extends ResolverBase {
     @Ctx() context: AppContext
   ): Promise<RunQueryResultType[]> {
     const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+    for (const item of input) {
+      this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, item);
+    }
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
 
     // Convert input to RunQueryParams array
@@ -556,6 +602,13 @@ export class RunQueryResolver extends ResolverBase {
 
     try {
       const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      for (const item of input) {
+        this.assertSavedQueryAllowedForImpersonation(
+          provider as unknown as IMetadataProvider,
+          context.userPayload,
+          item.params
+        );
+      }
 
       // Cast provider to SQLServerDataProvider to access RunQueriesWithCacheCheck method
       const sqlProvider = provider as unknown as SQLServerDataProvider;

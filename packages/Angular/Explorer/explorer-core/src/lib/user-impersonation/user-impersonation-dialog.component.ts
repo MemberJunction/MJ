@@ -18,6 +18,7 @@ import { MJUserImpersonationService } from './user-impersonation.service';
 import type {
     MJImpersonationCandidate,
     MJImpersonationCategory,
+    MJImpersonationMode,
     MJImpersonationQuickPreset,
     MJImpersonationState,
 } from './user-impersonation.types';
@@ -29,7 +30,8 @@ interface ResolvedQuickPreset {
 
 const DEFAULT_DIALOG_TITLE = 'View As User';
 const DEFAULT_DIALOG_SUBTITLE =
-    "Temporarily view the application with another user's permissions and row-level security scope.";
+    "Temporarily inspect the application with another user's permissions and row-level security scope.";
+const SAFE_ICON_CLASS_REGEX = /^[a-zA-Z0-9_\-\s]+$/;
 
 @Component({
     selector: 'mj-user-impersonation-dialog',
@@ -55,6 +57,7 @@ export class UserImpersonationDialogComponent implements OnInit {
     public Loading = false;
     public SearchTerm = '';
     public SelectedCategoryKey: string | null = null;
+    public SelectedMode: MJImpersonationMode = 'ViewAs';
     public SwitchingUserId: string | null = null;
 
     public DialogTitle = DEFAULT_DIALOG_TITLE;
@@ -68,6 +71,9 @@ export class UserImpersonationDialogComponent implements OnInit {
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe((state) => {
                 this.State = state;
+                if (!state.canImpersonateWithWrites && this.SelectedMode === 'ActAs') {
+                    this.SelectedMode = 'ViewAs';
+                }
                 if (!state.switching) {
                     this.SwitchingUserId = null;
                 }
@@ -81,6 +87,8 @@ export class UserImpersonationDialogComponent implements OnInit {
                 if (open) {
                     this.SearchTerm = '';
                     this.SelectedCategoryKey = null;
+                    // Always reset to safe Read-Only ('ViewAs') mode every time the dialog opens
+                    this.SelectedMode = 'ViewAs';
                     this.syncAdapterMetadata();
                     this.recomputeView();
                     this.focusSearchSoon();
@@ -157,6 +165,14 @@ export class UserImpersonationDialogComponent implements OnInit {
         this.cdr.markForCheck();
     }
 
+    public SelectMode(mode: MJImpersonationMode): void {
+        if (mode === 'ActAs' && !this.State.canImpersonateWithWrites) {
+            return;
+        }
+        this.SelectedMode = mode;
+        this.cdr.markForCheck();
+    }
+
     public Close(): void {
         if (this.State.switching) {
             return;
@@ -171,12 +187,19 @@ export class UserImpersonationDialogComponent implements OnInit {
     }
 
     public async SelectCandidate(candidate: MJImpersonationCandidate): Promise<void> {
-        if (this.State.switching || this.IsActiveCandidate(candidate)) {
+        if (
+            this.State.switching ||
+            (this.IsActiveCandidate(candidate) && this.State.mode === this.SelectedMode)
+        ) {
             return;
         }
         this.SwitchingUserId = candidate.userId;
         this.cdr.markForCheck();
-        await this.impersonationService.StartImpersonation(candidate.userId);
+        await this.impersonationService.StartImpersonation(
+            candidate.userId,
+            undefined,
+            this.SelectedMode
+        );
     }
 
     public async ExitImpersonation(): Promise<void> {
@@ -191,6 +214,14 @@ export class UserImpersonationDialogComponent implements OnInit {
             this.State.activeTarget &&
                 UUIDsEqual(this.State.activeTarget.userId, candidate.userId)
         );
+    }
+
+    public SanitizeIconClass(icon?: string): string {
+        if (!icon) {
+            return '';
+        }
+        const trimmed = icon.trim();
+        return SAFE_ICON_CLASS_REGEX.test(trimmed) ? trimmed : '';
     }
 
     public GetInitials(candidate: MJImpersonationCandidate): string {

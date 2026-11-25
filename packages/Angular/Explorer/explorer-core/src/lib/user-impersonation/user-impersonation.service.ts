@@ -1,10 +1,12 @@
-import { inject, Injectable } from '@angular/core';
+import { DestroyRef, inject, Injectable } from '@angular/core';
 import {
     LogError,
     Metadata,
     SetProvider,
     type IMetadataProvider,
+    type UserInfo,
 } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { GetGlobalObjectStore, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     GraphQLDataProvider,
@@ -18,6 +20,7 @@ import {
     type MJImpersonationActionResult,
     type MJImpersonationAppAdapter,
     type MJImpersonationCandidate,
+    type MJImpersonationMode,
     type MJImpersonationProviderLike,
     type MJImpersonationState,
     type MJImpersonationTransportAdapter,
@@ -25,12 +28,18 @@ import {
 
 const GRAPHQL_PROVIDER_SINGLETON_KEY = '___SINGLETON__GraphQLDataProvider';
 const IMPERSONATION_SERVICE_GLOBAL_KEY = '___SINGLETON__MJUserImpersonationService';
+const DEFAULT_TTL_MINUTES = 15;
+const MAX_TTL_MINUTES = 60;
 
 const CAN_IMPERSONATE_QUERY = `
 query MJCanImpersonateUsers {
   MJCanImpersonateUsers {
     CanImpersonate
+    CanImpersonateWithWrites
     AuthorizationName
+    WriteAuthorizationName
+    DefaultTTLMinutes
+    MaxTTLMinutes
     ResultCode
     Message
   }
@@ -67,6 +76,8 @@ mutation MJStartUserImpersonation($input: MJStartUserImpersonationInput!) {
     RawApiKey
     APIKeyID
     ExpiresAt
+    Mode
+    ReadOnly
     TargetUser {
       UserID
       Name
@@ -94,7 +105,11 @@ mutation MJEndUserImpersonation($input: MJEndUserImpersonationInput!) {
 
 interface CanImpersonateWirePayload {
     CanImpersonate?: boolean;
+    CanImpersonateWithWrites?: boolean;
     AuthorizationName?: string | null;
+    WriteAuthorizationName?: string | null;
+    DefaultTTLMinutes?: number | null;
+    MaxTTLMinutes?: number | null;
     ResultCode?: string | null;
     Message?: string | null;
 }
@@ -125,6 +140,8 @@ interface StartImpersonationWirePayload {
     RawApiKey?: string | null;
     APIKeyID?: string | null;
     ExpiresAt?: string | null;
+    Mode?: string | null;
+    ReadOnly?: boolean | null;
     TargetUser?: ImpersonatableUserWireRow | null;
 }
 
@@ -133,6 +150,20 @@ interface EndImpersonationWirePayload {
     ResultCode?: string | null;
     Message?: string | null;
     APIKeyID?: string | null;
+}
+
+interface SavedUserInfoSettingMethods {
+    readonly setSetting: (
+        settingKey: string,
+        value: string,
+        contextUser?: UserInfo
+    ) => Promise<boolean>;
+    readonly setSettingDebounced: (
+        settingKey: string,
+        value: string,
+        contextUser?: UserInfo
+    ) => void;
+    readonly deleteSetting: (settingKey: string) => Promise<boolean>;
 }
 
 function mapWireUser(row: ImpersonatableUserWireRow): MJImpersonationCandidate {
@@ -177,36 +208,48 @@ export function GetActiveUserImpersonationService(): MJUserImpersonationService 
 }
 
 /**
- * Generic Explorer service coordinating Authorization-gated User Impersonation ("View As User...").
+ * Generic Explorer service coordinating Dual-Key, Read-Only-by-Default User Impersonation ("View As User...").
  *
- * Key invariants:
+ * Security & runtime invariants:
  * - Preserves the original authenticated `GraphQLDataProvider` before any impersonation switch so
- *   all control-plane operations (`MJCanImpersonateUsers`, `MJListImpersonatableUsers`,
- *   `MJStartUserImpersonation`, `MJEndUserImpersonation`) always authenticate under the real user's
- *   session — enabling seamless User A -> User B -> Exit transitions.
- * - Atomically swaps `Metadata.Provider`, the `GraphQLDataProvider` global singleton, and Explorer
- *   service provider references in place without triggering `UserInfoEngine.Config(true)` shell teardown.
- * - Emits `MJEventType.TenantChanged` to flush `ComponentCacheManager` so cached tabs never bleed
- *   previous-user data into the new user's RLS scope.
- * - Exposes {@link RegisterAppAdapter} so any MJ application can contribute custom dialog titles,
- *   quick-switch presets, category filters, candidate enrichment, and post-switch navigation.
+ *   all control-plane operations always authenticate under the real user's Bearer JWT session.
+ * - Never stores `rawApiKey` on service fields, observable state, DOM attributes, URLs, `UserInfoEngine`,
+ *   or browser storage — holds it only in a transient local variable while constructing the impersonated
+ *   `GraphQLDataProvider` and zeroes the reference immediately.
+ * - Serializes all `StartImpersonation` / `ExitImpersonation` transitions through an async mutex queue
+ *   so rapid double-clicks or concurrent switches never race or orphan server API keys.
+ * - Flushes any pending `UserInfoEngine` debounced writes under the real actor BEFORE switching, and
+ *   suppresses background `UserInfoEngine.SetSetting*` writes while Read-Only impersonation is active
+ *   so UI splitter/grid/tab preference saves never spam mutation errors or pollute target user settings.
+ * - Schedules automatic session exit at `ExpiresAt` and fires best-effort `keepalive` key revocation on
+ *   browser tab `pagehide`.
  */
 @Injectable({ providedIn: 'root' })
 export class MJUserImpersonationService {
     private readonly injectedTransport = inject(MJ_USER_IMPERSONATION_TRANSPORT, { optional: true });
     private readonly appManager = inject(ApplicationManager, { optional: true });
     private readonly workspaceManager = inject(WorkspaceStateManager, { optional: true });
+    private readonly destroyRef = inject(DestroyRef, { optional: true });
 
     private originalActorProvider: MJImpersonationProviderLike | null = null;
     private activeImpersonatedProvider: MJImpersonationProviderLike | null = null;
     private capabilityChecked = false;
+    private transitionQueue: Promise<void> = Promise.resolve();
+    private expiryTimer: ReturnType<typeof setTimeout> | null = null;
+    private savedSettingMethods: SavedUserInfoSettingMethods | null = null;
+    private pageHideListenerBound: (() => void) | null = null;
     private readonly adapters = new Map<string, MJImpersonationAppAdapter>();
 
     private readonly stateSubject = new BehaviorSubject<MJImpersonationState>({
         canImpersonate: false,
+        canImpersonateWithWrites: false,
         activeTarget: null,
+        mode: 'ViewAs',
+        readOnly: true,
         apiKeyId: null,
         expiresAt: null,
+        defaultTtlMinutes: DEFAULT_TTL_MINUTES,
+        maxTtlMinutes: MAX_TTL_MINUTES,
         switching: false,
         errorMessage: null,
         actorIdentity: null,
@@ -239,6 +282,12 @@ export class MJUserImpersonationService {
             store[IMPERSONATION_SERVICE_GLOBAL_KEY] = this;
         }
         this.CaptureOriginalActorProvider();
+        this.registerPageHideCleanup();
+        this.destroyRef?.onDestroy(() => {
+            this.clearExpiryTimer();
+            this.restoreUserInfoSettingWrites();
+            this.unregisterPageHideCleanup();
+        });
     }
 
     public get CurrentState(): MJImpersonationState {
@@ -249,12 +298,21 @@ export class MJUserImpersonationService {
         return this.stateSubject.getValue().canImpersonate;
     }
 
+    public get CanImpersonateWithWrites(): boolean {
+        return this.stateSubject.getValue().canImpersonateWithWrites;
+    }
+
     public get ActiveTarget(): MJImpersonationCandidate | null {
         return this.stateSubject.getValue().activeTarget;
     }
 
     public get IsImpersonating(): boolean {
         return this.stateSubject.getValue().activeTarget !== null;
+    }
+
+    public get IsReadOnlySession(): boolean {
+        const state = this.stateSubject.getValue();
+        return state.activeTarget !== null && state.readOnly;
     }
 
     public get DialogOpen(): boolean {
@@ -291,8 +349,9 @@ export class MJUserImpersonationService {
     }
 
     /**
-     * Verifies with the server (`MJCanImpersonateUsers`) whether the real underlying user holds
-     * an explicit `User Impersonation` authorization grant. Fails closed to `false`.
+     * Verifies with the server (`MJCanImpersonateUsers`) whether user impersonation is enabled on
+     * the server AND the real underlying user holds `User Impersonation` (and optionally `ActAs`).
+     * Fails closed to `false`.
      */
     public async CheckCanImpersonate(forceRefresh: boolean = false): Promise<boolean> {
         if (this.capabilityChecked && !forceRefresh) {
@@ -301,7 +360,7 @@ export class MJUserImpersonationService {
 
         const actorProvider = this.CaptureOriginalActorProvider();
         if (!actorProvider) {
-            this.patchState({ canImpersonate: false });
+            this.patchState({ canImpersonate: false, canImpersonateWithWrites: false });
             return false;
         }
 
@@ -309,12 +368,27 @@ export class MJUserImpersonationService {
             const response = await actorProvider.ExecuteGQL(CAN_IMPERSONATE_QUERY);
             const payload = response['MJCanImpersonateUsers'] as CanImpersonateWirePayload | undefined;
             const allowed = Boolean(payload?.CanImpersonate);
+            const allowWrites = allowed && Boolean(payload?.CanImpersonateWithWrites);
+            const defaultTtl =
+                typeof payload?.DefaultTTLMinutes === 'number' && payload.DefaultTTLMinutes > 0
+                    ? payload.DefaultTTLMinutes
+                    : DEFAULT_TTL_MINUTES;
+            const maxTtl =
+                typeof payload?.MaxTTLMinutes === 'number' && payload.MaxTTLMinutes > 0
+                    ? payload.MaxTTLMinutes
+                    : MAX_TTL_MINUTES;
+
             this.capabilityChecked = true;
-            this.patchState({ canImpersonate: allowed });
+            this.patchState({
+                canImpersonate: allowed,
+                canImpersonateWithWrites: allowWrites,
+                defaultTtlMinutes: defaultTtl,
+                maxTtlMinutes: maxTtl,
+            });
             return allowed;
         } catch {
             this.capabilityChecked = true;
-            this.patchState({ canImpersonate: false });
+            this.patchState({ canImpersonate: false, canImpersonateWithWrites: false });
             return false;
         }
     }
@@ -441,11 +515,45 @@ export class MJUserImpersonationService {
 
     /**
      * Switches the active MJ GraphQL provider to a real server-authenticated impersonated session
-     * for `targetUserId` using a newly minted short-lived scoped API key.
+     * for `targetUserId` using a newly minted short-lived (`15m` default) scoped API key.
+     * Serialized through a transition mutex so rapid double-clicks never race or orphan keys.
      */
-    public async StartImpersonation(
+    public StartImpersonation(
         targetUserId: string,
-        ttlMinutes?: number
+        ttlMinutes?: number,
+        mode: MJImpersonationMode = 'ViewAs'
+    ): Promise<MJImpersonationActionResult> {
+        return this.runSerializedTransition(() =>
+            this.startImpersonationInternal(targetUserId, ttlMinutes, mode)
+        );
+    }
+
+    /**
+     * Revokes the active temporary impersonation API key over the preserved real user provider,
+     * restores the original provider, restores `UserInfoEngine` write methods, flushes cached tabs,
+     * and invokes adapter `afterSwitch(null)` hooks.
+     */
+    public ExitImpersonation(): Promise<MJImpersonationActionResult> {
+        return this.runSerializedTransition(() => this.exitImpersonationInternal());
+    }
+
+    private runSerializedTransition<T>(task: () => Promise<T>): Promise<T> {
+        const prior = this.transitionQueue;
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        this.transitionQueue = prior.then(() => gate, () => gate);
+        return prior
+            .catch(() => undefined)
+            .then(task)
+            .finally(() => release());
+    }
+
+    private async startImpersonationInternal(
+        targetUserId: string,
+        ttlMinutes: number | undefined,
+        requestedMode: MJImpersonationMode
     ): Promise<MJImpersonationActionResult> {
         const cleanTargetId = targetUserId.trim();
         if (!cleanTargetId) {
@@ -453,19 +561,35 @@ export class MJUserImpersonationService {
         }
 
         const actorProvider = this.CaptureOriginalActorProvider();
-        if (!actorProvider || !this.CanImpersonate) {
+        const currentState = this.stateSubject.getValue();
+        if (!actorProvider || !currentState.canImpersonate) {
             return { success: false, message: 'User Impersonation authorization is required.' };
         }
 
-        const previousApiKeyId = this.stateSubject.getValue().apiKeyId;
+        if (requestedMode === 'ActAs' && !currentState.canImpersonateWithWrites) {
+            return {
+                success: false,
+                message: 'Write-enabled impersonation (Act As) is not permitted for this session.',
+            };
+        }
+
+        const previousApiKeyId = currentState.apiKeyId;
         const previousImpersonatedProvider = this.activeImpersonatedProvider;
+        const wasAlreadyImpersonating = currentState.activeTarget !== null;
 
         this.patchState({ switching: true, errorMessage: null });
 
         try {
+            // If switching from the real actor session, flush any pending debounced user settings
+            // BEFORE swapping providers so actor preferences save under the real actor's account.
+            if (!wasAlreadyImpersonating) {
+                await this.flushActorSettingsSafely();
+            }
+
             const startRes = await actorProvider.ExecuteGQL(START_USER_IMPERSONATION_MUTATION, {
                 input: {
                     TargetUserID: cleanTargetId,
+                    Mode: requestedMode,
                     ...(typeof ttlMinutes === 'number' ? { TTLMinutes: ttlMinutes } : {}),
                 },
             });
@@ -481,12 +605,13 @@ export class MJUserImpersonationService {
 
             const actorConfig = actorProvider.ConfigData;
             const transport = this.getTransport();
+            let rawKeyTransient: string | null = payload.RawApiKey;
             let impersonatedProvider: MJImpersonationProviderLike;
             try {
                 impersonatedProvider = await transport.createImpersonatedProvider({
                     graphqlUrl: actorConfig?.URL ?? '',
                     wsUrl: actorConfig?.WSURL ?? '',
-                    rawApiKey: payload.RawApiKey,
+                    rawApiKey: rawKeyTransient,
                     mjCoreSchemaName: actorConfig?.MJCoreSchemaName,
                     includeSchemas: actorConfig?.IncludeSchemas,
                     excludeSchemas: actorConfig?.ExcludeSchemas,
@@ -500,6 +625,18 @@ export class MJUserImpersonationService {
                         : 'Failed to connect impersonated session.';
                 this.patchState({ switching: false, errorMessage: msg });
                 return { success: false, message: msg };
+            } finally {
+                // Zero transient rawApiKey reference immediately — never retained on service state.
+                rawKeyTransient = null;
+            }
+
+            const confirmedMode: MJImpersonationMode = payload.Mode === 'ActAs' ? 'ActAs' : 'ViewAs';
+            const confirmedReadOnly = confirmedMode !== 'ActAs' || payload.ReadOnly !== false;
+
+            if (confirmedReadOnly) {
+                this.suppressUserInfoSettingWrites();
+            } else {
+                this.restoreUserInfoSettingWrites();
             }
 
             // Atomically swap active MJ Metadata.Provider + GraphQLDataProvider singleton
@@ -525,9 +662,12 @@ export class MJUserImpersonationService {
                 .find((c) => UUIDsEqual(c.userId, cleanTargetId));
             const activeTarget = existingEnriched ?? mapWireUser(payload.TargetUser);
 
+            this.scheduleExpiryAutoExit(payload.ExpiresAt ?? null);
             this.dialogOpenSubject.next(false);
             this.patchState({
                 activeTarget,
+                mode: confirmedMode,
+                readOnly: confirmedReadOnly,
                 apiKeyId: payload.APIKeyID,
                 expiresAt: payload.ExpiresAt ?? null,
                 switching: true,
@@ -539,7 +679,9 @@ export class MJUserImpersonationService {
 
             return {
                 success: true,
-                message: `Now viewing as ${activeTarget.name}.`,
+                message: confirmedReadOnly
+                    ? `Now viewing as ${activeTarget.name} (Read-Only).`
+                    : `Now acting as ${activeTarget.name} (Write Mode Enabled).`,
             };
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Unable to switch user.';
@@ -548,11 +690,7 @@ export class MJUserImpersonationService {
         }
     }
 
-    /**
-     * Revokes the active temporary impersonation API key over the preserved real user provider,
-     * restores the original provider, flushes cached tabs, and invokes adapter `afterSwitch(null)` hooks.
-     */
-    public async ExitImpersonation(): Promise<MJImpersonationActionResult> {
+    private async exitImpersonationInternal(): Promise<MJImpersonationActionResult> {
         const state = this.stateSubject.getValue();
         const actorProvider = this.CaptureOriginalActorProvider();
         if (!actorProvider) {
@@ -562,6 +700,7 @@ export class MJUserImpersonationService {
         const keyIdToRevoke = state.apiKeyId;
         const discardedProvider = this.activeImpersonatedProvider;
 
+        this.clearExpiryTimer();
         this.patchState({ switching: true, errorMessage: null });
 
         try {
@@ -572,6 +711,7 @@ export class MJUserImpersonationService {
             const transport = this.getTransport();
             transport.installProvider(actorProvider);
             this.activeImpersonatedProvider = null;
+            this.restoreUserInfoSettingWrites();
 
             try {
                 await transport.syncProviderReferences(actorProvider);
@@ -586,6 +726,8 @@ export class MJUserImpersonationService {
             this.dialogOpenSubject.next(false);
             this.patchState({
                 activeTarget: null,
+                mode: 'ViewAs',
+                readOnly: true,
                 apiKeyId: null,
                 expiresAt: null,
                 switching: true,
@@ -600,6 +742,7 @@ export class MJUserImpersonationService {
                 message: 'Returned to your account.',
             };
         } catch (err) {
+            this.restoreUserInfoSettingWrites();
             const message = err instanceof Error ? err.message : 'Unable to exit impersonation.';
             this.patchState({ switching: false, errorMessage: message });
             return { success: false, message };
@@ -611,6 +754,154 @@ export class MJUserImpersonationService {
             ...this.stateSubject.getValue(),
             ...partial,
         });
+    }
+
+    private async flushActorSettingsSafely(): Promise<void> {
+        try {
+            const engine = UserInfoEngine.Instance;
+            if (engine?.HasPendingSettings) {
+                await engine.FlushPendingSettings();
+            }
+        } catch {
+            // Non-fatal: never block impersonation start if UserInfoEngine is uninitialized
+        }
+    }
+
+    /**
+     * Suppresses background `UserInfoEngine` preference mutations (`SetSetting`, `SetSettingDebounced`,
+     * `DeleteSetting`) while Read-Only impersonation is active so splitter/grid/tab layout changes do
+     * not spam GraphQL `IMPERSONATION_READ_ONLY` errors or mutate the target user's stored preferences.
+     */
+    private suppressUserInfoSettingWrites(): void {
+        if (this.savedSettingMethods) {
+            return;
+        }
+        try {
+            const engine = UserInfoEngine.Instance;
+            if (!engine) {
+                return;
+            }
+            this.savedSettingMethods = {
+                setSetting: engine.SetSetting,
+                setSettingDebounced: engine.SetSettingDebounced,
+                deleteSetting: engine.DeleteSetting,
+            };
+            engine.SetSetting = async (): Promise<boolean> => true;
+            engine.SetSettingDebounced = (): void => {
+                // No-op during Read-Only user impersonation
+            };
+            engine.DeleteSetting = async (): Promise<boolean> => true;
+        } catch {
+            // Non-fatal in minimal test environments
+        }
+    }
+
+    private restoreUserInfoSettingWrites(): void {
+        if (!this.savedSettingMethods) {
+            return;
+        }
+        try {
+            const engine = UserInfoEngine.Instance;
+            if (engine) {
+                engine.SetSetting = this.savedSettingMethods.setSetting;
+                engine.SetSettingDebounced = this.savedSettingMethods.setSettingDebounced;
+                engine.DeleteSetting = this.savedSettingMethods.deleteSetting;
+            }
+        } catch {
+            // Non-fatal
+        } finally {
+            this.savedSettingMethods = null;
+        }
+    }
+
+    private scheduleExpiryAutoExit(expiresAtIso: string | null): void {
+        this.clearExpiryTimer();
+        if (!expiresAtIso) {
+            return;
+        }
+        const expiresMs = Date.parse(expiresAtIso);
+        if (!Number.isFinite(expiresMs)) {
+            return;
+        }
+        const delayMs = Math.max(0, expiresMs - Date.now());
+        this.expiryTimer = setTimeout(() => {
+            this.expiryTimer = null;
+            if (this.IsImpersonating) {
+                void this.ExitImpersonation();
+            }
+        }, delayMs);
+        const maybeNodeTimer = this.expiryTimer as { unref?: () => void };
+        maybeNodeTimer.unref?.();
+    }
+
+    private clearExpiryTimer(): void {
+        if (this.expiryTimer !== null) {
+            clearTimeout(this.expiryTimer);
+            this.expiryTimer = null;
+        }
+    }
+
+    private registerPageHideCleanup(): void {
+        const win = (globalThis as { window?: Window }).window;
+        if (!win || typeof win.addEventListener !== 'function') {
+            return;
+        }
+        this.pageHideListenerBound = () => {
+            this.handlePageHideCleanup();
+        };
+        win.addEventListener('pagehide', this.pageHideListenerBound);
+    }
+
+    private unregisterPageHideCleanup(): void {
+        const win = (globalThis as { window?: Window }).window;
+        if (win && this.pageHideListenerBound && typeof win.removeEventListener === 'function') {
+            win.removeEventListener('pagehide', this.pageHideListenerBound);
+        }
+        this.pageHideListenerBound = null;
+    }
+
+    private handlePageHideCleanup(): void {
+        const state = this.stateSubject.getValue();
+        if (!state.apiKeyId) {
+            return;
+        }
+        const keyId = state.apiKeyId;
+        const actorProvider = this.originalActorProvider;
+        const discarded = this.activeImpersonatedProvider;
+
+        this.clearExpiryTimer();
+        this.restoreUserInfoSettingWrites();
+        this.activeImpersonatedProvider = null;
+
+        const graphqlUrl = actorProvider?.ConfigData?.URL;
+        const bearerToken = actorProvider?.ConfigData?.Token;
+        if (graphqlUrl && bearerToken && typeof fetch === 'function') {
+            try {
+                const authHeader = bearerToken.startsWith('Bearer ')
+                    ? bearerToken
+                    : `Bearer ${bearerToken}`;
+                void fetch(graphqlUrl, {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: authHeader,
+                    },
+                    body: JSON.stringify({
+                        query: END_USER_IMPERSONATION_MUTATION,
+                        variables: { input: { APIKeyID: keyId } },
+                    }),
+                }).catch(() => undefined);
+            } catch {
+                // Best-effort unload revocation
+            }
+        } else if (actorProvider) {
+            void this.revokeKeySilently(actorProvider, keyId);
+        }
+
+        if (discarded && discarded !== actorProvider) {
+            void this.disposeProviderSilently(discarded);
+        }
     }
 
     private async applyAdapterEnrichments(
@@ -691,7 +982,7 @@ export class MJUserImpersonationService {
             const payload = res['MJEndUserImpersonation'] as EndImpersonationWirePayload | undefined;
             void payload;
         } catch {
-            // Non-fatal: temporary keys also expire automatically via server TTL.
+            // Non-fatal: temporary keys also expire automatically via server 15m TTL.
         }
     }
 

@@ -18,6 +18,17 @@
             <h2 id="mj-impersonation-dialog-title" class="impersonation-title">
               {{ DialogTitle }}
             </h2>
+            <span
+              class="impersonation-mode-chip"
+              [attr.data-mode]="SelectedMode">
+              @if (SelectedMode === 'ActAs') {
+                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                Write Mode
+              } @else {
+                <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                Read-Only
+              }
+            </span>
           </div>
           <p class="impersonation-subtitle">{{ DialogSubtitle }}</p>
         </div>
@@ -35,15 +46,52 @@
 
       <!-- Active impersonation notice inside dialog -->
       @if (State.activeTarget; as active) {
-        <div class="impersonation-active-callout">
-          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <div
+          class="impersonation-active-callout"
+          [class.is-write-mode]="!State.readOnly">
+          <i
+            [class]="State.readOnly ? 'fa-solid fa-circle-info' : 'fa-solid fa-triangle-exclamation'"
+            aria-hidden="true"></i>
           <span>
-            Currently viewing as <strong>{{ active.name }}</strong>
+            Currently {{ State.readOnly ? 'viewing' : 'acting' }} as <strong>{{ active.name }}</strong>
             @if (active.email) {
               ({{ active.email }})
             }
+            · <strong>{{ State.readOnly ? '[Read-Only]' : '[Write Mode Enabled]' }}</strong>
           </span>
         </div>
+      }
+
+      <!-- Optional Dual-Gated Mode Selector (shown ONLY when server + authorization permit ActAs) -->
+      @if (State.canImpersonateWithWrites) {
+        <div class="impersonation-mode-bar" role="radiogroup" aria-label="Impersonation access mode">
+          <button
+            type="button"
+            class="impersonation-mode-option"
+            [class.active]="SelectedMode === 'ViewAs'"
+            [disabled]="State.switching"
+            (click)="SelectMode('ViewAs')">
+            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+            <span>View As (Read-Only · Recommended)</span>
+          </button>
+          <button
+            type="button"
+            class="impersonation-mode-option is-danger"
+            [class.active]="SelectedMode === 'ActAs'"
+            [disabled]="State.switching"
+            (click)="SelectMode('ActAs')">
+            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+            <span>Act As (Allow Writes)</span>
+          </button>
+        </div>
+        @if (SelectedMode === 'ActAs') {
+          <div class="impersonation-write-warning" role="alert">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            <span>
+              <strong>Write Mode Enabled:</strong> Data modifications will execute under the selected user's identity and be recorded in the security audit log.
+            </span>
+          </div>
+        }
       }
 
       <!-- Search & Category Filter Bar -->
@@ -85,8 +133,8 @@
                 class="impersonation-category-pill"
                 [class.active]="SelectedCategoryKey === cat.key"
                 (click)="SelectCategory(cat.key)">
-                @if (cat.icon) {
-                  <i [class]="cat.icon" aria-hidden="true"></i>
+                @if (SanitizeIconClass(cat.icon); as catIcon) {
+                  <i [class]="catIcon" aria-hidden="true"></i>
                 }
                 <span>{{ cat.label }}</span>
               </button>
@@ -114,12 +162,12 @@
                 <button
                   type="button"
                   class="impersonation-preset-card"
-                  [class.is-active]="IsActiveCandidate(item.candidate)"
-                  [disabled]="State.switching || IsActiveCandidate(item.candidate)"
+                  [class.is-active]="IsActiveCandidate(item.candidate) && State.mode === SelectedMode"
+                  [disabled]="State.switching || (IsActiveCandidate(item.candidate) && State.mode === SelectedMode)"
                   (click)="SelectCandidate(item.candidate)">
                   <div class="impersonation-preset-top">
-                    @if (item.preset.icon) {
-                      <i [class]="item.preset.icon" aria-hidden="true"></i>
+                    @if (SanitizeIconClass(item.preset.icon); as presetIcon) {
+                      <i [class]="presetIcon" aria-hidden="true"></i>
                     }
                     <span class="impersonation-preset-label">{{ item.preset.label }}</span>
                   </div>
@@ -143,7 +191,7 @@
           } @else if (FilteredCandidates.length === 0) {
             <div class="impersonation-state-panel">
               <i class="fa-solid fa-users-slash" aria-hidden="true"></i>
-              <span>No matching active users found.</span>
+              <span>No matching eligible users found.</span>
             </div>
           } @else {
             <ul class="impersonation-user-list">
@@ -179,8 +227,8 @@
                           <span
                             class="impersonation-badge"
                             [attr.data-tone]="badge.tone || 'neutral'">
-                            @if (badge.icon) {
-                              <i [class]="badge.icon" aria-hidden="true"></i>
+                            @if (SanitizeIconClass(badge.icon); as badgeIcon) {
+                              <i [class]="badgeIcon" aria-hidden="true"></i>
                             }
                             <span>{{ badge.label }}</span>
                           </span>
@@ -192,7 +240,7 @@
                     }
                   </div>
                   <div class="impersonation-user-action">
-                    @if (IsActiveCandidate(candidate)) {
+                    @if (IsActiveCandidate(candidate) && State.mode === SelectedMode) {
                       <span class="impersonation-active-pill">
                         <i class="fa-solid fa-check" aria-hidden="true"></i>
                         Active
@@ -200,7 +248,7 @@
                     } @else {
                       <button
                         mjButton
-                        variant="primary"
+                        [variant]="SelectedMode === 'ActAs' ? 'danger' : 'primary'"
                         size="sm"
                         type="button"
                         [disabled]="State.switching"
@@ -208,6 +256,8 @@
                         @if (SwitchingUserId === candidate.userId) {
                           <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
                           Switching...
+                        } @else if (SelectedMode === 'ActAs') {
+                          Act As
                         } @else {
                           View As
                         }
@@ -242,6 +292,7 @@
               of {{ TotalCount }}
             }
             {{ FilteredCandidates.length === 1 ? 'user' : 'users' }}
+            · {{ State.defaultTtlMinutes }}m session TTL
           </span>
         </div>
         <button

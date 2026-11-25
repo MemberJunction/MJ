@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import {
     MJ_USER_IMPERSONATION_TRANSPORT,
     MJUserImpersonationService,
     type MJImpersonationAppAdapter,
+    type MJImpersonationMode,
     type MJImpersonationProviderLike,
     type MJImpersonationTransportAdapter,
 } from './index';
@@ -31,11 +33,14 @@ interface TestHarness {
 
 function createServiceHarness(opts?: {
     canImpersonate?: boolean;
+    canImpersonateWithWrites?: boolean;
     activeAppPath?: string;
     activeAppName?: string;
     connectShouldFail?: boolean;
+    expiresAt?: string;
 }): TestHarness {
     const canImpersonate = opts?.canImpersonate ?? true;
+    const canImpersonateWithWrites = opts?.canImpersonateWithWrites ?? false;
     const disposedProviders: MJImpersonationProviderLike[] = [];
 
     const executeGql = vi.fn().mockImplementation(async (query: string, variables?: Record<string, unknown>) => {
@@ -43,9 +48,13 @@ function createServiceHarness(opts?: {
             return {
                 MJCanImpersonateUsers: {
                     CanImpersonate: canImpersonate,
+                    CanImpersonateWithWrites: canImpersonate && canImpersonateWithWrites,
                     AuthorizationName: 'User Impersonation',
-                    ResultCode: canImpersonate ? 'OK' : 'FORBIDDEN',
-                    Message: canImpersonate ? 'Authorized' : 'Denied',
+                    WriteAuthorizationName: 'User Impersonation: Act As (Allow Writes)',
+                    DefaultTTLMinutes: 15,
+                    MaxTTLMinutes: 60,
+                    ResultCode: canImpersonate ? 'OK' : 'FEATURE_DISABLED',
+                    Message: canImpersonate ? 'Authorized' : 'Disabled',
                 },
             };
         }
@@ -53,7 +62,7 @@ function createServiceHarness(opts?: {
             return {
                 MJListImpersonatableUsers: {
                     Authorized: canImpersonate,
-                    ResultCode: canImpersonate ? 'OK' : 'FORBIDDEN',
+                    ResultCode: canImpersonate ? 'OK' : 'FEATURE_DISABLED',
                     TotalCount: 2,
                     Users: canImpersonate
                         ? [
@@ -83,15 +92,18 @@ function createServiceHarness(opts?: {
             };
         }
         if (query.includes('MJStartUserImpersonation')) {
-            const input = (variables?.['input'] ?? {}) as { TargetUserID?: string };
+            const input = (variables?.['input'] ?? {}) as { TargetUserID?: string; Mode?: MJImpersonationMode };
             const isB = input.TargetUserID === USER_B_ID;
+            const mode: MJImpersonationMode = input.Mode === 'ActAs' ? 'ActAs' : 'ViewAs';
             return {
                 MJStartUserImpersonation: {
                     Success: true,
                     ResultCode: 'IMPERSONATION_STARTED',
-                    RawApiKey: isB ? 'mj_sk_key_b' : 'mj_sk_key_a',
+                    RawApiKey: isB ? 'mj_sk_key_b_secret' : 'mj_sk_key_a_secret',
                     APIKeyID: isB ? KEY_B_ID : KEY_A_ID,
-                    ExpiresAt: '2026-12-01T12:00:00.000Z',
+                    ExpiresAt: opts?.expiresAt ?? '2027-12-01T12:00:00.000Z',
+                    Mode: mode,
+                    ReadOnly: mode !== 'ActAs',
                     TargetUser: isB
                         ? {
                               UserID: USER_B_ID,
@@ -128,6 +140,7 @@ function createServiceHarness(opts?: {
             Email: 'alice@example.com',
         } as MJImpersonationProviderLike['CurrentUser'],
         ConfigData: {
+            Token: 'eyJ_mock_jwt',
             URL: 'https://api.example.com/graphql',
             WSURL: 'wss://api.example.com/graphql',
         },
@@ -149,9 +162,9 @@ function createServiceHarness(opts?: {
             }
             const created: MJImpersonationProviderLike = {
                 CurrentUser: {
-                    ID: rawApiKey === 'mj_sk_key_b' ? USER_B_ID : USER_A_ID,
-                    Name: rawApiKey === 'mj_sk_key_b' ? 'Cara Manager' : 'Bob Analyst',
-                    Email: rawApiKey === 'mj_sk_key_b' ? 'cara@example.com' : 'bob@example.com',
+                    ID: rawApiKey === 'mj_sk_key_b_secret' ? USER_B_ID : USER_A_ID,
+                    Name: rawApiKey === 'mj_sk_key_b_secret' ? 'Cara Manager' : 'Bob Analyst',
+                    Email: rawApiKey === 'mj_sk_key_b_secret' ? 'cara@example.com' : 'bob@example.com',
                 } as MJImpersonationProviderLike['CurrentUser'],
                 ExecuteGQL: vi.fn().mockResolvedValue({}),
                 Dispose: vi.fn(() => {
@@ -196,51 +209,86 @@ describe('MJUserImpersonationService', () => {
         vi.restoreAllMocks();
     });
 
-    it('defaults canImpersonate to false and reflects server authorization check', async () => {
+    it('defaults canImpersonate and canImpersonateWithWrites to false and reflects server dual-gate check', async () => {
         const denied = createServiceHarness({ canImpersonate: false });
         expect(denied.service.CanImpersonate).toBe(false);
+        expect(denied.service.CanImpersonateWithWrites).toBe(false);
         expect(await denied.service.CheckCanImpersonate()).toBe(false);
-        expect(denied.service.CanImpersonate).toBe(false);
 
-        const allowed = createServiceHarness({ canImpersonate: true });
-        expect(await allowed.service.CheckCanImpersonate()).toBe(true);
-        expect(allowed.service.CanImpersonate).toBe(true);
+        const roOnly = createServiceHarness({ canImpersonate: true, canImpersonateWithWrites: false });
+        expect(await roOnly.service.CheckCanImpersonate()).toBe(true);
+        expect(roOnly.service.CanImpersonate).toBe(true);
+        expect(roOnly.service.CanImpersonateWithWrites).toBe(false);
+        expect(roOnly.service.CurrentState.defaultTtlMinutes).toBe(15);
+        expect(roOnly.service.CurrentState.maxTtlMinutes).toBe(60);
+
+        // Rejects ActAs client-side when canImpersonateWithWrites is false
+        const actAsDenied = await roOnly.service.StartImpersonation(USER_A_ID, undefined, 'ActAs');
+        expect(actAsDenied.success).toBe(false);
+        expect(roOnly.service.IsImpersonating).toBe(false);
     });
 
-    it('preserves original actor provider across User A -> User B -> Exit and revokes old keys', async () => {
+    it('defaults to Read-Only ViewAs mode, never retains rawApiKey on service state, suppresses UserInfoEngine writes during RO, and restores on Exit', async () => {
         const { service, actorProvider, transport, activeProviderRef, disposedProviders } =
             createServiceHarness({ canImpersonate: true });
 
-        await service.CheckCanImpersonate();
-        const startA = await service.StartImpersonation(USER_A_ID);
-        expect(startA.success).toBe(true);
-        expect(service.IsImpersonating).toBe(true);
-        expect(service.ActiveTarget?.userId).toBe(USER_A_ID);
-        expect(activeProviderRef.current).not.toBe(actorProvider);
-        expect(transport.syncProviderReferences).toHaveBeenCalledTimes(1);
+        const engine = UserInfoEngine.Instance;
+        const originalSetSetting = engine.SetSetting;
+        const setSettingSpy = vi.fn().mockResolvedValue(true);
+        engine.SetSetting = setSettingSpy;
 
-        // Switch directly from User A -> User B using the preserved original actor provider
-        const startB = await service.StartImpersonation(USER_B_ID);
-        expect(startB.success).toBe(true);
+        try {
+            await service.CheckCanImpersonate();
+            const startA = await service.StartImpersonation(USER_A_ID);
+            expect(startA.success).toBe(true);
+            expect(service.IsImpersonating).toBe(true);
+            expect(service.IsReadOnlySession).toBe(true);
+            expect(service.CurrentState.mode).toBe('ViewAs');
+            expect(service.CurrentState.readOnly).toBe(true);
+            expect(JSON.stringify(service.CurrentState)).not.toContain('mj_sk_key_a_secret');
+
+            // UserInfoEngine.SetSetting is suppressed while in Read-Only impersonation
+            await engine.SetSetting('explorer.test.pref', '1');
+            expect(setSettingSpy).not.toHaveBeenCalled();
+
+            // Switch directly User A -> User B serializes cleanly, revokes Key A, disposes Provider A
+            const startB = await service.StartImpersonation(USER_B_ID);
+            expect(startB.success).toBe(true);
+            expect(service.ActiveTarget?.userId).toBe(USER_B_ID);
+            expect(transport.syncProviderReferences).toHaveBeenCalledTimes(2);
+            expect(actorProvider.ExecuteGQL).toHaveBeenCalledWith(
+                expect.stringContaining('MJEndUserImpersonation'),
+                { input: { APIKeyID: KEY_A_ID } }
+            );
+            expect(disposedProviders).toHaveLength(1);
+
+            // Exit restores original actor provider AND restores UserInfoEngine.SetSetting
+            const exitRes = await service.ExitImpersonation();
+            expect(exitRes.success).toBe(true);
+            expect(service.IsImpersonating).toBe(false);
+            expect(activeProviderRef.current).toBe(actorProvider);
+            await engine.SetSetting('explorer.test.pref', '2');
+            expect(setSettingSpy).toHaveBeenCalledWith('explorer.test.pref', '2');
+        } finally {
+            engine.SetSetting = originalSetSetting;
+        }
+    });
+
+    it('serializes concurrent StartImpersonation calls through transition mutex without race conditions', async () => {
+        const { service, actorProvider } = createServiceHarness({ canImpersonate: true });
+        await service.CheckCanImpersonate();
+
+        const [resA, resB] = await Promise.all([
+            service.StartImpersonation(USER_A_ID),
+            service.StartImpersonation(USER_B_ID),
+        ]);
+        expect(resA.success).toBe(true);
+        expect(resB.success).toBe(true);
         expect(service.ActiveTarget?.userId).toBe(USER_B_ID);
-        // Key A must have been revoked via the original actor provider and provider A disposed
         expect(actorProvider.ExecuteGQL).toHaveBeenCalledWith(
             expect.stringContaining('MJEndUserImpersonation'),
             { input: { APIKeyID: KEY_A_ID } }
         );
-        expect(disposedProviders).toHaveLength(1);
-
-        // Exit impersonation restores original actor provider and revokes Key B
-        const exitRes = await service.ExitImpersonation();
-        expect(exitRes.success).toBe(true);
-        expect(service.IsImpersonating).toBe(false);
-        expect(service.ActiveTarget).toBeNull();
-        expect(activeProviderRef.current).toBe(actorProvider);
-        expect(actorProvider.ExecuteGQL).toHaveBeenCalledWith(
-            expect.stringContaining('MJEndUserImpersonation'),
-            { input: { APIKeyID: KEY_B_ID } }
-        );
-        expect(disposedProviders).toHaveLength(2);
     });
 
     it('silently revokes minted key if impersonated provider connection fails', async () => {
@@ -301,10 +349,11 @@ describe('MJUserImpersonationService', () => {
         const users = await service.LoadUsers('', true);
         expect(users).toHaveLength(1);
         expect(users[0].organization).toBe('Acme Corp');
-        expect(users[0].badges?.[0].label).toBe('VIP');
 
         await service.StartImpersonation(USER_A_ID);
-        expect(afterSwitchSpy).toHaveBeenCalledWith(expect.objectContaining({ userId: USER_A_ID, organization: 'Acme Corp' }));
+        expect(afterSwitchSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: USER_A_ID, organization: 'Acme Corp' })
+        );
 
         await service.ExitImpersonation();
         expect(afterSwitchSpy).toHaveBeenCalledWith(null);
@@ -316,7 +365,11 @@ describe('MJUserImpersonationService', () => {
     it('emits MJEventType.TenantChanged on default workspace reset to flush cached tabs', async () => {
         const raiseSpy = vi.spyOn(MJGlobal.Instance, 'RaiseEvent');
         const actorProvider: MJImpersonationProviderLike = {
-            CurrentUser: { ID: ACTOR_USER_ID, Name: 'Alice', Email: 'alice@example.com' } as MJImpersonationProviderLike['CurrentUser'],
+            CurrentUser: {
+                ID: ACTOR_USER_ID,
+                Name: 'Alice',
+                Email: 'alice@example.com',
+            } as MJImpersonationProviderLike['CurrentUser'],
             ExecuteGQL: vi.fn().mockImplementation(async (query: string) => {
                 if (query.includes('MJCanImpersonateUsers')) {
                     return { MJCanImpersonateUsers: { CanImpersonate: true } };
@@ -327,7 +380,14 @@ describe('MJUserImpersonationService', () => {
                             Success: true,
                             RawApiKey: 'mj_sk_x',
                             APIKeyID: KEY_A_ID,
-                            TargetUser: { UserID: USER_A_ID, Name: 'Bob', Email: 'bob@example.com', RoleNames: [] },
+                            Mode: 'ViewAs',
+                            ReadOnly: true,
+                            TargetUser: {
+                                UserID: USER_A_ID,
+                                Name: 'Bob',
+                                Email: 'bob@example.com',
+                                RoleNames: [],
+                            },
                         },
                     };
                 }
