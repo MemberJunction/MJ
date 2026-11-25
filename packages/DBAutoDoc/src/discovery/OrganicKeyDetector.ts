@@ -51,6 +51,8 @@ export interface OrganicKeyDetectionResult {
         /** Probes spent, and the cap they ran under. */
         probesUsed: number;
         probesAllowed: number;
+        tablesNormalizedCount?: number;
+        tablesCachedCount?: number;
     };
     /** Per-cluster probe record, so a dropped key can be explained rather than just missing. */
     Verification: ClusterVerification[];
@@ -144,6 +146,7 @@ export class OrganicKeyDetector {
                 outputTokens: a.tokens.output,
                 estimatedCost: this.estimateCost(a.tokens.input, a.tokens.output),
                 refinementModelUsed: this.aiConfig.model,
+                CachedNormalizations: a.CachedNormalizations,
             },
             Summary: {
                 columnsInScope: a.Summary.columnsInScope,
@@ -162,6 +165,8 @@ export class OrganicKeyDetector {
                 conceptsSkippedUnanchored: c.SkippedUnanchored,
                 probesUsed: budget ? budget.ProbesUsed : 0,
                 probesAllowed: budget ? budget.ProbesAllowed : 0,
+                tablesNormalizedCount: a.Summary.tablesNormalizedCount,
+                tablesCachedCount: a.Summary.tablesCachedCount,
             },
             Verification: c.Verification,
         };

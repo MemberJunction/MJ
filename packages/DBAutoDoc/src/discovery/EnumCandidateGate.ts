@@ -312,12 +312,14 @@ export class EnumCandidateGate {
    * Trim whitespace, drop empty strings and null-like sentinels.
    * Does NOT case-normalize — case differences may be meaningful.
    */
-  private normalizeValues(values: string[]): string[] {
+  private normalizeValues(values: string[] | undefined): string[] {
+    if (!Array.isArray(values)) return [];
     const NULL_SENTINELS = new Set(['', 'NULL', 'null', 'N/A', 'n/a', '-', '--']);
     const seen = new Set<string>();
     const result: string[] = [];
 
     for (const raw of values) {
+      if (typeof raw !== 'string') continue;
       const trimmed = raw.trim();
       if (NULL_SENTINELS.has(trimmed)) continue;
       if (seen.has(trimmed)) continue;

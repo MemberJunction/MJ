@@ -30,9 +30,10 @@ export class BackpropagationEngine {
     state: DatabaseDocumentation,
     run: AnalysisRun,
     triggers: BackpropagationTrigger[]
-  ): Promise<{ tablesUpdated: number; tokensUsed: number }> {
+  ): Promise<{ tablesUpdated: number; tokensUsed: number; updatedTableKeys: string[] }> {
     let tablesUpdated = 0;
     let totalTokensUsed = 0;
+    const updatedTableKeys: string[] = [];
 
     // Group triggers by target table
     const triggersByTable = this.groupTriggersByTable(triggers);
@@ -117,6 +118,7 @@ export class BackpropagationEngine {
         );
 
         tablesUpdated++;
+        updatedTableKeys.push(`${schemaName}.${tableName}`);
 
         this.iterationTracker.addLogEntry(run, {
           level: table.dependencyLevel || 0,
@@ -144,7 +146,7 @@ export class BackpropagationEngine {
       this.iterationTracker.incrementBackpropagation(run);
     }
 
-    return { tablesUpdated, tokensUsed: totalTokensUsed };
+    return { tablesUpdated, tokensUsed: totalTokensUsed, updatedTableKeys };
   }
 
   /** @deprecated Use {@link Execute}. */
@@ -152,7 +154,7 @@ export class BackpropagationEngine {
     state: DatabaseDocumentation,
     run: AnalysisRun,
     triggers: BackpropagationTrigger[]
-  ): Promise<{ tablesUpdated: number; tokensUsed: number }> {
+  ): Promise<{ tablesUpdated: number; tokensUsed: number; updatedTableKeys: string[] }> {
     return this.Execute(state, run, triggers);
   }
 

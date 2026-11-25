@@ -9,6 +9,8 @@
  * See plans/dbautodoc-organic-keys.md.
  */
 
+import type { CachedTableNormalization } from './incremental.js';
+
 /** Strategy used to normalize values before equality comparison (matches PR #2193). */
 export type OrganicKeyNormalizationStrategy = 'LowerCaseTrim' | 'Trim' | 'ExactMatch' | 'Custom';
 
@@ -148,6 +150,8 @@ export interface OrganicKeyDetectionPhase {
     refinementModelUsed?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     skipReason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     errorMessage?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    /** Per-table normalized columns + embeddings persisted for incremental organic-key runs, keyed by "schema.table". */
+    CachedNormalizations?: Record<string, CachedTableNormalization>;
 }
 
 /** Outcome of refining a single cluster. */

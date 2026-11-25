@@ -14,6 +14,7 @@ export default class Analyze extends Command {
   static examples = [
     '$ db-auto-doc analyze',
     '$ db-auto-doc analyze --config ./my-config.json',
+    '$ db-auto-doc analyze --incremental ./output/run-1/state.json',
     '$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json',
     '$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json --max-iterations 3',
     '$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json --reanalyze-below 0.7',
@@ -24,6 +25,11 @@ export default class Analyze extends Command {
     resume: Flags.string({
       char: 'r',
       description: 'Resume from an existing state file. Skips schema introspection and discovery if state already has data.',
+      required: false
+    }),
+    incremental: Flags.string({
+      char: 'i',
+      description: 'Incremental analysis from a prior completed state.json. Diffs live schema changes and updates only affected tables and relationships.',
       required: false
     }),
     config: Flags.string({
@@ -57,6 +63,9 @@ export default class Analyze extends Command {
     const spinner = ora();
 
     // Validate flag combinations
+    if (flags.resume && flags.incremental) {
+      this.error('--resume and --incremental cannot be used together (use --resume for interrupted runs, --incremental for schema changes)');
+    }
     if (flags['pruning-only'] && !flags.resume) {
       this.error('--pruning-only requires --resume pointing to an existing state file');
     }
@@ -81,6 +90,7 @@ export default class Analyze extends Command {
       const orchestrator = new AnalysisOrchestrator({
         config,
         resumeFromState: flags.resume,
+        incrementalFromState: flags.incremental,
         reanalyzeBelowConfidence,
         maxIterations,
         // --pruning-only runs the FK pruning pass alone; sampling would be new work it never asked for
@@ -112,6 +122,9 @@ export default class Analyze extends Command {
 
         if (flags.resume) {
           this.log(chalk.blue(`\n  Resumed from: ${flags.resume}`));
+        }
+        if (flags.incremental) {
+          this.log(chalk.blue(`\n  Incremental baseline: ${flags.incremental}`));
         }
       } else {
         spinner.fail('Analysis failed');

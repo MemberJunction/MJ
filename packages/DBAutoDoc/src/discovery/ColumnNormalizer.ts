@@ -85,6 +85,8 @@ export interface NormalizationBatchResult {
      * fewer clusters will be found, and that is a budget outcome rather than a schema fact.
      */
     TablesSkippedForBudget: number;
+    /** Lower-cased `schema.table` keys whose LLM normalization call failed (must not be cached as empty). */
+    FailedTables?: string[];
 }
 
 export interface NormalizerOptions {
@@ -265,6 +267,7 @@ export class TableNormalizer {
         let tablesSkippedForBudget = 0;
 
         const allNormalized: NormalizedColumn[] = [];
+        const failedTables: string[] = [];
         let rejected = 0;
         let errors = 0;
         let total = 0;
@@ -294,6 +297,7 @@ export class TableNormalizer {
 
                 if (r.errorMessage) {
                     errors++;
+                    failedTables.push(`${tables[idx].schema}.${tables[idx].table}`.toLowerCase());
                 } else {
                     for (const n of r.normalized) {
                         if (n.IsUsefulOrganicKey) allNormalized.push(n);
@@ -319,6 +323,7 @@ export class TableNormalizer {
             tokens: { total, input, output },
             BudgetExhausted: budgetExhausted,
             TablesSkippedForBudget: tablesSkippedForBudget,
+            FailedTables: failedTables,
         };
     }
 

@@ -6,7 +6,8 @@
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ApplyBestPrimaryKeys } from './ApplyPrimaryKeys.js';
 import { PKDetector } from './PKDetector.js';
-import { FKDetector } from './FKDetector.js';
+import { FKDetector, FKDetectionScope } from './FKDetector.js';
+import { IncrementalDiscoveryScope } from '../types/incremental.js';
 import { LLMDiscoveryValidator } from './LLMDiscoveryValidator.js';
 import { LLMSanityChecker } from './LLMSanityChecker.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
@@ -60,7 +61,7 @@ export class DiscoveryEngine {
     this.onProgress = options.OnProgress || (() => {});
     this.onCheckpoint = options.OnCheckpoint || (async () => {});
 
-    // Create stats cache and detectors
+    // Create stats cache and detectors (seed from already-sampled schema statistics when present)
     this.statsCache = new ColumnStatsCache();
     // The cache starts from what the sampling pass already measured, so discovery queries the
     // database only for columns sampling did not cover.
@@ -267,6 +268,276 @@ export class DiscoveryEngine {
     existingPhase?: RelationshipDiscoveryPhase
   ): Promise<DiscoveryResult> {
     return this.Discover(maxTokens, triggerAnalysis, existingPhase);
+  }
+
+  /**
+   * Execute bidirectional incremental relationship discovery:
+   *   1. Detect PKs only on `scope.PKTablesToAnalyze`, augmenting `T_delta` with new PK tables.
+   *   2. Detect FKs for `(S_delta x T)` and `(S_old x T_delta)` while reusing `scope.SurvivingFKs`.
+   *   3. Run sanity check, LLM validation, and confidence backpropagation only on newly discovered candidates.
+   */
+  public async DiscoverIncremental(
+    maxTokens: number,
+    triggerAnalysis: DiscoveryTriggerAnalysis,
+    scope: IncrementalDiscoveryScope
+  ): Promise<DiscoveryResult & { PKTablesRun: number; FKFullTablesRun: number; FKTargetedTablesRun: number }> {
+    const phase = this.initializePhase(maxTokens, triggerAnalysis);
+    phase.discovered.primaryKeys = [...scope.SurvivingPKs];
+    phase.discovered.foreignKeys = [...scope.SurvivingFKs];
+
+    const iterResult = this.createIncrementalIteration();
+    const pkRun = await this.detectIncrementalPrimaryKeys(phase, scope);
+    const allPKs = [...this.collectCatalogPKTargets(), ...phase.discovered.primaryKeys];
+
+    iterResult.phase = 'fk_detection';
+    const fkRun = await this.detectIncrementalForeignKeys(phase, scope, allPKs);
+    await this.refineAndFinalizeIncrementalDiscovery(phase, scope, pkRun.NewPKs, fkRun.NewFKs, allPKs, iterResult, maxTokens);
+
+    return {
+      Phase: phase,
+      guardrailsReached: iterResult.tokensUsed >= maxTokens,
+      StatsCache: this.statsCache,
+      PKTablesRun: pkRun.TablesRun,
+      FKFullTablesRun: fkRun.FullTablesRun,
+      FKTargetedTablesRun: fkRun.TargetedTablesRun
+    };
+  }
+
+  private createIncrementalIteration(): RelationshipDiscoveryIteration {
+    return {
+      iteration: 1,
+      phase: 'pk_detection',
+      startedAt: new Date().toISOString(),
+      completedAt: '',
+      tokensUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      discoveries: { newPKs: [], newFKs: [], validated: [], rejected: [], confidenceChanges: [] },
+      backpropTriggered: false
+    };
+  }
+
+  private async refineAndFinalizeIncrementalDiscovery(
+    phase: RelationshipDiscoveryPhase,
+    scope: IncrementalDiscoveryScope,
+    initialPKs: PKCandidate[],
+    initialFKs: FKCandidate[],
+    allPKs: PKCandidate[],
+    iterResult: RelationshipDiscoveryIteration,
+    maxTokens: number
+  ): Promise<void> {
+    let newPKs = initialPKs;
+    let newFKs = initialFKs;
+    if (this.sanityChecker && (newPKs.length > 0 || newFKs.length > 0)) {
+      const cleaned = await this.runIncrementalSanityCheck(newPKs, newFKs, iterResult);
+      newPKs = cleaned.NewPKs;
+      newFKs = cleaned.NewFKs;
+    }
+    if (this.llmValidator && (newPKs.length > 0 || newFKs.length > 0) && iterResult.tokensUsed < maxTokens) {
+      const validated = await this.performLLMValidation(newPKs, newFKs, allPKs, iterResult, maxTokens - iterResult.tokensUsed);
+      newPKs = validated.updatedPKs;
+      newFKs = validated.updatedFKs;
+      iterResult.tokensUsed += validated.tokensUsed;
+      iterResult.discoveries.validated = validated.validated;
+      iterResult.discoveries.rejected = validated.rejected;
+    }
+    phase.discovered.primaryKeys = [...scope.SurvivingPKs, ...newPKs];
+    phase.discovered.foreignKeys = [...scope.SurvivingFKs, ...newFKs];
+    if (this.config.backpropagation.enabled && (newPKs.length > 0 || newFKs.length > 0)) {
+      iterResult.phase = 'backprop';
+      iterResult.discoveries.confidenceChanges = await this.performBackpropagation(phase, newPKs, newFKs);
+      iterResult.backpropTriggered = iterResult.discoveries.confidenceChanges.length > 0;
+    }
+    iterResult.discoveries.newPKs = newPKs;
+    iterResult.discoveries.newFKs = newFKs;
+    iterResult.completedAt = new Date().toISOString();
+    phase.iterations.push(iterResult);
+    phase.tokenBudget.used = iterResult.tokensUsed;
+    phase.tokenBudget.remaining = Math.max(0, maxTokens - iterResult.tokensUsed);
+    phase.completedAt = iterResult.completedAt;
+    this.calculateSummary(phase);
+  }
+
+  private async detectIncrementalPrimaryKeys(
+    phase: RelationshipDiscoveryPhase,
+    scope: IncrementalDiscoveryScope
+  ): Promise<{ NewPKs: PKCandidate[]; TablesRun: number }> {
+    const pkLowerSet = new Set(Array.from(scope.PKTablesToAnalyze).map(t => t.toLowerCase()));
+    const newPKs: PKCandidate[] = [];
+    let tablesRun = 0;
+
+    for (const schema of this.schemas) {
+      for (const table of schema.tables) {
+        const tableKey = `${schema.name}.${table.name}`;
+        if (!pkLowerSet.has(tableKey.toLowerCase())) continue;
+        tablesRun++;
+        const candidates = await this.pkDetector.detectPKCandidates(schema.name, table, 1);
+        for (const pk of candidates) {
+          newPKs.push(pk);
+          phase.discovered.primaryKeys.push(pk);
+          scope.NewOrChangedTargetTables.add(tableKey);
+          scope.DirtyPKPruningTables.add(tableKey);
+        }
+      }
+    }
+    if (tablesRun > 0) await this.onCheckpoint(phase);
+    return { NewPKs: newPKs, TablesRun: tablesRun };
+  }
+
+  private async detectIncrementalForeignKeys(
+    phase: RelationshipDiscoveryPhase,
+    scope: IncrementalDiscoveryScope,
+    allPKs: PKCandidate[]
+  ): Promise<{ NewFKs: FKCandidate[]; FullTablesRun: number; TargetedTablesRun: number }> {
+    const fullScanLower = new Set(Array.from(scope.FullFKScanTables).map(t => t.toLowerCase()));
+    const lowerTargets = new Set(Array.from(scope.NewOrChangedTargetTables).map(t => t.toLowerCase()));
+    const fullColsByLowerTable = new Map<string, Set<string>>();
+    for (const [k, cols] of scope.FullFKSourceColumnsByTable.entries()) {
+      fullColsByLowerTable.set(k.toLowerCase(), cols);
+    }
+
+    const newFKs: FKCandidate[] = [];
+    let fullTablesRun = 0;
+    let targetedTablesRun = 0;
+
+    for (const schema of this.schemas) {
+      for (const table of schema.tables) {
+        const tableKey = `${schema.name}.${table.name}`;
+        const lowerKey = tableKey.toLowerCase();
+        const existingForTable = scope.SurvivingFKs.filter(
+          f => f.schemaName.toLowerCase() === schema.name.toLowerCase() &&
+               f.sourceTable.toLowerCase() === table.name.toLowerCase()
+        );
+
+        const tableNewFKs = await this.scanSingleTableIncrementalFKs(
+          schema.name,
+          table,
+          lowerKey,
+          allPKs,
+          fullScanLower,
+          fullColsByLowerTable,
+          lowerTargets,
+          existingForTable
+        );
+        if (tableNewFKs.DidFull) fullTablesRun++;
+        if (tableNewFKs.DidTargeted) targetedTablesRun++;
+
+        for (const fk of tableNewFKs.Candidates) {
+          if (!this.hasDuplicateFK(phase.discovered.foreignKeys, fk)) {
+            phase.discovered.foreignKeys.push(fk);
+            newFKs.push(fk);
+            scope.DirtyFKPruningTables.add(tableKey);
+          }
+        }
+      }
+    }
+    if (newFKs.length > 0) await this.onCheckpoint(phase);
+    return { NewFKs: newFKs, FullTablesRun: fullTablesRun, TargetedTablesRun: targetedTablesRun };
+  }
+
+  private async scanSingleTableIncrementalFKs(
+    schemaName: string,
+    table: TableDefinition,
+    lowerTableKey: string,
+    allPKs: PKCandidate[],
+    fullScanLower: Set<string>,
+    fullColsByLowerTable: Map<string, Set<string>>,
+    lowerTargets: Set<string>,
+    existingForTable: FKCandidate[]
+  ): Promise<{ Candidates: FKCandidate[]; DidFull: boolean; DidTargeted: boolean }> {
+    if (fullScanLower.has(lowerTableKey)) {
+      const found = await this.fkDetector.DetectFKCandidates(this.schemas, schemaName, table, allPKs, 1);
+      return { Candidates: found, DidFull: true, DidTargeted: false };
+    }
+
+    const deltaCols = fullColsByLowerTable.get(lowerTableKey);
+    const collected: FKCandidate[] = [];
+    let didFull = false;
+    let didTargeted = false;
+
+    if (deltaCols && deltaCols.size > 0) {
+      didFull = true;
+      const fullScope: FKDetectionScope = { SourceColumns: deltaCols, ExistingTableFKs: existingForTable };
+      collected.push(...(await this.fkDetector.DetectFKCandidates(this.schemas, schemaName, table, allPKs, 1, fullScope)));
+    }
+
+    if (lowerTargets.size > 0) {
+      const remainingCols = new Set(
+        table.columns.map(c => c.name.toLowerCase()).filter(name => !deltaCols?.has(name))
+      );
+      if (remainingCols.size > 0) {
+        didTargeted = true;
+        const targetScope: FKDetectionScope = {
+          SourceColumns: remainingCols,
+          TargetTables: lowerTargets,
+          ExistingTableFKs: [...existingForTable, ...collected]
+        };
+        collected.push(...(await this.fkDetector.DetectFKCandidates(this.schemas, schemaName, table, allPKs, 1, targetScope)));
+      }
+    }
+    return { Candidates: collected, DidFull: didFull, DidTargeted: didTargeted };
+  }
+
+  private async runIncrementalSanityCheck(
+    newPKs: PKCandidate[],
+    newFKs: FKCandidate[],
+    iterResult: RelationshipDiscoveryIteration
+  ): Promise<{ NewPKs: PKCandidate[]; NewFKs: FKCandidate[] }> {
+    iterResult.phase = 'sanity_check';
+    const sanity = await this.sanityChecker!.reviewCandidates(newPKs, newFKs);
+    iterResult.tokensUsed += sanity.tokensUsed;
+    iterResult.inputTokens += sanity.InputTokens || 0;
+    iterResult.outputTokens += sanity.OutputTokens || 0;
+
+    const filteredPKs = newPKs.filter(pk => !sanity.invalidPKs.some(
+      inv => inv.schema === pk.schemaName && inv.table === pk.tableName && pk.columnNames.includes(inv.column)
+    ));
+    const filteredFKs = newFKs.filter(fk => !sanity.invalidFKs.some(
+      inv => inv.schema === fk.schemaName && inv.table === fk.sourceTable && inv.column === fk.sourceColumn
+    ));
+    return { NewPKs: filteredPKs, NewFKs: filteredFKs };
+  }
+
+  private hasDuplicateFK(existing: FKCandidate[], candidate: FKCandidate): boolean {
+    return existing.some(e =>
+      e.schemaName === candidate.schemaName &&
+      e.sourceTable === candidate.sourceTable &&
+      e.sourceColumn === candidate.sourceColumn &&
+      e.targetSchema === candidate.targetSchema &&
+      e.targetTable === candidate.targetTable &&
+      e.targetColumn === candidate.targetColumn
+    );
+  }
+
+  private collectCatalogPKTargets(): PKCandidate[] {
+    const catalogPKs: PKCandidate[] = [];
+    for (const schema of this.schemas) {
+      for (const table of schema.tables) {
+        const pkCols = table.columns.filter(c => c.isCatalogPrimaryKey === true || c.isPrimaryKey);
+        if (pkCols.length === 0) continue;
+        const alreadyInDiscovered = pkCols.every(c => c.isCatalogPrimaryKey === false);
+        if (alreadyInDiscovered) continue;
+        catalogPKs.push({
+          schemaName: schema.name,
+          tableName: table.name,
+          columnNames: pkCols.map(c => c.name),
+          confidence: 100,
+          evidence: {
+            uniqueness: 1,
+            nullCount: 0,
+            totalRows: table.rowCount,
+            dataPattern: pkCols.length > 1 ? 'composite' : 'sequential',
+            namingScore: 1,
+            dataTypeScore: 1,
+            warnings: []
+          },
+          discoveredInIteration: 0,
+          validatedByLLM: true,
+          status: 'confirmed'
+        });
+      }
+    }
+    return catalogPKs;
   }
 
   /**
@@ -1124,9 +1395,9 @@ export class DiscoveryEngine {
     // Apply ONE primary key per table: the best surviving candidate.
     ApplyBestPrimaryKeys(state, phase.discovered.primaryKeys, this.config.confidence.primaryKeyMinimum * 100);
 
-    // Apply high-confidence FKs and build table-level dependency graph
+    // Apply high-confidence non-rejected FKs and build table-level dependency graph
     for (const fk of phase.discovered.foreignKeys) {
-      if (fk.confidence >= this.config.confidence.foreignKeyMinimum * 100) {
+      if (fk.status !== 'rejected' && fk.confidence >= this.config.confidence.foreignKeyMinimum * 100) {
         const schema = state.schemas.find(s => s.name === fk.schemaName);
         if (!schema) continue;
 

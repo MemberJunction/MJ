@@ -136,6 +136,18 @@ const result = await api.resume('./output/run-5/state.json', {
 });
 ```
 
+### `AnalyzeIncremental(baseStateFile, config): Promise<AnalysisExecutionResult>`
+
+Runs an incremental analysis against a completed baseline `state.json` after schema evolution. Introspects the live database, computes structural schema diffs (`SchemaDiffer`), reuses statistics/keys/descriptions/organic-key normalizations for unchanged tables, and executes bidirectional PK/FK discovery (`(S_delta x T) U (S_old x T_delta)`) plus affected-subgraph description & backpropagation passes.
+
+```typescript
+const result = await api.AnalyzeIncremental('./output/run-1/state.json', {
+  database: { provider: 'sqlserver', server: 'localhost', database: 'ProductDB', user: 'sa', password: '...' },
+  ai: { provider: 'gemini', model: 'gemini-3.8-flash', apiKey: process.env.GEMINI_API_KEY! },
+  onProgress: (msg, data) => console.log(msg, data)
+});
+```
+
 ### `export(stateFile, options?): Promise<ExportResult>`
 
 Generates SQL and/or Markdown from an analysis state file.

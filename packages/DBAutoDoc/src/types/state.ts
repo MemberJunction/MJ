@@ -6,6 +6,7 @@
 import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
 import { SampleQuery, SampleQueryGenerationSummary } from './sample-queries.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from './organic-keys.js';
+import type { IncrementalPhaseReport } from './incremental.js';
 import type { AutoDocPluginStateSection } from '../plugins/types.js';
 import type { AutoDocIndex } from './driver.js';
 
@@ -23,6 +24,8 @@ export interface DatabaseDocumentation {
    */
   organicKeyClusters?: OrganicKeyCluster[];
   resumedFromFile?: string; // Path to the state file this analysis resumed from
+  /** Path to the baseline state file when produced via an incremental schema-change run. */
+  incrementalFromFile?: string; // case-violation-ok-legacy-back-compat: persisted alongside camelCase siblings in state.json
   /**
    * Per-plugin sections, keyed by plugin registration name. Each holds the plugin's hook-run
    * history and whatever data the plugin chose to persist. Absent in state files from runs
@@ -82,6 +85,8 @@ export interface AnalysisPhases {
   descriptionGeneration: AnalysisRun[]; // Table and column description analysis
   queryGeneration?: QueryGenerationPhase; // Metadata about query generation process
   organicKeyDetection?: OrganicKeyDetectionPhase; // Optional organic-key cluster detection (runs after description + PK/FK)
+  /** Present when this state was produced by an incremental schema-evolution run. */
+  incremental?: IncrementalPhaseReport; // case-violation-ok-legacy-back-compat: persisted alongside camelCase siblings in AnalysisPhases
 }
 
 /**
@@ -160,6 +165,10 @@ export interface ColumnDefinition {
   isNullable: boolean;
   isPrimaryKey: boolean;
   isForeignKey: boolean;
+  /** True when the primary key was declared in the database catalog (as opposed to AI-inferred). */
+  isCatalogPrimaryKey?: boolean; // case-violation-ok-legacy-back-compat: persisted alongside camelCase siblings in ColumnDefinition
+  /** True when the foreign key was declared in the database catalog (as opposed to AI-inferred). */
+  isCatalogForeignKey?: boolean; // case-violation-ok-legacy-back-compat: persisted alongside camelCase siblings in ColumnDefinition
   foreignKeyReferences?: ForeignKeyReference;
   /**
    * Declared maximum length, in characters, of a character column. Undefined when unknown or

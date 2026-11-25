@@ -1,4 +1,5 @@
 import type { AutoDocPluginConfigEntry } from '../plugins/types.js';
+import type { IncrementalConfig } from './incremental.js';
 
 /**
  * Configuration types for DBAutoDoc
@@ -222,6 +223,10 @@ export interface AnalysisConfig {
    * important columns (default true). Indexes often exist where no PK/FK is declared.
    */
   useExistingIndexes?: boolean;
+  /**
+   * Options for incremental schema-change runs (`--incremental <state.json>`).
+   */
+  incremental?: IncrementalConfig; // case-violation-ok-legacy-back-compat: DBAutoDoc config.json uses camelCase across AnalysisConfig
 }
 
 /**
