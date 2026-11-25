@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, Input, ViewEncapsulation, computed } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, ViewEncapsulation } from '@angular/core';
 
 export interface SpotlightCutoutRect {
   X: number;
@@ -27,7 +27,7 @@ export interface SpotlightCutoutRect {
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <path class="mjt-spotlight-path" [attr.d]="maskPath()" />
+          <path class="mjt-spotlight-path" [attr.d]="MaskPath" />
           @for (hole of Cutouts; track $index) {
             <rect
               class="mjt-spotlight-ring"
@@ -50,9 +50,9 @@ export class TourSpotlightOverlayComponent {
   @Input() public ViewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
   @Input() public ViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 720;
 
-  protected readonly maskPath = computed(() =>
-    BuildSpotlightEvenOddPath(this.ViewportWidth, this.ViewportHeight, this.Cutouts),
-  );
+  protected get MaskPath(): string {
+    return BuildSpotlightEvenOddPath(this.ViewportWidth, this.ViewportHeight, this.Cutouts);
+  }
 }
 
 /**

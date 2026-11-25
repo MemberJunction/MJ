@@ -9,6 +9,7 @@ import type {
 import axe from 'axe-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OverlayTourPresenterComponent } from '../presenters/overlay-tour-presenter.component';
+import { TourSpotlightOverlayComponent } from '../overlay/tour-spotlight-overlay.component';
 import { ActionStepRenderer } from './action-step-renderer.component';
 import { BeaconStepRenderer } from './beacon-step-renderer.component';
 import { ChoiceStepRenderer } from './choice-step-renderer.component';
@@ -310,5 +311,25 @@ describe('Guided Tour Step Renderers & OverlayPresenter (WCAG 2.2 AA)', () => {
     el.attributeChangedCallback('surface-key', 'marketing-site', 'marketing-site');
     expect(el.SurfaceKey).toBe('marketing-site');
     el.remove();
+  });
+
+  it('TourSpotlightOverlayComponent updates SVG evenodd cutout path when Cutouts input changes across steps', () => {
+    const fixture = TestBed.createComponent(TourSpotlightOverlayComponent);
+    fixture.componentRef.setInput('Visible', true);
+    fixture.componentRef.setInput('ViewportWidth', 1440);
+    fixture.componentRef.setInput('ViewportHeight', 900);
+    fixture.componentRef.setInput('Cutouts', [{ X: 24, Y: 12, Width: 140, Height: 36, Radius: 8 }]);
+    fixture.detectChanges();
+
+    const pathEl = fixture.nativeElement.querySelector('path.mjt-spotlight-path') as SVGPathElement;
+    const firstD = pathEl.getAttribute('d') ?? '';
+    expect(firstD).toContain('M32,12');
+
+    fixture.componentRef.setInput('Cutouts', [{ X: 820, Y: 12, Width: 280, Height: 36, Radius: 8 }]);
+    fixture.detectChanges();
+
+    const secondD = pathEl.getAttribute('d') ?? '';
+    expect(secondD).not.toBe(firstD);
+    expect(secondD).toContain('M828,12');
   });
 });
