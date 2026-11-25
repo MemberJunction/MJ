@@ -451,3 +451,68 @@ describe('HttpRequest StripHeadersOnCrossOriginRedirect', () => {
     });
 });
 
+
+// =====================================================================
+// UserAgent + MaxResponseBytes
+// =====================================================================
+describe('HttpRequest UserAgent', () => {
+    it('sends the configured User-Agent', async () => {
+        StubFetch([{ body: '{}' }]);
+        await HttpGet('https://api.example.com/x', { UserAgent: 'MJ-Crawler/1.0' });
+        expect((calls[0].init.headers as Record<string, string>)['User-Agent']).toBe('MJ-Crawler/1.0');
+    });
+
+    it('lets an explicit User-Agent header win', async () => {
+        StubFetch([{ body: '{}' }]);
+        await HttpGet('https://api.example.com/x', { UserAgent: 'ignored', Headers: { 'user-agent': 'mine' } });
+        const headers = calls[0].init.headers as Record<string, string>;
+        expect(headers['user-agent']).toBe('mine');
+        expect(headers['User-Agent']).toBeUndefined();
+    });
+});
+
+describe('HttpRequest MaxResponseBytes', () => {
+    it('reads a body within the cap', async () => {
+        StubFetch([{ body: 'hello', headers: { 'content-type': 'text/plain' } }]);
+        const response = await HttpGet<string>('https://api.example.com/x', { ResponseType: 'text', MaxResponseBytes: 10 });
+        expect(response.Data).toBe('hello');
+    });
+
+    it('refuses a body past the cap while reading it', async () => {
+        StubFetch([{ body: 'x'.repeat(50), headers: { 'content-type': 'text/plain' } }]);
+        const error = await HttpGet('https://api.example.com/x', { ResponseType: 'arraybuffer', MaxResponseBytes: 10 }).catch((e: unknown) => e);
+        expect(IsHttpError(error)).toBe(true);
+        expect((error as HttpError).IsTooLarge).toBe(true);
+    });
+
+    it('refuses on a Content-Length already past the cap', async () => {
+        StubFetch([{ body: 'x'.repeat(5), headers: { 'content-type': 'text/plain', 'content-length': '5000' } }]);
+        await expect(HttpGet('https://api.example.com/x', { ResponseType: 'text', MaxResponseBytes: 10 })).rejects.toMatchObject({ IsTooLarge: true });
+    });
+
+    it('keeps the status of an error answer past the cap, with no body, so a 503 stays worth retrying', async () => {
+        StubFetch([{ status: 503, statusText: 'Service Unavailable', body: 'x'.repeat(50), headers: { 'content-type': 'text/html' } }]);
+        const error = await HttpGet('https://api.example.com/x', { ResponseType: 'arraybuffer', MaxResponseBytes: 10 }).catch((e: unknown) => e);
+        expect(IsHttpError(error)).toBe(true);
+        expect((error as HttpError).Status).toBe(503);
+        expect((error as HttpError).IsTooLarge).toBe(false);
+        const unthrown = await HttpGet('https://api.example.com/x', { ResponseType: 'text', MaxResponseBytes: 10, ThrowOnError: false });
+        expect(unthrown.Status).toBe(503);
+        expect(unthrown.Data).toBeNull();
+    });
+
+    it("decodes capped text by the response's charset", async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => new Response(new Uint8Array([0x63, 0x61, 0x66, 0xe9]), { status: 200, headers: { 'content-type': 'text/plain; charset=windows-1252' } })),
+        );
+        const response = await HttpGet<string>('https://api.example.com/x', { ResponseType: 'text', MaxResponseBytes: 100 });
+        expect(response.Data).toBe('café');
+    });
+
+    it('parses capped JSON', async () => {
+        StubFetch([{ body: '{"a":1}' }]);
+        const response = await HttpGet<{ a: number }>('https://api.example.com/x', { MaxResponseBytes: 100 });
+        expect(response.Data).toEqual({ a: 1 });
+    });
+});

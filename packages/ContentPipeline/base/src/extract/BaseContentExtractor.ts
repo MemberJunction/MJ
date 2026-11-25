@@ -29,6 +29,11 @@ export interface ExtractRequest {
     FileType: string;
     /** Where the bytes came from, for diagnostics and for resolving relative links. */
     URL: string;
+    /**
+     * The server's `Content-Type` for the bytes, when they were fetched over HTTP. A weak signal for the file
+     * type, but the authority for a text document's charset (`text/html; charset=windows-1252`).
+     */
+    ContentType?: string;
     /** The source's type-specific settings, already defaulted and validated. */
     Parameters: Readonly<Record<string, string>>;
     /** The resolved confidence scale for this source and run. */
@@ -76,8 +81,17 @@ export interface ContentBlock {
     /** Explicit request for downstream pipeline work on the child record this block produces. */
     Request?: PipelineStageRequest;
     /**
-     * Well-known fields the block determined directly (a manifest row's title, date or decorator), each with
-     * its confidence. A `Date` here replaces the date the child would otherwise inherit from its parent.
+     * Well-known fields the block determined directly, each with its confidence: a manifest row's title, date or
+     * decorator, or, for a single document, the publication date and decorator its extractor read. Each is
+     * proposed at its own confidence and a null value is skipped.
+     *
+     * - **A single document** (one block, not a container): the fields apply to the item itself, as the Extract
+     *   stage's own findings (`Extract.Block`), so a re-extraction replaces them and a value from another stage
+     *   competes on confidence. This is how an extractor sets an item's `Date` or `Decorator`, which `Columns`
+     *   cannot carry. A `Title` here competes with {@link Title}: it replaces that title only when more confident.
+     * - **A child** (a container's member or row): the fields are listing data (`Listing.Block`) that the child's
+     *   own later Extract can override on confidence. A `Date` here replaces the date the child would otherwise
+     *   inherit from its parent.
      */
     Fields?: DiscoveredField[];
 }

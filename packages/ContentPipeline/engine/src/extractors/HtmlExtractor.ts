@@ -11,9 +11,15 @@
  * `TextExtractor` from `@memberjunction/ai-vectors` is still used to decide whether the page holds any
  * text at all, and to read the title.
  *
+ * The bytes are decoded by the charset the page was served with (`ExtractRequest.ContentType`), else the one its
+ * own `<meta charset>` (or `http-equiv` Content-Type) declares, else UTF-8, so a `windows-1252` page keeps its
+ * accented letters. `ExtractorOptions.Html.TitleSelector` names the element whose text is the title, for a site
+ * whose `<title>` is the site's name on every page; without a match the `<title>` is used as before.
+ *
  * @module @memberjunction/content-pipeline
  */
 
+import * as cheerio from 'cheerio';
 import { RegisterClass } from '@memberjunction/global';
 import { TextExtractor } from '@memberjunction/ai-vectors';
 import { BaseContentExtractor, ExtractRequest, ExtractResult } from '@memberjunction/content-pipeline-base';
@@ -21,20 +27,26 @@ import { BaseContentExtractor, ExtractRequest, ExtractResult } from '@memberjunc
 /** The registered key. */
 export const HTML_EXTRACTOR = 'Html';
 
+/** How far into a page to look for its `<meta charset>`; the HTML standard's prescan reads the first 1024 bytes. */
+const CHARSET_PRESCAN_BYTES = 1024;
+/** The longest title kept, to fit `MJ: Content Items.Name` (`nvarchar(250)`). */
+const MAX_TITLE_CHARS = 250;
+
 @RegisterClass(BaseContentExtractor, HTML_EXTRACTOR)
 export class HtmlExtractor extends BaseContentExtractor {
     public readonly Key = HTML_EXTRACTOR;
     public readonly SupportedFileTypes = ['html', 'htm', 'xhtml'];
 
     public async Extract(request: ExtractRequest): Promise<ExtractResult> {
-        const html = new TextDecoder('utf-8', { fatal: false }).decode(request.Content);
+        const html = new TextDecoder(HtmlCharset(request.Content, request.ContentType), { fatal: false }).decode(request.Content);
         if (TextExtractor.ExtractFromHTML(html).trim().length === 0) {
             // An HTML document that yields no text is a real outcome — a page that is all script, or
             // a redirect stub. Reporting no blocks is honest; a block of empty string would read as
             // a successful extraction downstream.
             return { Blocks: [] };
         }
-        const title = this.titleOf(html);
+        const titleSelector = request.Options?.TitleSelector;
+        const title = (typeof titleSelector === 'string' && titleSelector.trim() ? this.selectedTitle(html, titleSelector.trim()) : null) ?? this.titleOf(html);
         return {
             Blocks: [
                 {
@@ -43,6 +55,17 @@ export class HtmlExtractor extends BaseContentExtractor {
                 },
             ],
         };
+    }
+
+    /** The text of the first element `selector` matches, or null when none does (or the selector is not valid CSS). */
+    private selectedTitle(html: string, selector: string): string | null {
+        try {
+            const $ = cheerio.load(html);
+            const text = $(selector).first().text().replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE_CHARS).trim();
+            return text.length > 0 ? text : null;
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -89,5 +112,33 @@ export class HtmlExtractor extends BaseContentExtractor {
             }
         }
         return -1;
+    }
+}
+
+/**
+ * The charset to decode an HTML page with: the served `Content-Type`'s, else the page's own `<meta charset>` or
+ * `<meta http-equiv="Content-Type" content="...; charset=...">` within its first bytes, else UTF-8. A label
+ * `TextDecoder` does not know is passed over.
+ */
+export function HtmlCharset(content: Uint8Array, contentType?: string): string {
+    const fromHeader = Known(/charset\s*=\s*["']?([\w.:-]+)/i.exec(contentType ?? '')?.[1]);
+    if (fromHeader) {
+        return fromHeader;
+    }
+    const head = new TextDecoder('latin1').decode(content.subarray(0, CHARSET_PRESCAN_BYTES));
+    const meta =
+        /<meta[^>]+charset\s*=\s*["']?([\w.:-]+)/i.exec(head)?.[1];
+    return Known(meta) ?? 'utf-8';
+}
+
+/** The label when `TextDecoder` knows it, else null. */
+function Known(label: string | undefined): string | null {
+    if (!label) {
+        return null;
+    }
+    try {
+        return new TextDecoder(label).encoding;
+    } catch {
+        return null;
     }
 }

@@ -22,6 +22,12 @@
  * WebSockets do not go through the route at all, so the page may open none: reading a page never needs a live
  * connection.
  *
+ * A session whose artifact carries a browser storage state (`AccessArtifact.Extensions.StorageState`, from the
+ * `BrowserLogin` Access driver) is restored into each page's context, cookies and `localStorage` both, when the
+ * page is on one of the session's origins; its `Cookie` header is then not added again. How a page is loaded is
+ * the source's `PageRendererOptions` (`WaitUntil`, `WaitSelector`, `ScrollToBottom`, `UserAgent`); how Chromium is
+ * launched is the deployment's ({@link HeadlessPageRenderer.LaunchArgs}, or `MJ_HEADLESS_CHROMIUM_ARGS`).
+ *
  * Not covered: the address is checked by name before each request is fetched, so a DNS server that answers
  * differently between the check and the fetch could still reach a private address. Closing that needs every
  * connection made to an address checked at connect time (a proxy of our own).
@@ -29,11 +35,18 @@
  * @module @memberjunction/content-pipeline
  */
 
-import type { APIRequestContext, APIResponse, Browser, Page, Route } from 'playwright';
+import type { APIRequestContext, APIResponse, Browser, BrowserContextOptions, Page, Route } from 'playwright';
 import { LogError } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { AssertPublicUrl } from '@memberjunction/network-utils';
-import { BasePageRenderer, PageRenderRequest, PageRenderResult } from '@memberjunction/content-pipeline-base';
+import {
+    BasePageRenderer,
+    PageRenderOptions,
+    PageRenderRequest,
+    PageRenderResult,
+    SessionStorageState,
+    SessionStorageStateOf,
+} from '@memberjunction/content-pipeline-base';
 
 /** The registered key. */
 export const HEADLESS_PAGE_RENDERER = 'Headless';
@@ -44,6 +57,12 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const IDLE_CLOSE_MS = 60_000;
 /** The most redirects one request may take (Chromium's own limit). */
 const MAX_REDIRECTS = 20;
+/** How long `WaitSelector` may take to appear when the source sets no `WaitSelectorTimeoutMs`. */
+const DEFAULT_WAIT_SELECTOR_TIMEOUT_MS = 10_000; // content that arrives after load usually does within seconds
+/** The most scroll steps `ScrollToBottom` takes, so an endless feed cannot hold a render forever. */
+const MAX_SCROLL_STEPS = 50; // fifty screens of lazy content; the render's own timeout still bounds it
+/** The environment variable that adds Chromium launch arguments (space-separated), e.g. `--no-sandbox` in a container. */
+export const HEADLESS_CHROMIUM_ARGS_ENV = 'MJ_HEADLESS_CHROMIUM_ARGS';
 
 /** What one render's route knows: the page whose navigation it watches, and how subsequent hops are fetched. */
 export interface HeadlessRenderState {
@@ -58,6 +77,12 @@ export interface HeadlessRenderState {
 @RegisterClass(BasePageRenderer, HEADLESS_PAGE_RENDERER)
 export class HeadlessPageRenderer extends BasePageRenderer {
     public readonly Key: string = HEADLESS_PAGE_RENDERER;
+
+    /**
+     * Extra Chromium launch arguments for this process (e.g. `['--no-sandbox', '--disable-dev-shm-usage']` in a
+     * container), added to those in {@link HEADLESS_CHROMIUM_ARGS_ENV}. Read when the shared browser launches.
+     */
+    public static LaunchArgs: string[] = [];
 
     private static browser: Promise<Browser> | null = null;
     private static inUse = 0;
@@ -76,13 +101,14 @@ export class HeadlessPageRenderer extends BasePageRenderer {
             if (request.Signal.aborted) {
                 throw new Error('Render aborted before navigation');
             }
-            context = await browser.newContext({ serviceWorkers: 'block' });
+            context = await browser.newContext(this.contextOptions(request));
             const state: HeadlessRenderState = { Page: null, RedirectTo: null, Requests: context.request };
             await context.route('**/*', (route) => this.RouteRequest(route, request, state));
             await context.routeWebSocket(/.*/, (socket) => socket.close({ code: 1008, reason: 'WebSockets are not allowed when rendering a page' }));
             const page = await context.newPage();
             state.Page = page;
             const response = await this.navigate(page, this.withAccessQuery(request), request, state);
+            await this.settle(page, request.Options);
             const finalUrl = page.url();
             if (/^https?:/i.test(finalUrl)) {
                 await this.AssertAllowed(finalUrl);
@@ -103,7 +129,7 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         const deadline = Date.now() + (request.TimeoutMs ?? DEFAULT_TIMEOUT_MS);
         for (let hops = 0; ; hops++) {
             state.RedirectTo = null;
-            const response = await page.goto(url, { waitUntil: 'networkidle', timeout: Math.max(1, deadline - Date.now()) });
+            const response = await page.goto(url, { waitUntil: request.Options?.WaitUntil ?? 'networkidle', timeout: Math.max(1, deadline - Date.now()) });
             const next = state.RedirectTo as string | null;
             if (!next) {
                 return response;
@@ -113,6 +139,52 @@ export class HeadlessPageRenderer extends BasePageRenderer {
             }
             await this.AssertAllowed(next);
             url = next;
+        }
+    }
+
+    /** The page's context: no service workers, the source's User-Agent, and the session's browser state when it is for this page. */
+    private contextOptions(request: PageRenderRequest): BrowserContextOptions {
+        const storage = this.storageStateFor(request);
+        return {
+            serviceWorkers: 'block',
+            ...(request.Options?.UserAgent ? { userAgent: request.Options.UserAgent } : {}),
+            ...(storage ? { storageState: ToPlaywrightStorageState(storage) } : {}),
+        };
+    }
+
+    /** The session's browser state, when it carries one and the page is on one of the session's origins. */
+    private storageStateFor(request: PageRenderRequest): SessionStorageState | null {
+        const state = SessionStorageStateOf(request.Access);
+        if (!state) {
+            return null;
+        }
+        try {
+            return this.isAccessOrigin(new URL(request.URL).origin, request) ? state : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** After navigation: wait for the source's selector, and scroll to the bottom when asked, so late content is there. */
+    private async settle(page: Page, options: PageRenderOptions | undefined): Promise<void> {
+        if (options?.WaitSelector) {
+            await page.waitForSelector(options.WaitSelector, { state: 'visible', timeout: options.WaitSelectorTimeoutMs ?? DEFAULT_WAIT_SELECTOR_TIMEOUT_MS });
+        }
+        if (options?.ScrollToBottom) {
+            await ScrollToBottom(page);
+        }
+    }
+
+    /**
+     * Run `work` with the shared browser, which stays open (and is closed after a while idle) like a render's. For
+     * other browser work of the pipeline, such as a browser login, so it launches no second Chromium.
+     */
+    public static async WithBrowser<T>(work: (browser: Browser) => Promise<T>): Promise<T> {
+        const browser = await HeadlessPageRenderer.acquire();
+        try {
+            return await work(browser);
+        } finally {
+            HeadlessPageRenderer.release();
         }
     }
 
@@ -219,7 +291,14 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         } catch {
             return headers;
         }
-        return request.Access?.Headers && this.isAccessOrigin(origin, request) ? { ...headers, ...request.Access.Headers } : headers;
+        if (!request.Access?.Headers || !this.isAccessOrigin(origin, request)) {
+            return headers;
+        }
+        // With the browser state restored the context holds the cookies; a Cookie header would replace them.
+        const session = SessionStorageStateOf(request.Access)
+            ? Object.fromEntries(Object.entries(request.Access.Headers).filter(([name]) => name.toLowerCase() !== 'cookie'))
+            : request.Access.Headers;
+        return { ...headers, ...session };
     }
 
     /** The frame a request came from; a request with none (a service worker's) is never the page's. */
@@ -289,11 +368,17 @@ export class HeadlessPageRenderer extends BasePageRenderer {
                 `The Headless page renderer needs the 'playwright' package (and a Chromium for it: npx playwright install chromium): ${error instanceof Error ? error.message : String(error)}`,
             );
         }
-        const browser = await chromium.launch({ headless: true });
+        const browser = await chromium.launch({ headless: true, args: HeadlessPageRenderer.launchArgs() });
         browser.once('disconnected', () => {
             HeadlessPageRenderer.browser = null;
         });
         return browser;
+    }
+
+    /** {@link LaunchArgs} plus those in {@link HEADLESS_CHROMIUM_ARGS_ENV}, each once. */
+    private static launchArgs(): string[] {
+        const fromEnv = (process.env[HEADLESS_CHROMIUM_ARGS_ENV] ?? '').split(/\s+/).filter((a) => a.length > 0);
+        return [...new Set([...fromEnv, ...HeadlessPageRenderer.LaunchArgs])];
     }
 
     /** One render done; close the browser once nothing has used it for a while. */
@@ -307,4 +392,38 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         }, IDLE_CLOSE_MS);
         HeadlessPageRenderer.idleTimer.unref?.();
     }
+}
+
+/** Scroll a page to its bottom a screen at a time until it stops growing (or {@link MAX_SCROLL_STEPS}), for content loaded on scroll. */
+async function ScrollToBottom(page: Page): Promise<void> {
+    let height = -1;
+    for (let step = 0; step < MAX_SCROLL_STEPS; step++) {
+        const next = await page.evaluate(() => {
+            window.scrollBy(0, window.innerHeight);
+            return document.body.scrollHeight;
+        });
+        const atBottom = await page.evaluate(() => window.scrollY + window.innerHeight >= document.body.scrollHeight - 2);
+        if (atBottom && next === height) {
+            return;
+        }
+        height = next;
+        await page.waitForTimeout(250);
+    }
+}
+
+/** A {@link SessionStorageState} in Playwright's `storageState` shape. */
+export function ToPlaywrightStorageState(state: SessionStorageState): Exclude<BrowserContextOptions['storageState'], string | undefined> {
+    return {
+        cookies: state.Cookies.map((c) => ({
+            name: c.Name,
+            value: c.Value,
+            domain: c.Domain,
+            path: c.Path,
+            expires: c.Expires,
+            httpOnly: c.HttpOnly,
+            secure: c.Secure,
+            sameSite: c.SameSite,
+        })),
+        origins: state.Origins.map((o) => ({ origin: o.Origin, localStorage: o.LocalStorage.map((e) => ({ name: e.Name, value: e.Value })) })),
+    };
 }

@@ -3,10 +3,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const httpGet = vi.hoisted(() => vi.fn());
-vi.mock('@memberjunction/network-utils', () => ({ HttpGet: httpGet }));
+const { httpGet, httpHead } = vi.hoisted(() => ({ httpGet: vi.fn(), httpHead: vi.fn() }));
+vi.mock('@memberjunction/network-utils', () => ({ HttpGet: httpGet, HttpHead: httpHead }));
 
-import { FetchContent, FetchRequest } from '../ContentFetcher.js';
+import { FetchContent, FetchRequest, ProbeContentType } from '../ContentFetcher.js';
 
 function request(url: string, extra: Partial<FetchRequest> = {}): FetchRequest {
     return {
@@ -55,5 +55,29 @@ describe('FetchContent session binding', () => {
     it('fails closed when it cannot tell where the source lives', async () => {
         await FetchContent(request('https://api.source.test/items/1', { SourceURL: undefined }));
         expect(httpGet.mock.calls[0][1].Headers).toBeUndefined();
+    });
+});
+
+describe('FetchContent User-Agent and size cap', () => {
+    it('sends the configured User-Agent and reads at most MaxBytes', async () => {
+        await FetchContent(request('https://api.source.test/items/1', { UserAgent: 'MJ-Bot/1', MaxBytes: 1024 }));
+        const config = httpGet.mock.calls[0][1];
+        expect(config.UserAgent).toBe('MJ-Bot/1');
+        expect(config.MaxResponseBytes).toBe(1024);
+    });
+});
+
+describe('ProbeContentType', () => {
+    it('asks with a HEAD, with the session for its own origin', async () => {
+        httpHead.mockReset().mockResolvedValue({ Ok: true, Headers: { 'content-type': 'application/pdf' } });
+        expect(await ProbeContentType(request('https://api.source.test/doc.pdf'))).toBe('application/pdf');
+        expect(httpHead.mock.calls[0][1]).toMatchObject({ ValidateUrl: true, Headers: { 'x-api-key': 'secret' } });
+    });
+
+    it('says nothing when the server refuses HEAD', async () => {
+        httpHead.mockReset().mockResolvedValue({ Ok: false, Status: 405, Headers: { 'content-type': 'text/html' } });
+        expect(await ProbeContentType(request('https://api.source.test/x'))).toBeUndefined();
+        httpHead.mockReset().mockRejectedValue(new Error('network'));
+        expect(await ProbeContentType(request('https://api.source.test/x'))).toBeUndefined();
     });
 });

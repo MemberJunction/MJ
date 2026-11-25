@@ -8,11 +8,47 @@ import { MJContentSourceEntity, MJContentItemEntity, MJContentSourceEntity_ICont
 import * as cheerio from 'cheerio';
 import type { AnyNode } from 'domhandler';
 import { HttpGet, HttpHead } from '@memberjunction/network-utils';
-import { BasePageRenderer, DiscoverRequest, DiscoveredItem, DiscoverWalkEnd } from '@memberjunction/content-pipeline-base';
-import { CrawlFetchers, CrawlFound, CrawlPage, DecodeCrawlState, WebsiteCrawl } from './WebsiteCrawl';
+import {
+    BasePageRenderer,
+    DiscoverRequest,
+    DiscoveredItem,
+    DiscoverWalkEnd,
+    PageRenderOptions,
+    ResolvePageRenderMode,
+} from '@memberjunction/content-pipeline-base';
+import { CrawlFetchers, CrawlFound, DecodeCrawlState, WebsiteCrawl } from './WebsiteCrawl';
+import { CrawlPolitenessOptions } from './CrawlPoliteness';
+import { CrawlScopeOptions } from './CrawlScope';
+import { WebsiteCrawlFetchers } from './WebsiteCrawlFetchers';
 import { URL } from 'url';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
+
+/**
+ * The `Configuration.Website` settings the crawl reads beyond those the generated
+ * `MJContentSourceEntity_IContentSourceWebsiteConfiguration` carries (documented on
+ * `IContentSourceWebsiteConfiguration` in `metadata/entities/JSONType-interfaces`; the generated type gains them
+ * at the next CodeGen). Every one is optional and off (or today's behaviour) when unset.
+ */
+export interface WebsiteCrawlConfiguration extends CrawlScopeOptions {
+    /** How many pages the crawl fetches at a time. Default 1. */
+    Concurrency?: number;
+    /** How a host that answers 429 (or 503 with Retry-After) is backed off, retried and paced. */
+    RateLimit?: CrawlPolitenessOptions;
+    /** The `User-Agent` the crawl's (and Extract's) plain HTTP requests send. Unset: the runtime's own. */
+    UserAgent?: string;
+    /** The most bytes of one response read (a page, a fetched item; a sitemap is held to 50 MB instead). Unset: no limit. */
+    MaxResponseBytes?: number;
+}
+
+/** `Configuration` as Discover reads it: the generated shape, plus the render settings and crawl settings above. */
+type WebsiteDiscoverConfiguration = MJContentSourceEntity_IContentSourceConfiguration & {
+    /** When the source's renderer is used: `Always` (default) or `WhenEmpty`. */
+    PageRenderMode?: string;
+    /** How the renderer loads a page. */
+    PageRendererOptions?: PageRenderOptions;
+    Website?: MJContentSourceEntity_IContentSourceConfiguration['Website'] & WebsiteCrawlConfiguration;
+};
 
 @RegisterClass(AutotagBase, 'AutotagWebsite')
 export class AutotagWebsite extends AutotagBase {
@@ -347,11 +383,14 @@ export class AutotagWebsite extends AutotagBase {
      * stops between pages and returns a resume token, and the next walk carries on from it.
      */
     public async *Discover(request: DiscoverRequest): AsyncGenerator<DiscoveredItem, DiscoverWalkEnd | void, undefined> {
-        const configuration = request.Configuration as MJContentSourceEntity_IContentSourceConfiguration;
+        const configuration = request.Configuration as WebsiteDiscoverConfiguration;
         this.configureCrawl(configuration.Website, new Map(Object.entries(request.Parameters)));
         const website = configuration.Website ?? {};
         const crawl = new WebsiteCrawl(
             {
+                ...this.scopeOptions(website),
+                Concurrency: website.Concurrency,
+                Politeness: website.RateLimit,
                 SeedURL: request.URL,
                 RootURL: this.RootURL ?? this.getBasePath(request.URL),
                 Pattern: this.URLPattern ? new RegExp(this.URLPattern) : /.*/,
@@ -366,7 +405,7 @@ export class AutotagWebsite extends AutotagBase {
                 Deadline: request.Deadline ?? null,
                 Signal: request.Signal,
             },
-            this.crawlFetchers(request, configuration.PageRenderer, website.RenderTimeoutMs),
+            this.crawlFetchers(request, configuration),
         );
         this.activeDiscoverRequest = request;
         try {
@@ -403,44 +442,48 @@ export class AutotagWebsite extends AutotagBase {
         }
     }
 
+    /** The crawl's URL-normalization, trap and include/exclude settings, as the source set them. */
+    private scopeOptions(website: WebsiteCrawlConfiguration): CrawlScopeOptions {
+        return {
+            MergeWwwAndScheme: website.MergeWwwAndScheme,
+            StripTrackingParams: website.StripTrackingParams,
+            StripQueryParams: website.StripQueryParams,
+            DedupCanonical: website.DedupCanonical,
+            DedupRedirects: website.DedupRedirects,
+            LoopLimit: website.LoopLimit,
+            SkipCalendarPaths: website.SkipCalendarPaths,
+            IncludePatterns: website.IncludePatterns,
+            ExcludePatterns: website.ExcludePatterns,
+        };
+    }
+
     /**
-     * How the crawl reads pages and sitemaps. Pages go through the source's page renderer when it names one;
-     * otherwise, like sitemaps, over HTTP with the SSRF guard and the session applied to its own origins.
+     * How the crawl reads pages and sitemaps (see {@link WebsiteCrawlFetchers}). HTML pages go through the source's
+     * page renderer when it names one (always, or only when the plain page is empty); everything else, and every
+     * sitemap, over HTTP with the SSRF guard and the session applied to its own origins.
      */
-    private crawlFetchers(request: DiscoverRequest, rendererKey: string | undefined, renderTimeoutMs: number | undefined): CrawlFetchers {
+    private crawlFetchers(request: DiscoverRequest, configuration: WebsiteDiscoverConfiguration): CrawlFetchers {
+        const rendererKey = configuration.PageRenderer;
         const renderer = rendererKey ? BasePageRenderer.Resolve(rendererKey) : null;
         if (rendererKey && !renderer) {
             throw new Error(`PageRenderer '${rendererKey}' is not registered. Check that the package registering it has been loaded.`);
         }
-        const text = async (url: string): Promise<string | null> => {
-            try {
-                const response = await HttpGet<string>(url, { ResponseType: 'text', ThrowOnError: false, ...this.buildCrawlHttpOptions(url) });
-                return response.Status === 200 && typeof response.Data === 'string' ? response.Data : null;
-            } catch {
-                return null;
-            }
-        };
-        const page = async (url: string): Promise<CrawlPage | null> => {
-            try {
-                if (renderer) {
-                    const sourceOrigin = this.originOf(request.URL);
-                    const rendered = await renderer.Render({
-                        URL: url,
-                        Access: this.sessionAppliesToUrl(request, url) ? request.Access : null,
-                        AccessOrigins: request.Access?.Origins?.length ? request.Access.Origins : sourceOrigin ? [sourceOrigin] : [],
-                        TimeoutMs: renderTimeoutMs,
-                        Signal: request.Signal,
-                    });
-                    return { Html: rendered.Html, FinalURL: rendered.FinalURL, Status: rendered.Status };
-                }
-                const html = await text(url);
-                return html === null ? null : { Html: html, FinalURL: url, Status: 200 };
-            } catch (error) {
-                LogStatus(`AutotagWebsite: could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
-                return null;
-            }
-        };
-        return { Page: page, Text: text };
+        const website = configuration.Website ?? {};
+        const sourceOrigin = this.originOf(request.URL);
+        return new WebsiteCrawlFetchers({
+            HttpOptions: (url) => this.buildCrawlHttpOptions(url),
+            Renderer: renderer,
+            RenderMode: ResolvePageRenderMode(configuration.PageRenderMode),
+            RenderOptions: configuration.PageRendererOptions,
+            RenderTimeoutMs: website.RenderTimeoutMs,
+            RenderAccess: (url) => ({
+                Access: this.sessionAppliesToUrl(request, url) ? request.Access : null,
+                AccessOrigins: request.Access?.Origins?.length ? request.Access.Origins : sourceOrigin ? [sourceOrigin] : [],
+            }),
+            UserAgent: website.UserAgent,
+            MaxResponseBytes: website.MaxResponseBytes,
+            Signal: request.Signal,
+        });
     }
 
     /** True when HTTP HEAD returns a valid `Last-Modified` header at or before `since`. */

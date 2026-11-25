@@ -83,8 +83,43 @@ export interface AccessArtifact {
      * token died by getting a 401 on record four hundred.
      */
     ExpiresAt?: Date;
-    /** Anything the driver's own fetcher needs that the generic shape cannot express. */
+    /**
+     * Anything the driver's own fetcher needs that the generic shape cannot express. A browser session that is
+     * not cookie-only puts its {@link SessionStorageState} under {@link ACCESS_STORAGE_STATE_EXTENSION}; the
+     * Headless renderer restores it per render.
+     */
     Extensions?: Readonly<Record<string, unknown>>;
+}
+
+/** The {@link AccessArtifact.Extensions} key a browser session's {@link SessionStorageState} travels under. */
+export const ACCESS_STORAGE_STATE_EXTENSION = 'StorageState';
+
+/** One cookie of a {@link SessionStorageState} (Playwright's `storageState` shape). */
+export interface SessionStorageCookie {
+    Name: string;
+    Value: string;
+    Domain: string;
+    Path: string;
+    /** Unix time in seconds; -1 for a session cookie. */
+    Expires: number;
+    HttpOnly: boolean;
+    Secure: boolean;
+    SameSite: 'Strict' | 'Lax' | 'None';
+}
+
+/**
+ * A signed-in browser's state, for a site whose session is not cookie-only (a token in `localStorage`): its
+ * cookies and each origin's `localStorage`. Captured by a browser login, restored into each rendered page.
+ */
+export interface SessionStorageState {
+    Cookies: SessionStorageCookie[];
+    Origins: { Origin: string; LocalStorage: { Name: string; Value: string }[] }[];
+}
+
+/** The {@link SessionStorageState} an artifact carries, or null when it carries none (or something else under the key). */
+export function SessionStorageStateOf(artifact: AccessArtifact | null | undefined): SessionStorageState | null {
+    const state = artifact?.Extensions?.[ACCESS_STORAGE_STATE_EXTENSION] as SessionStorageState | undefined;
+    return state && Array.isArray(state.Cookies) && Array.isArray(state.Origins) ? state : null;
 }
 
 /** What a connectivity test concluded. */
