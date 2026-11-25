@@ -5,3 +5,5 @@ export * from './Calendar';
 export * from './CredentialUtils';
 export * from './AddressUtils';
 export * from './FilterUtils';
+export * from './V2Types';
+export * from './V2Drivers';

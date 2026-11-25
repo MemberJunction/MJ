@@ -1,3 +1,4 @@
+import { EscapeSQLString } from '@memberjunction/global';
 import { DataTypeMap, MappedType } from '../dataTypeMap.js';
 import { BaseSchemaDDL } from './baseSchemaDDL.js';
 import type {
@@ -149,6 +150,14 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
 
     /** SQL Server's hard per-table column cap. */
     override get MaxColumnCount(): number { return 1024; }
+
+    /**
+     * SQL Server `sp_addextendedproperty` types `@value` as `sql_variant`, which caps payloads at
+     * 7,500 bytes (3,750 UTF-16 code units for `N'...'` literals; >4,000 code units also promotes
+     * the literal to `nvarchar(max)`, which SQL Server refuses to implicitly convert to `sql_variant`).
+     * Cap at 3,700 UTF-16 code units (7,400 bytes) to stay safely under both limits.
+     */
+    override get MaxCommentLength(): number { return 3700; }
 
     /**
      * Minimum in-row byte footprint of a column. Off-row-capable variable-length / LOB types
@@ -360,14 +369,14 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     }
 
     CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
-        const escaped = comment.replace(/'/g, "''");
+        const escaped = this.EscapeComment(comment);
         return [
             `EXEC sp_addextendedproperty`,
             `    @name = N'MS_Description',`,
             `    @value = N'${escaped}',`,
-            `    @level0type = N'SCHEMA', @level0name = '${schema}',`,
-            `    @level1type = N'TABLE', @level1name = '${table}',`,
-            `    @level2type = N'COLUMN', @level2name = '${column}';`,
+            `    @level0type = N'SCHEMA', @level0name = ${this.escapeUnicodeLiteral(schema)},`,
+            `    @level1type = N'TABLE', @level1name = ${this.escapeUnicodeLiteral(table)},`,
+            `    @level2type = N'COLUMN', @level2name = ${this.escapeUnicodeLiteral(column)};`,
         ].join('\n');
     }
 
@@ -405,14 +414,14 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     }
 
     CommentOnObject(objectType: string, schema: string, name: string, comment: string): string {
-        const escapedComment = comment.replace(/'/g, "''");
+        const escapedComment = this.EscapeComment(comment);
         const level1Type = this.objectTypeToLevel1Type(objectType);
         return [
             `EXEC sp_addextendedproperty`,
             `    @name = N'MS_Description',`,
             `    @value = N'${escapedComment}',`,
-            `    @level0type = N'SCHEMA', @level0name = N'${schema}',`,
-            `    @level1type = N'${level1Type}', @level1name = N'${name}'`,
+            `    @level0type = N'SCHEMA', @level0name = ${this.escapeUnicodeLiteral(schema)},`,
+            `    @level1type = ${this.escapeUnicodeLiteral(level1Type)}, @level1name = ${this.escapeUnicodeLiteral(name)}`,
         ].join('\n');
     }
 
@@ -449,14 +458,14 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
         const level1Type = this.objectTypeToLevel1Type(objectType);
         // IF NOT EXISTS governs the single EXEC that follows (sp_addextendedproperty has no internal ';').
         return [
-            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'${level1Type}', N'${name}', NULL, NULL))`,
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', ${this.escapeUnicodeLiteral(schema)}, ${this.escapeUnicodeLiteral(level1Type)}, ${this.escapeUnicodeLiteral(name)}, NULL, NULL))`,
             `${this.CommentOnObject(objectType, schema, name, comment)};`,
         ].join('\n');
     }
 
     override CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
         return [
-            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'TABLE', N'${table}', N'COLUMN', N'${column}'))`,
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', ${this.escapeUnicodeLiteral(schema)}, N'TABLE', ${this.escapeUnicodeLiteral(table)}, N'COLUMN', ${this.escapeUnicodeLiteral(column)}))`,
             this.CommentOnColumn(schema, table, column, comment),
         ].join('\n');
     }
@@ -581,6 +590,10 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
             return `NVARCHAR(${maxLength})`;
         }
         return 'NVARCHAR(255)';
+    }
+
+    private escapeUnicodeLiteral(value: string): string {
+        return `N'${EscapeSQLString(value)}'`;
     }
 
     private objectTypeToLevel1Type(objectType: string): string {

@@ -135,6 +135,14 @@ export interface IRecordProcessor {
     /** When true, a run that completed with one or more failed records ends with status `Failed`. */
     FailRunOnRecordError?: boolean;
 
+    /**
+     * Batch path only (`ProcessBatch`): how many batches the engine processes at once (default 1). The engine reads up to
+     * this many consecutive batches from the source, processes them concurrently, and only then checkpoints, runs the
+     * budget gate and the error-rate breaker for all of them (a "wave"), so a resumed run restarts at the first batch of
+     * the wave it stopped in. The batches are disjoint; the processor must keep their work independent.
+     */
+    MaxConcurrentBatches?: number;
+
     /** Optional hook to enrich output mapping configuration and report whether the processor has unmapped writes. */
     PrepareOutputMapping?(mapping: Record<string, unknown> | undefined): { OutputMapping?: Record<string, unknown>; HasUnmappedWrites?: boolean };
 

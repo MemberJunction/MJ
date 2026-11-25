@@ -56,6 +56,7 @@ import {
   ArtifactViewerViewMode,
   BaseArtifactViewerPluginComponent,
   IArtifactVersionDiffViewer,
+  type ArtifactExportOption,
   type NavigationRequest,
   type PreVerifiedFrozenSnapshotEntry,
 } from '../base-artifact-viewer.component';
@@ -4302,6 +4303,25 @@ export class SlideDeckArtifactViewerComponent
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
     const serialized = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
     return CreateJsonSnapshot(serialized, this.Deck.Title || this.getDisplayTitle());
+  }
+
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return [
+      { Key: 'pptx', Label: 'PowerPoint (.pptx)', Icon: 'fa-solid fa-file-powerpoint', Description: 'Every slide, with data snapshots' },
+      { Key: 'pdf-print', Label: 'PDF (print)', Icon: 'fa-solid fa-file-pdf', Description: 'Opens the print dialog. Choose Save as PDF.' },
+    ];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key === 'pptx') {
+      this.OnExportPptx();
+      return;
+    }
+    if (key === 'pdf-print') {
+      this.OnExportPdf();
+      return;
+    }
+    return super.RunExport(key);
   }
 
   public get ActiveDeckForDisplay(): SlideDeckSpec {

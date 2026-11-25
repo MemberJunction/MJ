@@ -983,13 +983,13 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(query(f, '[data-toolbar-collapse="menu"]')).not.toBeNull();
     });
 
-    it('shows the Form mode switch row in the View sheet at phone width when FormModeSwitch is set, flips label with Mode, and calls Switch with the other mode', () => {
+    it('shows the Form mode switch row in the More sheet at phone width when FormModeSwitch is set, flips label with Mode, and calls Switch with the other mode', () => {
       vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
       const sw = vi.fn().mockReturnValue(true);
       const f = renderRaw({ EditMode: false, FormModeSwitch: { Mode: 'default', Switch: sw } });
       f.componentInstance.ExpandToolbarForSession();
       f.detectChanges();
-      openView(f);
+      openMore(f);
 
       const findModeBtn = () =>
         queryAll(f, '.mj-forms-menu-item').find((b) =>
@@ -1004,13 +1004,13 @@ describe('MjFormToolbarComponent (DOM)', () => {
       btnDefault!.click();
       f.detectChanges();
       expect(sw).toHaveBeenCalledWith('standard');
-      expect(f.componentInstance.ViewMenuOpen).toBe(false);
+      expect(f.componentInstance.MoreMenuOpen).toBe(false);
 
-      // Standard mode flips label & icon; if Switch returns false (unsaved guard refuses), sheet stays open
+      // Standard mode flips label & icon; if Switch returns false (unsaved guard refuses), menu stays open
       const swRefuse = vi.fn().mockReturnValue(false);
       f.componentRef.setInput('FormModeSwitch', { Mode: 'standard', Switch: swRefuse });
       f.detectChanges();
-      openView(f);
+      openMore(f);
 
       const btnStandard = findModeBtn();
       expect(btnStandard?.textContent).toContain('Back to custom view');
@@ -1018,18 +1018,31 @@ describe('MjFormToolbarComponent (DOM)', () => {
       btnStandard!.click();
       f.detectChanges();
       expect(swRefuse).toHaveBeenCalledWith('default');
-      expect(f.componentInstance.ViewMenuOpen).toBe(true);
+      expect(f.componentInstance.MoreMenuOpen).toBe(true);
     });
 
-    it('hides the Form mode switch row in the View menu at desktop width', () => {
+    it('shows the Form mode switch row in the More menu at desktop width (and not in View) and keeps ShowMoreMenu true', () => {
       useViewport(false);
       const sw = vi.fn().mockReturnValue(true);
       const desktop = render({ FormModeSwitch: { Mode: 'default', Switch: sw } });
+      expect(desktop.componentInstance.ShowMoreMenu).toBe(true);
+
+      // Not in View menu
       openView(desktop);
-      const desktopModeBtn = queryAll(desktop, '.mj-forms-menu-item').find((b) =>
+      const viewModeBtn = queryAll(desktop, '.mj-forms-menu-item').find((b) =>
         b.textContent?.includes('Open standard form') || b.textContent?.includes('Back to custom view')
       );
-      expect(desktopModeBtn).toBeUndefined();
+      expect(viewModeBtn).toBeUndefined();
+
+      // Present in More menu across desktop viewports
+      openMore(desktop);
+      const moreModeBtn = query(desktop, '[data-form-mode-switch="true"]') as HTMLButtonElement | null;
+      expect(moreModeBtn).not.toBeNull();
+      expect(moreModeBtn?.textContent).toContain('Open standard form');
+      moreModeBtn!.click();
+      desktop.detectChanges();
+      expect(sw).toHaveBeenCalledWith('standard');
+      expect(desktop.componentInstance.MoreMenuOpen).toBe(false);
     });
 
     it('defaults to collapsed pill in Read Mode when mj.form.toolbar.visibility is unset', () => {

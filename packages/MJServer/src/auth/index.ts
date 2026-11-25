@@ -9,6 +9,7 @@ import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { initializeAuthProviders } from './initializeProviders.js';
 import { DomainMatchesPattern } from './domainPattern.js';
+import { IsInviteOnlyMode, ResolveEffectiveNewUserRoles } from './inviteOnlyPolicy.js';
 
 export * from './APIKeyScopeAuth.js';
 export * from './scopeLimitedPrincipal.js';
@@ -16,6 +17,7 @@ export * from './actingContextResolver.js';
 export * from './AuthProviderEngine.js';
 export * from './LoginScreenEngine.js';
 export * from './AuthProviderCatalogRouter.js';
+export * from './inviteOnlyPolicy.js';
 export { InitializeAuthProviders, initializeAuthProviders, InitializeAuthProvidersFromMetadata, initializeAuthProvidersFromMetadata, RefreshAuthProviders, refreshAuthProviders, ValidateAuthProvidersRegistered, validateAuthProvidersRegistered } from './initializeProviders.js';
 
 // This is a hard-coded forever constant due to internal migrations
@@ -320,6 +322,11 @@ export const VerifyUserRecord = async (
       return VerifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false);
     }
 
+    if (IsInviteOnlyMode(configInfo.userHandling)) {
+      console.warn(`Invite-only mode: refusing sign-in for uninvited user '${email}' (auto-provisioning disabled).`);
+      return undefined;
+    }
+
     // NOTE: `requestDomain` (parsed from the spoofable `Origin` header) is deliberately NOT part of
     // this condition. It was previously required here, which meant a non-browser client sending no
     // Origin could never auto-provision while an attacker simply forged one — it gated entry without
@@ -349,7 +356,7 @@ export const VerifyUserRecord = async (
 
           const initData: MJUserEntityType & { UserRoles: { UserID: string; Role: string; RoleID: string }[] } = newUser.GetAll();
 
-          initData.UserRoles = configInfo.userHandling.newUserRoles.map((role) => {
+          initData.UserRoles = ResolveEffectiveNewUserRoles(configInfo.userHandling).map((role) => {
             const roleInfo: RoleInfo | undefined = md.Roles.find((r) => r.Name === role);
             const roleID: string = roleInfo ? roleInfo.ID : '';
 

@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT192 - Comms V2 Public Routes and Sends over the Wire (client transport)",
+    "Description": "Drives the Comms V2 surfaces that have a wire against a running MJAPI: fixtures and assertions go through GraphQL, the public /comms routes are plain HTTP requests, and the work they enqueue is consumed by MJAPI's own work-queue host and its registered comms.activity handler. CV2W1: a one-click unsubscribe POST answers 200 and a User Unsubscribe suppression appears for the log's endpoint; an unknown token answers 404 and a malformed one 400. CV2W2: a correctly signed SendGrid event webhook POST (a hard bounce) answers 202, a Hard Bounce suppression appears and the endpoint is marked Hard Bounced; needs MJAPI started with COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID and the test process given the matching MJ_IT_SENDGRID_WEBHOOK_PRIVATE_KEY, and skips without the private key. CV2W3: a webhook signed with the wrong key, one changed after signing and one with no signature headers each answer 401 and no suppression appears. CV2W4: V1 RunEntityCommunicationByViewID in preview mode returns the recipient's message and writes no Communication Log. CV2W5: the same query routed to V2 Send for a recipient with an active Hard Bounce suppression reports the recipient skipped with that reason and writes no Communication Log. CV2W6: a signed click link answers 302 to its target and a signed open pixel answers with the GIF, and a Clicked and an Opened activity appear on the log; a click with a wrong signature answers 400; a signed click and open for a tracking token on no log are answered the same way and nothing is recorded for them; needs the test process and MJAPI to share MJ_COMMS_HMAC_SECRET, and skips without it. Needs MJAPI running with its work-queue host enabled and MJ_API_KEY set.",
+    "MaxExecutionTimeMS": 600000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A one-click unsubscribe POST and a correctly signed provider webhook POST each end in a suppression written by MJAPI's own queue handler, a badly signed webhook is refused and suppresses nothing, a V1 preview over GraphQL writes no log, and a V2 Send over GraphQL to a suppressed recipient is blocked before any log or provider call."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "comms-v2-wire"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "3D727A21-82AB-4961-A351-F8878D91878A"
+  }
+}

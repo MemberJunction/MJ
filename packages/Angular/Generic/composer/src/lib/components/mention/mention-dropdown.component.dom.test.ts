@@ -2,8 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { MentionDropdownComponent } from './mention-dropdown.component';
-import type { MentionSuggestion } from '../../composer-trigger-provider';
+import {
+  MentionDropdownComponent,
+  SplitHighlightSegments,
+} from './mention-dropdown.component';
+import type {
+  ComposerPopulationFilter,
+  ComposerSearchField,
+  MentionSuggestion,
+} from '../../composer-trigger-provider';
 
 /**
  * DOM spec for <mj-mention-dropdown> — the @mention autocomplete list.
@@ -76,5 +83,91 @@ describe('MentionDropdownComponent (DOM)', () => {
     f.componentInstance.suggestionSelected.subscribe(spy);
     queryAll(f, '.mention-suggestion')[1].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     expect(spy).toHaveBeenCalledWith(user);
+  });
+
+  it('omits the smart filter toolbar for non-"@" triggers', () => {
+    const nonAt = render({ ActiveTrigger: '#' });
+    expect(query(nonAt, '.mention-toolbar')).toBeNull();
+  });
+
+  it('renders FK-style population & search-field toolbar when ActiveTrigger is "@", emits changes, and prevents default mousedown focus loss', () => {
+    const f = render({ ActiveTrigger: '@', PopulationFilter: 'all', SearchField: 'all' });
+    expect(query(f, '.mention-toolbar')).not.toBeNull();
+
+    const popPills = queryAll(f, '.mention-pop-pill');
+    expect(popPills.map((p) => p.textContent?.trim())).toEqual(['All', 'My Agents', 'Shared', 'People']);
+
+    const popChanges: ComposerPopulationFilter[] = [];
+    f.componentInstance.PopulationFilterChange.subscribe((val) => popChanges.push(val));
+    const popEvent = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    popPills[1].dispatchEvent(popEvent);
+    expect(popEvent.defaultPrevented).toBe(true);
+    expect(popChanges).toEqual(['my-agents']);
+
+    const fieldChanges: ComposerSearchField[] = [];
+    f.componentInstance.SearchFieldChange.subscribe((val) => fieldChanges.push(val));
+    const scopeBtn = query(f, '.mention-scope-trigger')!;
+    const openEvt = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    scopeBtn.dispatchEvent(openEvt);
+    expect(openEvt.defaultPrevented).toBe(true);
+    f.detectChanges();
+
+    const scopeOpts = queryAll(f, '.mention-scope-option');
+    expect(scopeOpts.length).toBe(4);
+    const pickEvt = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    scopeOpts[2].dispatchEvent(pickEvt);
+    expect(pickEvt.defaultPrevented).toBe(true);
+    expect(fieldChanges).toEqual(['capabilities']);
+  });
+
+  it('renders group headers, smart badges (Chat Default, In Thread, My Agent), lineage + description, and safe query highlights', () => {
+    const pepper: MentionSuggestion = {
+      type: 'agent',
+      id: 'p1',
+      name: 'Pepper',
+      displayName: 'Pepper',
+      description: 'Executive SQL & calendar partner',
+      lineage: 'Chief of Staff · My Agent',
+      group: 'frequent',
+      groupLabel: 'Frequent & Recent',
+      isMyAgent: true,
+      isDefaultChatAgent: true,
+      isInCurrentThread: true,
+    };
+    const queryBuilder: MentionSuggestion = {
+      type: 'agent',
+      id: 'q1',
+      name: 'Query Builder',
+      displayName: 'Query Builder',
+      description: 'Writes SQL queries and joins',
+      lineage: 'Shared',
+      group: 'shared',
+      groupLabel: 'Shared',
+    };
+
+    const f = render({
+      ActiveTrigger: '@',
+      SearchQuery: 'sql',
+      suggestions: [pepper, queryBuilder],
+    });
+
+    const headers = queryAll(f, '.mention-group-header');
+    expect(headers.length).toBe(2);
+    expect(headers[0].textContent).toContain('Frequent & Recent');
+    expect(headers[1].textContent).toContain('Shared');
+
+    const chips = queryAll(f, '.mention-chip').map((c) => c.textContent?.trim());
+    expect(chips).toEqual(['Chat Default', 'In Thread', 'My Agent']);
+
+    const descriptions = queryAll(f, '.suggestion-description').map((d) => d.textContent?.trim());
+    expect(descriptions[0]).toContain('Chief of Staff · My Agent — Executive SQL & calendar partner');
+
+    const marks = queryAll(f, 'mark.mention-highlight').map((m) => m.textContent?.trim());
+    expect(marks).toEqual(['SQL', 'SQL']);
+
+    expect(SplitHighlightSegments('Pepper SQL', 'sql')).toEqual([
+      { Text: 'Pepper ', Matched: false },
+      { Text: 'SQL', Matched: true },
+    ]);
   });
 });

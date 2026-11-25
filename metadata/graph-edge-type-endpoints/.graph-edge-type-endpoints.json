@@ -1,0 +1,184 @@
+[
+  {
+    "fields": {
+      "EdgeTypeID": "8DB67056-D702-46E4-82ED-A7E2A11D15CA",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Alternate Base Views"
+    },
+    "primaryKey": {
+      "ID": "C4E9A342-8B65-448B-9A3C-07D8F1C1CECD"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.968Z",
+      "checksum": "587a649e29b79150941a02421ae9c5e2ade666813555e2ef809bb7091451be5a"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8DB67056-D702-46E4-82ED-A7E2A11D15CA",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    },
+    "primaryKey": {
+      "ID": "308CB0FF-196C-43A9-A3FC-F71AB6F7E384"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.985Z",
+      "checksum": "4d961369ef3e4c2196775d683b10ce56ddd3cb23f1be9038c301f3206ed3a4e3"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8DB67056-D702-46E4-82ED-A7E2A11D15CA",
+      "Side": "Target",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Concepts"
+    },
+    "primaryKey": {
+      "ID": "40595AA3-D1A8-47AF-B809-1AC7F023A18E"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.002Z",
+      "checksum": "91b9f7758cd8ef504787d3d247dcdcfddb3aa855f7b8f6d3e93069393d0adb2b"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8FE3F834-989C-44F6-9F86-45848284CC68",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entities"
+    },
+    "primaryKey": {
+      "ID": "233C19F4-A4AD-481A-92DE-DE4A56CE4147"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.018Z",
+      "checksum": "974c5bbd102bda423eaa4d8f69008ce6f757c6d85b2eef5938d758a04a006092"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8FE3F834-989C-44F6-9F86-45848284CC68",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+    },
+    "primaryKey": {
+      "ID": "348F7D6E-327F-4200-8B63-F7CC9CD7D60F"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.034Z",
+      "checksum": "daa8be5e53b39a19e56dbbf84f14c7fbad9dcc3634a0c9a185e00df455620040"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "8FE3F834-989C-44F6-9F86-45848284CC68",
+      "Side": "Target",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Concepts"
+    },
+    "primaryKey": {
+      "ID": "5AD6D404-B11B-4AC5-9AEE-AD1301714DDE"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.051Z",
+      "checksum": "1221bc68b6c417a45296a08938960c1cad604fe5e6badc69430dd944102affb0"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "57EC0A4D-B9FD-4C63-ADB1-8D5C3A70A3DA",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    },
+    "primaryKey": {
+      "ID": "F44A6A33-1D03-4681-AFE2-CDEFE10031C4"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.067Z",
+      "checksum": "a8fdf30d0d4b64cd612db4b56fc408afb610da6cb7cdf7902c9a210819d676dc"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "57EC0A4D-B9FD-4C63-ADB1-8D5C3A70A3DA",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Alternate Base Views"
+    },
+    "primaryKey": {
+      "ID": "5ACF7D92-CCC9-4BD8-B72A-0D42243F4ED2"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.084Z",
+      "checksum": "b7b3bd92b2511943aff9e6a123963a1078b426665c7655c6634f756cd3593e82"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "57EC0A4D-B9FD-4C63-ADB1-8D5C3A70A3DA",
+      "Side": "Target",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Concepts"
+    },
+    "primaryKey": {
+      "ID": "B9BCDFF8-A569-4760-99E5-49F737AA48E1"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.102Z",
+      "checksum": "cd70d0786d95d9dd0b7bc8c7c29a3397eef5d8007847f6e1db58685f15b49dc1"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    },
+    "primaryKey": {
+      "ID": "E0B31C96-645A-40AD-B6C4-61ED873E8D19"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.120Z",
+      "checksum": "309f2bc76433e5d7dd8e20e2f666c8de93d8e96a7ab45b54288c8c9ad9f764a4"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Skills"
+    },
+    "primaryKey": {
+      "ID": "F4E7A2A6-7F60-4048-A94D-B011C3E5C319"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.137Z",
+      "checksum": "cb1e3b8c1590b95674b13e068bf31609be2ec2e71fc24bd2e6f6aa1652f17080"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069",
+      "Side": "Source",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    },
+    "primaryKey": {
+      "ID": "96F6BF5B-42BC-422B-89A0-F0F218C8E26F"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.159Z",
+      "checksum": "96370f2c060bb30cda8e3ad4f4398d6700472d211383085f3a0ebcc483b6a9fa"
+    }
+  },
+  {
+    "fields": {
+      "EdgeTypeID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069",
+      "Side": "Target",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Concepts"
+    },
+    "primaryKey": {
+      "ID": "04426A0D-07DC-485C-A60D-0479CEAB4CF8"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.176Z",
+      "checksum": "3d789127dfb78949e096ce5e4b808f6006403578c060d3dfbc0cfd19456e31f2"
+    }
+  }
+]

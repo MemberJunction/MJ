@@ -9,12 +9,16 @@
  * manifest — so the client load mechanism lives in distributed npm packages (the CLI +
  * the generated manifest MJExplorer already imports) rather than a bespoke MJExplorer file.
  *
+ * Also manages the top-level `publicPages` array: one entry per page an app serves before
+ * sign-in. `mj codegen manifest --open-app-client-bootstrap` turns it into the host's page list.
+ *
  * Operates on the standard mj.config.cjs file using string-based manipulation
  * to preserve formatting and comments.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compileFunction } from 'node:vm';
+import { IsManifestPublicErrorPage } from '../manifest/manifest-schema.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { PackageRunsOnTier } from '../manifest/package-platform.js';
 import { ResolveServerPackagePath } from './workspace-paths.js';
@@ -33,6 +37,32 @@ export interface DynamicPackageEntry {
     /** Open App name this package belongs to */
     AppName: string;
     /** Whether this package should be loaded */
+    Enabled: boolean;
+}
+
+/**
+ * A single entry in the top-level `publicPages` array.
+ */
+export interface PublicPageConfigEntry {
+    /** Open App name this page belongs to */
+    AppName: string;
+    /** URL slug; the page is served at `/p/<Slug>`. An error page has none. */
+    Slug?: string;
+    /** Set on an error page */
+    Role?: 'error';
+    /** Folder under `/p/` an error page covers; empty for all of `/p/` */
+    Scope?: string;
+    /** npm package that exports the page component */
+    PackageName: string;
+    /** Named export of the page component */
+    ExportName: string;
+    /** Page title, used in the page's HTML and link preview */
+    Title?: string;
+    /** Link preview text */
+    Description?: string;
+    /** Whether the page also answers the addresses under its slug */
+    SubPaths?: boolean;
+    /** Whether the host serves this page */
     Enabled: boolean;
 }
 
@@ -117,9 +147,68 @@ export function AddClientDynamicPackages(
 }
 
 /**
- * Removes all server and client dynamic package entries for an app from mj.config.cjs.
- * Entry removal is keyed by AppName and is array-agnostic — it sweeps both the
- * `server` and `client` arrays in one pass.
+ * Adds the app's public pages to the top-level `publicPages` array in mj.config.cjs.
+ *
+ * A page the app already has (same AppName and Slug) is updated in place to the manifest's
+ * package and export, and keeps its `Enabled` value. Fails, and writes nothing, when another
+ * app already owns one of the slugs.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param manifest - The app's validated manifest
+ * @returns Operation result
+ */
+export function AddPublicPages(
+    repoRoot: string,
+    manifest: MJAppManifest,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    const pages = GetPublicPagesFromManifest(manifest);
+    if (pages.length === 0) {
+        return { Success: true };
+    }
+
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update publicPages', (input) => {
+        const conflict = FindSlugConflict(input, manifest);
+        if (conflict) {
+            throw new Error(conflict);
+        }
+        let content = EnsurePublicPagesSection(input);
+        for (const page of pages) {
+            content = UpsertPublicPage(content, page);
+        }
+        return content;
+    });
+}
+
+/**
+ * Checks, without writing, that no other app in mj.config.cjs owns one of the manifest's
+ * public page slugs. Run before an install or upgrade changes anything.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param manifest - The app's validated manifest
+ * @returns Failure naming the slug and both apps, or success
+ */
+export function CheckPublicPageSlugConflicts(
+    repoRoot: string,
+    manifest: MJAppManifest,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    if ((manifest.publicPages ?? []).length === 0) {
+        return { Success: true };
+    }
+    for (const configPath of resolveConfigPaths(repoRoot, serverPackagePath)) {
+        const conflict = FindSlugConflict(readFileSync(configPath, 'utf-8'), manifest);
+        if (conflict) {
+            return { Success: false, ErrorMessage: conflict };
+        }
+    }
+    return { Success: true };
+}
+
+/**
+ * Removes all server and client dynamic package entries and public pages for an app from
+ * mj.config.cjs. Entry removal is keyed by AppName and is array-agnostic — it sweeps the
+ * `server`, `client` and `publicPages` arrays in one pass.
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param appName - The app name to remove entries for
@@ -146,6 +235,7 @@ export function RemoveServerDynamicPackages(
  * Surviving entries are left byte-identical rather than removed and re-added, so a disabled app's
  * `Enabled: false` state is preserved. Server and client keep-sets are computed per array, so a
  * server-only package is not pruned from `server` just because it is absent from `client`.
+ * Public pages whose slug the manifest no longer declares are removed the same way.
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param manifest - The NEW (target) manifest the config should converge on
@@ -161,12 +251,12 @@ export function PruneDynamicPackagesNotInManifest(
         result = PruneEntriesForApp(result, manifest, 'client');
         result = NormalizeEmptyDynamicArray(result, 'server');
         result = NormalizeEmptyDynamicArray(result, 'client');
-        return result;
+        return PrunePublicPagesForApp(result, manifest);
     });
 }
 
 /**
- * Toggles the enabled state of all dynamic package entries for an app.
+ * Toggles the enabled state of all dynamic package entries and public pages for an app.
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param appName - The app name to toggle
@@ -577,6 +667,10 @@ function RemoveEntriesForApp(content: string, appName: string): string {
     }
     result = NormalizeEmptyDynamicArray(result, 'server');
     result = NormalizeEmptyDynamicArray(result, 'client');
+    const pages = LocatePublicPagesArray(result);
+    if (pages) {
+        result = CollapseEmptyPublicPagesArray(ReplaceInRange(result, pages.OpenBracketPos, pages.ClosePos, pattern, () => ''));
+    }
     return result;
 }
 
@@ -615,7 +709,190 @@ function ToggleEntriesForApp(content: string, appName: string, enabled: boolean)
                 (match) => match.replace(/(?:true|false)$/, () => String(enabled)));
         }
     }
+    const pages = LocatePublicPagesArray(result);
+    if (pages) {
+        result = ReplaceInRange(result, pages.OpenBracketPos, pages.ClosePos, pattern,
+            (match) => match.replace(/(?:true|false)$/, () => String(enabled)));
+    }
     return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC PAGES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Builds the `publicPages` entries for a manifest. */
+function GetPublicPagesFromManifest(manifest: MJAppManifest): PublicPageConfigEntry[] {
+    return (manifest.publicPages ?? []).map((page): PublicPageConfigEntry => {
+        const common = { AppName: manifest.name, PackageName: page.package, ExportName: page.export, Enabled: true };
+        if (IsManifestPublicErrorPage(page)) {
+            return { ...common, Role: 'error', Scope: page.scope };
+        }
+        return { ...common, Slug: page.slug, Title: page.title, Description: page.description, SubPaths: page.subPaths === true };
+    });
+}
+
+/**
+ * Quotes free text as a string literal for mj.config.cjs. Braces, quotes and slashes become
+ * escapes, so the entry-block patterns (`[^{}]*`, quoted values) and comment masking still work.
+ */
+function QuoteConfigText(value: string): string {
+    return JSON.stringify(value).replace(/[{}'/]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/** Lines for the optional text keys of a page entry, each ending with a comma. */
+function OptionalPageTextLines(page: PublicPageConfigEntry): string {
+    return (['Title', 'Description'] as const)
+        .filter((key) => page[key] !== undefined)
+        .map((key) => `\n      ${key}: ${QuoteConfigText(page[key] ?? '')},`)
+        .join('');
+}
+
+/**
+ * Sets an optional text key in an entry block: replaces its value, adds it before `Enabled`,
+ * or removes the key when the value is undefined.
+ */
+function SetOptionalEntryText(block: string, key: 'Title' | 'Description', value: string | undefined): string {
+    const quoted = `(["'])(?:(?!\\1)[^\\\\]|\\\\.)*\\1`;
+    const existing = new RegExp(`\\n?[ \\t]*\\b${key}:\\s*${quoted},?`);
+    if (value === undefined) {
+        return block.replace(existing, '');
+    }
+    if (existing.test(block)) {
+        return block.replace(existing, (match) => match.replace(new RegExp(quoted), () => QuoteConfigText(value)));
+    }
+    return block.replace(/(\n[ \t]*)Enabled:/, (match, indent: string) => `${indent}${key}: ${QuoteConfigText(value)},${match}`);
+}
+
+/** Sets the `SubPaths: true` line of an entry block: adds it before `Enabled`, or removes it. */
+function SetSubPathsFlag(block: string, subPaths: boolean): string {
+    const existing = /\n?[ \t]*\bSubPaths:\s*(?:true|false),?/;
+    const without = block.replace(existing, '');
+    return subPaths ? without.replace(/(\n[ \t]*)Enabled:/, (match, indent: string) => `${indent}SubPaths: true,${match}`) : without;
+}
+
+/** True when an entry block is the config entry of `page`: the same error scope, or the same slug. */
+function IsEntryBlockOf(block: string, page: PublicPageConfigEntry): boolean {
+    const isErrorBlock = ReadEntryValue(block, 'Role') === 'error';
+    if (page.Role === 'error') {
+        return isErrorBlock && ReadEntryValue(block, 'Scope') === page.Scope;
+    }
+    return !isErrorBlock && ReadEntryValue(block, 'Slug') === page.Slug;
+}
+
+/** The identity lines of a new entry: role and scope for an error page, slug for a page. */
+function PageIdentityLines(page: PublicPageConfigEntry): string {
+    return page.Role === 'error'
+        ? `\n      Role: "error",\n      Scope: ${JSON.stringify(page.Scope ?? '')},`
+        : `\n      Slug: ${JSON.stringify(page.Slug ?? '')},`;
+}
+
+/** Locates the first `publicPages: [` array outside comments, or null when there is none. */
+function LocatePublicPagesArray(content: string): { OpenBracketPos: number; ClosePos: number } | null {
+    const match = BlankComments(content).match(/\bpublicPages\s*:\s*\[/);
+    if (!match || match.index === undefined) return null;
+    const openBracketPos = match.index + match[0].length - 1;
+    const closePos = FindMatchingBracket(content, openBracketPos);
+    return closePos === -1 ? null : { OpenBracketPos: openBracketPos, ClosePos: closePos };
+}
+
+/** Collapses a whitespace-only `publicPages` array to `[]`. */
+function CollapseEmptyPublicPagesArray(content: string): string {
+    const location = LocatePublicPagesArray(content);
+    if (!location || content.slice(location.OpenBracketPos + 1, location.ClosePos).trim() !== '') {
+        return content;
+    }
+    return content.slice(0, location.OpenBracketPos) + '[]' + content.slice(location.ClosePos + 1);
+}
+
+/** Adds an empty top-level `publicPages` array when the config has none. */
+function EnsurePublicPagesSection(content: string): string {
+    if (LocatePublicPagesArray(content)) {
+        return content;
+    }
+    return InsertBeforeModuleExportsClose(content, `\n  publicPages: [],\n`);
+}
+
+/** Reads the string value of `key` from one entry block, or undefined. */
+function ReadEntryValue(block: string, key: string): string | undefined {
+    return block.match(new RegExp(`\\b${key}:\\s*['"]([^'"]*)['"]`))?.[1];
+}
+
+/** Returns each `{ Slug, AppName }` pair in the `publicPages` array. */
+function ReadPublicPageOwners(content: string): { Slug: string; AppName: string }[] {
+    const location = LocatePublicPagesArray(content);
+    if (!location) return [];
+    const body = BlankComments(content).slice(location.OpenBracketPos, location.ClosePos);
+    const owners: { Slug: string; AppName: string }[] = [];
+    for (const block of body.match(/\{[^{}]*\}/g) ?? []) {
+        const slug = ReadEntryValue(block, 'Slug');
+        const appName = ReadEntryValue(block, 'AppName');
+        if (slug && appName) owners.push({ Slug: slug, AppName: appName });
+    }
+    return owners;
+}
+
+/** Returns an error message when another app owns one of the manifest's slugs, else undefined. */
+function FindSlugConflict(content: string, manifest: MJAppManifest): string | undefined {
+    const owners = ReadPublicPageOwners(content);
+    for (const page of manifest.publicPages ?? []) {
+        if (IsManifestPublicErrorPage(page)) continue;
+        const owner = owners.find((o) => o.Slug === page.slug && o.AppName !== manifest.name);
+        if (owner) {
+            return `Public page slug '${page.slug}' is already used by installed app '${owner.AppName}', so app '${manifest.name}' cannot use it. ` +
+                `Remove '${owner.AppName}' or change one of the slugs.`;
+        }
+    }
+    return undefined;
+}
+
+/** Sets a string-valued key in an entry block, keeping every other line. */
+function SetEntryValue(block: string, key: string, value: string): string {
+    const pattern = new RegExp(`\\b${key}:\\s*(['"])(?:[^'"\\\\]|\\\\.)*\\1`);
+    return block.replace(pattern, () => `${key}: ${JSON.stringify(value)}`);
+}
+
+/**
+ * Updates the app's existing entry for the page's slug to the page's package and export, or
+ * appends a new entry when the app has none for that slug.
+ */
+function UpsertPublicPage(content: string, page: PublicPageConfigEntry): string {
+    const location = LocatePublicPagesArray(content);
+    if (!location) {
+        throw new Error('publicPages array not found in mj.config.cjs when adding a page.');
+    }
+    let found = false;
+    const pattern = new RegExp(`\\{[^{}]*AppName:\\s*['"]${EscapeRegex(page.AppName)}['"][^{}]*\\}`, 'g');
+    const updated = ReplaceInRange(content, location.OpenBracketPos, location.ClosePos, pattern, (block) => {
+        if (!IsEntryBlockOf(block, page)) return block;
+        found = true;
+        const withCode = SetEntryValue(SetEntryValue(block, 'PackageName', page.PackageName), 'ExportName', page.ExportName);
+        if (page.Role === 'error') return withCode;
+        const withText = SetOptionalEntryText(SetOptionalEntryText(withCode, 'Title', page.Title), 'Description', page.Description);
+        return SetSubPathsFlag(withText, page.SubPaths === true);
+    });
+    if (found) {
+        return updated;
+    }
+
+    // JSON.stringify every value so a manifest value cannot break out of its string literal.
+    const entryStr = `\n    {\n      AppName: ${JSON.stringify(page.AppName)},${PageIdentityLines(page)}` +
+        `\n      PackageName: ${JSON.stringify(page.PackageName)},\n      ExportName: ${JSON.stringify(page.ExportName)},` +
+        `${OptionalPageTextLines(page)}${page.SubPaths ? '\n      SubPaths: true,' : ''}\n      Enabled: ${page.Enabled}\n    },`;
+    const before = EnsureTrailingComma(content.slice(0, location.ClosePos), location.OpenBracketPos).trimEnd();
+    return before + entryStr + '\n  ' + content.slice(location.ClosePos);
+}
+
+/** Removes the app's `publicPages` entries whose slug, or error scope, the manifest no longer declares. */
+function PrunePublicPagesForApp(content: string, manifest: MJAppManifest): string {
+    const location = LocatePublicPagesArray(content);
+    if (!location) return content;
+    const declared = GetPublicPagesFromManifest(manifest);
+    const pattern = new RegExp(`\\s*\\{[^{}]*AppName:\\s*['"]${EscapeRegex(manifest.name)}['"][^{}]*\\},?`, 'g');
+    const result = ReplaceInRange(content, location.OpenBracketPos, location.ClosePos, pattern, (block) => {
+        return declared.some((page) => IsEntryBlockOf(block, page)) ? block : '';
+    });
+    return CollapseEmptyPublicPagesArray(result);
 }
 
 /**

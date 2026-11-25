@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C3 -> S9.5",
+    "Description": "Gate G3.10 (owner PR 4, phase 3, dataset C3, criterion S9.5): on C3 (W9-multiclass s42) SemanticsCheck passes for 3 of 3 classes (Attended, Cancelled, NoShow; NoShow adverse): each class sits at its artifact's class-order position, the At-Risk list sorts by adverse probability and its label names every adverse class and no other; and a binding that swaps the adverse class is refused, 1 of 1: the at-risk-list row loaded as an entity through MJAPI with its Label set to a non-adverse class is refused on Save() with a validation error on Label, and the row is unchanged. The model is trained with logistic regression under a seeded 25% holdout and evaluated through the lifecycle gate, which creates its four MJ: ML Output Bindings rows. Mutation: remove the adverse-class comparison in Core semantics-rules.ts (labelProblem) -> swapped binding refused 0 of 1.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G3.10\", \"owner:PR4\", \"phase:3\", \"dataset:C3\", \"criterion:S9.5\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
+    "ExpectedOutcomes": {
+      "summary": "SemanticsCheck passes for 3 of 3 C3 classes; a binding that swaps the adverse class is refused, 1 of 1."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c3-s9-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "473A6D60-94E2-478C-880F-C014EBF0B198"
+  }
+}

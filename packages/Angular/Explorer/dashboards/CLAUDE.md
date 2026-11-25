@@ -158,6 +158,7 @@ These four AI surfaces (each a separate `BaseResourceComponent`, naturally mode-
 | Roles | **deep — see the dedicated explorer-settings block below** | FilterRolesByType, SearchRoles, **SelectRole** (id **or name** — view + read-only permission summary), **NavigateToRoleRecord** (view), ClearRoleFilters, RefreshRoles |
 | API Keys | key counts, MainTab, SelectedKeyId (never secrets) | SwitchAPIKeysTab, FilterAPIKeysByStatus, SearchAPIKeys, RefreshAPIKeyData |
 | Query Browser | SelectedQueryId/Name, SearchText, SelectedCategory, QueryCount (never SQL/results) | SearchQueries, FilterQueriesByStatus, SelectQuery, RefreshQueries, RunStoredQuery, PageQueryResults, GetQueryMetadata, **CreateLiveSheetFromQuery**, **AppendQueryToLiveSheet** (`Approved` + `UserCanRun` gated) |
+| Execution Limits | ActiveTab, SelectedCategory, RunStatusFilter, SearchQuery, ShowOverriddenOnly, ShowClampedOnly, TotalKeysCount, OverriddenKeysCount, ClampedKeysCount, ActiveRunCount, PausedRunCount, PausedRunAgents (bounded), SelectedRunID | SwitchLimitsTab, FilterLimitsCategory, RefreshLimitsDiagnostics |
 
 > **Admin safety rule:** Admin surfaces expose ONLY navigational / filter / search / export / read-only-diagnostic tools to the agent. **Never** wire create/edit/delete (users/roles/keys), schema mutations, GraphQL execution, query-run-with-arbitrary-params, or secret/token values into agent context or tools. Each Admin component carries a documented SAFETY BOUNDARY comment.
 

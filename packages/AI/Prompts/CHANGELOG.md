@@ -1,5 +1,85 @@
 # @memberjunction/ai-prompts
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 8369c1c: Memory-leak audit Round 22 fixes.
+  - `AgentUserPolicyEngine` scopes per-request `IMetadataProvider` policy caches via a `WeakMap` (with O(1) generation-stamped pair invalidation across live providers) instead of stringifying per-request provider IDs into a singleton `Map` that pinned dead request providers.
+  - `BaseModelRunner` removes prompt runs from `_trackedPromptRunsById` deterministically in `_promptRunQueue.Settled(promptRun).finally(...)` as soon as each INSERT settles, so long-lived runners never accumulate prompt-run entities while keeping all concurrent in-flight parent runs tracked.
+  - `ArtifactCollaborationServer` removes entries from `CompactedVectorKeysByArtifact` when `CompactedStateVectors` evicts their last vector key instead of keeping orphan per-artifact entries for the life of the process.
+  - The Tasks view and message rows no longer restart their polling / elapsed-time intervals when a task load settles after the component is destroyed.
+
+- 18a02db: Add native multimodal content embedding support (`Contents?: ChatMessageContent[]`) to `AIEmbeddingRunner` via `BaseEmbeddings.EmbedContent` (with bounded concurrency, per-attempt abort propagation, output dimensions, catalog prefix handling, and prompt-run tracking), and add `HasMediaInput` / `ResolveEmbedContent` hooks to `EmbedStage` so video, image, and audio chunks can embed natively alongside text chunks in the same routed vector index.
+
+  Note: `EmbeddingRunParams.Texts` is now optional (`Texts?: string[]`) to allow mutually exclusive `Texts` or `Contents` inputs; downstream TypeScript code reading `params.Texts` under strict null checks should guard with `params.Texts ?? []`.
+
+- c63e493: Optimize search, agent, and prompt hot paths and harden multi-tenant RunView deduplication:
+  - Partition `ProviderBase` RunView in-flight deduplication and linger cache keys by `contextUser` per-request isolation state (`TenantContext`, `MagicLinkScope`, `APIKeyActingContext`, `APIKeyRowFilters`, `WidgetGuestContext`, `AnonymousVisitorID`, and `IsMagicLinkAnonymous` roles) via an overridable `ComputeRunViewDedupContextScope(contextUser)` hook, preserving case sensitivity for non-UUID tenant IDs and bypassing dedup when unknown nested `TenantContext` object shapes are present.
+  - Add bounded 30s user-scoped LRU metadata caches (`UserScopedCacheKey`, max 100 entries) for `MJ: Vector Indexes` and `MJ: Vector Databases` plus non-colocated `VectorDBBase` client pooling in `VectorSearchProvider` with entity-mutation invalidation.
+  - Add `SearchParams.SkipNameEnrichment` and skip tag hydration in `FullTextSearchProvider` when no tag filter is active.
+  - Combine lane `ExtraFilter` and reader RLS into a single-pass `RunView` in `SearchEngine` using a non-serializable Symbol verification stamp while preserving `VerifyOriginRecords`, FLS projection, and per-reader audience isolation.
+  - Resolve Agent and Skill principals from `AIEngine.Instance` before falling back to `GetEntityObject.Load` in `ScopedSearchAction`.
+  - Coalesce and background intermediate `ConversationDetail.Save()` progress writes in `AgentRunner.RunAgentInConversation`, pass explicit `inputArtifacts: []` from `BaseAgent` sub-agent delegation to skip redundant `hydrateConversationArtifacts` scans without affecting realtime delegation, and defer `'System Only'` internal payload-only artifact persistence off the reply critical path when no `artifactDirective` is present (leaving `artifactInfo` undefined so no client artifact notification fires for internal payload state).
+  - Inherit `modelSelectionPrompt.ModelSpecificResponseFormat` in `AIPromptRunner` when `effectiveResponseFormat` is active and the executing prompt leaves `ModelSpecificResponseFormat` unset.
+- be7f58e: Execute the Video Studio post-release hardening workstreams (`plans/video-studio-hardening.md`): add shared real-render test gates (`VIDEO_STUDIO_RENDER_TESTS_REQUIRED=1`) and CI workflow (`.github/workflows/video-studio-render.yml`, WS1); fix `PayloadManager` dotted/bracketed keys and empty-array upstream merges, update `JSONValidator.CleanValidationSyntax` and `AIPromptRunner` so colon-bearing keys like `16:9` and unrecognized `:rule` suffixes stay intact (#4827), and remove all `INTERIM` workarounds across Video Studio including unused `RestoreStrippedFormatKeys` (WS2); record Consult & Handoff ownership and independent review findings (WS3); unify stage-name normalization in `gates.ts` and decompose long orchestrator methods in `VideoStudioAgent` (WS4); add the orchestrator Loop vs code-led decision record (WS5); and record shipped scope in `plans/video-studio.md` §15 (WS6-2).
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/templates@6.3.0-edge.2
+  - @memberjunction/credentials@6.3.0-edge.2
+  - @memberjunction/templates-base-types@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { CleanAndParseJSON, EscapeSQLString, GetGlobalObjectStore, IndexByUUID, IsValidUUID, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, IMetadataProvider, IRunViewProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, IRunViewProvider, LimitsConfigResolver, LogError, RunView, UserInfo } from '@memberjunction/core';
+import type { ActionOutputTrustLevel } from '@memberjunction/actions-base';
 import {
   ArtifactMetadataEngine,
   ArtifactPermissionEngine,
@@ -61,7 +62,15 @@ export { SetArtifactLiveMutationHook, GetArtifactLiveMutationHook };
 
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const GLOBAL_KEY_TRUSTED_AGENT_DRAFT = '__MJ_TRUSTED_AGENT_DRAFT_VERSION_ENTITIES__';
-const MAX_INITIAL_OPERATIONS = 100;
+
+/**
+ * Active external-data taint metadata reported by the owning agent run so newly created or
+ * synthesized workspace artifacts inherit the run's trust boundary.
+ */
+export interface ActiveRunTaint {
+  TrustLevel: Exclude<ActionOutputTrustLevel, 'Trusted'>;
+  SourceName: string;
+}
 
 /**
  * Optional persistence and execution context passed to {@link ArtifactToolManager.Initialize} (`A4`).
@@ -79,6 +88,8 @@ export interface ArtifactToolManagerOptions {
   agentName?: string;
   /** Whether always-on artifact workspace tools are exposed even when no artifacts are attached yet. */
   workspaceEnabled?: boolean;
+  /** Returns the owning run's active external-data taint boundary, if any. */
+  getRunTaint?: () => ActiveRunTaint | undefined;
   /** Out-of-band server flag confirming the human user acknowledged the RLS/FLS snapshot freeze warning (`B7`). */
   allowFreezeFromUserConfirmation?: boolean;
 }
@@ -121,6 +132,8 @@ interface ArtifactEntry {
   annotation?: string;
   deliveryMode?: 'Inline' | 'ToolsOnly';
   forceToolsOnly?: boolean;
+  trustLevel?: ActionOutputTrustLevel;
+  sourceName?: string;
 }
 
 interface PersistVersionRollbackSnapshot {
@@ -167,6 +180,10 @@ export interface StoredToolResult {
   timestamp: Date;
   /** How long the invocation took, in milliseconds */
   durationMs: number;
+  /** Output trust classification inherited from the underlying artifact, when set */
+  trustLevel?: ActionOutputTrustLevel;
+  /** Provenance label inherited from the underlying artifact (e.g. `'action:Web Search'`) */
+  sourceName?: string;
 }
 
 export interface ArtifactToolSnapshot {
@@ -191,6 +208,7 @@ export class ArtifactToolManager {
   private contextUser?: UserInfo;
   private provider?: IMetadataProvider;
   private getAgentRun?: () => { ID?: string; Agent?: string | null } | null | undefined;
+  private getRunTaint?: () => ActiveRunTaint | undefined;
   private agentRunId?: string;
   private agentName?: string;
   private workspaceEnabled = false;
@@ -201,6 +219,12 @@ export class ArtifactToolManager {
   private static readonly MUTATING_TOOL_NAMES: ReadonlySet<string> = MUTATING_ARTIFACT_TOOL_NAMES;
 
   private static readonly STRUCTURAL_SPREADSHEET_TOOLS: ReadonlySet<string> = STRUCTURAL_SPREADSHEET_TOOLS;
+
+  constructor(options?: Pick<ArtifactToolManagerOptions, 'getRunTaint'>) {
+    if (options?.getRunTaint !== undefined) {
+      this.getRunTaint = options.getRunTaint;
+    }
+  }
 
   // ─── LIFECYCLE ───
 
@@ -218,6 +242,9 @@ export class ArtifactToolManager {
     this.contextUser = options?.contextUser;
     this.provider = options?.provider;
     this.getAgentRun = options?.getAgentRun;
+    if (options?.getRunTaint !== undefined) {
+      this.getRunTaint = options.getRunTaint;
+    }
     this.agentRunId = options?.agentRunId;
     this.agentName = options?.agentName;
     this.workspaceEnabled = options?.workspaceEnabled ?? Boolean(options?.contextUser || inputArtifacts.length > 0);
@@ -256,6 +283,8 @@ export class ArtifactToolManager {
       annotation: artifact.annotation,
       deliveryMode: artifact.deliveryMode,
       forceToolsOnly: artifact.forceToolsOnly,
+      trustLevel: artifact.trustLevel,
+      sourceName: artifact.sourceName,
     });
     return alphaId;
   }
@@ -321,7 +350,7 @@ export class ArtifactToolManager {
     return parsed.isUuid ? parsed.trimmed : undefined;
   }
 
-  /** Reset all state */
+  /** Reset per-run session state (preserves owner-bound `getRunTaint` provider). */
   Clear(): void {
     this.artifacts.clear();
     this.toolResults = [];
@@ -389,6 +418,8 @@ export class ArtifactToolManager {
         annotation: entry.annotation,
         deliveryMode: entry.deliveryMode,
         forceToolsOnly: entry.forceToolsOnly,
+        ...(entry.trustLevel ? { trustLevel: entry.trustLevel } : {}),
+        ...(entry.sourceName ? { sourceName: entry.sourceName } : {}),
       });
     }
     if (seed?.length) {
@@ -922,7 +953,19 @@ export class ArtifactToolManager {
     const targetEntry = entry;
     const lockKey = targetEntry.artifactId ?? targetEntry.alphaId;
 
-    return this.withArtifactLock(lockKey, async () => {
+    return this.withArtifactLock(lockKey, async () =>
+      this.withEntryTrust(
+        targetEntry,
+        await this.executeSingleToolCallLocked(targetEntry, call, startedAt),
+      ),
+    );
+  }
+
+  private async executeSingleToolCallLocked(
+    targetEntry: ArtifactEntry,
+    call: ArtifactToolCall,
+    startedAt: number,
+  ): Promise<StoredToolResult> {
       const isMutatingTool = ArtifactToolManager.MUTATING_TOOL_NAMES.has(call.tool);
       const sanitizedInput = this.sanitizeToolInput(call.input);
       const toolDef = targetEntry.library.GetToolList().find((def) => def.name === call.tool);
@@ -1700,6 +1743,16 @@ export class ArtifactToolManager {
           data: sanitizedData,
         };
 
+        // Propagate active run taint onto any artifact mutated during a tainted run so untrusted
+        // external content cannot be laundered through edits to an existing trusted artifact.
+        const mutatedTrust = this.resolveCreationTrust([targetEntry]);
+        if (mutatedTrust.trustLevel) {
+          targetEntry.trustLevel = mutatedTrust.trustLevel;
+        }
+        if (mutatedTrust.sourceName) {
+          targetEntry.sourceName = mutatedTrust.sourceName;
+        }
+
         if (targetEntry.artifactId) {
           const touchedSummary: GovernedRunArtifactSummary = {
             ArtifactID: targetEntry.artifactId,
@@ -1718,7 +1771,7 @@ export class ArtifactToolManager {
         settledData = rawData;
       } else if (result.success) {
         if (resultObj && resultObj['rlsCheckRequired'] === true) {
-          storedResult = await this.handleFollowSourceLinkRuntime(resultObj, activeRunIdForCall);
+          storedResult = await this.handleFollowSourceLinkRuntime(targetEntry, resultObj, activeRunIdForCall);
         } else if (resultObj && resultObj['requested'] === 'rerank') {
           storedResult = await this.handleRerankRuntime(targetEntry, resultObj, activeRunIdForCall);
         }
@@ -1756,7 +1809,6 @@ export class ArtifactToolManager {
           }).catch(() => undefined);
         }
       }
-    });
   }
 
   /**
@@ -2634,15 +2686,16 @@ export class ArtifactToolManager {
     call: ArtifactToolCall,
     startedAt: number,
     result: ArtifactToolResult,
+    trust?: Pick<ArtifactEntry, 'trustLevel' | 'sourceName'>,
   ): StoredToolResult {
-    const stored: StoredToolResult = {
+    const stored = this.withEntryTrust(trust, {
       artifactId: call.artifactId,
       tool: call.tool,
       input: call.input,
       result,
       timestamp: new Date(),
       durationMs: Date.now() - startedAt,
-    };
+    });
     this.toolResults.push(stored);
     return stored;
   }
@@ -2676,9 +2729,10 @@ export class ArtifactToolManager {
         errorMessage: 'initialOperations must be an array of { tool: string, input?: object } items.',
       };
     }
-    if (rawOps.length > MAX_INITIAL_OPERATIONS) {
+    const maxInitialOperations = LimitsConfigResolver.Resolve().Limits.Tuning.MaxInitialArtifactOperations;
+    if (rawOps.length > maxInitialOperations) {
       return {
-        errorMessage: `initialOperations exceeds the maximum allowed ${MAX_INITIAL_OPERATIONS} operations per request.`,
+        errorMessage: `initialOperations exceeds the maximum allowed ${maxInitialOperations} operations per request.`,
       };
     }
 
@@ -2760,6 +2814,7 @@ export class ArtifactToolManager {
 
     const activeRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
     const activeAgentName = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
+    const inheritedTrust = this.resolveCreationTrust();
 
     if (this.provider && this.contextUser) {
       const outcome = await GovernedArtifactService.Instance.CreateGovernedArtifact({
@@ -2793,6 +2848,7 @@ export class ArtifactToolManager {
         mimeType: outcome.mimeType,
         toolLibraryClass: outcome.toolLibraryClass,
         content: outcome.content ?? '',
+        ...inheritedTrust,
       });
       const registeredEntry = this.artifacts.get(alphaId);
       if (registeredEntry) {
@@ -2814,28 +2870,33 @@ export class ArtifactToolManager {
       this.enteredPresenceArtifactIds.add(outcome.artifactId);
 
       const availableTools = registeredEntry?.library.GetToolList().map((t) => t.name) ?? [];
-      return this.recordToolResult(call, startedAt, {
-        success: true,
-        data: {
-          alphaId,
-          artifactId: outcome.artifactId,
-          versionId: outcome.versionId,
-          versionNumber: outcome.versionNumber ?? 1,
-          title: outcome.name ?? title,
-          artifactTypeName: outcome.typeName ?? normalizedTypeName,
-          driverClass: outcome.driverClass,
-          persisted: true,
-          ...(outcome.results?.length
-            ? {
-                initialOperationResults: outcome.results.map((r) => ({
-                  tool: r.tool,
-                  data: r.data ?? null,
-                })),
-              }
-            : {}),
-          availableTools,
+      return this.recordToolResult(
+        call,
+        startedAt,
+        {
+          success: true,
+          data: {
+            alphaId,
+            artifactId: outcome.artifactId,
+            versionId: outcome.versionId,
+            versionNumber: outcome.versionNumber ?? 1,
+            title: outcome.name ?? title,
+            artifactTypeName: outcome.typeName ?? normalizedTypeName,
+            driverClass: outcome.driverClass,
+            persisted: true,
+            ...(outcome.results?.length
+              ? {
+                  initialOperationResults: outcome.results.map((r) => ({
+                    tool: r.tool,
+                    data: r.data ?? null,
+                  })),
+                }
+              : {}),
+            availableTools,
+          },
         },
-      });
+        inheritedTrust,
+      );
     }
 
     // In-memory test fallback when no database provider/user is bound
@@ -2852,6 +2913,7 @@ export class ArtifactToolManager {
       description,
       mimeType: built.mimeType,
       content: built.content,
+      ...inheritedTrust,
     });
     const registeredEntry = this.artifacts.get(alphaId);
     const initialResults: Array<{ tool: string; data: ArtifactToolResult['data'] }> = [];
@@ -2884,26 +2946,31 @@ export class ArtifactToolManager {
       registeredEntry.content = workingContent;
     }
     const availableTools = registeredEntry?.library.GetToolList().map((t) => t.name) ?? [];
-    return this.recordToolResult(call, startedAt, {
-      success: true,
-      data: {
-        alphaId,
-        artifactId: alphaId,
-        versionNumber: 1,
-        title,
-        artifactTypeName: normalizedTypeName,
-        persisted: false,
-        ...(initialResults.length > 0
-          ? {
-              initialOperationResults: initialResults.map((r) => ({
-                tool: r.tool,
-                data: r.data ?? null,
-              })),
-            }
-          : {}),
-        availableTools,
+    return this.recordToolResult(
+      call,
+      startedAt,
+      {
+        success: true,
+        data: {
+          alphaId,
+          artifactId: alphaId,
+          versionNumber: 1,
+          title,
+          artifactTypeName: normalizedTypeName,
+          persisted: false,
+          ...(initialResults.length > 0
+            ? {
+                initialOperationResults: initialResults.map((r) => ({
+                  tool: r.tool,
+                  data: r.data ?? null,
+                })),
+              }
+            : {}),
+          availableTools,
+        },
       },
-    });
+      inheritedTrust,
+    );
   }
 
   private async handleOpenArtifactTool(
@@ -2926,18 +2993,23 @@ export class ArtifactToolManager {
     if (!this.provider || !this.contextUser) {
       for (const entry of this.artifacts.values()) {
         if (entry.artifactId && UUIDsEqual(entry.artifactId, requestedId)) {
-          return this.recordToolResult(call, startedAt, {
-            success: true,
-            data: {
-              alphaId: entry.alphaId,
-              artifactId: entry.artifactId,
-              versionId: entry.versionId,
-              versionNumber: entry.currentVersionNumber ?? entry.versionNumber,
-              name: entry.name,
-              typeName: entry.typeName,
-              availableTools: entry.library.GetToolList().map((t) => t.name),
+          return this.recordToolResult(
+            call,
+            startedAt,
+            {
+              success: true,
+              data: {
+                alphaId: entry.alphaId,
+                artifactId: entry.artifactId,
+                versionId: entry.versionId,
+                versionNumber: entry.currentVersionNumber ?? entry.versionNumber,
+                name: entry.name,
+                typeName: entry.typeName,
+                availableTools: entry.library.GetToolList().map((t) => t.name),
+              },
             },
-          });
+            entry,
+          );
         }
       }
       return this.recordToolResult(call, startedAt, {
@@ -3017,21 +3089,26 @@ export class ArtifactToolManager {
       location: { Domain: ResolvePresenceDomain(state.typeName) },
     });
 
-    return this.recordToolResult(call, startedAt, {
-      success: true,
-      data: {
-        alphaId: matchedEntry?.alphaId,
-        artifactId: state.artifactId,
-        versionId: state.versionId,
-        versionNumber: state.versionNumber,
-        name: state.name,
-        typeName: state.typeName,
-        driverClass: state.driverClass,
-        canEdit: state.permissions.CanEdit,
-        liveRoomHydrated: state.liveRoomHydrated,
-        availableTools: matchedEntry?.library.GetToolList().map((t) => t.name) ?? [],
+    return this.recordToolResult(
+      call,
+      startedAt,
+      {
+        success: true,
+        data: {
+          alphaId: matchedEntry?.alphaId,
+          artifactId: state.artifactId,
+          versionId: state.versionId,
+          versionNumber: state.versionNumber,
+          name: state.name,
+          typeName: state.typeName,
+          driverClass: state.driverClass,
+          canEdit: state.permissions.CanEdit,
+          liveRoomHydrated: state.liveRoomHydrated,
+          availableTools: matchedEntry?.library.GetToolList().map((t) => t.name) ?? [],
+        },
       },
-    });
+      matchedEntry,
+    );
   }
 
   private async checkCollectionPermission(
@@ -3127,6 +3204,7 @@ export class ArtifactToolManager {
       summaryPreview: string;
     }> = [];
     const seenArtifactIds = new Set<string>();
+    const includedEntries: ArtifactEntry[] = [];
 
     for (const entry of this.artifacts.values()) {
       if (entry.artifactId && this.contextUser && this.provider) {
@@ -3148,6 +3226,7 @@ export class ArtifactToolManager {
       if (entry.artifactId) {
         seenArtifactIds.add(NormalizeUUID(entry.artifactId));
       }
+      includedEntries.push(entry);
       items.push({
         alphaId: entry.alphaId,
         artifactId: entry.artifactId,
@@ -3193,13 +3272,18 @@ export class ArtifactToolManager {
       }
     }
 
-    return this.recordToolResult(call, startedAt, {
-      success: true,
-      data: {
-        count: items.length,
-        artifacts: items,
+    return this.recordToolResult(
+      call,
+      startedAt,
+      {
+        success: true,
+        data: {
+          count: items.length,
+          artifacts: items,
+        },
       },
-    });
+      this.mergeEntriesTrust(includedEntries),
+    );
   }
 
   private async handleCreateSynthesizedArtifactTool(
@@ -3241,6 +3325,7 @@ export class ArtifactToolManager {
 
     const sourceInputs: ArtifactSynthesisSourceInput[] = [];
     const seenIds = new Set<string>();
+    const includedEntries: ArtifactEntry[] = [];
     let resolvedEnvironmentId: string | null = null;
 
     if (requestedIdsRaw.length > 0) {
@@ -3273,6 +3358,7 @@ export class ArtifactToolManager {
           if (!seenIds.has(dedupKey)) {
             seenIds.add(dedupKey);
             sourceInputs.push(srcInput);
+            includedEntries.push(matchedEntry);
           }
         } else {
           const loaded = await this.loadExternalReadableArtifact(ref);
@@ -3308,10 +3394,12 @@ export class ArtifactToolManager {
         if (!seenIds.has(dedupKey)) {
           seenIds.add(dedupKey);
           sourceInputs.push(srcInput);
+          includedEntries.push(entry);
         }
       }
     }
 
+    const inheritedTrust = this.resolveCreationTrust(includedEntries);
     const digests: ReturnType<typeof ArtifactSynthesisEngine.Instance.ExtractSourceDigest>[] = [];
     for (let i = 0; i < sourceInputs.length; i += 4) {
       const batch = await Promise.all(
@@ -3408,6 +3496,7 @@ export class ArtifactToolManager {
       versionNumber: 1,
       description: finalDescription,
       content: normalized.Content,
+      ...inheritedTrust,
     });
     if (persistedDriverClass) {
       const registeredEntry = this.artifacts.get(newAlphaId);
@@ -3431,22 +3520,27 @@ export class ArtifactToolManager {
       GovernedArtifactService.Instance.RecordTouchedArtifact(synthRunId, summary);
     }
 
-    return this.recordToolResult(call, startedAt, {
-      success: true,
-      data: {
-        alphaId: newAlphaId,
-        artifactId: persistedArtifactId ?? newAlphaId,
-        versionId: persistedVersionId,
-        versionNumber: 1,
-        title: normalized.Title,
-        artifactTypeName: normalized.ArtifactTypeName,
-        targetKind: normalized.TargetKind,
-        linkedChartCount: normalized.LinkedChartCount,
-        sourceCount: digests.length,
-        persisted,
-        warnings: normalized.Warnings,
+    return this.recordToolResult(
+      call,
+      startedAt,
+      {
+        success: true,
+        data: {
+          alphaId: newAlphaId,
+          artifactId: persistedArtifactId ?? newAlphaId,
+          versionId: persistedVersionId,
+          versionNumber: 1,
+          title: normalized.Title,
+          artifactTypeName: normalized.ArtifactTypeName,
+          targetKind: normalized.TargetKind,
+          linkedChartCount: normalized.LinkedChartCount,
+          sourceCount: digests.length,
+          persisted,
+          warnings: normalized.Warnings,
+        },
       },
-    });
+      inheritedTrust,
+    );
   }
 
   private async handleRefreshAndSnapshotArtifactTool(
@@ -3546,21 +3640,27 @@ export class ArtifactToolManager {
       GovernedArtifactService.Instance.RecordTouchedArtifact(activeRunId, touchedSummary);
     }
 
-    return this.recordToolResult(call, startedAt, {
-      success: true,
-      data: {
-        changed: outcome.changed,
-        resultCode: outcome.resultCode,
-        artifactId: outcome.artifactId,
-        versionId: outcome.versionId ?? null,
-        versionNumber: outcome.versionNumber ?? null,
-        diffSummary: outcome.diffSummary ?? outcome.message,
-        signedFrozenBlocksCount: outcome.signedFrozenBlocksCount ?? 0,
+    return this.recordToolResult(
+      call,
+      startedAt,
+      {
+        success: true,
+        data: {
+          changed: outcome.changed,
+          resultCode: outcome.resultCode,
+          artifactId: outcome.artifactId,
+          versionId: outcome.versionId ?? null,
+          versionNumber: outcome.versionNumber ?? null,
+          diffSummary: outcome.diffSummary ?? outcome.message,
+          signedFrozenBlocksCount: outcome.signedFrozenBlocksCount ?? 0,
+        },
       },
-    });
+      openEntry,
+    );
   }
 
   private async handleFollowSourceLinkRuntime(
+    sourceEntry: ArtifactEntry,
     rawData: ArtifactToolArgs,
     activeRunId: string | undefined,
   ): Promise<ArtifactToolResult> {
@@ -3623,11 +3723,13 @@ export class ArtifactToolManager {
 
       const recordPayload = res.Results[0];
       const serializedRecord = JSON.stringify(recordPayload, null, 2);
+      const inheritedTrust = this.resolveCreationTrust([sourceEntry]);
       const registeredAlphaId = this.RegisterArtifact({
         name: `${entityName}: ${recordId.slice(0, 8)}`,
         typeName: 'JSON',
         content: serializedRecord,
         description: `Source record ${entityName} (${recordId}) opened via follow_source_link${activeRunId ? ` [run ${activeRunId}]` : ''}`,
+        ...inheritedTrust,
       });
 
       return {
@@ -3808,5 +3910,71 @@ export class ArtifactToolManager {
 
   private resolveLibrary(typeName: string, toolLibraryClass?: string): ArtifactToolLibraryWithRevisionHash {
     return GovernedArtifactService.Instance.ResolveLibrary(typeName, toolLibraryClass);
+  }
+
+  /**
+   * Resolves the highest-severity trust boundary across source artifacts so cross-artifact tools
+   * (`list_workspace_artifacts`, `create_synthesized_artifact`) preserve taint instead of laundering
+   * `'Untrusted'` / `'SemiTrusted'` data into `'Trusted'` outputs.
+   */
+  private mergeEntriesTrust(entries: Iterable<ArtifactEntry>): {
+    trustLevel?: ArtifactEntry['trustLevel'];
+    sourceName?: string;
+  } {
+    let highest: ArtifactEntry['trustLevel'] | undefined;
+    let sourceName: string | undefined;
+    for (const entry of entries) {
+      if (entry.trustLevel === 'Untrusted') {
+        return {
+          trustLevel: 'Untrusted',
+          ...(entry.sourceName
+            ? { sourceName: entry.sourceName }
+            : entry.name
+              ? { sourceName: `artifact:${entry.name}` }
+              : {}),
+        };
+      }
+      if (entry.trustLevel === 'SemiTrusted' && highest == null) {
+        highest = 'SemiTrusted';
+        sourceName = entry.sourceName ?? (entry.name ? `artifact:${entry.name}` : undefined);
+      }
+    }
+    if (!highest) {
+      return {};
+    }
+    return {
+      trustLevel: highest,
+      ...(sourceName ? { sourceName } : {}),
+    };
+  }
+
+  private resolveCreationTrust(sourceEntries?: Iterable<ArtifactEntry>): {
+    trustLevel?: ArtifactEntry['trustLevel'];
+    sourceName?: string;
+  } {
+    const fromEntries = sourceEntries ? this.mergeEntriesTrust(sourceEntries) : {};
+    const runTaint = this.getRunTaint?.();
+    if (!runTaint || fromEntries.trustLevel === 'Untrusted') {
+      return fromEntries;
+    }
+    if (runTaint.TrustLevel === 'Untrusted') {
+      return { trustLevel: 'Untrusted', sourceName: runTaint.SourceName };
+    }
+    return fromEntries.trustLevel === 'SemiTrusted'
+      ? fromEntries
+      : { trustLevel: 'SemiTrusted', sourceName: runTaint.SourceName };
+  }
+
+  private withEntryTrust(
+    entry: Pick<ArtifactEntry, 'trustLevel' | 'sourceName'> | undefined,
+    stored: StoredToolResult,
+  ): StoredToolResult {
+    if (entry?.trustLevel) {
+      stored.trustLevel = entry.trustLevel;
+    }
+    if (entry?.sourceName) {
+      stored.sourceName = entry.sourceName;
+    }
+    return stored;
   }
 }

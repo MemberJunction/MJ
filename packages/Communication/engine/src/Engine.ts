@@ -1,8 +1,32 @@
-import { BaseCommunicationProvider, CommunicationEngineBase, CreateDraftResult, Message, MessageRecipient, MessageResult, MJCommunicationProviderEntityExtended, ProviderCredentialsBase } from "@memberjunction/communication-types";
+import {
+    BaseCommunicationProvider,
+    CommunicationEngineBase,
+    CreateDraftResult,
+    EvaluateEligibilityParams,
+    EvaluateEligibilityResult,
+    Message,
+    MessageClass,
+    MessageRecipient,
+    MessageResult,
+    MJCommunicationProviderEntityExtended,
+    PrincipalRecordRef,
+    ProviderCredentialsBase,
+    ResolvedEndpoint,
+    SendToPrincipalsParams,
+    SendV2Result,
+} from "@memberjunction/communication-types";
 import { MJCommunicationBaseMessageTypeEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity } from "@memberjunction/core-entities";
 import { IMetadataProvider, LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { ProcessedMessageServer } from "./BaseProvider";
+import { V2DispatchConfig, V2SendService } from "./V2SendService";
+import {
+    LOCAL_JSON_COMMUNICATION_PROVIDER_NAME,
+    LoadLocalJsonCommunicationProvider,
+    MJ_MOCK_COMM_DIR_ENV,
+} from "./LocalJsonCommunicationProvider";
+
+LoadLocalJsonCommunicationProvider();
  
 
 /**
@@ -56,6 +80,150 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
      * admin-managed via `MJ: Communication Providers`), so no eviction is needed.
      */
     private _providerInstanceCache: Map<string, BaseCommunicationProvider> = new Map();
+    private _v2SendService = new V2SendService();
+    private _scheduledSweepTimer: ReturnType<typeof setInterval> | undefined;
+    private _scheduledSweepRunning = false;
+
+    /**
+     * Configures V2 dispatch behavior (chunk fan-out, tracking base URL, HMAC secret, instance enforcement mode).
+     */
+    public ConfigureV2Dispatch(config: V2DispatchConfig): void {
+        this._v2SendService.Configure(config);
+    }
+
+    /**
+     * Processes due `Pending` V2 communication logs whose `ScheduledAt` has arrived.
+     */
+    public async ProcessDueScheduledLogs(
+        contextUser?: UserInfo,
+        batchSize = 50,
+    ): Promise<{ Processed: number; Sent: number; Failed: number; Redeferred: number }> {
+        if (!this.Loaded) {
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
+        const user = contextUser ?? this.ContextUser;
+        if (!user) {
+            throw new Error('ContextUser is required to process due scheduled logs');
+        }
+        return this._v2SendService.ProcessDueScheduledLogs(
+            user,
+            (name) => this.GetProvider(name),
+            batchSize,
+        );
+    }
+
+    /**
+     * Starts a periodic background sweep that dispatches due `Pending` scheduled/deferred V2 logs.
+     */
+    public StartScheduledDeferralSweep(intervalMs = 60_000): void {
+        if (this._scheduledSweepTimer) {
+            return;
+        }
+        this._scheduledSweepTimer = setInterval(() => {
+            if (this._scheduledSweepRunning || !this.Loaded || !this.ContextUser) {
+                return;
+            }
+            this._scheduledSweepRunning = true;
+            this.ProcessDueScheduledLogs(this.ContextUser)
+                .catch((err) => {
+                    LogError(`CommunicationEngine.StartScheduledDeferralSweep error: ${err instanceof Error ? err.message : String(err)}`);
+                })
+                .finally(() => {
+                    this._scheduledSweepRunning = false;
+                });
+        }, intervalMs);
+        if (typeof this._scheduledSweepTimer.unref === 'function') {
+            this._scheduledSweepTimer.unref();
+        }
+    }
+
+    /**
+     * Stops the periodic background sweep for scheduled/deferred V2 logs.
+     */
+    public StopScheduledDeferralSweep(): void {
+        if (this._scheduledSweepTimer) {
+            clearInterval(this._scheduledSweepTimer);
+            this._scheduledSweepTimer = undefined;
+        }
+    }
+
+    /**
+     * V2: Resolves and persists communication endpoints for a batch of principal records.
+     */
+    public async ResolveEndpoints(
+        records: PrincipalRecordRef[],
+        channelID: string,
+        contextUser?: UserInfo,
+    ): Promise<Map<string, ResolvedEndpoint[]>> {
+        if (!this.Loaded) {
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
+        return this._v2SendService.ResolveEndpoints(records, channelID, contextUser ?? this.ContextUser);
+    }
+
+    /**
+     * V2: Evaluates pre-flight compliance eligibility for a batch of recipients without sending.
+     */
+    public async EvaluateEligibility(
+        params: EvaluateEligibilityParams,
+        contextUser?: UserInfo,
+    ): Promise<EvaluateEligibilityResult> {
+        if (!this.Loaded) {
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
+        return this._v2SendService.EvaluateEligibility(params, contextUser ?? this.ContextUser);
+    }
+
+    /**
+     * V1 gate: checks endpoint status and active suppressions for a recipient address.
+     */
+    public async CheckV1ComplianceGate(
+        channelID: string,
+        recipientAddress: string,
+        messageClass: MessageClass = 'Transactional',
+        contextUser?: UserInfo,
+    ): Promise<{ Allowed: boolean; Reason?: string; Detail?: string }> {
+        return this._v2SendService.CheckV1ComplianceGate(
+            channelID,
+            recipientAddress,
+            messageClass,
+            contextUser ?? this.ContextUser,
+        );
+    }
+
+    /**
+     * Batched V1 gate: checks endpoint status and active suppressions across all recipient addresses.
+     */
+    public async CheckV1ComplianceGateBatch(
+        channelID: string,
+        recipientAddresses: ReadonlyArray<string>,
+        messageClass: MessageClass = 'Transactional',
+        contextUser?: UserInfo,
+    ): Promise<{ Allowed: boolean; Reason?: string; Detail?: string }> {
+        return this._v2SendService.CheckV1ComplianceGateBatch(
+            channelID,
+            recipientAddresses,
+            messageClass,
+            contextUser ?? this.ContextUser,
+        );
+    }
+
+    /**
+     * V2: Compliance-gated, endpoint-resolved send pipeline with link/open tracking and chunked fan-out.
+     */
+    public async Send(
+        params: SendToPrincipalsParams,
+        contextUser?: UserInfo,
+    ): Promise<SendV2Result> {
+        if (!this.Loaded) {
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
+        return this._v2SendService.Send(
+            params,
+            contextUser ?? this.ContextUser,
+            (name) => this.GetProvider(name),
+        );
+    }
 
     // ── Proxied cached collections (single source of truth: CommunicationEngineBase.Instance) ──
     public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] { return this.base.BaseMessageTypes; }
@@ -208,8 +376,39 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             else {
                 const log = await this.base.StartLog(processedMessage, run);
                 if (log) {
+                    const effectiveUser = contextUser ?? this.ContextUser;
+                    const channelID = message.MessageType?.CommunicationBaseMessageTypeID;
+                    const messageClass: MessageClass = message.MessageClass ?? 'Transactional';
+                    const shouldGateV1 =
+                        message.CheckComplianceGate === true ||
+                        process.env.MJ_COMMS_V1_COMPLIANCE_GATE === 'true';
+
+                    if (shouldGateV1 && channelID && effectiveUser) {
+                        const recipientsToCheck = [
+                            ...(message.To ? [message.To] : []),
+                            ...(message.CCRecipients ?? []),
+                            ...(message.BCCRecipients ?? []),
+                        ];
+                        const gateResult = await this.CheckV1ComplianceGateBatch(
+                            channelID,
+                            recipientsToCheck,
+                            messageClass,
+                            effectiveUser,
+                        );
+                        if (!gateResult.Allowed) {
+                            const blockMsg = gateResult.Detail ?? gateResult.Reason ?? 'Blocked by compliance gate';
+                            log.Status = 'Failed';
+                            log.ErrorMessage = blockMsg;
+                            if (!(await log.Save())) {
+                                LogError(`Failed to save blocked CommunicationLog ${log.ID}: ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                            }
+                            return { Success: false, Error: blockMsg, Message: processedMessage };
+                        }
+                    }
+
                     const sendResult = await provider.SendSingleMessage(processedMessage, credentials);
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';
+                    log.ProviderMessageID = sendResult.ProviderMessageID ?? log.ProviderMessageID;
                     log.ErrorMessage = sendResult.Error;
                     if (!await log.Save()){
                         throw new Error(`Failed to complete log for message: ${log.LatestResult?.Message}`);
@@ -264,7 +463,10 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
 
              // Check if provider supports drafts
              const providerEntity = this.Providers.find(p => p.Name === providerName);
-             if (!providerEntity?.SupportsDrafts) {
+             const isLocalJsonMockActive =
+                 providerName === LOCAL_JSON_COMMUNICATION_PROVIDER_NAME &&
+                 Boolean(process.env[MJ_MOCK_COMM_DIR_ENV]?.trim());
+             if (!providerEntity?.SupportsDrafts && !isLocalJsonMockActive) {
                  return {
                      Success: false,
                      ErrorMessage: `Provider ${providerName} does not support creating drafts`

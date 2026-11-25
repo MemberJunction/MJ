@@ -4,9 +4,13 @@ import { IndexByUUID, RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberju
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
-import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCategoryEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { CompositeKey, Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
-import { ListShareDialogConfig, ListShareDialogResult, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue } from '@memberjunction/ng-list-management';
+import { MJListEntity, MJListDetailEntity, MJListCategoryEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { CompositeKey, Metadata, RunView, RunViewResult, EntityInfo, LogError } from '@memberjunction/core';
+import {
+    ListShareDialogConfig, ListShareDialogResult, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue,
+    AddViewResultsToList, CreateListsClient, ListChangeApplied, ListChangeFailureMessage, RecordCountText, RunListChange
+} from '@memberjunction/ng-list-management';
+import type { ApplyResult } from '@memberjunction/lists-base';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { SectionPickerItem } from '@memberjunction/ng-ui-components';
 
@@ -802,7 +806,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     public async RemoveSelectedItems(): Promise<void> {
-        if (this.SelectedItems.size === 0) return;
+        if (this.SelectedItems.size === 0 || !this.record) return;
 
         const count = this.SelectedItems.size;
         const confirmMessage = `Remove ${count} item${count > 1 ? 's' : ''} from this list?`;
@@ -810,49 +814,10 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         if (!(await this.confirmService.ConfirmDelete({ message: confirmMessage }))) return;
 
         try {
-            // Queue all deletes in one TransactionGroup — one round trip
-            // instead of one per selected item. Deliberately atomic (unlike
-            // the server bulk paths, which trade atomicity for per-record
-            // error isolation): if Submit() fails, the transaction rolled
-            // back and NO rows were removed.
-            const tg = await this.metadata.CreateTransactionGroup();
-            let queued = 0;
-            let failedToQueue = 0;
-            const itemsByID = IndexByUUID(this.ListItems, i => i.detail.ID);
-            for (const id of this.SelectedItems) {
-                const item = itemsByID.Get(id);
-                if (item) {
-                    item.detail.TransactionGroup = tg;
-                    // With a TransactionGroup set, Delete() returns true once
-                    // enqueued; false means a pre-enqueue failure (validation/
-                    // permission) and the row never joined the transaction.
-                    if (await item.detail.Delete()) {
-                        queued++;
-                    } else {
-                        failedToQueue++;
-                        LogError(`Failed to queue list item removal: ${item.detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                    }
-                }
-            }
-            const success = queued === 0 || await tg.Submit();
-            if (!success) {
-                this.showNotification('Error removing items from list', 'error', 4000);
-                return;
-            }
-
-            if (failedToQueue > 0) {
-                this.showNotification(
-                    `Removed ${queued} item${queued === 1 ? '' : 's'} from list; ${failedToQueue} failed`,
-                    'error',
-                    4000
-                );
-            } else {
-                this.showNotification(
-                    `Removed ${count} item${count > 1 ? 's' : ''} from list`,
-                    'success',
-                    3000
-                );
-            }
+            const client = CreateListsClient(this.metadata);
+            const result = await client.RemoveRecordsFromList(this.record.ID, this.selectedRecordIds());
+            this.notifyRemoveResult(result);
+            if (!ListChangeApplied(result)) return;
 
             this.SelectedItems.clear();
             await this.loadStats();
@@ -860,11 +825,30 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             this.updateNavBadges();
         } catch (error) {
             console.error('Error removing items:', error);
-            this.showNotification(
-                'Error removing items from list',
-                'error',
-                4000
-            );
+            this.showNotification('Error removing items from list', 'error', 4000);
+        }
+    }
+
+    /** RecordID values of the selected items. */
+    private selectedRecordIds(): string[] {
+        const itemsByID = IndexByUUID(this.ListItems, i => i.detail.ID);
+        const recordIds: string[] = [];
+        for (const id of this.SelectedItems) {
+            const item = itemsByID.Get(id);
+            if (item) recordIds.push(item.detail.RecordID);
+        }
+        return recordIds;
+    }
+
+    private notifyRemoveResult(result: ApplyResult): void {
+        const removed = result.Counts?.Removed ?? 0;
+        const removedText = `Removed ${removed} item${removed === 1 ? '' : 's'} from list`;
+        if (result.Success) {
+            this.showNotification(removedText, 'success', 3000);
+        } else if (result.ResultCode === 'PARTIAL_SUCCESS') {
+            this.showNotification(`${removedText}; ${ListChangeFailureMessage(result, '')}`, 'error', 4000);
+        } else {
+            this.showNotification(ListChangeFailureMessage(result, 'Error removing items from list'), 'error', 4000);
         }
     }
 
@@ -1298,33 +1282,31 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.AddProgress = 0;
         this.cdr.detectChanges();
 
-        // Use transaction group for bulk insert
-        const tg = await this.metadata.CreateTransactionGroup();
+        const result = await RunListChange(() =>
+            CreateListsClient(this.metadata).AddRecordsToList(this.record.ID, recordsToAdd.map(r => r.ID)));
+        this.notifyAddResult(result);
 
-        for (const record of recordsToAdd) {
-            const listDetail = await this.metadata.GetEntityObject<MJListDetailEntityExtended>('MJ: List Details');
-            listDetail.ListID = this.record.ID;
-            listDetail.RecordID = record.ID;
-            listDetail.TransactionGroup = tg;
-            await listDetail.Save();
-        }
-
-        const success = await tg.Submit();
-
-        if (success) {
+        if (ListChangeApplied(result)) {
             this.AddProgress = this.AddTotal;
-            this.showNotification(
-                `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
-                'success',
-                2500
-            );
             this.CloseAddRecordsDialog();
             await this.RefreshItems();
         } else {
-            LogError('Error adding records to list');
-            this.showNotification('Failed to add some records', 'error', 2500);
             this.AddDialogSaving = false;
             this.cdr.detectChanges();
+        }
+    }
+
+
+    private notifyAddResult(result: ApplyResult): void {
+        const added = result.Counts?.Added ?? 0;
+        const addedText = `Added ${RecordCountText(added)} to list`;
+        if (result.Success) {
+            this.showNotification(addedText, 'success', 2500);
+        } else if (result.ResultCode === 'PARTIAL_SUCCESS') {
+            this.showNotification(`${addedText}; ${ListChangeFailureMessage(result, '')}`, 'error', 4000);
+        } else {
+            LogError(`Error adding records to list: ${result.Message}`);
+            this.showNotification(ListChangeFailureMessage(result, 'Failed to add records'), 'error', 4000);
         }
     }
 
@@ -1424,71 +1406,25 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.FetchingRecordsToSave = true;
         this.cdr.detectChanges();
 
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-
-        // Collect all unique record IDs from selected views
-        const recordIdSet = new Set<string>();
-
-        for (const userView of this.UserViewsToAdd) {
-            const runViewResult = await rv.RunView({
-                ViewID: userView.ID,
-                ViewEntity: userView,
-                Fields: ['ID']
-            }, this.metadata.CurrentUser);
-
-            if (runViewResult.Success) {
-                const records = runViewResult.Results as Array<Record<string, string>>;
-                records.forEach(r => recordIdSet.add(NormalizeUUID(r.ID)));
-            }
-        }
-
-        // Filter out records already in the list
-        await this.loadExistingListDetailIds();
-        const recordsToAdd = [...recordIdSet].filter(id => !this.ExistingListDetailIds.has(id));
-
-        this.AddFromViewTotal = recordsToAdd.length;
-        this.AddFromViewProgress = 0;
+        const result = await AddViewResultsToList(CreateListsClient(this.metadata), this.UserViewsToAdd.map(view => view.ID), this.record.ID);
         this.FetchingRecordsToSave = false;
-        this.cdr.detectChanges();
 
-        if (recordsToAdd.length === 0) {
+        if (result.Success && (result.Counts?.Added ?? 0) === 0) {
             this.showNotification('All records already in list', 'info', 2500);
-            this.ShowAddFromViewLoader = false;
-            this.cdr.detectChanges();
-            return;
+        } else {
+            this.notifyAddResult(result);
         }
 
-        LogStatus(`Adding ${recordsToAdd.length} records to list`);
-
-        // Use transaction group for bulk insert
-        const tg = await this.metadata.CreateTransactionGroup();
-
-        for (const recordID of recordsToAdd) {
-            const listDetail = await this.metadata.GetEntityObject<MJListDetailEntityExtended>('MJ: List Details');
-            listDetail.ListID = this.record.ID;
-            listDetail.RecordID = recordID;
-            listDetail.TransactionGroup = tg;
-            await listDetail.Save();
-        }
-
-        const success = await tg.Submit();
-
-        if (success) {
-            this.AddFromViewProgress = this.AddFromViewTotal;
-            this.showNotification(
-                `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
-                'success',
-                2500
-            );
+        if (ListChangeApplied(result)) {
             this.CloseAddFromViewDialog();
             await this.RefreshItems();
         } else {
-            LogError('Error adding records from view to list');
-            this.showNotification('Failed to add some records', 'error', 2500);
             this.ShowAddFromViewLoader = false;
             this.cdr.detectChanges();
         }
     }
+
+
 
     /** @deprecated Use {@link ConfirmAddFromView}. */
     public async confirmAddFromView(): Promise<void> {

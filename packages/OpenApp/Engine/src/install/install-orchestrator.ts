@@ -7,15 +7,15 @@
 import { join } from 'node:path';
 import { readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
+import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction, DependenciesFromHead } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
-import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
+import { ParseAndValidateManifest, ParseManifestDependencies } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import type { GitHubClientOptions, MigrationDownloadResult } from '../github/github-client.js';
-import { ResolveAppSource, SubpathFromLocator, type OpenAppSource } from '../source/open-app-source.js';
+import type { GitHubClientOptions, ManifestFetchResult, MigrationDownloadResult } from '../github/github-client.js';
+import { ResolveAppSource, SubpathFromLocator, type OpenAppSource, type SourceContext } from '../source/open-app-source.js';
 import { IsLocalAppLocator } from '../source/local-app-source.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation, type SchemaOperationResult, type ValidateSchemaNameOptions } from './schema-manager.js';
@@ -24,11 +24,11 @@ import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type AppPackageGroups, type PackageManagerOptions, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { RestoreFileSnapshot, SnapshotFiles } from './file-snapshot.js';
 import { CheckWorkspacePackages } from './workspace-packages.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, AddPublicPages, CheckPublicPageSlugConflicts, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
@@ -269,11 +269,17 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
     }
 
+    // Before any database or file change: another installed app may own one of this app's public page slugs.
+    const slugCheck = CheckPublicPageSlugConflicts(context.RepoRoot, manifest, context.ServerPackagePath);
+    if (!slugCheck.Success) {
+      return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, slugCheck.ErrorMessage ?? 'Public page slug conflict');
+    }
+
     // Steps 4-5: Resolve the full transitive dependency graph and install members
     // in leaf-first order. Skipped when this call is itself a pre-resolved member
     // of a parent's graph (the parent already resolved and installed our deps).
     if (!options._skipDependencyResolution) {
-      const depResult = await ResolveDependencyChain(manifest, context, appSource);
+      const depResult = await ResolveDependencyChain(manifest, context, appSource, options.DependenciesFromHead);
       if (!depResult.Success) {
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
       }
@@ -467,7 +473,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     const finalStatus = npmInstallWarning ? 'Disabled' : 'Active';
     await SetAppStatus(context.ContextUser, createdAppId!, finalStatus);
     if (finalStatus !== 'Active') {
-      // Array-agnostic by AppName — sweeps both the server and client arrays.
+      // Array-agnostic by AppName — sweeps the server, client and publicPages arrays.
       ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
     }
     await SetAppStep(context.ContextUser, createdAppId!, 'Finalized');
@@ -918,35 +924,38 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
     }
 
+    const slugCheck = CheckPublicPageSlugConflicts(context.RepoRoot, manifest, context.ServerPackagePath);
+    if (!slugCheck.Success) {
+      return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, slugCheck.ErrorMessage ?? 'Public page slug conflict');
+    }
+
     // Step 3: Check dependency compatibility
-    if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
-      const depResult = await ResolveDependencyChain(manifest, context, appSource);
-      if (!depResult.Success) {
+    const depResult = await ResolveDependencyChain(manifest, context, appSource, options.DependenciesFromHead);
+    if (!depResult.Success) {
+      return BuildFailureResult(
+        'Upgrade',
+        options.AppName,
+        targetVersion,
+        'Schema',
+        startTime,
+        depResult.ErrorMessage ?? 'Dependency check failed for upgrade',
+      );
+    }
+    // Install any new dependencies required by the upgraded version
+    if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
+      const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
+        AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+        Verbose: options.Verbose,
+      });
+      if (!installResult.Success) {
         return BuildFailureResult(
           'Upgrade',
           options.AppName,
           targetVersion,
           'Schema',
           startTime,
-          depResult.ErrorMessage ?? 'Dependency check failed for upgrade',
+          installResult.ErrorMessage ?? 'Failed to install new dependencies for upgrade',
         );
-      }
-      // Install any new dependencies required by the upgraded version
-      if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
-          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
-          Verbose: options.Verbose,
-        });
-        if (!installResult.Success) {
-          return BuildFailureResult(
-            'Upgrade',
-            options.AppName,
-            targetVersion,
-            'Schema',
-            startTime,
-            installResult.ErrorMessage ?? 'Failed to install new dependencies for upgrade',
-          );
-        }
       }
     }
 
@@ -1031,7 +1040,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           PackageManager: context.PackageManager,
         }),
       );
-      const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose);
+      // The record still holds the previous version's manifest here (it is rewritten in Step 9),
+      // also on a resumed attempt, so its pins can be told apart from the host's own deps.
+      const replaced = await ResolveReplacedPackages(existingApp, context);
+      const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose, replaced);
       if (!pkgResult.Success) {
         const restore = pkgResult.PackageJsonUpdated ? RestoreFileSnapshot(packageFiles) : null;
         if (restore !== null && restore.Failed.length === 0) {
@@ -1140,7 +1152,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       ...(manifest.schema ? { SchemaName: manifest.schema.name } : {}),
     });
     if (upgradeFinalStatus !== 'Active') {
-      // Array-agnostic by AppName — sweeps both the server and client arrays.
+      // Array-agnostic by AppName — sweeps the server, client and publicPages arrays.
       ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
     }
 
@@ -1494,26 +1506,12 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
 
       // Collect other installed apps' manifests so we don't remove shared prebundle excludes
-      const otherApps = (await ListInstalledApps(context.ContextUser))
-        .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
-      // Skip a corrupt OTHER-app manifest — it must not break THIS app's removal (B24).
-      const otherManifests = otherApps.flatMap(a => {
-        try {
-          return [JSON.parse(a.ManifestJSON) as MJAppManifest];
-        } catch {
-          Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
-          return [];
-        }
-      });
+      const otherManifests = await ListOtherAppManifests(options.AppName, context);
 
       // Same shared-survival rule for npm deps: any package another installed app still
       // declares (server/client/shared) must survive this app's removal, or the survivor's
       // next boot fails on a missing dependency.
-      const retainPackages = [...new Set(otherManifests.flatMap(m => [
-        ...(m.packages?.server ?? []),
-        ...(m.packages?.client ?? []),
-        ...(m.packages?.shared ?? []),
-      ].map(p => p.name)))];
+      const retainPackages = ListDeclaredPackageNames(otherManifests);
 
       await Promise.all([
         Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
@@ -1599,6 +1597,29 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     Callbacks?.OnError?.('Remove', message);
     return BuildFailureResult('Remove', options.AppName, '', phase, startTime, message);
   }
+}
+
+/**
+ * The parsed manifests of every installed app other than `appName` (status `Removed` excluded).
+ * A corrupt OTHER-app manifest is skipped with a warning: it must not break an operation on THIS
+ * app (B24).
+ */
+async function ListOtherAppManifests(appName: string, context: OrchestratorContext): Promise<MJAppManifest[]> {
+  const otherApps = (await ListInstalledApps(context.ContextUser)).filter((a) => a.Name !== appName && a.Status !== 'Removed');
+  return otherApps.flatMap((a) => {
+    try {
+      return [JSON.parse(a.ManifestJSON) as MJAppManifest];
+    } catch {
+      context.Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
+      return [];
+    }
+  });
+}
+
+/** Every npm package name the manifests declare, across server, client and shared, deduplicated. */
+function ListDeclaredPackageNames(manifests: MJAppManifest[]): string[] {
+  const names = manifests.flatMap((m) => [...(m.packages?.server ?? []), ...(m.packages?.client ?? []), ...(m.packages?.shared ?? [])].map((p) => p.name));
+  return [...new Set(names)];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1691,15 +1712,19 @@ interface InternalResult {
  * Resolves the FULL transitive dependency graph for a manifest, returning any
  * uninstalled dependencies that need to be installed first, in leaf-first order.
  *
- * Unlike a single-level resolve, this fetches every reachable dependency's
- * manifest from its repository so the complete graph is known up front — which
- * is what makes genuine cross-repo cycle detection (A -> B -> A) possible before
- * any install work begins. A `file:` dependency is refused unless the app itself comes
- * from a local folder. The packages of every local dependency to install are checked against
- * the workspace here, before the first dependency installs.
+ * Unlike a single-level resolve, this reads what every reachable dependency itself
+ * depends on (an installed app's recorded manifest, otherwise the manifest in its
+ * repository) so the complete graph is known up front — which is what makes genuine
+ * cross-repo cycle detection (A -> B -> A) possible before any install work begins. A
+ * `file:` dependency is refused unless the app itself comes from a local folder. The
+ * packages of every local dependency to install are checked against the workspace here,
+ * before the first dependency installs. The installed apps in `fromHead` are read from their
+ * default branches (a local app: its folder) first.
  */
-async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext, appSource: OpenAppSource): Promise<InternalResult> {
-  if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
+async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext, appSource: OpenAppSource, fromHead: DependenciesFromHead = []): Promise<InternalResult> {
+  // The names in `fromHead` are checked below, also for an app that has no dependencies to resolve.
+  const namesToCheck = fromHead === 'all' ? [] : fromHead;
+  if (Object.keys(manifest.dependencies ?? {}).length === 0 && namesToCheck.length === 0) {
     return { Success: true };
   }
   const localDependencyError = DescribeUntrustedLocalDependency(manifest.name, appSource.Locator, manifest.dependencies);
@@ -1721,7 +1746,23 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     if (app.Status !== 'Active' && app.Status !== 'Disabled') {
       continue;
     }
-    installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL };
+    // The app being upgraded: its new manifest is the graph's root, and its record is about to be replaced.
+    if (app.Name === manifest.name) {
+      continue;
+    }
+    const appFromHead = fromHead === 'all' || fromHead.includes(app.Name);
+    installedMap[app.Name] = {
+      Version: app.Version,
+      Repository: app.RepositoryURL,
+      Subpath: app.Subpath,
+      Dependencies: ReadInstalledDependencies(app, context, appFromHead),
+      FromHead: appFromHead,
+    };
+  }
+
+  const unknown = namesToCheck.filter((name) => !installedMap[name]);
+  if (unknown.length > 0) {
+    return { Success: false, ErrorMessage: `Cannot read dependencies from the default branch of ${unknown.map((name) => `'${name}'`).join(', ')}: not another app that is installed (Active or Disabled)` };
   }
 
   // Zod infers object variant fields as optional; DependencyValue requires them.
@@ -1740,6 +1781,9 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     BuildManifestFetcher(context, localManifests),
     (repoUrl, versionRange) => ResolveDependencyVersion(repoUrl, versionRange, context.GitHubOptions, context.RepoRoot),
   );
+  for (const warning of result.Warnings ?? []) {
+    context.Callbacks?.OnWarn?.('Dependencies', warning);
+  }
   if (!result.Success) {
     return { Success: false, ErrorMessage: result.ErrorMessage };
   }
@@ -1757,14 +1801,42 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 }
 
 /**
+ * What an installed app depends on, read from its persisted `ManifestJSON` (the documented source
+ * of truth, saved in the same write as `Version`). Returns undefined, after a warning, when that
+ * cannot be read: the graph then reads the manifest from the app's source, at the installed
+ * version or, with `fromHead`, on the default branch. A `file:` dependency the app may not declare
+ * is left out, after a warning.
+ */
+function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorContext, fromHead: boolean): Record<string, DependencyValue> | undefined {
+  const recorded = ParseManifestDependencies(app.ManifestJSON);
+  if (!recorded.Success || !recorded.Dependencies) {
+    context.Callbacks?.OnWarn?.(
+      'Dependencies',
+      `Could not read the recorded dependencies of installed app '${app.Name}' (${recorded.Errors?.join(', ')}). If this operation needs them, they are read from ${app.RepositoryURL} ${fromHead ? 'on its default branch' : `at version ${app.Version}`}.`,
+    );
+    return undefined;
+  }
+  const dependencies = recorded.Dependencies as Record<string, DependencyValue>;
+  const untrusted = FindUntrustedLocalDependencies(app.RepositoryURL, dependencies);
+  if (untrusted.length === 0) {
+    return dependencies;
+  }
+  context.Callbacks?.OnWarn?.(
+    'Dependencies',
+    `${DescribeUntrustedLocalDependency(app.Name, app.RepositoryURL, dependencies)} They are ignored.`,
+  );
+  return Object.fromEntries(Object.entries(dependencies).filter(([name]) => !untrusted.includes(name)));
+}
+
+/**
  * Builds a {@link ManifestFetcher} that retrieves and validates a dependency's
  * manifest from its source (at the resolved version when given). Used by the graph
  * builder to walk transitive deps. Each manifest read from a local folder is kept in
  * `localManifests`, keyed by its locator.
  */
 function BuildManifestFetcher(context: OrchestratorContext, localManifests: Map<string, MJAppManifest>): ManifestFetcher {
-  return async (repoUrl: string, subpath?: string, version?: string) => {
-    const fetched = await ResolveAppSource(repoUrl, { GitHubOptions: context.GitHubOptions, Subpath: subpath, RepoRoot: context.RepoRoot }).FetchManifest(version);
+  return async (repoUrl: string, subpath?: string, version?: string, appName?: string) => {
+    const fetched = await FetchDependencyManifest(repoUrl, { GitHubOptions: context.GitHubOptions, Subpath: subpath, AppName: appName, RepoRoot: context.RepoRoot }, version);
     if (!fetched.Success || !fetched.ManifestJSON) {
       return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
     }
@@ -1792,6 +1864,19 @@ function BuildManifestFetcher(context: OrchestratorContext, localManifests: Map<
 }
 
 /**
+ * Fetches a dependency's manifest. A source that throws (a rate limit while it looks for a version
+ * tag) is a failed fetch: thrown out of {@link UpgradeApp} it would mark the app being upgraded as
+ * `Error`, although nothing has changed yet.
+ */
+async function FetchDependencyManifest(repoUrl: string, sourceContext: SourceContext, version?: string): Promise<ManifestFetchResult> {
+  try {
+    return await ResolveAppSource(repoUrl, sourceContext).FetchManifest(version);
+  } catch (error: unknown) {
+    return { Success: false, ErrorMessage: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
  * Returns why an app may not declare its `file:` dependencies, or undefined when it may. Only an
  * app read from a local folder may name another folder of the consumer repository; an app from
  * GitHub may not reach into the repository it is installed into.
@@ -1801,17 +1886,25 @@ function DescribeUntrustedLocalDependency(
   appLocator: string,
   dependencies: MJAppManifest['dependencies'],
 ): string | undefined {
-  if (IsLocalAppLocator(appLocator)) {
-    return undefined;
-  }
-  const local = Object.entries(dependencies ?? {})
-    .filter(([, value]) => typeof value !== 'string' && IsLocalAppLocator(value.repository ?? ''))
-    .map(([name, value]) => `${name} (${typeof value === 'string' ? value : value.repository})`);
+  const local = FindUntrustedLocalDependencies(appLocator, dependencies).map((name) => {
+    const value = dependencies?.[name];
+    return `${name} (${typeof value === 'string' ? value : value?.repository})`;
+  });
   if (local.length === 0) {
     return undefined;
   }
   return `App '${appName}' from ${appLocator} declares local dependencies: ${local.join(', ')}. `
     + `Only an app installed from a local folder may depend on a file: locator.`;
+}
+
+/** The names of the `file:` dependencies that an app read from `appLocator` may not declare. */
+function FindUntrustedLocalDependencies(appLocator: string, dependencies: MJAppManifest['dependencies']): string[] {
+  if (IsLocalAppLocator(appLocator)) {
+    return [];
+  }
+  return Object.entries(dependencies ?? {})
+    .filter(([, value]) => typeof value !== 'string' && IsLocalAppLocator(value.repository ?? ''))
+    .map(([name]) => name);
 }
 
 /**
@@ -2420,11 +2513,49 @@ export function DescribeRestoredUpgrade(info: RestoredUpgradeInfo): string {
   );
 }
 
+/** What an upgrade's package step needs to remove the replaced version's stale pins (#6789). */
+type ReplacedPackages = Required<Pick<PackageManagerOptions, 'PreviousPackages' | 'RetainPackages'>>;
+
+/** A manifest's package groups, empty when it declares none (`packages` is optional). */
+function ToPackageGroups(packages: MJAppManifest['packages']): AppPackageGroups {
+  return { Server: packages?.server ?? [], Client: packages?.client ?? [], Shared: packages?.shared ?? [] };
+}
+
+/**
+ * The installed version's packages, read from the persisted `ManifestJSON` (the documented source
+ * of truth), plus every package another installed app declares, which must keep its pin. Returns
+ * undefined, after a warning, when that manifest cannot be parsed: the upgrade then only adds, as
+ * it did before, and never fails over an unreadable historical record. Also undefined when the
+ * installed version declared no packages: there is nothing to remove.
+ */
+async function ResolveReplacedPackages(existingApp: InstalledAppInfo, context: OrchestratorContext): Promise<ReplacedPackages | undefined> {
+  let previous: MJAppManifest;
+  try {
+    previous = JSON.parse(existingApp.ManifestJSON) as MJAppManifest;
+  } catch {
+    context.Callbacks?.OnWarn?.(
+      'Packages',
+      `Could not parse the previously-installed manifest for '${existingApp.Name}', so package pins the new version no longer ` +
+        `lists were not removed. Check the server and client package.json files for old ${existingApp.Name} packages.`,
+    );
+    return undefined;
+  }
+  const previousGroups = ToPackageGroups(previous.packages);
+  if (previousGroups.Server.length + previousGroups.Client.length + previousGroups.Shared.length === 0) return undefined;
+  return {
+    PreviousPackages: previousGroups,
+    RetainPackages: ListDeclaredPackageNames(await ListOtherAppManifests(existingApp.Name, context)),
+  };
+}
+
 /**
  * Adds app npm packages to the appropriate workspace package.json files and runs npm install.
  *
  * @param packageVersion - The version string to write (may differ from manifest.version when an explicit version is requested)
  * @param versionStrategy - Override for version strategy (e.g., 'exact' when explicit version is requested)
+ * @param replaced - Upgrade only: the replaced version's packages, whose pins the new manifest no longer places are removed.
+ *   With it, the step runs even when the new manifest declares no packages, so a version that drops them all
+ *   still loses its old pins (#6789).
  */
 async function HandlePackageInstallation(
   manifest: MJAppManifest,
@@ -2432,33 +2563,40 @@ async function HandlePackageInstallation(
   packageVersion?: string,
   versionStrategy?: VersionStrategy,
   verbose?: boolean,
+  replaced?: ReplacedPackages,
 ): Promise<InternalResult> {
-  if (!manifest.packages) {
+  if (!manifest.packages && !replaced) {
     return { Success: true };
   }
 
+  const wanted = ToPackageGroups(manifest.packages);
   context.Callbacks?.OnProgress?.('Packages', 'Adding packages...');
   const addResult = AddAppPackages({
     RepoRoot: context.RepoRoot,
-    ServerPackages: manifest.packages.server ?? [],
-    ClientPackages: manifest.packages.client ?? [],
-    SharedPackages: manifest.packages.shared ?? [],
+    ServerPackages: wanted.Server,
+    ClientPackages: wanted.Client,
+    SharedPackages: wanted.Shared,
     Version: packageVersion ?? manifest.version,
     ServerPackagePath: context.ServerPackagePath,
     ClientPackagePath: context.ClientPackagePath,
     PackageManager: context.PackageManager,
     VersionStrategy: versionStrategy ?? context.VersionStrategy,
     AdditionalTargets: context.AdditionalTargets,
+    PreviousPackages: replaced?.PreviousPackages,
+    RetainPackages: replaced?.RetainPackages,
   });
 
   if (!addResult.Success) {
     return { Success: false, ErrorMessage: addResult.ErrorMessage };
   }
+  if (addResult.Removed.length > 0) {
+    context.Callbacks?.OnProgress?.('Packages', `Removed pins the new version no longer places in that workspace: ${addResult.Removed.join(', ')}`);
+  }
 
   // If the manifest declares a package prefix, bump ALL matching dependencies
   // across the workspace (not just the manifest-declared ones). This handles
   // consumer-added packages like bcsaas-settings, bcsaas-credentials, etc.
-  const prefix = manifest.packages.prefix;
+  const prefix = manifest.packages?.prefix;
   if (prefix) {
     const bareVersion = packageVersion ?? manifest.version;
     const updatedCount = BumpPrefixedDependencies(context.RepoRoot, prefix, bareVersion);
@@ -2468,7 +2606,7 @@ async function HandlePackageInstallation(
   }
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
-  const installResult = await RunPackageInstallAsync(context.RepoRoot, verbose, manifest.packages.registry, context.PackageManager);
+  const installResult = await RunPackageInstallAsync(context.RepoRoot, verbose, manifest.packages?.registry, context.PackageManager);
   if (installResult.DevWorkspaceParent) {
     context.Callbacks?.OnProgress?.(
       'Packages',
@@ -2600,6 +2738,14 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
     return { Success: false, ErrorMessage: clientResult.ErrorMessage };
   }
   warnSkipped(clientResult);
+
+  // Record the app's public pages in publicPages. `mj codegen manifest --open-app-client-bootstrap`
+  // (run by MJExplorer's prebuild) writes them to the host's page list.
+  const publicPagesResult = AddPublicPages(context.RepoRoot, manifest, context.ServerPackagePath);
+  if (!publicPagesResult.Success) {
+    return { Success: false, ErrorMessage: publicPagesResult.ErrorMessage };
+  }
+  warnSkipped(publicPagesResult);
 
   // Add entityPackageName mapping so CodeGen resolves per-schema imports correctly
   const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest, context.ServerPackagePath);

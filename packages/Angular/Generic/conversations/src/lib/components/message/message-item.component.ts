@@ -658,6 +658,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public InFlightCount = 0;
 
   /**
+   * Whether the viewer may stop this reply's run. The host decides from who started it: a user
+   * stops their own runs, the conversation's owner stops any. Default true.
+   */
+  @Input() public StopAllowed = true;
+
+  /**
    * Whether inline markdown links in message text open in a new browser tab (`target="_blank"`).
    * In-page fragment links (`#heading`) and `mailto:` / `tel:` / `sms:` links stay in the
    * current tab. Default `true`.
@@ -709,12 +715,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.AssistantAvatarFailed = value;
   }
 
-  /** The avatar image URL actually rendered: trimmed, and null after a load error
-   *  so a broken/whitespace URL degrades to the agent icon instead of a broken-image glyph. */
+  /** The avatar image URL actually rendered: host override -> agent LogoURL ->
+   *  default Persona PreviewImageURL, and null after a load error so a broken/whitespace
+   *  URL degrades cleanly to the agent icon instead of a broken-image glyph. */
   public get EffectiveAssistantAvatarUrl(): string | null {
     if (this.AssistantAvatarFailed) return null;
-    const url = this._assistantAvatarUrl?.trim();
-    return url ? url : null;
+    const hostUrl = this._assistantAvatarUrl?.trim();
+    if (hostUrl) return hostUrl;
+    if (!this.IsAIMessage) return null;
+    const agentID = this.message?.AgentID;
+    if (!agentID) return null;
+    const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentID));
+    const logoUrl = agent?.LogoURL?.trim();
+    if (logoUrl) return logoUrl;
+    if (typeof AIEngineBase.Instance.ResolveAgentPersona === 'function') {
+      const personaUrl = AIEngineBase.Instance.ResolveAgentPersona(agentID)?.Persona?.PreviewImageURL?.trim();
+      if (personaUrl) return personaUrl;
+    }
+    return null;
   }
 
   /** @deprecated Use {@link EffectiveAssistantAvatarUrl}. */
@@ -949,6 +967,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
+  /** Set in ngOnDestroy so async work that settles afterwards cannot re-arm the elapsed-time interval. */
+  private _isDestroyed = false;
   public ElapsedTimeFormatted: string = '0:00';
 
   /** @deprecated Use {@link ElapsedTimeFormatted}. */
@@ -1324,6 +1344,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   ngOnDestroy() {
+    this._isDestroyed = true;
     this.stopElapsedTimeUpdater();
     this.clearStopRetryTimer();
     this.disconnectMessageTextResizeObserver();
@@ -1451,6 +1472,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * and active durable workflow task graphs.
    */
   private startElapsedTimeUpdater(): void {
+    if (this._isDestroyed) {
+      return;
+    }
     if (this.IsInProgressAIMessage || this.IsAgentRunActive || this.HasActiveWorkflowTasks) {
       // Initial update
       this.updateTimers();
@@ -1613,6 +1637,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.AiAgentInfo;
   }
 
+  /** Normalized Font Awesome icon class for the assistant avatar fallback. */
+  public get EffectiveAssistantIconClass(): string {
+    return this.normalizeIconClass(this.AiAgentInfo?.iconClass || 'fa-robot');
+  }
+
+  /** @deprecated Use {@link EffectiveAssistantIconClass}. */
+  public get effectiveAssistantIconClass(): string {
+    return this.EffectiveAssistantIconClass;
+  }
+
   /** The engine-resolved agent identity — no host display overrides applied.
    *  Protected (not private) so the template's run-details header — which labels
    *  the REAL agent's diagnostics and record link — can read it directly. */
@@ -1632,6 +1666,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
           role: agent.Description || 'AI Assistant'
         };
       } else {
+        // Fallback to denormalized message.Agent name when a brand-new instance hasn't refreshed cache yet
+        if (this.message.Agent) {
+          return {
+            name: this.message.Agent,
+            iconClass: 'fa-robot',
+            role: 'AI Assistant'
+          };
+        }
         // Only log if the message is complete (should have AgentID by then)
         if (this.message.Status === 'Complete') {
           console.warn('⚠️ Agent not found in cache for ID:', agentID);
@@ -2002,11 +2044,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Whether this message offers a Stop control: an AI reply still in progress, in a conversation
-   * the viewer may write to, while more than one reply is in flight (see {@link InFlightCount}).
+   * the viewer may write to, when the host lets the viewer stop this run ({@link StopAllowed}),
+   * while more than one reply is in flight (see {@link InFlightCount}).
    * The server's permission check is the real gate; this only decides whether the control is shown.
    */
   public get CanStopRun(): boolean {
-    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun && this.InFlightCount > 1;
+    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun && this.StopAllowed !== false && this.InFlightCount > 1;
   }
 
   /** Stop button handler: marks the message as stopping and hands the request to the host. */
@@ -3064,6 +3107,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         this.CurrentUser
       );
 
+      if (this._isDestroyed) {
+        return;
+      }
       if (result.Success) {
         const allTasks = result.Results || [];
         if (safeParentId) {
@@ -3090,7 +3136,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       console.error('Failed to load tasks for conversation detail:', error);
     } finally {
       this._tasksLoadInFlight = false;
-      if (this._tasksReloadQueued) {
+      if (this._tasksReloadQueued && !this._isDestroyed) {
         this._tasksReloadQueued = false;
         void this.loadTasks();
       }

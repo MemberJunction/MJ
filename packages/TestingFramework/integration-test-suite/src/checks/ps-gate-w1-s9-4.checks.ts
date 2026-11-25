@@ -5,7 +5,8 @@
  * vacuously). Drivers are measured from the mean training row, so a member without
  * auto-renew is driven up by the absence of what lowers the average member's risk. The drawer's badge reads
  * `RowDriver.Up`, which is `AtRiskRules.DriverRaisesRisk`; `Up === false` is the green "Lowers Risk" badge
- * (PSRowDriversComponent's own DOM test pins that copy).
+ * (PSRowDriversComponent's own DOM test pins that copy). The scoring process is bound (D4-153), so the drivers are read
+ * from its scoring runs' `Champion` `Model` Feature Values, where the Engine stores them (D4-167).
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { ContainmentProbe, HarnessDatasets } from '@memberjunction/predictive-studio-truth-suite';
@@ -27,7 +28,7 @@ export const PsGateW1S94Checks: NamedCheck[] = [
     Fn: async (ctx) => {
       const h = await PsGate.Harness(ctx);
       const { Details: details, Model: model, Dataset: dataset } = await PsGateSpecs.W1RecordProcess(h);
-      const rows = ContainmentProbe.TopDriverRows(details, 'Auto Renew', model);
+      const rows = await ContainmentProbe.TopDriverRows(details, 'Auto Renew', model, h);
       const autoRenew = HarnessDatasets.ColumnByRowID(dataset, 'AutoRenew');
       const on = rows.filter((r) => autoRenew.Get(r.RecordID) === '1');
       const off = rows.filter((r) => autoRenew.Get(r.RecordID) === '0');

@@ -272,6 +272,97 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "RhythmTemplateID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: AI Agent Rhythm Templates ID backing this recurring routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "525EF0FE-0A6F-41FC-9EBD-28396F7076BB"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:25.981Z",
+            "checksum": "5c33a3848b7cd7c3894f16de55a901eec427fb6ed5e2ecc181d8f17ce11c8029"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentConfigurationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: AI Configurations UUID (or configuration name) overriding the routine's model tier configuration. Pass empty string/null on an update to fall back to the rhythm template default.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E60DC3B0-F243-4701-845F-31D5C8DCEA5B"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:54.580Z",
+            "checksum": "324145dff6b55174bce22ce1dbd7d38c7232176470372e8114e54d95eafe8ee9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelTier",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional logical model tier alias ('Draft', 'Standard', or 'High') resolved to Fast / Standard / High Power in MJ: AI Configurations when AgentConfigurationID is not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FDA6CF8E-58DF-4D1F-920D-DE24A73107C6"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:54.604Z",
+            "checksum": "30418ecd17028d904a10602648dac19ce5dba14a135d9763f0eaa542b116081b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedByUser",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Deprecated self-attestation flag (ignored during agent execution — pass a server-verified ConfirmedApprovalRequestID instead).",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "55429DCD-B42A-4F89-A69F-0A39026FFF08"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.618Z",
+            "checksum": "0161f282d1b0debd7ecb7a47e538dc94010a5dccfc0e8b631ec864ae34b5659c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of a server-verified Approved MJ: AI Agent Requests row owned by the calling user and matching the target agent. Required when an executing agent creates a brand-new Recurring routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "231B3DAD-673E-4629-8E2C-A42D0A0FFAE6"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.680Z",
+            "checksum": "d7344ab99c6ae923498c319140542afa61d5e9ce12f6ffac2e8ccbfb2f3caef0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "WakeAtISO",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -800,6 +891,24 @@
           "sync": {
             "lastModified": "2026-11-10T23:41:28.773Z",
             "checksum": "25c1366fc47519633853e777ec4a663be8e5aa0e988080b7c56631787863fef7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Approved MJ: AI Agent Requests ID authorizing this inter-agent request when sender CoordinationMode is Coordinator.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F54602-073E-44DC-9830-4C8B4FF341FA"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.017Z",
+            "checksum": "f4b34c025b5c0f56c59d12b57cdbf4a1ac4f46e363524db33f7861d20738e23c"
           }
         }
       ],

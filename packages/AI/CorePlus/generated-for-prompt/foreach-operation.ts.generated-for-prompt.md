@@ -33,5 +33,19 @@ interface ForEachOperation {
         templateParameters?: Record<string, string>;  // Values bound into the prompt's template, alongside the loop's own item and index.
         outputMapping?: string;  // JSON mapping from the prompt's response into the payload, per iteration.
     };  // Execute a prompt per iteration.
+    enqueue?: ForEachEnqueueOperation;  // Enqueue work items onto a WorkQueue topic for bounded parallel fan-out instead of executing
+}
+
+interface ForEachEnqueueOperation {
+    topic?: string;  // Destination WorkQueue topic name (defaults to `Limits.TaskGraphQueue.DefaultEnqueueTopicName`).
+    handlerKey?: string;  // Optional registered `BaseWorkHandler` key for consumer execution.
+    actionName?: string;  // Optional MemberJunction Action name run by the default queue item worker per item.
+    subAgentName?: string;  // Optional MemberJunction Sub-Agent name run by the default queue item worker per item.
+    payloadTemplate?: Record<string, unknown>;  // Static or expression payload merged into each published queue item.
+    correlationKey?: string;  // Optional correlation key prefix/path; defaults to deterministic `<graphRunId>:<stepInvocationId>`.
+    publishConcurrency?: number;  // Bounded concurrent WorkQueue publish operations (clamped by...
+    maxActiveRunners?: number;  // Bounded concurrent active isolated runners on the host (clamped by...
+    maxRetries?: number;  // Maximum delivery/retry attempts per queued item (clamped by...
+    expiresInHours?: number;  // Deadline in hours while waiting for fan-out items to finish.
 }
 ```

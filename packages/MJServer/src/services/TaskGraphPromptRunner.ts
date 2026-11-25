@@ -16,13 +16,42 @@
  */
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskPromptRunner, TaskPromptRunParams, TaskPromptRunResult } from '@memberjunction/task-graph';
+import { PickUsageMetric, SumUsageTokenPair } from './taskGraphUsageMetrics.js';
 
 /** The placeholder a workflow prompt uses to receive the payload (plan §5.7). */
 const CURRENT_PAYLOAD_PLACEHOLDER = '_CURRENT_PAYLOAD';
+
+function extractPromptUsage(result: AIPromptRunResult | null | undefined): { CostUsd?: number; TokensUsed?: number } {
+    const promptRun = result?.promptRun;
+    const chatUsage = result?.chatResult?.data?.usage;
+    const costUsd = PickUsageMetric([
+        promptRun?.TotalCost,
+        promptRun?.Cost,
+        result?.combinedCost,
+        result?.cost,
+        chatUsage?.cost,
+    ]);
+    const tokensUsed = PickUsageMetric([
+        promptRun?.TokensUsedRollup,
+        promptRun?.TokensUsed,
+        SumUsageTokenPair(promptRun?.TokensPromptRollup, promptRun?.TokensCompletionRollup),
+        SumUsageTokenPair(promptRun?.TokensPrompt, promptRun?.TokensCompletion),
+        result?.combinedTokensUsed,
+        result?.tokensUsed,
+        SumUsageTokenPair(result?.combinedPromptTokens, result?.combinedCompletionTokens),
+        SumUsageTokenPair(result?.promptTokens, result?.completionTokens),
+        chatUsage?.totalTokens,
+        SumUsageTokenPair(chatUsage?.promptTokens, chatUsage?.completionTokens),
+    ]);
+    return {
+        ...(costUsd !== undefined ? { CostUsd: costUsd } : {}),
+        ...(tokensUsed !== undefined ? { TokensUsed: tokensUsed } : {}),
+    };
+}
 
 export class TaskGraphPromptRunner implements TaskPromptRunner {
     public async RunPromptForTask(params: TaskPromptRunParams): Promise<TaskPromptRunResult> {
@@ -39,11 +68,13 @@ export class TaskGraphPromptRunner implements TaskPromptRunner {
             promptParams.data = this.buildData(params);
 
             const result = await new AIPromptRunner().ExecutePrompt(promptParams);
+            const usage = extractPromptUsage(result);
             if (!result?.success) {
                 return {
                     Success: false,
                     ErrorMessage: result?.errorMessage ?? 'The prompt did not return a result.',
                     PromptRunID: result?.promptRun?.ID,
+                    ...usage,
                 };
             }
 
@@ -53,6 +84,7 @@ export class TaskGraphPromptRunner implements TaskPromptRunner {
                 Output: parsed.payload,
                 PromptRunID: result.promptRun?.ID,
                 ChatMessage: parsed.chatMessage,
+                ...usage,
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);

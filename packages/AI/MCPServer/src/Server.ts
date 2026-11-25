@@ -20,7 +20,7 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { Readable } from 'stream';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
@@ -76,6 +76,7 @@ import { CreateOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 import { ApplyTrustProxy } from './ProxySettings.js';
+import { ReleaseUnstoredStreamableSession, StreamableSessionStore } from './StreamableSessionStore.js';
 
 
 /*******************************************************************************
@@ -219,11 +220,13 @@ function buildPoolConfig(): sql.config {
 
 /**
  * Extracts an API key from an incoming HTTP request.
- * Checks multiple sources in order of preference:
+ * Keys are accepted from headers ONLY — never from URL query parameters, which leak
+ * into access logs, proxies, and browser history. Checked in order of preference:
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer <token> header
- * 4. URL query parameter (apiKey or api_key)
+ *
+ * API keys are never read from the URL query string (see `ExtractCredentials` in auth/AuthGate.ts).
  *
  * @param request - The incoming HTTP request
  * @returns The extracted API key string, or null if not found
@@ -241,16 +244,22 @@ function extractAPIKeyFromRequest(request: Request | http.IncomingMessage): stri
         }
     }
 
-    // Check URL query parameters as fallback
-    if (!apiKey && request.url) {
-        const url = new URL(request.url, `http://${request.headers.host}`);
-        const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
-        if (queryKey) {
-            apiKey = queryKey;
-        }
-    }
-
     return apiKey || null;
+}
+
+/**
+ * Compares two secrets without leaking, through timing, how many leading bytes matched.
+ * `timingSafeEqual` needs equal-length inputs, so a length mismatch is answered after a
+ * same-cost self-comparison: only the length (not secret for a fixed-format key) is observable.
+ */
+function constantTimeEquals(provided: string, expected: string): boolean {
+    const providedBytes = Buffer.from(provided, 'utf8');
+    const expectedBytes = Buffer.from(expected, 'utf8');
+    if (providedBytes.length !== expectedBytes.length) {
+        timingSafeEqual(providedBytes, providedBytes);
+        return false;
+    }
+    return timingSafeEqual(providedBytes, expectedBytes);
 }
 
 /**
@@ -326,7 +335,9 @@ async function validateApiKey(
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
-        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+        // Constant-time comparison: this is the superadmin credential, and a byte-by-byte `===`
+        // leaks how much of a guess matched through response timing.
+        if (configuredSystemApiKey && constantTimeEquals(apiKey, configuredSystemApiKey)) {
             return {
                 valid: true,
                 user: systemUser,
@@ -1085,6 +1096,17 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
 
         // Validate OAuth configuration if OAuth is enabled
         const authMode = GetAuthMode();
+
+        // SECURITY: auth mode 'none' runs every request as the system user. Refuse it
+        // outright in production (mirrors MJServer's localDevAuth fail-loud rule); outside
+        // production the server additionally binds to loopback only (see app.listen below).
+        if (authMode === 'none' && process.env.NODE_ENV === 'production') {
+            throw new Error(
+                "MCP Server auth mode 'none' is strictly forbidden when NODE_ENV=production. " +
+                "Configure apiKey or oauth authentication."
+            );
+        }
+
         let effectiveAuthMode = authMode;
         let configuredProviderNames: string[] = [];
 
@@ -1355,7 +1377,8 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                 // Store transport for message routing
                 const sessionId = transport.sessionId;
                 transports.set(sessionId, transport);
-                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId}`);
+                // Log only a truncated session ID prefix — the full ID is a credential-like token
+                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId.substring(0, 8)}…`);
 
                 // Set up keepalive ping to prevent connection timeout (every 15 seconds)
                 const keepaliveInterval = setInterval(() => {
@@ -1476,8 +1499,13 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
         // STREAMABLE HTTP TRANSPORT (newer MCP protocol - single endpoint)
         // =====================================================================
 
-        // Store for Streamable HTTP transports (session ID -> transport)
-        const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
+        // Store for Streamable HTTP sessions (session ID -> transport + its McpServer). Active
+        // sessions stay open regardless of count; sessions closed by HTTP DELETE leave via onclose,
+        // and abandoned sessions are closed once idle past `mcpServerSettings.sessionIdleTtlMs`.
+        const streamableSessions = new StreamableSessionStore<StreamableHTTPServerTransport>({
+            IdleTtlMs: _config?.mcpServerSettings?.sessionIdleTtlMs,
+            SweepIntervalMs: _config?.mcpServerSettings?.sessionSweepIntervalMs,
+        });
 
         // Streamable HTTP endpoint - handles both GET (SSE stream) and POST (messages)
         // This is the newer, recommended MCP transport
@@ -1485,9 +1513,10 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
             // Get or validate session ID from header
             const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-            // For existing sessions, route to the existing transport
-            if (sessionId && streamableTransports.has(sessionId)) {
-                const transport = streamableTransports.get(sessionId)!;
+            // For existing sessions, route to the existing transport (this also restarts its idle clock)
+            const existingTransport = sessionId ? streamableSessions.GetTransport(sessionId) : undefined;
+            if (sessionId && existingTransport) {
+                const transport = existingTransport;
                 try {
                     // Pass parsed body to handleRequest - required for SDK to properly parse the message
                     await transport.handleRequest(req, res, req.body);
@@ -1510,9 +1539,14 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
 
             const sessionContext = ToSessionContext(authResult);
 
+            // Declared outside the try so a failure part-way through can release what was created.
+            let mcpServer: McpServer | null = null;
+            let transport: StreamableHTTPServerTransport | null = null;
+            let sessionStored = false;
+
             try {
                 // Create a new MCP server for this session
-                const mcpServer = new McpServer({
+                mcpServer = new McpServer({
                     name: "MemberJunction",
                     version: "1.0.0"
                 });
@@ -1521,30 +1555,36 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                 await registerAllTools(mcpServer, sessionContext, systemUser);
 
                 // Create Streamable HTTP transport with session ID generation
-                const transport = new StreamableHTTPServerTransport({
+                const newTransport = new StreamableHTTPServerTransport({
                     sessionIdGenerator: () => randomUUID()
                 });
+                transport = newTransport;
 
-                // Connect the server to the transport
-                await mcpServer.connect(transport);
-
-                // Store for future requests (after first request establishes session)
-                transport.onclose = () => {
-                    const sid = transport.sessionId;
+                // Stop tracking the session when its transport closes (client DELETE, eviction, or
+                // error). This must be assigned BEFORE connect(): the SDK chains whatever onclose is
+                // already set with its own close handling, so assigning afterwards replaces that
+                // chain and the McpServer never learns its transport closed.
+                newTransport.onclose = () => {
+                    const sid = newTransport.sessionId;
                     if (sid) {
-                        streamableTransports.delete(sid);
+                        streamableSessions.Remove(sid);
                     }
                 };
 
+                // Connect the server to the transport
+                await mcpServer.connect(newTransport);
+
                 // Handle the current request
                 // Pass the parsed body to help the SDK recognize the initialize request
-                await transport.handleRequest(req, res, req.body);
+                await newTransport.handleRequest(req, res, req.body);
 
-                // Store the transport after successful request handling
-                const newSessionId = transport.sessionId;
+                // Store the session after successful request handling
+                const newSessionId = newTransport.sessionId;
                 if (newSessionId) {
-                    streamableTransports.set(newSessionId, transport);
-                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
+                    streamableSessions.Add(newSessionId, { Transport: newTransport, Server: mcpServer });
+                    sessionStored = true;
+                    // Log only a truncated session ID prefix — the full ID is a credential-like token
+                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId.substring(0, 8)}…`);
                 } else {
                     console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
                 }
@@ -1557,11 +1597,17 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                         message: error instanceof Error ? error.message : 'Connection failed'
                     });
                 }
+            } finally {
+                // Nothing will ever route to a session that was not stored (the request failed, or
+                // it was not an initialize request and so got no session ID): release it now.
+                if (!sessionStored) {
+                    await ReleaseUnstoredStreamableSession(mcpServer, transport);
+                }
             }
         });
 
         // Start the Express server
-        app.listen(mcpServerPort, () => {
+        const onListening = () => {
             console.log(`MemberJunction MCP Server running on port ${mcpServerPort}`);
             console.log(`SSE endpoint: http://localhost:${mcpServerPort}/mcp/sse`);
             console.log(`Messages endpoint: http://localhost:${mcpServerPort}/mcp/messages`);
@@ -1571,7 +1617,14 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
             if (IsOAuthEnabled()) {
                 console.log(`Protected Resource Metadata: http://localhost:${mcpServerPort}/.well-known/oauth-protected-resource`);
             }
-        });
+        };
+        if (authMode === 'none') {
+            // SECURITY: with no authentication every caller runs as the system user, so the
+            // port must never be exposed beyond loopback (mirrors MJCodeGenAPI's bind rule).
+            app.listen(mcpServerPort, '127.0.0.1', onListening);
+        } else {
+            app.listen(mcpServerPort, onListening);
+        }
 
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);

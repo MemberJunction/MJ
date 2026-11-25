@@ -190,12 +190,16 @@ export class FeatureResolver {
     });
   }
 
-  /** `series`: a lag or rolling window the unit's Temporal Spec declares, by index. */
+  /** `series`: a lag or rolling window the unit's Temporal Spec declares, by index; refused `series-without-key` on a `grain` unit, whose rows carry no series key. */
   protected ResolveSeries(step: Extract<FeatureStep, { Kind: 'series' }>): void {
     const t = this.Unit.temporal;
     const max = t ? (step.Feature.kind === 'lag' ? t.lags.length : t.rollingWindows.length) : 0;
     if (!t || step.Feature.index < 0 || step.Feature.index >= max) {
       throw new AssemblyRefused({ kind: 'unresolved-column', entity: PredictionUnit.UnitRowEntityName(this.Unit.rows), field: `TemporalSpec.${step.Feature.kind}[${step.Feature.index}]` });
+    }
+    if (this.Unit.rows.kind === 'grain') {
+      // A grain unit's every row is its own entity key, so each series holds one point and the feature is empty (D4-181).
+      throw new AssemblyRefused({ kind: 'series-without-key', entity: PredictionUnit.UnitRowEntityName(this.Unit.rows), feature: `TemporalSpec.${step.Feature.kind}[${step.Feature.index}]` });
     }
     const encoding: ColumnEncoding = { kind: 'numeric', nonNumericValue: 'fail' };
     this.add({ name: step.FeatureName, source: { kind: 'series', feature: { kind: step.Feature.kind, index: step.Feature.index } }, encoding, missing: FeatureResolver.DefaultMissing(encoding) });

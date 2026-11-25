@@ -63,6 +63,9 @@ export {
   PostgreSQLHeaderBuilder,
   getHeaderBuilder,
   registerHeaderBuilder,
+  PG_EXTENSION_REQUIREMENTS,
+  RequiredPgExtensions,
+  BuildPgExtensionStatements,
   convertFile,
   GetPGCatalogViewDefinition,
   CollectTSQLBitColumns,
@@ -116,6 +119,7 @@ export type {
   TableColumnRegistry,
   DialectCombination,
   DialectHeaderBuilder,
+  PgExtensionRequirement,
   ParsedType,
 } from './rules/index.js';
 

@@ -22,26 +22,54 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 1
+            "Priority": 10
           },
           "primaryKey": {
             "ID": "C391C70E-F62B-42E0-BE6F-FD72DEB5B4F9"
           },
           "sync": {
-            "lastModified": "2026-06-09T06:32:34.227Z",
-            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
+            "lastModified": "2026-11-24T20:27:15.893Z",
+            "checksum": "d9ed3c25ca94c243df966a26022612df23f449d0f66f2e6bdbbe8d6e264c02a4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0969F909-0F9A-4AFE-BD08-BD5D0DAE12A8"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:27:15.909Z",
+            "checksum": "c451458183a0bee7f6280103631be958dbe3131c287f7cd8dc86c9071df3469a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Luna",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F454CE0C-EC8C-48E9-B896-DED91529F867"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:27:15.925Z",
+            "checksum": "4d2cdbc950fdb9ae60b8eda600a92d8d310e9ce844a54fc8fd5c2e1ca6d2dafd"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "3ED5F53A-E203-4378-A40D-1FDC69794970"
-    },
-    "sync": {
-      "lastModified": "2026-06-09T06:32:34.202Z",
-      "checksum": "89c761cf597490d3478aed5578cc3e8d22327b99c6071b32cc4152c9e30bf82f"
     }
   }
 ]

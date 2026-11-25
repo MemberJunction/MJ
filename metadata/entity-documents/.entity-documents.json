@@ -145,5 +145,26 @@
       "lastModified": "2026-11-10T23:41:50.142Z",
       "checksum": "6cff1e52d085328a13c9d7d6f2c391fb6ed4d2b2de260216a3a6d4db95a70987"
     }
+  },
+  {
+    "fields": {
+      "Name": "Artifacts Content",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Artifacts",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-artifacts-content.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "D7DC2505-3E2D-4365-8BC8-72DF43163F4F"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:46.333Z",
+      "checksum": "7875f6988a1c4c96db6a8883eb296269699434f3e8754c117eef8e75d2a0100b"
+    }
   }
 ]

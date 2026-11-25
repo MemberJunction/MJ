@@ -1,5 +1,181 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- cd98580: Implement MemberJunction Communications V2 (Comms V2): schema, metadata seeds, compliance gate with 9 rule drivers, endpoint resolution, link/pixel tracking, SendGrid webhook/domain auth, public preference center and admin dashboard, templated delivery, and IT188–IT192 integration test suites.
+
+  Key behavior details:
+  - V1 `SendSingleMessage` and `CoreActions` remain unchanged by default; opt into V1 compliance gating via `Message.CheckComplianceGate = true` or `MJ_COMMS_V1_COMPLIANCE_GATE=true`.
+  - `EntityCommunicationsEngine.RunEntityCommunication` supports V2 routing via `UseV2 = true` and tags V1 bulk sends as `Message.MessageClass = 'Operational'`.
+  - `MessageClass = 'Transactional'` sends require Owner privileges or the `Communications: Send Transactional` authorization.
+  - A `Marketing` message must be sent under a preference (`Envelope.PreferenceID`); without one it is blocked with `PreferenceRequired` in every enforcement mode.
+  - Every `Marketing` email carries the one-click unsubscribe header (`List-Unsubscribe`, `List-Unsubscribe-Post`), whether or not a compliance regime is enabled. The unsubscribe footer still comes only from an enabled regime.
+  - A link whose click-tracked form would exceed 2,000 characters is left untracked.
+  - The `MJ: Users` principal's email mapping is seeded (`metadata/entity-communication-message-types`), so users are reachable on a new installation.
+  - `spDeleteEntityWithCoreDependencies` removes an entity's communication principals, endpoint links, preferences and principal-only suppressions with it, including the consent audit rows that reference them. A suppression that also names an endpoint (a hard bounce or complaint recorded against a principal) is kept with its entity link cleared, so the address stays blocked. Communication logs and sender types keep their rows with the entity link cleared.
+  - Delivery guarantee is a setting, not an accident: `DeliveryGuarantee` (`At Most Once` | `At Least Once`) on `MJ: Communication Providers` (default `At Most Once`), `MJ: Communication Senders`, `MJ: Communication Runs` and `Envelope.DeliveryGuarantee`, most specific first. A log stuck `In-Progress` for 15 minutes is never resent under At Most Once (reported `OutcomeUnknown`; the recipient may miss it) and is reclaimed and resent under At Least Once (the recipient may get it twice).
+  - Chunked runs are tracked in the new `MJ: Communication Run Chunks` table (one row per chunk, unique per run) and `CommunicationRun.ChunkCount`; the last chunk sets the run's `Status` to `Complete`, or `Failed` if any chunk was refused.
+  - `CommunicationLog.IsDryRun` marks dry-run sends, and `CommunicationLog.DeferredPayload` holds a deferred message until it is dispatched; `CorrelationData` holds only the caller's data.
+  - The database enforces one active `Admin Block` per address (filtered unique index) and keeps `MJ: Communication Consent Audit Logs` append-only (a trigger refuses updates and deletes, except the entity-delete cleanup in `spDeleteEntityWithCoreDependencies`).
+  - The log claim and scheduled-deferral sweep now write `OUTPUT ... INTO` a table variable; the previous bare `OUTPUT` clause is refused by SQL Server on a table with an enabled trigger, which stopped retries and deferred sends from being claimed.
+  - GDPR erasure clears a pending deferred message body and fails loudly if any log or activity cannot be scrubbed.
+
+- 916fe91: Add the extensible Chief of Staff skills platform, typed core actions, offered rhythms, suggestions, and Agent Channels (`V202611201630`):
+  - **Schema & CodeGen (`V202611201630`)**: Add `AISkillAction.Role` (`Tool` | `Briefing` | `Both`), `AIAgentSkill.AllowMetadataSyncUpdate`, `RowLevelSecurityFilter.PlatformVariants` (SQL Server + PostgreSQL dialect RLS), `MJ: AI Agent Rhythm Templates`, `MJ: AI Agent Suggestions`, `ConversationType` `AGENT_CHANNEL`, `MJ: Agent Channels` (IS-A `MJ: Conversations`), and `MJ: Agent Channel Participants`.
+  - **Policy & Briefing Engine**: Introduce `TypedActionPolicyGuard` in `@memberjunction/ai-core-plus` with sub-agent policy ceiling propagation across `BaseAgent` and `AgentUserPolicyEngine`, plus `AIEngine.GetBriefingActionsForAgent` / `GetSkillBriefingActionIDs` for dynamic cross-app briefing fan-out.
+  - **Core Typed Actions & Agent Channels**: Replace all raw SQL / generic CRUD actions on Chief of Staff with 13 scoped typed actions (including `Assemble My Briefing`, Offered Rhythms, Suggestions, Memory, and Agent Channel actions), add `AgentChannelConversationDriver` with loop-guard and hourly wake rate limits, and enforce recurring routine confirmation in `Schedule Next Agent Wake`.
+  - **Inbound Utility Mailbox Adapter**: Add `InboundUtilityMailboxIngestionService` and `EmailUtilityMailboxExtension` (`BaseServerExtension`) in `@memberjunction/messaging-adapters`.
+  - **Governance, Standards & UI**: Add `agent-skill-governance` repo standard, `ChiefOfStaffAgentChannelsComponent` and Governance `InstructionsOverride` size monitor in `@memberjunction/ng-dashboards`, and `IT157` (`COS9–COS12`) integration checks.
+
+- 2122c07: Add code-only `BaseRemotableOperation` contracts and server implementations (`Limits.GetDiagnostics`, `Limits.ResumePausedRun`, `Limits.PauseRun`), wire the `AdminLimitsResourceComponent` execution-limits governance dashboard into Explorer's Admin application navigation, add end-to-end 5,000-node workflow and 2,000-turn agent-channel plus synthetic runaway tests, and document the 5-tier limits configuration architecture and sweep inventory.
+- c799eea: Epic 4a Slice 4: add Library `Shared with Me` and `Shared by Me` views displaying shared conversations (including `ParentID` side threads) and artifacts with owner Revoke actions, restrict conversation sharing UI strictly to owners with `ParentID` privacy indicators, verify direct `NavigationService` deep links with post-revocation access denial, and add unit/DOM + Playwright E2E coverage.
+
+### Patch Changes
+
+- 4d51997: Add personal and shared AI Agent instances via multi-level prototype inheritance (`AIAgent.BaseAgentID`, `MaxDepth = 5`), `InstantiationMode` (`None | Optional | Required`), `AdditionalInstructions`, exclusive `IsPrimaryInstance` sibling sync, 2x2 RBAC with SQL Row-Level Security (`UserAccessibleAIAgents`), ancestor policy/limit ceiling intersection, unified text + Realtime voice personas with audience-aware tone framing, `Manage My Agent Instance` action, `LocalJsonCommunicationProvider` for local JSON-backed Email & Calendar testing, Frecency + FK-style Smart `@Mention` autocomplete, per-user Default Chat Agent (`chat.defaultAgentId`), and the unified **My Agents** Explorer application (`Overview`, `Agents`, `Agent Channels`).
+- c6b3913: Pre-freeze AI Agents improvements (Epics B, C, D, and post-`#6852` Epic E hardening):
+  - **Chief of Staff routing parity (Epic B):** Enabled `"enableHandoff": true` on Chief of Staff (`metadata/agents/.chief-of-staff-agent.json`), extracted Section 4 ("Agent Delegation") into a shared `{@include ../_includes/agent-delegation.md}` fragment parameterized by `{{ agentName }}` with zero hard-coded `"Sage"` references, included it in both Sage and Chief of Staff system prompts while keeping each agent's own sub-agents separate, and verified `BaseAgentID` prototype inheritance passes `enableHandoff` cleanly to derived instances.
+  - **Per-user default agent (Epic C):** Extended `DefaultAgentResolver` (`ResolveWithDetails` + `Resolve`) with per-user `UserInfoEngine` preference (`Conversations.DefaultAgentID`, with read-only fallback to legacy `chat.defaultAgentId`) and automatic primary-instance (`IsPrimaryInstance = 1`) resolution for instantiable org/app default templates, validating `Active` status and full `BaseAgentID` ancestor `CanRun` permissions with graceful fallback and one-time non-blocking user notice. Added a "Default for new chats" toggle in `ConversationAgentPickerComponent` and unified Chat / My Agents default-agent settings and conversation-manager cache invalidation.
+  - **Remove hard-coded `'Sage'` assumptions (Epic D):** Updated `MemoryManagerAgent`, `LiveKitRoomResourceComponent`, Conversations UI (`conversation-chat-area`, `message-input`, `agent-handoff-card`, `agent-handoff-map`, `agent-turn-routing`, `realtime-*`), and `metadata/prompts/templates/sage/check-intent.template.md` (`{{ conversationManagerName }}`) to use the resolved conversation manager / default agent with neutral `'Assistant'` fallback, keeping `DefaultAgentResolver.FALLBACK_AGENT_NAME = 'Sage'` strictly as the last-resort safety net.
+  - **Post-`#6852` Agent Instances hardening (Epic E `E1`–`E5`):** Enforced `mj.config.cjs` (`MjConfig`) at the root ceiling of `LimitsConfigResolver` / `ResolveAgentRunLimits` so user policies can only narrow org ceilings unless an authorized admin override applies (`E2`/`F1`); resolved `Required` templates to the user's `IsPrimaryInstance = 1` across `AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage` and `UserRoutineDispatcherDriver` (`E1`); hid `"Set up My Chief of Staff"` / create CTAs in `MyAgentsSectionComponent` when the user lacks `CanCreate` on `MJ: AI Agents` (`E5`); and added unit tests covering `E1`–`E5` including derived-instance `ScopeCommonReach` / `SupportsAudience` enforcement and transitive ancestor `CanRun` validation.
+
+- a87fe90: The artifact viewer header now has one Export menu in place of the PDF-only button. A viewer lists its formats with `GetExportOptions()` and runs the chosen one with `RunExport(key)`. By default these give the portrait and landscape PDF entries when `SupportsPDFExport` is true, so the Docs and Component viewers export as before. An option with a `DisabledReason` shows greyed out, with the reason in place of its description, and does not run. The menu is an `mj-menu`: the arrow keys move between options, and an unavailable option can still take focus, so a screen reader reads its reason.
+
+  Query (data) artifacts now export their results as Excel, CSV or JSON, and their query as a `.sql` file. A results export runs the query again without paging, up to 100,000 rows, through the grid's own export. A warning shows when that limit is hit or the query fails and only the rows on screen were exported. The same menu saves the query (save, update, or save as new), saves the records as a list, opens the saved query as a live Excel workbook when the server has the Excel add-in, and creates a Live Sheet (a Sheets artifact with a live table on the saved query). Excel (live) and Live Sheet need a saved query that matches the version on screen. The data toolbar no longer has the Save Query, Update Query and Save as List buttons; when the SQL has changed it shows an Open Query button next to its badge.
+
+  More viewers now list their exports in the same menu, through the export code they already had. Docs offer Word, Markdown and PDF. Sheets offer the workbook as Excel and the active sheet as CSV. Slides offer PowerPoint and a printable PDF. PDF, Word, Excel file, image, audio and video artifacts offer their original file. SVG, HTML, JSON and code artifacts save their source with the matching extension. The base viewer has `FILE_EXPORT_KEY` and protected `FileExportOption`, `OriginalFileName`, `ExportFileName` and `DownloadTextFile` helpers for this. The code viewer now detects JavaScript content as JavaScript; before, it showed it as Java. The Word (.docx) export of a Docs artifact now works in the browser; before, it failed with "nodebuffer is not supported by this platform".
+
+  `NavigationRequest` has optional `ArtifactID` and `ArtifactName`. The Conversations resource, the artifact tab, the dashboard chat pane and the chat overlay open that artifact in its own tab.
+
+  **Import change:** `LiveSheetClientToolHelper` and its helpers (`CreateLiveSheetHelperForProvider` and the other exports of `live-sheet-client-tool.helper`) moved from `@memberjunction/ng-dashboards` to `@memberjunction/ng-artifacts`. `@memberjunction/ng-dashboards` no longer exports them, so code outside this repository that imports them from `@memberjunction/ng-dashboards` must import them from `@memberjunction/ng-artifacts`. `@memberjunction/ng-query-viewer` now exports its Open in Excel parameter helpers (`HasRequiredParameterValues`, `ToExcelParameterValues`, `CanOpenQueryInExcel`).
+
+- 7690d8d: The list update confirmation (refresh preview, move, compose) shows each previewed record's name, with its ID beside it, instead of the bare ID. Names are looked up for the previewed records only; a record with no name, or a failed lookup, keeps showing its ID.
+- 346795c: Tests only: widen tight wall-clock ceilings added since v6.3.0-edge.1 so the publish gate's single shared runner doesn't flake. Pathological-input checks get 2 s; the fast-judge early-return and microtask coalescing checks stay below the timings they prove (500 ms).
+- ef8c489: Add domain-neutral `ShellChromePolicyService` and `ShellNoAccessComponent` (`mj-shell-no-access`) across the Explorer shell so restricted participant profiles cleanly unmount global search, floating chat, app switcher, notification bell, and administrative menu items, and authenticated users with zero application grants see a themeable, `--mj-*`-styled no-access view with grant refresh and sign-out while preserving standard Explorer behavior.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [a87fe90]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [346cdf3]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [8289a9d]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [59afb5f]
+- Updated dependencies [1d4a3f0]
+- Updated dependencies [7690d8d]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6e740d7]
+- Updated dependencies [5f514f2]
+- Updated dependencies [798fe51]
+- Updated dependencies [3d5adab]
+- Updated dependencies [0a24be3]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [df69cd5]
+- Updated dependencies [62f6560]
+- Updated dependencies [ba46ec9]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [d498eb9]
+- Updated dependencies [447f7fa]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [66258b1]
+- Updated dependencies [375f9f1]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [97cf34a]
+- Updated dependencies [dccf367]
+- Updated dependencies [ab9f8e8]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/conversations-runtime@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/ng-composer@6.3.0-edge.2
+  - @memberjunction/ng-conversations@6.3.0-edge.2
+  - @memberjunction/ng-dashboards@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ng-artifacts@6.3.0-edge.2
+  - @memberjunction/ng-query-viewer@6.3.0-edge.2
+  - @memberjunction/communication-types@6.3.0-edge.2
+  - @memberjunction/ng-base-forms@6.3.0-edge.2
+  - @memberjunction/ng-list-management@6.3.0-edge.2
+  - @memberjunction/lists-base@6.3.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ng-dashboard-viewer@6.3.0-edge.2
+  - @memberjunction/ng-shared@6.3.0-edge.2
+  - @memberjunction/ng-ui-components@6.3.0-edge.2
+  - @memberjunction/ng-auth-services@6.3.0-edge.2
+  - @memberjunction/ng-markdown@6.3.0-edge.2
+  - @memberjunction/ng-realtime-media@6.3.0-edge.2
+  - @memberjunction/ng-ai-test-harness@6.3.0-edge.2
+  - @memberjunction/export-engine@6.3.0-edge.2
+  - @memberjunction/theme-engine@6.3.0-edge.2
+  - @memberjunction/ng-shared-generic@6.3.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.3.0-edge.2
+  - @memberjunction/ng-base-application@6.3.0-edge.2
+  - @memberjunction/ng-entity-form-dialog@6.3.0-edge.2
+  - @memberjunction/ng-entity-permissions@6.3.0-edge.2
+  - @memberjunction/ng-explorer-settings@6.3.0-edge.2
+  - @memberjunction/ng-list-detail-grid@6.3.0-edge.2
+  - @memberjunction/ng-base-types@6.3.0-edge.2
+  - @memberjunction/ng-diagnostics@6.3.0-edge.2
+  - @memberjunction/ng-file-storage@6.3.0-edge.2
+  - @memberjunction/ng-mj-livekit-room@6.3.0-edge.2
+  - @memberjunction/ng-notifications@6.3.0-edge.2
+  - @memberjunction/ng-react@6.3.0-edge.2
+  - @memberjunction/ng-record-changes@6.3.0-edge.2
+  - @memberjunction/ng-record-selector@6.3.0-edge.2
+  - @memberjunction/ng-record-tags@6.3.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.3.0-edge.2
+  - @memberjunction/ng-search@6.3.0-edge.2
+  - @memberjunction/ng-user-avatar@6.3.0-edge.2
+  - @memberjunction/entity-communications-client@6.3.0-edge.2
+  - @memberjunction/templates-base-types@6.3.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.2
+  - @memberjunction/ng-container-directives@6.3.0-edge.2
+  - @memberjunction/ng-conversation-offers@6.3.0-edge.2
+  - @memberjunction/ng-export-service@6.3.0-edge.2
+  - @memberjunction/ng-feedback@6.3.0-edge.2
+  - @memberjunction/interactive-component-types@6.3.0-edge.2
+  - @memberjunction/excel-addin@6.3.0-edge.2
+  - @memberjunction/ng-generic-dialog@6.3.0-edge.2
+  - @memberjunction/ng-word-cloud@6.3.0-edge.2
+  - @memberjunction/ng-pagination@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

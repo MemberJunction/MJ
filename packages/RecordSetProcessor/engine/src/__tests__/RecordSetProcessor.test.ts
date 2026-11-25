@@ -16,7 +16,7 @@ import {
     RecordResult,
     RunHandle,
 } from '@memberjunction/record-set-processor-base';
-import { FunctionRecordProcessor, NoOpTracker, RecordSetProcessor } from '../index';
+import { BATCH_WATERMARK_WRITE_CONCURRENCY, FunctionRecordProcessor, NoOpTracker, RecordSetProcessor } from '../index';
 import { WatermarkService, type WatermarkDecision } from '../watermark/WatermarkService';
 
 const USER = {} as UserInfo;
@@ -265,6 +265,112 @@ describe('RecordSetProcessor.Process', () => {
         });
         expect(result.Processed).toBe(2); // only r3, r4 remain after offset 3
         expect(tracker.details.map((d) => d.record.RecordID)).toEqual(['r3', 'r4']);
+    });
+
+    describe('a processor that declares MaxConcurrentBatches runs that many batches at once', () => {
+        /** A batch processor that records how many of its batches are in flight; batch `failing` (1-based start order) fails every record. */
+        const batchProcessor = (limit: number | undefined, failing: number | null = null) => {
+            const state = { inFlight: 0, peak: 0, started: 0 };
+            return {
+                state,
+                processor: {
+                    MaxConcurrentBatches: limit,
+                    ProcessRecord: async (): Promise<RecordResult> => ok(),
+                    ProcessBatch: async (records: RecordRef[]): Promise<RecordResult[]> => {
+                        const n = ++state.started;
+                        state.inFlight++;
+                        state.peak = Math.max(state.peak, state.inFlight);
+                        await new Promise((r) => setTimeout(r, 5));
+                        state.inFlight--;
+                        return records.map((r) => (n === failing ? { Status: 'Failed', ErrorMessage: `batch ${n}` } : Number(r.RecordID.slice(1)) % 7 === 0 ? { Status: 'Skipped' } : ok()));
+                    },
+                },
+            };
+        };
+        const run = (p: ReturnType<typeof batchProcessor>['processor'], n: number) => engine.Process({ Source: new ArraySource(recs(n), 'E'), Processor: p,
+            Tracker: new NoOpTracker(), ContextUser: USER, Provider: PROVIDER, BatchSize: 3, ErrorThresholdPercent: 100 });
+
+        it('a batch that rejects fails the run only after every batch of its wave has settled: nothing is written after the run closes', async () => {
+            const events: string[] = [];
+            const tracker = {
+                BeginRun: async () => ({ ProcessRunID: 'PR' }),
+                RecordResult: async (_h: unknown, record: RecordRef) => {
+                    if (record.RecordID === 'r0') throw new Error('detail write failed');
+                    events.push(`result ${record.RecordID}`);
+                },
+                Checkpoint: async () => true,
+                CompleteRun: async (_h: unknown, summary: { Status: string }) => { events.push(`complete ${summary.Status}`); },
+                LoadResumeCursor: async () => undefined,
+            };
+            const processor = {
+                MaxConcurrentBatches: 2,
+                ProcessRecord: async (): Promise<RecordResult> => ok(),
+                ProcessBatch: async (records: RecordRef[]): Promise<RecordResult[]> => {
+                    if (records[0].RecordID !== 'r0') await new Promise((r) => setTimeout(r, 30)); // the second batch is still writing
+                    return records.map(() => ok());
+                },
+            };
+            const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const result = await engine.Process({ Source: new ArraySource(recs(6), 'E'), Processor: processor, Tracker: tracker, ContextUser: USER, Provider: PROVIDER, BatchSize: 3 });
+            errors.mockRestore();
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toContain('detail write failed');
+            expect(events[events.length - 1]).toBe('complete Failed');
+            expect(events.filter((e) => e.startsWith('result r'))).toEqual(['result r3', 'result r4', 'result r5']);
+        });
+
+        it('never has more than MaxConcurrentBatches batches in flight, and has more than one', async () => {
+            const { state, processor } = batchProcessor(4);
+            const result = await run(processor, 30);
+            expect([result.Status, result.Processed, state.started]).toEqual(['Completed', 30, 10]);
+            expect(state.peak).toBeGreaterThan(1);
+            expect(state.peak).toBeLessThanOrEqual(4);
+        });
+
+        it('ends with the counts of the serial run on the same input', async () => {
+            const serial = await run(batchProcessor(undefined).processor, 31);
+            const parallel = await run(batchProcessor(4).processor, 31);
+            const pick = (r: typeof serial) => [r.Status, r.Total, r.Processed, r.Success, r.Error, r.Skipped];
+            expect(pick(parallel)).toEqual(pick(serial));
+            expect(serial.Processed).toBe(31);
+        });
+
+        it('a failing batch fails its own records only; its wave finishes, and the run goes on to the breaker as a serial run does', async () => {
+            const serial = await run(batchProcessor(undefined, 2).processor, 30);
+            const parallel = await run(batchProcessor(4, 2).processor, 30);
+            const pick = (r: typeof serial) => [r.Status, r.Processed, r.Success, r.Error, r.Skipped];
+            expect(pick(parallel)).toEqual(pick(serial));
+            expect(parallel.Error).toBe(3);
+        });
+    });
+
+    describe('the batch path writes its records\' watermarks with bounded concurrency', () => {
+        afterEach(() => vi.restoreAllMocks());
+
+        it('writes every succeeded record\'s watermark once, at most BATCH_WATERMARK_WRITE_CONCURRENCY at a time, and more than one at a time', async () => {
+            vi.spyOn(WatermarkService.Instance, 'CheckBatchWatermarks').mockImplementation(async (p) =>
+                new Map<string, WatermarkDecision>(p.Records.map((r) => [r.RecordID, { ShouldSkip: false, BasisHash: `h-${r.RecordID}` }])));
+            let inFlight = 0;
+            let peak = 0;
+            const written: string[] = [];
+            vi.spyOn(WatermarkService.Instance, 'UpdateWatermark').mockImplementation(async (p) => {
+                inFlight++;
+                peak = Math.max(peak, inFlight);
+                await new Promise((r) => setTimeout(r, 5));
+                written.push(`${p.RecordID}:${p.BasisHash}`);
+                inFlight--;
+            });
+            const processor = {
+                ProcessRecord: async (): Promise<RecordResult> => ok(),
+                ProcessBatch: async (records: RecordRef[]): Promise<RecordResult[]> => records.map((r) => (r.RecordID === 'r3' ? { Status: 'Failed', ErrorMessage: 'x' } : ok())),
+            };
+            const result = await engine.Process({ Source: new ArraySource(recs(30), 'E'), Processor: processor, Tracker: new NoOpTracker(),
+                ContextUser: USER, Provider: PROVIDER, BatchSize: 30, RecordProcessID: 'RP', EntityID: 'E', ErrorThresholdPercent: 100 });
+            expect(result.Processed).toBe(30);
+            expect([...written].sort()).toEqual(recs(30).filter((r) => r.RecordID !== 'r3').map((r) => `${r.RecordID}:h-${r.RecordID}`).sort());
+            expect(peak).toBeGreaterThan(1);
+            expect(peak).toBeLessThanOrEqual(BATCH_WATERMARK_WRITE_CONCURRENCY);
+        });
     });
 
     describe('the breaker over attempted records', () => {

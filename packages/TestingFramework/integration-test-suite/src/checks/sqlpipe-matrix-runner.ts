@@ -72,46 +72,136 @@ export async function CreateDependencies(f: MatrixFixture): Promise<void> {
     await f.Backend.RefreshQueries();
 }
 
+// ─── Concurrency helper ────────────────────────────────────────────────────
+
+/** Bounds parallel SaveQuery writes so SQL Server/PG connection pools and metadata locks stay unsaturated. */
+const DEFAULT_SAVE_CONCURRENCY = 4;
+/** Bounds parallel read-only scenario execution/extraction requests to saturate CI DB I/O without starving MJAPI. */
+const DEFAULT_RUN_CONCURRENCY = 6;
+/** Upper bound for SQLPIPE_CONCURRENCY override so a misconfigured env var cannot exhaust the DB connection pool. */
+const MAX_SQLPIPE_CONCURRENCY = 16;
+
+/** Resolves bounded worker concurrency from SQLPIPE_CONCURRENCY (1..16), or the provided default. */
+export function MatrixConcurrency(defaultLimit: number): number {
+    const raw = process.env.SQLPIPE_CONCURRENCY;
+    if (!raw) return defaultLimit;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return defaultLimit;
+    return Math.min(parsed, MAX_SQLPIPE_CONCURRENCY);
+}
+
+/**
+ * Runs `worker` across `items` with at most `limit` in-flight promises, preserving input order.
+ * If any worker throws, stops pulling new items immediately, waits for in-flight workers to
+ * settle (so teardown never races straggling DB writes), and rethrows the first error.
+ */
+export async function RunWithConcurrency<T, R>(
+    items: readonly T[],
+    limit: number,
+    worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+    if (items.length === 0) return [];
+    const results = new Array<R>(items.length);
+    let nextIndex = 0;
+    let aborted = false;
+    let firstError: unknown;
+    let hasError = false;
+    const workerCount = Math.max(1, Math.min(limit, items.length));
+
+    const runWorker = async (): Promise<void> => {
+        while (!aborted && nextIndex < items.length) {
+            const current = nextIndex++;
+            try {
+                results[current] = await worker(items[current], current);
+            } catch (err) {
+                if (!hasError) {
+                    hasError = true;
+                    firstError = err;
+                }
+                aborted = true;
+                return;
+            }
+        }
+    };
+
+    await Promise.allSettled(Array.from({ length: workerCount }, () => runWorker()));
+    if (hasError) throw firstError;
+    return results;
+}
+
 // ─── Saving scenario queries ───────────────────────────────────────────────
 
-/** Saves each query not saved yet. A refused query must be refused with its code and write nothing. */
+async function saveSingleScenarioQuery(
+    f: MatrixFixture,
+    query: ScenarioQuery,
+): Promise<{ Saved: SavedQuery; Created: boolean; Failures: string[] }> {
+    const localFailures: string[] = [];
+    const { Record: record, Message: message } = await f.Backend.SaveQuery(f.Category.ID, {
+        Name: query.Name,
+        SQL: query.SQL,
+        Cached: query.Cached,
+    });
+    if (query.Refusal) {
+        if (record) localFailures.push(`${query.Name}: saved, but must be refused with ${query.Refusal}`);
+        else if (!message.includes(query.Refusal)) localFailures.push(`${query.Name}: refused with "${message.slice(0, 200)}", expected ${query.Refusal}`);
+        else if (await f.Backend.CountQueries(f.Category.ID, query.Name) !== 0) localFailures.push(`${query.Name}: refused, but a query row was written`);
+        return { Saved: { Query: query, Record: null }, Created: false, Failures: localFailures };
+    }
+    if (!record) localFailures.push(`${query.Name}: save failed: ${message.slice(0, 300)}\n      SQL: ${query.SQL.slice(0, 400)}`);
+    return { Saved: { Query: query, Record: record }, Created: true, Failures: localFailures };
+}
+
+/** Saves each unique query not saved yet using bounded concurrency. A refused query must be refused with its code and write nothing. */
 export async function SaveScenarioQueries(f: MatrixFixture, queries: readonly ScenarioQuery[], failures: string[]): Promise<void> {
-    let created = 0;
+    const unique: ScenarioQuery[] = [];
+    const seen = new Set<string>();
     for (const query of queries) {
-        if (f.Saved.has(query.Key)) continue;
-        const { Record: record, Message: message } = await f.Backend.SaveQuery(f.Category.ID, { Name: query.Name, SQL: query.SQL, Cached: query.Cached });
-        if (query.Refusal) {
-            if (record) failures.push(`${query.Name}: saved, but must be refused with ${query.Refusal}`);
-            else if (!message.includes(query.Refusal)) failures.push(`${query.Name}: refused with "${message.slice(0, 200)}", expected ${query.Refusal}`);
-            else if (await f.Backend.CountQueries(f.Category.ID, query.Name) !== 0) failures.push(`${query.Name}: refused, but a query row was written`);
-            f.Saved.set(query.Key, { Query: query, Record: null });
-            continue;
-        }
-        if (!record) failures.push(`${query.Name}: save failed: ${message.slice(0, 300)}\n      SQL: ${query.SQL.slice(0, 400)}`);
-        f.Saved.set(query.Key, { Query: query, Record: record });
-        created++;
+        if (f.Saved.has(query.Key) || seen.has(query.Key)) continue;
+        seen.add(query.Key);
+        unique.push(query);
+    }
+    if (unique.length === 0) return;
+
+    const outcomes = await RunWithConcurrency(unique, MatrixConcurrency(DEFAULT_SAVE_CONCURRENCY), (query) =>
+        saveSingleScenarioQuery(f, query),
+    );
+
+    let created = 0;
+    for (const outcome of outcomes) {
+        f.Saved.set(outcome.Saved.Query.Key, outcome.Saved);
+        failures.push(...outcome.Failures);
+        if (outcome.Created) created++;
     }
     if (created > 0) await f.Backend.RefreshQueries();
 }
 
 // ─── Running scenarios ─────────────────────────────────────────────────────
 
-/** Builds, saves and runs a list of points; returns every difference found, and the number of runs. */
+/** Builds, saves and runs a list of points with bounded concurrency; returns every difference found, and the number of runs. */
 export async function RunPoints(f: MatrixFixture, points: readonly ScenarioPoint[]): Promise<{ Failures: string[]; Runs: number; Queries: number }> {
     const failures: string[] = [];
     const queries = points.map(p => BuildQuery(f.Env, p));
     const transient = (path: string) => path === 'adhoc' || path === 'spec';
     await SaveScenarioQueries(f, queries.filter((_q, i) => !transient(points[i].Path)), failures);
-    let runs = 0;
+
+    const work: Array<{ Run: ScenarioRun; QueryID: string | null }> = [];
     for (const [index, point] of points.entries()) {
         const run = BuildRun(f.Env, point, queries[index]);
         if (!run) continue;
         const saved = f.Saved.get(run.Query.Key);
         if (!transient(point.Path) && !saved?.Record) continue;
-        runs++;
-        failures.push(...(await runOne(f, run, saved?.Record?.ID ?? null)).map(m => `${run.Label}: ${m}`));
+        work.push({ Run: run, QueryID: saved?.Record?.ID ?? null });
     }
-    return { Failures: failures, Runs: runs, Queries: new Set(queries.map(q => q.Key)).size };
+
+    const perPointFailures = await RunWithConcurrency(work, MatrixConcurrency(DEFAULT_RUN_CONCURRENCY), async (item) => {
+        const found = await runOne(f, item.Run, item.QueryID);
+        return found.map(m => `${item.Run.Label}: ${m}`);
+    });
+    for (const itemFailures of perPointFailures) {
+        failures.push(...itemFailures);
+    }
+
+    return { Failures: failures, Runs: work.length, Queries: new Set(queries.map(q => q.Key)).size };
 }
 
 async function runOne(f: MatrixFixture, run: ScenarioRun, queryID: string | null): Promise<string[]> {
@@ -135,21 +225,24 @@ async function runOne(f: MatrixFixture, run: ScenarioRun, queryID: string | null
 
 // ─── Extraction properties ─────────────────────────────────────────────────
 
-/** Checks the child rows extraction wrote for every saved scenario query; returns the differences. */
+/** Checks the child rows extraction wrote for every saved scenario query using bounded concurrency; returns the differences. */
 export async function CheckExtractionProperties(f: MatrixFixture): Promise<{ Failures: string[]; Checked: number }> {
-    const failures: string[] = [];
-    let checked = 0;
-    for (const saved of f.Saved.values()) {
-        if (!saved.Record) continue;
-        checked++;
+    const savedRecords = [...f.Saved.values()].filter((s): s is { readonly Query: ScenarioQuery; readonly Record: SavedRecord } => s.Record !== null);
+
+    const perQueryFailures = await RunWithConcurrency(savedRecords, MatrixConcurrency(DEFAULT_RUN_CONCURRENCY), async (saved) => {
         try {
             const rows = await f.Backend.ReadRows(saved.Record.ID);
-            failures.push(...(await queryProperties(f, saved.Query, saved.Record, rows)).map(m => `${saved.Query.Name}: ${m}`));
+            return (await queryProperties(f, saved.Query, saved.Record, rows)).map(m => `${saved.Query.Name}: ${m}`);
         } catch (e) {
-            failures.push(`${saved.Query.Name}: ${ErrorMessageOf(e).slice(0, 300)}`);
+            return [`${saved.Query.Name}: ${ErrorMessageOf(e).slice(0, 300)}`];
         }
+    });
+
+    const failures: string[] = [];
+    for (const qFailures of perQueryFailures) {
+        failures.push(...qFailures);
     }
-    return { Failures: failures, Checked: checked };
+    return { Failures: failures, Checked: savedRecords.length };
 }
 
 async function queryProperties(f: MatrixFixture, query: ScenarioQuery, record: SavedRecord, rows: StoredQueryRows): Promise<string[]> {

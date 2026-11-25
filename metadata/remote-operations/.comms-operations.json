@@ -1,0 +1,158 @@
+[
+  {
+    "fields": {
+      "Name": "Simulate Communications Compliance Gate",
+      "OperationKey": "Communications.SimulateComplianceGate",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Communications",
+      "Description": "Runs the Communications V2 ComplianceGate in dry-run simulation mode for a sender, optional principal, preference, message class, and jurisdiction.",
+      "InputTypeName": "CommsSimulateComplianceGateInput",
+      "InputTypeDefinition": "@file:types/comms-simulate-compliance-gate.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "CommsSimulateComplianceGateOutput",
+      "OutputTypeDefinition": "@file:types/comms-simulate-compliance-gate.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3B57A778-276F-416A-AAE4-1B9BDC67FFD5"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.140Z",
+      "checksum": "af2991ce8f84e0ce52f9091d6e394ecb50193a8ab1d3c7f71510c37ea229a221"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Communications Sending Domain",
+      "OperationKey": "Communications.CreateSendingDomain",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Communications",
+      "Description": "Registers a CommunicationSendingDomain with the downstream communication provider and stores returned DNS verification records.",
+      "InputTypeName": "CommsSendingDomainInput",
+      "InputTypeDefinition": "@file:types/comms-sending-domain.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "CommsSendingDomainAuthOutput",
+      "OutputTypeDefinition": "@file:types/comms-sending-domain-auth.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "1FD64151-159B-4E13-9E3B-C1B907FAC693"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.176Z",
+      "checksum": "6c0a180f38cb8f9ac6cd8f9fadbfd02ae44328fc58e872c7009c7d4083bd4f34"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Verify Communications Sending Domain",
+      "OperationKey": "Communications.VerifySendingDomain",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Communications",
+      "Description": "Verifies DNS records for a CommunicationSendingDomain with the downstream provider and merges validation results into the stored DNS records.",
+      "InputTypeName": "CommsSendingDomainInput",
+      "InputTypeDefinition": "@file:types/comms-sending-domain.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "CommsSendingDomainAuthOutput",
+      "OutputTypeDefinition": "@file:types/comms-sending-domain-auth.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D2C3B086-B796-44A1-A86F-5A103BB54EA9"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.203Z",
+      "checksum": "7c4a264b42d0f4a1bd84731d7eb6db263bbc01fb011cde4293c808f0e720f7fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delete Communications Sending Domain",
+      "OperationKey": "Communications.DeleteSendingDomain",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Communications",
+      "Description": "Removes a CommunicationSendingDomain from the downstream provider and deletes the MJ record.",
+      "InputTypeName": "CommsSendingDomainInput",
+      "InputTypeDefinition": "@file:types/comms-sending-domain.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "CommsAdminMutationOutput",
+      "OutputTypeDefinition": "@file:types/comms-admin-mutation.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D0737DC6-22E7-4610-8231-206EB13820D0"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.229Z",
+      "checksum": "e7fafee807a879c150b20fde0405c724802e1e54033d3c9dda284d7d6ef6bf75"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Revoke Communications Suppression",
+      "OperationKey": "Communications.RevokeSuppression",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Communications",
+      "Description": "Revokes an active CommunicationSuppression, writes an append-only CommunicationConsentAuditLog entry, and clears any downstream provider suppression.",
+      "InputTypeName": "CommsRevokeSuppressionInput",
+      "InputTypeDefinition": "@file:types/comms-revoke-suppression.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "CommsAdminMutationOutput",
+      "OutputTypeDefinition": "@file:types/comms-admin-mutation.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "CB17D0C6-56C3-4FD1-A422-443297E77B50"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.255Z",
+      "checksum": "d1ca27d4ac837cd647ba9caaec567a1d61640ab7655d8555cd5e08c30ce7d650"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Block Communications Endpoint",
+      "OperationKey": "Communications.BlockEndpoint",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Communications",
+      "Description": "Creates an active Admin Block CommunicationSuppression for an endpoint and writes the corresponding CommunicationConsentAuditLog entry server-side.",
+      "InputTypeName": "CommsBlockEndpointInput",
+      "InputTypeDefinition": "@file:types/comms-block-endpoint.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "CommsBlockEndpointOutput",
+      "OutputTypeDefinition": "@file:types/comms-block-endpoint.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "29A5E30C-4C16-411D-BB58-71D198796336"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.282Z",
+      "checksum": "8feddfab972aee8028ee16bab0d73cc8b3b2959831039aea133c0e564ca31844"
+    }
+  }
+]

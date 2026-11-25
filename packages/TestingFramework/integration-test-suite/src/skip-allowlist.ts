@@ -359,6 +359,11 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Gate: 'credentials',
         Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
     },
+    {
+        CheckId: 'open-app-local-source.OLS11',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
 ];
 
 for (const entry of SKIP_ALLOWLIST) {

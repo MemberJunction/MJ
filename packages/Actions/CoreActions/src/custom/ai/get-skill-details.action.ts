@@ -3,6 +3,7 @@ import { BaseAction, ActionEngineServer } from "@memberjunction/actions";
 import { RegisterClass, NormalizeUUID } from "@memberjunction/global";
 import { LogError } from "@memberjunction/core";
 import { AIEngine } from "@memberjunction/aiengine";
+import { IsTemplatedSkillInstructions } from "@memberjunction/ai-agents";
 import type { MJAISkillEntity } from "@memberjunction/core-entities";
 import { GetActionBooleanParam, GetActionParamValue } from "./semantic-entity-search.helper";
 
@@ -30,6 +31,12 @@ export interface SkillDetailsResult {
         Description: string;
     }>;
     Instructions?: string;
+    /**
+     * Present with `Instructions`: true when the instructions are a template (they start with the
+     * `{# mj:template #}` marker). `Instructions` is then the template source; the agent renders it
+     * with its own run data when the skill activates, so `{{ }}` and `{% %}` blocks are resolved then.
+     */
+    InstructionsAreTemplate?: boolean;
 }
 
 /**
@@ -121,7 +128,10 @@ export class GetSkillDetailsAction extends BaseAction {
                 SearchScopeAccess: skill.SearchScopeAccess ?? null,
                 BundledActions: bundledActions,
                 BundledSubAgents: bundledSubAgents,
-                ...(includeInstructions ? { Instructions: skill.Instructions ?? '' } : {}),
+                ...(includeInstructions ? {
+                    Instructions: skill.Instructions ?? '',
+                    InstructionsAreTemplate: IsTemplatedSkillInstructions(skill.Instructions),
+                } : {}),
             };
 
             const existing = params.Params.find((p) => p.Name.toLowerCase() === 'skilldetails');

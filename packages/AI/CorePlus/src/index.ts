@@ -2,6 +2,7 @@ export * from './model-run.types';
 export * from './prompt.types';
 export * from './prompt-run-messages.types';
 export * from './agent-types';
+export * from './agent-instantiation';
 export * from './agent-run-data-keys';
 export * from './agent-failure-message';
 export * from './agent-reply-text';
@@ -72,5 +73,10 @@ export * from './attachment-blob-store';
 // MJOPUS1 realtime-recording shard wire format, shared by the browser recorder and MJAPI.
 export * from './realtime-recording-shard-format';
 export * from './AgentUserPolicyEngine';
+export * from './TypedActionPolicyGuard';
+export * from './limits-diagnostics';
+export * from './runaway-governance';
+export * from './limits-operations';
+export * from './workflow-budget';
 
 

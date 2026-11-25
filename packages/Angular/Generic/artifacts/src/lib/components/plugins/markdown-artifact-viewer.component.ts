@@ -1,5 +1,7 @@
 import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, NgZone, Renderer2, Type, inject } from '@angular/core';
+import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type { MentionSuggestion } from '@memberjunction/ng-composer';
 import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
@@ -32,6 +34,7 @@ import {
   ArtifactViewerViewMode,
   BaseArtifactViewerPluginComponent,
   IArtifactVersionDiffViewer,
+  type ArtifactExportOption,
   type PreVerifiedFrozenSnapshotEntry,
 } from '../base-artifact-viewer.component';
 import { ResolvePreVerifiedFrozenSnapshotState } from '../../utils/frozen-snapshot-verification.util';
@@ -66,6 +69,22 @@ import {
   type DocumentWordDiffResult,
 } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
+import { ArtifactLinkTriggerProvider } from '../../services/artifact-link-trigger.provider';
+import {
+  CheckDocRecordLinksAccessBatch,
+  DOC_LINK_PREVIEW_HREF_READABLE,
+  DOC_LINK_PREVIEW_HREF_UNREADABLE,
+  ExtractDocRecordLinks,
+  FindActiveDocLinkTrigger,
+  HasDocRecordLinks,
+  RenderDocRecordLinkChipHtml,
+  ReplaceDocLinkTriggerWithToken,
+  ReplaceDocRecordLinksWithPreviewMarkdown,
+  ResolveDocRecordLinkCompositeKey,
+  StripDocRecordLinksToPlainText,
+  type DocRecordLinkAccessState,
+  type ParsedDocRecordLink,
+} from '../../utils/doc-record-link.util';
 import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { ComputeBoundedSequenceDiff } from '../../utils/line-diff';
 import type { ContextMenuItem, TouchContextMenuTrigger } from '../context-menu/context-menu.types';
@@ -735,6 +754,17 @@ interface DocsInlineToken {
         </div>
       }
 
+      <!-- Durable Doc Link Autocomplete Dropdown (triggered by typing [[ in edit/suggest modes) -->
+      <mj-mention-dropdown
+        [Suggestions]="DocLinkSuggestions"
+        [Visible]="ShowDocLinkMenu"
+        [Position]="DocLinkMenuPosition"
+        [UseFixedPositioning]="true"
+        (SuggestionSelected)="OnDocLinkSuggestionSelected($event)"
+        (Closed)="CloseDocLinkMenu()"
+        data-testid="doc-link-autocomplete-dropdown"
+      ></mj-mention-dropdown>
+
       <!-- Collaboration & Permission Status Banners (E1 & Low Retry State) -->
       @if (LiveSyncUnavailable) {
         <div
@@ -1225,11 +1255,12 @@ interface DocsInlineToken {
                                   role="textbox"
                                   data-placeholder="Heading title (press Enter for paragraph below)…"
                                   [attr.data-testid]="'editable-heading-' + seg.SegmentID"
-                                  [innerHTML]="RenderInlineEditableHtml(seg.HeadingText ?? GetEditableHeadingText(seg))"
+                                  [innerHTML]="RenderInlineEditableSafeHtml(seg.HeadingText ?? GetEditableHeadingText(seg))"
                                   (focus)="OnSegmentSurfaceFocus(seg)"
                                   (input)="OnEditableBlockInput(seg, $event)"
                                   (blur)="CommitEditableHeading(seg, $event)"
                                   (keydown)="OnEditableBlockKeydown(seg, $event)"
+                                  (click)="OnDocRecordLinkClick($event)"
                                 ></div>
                                 @if (IsSegmentLocked(seg)) {
                                   <span
@@ -1289,10 +1320,11 @@ interface DocsInlineToken {
                                             [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                             [attr.data-testid]="'table-header-' + seg.SegmentID + '-' + cIdx"
                                             [style.text-align]="GetColumnTextAlign(table, cIdx)"
-                                            [innerHTML]="RenderInlineEditableHtml(hdr)"
+                                            [innerHTML]="RenderInlineEditableSafeHtml(hdr)"
                                             (focus)="OnTableCellFocus(seg, 0, cIdx, true)"
                                             (input)="OnEditableBlockDomDirty(seg)"
                                             (blur)="UpdateTableHeaderCell(seg, cIdx, $event)"
+                                            (click)="OnDocRecordLinkClick($event)"
                                             (contextmenu)="OnDocsTableCellContextMenu($event, seg, 0, cIdx, true)"
                                           ></th>
                                         }
@@ -1306,10 +1338,11 @@ interface DocsInlineToken {
                                               [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                               [attr.data-testid]="'table-cell-' + seg.SegmentID + '-' + rIdx + '-' + cIdx"
                                               [style.text-align]="GetColumnTextAlign(table, cIdx)"
-                                              [innerHTML]="RenderInlineEditableHtml(cell)"
+                                              [innerHTML]="RenderInlineEditableSafeHtml(cell)"
                                               (focus)="OnTableCellFocus(seg, rIdx, cIdx, false)"
                                               (input)="OnEditableBlockDomDirty(seg)"
                                               (blur)="UpdateTableBodyCell(seg, rIdx, cIdx, $event)"
+                                              (click)="OnDocRecordLinkClick($event)"
                                               (contextmenu)="OnDocsTableCellContextMenu($event, seg, rIdx, cIdx, false)"
                                             ></td>
                                           }
@@ -1347,11 +1380,13 @@ interface DocsInlineToken {
                                         role="textbox"
                                         data-placeholder="List item (press Enter for next, or Enter when empty to exit)…"
                                         [attr.data-testid]="'list-item-text-' + seg.SegmentID + '-' + item.Index"
-                                        [innerHTML]="RenderInlineEditableHtml(item.Text)"
+                                        [attr.data-list-item-index]="item.Index"
+                                        [innerHTML]="RenderInlineEditableSafeHtml(item.Text)"
                                         (focus)="OnListItemFocus(seg, item.Index)"
                                         (input)="OnEditableBlockInput(seg, $event)"
                                         (blur)="UpdateListItemText(seg, item.Index, $event)"
                                         (keydown)="OnListItemKeydown(seg, item.Index, $event)"
+                                        (click)="OnDocRecordLinkClick($event)"
                                       ></span>
                                     </li>
                                   }
@@ -1395,11 +1430,12 @@ interface DocsInlineToken {
                                     role="textbox"
                                     data-placeholder="Callout details (press Enter for paragraph below)…"
                                     [attr.data-testid]="'editable-callout-body-' + seg.SegmentID"
-                                    [innerHTML]="RenderInlineEditableHtml(callout.BodyText)"
+                                    [innerHTML]="RenderInlineEditableSafeHtml(callout.BodyText)"
                                     (focus)="OnSegmentSurfaceFocus(seg)"
                                     (input)="OnEditableBlockInput(seg, $event)"
                                     (blur)="CommitEditableCallout(seg, $event)"
                                     (keydown)="OnEditableBlockKeydown(seg, $event)"
+                                    (click)="OnDocRecordLinkClick($event)"
                                   ></div>
                                 </div>
                               }
@@ -1444,11 +1480,12 @@ interface DocsInlineToken {
                                 aria-multiline="true"
                                 data-placeholder="Type text, '/' for commands, '#' for heading, or '-' for list…"
                                 [attr.data-testid]="'editable-paragraph-' + seg.SegmentID"
-                                [innerHTML]="RenderInlineEditableHtml(seg.RawMarkdown)"
+                                [innerHTML]="RenderInlineEditableSafeHtml(seg.RawMarkdown)"
                                 (focus)="OnSegmentSurfaceFocus(seg)"
                                 (input)="OnEditableBlockInput(seg, $event)"
                                 (blur)="CommitEditableParagraph(seg, $event)"
                                 (keydown)="OnEditableBlockKeydown(seg, $event)"
+                                (click)="OnDocRecordLinkClick($event)"
                               ></div>
                             }
                           }
@@ -1457,10 +1494,12 @@ interface DocsInlineToken {
                           <div
                             class="markdown-preview"
                             [attr.title]="CanUserEdit ? 'Double-click to edit block (or click Write in toolbar)' : null"
-                            (dblclick)="OnPreviewBlockDoubleClick(seg)"
+                            (dblclick)="OnPreviewBlockDoubleClick(seg, $event)"
+                            (click)="OnDocRecordLinkClick($event)"
+                            (keydown.enter)="OnDocRecordLinkClick($event)"
                           >
                             <mj-markdown
-                              [Data]="seg.RawMarkdown"
+                              [Data]="RenderPreviewMarkdown(seg.RawMarkdown)"
                               [EnableCollapsibleHeadings]="true"
                               [EnableLineNumbers]="false"
                               [EnableHighlight]="true"
@@ -5115,6 +5154,58 @@ interface DocsInlineToken {
         opacity: 0.8;
       }
 
+      :host ::ng-deep .mj-doc-link-chip,
+      :host ::ng-deep a[href^="#mj-doc-link-readable/"],
+      :host ::ng-deep a[href^="#mj-doc-link-unreadable/"] {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 7px;
+        margin: 0 2px;
+        border-radius: 999px;
+        font-size: 0.9em;
+        font-weight: 500;
+        line-height: 1.45;
+        vertical-align: baseline;
+        text-decoration: none;
+        border: 1px solid var(--mj-border-subtle);
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+      }
+
+      :host ::ng-deep .mj-doc-link-chip i {
+        font-size: 0.8em;
+      }
+
+      :host ::ng-deep .mj-doc-link-chip--readable,
+      :host ::ng-deep a[href^="#mj-doc-link-readable/"] {
+        color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+        border-color: color-mix(in srgb, var(--mj-brand-primary) 28%, var(--mj-border-default));
+        cursor: pointer;
+      }
+
+      :host ::ng-deep .mj-doc-link-chip--readable:hover,
+      :host ::ng-deep a[href^="#mj-doc-link-readable/"]:hover {
+        background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+        border-color: var(--mj-brand-primary);
+        text-decoration: none;
+      }
+
+      :host ::ng-deep .mj-doc-link-chip--readable:focus-visible,
+      :host ::ng-deep a[href^="#mj-doc-link-readable/"]:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+      }
+
+      :host ::ng-deep .mj-doc-link-chip--unreadable,
+      :host ::ng-deep a[href^="#mj-doc-link-unreadable/"] {
+        color: var(--mj-text-disabled);
+        background: var(--mj-bg-surface-sunken);
+        border-color: var(--mj-border-subtle);
+        cursor: not-allowed;
+        user-select: none;
+      }
+
       .mj-docs-pager {
         display: flex;
         justify-content: space-between;
@@ -5368,6 +5459,24 @@ export class MarkdownArtifactViewerComponent
   public SlashSearchQuery = '';
   public SlashMenuHighlightIndex = 0;
   public ActiveSlashTargetSegmentID: string | null = null;
+
+  // Durable Doc Link (`[[`) Autocomplete & Chip Access State
+  public ShowDocLinkMenu = false;
+  public DocLinkSuggestions: MentionSuggestion[] = [];
+  public DocLinkMenuPosition: { top: number; left: number } = { top: 0, left: 0 };
+  private readonly domSanitizer = inject(DomSanitizer, { optional: true });
+  private readonly docLinkTriggerProvider = new ArtifactLinkTriggerProvider();
+  private readonly docLinkAccessCache = new Map<string, DocRecordLinkAccessState>();
+  private readonly docLinkAccessPending = new Set<string>();
+  private readonly docLinkAccessQueue = new Map<string, ParsedDocRecordLink>();
+  private readonly docLinksByKeySignature = new Map<string, ParsedDocRecordLink>();
+  private readonly editableSafeHtmlCache = new Map<string, SafeHtml>();
+  private docLinkAccessFlushScheduled = false;
+  private docLinkAccessEpoch = 0;
+  private activeDocLinkSegmentID: string | null = null;
+  private activeDocLinkQuery = '';
+  private activeDocLinkElement: HTMLElement | null = null;
+  private docLinkSearchSeq = 0;
   public ExpandedOleBlockID: string | null = null;
   public StatusBannerMessage = '';
   public IsSavingVersion = false;
@@ -5822,6 +5931,14 @@ export class MarkdownArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.docLinkSearchSeq++;
+    this.docLinkAccessEpoch++;
+    this.docLinkAccessCache.clear();
+    this.docLinkAccessPending.clear();
+    this.docLinkAccessQueue.clear();
+    this.docLinksByKeySignature.clear();
+    this.editableSafeHtmlCache.clear();
+    this.docLinkAccessFlushScheduled = false;
     this.clearPendingSocketSaveTimeout();
     this.detachTouchPointerListeners();
     this.touchMenuMonitor.Destroy();
@@ -5907,6 +6024,26 @@ export class MarkdownArtifactViewerComponent
     this.FlushPendingEdits();
     const html = this.renderDocumentPrintableHtml();
     this.importExportService.ExportPrintablePdf(html, this.getDisplayTitle() || 'Document', orientation);
+  }
+
+  /** Word and Markdown, then the PDF entries. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return [
+      { Key: 'docx', Label: 'Word (.docx)', Icon: 'fa-solid fa-file-word', Description: 'Opens in Word' },
+      { Key: 'md', Label: 'Markdown (.md)', Icon: 'fa-brands fa-markdown', Description: 'Plain text with formatting marks' },
+      ...super.GetExportOptions(),
+    ];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key === 'docx') {
+      return this.OnExportDocx();
+    }
+    if (key === 'md') {
+      this.OnExportMarkdown();
+      return;
+    }
+    return super.RunExport(key);
   }
 
   /**
@@ -6043,7 +6180,15 @@ export class MarkdownArtifactViewerComponent
    * Transitions from Reader (`preview`) mode into Write (`edit`) mode and focuses the double-clicked block
    * whenever the current user has edit permission.
    */
-  public OnPreviewBlockDoubleClick(seg: DocumentRenderSegment): void {
+  public OnPreviewBlockDoubleClick(seg: DocumentRenderSegment, event?: Event): void {
+    if (
+      typeof Element !== 'undefined' &&
+      event?.target instanceof Element &&
+      (event.target.closest('[data-doc-record-link="true"]') ||
+        event.target.closest(`a[href^="${DOC_LINK_PREVIEW_HREF_READABLE}"], a[href^="${DOC_LINK_PREVIEW_HREF_UNREADABLE}"]`))
+    ) {
+      return;
+    }
     if (!this.CanUserEdit) {
       return;
     }
@@ -7078,12 +7223,18 @@ export class MarkdownArtifactViewerComponent
       this.CloseSlashMenu();
     }
 
+    // Durable doc-link (`[[`) autocomplete in both Edit and Suggest modes
+    if (this.CanUserEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
+      this.updateDocLinkAutocompleteFromInput(seg, el);
+    }
+
     // Live word-level suggestion tracking while typing in Suggest Mode
     if (this.ViewMode === 'suggest' && this.CanUserEdit && trimmed.length > 0) {
-      let proposedMd = trimmed;
+      const extractedText = this.ExtractMarkdownFromEditableElement(el).trim();
+      let proposedMd = extractedText || trimmed;
       if (seg.BlockKind === 'heading') {
         const level = seg.HeadingLevel ?? 1;
-        proposedMd = `${'#'.repeat(level)} ${trimmed.replace(/\n+/g, ' ')}`;
+        proposedMd = `${'#'.repeat(level)} ${proposedMd.replace(/\n+/g, ' ')}`;
       }
       if (proposedMd === seg.RawMarkdown.trim()) {
         const removed = this.Suggestions.filter(
@@ -7187,6 +7338,20 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnEditableBlockKeydown(seg: DocumentRenderSegment, event: KeyboardEvent): void {
+    // 0. Durable doc-link (`[[`) dropdown owns navigation keys while open
+    if (this.ShowDocLinkMenu) {
+      if (
+        event.key === 'Escape' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowUp' ||
+        event.key === 'Enter' ||
+        event.key === 'Tab'
+      ) {
+        event.preventDefault();
+        return;
+      }
+    }
+
     // 1. Slash menu keyboard navigation when open
     if (this.ShowSlashMenu) {
       if (
@@ -7443,7 +7608,11 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     const rawText = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ').trim();
-    if (rawText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
+    if (
+      rawText === '/' ||
+      (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID) ||
+      (this.ShowDocLinkMenu && this.activeDocLinkSegmentID === seg.SegmentID)
+    ) {
       return;
     }
     const level = seg.HeadingLevel ?? 1;
@@ -7462,7 +7631,11 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     const nextText = this.ExtractMarkdownFromEditableElement(el).trim();
-    if (nextText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
+    if (
+      nextText === '/' ||
+      (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID) ||
+      (this.ShowDocLinkMenu && this.activeDocLinkSegmentID === seg.SegmentID)
+    ) {
       return;
     }
     if (!nextText) {
@@ -7931,7 +8104,11 @@ export class MarkdownArtifactViewerComponent
   }
 
   public UpdateListItemText(seg: DocumentRenderSegment, itemIndex: number, event: Event): void {
-    if (this.isApplyingBlockTransaction || !this.CanEditSegment(seg)) {
+    if (
+      this.isApplyingBlockTransaction ||
+      !this.CanEditSegment(seg) ||
+      (this.ShowDocLinkMenu && this.activeDocLinkSegmentID === seg.SegmentID)
+    ) {
       return;
     }
     const el = event.target as HTMLElement | null;
@@ -7949,7 +8126,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnListItemKeydown(seg: DocumentRenderSegment, itemIndex: number, event: KeyboardEvent): void {
-    if (this.ShowSlashMenu) {
+    if (this.ShowSlashMenu || this.ShowDocLinkMenu) {
       this.OnEditableBlockKeydown(seg, event);
       return;
     }
@@ -8215,7 +8392,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   private commitEditableCalloutElement(seg: DocumentRenderSegment, el: HTMLElement | null): void {
-    if (this.isApplyingBlockTransaction) {
+    if (this.isApplyingBlockTransaction || (this.ShowDocLinkMenu && this.activeDocLinkSegmentID === seg.SegmentID)) {
       return;
     }
     const nextBody = this.ExtractMarkdownFromEditableElement(el).trim();
@@ -9265,10 +9442,60 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Renders inline Markdown (`**bold**`, `*italic*`, `` `code` ``, `***both***`) as sanitized WYSIWYG HTML
+   * Memoized `SafeHtml` wrapper over {@link RenderInlineEditableHtml} for Angular `[innerHTML]`
+   * bindings on `contenteditable` surfaces. Every plain markdown segment is HTML-escaped in
+   * {@link renderPlainInlineMarkdownHtml} and every chip attribute is escaped in
+   * {@link RenderDocRecordLinkChipHtml}; trusting the constructed HTML prevents Angular's default
+   * sanitizer from stripping `data-doc-link-*` and `contenteditable="false"`, while memoization
+   * preserves object identity across change-detection cycles so the caret never resets while typing.
+   */
+  public RenderInlineEditableSafeHtml(markdownText: string): SafeHtml | string {
+    const html = this.RenderInlineEditableHtml(markdownText);
+    if (!this.domSanitizer) {
+      return html;
+    }
+    const cached = this.editableSafeHtmlCache.get(html);
+    if (cached) {
+      return cached;
+    }
+    if (this.editableSafeHtmlCache.size >= 256) {
+      this.editableSafeHtmlCache.clear();
+    }
+    const trusted = this.domSanitizer.bypassSecurityTrustHtml(html);
+    this.editableSafeHtmlCache.set(html, trusted);
+    return trusted;
+  }
+
+  /**
+   * Renders inline Markdown (`**bold**`, `*italic*`, `` `code` ``, `***both***`) and durable
+   * record-mention tokens (`@{"_mode":"mention","type":"record",...}`) as sanitized WYSIWYG HTML
    * for `contenteditable` surfaces while preserving newlines as `<br>`.
    */
   public RenderInlineEditableHtml(markdownText: string): string {
+    if (!markdownText) {
+      return '';
+    }
+    const links = ExtractDocRecordLinks(markdownText, { SkipCode: true });
+    if (links.length === 0) {
+      return this.renderPlainInlineMarkdownHtml(markdownText);
+    }
+    const parts: string[] = [];
+    let cursor = 0;
+    for (const link of links) {
+      this.docLinksByKeySignature.set(link.KeySignature, link);
+      if (link.Token.startIndex > cursor) {
+        parts.push(this.renderPlainInlineMarkdownHtml(markdownText.slice(cursor, link.Token.startIndex)));
+      }
+      parts.push(RenderDocRecordLinkChipHtml(link, this.GetDocRecordLinkAccessState(link), { Editable: true }));
+      cursor = link.Token.endIndex;
+    }
+    if (cursor < markdownText.length) {
+      parts.push(this.renderPlainInlineMarkdownHtml(markdownText.slice(cursor)));
+    }
+    return parts.join('');
+  }
+
+  private renderPlainInlineMarkdownHtml(markdownText: string): string {
     if (!markdownText) {
       return '';
     }
@@ -9290,6 +9517,305 @@ export class MarkdownArtifactViewerComponent
         }
       })
       .join('');
+  }
+
+  /** Returns true when a markdown block contains at least one durable record-mention token. */
+  public HasDocRecordLinksInText(markdownText: string): boolean {
+    return HasDocRecordLinks(markdownText);
+  }
+
+  /**
+   * Prepares a markdown block for `<mj-markdown [EnableHtml]="false">` preview rendering by
+   * replacing durable record-mention tokens outside code blocks with safe Markdown fragment links
+   * (stored label only; `#mj-doc-link-readable/...` iff readable, `#mj-doc-link-unreadable/...`
+   * with "You don't have access" otherwise).
+   */
+  public RenderPreviewMarkdown(rawMarkdown: string): string {
+    if (!rawMarkdown || !HasDocRecordLinks(rawMarkdown)) {
+      return rawMarkdown ?? '';
+    }
+    return ReplaceDocRecordLinksWithPreviewMarkdown(rawMarkdown, (link) => {
+      this.docLinksByKeySignature.set(link.KeySignature, link);
+      return this.GetDocRecordLinkAccessState(link);
+    });
+  }
+
+  /**
+   * Returns the cached access state for a durable record link (`'readable'`, `'unreadable'`, or
+   * `'checking'`), queuing any uncached link into a microtask-coalesced batch so every render
+   * resolves all links in one DB-optimal pass (one `RunView` per entity via `RunViews`).
+   * Fails closed until proven readable. Cache entries are scoped to the current viewer ID.
+   */
+  public GetDocRecordLinkAccessState(link: ParsedDocRecordLink): DocRecordLinkAccessState {
+    const cacheKey = this.buildDocLinkAccessCacheKey(link);
+    const cached = this.docLinkAccessCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    this.queueDocRecordLinkAccessCheck(link, cacheKey);
+    return 'checking';
+  }
+
+  private buildDocLinkAccessCacheKey(link: ParsedDocRecordLink): string {
+    const user = this.getSafeCurrentUser();
+    return `${(user?.ID ?? '').trim().toLowerCase()}|${link.KeySignature}`;
+  }
+
+  private queueDocRecordLinkAccessChecks(links: ReadonlyArray<ParsedDocRecordLink>): void {
+    for (const link of links) {
+      const cacheKey = this.buildDocLinkAccessCacheKey(link);
+      if (!this.docLinkAccessCache.has(cacheKey)) {
+        this.queueDocRecordLinkAccessCheck(link, cacheKey);
+      }
+    }
+  }
+
+  private queueDocRecordLinkAccessCheck(link: ParsedDocRecordLink, cacheKey: string): void {
+    if (this.docLinkAccessPending.has(cacheKey) || this.docLinkAccessQueue.has(cacheKey)) {
+      return;
+    }
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user) {
+      this.docLinkAccessCache.set(cacheKey, 'unreadable');
+      return;
+    }
+    this.docLinkAccessQueue.set(cacheKey, link);
+    if (!this.docLinkAccessFlushScheduled) {
+      this.docLinkAccessFlushScheduled = true;
+      const epoch = this.docLinkAccessEpoch;
+      void Promise.resolve().then(() => this.flushDocRecordLinkAccessBatch(epoch));
+    }
+  }
+
+  private async flushDocRecordLinkAccessBatch(epoch: number): Promise<void> {
+    this.docLinkAccessFlushScheduled = false;
+    if (this.isComponentDestroyed || epoch !== this.docLinkAccessEpoch || this.docLinkAccessQueue.size === 0) {
+      return;
+    }
+    const entries = Array.from(this.docLinkAccessQueue.entries());
+    this.docLinkAccessQueue.clear();
+
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user) {
+      for (const [cacheKey] of entries) {
+        this.docLinkAccessCache.set(cacheKey, 'unreadable');
+      }
+      this.cdr.markForCheck();
+      return;
+    }
+
+    for (const [cacheKey] of entries) {
+      this.docLinkAccessPending.add(cacheKey);
+    }
+
+    try {
+      const batchResults = await CheckDocRecordLinksAccessBatch(
+        entries.map(([, link]) => link),
+        provider,
+        user,
+      );
+      if (this.isComponentDestroyed || epoch !== this.docLinkAccessEpoch) {
+        return;
+      }
+      for (const [cacheKey, link] of entries) {
+        this.docLinkAccessCache.set(cacheKey, batchResults.get(link.KeySignature) ?? 'unreadable');
+      }
+    } catch {
+      if (!this.isComponentDestroyed && epoch === this.docLinkAccessEpoch) {
+        for (const [cacheKey] of entries) {
+          this.docLinkAccessCache.set(cacheKey, 'unreadable');
+        }
+      }
+    } finally {
+      for (const [cacheKey] of entries) {
+        this.docLinkAccessPending.delete(cacheKey);
+      }
+      if (!this.isComponentDestroyed && epoch === this.docLinkAccessEpoch) {
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  /** Handles click or Enter on a rendered durable record-link chip in preview or edit mode. */
+  public OnDocRecordLinkClick(event: Event): void {
+    const target = typeof Element !== 'undefined' && event.target instanceof Element ? event.target : null;
+    if (!target) {
+      return;
+    }
+
+    // 1. Preview mode safe fragment-link chip (`<a href="#mj-doc-link-readable/..." | "#mj-doc-link-unreadable/...">`)
+    const anchorEl = target.closest<HTMLAnchorElement>('a[href]');
+    const href = anchorEl?.getAttribute('href') ?? '';
+    if (href.startsWith(DOC_LINK_PREVIEW_HREF_UNREADABLE)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (href.startsWith(DOC_LINK_PREVIEW_HREF_READABLE)) {
+      event.preventDefault();
+      event.stopPropagation();
+      let keySig = '';
+      try {
+        keySig = decodeURIComponent(href.slice(DOC_LINK_PREVIEW_HREF_READABLE.length));
+      } catch {
+        return;
+      }
+      const link = this.docLinksByKeySignature.get(keySig);
+      if (!link || this.GetDocRecordLinkAccessState(link) !== 'readable') {
+        return;
+      }
+      const resolved = ResolveDocRecordLinkCompositeKey(link, this.getSafeProvider());
+      if (resolved) {
+        this.OpenEntityRecord.emit({ entityName: resolved.Entity.Name, compositeKey: resolved.Key });
+      }
+      return;
+    }
+
+    // 2. Edit / Suggest / Table mode inline chip (`<span data-doc-record-link="true">`)
+    const chipEl = target.closest<HTMLElement>('[data-doc-record-link="true"]');
+    if (!chipEl) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (chipEl.getAttribute('data-doc-link-access') !== 'readable') {
+      return;
+    }
+    const entityName = chipEl.getAttribute('data-record-entity') ?? '';
+    const keysJson = chipEl.getAttribute('data-record-keys') ?? '';
+    if (!entityName) {
+      return;
+    }
+    let keys: Record<string, string | number> = {};
+    try {
+      keys = keysJson ? (JSON.parse(keysJson) as Record<string, string | number>) : {};
+    } catch {
+      return;
+    }
+    const resolved = ResolveDocRecordLinkCompositeKey(
+      {
+        EntityName: entityName,
+        Content: { type: 'record', entityName, keys },
+      },
+      this.getSafeProvider(),
+    );
+    if (!resolved) {
+      return;
+    }
+    this.OpenEntityRecord.emit({ entityName: resolved.Entity.Name, compositeKey: resolved.Key });
+  }
+
+  /** Closes the `[[` durable doc-link autocomplete dropdown. */
+  public CloseDocLinkMenu(): void {
+    this.ShowDocLinkMenu = false;
+    this.DocLinkSuggestions = [];
+    this.activeDocLinkSegmentID = null;
+    this.activeDocLinkQuery = '';
+    this.activeDocLinkElement = null;
+    this.cdr.markForCheck();
+  }
+
+  /** Inserts the selected durable record-mention token into the active edit/suggest block. */
+  public OnDocLinkSuggestionSelected(suggestion: MentionSuggestion): void {
+    const segId = this.activeDocLinkSegmentID;
+    const query = this.activeDocLinkQuery;
+    const el = this.activeDocLinkElement;
+    const token = ArtifactLinkTriggerProvider.FormatSelectionToken(suggestion);
+    this.CloseDocLinkMenu();
+
+    if (!segId) {
+      return;
+    }
+    const seg = this.DocumentSegments.find((s) => s.SegmentID === segId);
+    if (!seg) {
+      return;
+    }
+    const currentMarkdown = el ? this.ExtractMarkdownFromEditableElement(el) : seg.RawMarkdown;
+    let updatedBody = ReplaceDocLinkTriggerWithToken(currentMarkdown, query, token);
+    if (seg.BlockKind === 'heading') {
+      const level = seg.HeadingLevel ?? 1;
+      const stripped = updatedBody.replace(/^#{1,6}\s+/, '').replace(/\n+/g, ' ').trim();
+      updatedBody = `${'#'.repeat(level)} ${stripped}`;
+    } else if (seg.BlockKind === 'list') {
+      const itemIdxAttr = el?.getAttribute?.('data-list-item-index');
+      const itemIdx = itemIdxAttr != null ? Number.parseInt(itemIdxAttr, 10) : Number.NaN;
+      const items = this.GetParsedListItems(seg);
+      if (!Number.isNaN(itemIdx) && items[itemIdx]) {
+        items[itemIdx].Text = updatedBody.replace(/\n+/g, ' ').trim();
+        updatedBody = this.serializeParsedListItems(items);
+      }
+    } else if (seg.BlockKind === 'callout') {
+      const parsed = this.GetParsedCallout(seg);
+      const bodyLines = updatedBody.trim().split('\n').map((l) => `> ${l}`);
+      updatedBody = [`> [!${parsed.CalloutType}]`, ...bodyLines].join('\n');
+    }
+    this.ApplyInPlaceSegmentChange(seg, updatedBody, `Linked ${suggestion.name}`);
+  }
+
+  private updateDocLinkAutocompleteFromInput(seg: DocumentRenderSegment, el: HTMLElement | null): void {
+    const markdown = el ? this.ExtractMarkdownFromEditableElement(el) : '';
+    const trigger = FindActiveDocLinkTrigger(markdown);
+    if (!trigger) {
+      if (this.ShowDocLinkMenu && this.activeDocLinkSegmentID === seg.SegmentID) {
+        this.CloseDocLinkMenu();
+      }
+      return;
+    }
+
+    this.activeDocLinkSegmentID = seg.SegmentID;
+    this.activeDocLinkQuery = trigger.Query;
+    this.activeDocLinkElement = el;
+    this.DocLinkMenuPosition = this.computeDocLinkDropdownPosition(el);
+    this.ShowDocLinkMenu = true;
+    this.docLinkTriggerProvider.ExcludeArtifactID = this.artifactVersion?.ArtifactID ?? null;
+    const seq = ++this.docLinkSearchSeq;
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    this.cdr.markForCheck();
+
+    void this.docLinkTriggerProvider
+      .GetSuggestions({
+        Query: trigger.Query,
+        MaxResults: 12,
+        ContextUser: user ?? null,
+        Provider: provider ?? null,
+      })
+      .then((suggestions) => {
+        if (this.isComponentDestroyed || seq !== this.docLinkSearchSeq || !this.ShowDocLinkMenu) {
+          return;
+        }
+        this.DocLinkSuggestions = suggestions;
+        this.cdr.markForCheck();
+      })
+      .catch(() => {
+        if (!this.isComponentDestroyed && seq === this.docLinkSearchSeq && this.ShowDocLinkMenu) {
+          this.DocLinkSuggestions = [];
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  private computeDocLinkDropdownPosition(el: HTMLElement | null): { top: number; left: number } {
+    if (typeof window !== 'undefined' && typeof window.getSelection === 'function') {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (typeof range.getBoundingClientRect === 'function') {
+          const rect = range.getBoundingClientRect();
+          if (rect && (rect.bottom > 0 || rect.left > 0)) {
+            return { top: Math.round(rect.bottom + 6), left: Math.round(rect.left) };
+          }
+        }
+      }
+    }
+    if (el && typeof el.getBoundingClientRect === 'function') {
+      const rect = el.getBoundingClientRect();
+      return { top: Math.round(rect.bottom + 6), left: Math.round(rect.left) };
+    }
+    return { top: 120, left: 120 };
   }
 
   /**
@@ -9314,6 +9840,11 @@ export class MarkdownArtifactViewerComponent
         return;
       }
       const elm = node as HTMLElement;
+      const rawDocLink = elm.getAttribute?.('data-doc-link-raw');
+      if (rawDocLink) {
+        out.push(rawDocLink);
+        return;
+      }
       const tag = (elm.tagName || '').toUpperCase();
       if (tag === 'BR') {
         out.push('\n');
@@ -11329,16 +11860,16 @@ export class MarkdownArtifactViewerComponent
         }
         if (seg.BlockKind === 'heading') {
           const level = Math.min(6, Math.max(1, seg.HeadingLevel ?? 1));
-          const text = seg.HeadingText ?? this.GetEditableHeadingText(seg);
+          const text = StripDocRecordLinksToPlainText(seg.HeadingText ?? this.GetEditableHeadingText(seg));
           parts.push(`<h${level}>${EscapeHtml(text)}</h${level}>`);
         } else if (seg.BlockKind === 'code') {
           const parsed = this.GetParsedCodeBlock(seg);
           parts.push(`<pre><code>${EscapeHtml(parsed.Code)}</code></pre>`);
         } else if (seg.BlockKind === 'table') {
           const parsed = this.GetParsedTable(seg);
-          const th = parsed.Headers.map((h) => `<th>${EscapeHtml(h)}</th>`).join('');
+          const th = parsed.Headers.map((h) => `<th>${EscapeHtml(StripDocRecordLinksToPlainText(h))}</th>`).join('');
           const trs = parsed.Rows.map(
-            (r) => `<tr>${r.map((c) => `<td>${EscapeHtml(c)}</td>`).join('')}</tr>`,
+            (r) => `<tr>${r.map((c) => `<td>${EscapeHtml(StripDocRecordLinksToPlainText(c))}</td>`).join('')}</tr>`,
           ).join('');
           parts.push(`<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`);
         } else if (seg.BlockKind === 'list') {
@@ -11346,20 +11877,19 @@ export class MarkdownArtifactViewerComponent
           const isOrdered = Boolean(items[0]?.OrderedPrefix);
           const tag = isOrdered ? 'ol' : 'ul';
           const lis = items
-            .map((it) =>
-              it.IsTask
-                ? `<li>[${it.Checked ? 'x' : ' '}] ${EscapeHtml(it.Text)}</li>`
-                : `<li>${EscapeHtml(it.Text)}</li>`,
-            )
+            .map((it) => {
+              const plain = EscapeHtml(StripDocRecordLinksToPlainText(it.Text));
+              return it.IsTask ? `<li>[${it.Checked ? 'x' : ' '}] ${plain}</li>` : `<li>${plain}</li>`;
+            })
             .join('');
           parts.push(`<${tag}>${lis}</${tag}>`);
         } else if (seg.BlockKind === 'callout') {
           const parsed = this.GetParsedCallout(seg);
           parts.push(
-            `<blockquote><strong>${EscapeHtml(parsed.CalloutType)}:</strong> ${EscapeHtml(parsed.BodyText)}</blockquote>`,
+            `<blockquote><strong>${EscapeHtml(parsed.CalloutType)}:</strong> ${EscapeHtml(StripDocRecordLinksToPlainText(parsed.BodyText))}</blockquote>`,
           );
         } else {
-          parts.push(`<p>${EscapeHtml(raw).replace(/\n/g, '<br>')}</p>`);
+          parts.push(`<p>${EscapeHtml(StripDocRecordLinksToPlainText(raw)).replace(/\n/g, '<br>')}</p>`);
         }
       } else if (seg.Kind === 'mj-block' && seg.Descriptor) {
         const desc = seg.Descriptor;
@@ -14276,7 +14806,8 @@ export class MarkdownArtifactViewerComponent
   public OnExportMarkdown(): void {
     this.FlushPendingEdits();
     const baseTitle = (this.getDisplayTitle() || 'document').replace(/[^a-zA-Z0-9_-]+/g, '-');
-    this.importExportService.DownloadMarkdownFile(this.MarkdownContent, `${baseTitle}.md`);
+    const exportableMarkdown = StripDocRecordLinksToPlainText(this.MarkdownContent);
+    this.importExportService.DownloadMarkdownFile(exportableMarkdown, `${baseTitle}.md`);
     this.StatusBannerMessage = `Exported ${baseTitle}.md`;
   }
 
@@ -14431,6 +14962,18 @@ export class MarkdownArtifactViewerComponent
     this.embeddedArtifactVersions.clear();
     this.inFlightEmbeddedVersionKeys.clear();
     this.failedEmbeddedVersionMessages.clear();
+    this.docLinkAccessEpoch++;
+    this.docLinkAccessCache.clear();
+    this.docLinkAccessPending.clear();
+    this.docLinkAccessQueue.clear();
+    this.docLinksByKeySignature.clear();
+    this.editableSafeHtmlCache.clear();
+    this.docLinkAccessFlushScheduled = false;
+    this.ShowDocLinkMenu = false;
+    this.DocLinkSuggestions = [];
+    this.activeDocLinkSegmentID = null;
+    this.activeDocLinkQuery = '';
+    this.activeDocLinkElement = null;
     this.AnchoredThreads = [];
 
     const hasPersistedArtifact = Boolean(this.artifactVersion?.ArtifactID);
@@ -14484,6 +15027,10 @@ export class MarkdownArtifactViewerComponent
     this.OutlineItems = this.collabService.ExtractOutline(this.MarkdownContent);
     this.WordStats = this.collabService.ComputeWordStats(this.MarkdownContent);
     this.FrontmatterHeader = ParseMarkdownFrontmatterHeader(this.MarkdownContent);
+    const docLinks = ExtractDocRecordLinks(this.MarkdownContent);
+    if (docLinks.length > 0) {
+      this.queueDocRecordLinkAccessChecks(docLinks);
+    }
     for (const seg of this.DocumentSegments) {
       if (seg.Kind === 'mj-block' && seg.Descriptor) {
         if (this.isGuestSnapshotMode) {
@@ -15717,6 +16264,13 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnDocsClickCapture(event: Event): void {
+    if (this.ShowDocLinkMenu && typeof Element !== 'undefined' && event.target instanceof Element) {
+      const insideDropdown = Boolean(event.target.closest('[data-testid="doc-link-autocomplete-dropdown"]'));
+      const insideActiveBlock = Boolean(this.activeDocLinkElement && this.activeDocLinkElement.contains(event.target));
+      if (!insideDropdown && !insideActiveBlock) {
+        this.CloseDocLinkMenu();
+      }
+    }
     if (this.touchMenuMonitor.ConsumeSuppressedClick()) {
       event.preventDefault();
       event.stopPropagation();

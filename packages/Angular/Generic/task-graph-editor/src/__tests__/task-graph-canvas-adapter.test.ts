@@ -210,7 +210,7 @@ describe('SpecToConnections', () => {
         expect(conn.Data?.['EdgeID']).toBe(edgeID);
     });
 
-    it('keeps a false-overridden edge visible after a skip cascade', () => {
+    it('keeps a false-overridden edge visible after a skip cascade and ghosts untaken edges by default', () => {
         const edgeID = '1e0a5b3c-1111-2222-3333-444455556666';
         const s = spec({
             tasks: [
@@ -218,12 +218,19 @@ describe('SpecToConnections', () => {
                 task({ tempId: 'b', dependsOn: [{ id: edgeID, tempId: 'a', condition: 'data.ok' }] }),
             ],
         });
-        const hidden = SpecToConnections(s, { a: 'Complete', b: 'Skipped' });
+        const ghosted = SpecToConnections(s, { a: 'Complete', b: 'Skipped' });
+        expect(ghosted).toHaveLength(1);
+        expect(ghosted[0].Untaken).toBe(true);
+        expect(ghosted[0].Style).toBe('dashed');
+
+        const hidden = SpecToConnections(s, { a: 'Complete', b: 'Skipped' }, { showUntakenPaths: false });
         expect(hidden).toHaveLength(0);
+
         const kept = SpecToConnections(s, { a: 'Complete', b: 'Skipped' }, { edgeOverrides: { [edgeID]: 'false' } });
         expect(kept).toHaveLength(1);
         expect(kept[0].Style).toBe('dotted');
         expect(kept[0].Label).toBe('forced no');
+        expect(kept[0].ForcedVerdict).toBe('false');
     });
 
     it('shows the condition expression as the label in debugger mode', () => {

@@ -224,7 +224,7 @@ function viewResult(rows: MJFeaturePipelineVersionEntityExtended[]): RunViewResu
  * count the registry makes); any other read returns every row.
  */
 function featureValueResult(params: RunViewParams): RunViewResult<FeatureValueRow> {
-    const filterChampion = (params.ExtraFilter ?? '').includes("Role = 'Champion'");
+    const filterChampion = typeof params.ExtraFilter === 'string' && params.ExtraFilter.includes("Role = 'Champion'");
     const visible = filterChampion
         ? featureValueRows.filter((r) => (r as { Role?: string }).Role !== 'Challenger')
         : featureValueRows;

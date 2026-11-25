@@ -1,7 +1,7 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
-import { ResourceData, MJListEntity, MJListDetailEntity, MJUserSettingEntity, MJUserViewEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJListEntity, MJUserSettingEntity, MJUserViewEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, RunView, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { ListSetOperationsService, SetOperand, VennData, VennIntersection, SetOperation, SetOperationResult, OperandCacheKey } from '../services/list-set-operations.service';
@@ -9,9 +9,10 @@ import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
-import type { ListDelta, ListSource } from '@memberjunction/lists-base';
+import type { ApplyResult, ListDelta, ListSource } from '@memberjunction/lists-base';
 import { ValidateEnumParam, ValidateStringParam } from '../../shared/agent-tool-validation';
 import { BuildRecordIdFilter } from '../../shared/record-id-filter';
+import { CreateListsClient, IsPartialListResult, ListResultFailedCount, PluralizeRecords } from '../../shared/lists-client';
 import { ResolveVennRegion } from './lists-operations-region-resolver';
 import { BuildListOperationsAgentContext, ResolveNamedRecord, BuildNotFoundError } from '../lists-agent-context';
 interface ListSelection {
@@ -3353,58 +3354,25 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
   async ConfirmCreateList() {
     if (!this.NewListName || this.RecordsToAdd.length === 0) return;
-
-    // Get entity ID from selected lists
     if (this.SelectedLists.length === 0) return;
-    const entityId = this.SelectedLists[0].list.EntityID;
+    const listName = this.NewListName;
 
     this.IsSaving = true;
     this.cdr.detectChanges();
 
     try {
-      const md = this.ProviderToUse;
-      const tg = await md.CreateTransactionGroup();
-
-      // Queue the list plus all of its initial detail records in a single transaction.
-      // NewRecord() assigns a client-side UUID so the details can reference list.ID
-      // before the list actually persists.
-      const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
-      list.NewRecord();
-      list.Name = this.NewListName;
-      list.Description = this.NewListDescription || null;
-      list.EntityID = entityId;
-      list.UserID = md.CurrentUser!.ID;
-      list.TransactionGroup = tg;
-      await list.Save();
-
-      for (const recordId of this.RecordsToAdd) {
-        const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
-        detail.NewRecord();
-        detail.ListID = list.ID;
-        detail.RecordID = recordId;
-        detail.Sequence = 0;
-        detail.TransactionGroup = tg;
-        await detail.Save();
-      }
-
-      if (!await tg.Submit()) {
-        this.notificationService.CreateSimpleNotification(
-          'Failed to create list — all changes have been rolled back',
-          'error',
-          4000
-        );
+      const result = await CreateListsClient(this.ProviderToUse).CreateListFromRecords({
+        EntityName: this.SelectedLists[0].entityName,
+        RecordIds: this.RecordsToAdd,
+        ListName: listName,
+        Description: this.NewListDescription || undefined,
+      });
+      if (!result.CreatedListId) {
+        this.notificationService.CreateSimpleNotification(`Failed to create list: ${result.Message}`, 'error', 5000);
         return;
       }
-
-      this.notificationService.CreateSimpleNotification(
-        `Created "${this.NewListName}" with ${this.RecordsToAdd.length} items`,
-        'success',
-        3000
-      );
-
+      this.notifyMembersWritten(result, `Created "${listName}" with ${PluralizeRecords(result.Counts?.Added ?? 0, 'item')}`);
       this.CancelCreateDialog();
-
-      // Refresh available lists
       await this.LoadAvailableLists();
     } catch (error) {
       console.error('Error creating list:', error);
@@ -3412,6 +3380,20 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     } finally {
       this.IsSaving = false;
       this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Shows the outcome of a member write that ran: `summary` on success, `summary` plus the failed
+   * count on a partial success, and the server message on any other failure.
+   */
+  private notifyMembersWritten(result: ApplyResult, summary: string): void {
+    if (result.Success) {
+      this.notificationService.CreateSimpleNotification(summary, 'success', 3000);
+    } else if (IsPartialListResult(result)) {
+      this.notificationService.CreateSimpleNotification(`${summary}; ${ListResultFailedCount(result)} failed`, 'warning', 5000);
+    } else {
+      this.notificationService.CreateSimpleNotification(`Failed to add records: ${result.Message}`, 'error', 5000);
     }
   }
 
@@ -3521,41 +3503,16 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * Confirm adding records to selected list
    */
   async ConfirmAddToList(): Promise<void> {
-    if (!this.SelectedTargetListId || this.RecordsToAdd.length === 0) return;
+    const targetListId = this.SelectedTargetListId;
+    if (!targetListId || this.RecordsToAdd.length === 0) return;
 
     this.IsSaving = true;
     this.cdr.detectChanges();
 
     try {
-      const md = this.ProviderToUse;
-      const tg = await md.CreateTransactionGroup();
-
-      for (const recordId of this.RecordsToAdd) {
-        const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
-        detail.ListID = this.SelectedTargetListId;
-        detail.RecordID = recordId;
-        detail.Sequence = 0;
-        detail.TransactionGroup = tg;
-        await detail.Save();
-      }
-
-      const success = await tg.Submit();
-
-      if (success) {
-        const targetList = this.AvailableLists.find(l => UUIDsEqual(l.ID, this.SelectedTargetListId));
-        this.notificationService.CreateSimpleNotification(
-          `Added ${this.RecordsToAdd.length} records to "${targetList?.Name || 'list'}"`,
-          'success',
-          3000
-        );
-      } else {
-        this.notificationService.CreateSimpleNotification(
-          'Failed to add some records',
-          'warning',
-          4000
-        );
-      }
-
+      const result = await CreateListsClient(this.ProviderToUse).AddRecordsToList(targetListId, this.RecordsToAdd);
+      const targetList = this.AvailableLists.find(l => UUIDsEqual(l.ID, targetListId));
+      this.notifyMembersWritten(result, `Added ${PluralizeRecords(result.Counts?.Added ?? 0)} to "${targetList?.Name || 'list'}"`);
       this.CancelAddToListDialog();
     } catch (error) {
       console.error('Error adding to list:', error);

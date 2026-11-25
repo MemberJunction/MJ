@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT191 - Comms V2 Activity Worker and GDPR Erasure",
+    "Description": "Exercises CommsActivityWorker event processing, deduplication, SoftBounceThresholdPolicy auto-suppression, EraseEndpointPII, and click correlation by TrackingToken against the live database. In-process by design: these checks pin the worker's own rules with event shapes and repeat deliveries a public route cannot be made to produce. The path a real event takes (public route, work queue, MJAPI's registered handler) is covered over the wire by IT191.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Hard bounce and soft bounce thresholds create suppressions, duplicate events are skipped, EraseEndpointPII scrubs PII while preserving compliance records, and a verified click is recorded against its log without suppressing the endpoint."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "comms-v2-activity"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "EE1BB739-9751-4C41-85F9-D550770850E0"
+  },
+  "sync": {
+    "lastModified": "2026-11-19T19:30:43.250Z",
+    "checksum": "19fc5540c744d79a15f95c77769c23a0391c6e1466d6593f41bd59a6ee9c7bad"
+  }
+}

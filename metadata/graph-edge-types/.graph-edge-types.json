@@ -38,10 +38,10 @@
   {
     "fields": {
       "GraphID": null,
-      "Name": "Broader Than",
+      "Name": "BroaderThan",
       "Description": "Connects a parent or umbrella concept to a more specific child concept.",
       "IsDirected": true,
-      "InverseName": "Narrower Than",
+      "InverseName": "NarrowerThan",
       "DefaultWeight": 0.85,
       "AllowStored": true
     },
@@ -49,33 +49,33 @@
       "ID": "12797109-63C1-4581-BDB4-F1816020ACBF"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.392Z",
-      "checksum": "8c3b89b4440195aa4690db85a5d7afde01ad4303af56723e04697f33798a1ec7"
+      "lastModified": "2026-11-24T20:26:47.657Z",
+      "checksum": "c4bbedc068a027777c1a80d188e2426735cff2225985b1b01ff46b508facc7c0"
     }
   },
   {
     "fields": {
       "GraphID": null,
       "Name": "NarrowerThan",
-      "Description": "Connects a specific concept to its broader parent concept.",
+      "Description": "Retired: the inverse label of BroaderThan, not a type of its own. Store a BroaderThan edge from the broader concept to the narrower one instead. The row stays so edges stored under it before it was retired still read; the \"Graph Edges: Retype NarrowerThan as BroaderThan\" Record Process converts them.",
       "IsDirected": true,
       "InverseName": "BroaderThan",
       "DefaultWeight": 0.85,
-      "AllowStored": true
+      "AllowStored": false
     },
     "primaryKey": {
       "ID": "2AC4EAD6-1FF7-44FB-9C6C-BE13451FE40D"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.401Z",
-      "checksum": "41729c97ff74a055d4e8dd539b9df17170155f96032f25cf3590ecc145a9ee4b"
+      "lastModified": "2026-11-24T20:26:47.681Z",
+      "checksum": "e075c05fed5615489d89887b82ea44a015c18a373e86db029a318d4b50b363f9"
     }
   },
   {
     "fields": {
       "GraphID": null,
       "Name": "Defines",
-      "Description": "Connects a canonical Term or Policy concept to the Entity, Alternate Base View, or Concept it formally defines.",
+      "Description": "Connects an Alternate Base View or Query to the Graph Concept it formally defines. Direction is artifact to concept: the source is the view or query, the target is the concept.",
       "IsDirected": true,
       "InverseName": "DefinedBy",
       "DefaultWeight": 1,
@@ -85,15 +85,15 @@
       "ID": "8DB67056-D702-46E4-82ED-A7E2A11D15CA"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.411Z",
-      "checksum": "7d9f04e088ba3ff5a57558f5fb1f50b7bdc18b3175e04816cdfdf89912122e55"
+      "lastModified": "2026-11-24T20:26:47.695Z",
+      "checksum": "e7855bcea543156fb4c00f58ca30545c7c571193a92b71abd441fcab1789d983"
     }
   },
   {
     "fields": {
       "GraphID": null,
       "Name": "Describes",
-      "Description": "Connects a Domain or Policy concept to the Entity or resource it describes.",
+      "Description": "Connects an Entity or Entity Field to the Graph Concept whose data it holds. Direction is artifact to concept: the source is the entity or field, the target is the concept.",
       "IsDirected": true,
       "InverseName": "DescribedBy",
       "DefaultWeight": 0.9,
@@ -103,15 +103,15 @@
       "ID": "8FE3F834-989C-44F6-9F86-45848284CC68"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.419Z",
-      "checksum": "cf19e857057ad88307050484e8a0125d10eb3a345e22f2abde8d97f41d722379"
+      "lastModified": "2026-11-24T20:26:47.704Z",
+      "checksum": "002da14d36a03b33464604152da66429c1de676042ef5bcee3640c6e4079e8ff"
     }
   },
   {
     "fields": {
       "GraphID": null,
       "Name": "Measures",
-      "Description": "Connects a Metric concept to the Golden Query, Entity, or Alternate Base View that computes it.",
+      "Description": "Connects a Query or Alternate Base View to the metric Graph Concept it computes. Direction is artifact to concept: the source is the query or view, the target is the concept.",
       "IsDirected": true,
       "InverseName": "MeasuredBy",
       "DefaultWeight": 0.95,
@@ -121,15 +121,15 @@
       "ID": "57EC0A4D-B9FD-4C63-ADB1-8D5C3A70A3DA"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.429Z",
-      "checksum": "4c6a9e6255f25e11b467e59cbcd1d753bc61b359702ac6c52f3f45abc153be5e"
+      "lastModified": "2026-11-24T20:26:47.712Z",
+      "checksum": "32975d39d66c6406de644ecb6b161b8f9001d1579bb6bda5ecc66e16c8ad4da5"
     }
   },
   {
     "fields": {
       "GraphID": null,
       "Name": "Implements",
-      "Description": "Connects a Process concept to the Action, AI Agent, or Workflow that implements it.",
+      "Description": "Connects an Action, AI Skill or AI Agent to the process or policy Graph Concept it implements. Direction is artifact to concept: the source is the action, skill or agent, the target is the concept.",
       "IsDirected": true,
       "InverseName": "ImplementedBy",
       "DefaultWeight": 0.95,
@@ -139,8 +139,8 @@
       "ID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069"
     },
     "sync": {
-      "lastModified": "2026-11-03T23:46:01.438Z",
-      "checksum": "bc69e948ab92e2c5186753588fbe8da93d3579c214cf17102d619cd6ce60c03b"
+      "lastModified": "2026-11-24T20:26:47.719Z",
+      "checksum": "a36ef0181dd91392b1ca487062c4847abfa16cb8ca725067dbc67f2a1dcaed2d"
     }
   },
   {
@@ -231,6 +231,186 @@
     "sync": {
       "lastModified": "2026-11-03T23:46:01.493Z",
       "checksum": "a1f54084492f1f4706999428d8c9ec39629a87fc65057be11363db1b9ae9cc76"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "LinksTo",
+      "Description": "A document links to another record by name (a [[Name]] reference in its text). Recorded as an MJ: Record Links row by the artifact graph indexer and projected by the Record Link edge provider.",
+      "IsDirected": true,
+      "InverseName": "LinkedFrom",
+      "DefaultWeight": 0.8,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "E1673319-DC19-416D-9835-4CAA300DCC22"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.776Z",
+      "checksum": "12d2aa8cfc090d8394195573b488baacf2055c00829e769152d93d0e539302d9"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "SharesConceptWith",
+      "Description": "Two documents (or other records indexed by the Content Pipeline) were each a source of the same graph concept. Derived on read by the Shared Concept edge provider; never stored.",
+      "IsDirected": false,
+      "InverseName": "SharesConceptWith",
+      "DefaultWeight": 0.6,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "B0590F00-B92D-4298-9F54-89DEF6C5CE37"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.788Z",
+      "checksum": "fbbe9f642f8558adb1db95445916f5fa4f2215072ee37f55ed6d91bc60cbc929"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Subsets",
+      "Description": "Connects an Alternate Base View to the entity whose rows it is a subset of. Derived on read by the Alternate Base View edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Has Subset",
+      "DefaultWeight": 1,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "C5B691F3-F864-472A-9384-2380DC9D4356"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.802Z",
+      "checksum": "058077714616435cda4a6de971c6b393f8358801d0409e672230cfcc5b9fc568"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Is A",
+      "Description": "Connects an IS-A child entity to its parent entity. Derived on read by the Entity Metadata edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Has Subtype",
+      "DefaultWeight": 1,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "E7797155-44F0-4BF3-8EC7-0148C8CF214E"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.816Z",
+      "checksum": "800a087b47e84fc034c56c135ce57f937cdc4728170ff12053f023c30f14f966"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "References",
+      "Description": "Connects an entity to an entity it holds a foreign key to (the description names the field). Derived on read by the Entity Metadata and Foreign Key edge providers; never stored.",
+      "IsDirected": true,
+      "InverseName": "Referenced By",
+      "DefaultWeight": 0.6,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "C619A425-DD03-472E-925B-B89B8BEAEEF5"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.830Z",
+      "checksum": "d84b71ac3cf29c17a4de4431b47eb238286292140f978d16692fb5aa628ba7d0"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Reads",
+      "Description": "Connects a Query to an entity or Alternate Base View it selects from. Derived on read by the Query Metadata edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Read By",
+      "DefaultWeight": 0.8,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "703D544A-AB13-4D60-B89C-47DCED47134D"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.843Z",
+      "checksum": "f3ea4c8075cc6290961894139170944b2356ec681defb81424e579b85a4deb2d"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Composes",
+      "Description": "Connects a Query to a query it composes through {{query:\"...\"}}. Derived on read by the Query Metadata edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Composed Into",
+      "DefaultWeight": 0.9,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "765AD658-B298-4155-897D-C323388622A5"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.857Z",
+      "checksum": "e2e252d1a3e247c09cc1a6c2ab88e42e5f55e0e116b994d5ec06e382e363b8fb"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Field Of",
+      "Description": "Connects an Entity Field to the entity it belongs to. Derived on read by the Entity Metadata edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Has Field",
+      "DefaultWeight": 1,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "4640EF91-195D-4B10-8B0C-92C42FBD75E2"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.871Z",
+      "checksum": "9fcf738dc9a3e4f3b0c1759fdbcdd944c26bb641617f4d919db4be84b6c64ec4"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Preferred Over",
+      "Description": "Says to use the source instead of the target: the target is a deprecated or lower-authority equivalent of the source.",
+      "IsDirected": true,
+      "InverseName": "Superseded By",
+      "DefaultWeight": 0.9,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "3C2ACF78-2E10-4E36-ABC1-E3CCC59CD7A5"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.887Z",
+      "checksum": "d4c0bab0a19e9b8ed120b5013aa4fc7cf3029c80627b7ac2212b936ee8bf12b0"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Same As",
+      "Description": "General symmetric equivalence between two nodes that name the same thing.",
+      "IsDirected": false,
+      "InverseName": "Same As",
+      "DefaultWeight": 1,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "F8C2FFC8-B633-4CE2-B3DF-3620D25EE710"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:47.900Z",
+      "checksum": "7264ef55098b6eea99a6f7b7ec8dc2cb162eec681ba8c96e768f991966552748"
     }
   }
 ]

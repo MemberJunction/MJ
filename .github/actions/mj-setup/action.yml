@@ -1,6 +1,6 @@
 name: MJ workspace setup
 description: >-
-  pnpm + Node + a frozen-lockfile install + the MJExplorer environment file CI has to synthesize.
+  pnpm + Node + a cached frozen-lockfile install + the MJExplorer environment file CI has to synthesize.
   Extracted because the Unit Tests workflow now runs these same five steps in four separate jobs
   (build, each test shard, the ESM guard, the nightly coverage lane) and they must not drift —
   a shard installing differently from the job that built its dist/ produces failures that look
@@ -20,6 +20,18 @@ inputs:
       scripts and need no dependency tree.
     required: false
     default: 'true'
+  ignore-scripts:
+    description: >-
+      Pass `--ignore-scripts` to `pnpm install --frozen-lockfile`. Use in jobs that do not need
+      postinstall hooks.
+    required: false
+    default: 'false'
+  create-explorer-env:
+    description: >-
+      Synthesize the gitignored packages/MJExplorer/src/environments/environment.ts file. Set to
+      'false' for jobs that do not build MJExplorer or that assert a clean git working tree.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -31,16 +43,48 @@ runs:
       uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
-        cache: 'pnpm'
+        package-manager-cache: false
+
+    # The pnpm store has its own cache key, which only this action writes, and only after a
+    # full install. The setup-node pnpm cache shares one key with every job in the repository,
+    # so a job that does not install can save a near-empty store that all later jobs then hit.
+    - name: Find the pnpm store
+      if: inputs.install == 'true'
+      id: pnpm-store
+      shell: bash
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the pnpm store
+      if: inputs.install == 'true'
+      id: pnpm-cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: pnpm-store-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
 
     - name: Install dependencies
       if: inputs.install == 'true'
       shell: bash
-      run: pnpm install --frozen-lockfile
+      env:
+        IGNORE_SCRIPTS: ${{ inputs.ignore-scripts }}
+      run: |
+        if [ "$IGNORE_SCRIPTS" = "true" ]; then
+          pnpm install --frozen-lockfile --ignore-scripts
+        else
+          pnpm install --frozen-lockfile
+        fi
+
+    - name: Save the pnpm store
+      if: inputs.install == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: ${{ steps.pnpm-cache.outputs.cache-primary-key }}
 
     # MJExplorer's environment.ts is gitignored (it carries per-deployment auth config), so CI
     # has to synthesize one or the Explorer packages fail to compile.
     - name: Create MJExplorer environment file
+      if: inputs.create-explorer-env == 'true'
       shell: bash
       run: |
         mkdir -p packages/MJExplorer/src/environments

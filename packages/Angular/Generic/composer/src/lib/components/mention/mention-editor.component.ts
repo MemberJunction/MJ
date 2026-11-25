@@ -14,6 +14,8 @@ import {
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import {
+  ComposerPopulationFilter,
+  ComposerSearchField,
   ComposerSuggestionRequest,
   ComposerTriggerProvider,
   DiscoverComposerTriggerProviders,
@@ -296,6 +298,30 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     this.ShowMentionDropdown = value;
   }
   public MentionSuggestions: MentionSuggestion[] = [];
+
+  /** Active population filter for `'@'` autocomplete sessions; reset on close. */
+  public MentionPopulationFilter: ComposerPopulationFilter = 'all';
+
+  /** Active search-field scope for `'@'` autocomplete sessions; reset on close. */
+  public MentionSearchField: ComposerSearchField = 'all';
+
+  public get ActiveTriggerChar(): string {
+    return this.activeTrigger;
+  }
+
+  public get ActiveMentionQuery(): string {
+    return this.mentionQuery;
+  }
+
+  public OnMentionPopulationFilterChanged(filter: ComposerPopulationFilter): void {
+    this.MentionPopulationFilter = filter;
+    void this.fetchSuggestions(this.activeTrigger, this.mentionQuery, true);
+  }
+
+  public OnMentionSearchFieldChanged(field: ComposerSearchField): void {
+    this.MentionSearchField = field;
+    void this.fetchSuggestions(this.activeTrigger, this.mentionQuery, true);
+  }
 
   /** @deprecated Use {@link MentionSuggestions}. */
   public get mentionSuggestions(): MentionSuggestion[] {
@@ -720,7 +746,11 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * concatenates their results in priority order, caps the merged list, and opens the
    * dropdown. A monotonic sequence drops stale responses when the user keeps typing.
    */
-  private async fetchSuggestions(triggerChar: string, query: string): Promise<void> {
+  private async fetchSuggestions(
+    triggerChar: string,
+    query: string,
+    keepOpenOnEmpty: boolean = false
+  ): Promise<void> {
     const seq = ++this.suggestionRequestSeq;
     const providers = this.activeProviders.filter((p) => p.TriggerChar === triggerChar);
 
@@ -728,7 +758,13 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       Query: query,
       MaxResults: MentionEditorComponent.maxSuggestions,
       ContextUser: this.CurrentUser ?? null,
-      Provider: this.Provider
+      Provider: this.Provider,
+      ...(triggerChar === '@'
+        ? {
+            PopulationFilter: this.MentionPopulationFilter,
+            SearchField: this.MentionSearchField,
+          }
+        : {}),
     };
 
     const resultSets = await Promise.all(
@@ -742,14 +778,16 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const merged = resultSets.flat().slice(0, MentionEditorComponent.maxSuggestions);
     this.MentionSuggestions = merged;
 
+    const hasActiveSmartFilter =
+      triggerChar === '@' &&
+      (this.MentionPopulationFilter !== 'all' || this.MentionSearchField !== 'all');
+
     if (merged.length > 0) {
       this.ShowMentionDropdown = true;
       this.positionMentionDropdown();
-    } else if (this.virtualTriggerOpen) {
-      // A button press must never be a silent no-op. Closing on empty results is right for a TYPED
-      // trigger (the user is mid-word and nothing matched yet), but a host with zero skills clicking
-      // the button would get no feedback at all and read it as broken. Staying open surfaces the
-      // dropdown's own empty state, which was otherwise unreachable.
+    } else if (this.virtualTriggerOpen || keepOpenOnEmpty || hasActiveSmartFilter) {
+      // Keep the dropdown visible on empty results when opened via button or narrowed by an
+      // explicit filter/scope pill so the user can see the empty state and switch filters.
       this.ShowMentionDropdown = true;
       this.positionMentionDropdown();
     } else {
@@ -898,6 +936,10 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Handle mention selection from dropdown
    */
   OnMentionSelected(suggestion: MentionSuggestion): void {
+    const matchingProviders = this.activeProviders.filter((p) => p.TriggerChar === this.activeTrigger);
+    for (const provider of matchingProviders) {
+      provider.OnSuggestionSelected(suggestion, this.CurrentUser ?? null);
+    }
     this.insertMentionChip(suggestion);
     this.CloseMentionDropdown();
     this.MentionSelected.emit(suggestion);
@@ -1470,6 +1512,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     this.mentionStartIndex = -1;
     this.mentionQuery = '';
     this.activeTrigger = '@';
+    this.MentionPopulationFilter = 'all';
+    this.MentionSearchField = 'all';
   }
 
   /** @deprecated Use {@link CloseMentionDropdown}. */

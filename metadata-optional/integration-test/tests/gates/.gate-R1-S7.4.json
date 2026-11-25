@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "R1 -> S7.4",
+    "Description": "Gate G5.3 (owner PR 4, phase 5, dataset R1, criterion S7.4): over 20 scoring calls on the R1 model, 20 of 20 create an MJ: ML Scoring Runs row, and 100% of written scores carry model ID, artifact hash, scoring-run ID and as-of date (FM-16; ProcessRun stays 25 -> 25 today). The check publishes an R1 regression model, creates a test scoring binding of its pipeline (HarnessScoring.Binding through ScoringBindings.Upsert) and makes 20 Score Record Set calls with the BindingID over disjoint slices of 25 seeded R1 rows; one RunViews reads the runs' Model Feature Value rows, their scoring runs and their models (ScoringLineage), and every row must join to its run and model with the run's artifact hash equal to the model's and EffectiveAsOf equal to the run's AsOfDate.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G5.3\", \"owner:PR4\", \"phase:5\", \"dataset:R1\", \"criterion:S7.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "20 of 20 calls leave a scoring-run row and every written score's lineage is complete."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-r1-s7-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "17C840DE-B3D5-406E-97B7-F1F3871248C2"
+  }
+}

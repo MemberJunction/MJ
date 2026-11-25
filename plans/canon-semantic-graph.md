@@ -436,9 +436,15 @@ export interface GraphTraversalOptions {
 GetEdges(graphName: string, node: GraphNodeRef, options: GraphTraversalOptions, user: UserInfo): Promise<GraphEdgeView[]>;
 Subgraph(graphName: string, seeds: GraphNodeRef[], options: GraphTraversalOptions, user: UserInfo): Promise<{ Nodes: GraphNodeView[]; Edges: GraphEdgeView[] }>;
 DescribeForPrompt(subgraph: { Nodes: GraphNodeView[]; Edges: GraphEdgeView[] }): string;
+FindPath(graphName: string, from: GraphNodeRef, to: GraphNodeRef, options: GraphTraversalOptions, user: UserInfo): Promise<GraphPath>;
+DescribePathForPrompt(path: GraphPath): string;
 
 // packages/MJCoreEntities/src/engines/CanonGraphEngine.ts — canon conveniences over GraphEngine('MJ Canon')
 FindConcepts(text: string, user: UserInfo): GraphNodeView[];   // v1: name + synonym match
+ResolveConcepts(text: string, user: UserInfo): Promise<ConceptResolution>;   // Matched | Ambiguous | NoMatch
+ResolveGraphEndpoint(endpoint: GraphEndpointInput, graphName: string, user: UserInfo): Promise<GraphEndpointResolution>;
+FindPathBetween(graphName: string, from: GraphEndpointInput, to: GraphEndpointInput, options: GraphTraversalOptions, user: UserInfo): Promise<GraphPathRequestResult>;
+ProposeDomainConcepts(graphName: string, user: UserInfo, options?: ProposeEntityDomainsOptions): Promise<DomainProposal[]>;
 CanonContext(question: string, options: GraphTraversalOptions, user: UserInfo): Promise<{ Nodes: GraphNodeView[]; Edges: GraphEdgeView[] }>;
 ```
 
@@ -447,6 +453,20 @@ UUIDs are never compared with `===`.
 
 **Expansion is best-first.** A path's score is the product of its edge weights, decayed by depth,
 so definitional edges are followed before weak `Related To` ones. It stops at `MaxNodes`.
+
+**Paths use the same expansion.** `FindPath` starts best-first expansion at `from` and stops the
+moment `to` is admitted, then walks each node's parent back to the start. It returns the fewest-hop
+path, with the best path weight among paths of that length. `Depth` defaults to 4 and `MaxNodes` to
+200, because a path search needs more reach than a neighborhood read. A path never runs through a
+node some principal cannot see. An endpoint the caller cannot see gets the same `Found: false`
+answer as one that is not connected, so the result never reveals that a record exists.
+
+**Concept text can be ambiguous, and the engine says so.** `ResolveConcepts` tags each match `Exact`
+(the whole text is a name or synonym), `Mention` (the text contains one), `Partial` (the text is a
+fragment of one) or `Token` (words overlap). It is `Ambiguous` when two concepts match the whole text
+exactly, or when the best match is only `Partial` or `Token` and another concept scores within 0.05 of
+it. A `Mention` is never ambiguous: a question that names two concepts is asking about both. Only
+concepts the caller may see are scored, so a hidden concept never makes visible ones look ambiguous.
 
 **Labels and permissions resolve together.** After each expansion step, the engine fetches labels
 with one batched `RunViews` per entity: `ResultType: 'simple'`, primary keys plus the entity's name
@@ -465,7 +485,12 @@ Metadata nodes use metadata checks instead, with no query:
 | Canon Concept | read permission on its entity |
 
 ### Agent surface
-- **Action `Get Graph Context`** (`packages/Actions/CoreActions/src/custom/data/`). A thin wrapper over `GraphEngine`, per `packages/Actions/CLAUDE.md`. Inputs: `GraphName` (default "MJ Canon"), `Question` and/or seed nodes (entity name + record ID, or concept names), `Depth`, `MaxNodes`. Returns the subgraph as JSON and as `DescribeForPrompt` text.
+- **Action `Get Graph Context`** (`packages/Actions/CoreActions/src/custom/data/`). A thin wrapper over `GraphEngine`, per `packages/Actions/CLAUDE.md`. Inputs: `GraphName` (default "MJ Canon"), `Question` and/or seed nodes (entity name + record ID, or concept names), `Depth`, `MaxNodes`. Returns the subgraph as JSON and as `DescribeForPrompt` text. Its result code tells the agent what kind of answer it got:
+  - `SUCCESS`: the inputs resolved.
+  - `AMBIGUOUS_CONCEPT`: the text fits several concepts about equally well. The subgraph covers all of them and `Candidates` lists them, so the agent can ask which one is meant instead of answering about the wrong one.
+  - `NO_MATCH`: nothing the caller may see matched. This is an answer, not an error.
+- **Action `Find Graph Path`** and **remote operation `Graph.FindPath`**. Both run `CanonGraphEngine.FindPathBetween`, so there is one implementation. `From` and `To` are each a record or a concept name, synonym or ID. Result codes: `SUCCESS`, `NO_PATH` (an answer), `AMBIGUOUS_ENDPOINT` (with `Candidates`; no search runs) and `ENDPOINT_NOT_FOUND`. The action is for agents. The remote operation is for the Graph Explorer viewer and any client that asks "how are these two connected?"
+- **Agent bindings.** `Database Research Agent` and `Query Strategist` hold both graph actions, because they answer data questions where a canonical definition matters. Other agents do not, so their tool lists stay short.
 - **`Get Entity Details`** gains a short "Canon" section: the concepts it `Describes`, its alternate views, and the queries that `Read` it or `Measure` its concepts.
 - **Skip's consumption lives outside this repo.** The action and entity metadata are MJ's contract.
 
@@ -522,6 +547,13 @@ Bundle `semantic-graph` in the deterministic tier:
 The dashboard above, plus the record-form embed and the proposed-edge review queue.
 
 ### Phase G5: Inference and semantic lookup (later)
+0. **Domain proposals, deterministic (built).** `ProposeEntityDomains` (`packages/MJCoreEntities/src/graph/DomainClustering.ts`) runs Louvain community detection over the entity foreign-key and IS-A graph, with no AI call:
+   - Foreign keys weigh 0.6 and IS-A links 1.0, the defaults of the `References` and `Is A` edge types.
+   - Entities referenced by more than max(8, 5% of the scope) others are dropped as infrastructure hubs (users, entities, applications). They link everything and say nothing about domains.
+   - Each community of at least 3 entities becomes a `Domain` concept proposal, named after its most connected member. Each member gets a confidence: the share of its link weight that stays inside the group.
+   - Action `Propose Canon Domains` returns the proposals (dry run by default) or writes them with `SaveDomainProposals`: a `Proposed` concept plus `Inferred` + `Proposed` `Describes` edges, one transaction per proposal.
+   - A name already in the graph, in any status, is not proposed again, so a rejected proposal stays rejected.
+   - Naming stays with the reviewer. An LLM could suggest better names later, but the grouping does not need one.
 1. **A curator agent or Record Process** proposes `Describes`, `Defines`, `Measures` and `Same As` edges (canon), or edges for any graph that opts in, as `Inferred` + `Proposed` with a `Confidence`.
 2. **Vectorize** concept names, descriptions and synonyms, and edge descriptions, through MJ's existing entity-document vectorization, so lookup matches by meaning.
 

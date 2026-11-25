@@ -1,518 +1,295 @@
 /**
- * Pure, framework-free logic for the entity-agnostic Model Predictions panel.
+ * Pure, framework-free logic for the entity-agnostic Model Predictions panel (§5.8.5).
  *
- * Extracted from the Angular component so the band computation, value
- * formatting, and feature-importance parsing can be unit-tested without
- * standing up Angular or a real entity record. NONE of this is entity-specific
- * or domain-specific — it operates purely on numbers, strings, and the model's
- * generic `ProblemType` / `FeatureImportance` JSON.
+ * The panel reads predictions as Feature Values: the entity's `Active` scoring bindings the user holds, the latest value
+ * of each from `MJ: Latest Feature Values`, the binding's `Champion` history from `MJ: Feature Values`, and the lineage
+ * of the value (its scoring run and the scoring model's `record-panel` output binding). Every read is built in PS Core
+ * (`PredictionPanelQueries`), so the panel and the G5.6 gate send the same parameters, and every card is built here, so
+ * the DOM is tested on the same rules. Nothing in this file is entity-specific or domain-specific.
  */
 
-import {
-    ImportanceDisplay,
-    OutcomeBand,
-    OutcomeConfig,
-    formatPredictionScore,
-    resolveOutcomeConfig,
-    resolveOutcomeStyle,
-    resolveScoreBand,
-} from '@memberjunction/predictive-studio-core';
+import { AuthorizationEvaluator, type AuthorizationInfo, type UserInfo } from '@memberjunction/core';
+import type {
+    MJMLModelScoringBindingEntity,
+    MJMLOutputBindingEntity,
+    MJMLScoringRunEntity,
+    MJvwLatestFeatureValuesEntity,
+} from '@memberjunction/core-entities';
+import { IndexByUUID } from '@memberjunction/global';
+import { AtRiskRules, PredictionPanelQueries, StoredPrediction, type RiskBandDisplay, type StoredPredictionValue } from '@memberjunction/predictive-studio-core';
 
-/**
- * The neutral tercile a numeric prediction falls into. No moral direction is
- * implied — `low`/`mid`/`high` describe position on the value axis only.
- */
+/** The neutral tercile a 0–1 value falls into: position on the value axis only, no moral direction. */
 export type PredictionBand = 'low' | 'mid' | 'high';
 
-/** Generic problem types a trained model can have. */
-export type ModelProblemType = 'classification' | 'regression';
+/** How a prediction's primary value renders: a classification's adverse probability, or a regression's point. */
+export type PredictionValueKind = 'probability' | 'numeric';
 
-/** One normalized feature-importance driver for display. */
+/**
+ * The `MJ: ML Model Scoring Bindings` fields the panel reads: exactly the fields its read names, so a field the read
+ * names that the entity lacks is a compile error.
+ */
+export type PanelBindingRow = Pick<MJMLModelScoringBindingEntity, (typeof PredictionPanelQueries.BindingFields)[number]>;
+
+/** The value fields the panel reads, from `MJ: Latest Feature Values` (the latest value) and `MJ: Feature Values` (the history). */
+export type PanelValueRow = Pick<MJvwLatestFeatureValuesEntity, (typeof PredictionPanelQueries.ValueFields)[number]>;
+
+/** The `MJ: ML Scoring Runs` fields the lineage reads. */
+export type PanelRunRow = Pick<MJMLScoringRunEntity, (typeof PredictionPanelQueries.RunFields)[number]>;
+
+/** The `MJ: ML Output Bindings` fields the card reads (the scoring model's `record-panel` row). */
+export type PanelOutputBindingRow = Pick<MJMLOutputBindingEntity, (typeof PredictionPanelQueries.OutputBindingFields)[number]>;
+
+/** One per-record driver of a prediction, for display. */
 export interface PredictionDriver {
-    /** Raw feature name as the model stored it. */
-    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** Importance magnitude (absolute value of the raw contribution). */
-    importance: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
-    /** Importance as a 0–100 share of the strongest driver, for the bar width. */
+    /** The humanized source column. */
+    Name: string;
+    /** The contribution's magnitude. */
+    Importance: number;
+    /** The magnitude as a 0–100 share of the strongest driver, for the bar width. */
     RelativePct: number;
+    /** True when the driver points up on the card: it raised the adverse outcome, or (raw-contribution) the score. */
+    RaisesAdverse: boolean;
 }
 
-/** How a prediction's primary value should be rendered. */
-export type PredictionValueKind = 'probability' | 'numeric' | 'class';
+/** One class of a classification, in the model's class order, with its probability. */
+export interface PredictionClass {
+    Class: string;
+    /** 0–100, rounded. */
+    Pct: number;
+}
 
-/** Maximum number of feature-importance drivers shown per card. */
-export const MAX_DRIVERS = 5;
+/** One point of a prediction's history, with its sparkline coordinates on a 0–100 box. */
+export interface PredictionHistoryPoint {
+    ID: string;
+    /** The value's as-of date, formatted. */
+    AsOf: string;
+    /** The value as the card shows it ("72%", "1,240.5"). */
+    Display: string;
+    X: number;
+    Y: number;
+}
 
-/**
- * Coerce a dynamic field value into a finite number, or null when it isn't one.
- */
-export function ToNumber(value: unknown): number | null {
-    if (typeof value === 'number') {
-        return Number.isFinite(value) ? value : null;
+/** Where a shown value came from. */
+export interface PredictionLineage {
+    /** `Model` for a scored value, `Human` for a person's value of the binding's feature. */
+    Source: PanelValueRow['Source'];
+    /** The scoring model's version, read through the value's scoring run; null without a run. */
+    ModelVersion: number | null;
+    ScoringRunID: string | null;
+    /** The value's as-of date, formatted; null when undated. */
+    AsOf: string | null;
+    /** True when the scored record was in the model's training set: the score is optimistic. */
+    InTraining: boolean;
+}
+
+/** A resolved prediction card: one per authorized binding with a value for the record. */
+export interface PredictionCard {
+    BindingID: string;
+    /** The model that scored the value; null for a person's value. */
+    ModelID: string | null;
+    /** The card's title: the `record-panel` output binding's label, else the binding's feature name. */
+    Label: string;
+    Kind: PredictionValueKind;
+    /** "72%" (adverse probability) or a formatted number. */
+    DisplayValue: string;
+    /** 0–100 gauge fill of a classification's adverse probability; 0 for a regression. */
+    GaugePct: number;
+    Band: PredictionBand | null;
+    /** The risk band's label of a classification ("High risk"); null for a regression. */
+    StatusLabel: string | null;
+    /** The risk band's badge colour, `gray` for a regression. */
+    BadgeColor: RiskBandDisplay['BadgeColor'] | 'gray';
+    BadgeIcon: string | null;
+    /** The predicted class of a classification; null for a regression. */
+    Class: string | null;
+    /** The predicted class's probability ("72%"); null when not stored. */
+    ClassProbability: string | null;
+    /** Every class with its probability, in the stored class order. */
+    Classes: PredictionClass[];
+    Drivers: PredictionDriver[];
+    History: PredictionHistoryPoint[];
+    /** The history as an SVG polyline `points` attribute on a 0–100 box. */
+    SparklinePoints: string;
+    /** "Pipeline v3", or the pipeline alone when the version is unknown. */
+    Provenance: string;
+    /** When the value was computed, formatted. */
+    LastScored: string | null;
+    Lineage: PredictionLineage;
+}
+
+/** The record panel's rules: its authorization check and its cards. */
+export class ModelPredictionLogic {
+    /** Maximum number of per-record drivers shown per card. */
+    public static readonly MaxDrivers = 5;
+
+    /** A finite number from a dynamic value, or null. */
+    public static ToNumber(value: unknown): number | null { // unknown: a stored JSON member or a view column of any type
+        if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+        if (typeof value === 'string' && value.trim() !== '') {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : null;
+        }
+        return null;
     }
-    if (typeof value === 'string' && value.trim() !== '') {
-        const n = Number(value);
-        return Number.isFinite(n) ? n : null;
+
+    /** The neutral tercile of a 0–1 value, clamped. */
+    public static BandFor(value: number): PredictionBand {
+        const v = Math.max(0, Math.min(1, value));
+        if (v < 1 / 3) return 'low';
+        if (v < 2 / 3) return 'mid';
+        return 'high';
     }
-    return null;
-}
 
-/** @deprecated Use {@link ToNumber}. */
-export function toNumber(value: unknown): number | null {
-    return ToNumber(value);
-}
-
-/**
- * Decide how to render a value given the model's problem type and the value.
- *  - regression + numeric → 'numeric'
- *  - classification + value in [0,1] → 'probability' (a confidence/score we can gauge)
- *  - everything else (a class label, a missing value) → 'class'
- */
-export function ValueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
-    const isRegression = problemType === 'regression';
-    if (isRegression && numeric != null) {
-        return 'numeric';
+    /** A 0–1 value as a clamped, rounded 0–100 integer. */
+    public static GaugePct(value: number): number {
+        return Math.round(Math.max(0, Math.min(1, value)) * 100);
     }
-    if (!isRegression && numeric != null && numeric >= 0 && numeric <= 1) {
-        return 'probability';
-    }
-    return 'class';
-}
 
-/** @deprecated Use {@link ValueKind}. */
-export function valueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
-    return ValueKind(problemType, numeric);
-}
-
-/**
- * Neutral tercile for a 0–1 value. Position on the value axis only — no
- * assumption that high is good or bad. Values are clamped to [0,1].
- */
-export function BandFor(value: number): PredictionBand {
-    const v = Math.max(0, Math.min(1, value));
-    if (v < 1 / 3) return 'low';
-    if (v < 2 / 3) return 'mid';
-    return 'high';
-}
-
-/** @deprecated Use {@link BandFor}. */
-export function bandFor(value: number): PredictionBand {
-    return BandFor(value);
-}
-
-/** Round a 0–1 probability to an integer 0–100 gauge fill, clamped. */
-export function GaugePct(value: number): number {
-    return Math.round(Math.max(0, Math.min(1, value)) * 100);
-}
-
-/** @deprecated Use {@link GaugePct}. */
-export function gaugePct(value: number): number {
-    return GaugePct(value);
-}
-
-/**
- * Format the primary value for display:
- *  - probability → "72%"
- *  - numeric (regression) → grouped number, up to 4 decimals
- *  - class label → the label string
- *  - missing/empty → "—" (em dash)
- */
-export function FormatValue(rawValue: unknown, numeric: number | null, kind: PredictionValueKind): string {
-    if (kind === 'probability' && numeric != null) {
-        return `${GaugePct(numeric)}%`;
-    }
-    if (kind === 'numeric' && numeric != null) {
-        return numeric.toLocaleString(undefined, { maximumFractionDigits: 4 });
-    }
-    if (rawValue == null || rawValue === '') {
-        return '—';
-    }
-    return String(rawValue);
-}
-
-/** @deprecated Use {@link FormatValue}. */
-export function formatValue(rawValue: unknown, numeric: number | null, kind: PredictionValueKind): string {
-    return FormatValue(rawValue, numeric, kind);
-}
-
-/**
- * Pick the human label for a prediction: prefer the model's target variable,
- * then the bound column name, then a generic fallback.
- */
-export function ResolveLabel(targetVariable: string | null, targetColumn: string | null): string {
-    const target = targetVariable?.trim();
-    if (target) return target;
-    const col = targetColumn?.trim();
-    if (col) return col;
-    return 'Prediction';
-}
-
-/** @deprecated Use {@link ResolveLabel}. */
-export function resolveLabel(targetVariable: string | null, targetColumn: string | null): string {
-    return ResolveLabel(targetVariable, targetColumn);
-}
-
-/**
- * Parse a model's `FeatureImportance` JSON (`Record<string, number>`) into the
- * top-N sorted drivers with relative bar widths. Returns [] on null / invalid /
- * empty input — the caller omits the drivers section cleanly when empty.
- */
-export function ParseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
-    if (!featureImportanceJson) {
-        return [];
-    }
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(featureImportanceJson);
-    } catch {
-        return [];
-    }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return [];
-    }
-    const entries = Object.entries(parsed as Record<string, unknown>)
-        .map(([name, raw]) => ({ name, importance: Math.abs(ToNumber(raw) ?? 0) }))
-        .filter(d => d.importance > 0)
-        .sort((a, b) => b.importance - a.importance)
-        .slice(0, MAX_DRIVERS);
-
-    const max = entries.length > 0 ? entries[0].importance : 0;
-    return entries.map(d => ({
-        ...d,
-        RelativePct: max > 0 ? Math.round((d.importance / max) * 100) : 0,
-    }));
-}
-
-/** @deprecated Use {@link ParseDrivers}. */
-export function parseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
-    return ParseDrivers(featureImportanceJson);
-}
-
-/** The global drivers a prediction card may show. */
-export class PredictionDrivers {
-    /** Global drivers for a model's card: coefficient models only (split / impurity counts are not comparable across features and read as importance they are not, so they are hidden). */
-    public static DriversForModel(lineageJSON: string | null | undefined, featureImportanceJson: string | null): PredictionDriver[] {
-        return ImportanceDisplay.GlobalDriversShowable(lineageJSON) ? ParseDrivers(featureImportanceJson) : [];
+    /** A short date ("Nov 3, 2026") of a moment in the viewer's time zone, or null for a missing or invalid date. */
+    public static FormatDate(value: Date | string | null | undefined): string | null {
+        return ModelPredictionLogic.formatShortDate(value, undefined);
     }
 
     /**
-     * True when the model has stored importances that {@link DriversForModel} withholds because of their kind, so the card
-     * shows {@link ImportanceDisplay.HiddenNote} in their place (the same note the model detail page shows).
+     * A short date ("Nov 3, 2026") of a calendar date stored as midnight UTC (an as-of date), read in UTC so the viewer's
+     * time zone never moves it to the day before; null for a missing or invalid date.
      */
-    public static DriversHidden(lineageJSON: string | null | undefined, featureImportanceJson: string | null): boolean {
-        return !ImportanceDisplay.GlobalDriversShowable(lineageJSON) && ParseDrivers(featureImportanceJson).length > 0;
+    public static FormatCalendarDate(value: Date | string | null | undefined): string | null {
+        return ModelPredictionLogic.formatShortDate(value, 'UTC');
     }
-}
 
-/** Format a last-scored timestamp to a short date, or null when absent/invalid. */
-export function FormatLastScored(lastScoredAt: Date | string | null): string | null {
-    if (!lastScoredAt) {
-        return null;
+    private static formatShortDate(value: Date | string | null | undefined, timeZone: string | undefined): string | null {
+        if (!value) return null;
+        const d = value instanceof Date ? value : new Date(value);
+        if (isNaN(d.getTime())) return null;
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone });
     }
-    const d = lastScoredAt instanceof Date ? lastScoredAt : new Date(lastScoredAt);
-    if (isNaN(d.getTime())) {
-        return null;
+
+    /**
+     * The bindings whose view authorization `user` holds: an Owner holds every authorization, anyone else through
+     * `AuthorizationEvaluator.UserCanExecuteWithAncestors` (the rule `vwUserHeldAuthorizations` states in SQL). A binding
+     * with no view authorization, or one naming an authorization not in `authorizations`, matches no user (fail closed).
+     * The row-level security filter on both value entities is the guarantee; this check keeps the panel from showing a
+     * card the filter would leave empty.
+     */
+    public static AuthorizedBindings<T extends Pick<PanelBindingRow, 'ViewAuthorizationID'>>(
+        bindings: readonly T[],
+        user: UserInfo,
+        authorizations: readonly AuthorizationInfo[],
+    ): T[] {
+        const evaluator = new AuthorizationEvaluator();
+        const all = [...authorizations];
+        const byId = IndexByUUID(all);
+        return bindings.filter((b) => {
+            if (!b.ViewAuthorizationID) return false;
+            const auth = byId.Get(b.ViewAuthorizationID);
+            if (!auth) return false;
+            return user.Type === 'Owner' || evaluator.UserCanExecuteWithAncestors(auth, user, all);
+        });
     }
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
-/** @deprecated Use {@link FormatLastScored}. */
-export function formatLastScored(lastScoredAt: Date | string | null): string | null {
-    return FormatLastScored(lastScoredAt);
-}
+    /**
+     * One binding's card from its latest value, its history, the scoring model's `record-panel` output binding and the
+     * value's scoring run; null when the record has no value of the binding's feature. The value is what the row stores
+     * (§5.8.1): a classification's `ValueNumeric` is the adverse-class probability and `ValueText` the predicted class,
+     * with `Probabilities` (in the model's class order) and `Drivers` in `ValueJSON`; a regression's `ValueNumeric` is the
+     * point prediction. No record column is read.
+     */
+    public static BuildCard(
+        binding: PanelBindingRow,
+        latest: PanelValueRow | null,
+        history: readonly PanelValueRow[],
+        outputBinding: PanelOutputBindingRow | null,
+        run: PanelRunRow | null,
+    ): PredictionCard | null {
+        if (latest === null) return null;
+        const stored = StoredPrediction.Parse(latest.ValueJSON);
+        const numeric = ModelPredictionLogic.ToNumber(latest.ValueNumeric);
+        const kind: PredictionValueKind = latest.ValueText !== null ? 'probability' : 'numeric';
+        const band = kind === 'probability' && numeric !== null ? AtRiskRules.RiskBandDisplayFor(AtRiskRules.RiskBandFor(Math.max(0, Math.min(1, numeric)))) : null;
+        const confidence = ModelPredictionLogic.ToNumber(latest.Confidence);
+        const modelVersion = run ? ModelPredictionLogic.ToNumber(run.ModelVersion) : null;
+        const points = ModelPredictionLogic.historyPoints(history, kind);
+        return {
+            BindingID: binding.ID,
+            ModelID: latest.MLModelID,
+            Label: outputBinding?.Label?.trim() || binding.FeatureName,
+            Kind: kind,
+            DisplayValue: ModelPredictionLogic.formatValue(numeric, kind),
+            GaugePct: kind === 'probability' && numeric !== null ? ModelPredictionLogic.GaugePct(numeric) : 0,
+            Band: kind === 'probability' && numeric !== null ? ModelPredictionLogic.BandFor(numeric) : null,
+            StatusLabel: band ? band.Label : null,
+            BadgeColor: band ? band.BadgeColor : 'gray',
+            BadgeIcon: band ? band.Icon : null,
+            Class: latest.ValueText,
+            ClassProbability: latest.ValueText !== null && confidence !== null ? `${ModelPredictionLogic.GaugePct(confidence)}%` : null,
+            Classes: stored.Probabilities.map((p) => ({ Class: p.Class, Pct: ModelPredictionLogic.GaugePct(p.Probability) })),
+            Drivers: ModelPredictionLogic.drivers(stored, outputBinding),
+            History: points,
+            SparklinePoints: points.map((p) => `${p.X},${p.Y}`).join(' '),
+            Provenance: modelVersion !== null ? `${binding.MLTrainingPipeline || binding.FeatureName} v${modelVersion}` : (binding.MLTrainingPipeline || binding.FeatureName),
+            LastScored: ModelPredictionLogic.FormatDate(latest.ComputedAt),
+            Lineage: {
+                Source: latest.Source,
+                ModelVersion: modelVersion,
+                ScoringRunID: latest.MLScoringRunID,
+                AsOf: ModelPredictionLogic.FormatCalendarDate(latest.EffectiveAsOf),
+                InTraining: latest.InTraining === true,
+            },
+        };
+    }
 
-/**
- * A resolved historical prediction row from `MJ: Process Run Details` for an entity record.
- */
-export interface PredictionHistoryItem {
-    /** The MJ: Process Run Details primary key ID */
-    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** The parent Process Run ID */
-    ProcessRunId: string;
-    /** Model ID if resolved from payload or model lookup */
-    modelId: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** Resolved model name (e.g. "Member Churn Risk" or "LatePaymentOutcome") */
-    ModelName: string;
-    /** Resolved pipeline & version string (e.g. "Pipeline v1") */
-    Provenance: string;
-    /** Target variable / label */
-    target: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** Problem type: classification or regression */
-    problemType: ModelProblemType;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** Primary numeric value / score */
-    NumericValue: number | null;
-    /** Class label if classification */
-    PredictedClass: string | null;
-    /** Formatted display value (e.g. "88%", "Late", "1,240.5") */
-    DisplayValue: string;
-    /** True if 0–1 probability we can gauge/badge */
-    IsProbability: boolean;
-    /** Neutral band: 'low' | 'mid' | 'high' */
-    Band: PredictionBand | null;
-    /** Resolved semantic status band from outcomeConfig */
-    StatusBand: OutcomeBand | null;
-    /** Human-readable status label (e.g. "Low Risk", "High") */
-    StatusLabel: string | null;
-    /** Semantic badge color ('green' | 'amber' | 'red' | 'blue' | 'gray') */
-    BadgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray';
-    /** Icon class if specified in band/style */
-    BadgeIcon: string | null;
-    /** Execution status: 'Succeeded' | 'Failed' | 'Pending' | 'Skipped' */
-    status: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** When processing completed */
-    CompletedAt: Date | null;
-    /** Formatted date/time for history display */
-    FormattedTime: string;
-    /** Drivers if available in payload */
-    Drivers: PredictionDriver[];
-    /** Error message if Failed */
-    ErrorMessage: string | null;
-    /** Full raw payload object for JSON inspection */
-    RawPayload: Record<string, unknown> | null;
-}
+    /** A card's primary value: the adverse probability as a percentage, or the point prediction; "—" when missing. */
+    private static formatValue(numeric: number | null, kind: PredictionValueKind): string {
+        if (numeric === null) return '—';
+        return kind === 'probability' ? `${ModelPredictionLogic.GaugePct(numeric)}%` : numeric.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    }
 
-/** Summary descriptor of a model represented in prediction history. */
-export interface ModelHistorySummary {
-    modelId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    ModelName: string;
-    count: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-}
+    /** The history in as-of order with sparkline coordinates: a probability on a fixed 0–1 scale, a regression on its own range. */
+    private static historyPoints(history: readonly PanelValueRow[], kind: PredictionValueKind): PredictionHistoryPoint[] {
+        const rows = [...history]
+            .filter((r) => ModelPredictionLogic.ToNumber(r.ValueNumeric) !== null)
+            .sort((a, b) => ModelPredictionLogic.time(a.EffectiveAsOf) - ModelPredictionLogic.time(b.EffectiveAsOf) || ModelPredictionLogic.time(a.ComputedAt) - ModelPredictionLogic.time(b.ComputedAt));
+        const values = rows.map((r) => ModelPredictionLogic.ToNumber(r.ValueNumeric) || 0);
+        const min = kind === 'probability' ? 0 : Math.min(...values);
+        const max = kind === 'probability' ? 1 : Math.max(...values);
+        const span = max - min;
+        return rows.map((r, i) => {
+            const v = values[i];
+            const y = span > 0 ? (1 - (v - min) / span) * 100 : 50;
+            return {
+                ID: r.ID,
+                AsOf: ModelPredictionLogic.FormatCalendarDate(r.EffectiveAsOf) || ModelPredictionLogic.FormatDate(r.ComputedAt) || '—',
+                Display: ModelPredictionLogic.formatValue(v, kind),
+                X: rows.length > 1 ? Math.round((i / (rows.length - 1)) * 100) : 50,
+                Y: Math.round(Math.max(0, Math.min(100, y))),
+            };
+        });
+    }
 
-/** Input contract for parsing a Process Run Detail record. */
-export interface RawProcessRunDetail {
-    ID: string;
-    ProcessRunID: string;
-    Status: string;
-    CompletedAt: Date | string | null;
-    ResultPayload: string | null;
-    ErrorMessage: string | null;
-}
-
-/** Model metadata lookup contract for decorating history items. */
-export interface HistoryModelMetadata {
-    Name?: string;
-    Pipeline?: string | null;
-    Version?: number;
-    ProblemType?: string;
-    TargetVariable?: string;
-    Lineage?: string | null;
-    outcomeConfig?: OutcomeConfig | null;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
-}
-
-/**
- * Format a history completion timestamp with date and time.
- */
-export function FormatHistoryTimestamp(date: Date | string | null): string {
-    if (!date) return '—';
-    const d = date instanceof Date ? date : new Date(date);
-    if (isNaN(d.getTime())) return '—';
-    return d.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    });
-}
-
-/** @deprecated Use {@link FormatHistoryTimestamp}. */
-export function formatHistoryTimestamp(date: Date | string | null): string {
-    return FormatHistoryTimestamp(date);
-}
-
-/**
- * Parse an array of drivers from payload driver shapes (array of { feature, value } or map).
- */
-export function ParsePayloadDrivers(rawDrivers: unknown): PredictionDriver[] {
-    if (!rawDrivers) return [];
-    if (Array.isArray(rawDrivers)) {
-        const entries = rawDrivers
-            .map((item: unknown) => {
-                if (!item || typeof item !== 'object') return null;
-                const rec = item as Record<string, unknown>;
-                const name = typeof rec['feature'] === 'string' ? rec['feature'] : (typeof rec['name'] === 'string' ? rec['name'] : '');
-                const val = ToNumber(rec['value'] ?? rec['importance']);
-                if (!name || val == null) return null;
-                return { name, importance: Math.abs(val) };
-            })
-            .filter((d): d is { name: string; importance: number } => d != null && d.importance > 0)
-            .sort((a, b) => b.importance - a.importance)
-            .slice(0, MAX_DRIVERS);
-
-        const max = entries.length > 0 ? entries[0].importance : 0;
-        return entries.map(d => ({
-            ...d,
-            RelativePct: max > 0 ? Math.round((d.importance / max) * 100) : 0,
+    /**
+     * The per-record drivers, strongest first (at most {@link MaxDrivers}): pointing up when the stored effect raises the
+     * adverse outcome, or, when the `record-panel` output binding signs by `raw-contribution`, when the contribution is positive.
+     */
+    private static drivers(stored: StoredPredictionValue, outputBinding: PanelOutputBindingRow | null): PredictionDriver[] {
+        const raw = outputBinding?.DriverDirectionRelativeTo === 'raw-contribution';
+        const top = [...stored.Drivers]
+            .filter((d) => d.Contribution !== 0)
+            .sort((a, b) => Math.abs(b.Contribution) - Math.abs(a.Contribution))
+            .slice(0, ModelPredictionLogic.MaxDrivers);
+        const strongest = top.length > 0 ? Math.abs(top[0].Contribution) : 0;
+        return top.map((d) => ({
+            Name: AtRiskRules.HumanizeFeatureName(d.SourceColumn),
+            Importance: Math.abs(d.Contribution),
+            RelativePct: strongest > 0 ? Math.round((Math.abs(d.Contribution) / strongest) * 100) : 0,
+            RaisesAdverse: raw ? d.Contribution > 0 : d.RaisesAdverse,
         }));
     }
-    if (typeof rawDrivers === 'object') {
-        return ParseDrivers(JSON.stringify(rawDrivers));
+
+    /** Epoch milliseconds of a date, 0 when missing or invalid (an undated value sorts first). */
+    private static time(value: Date | string | null | undefined): number {
+        if (!value) return 0;
+        const t = (value instanceof Date ? value : new Date(value)).getTime();
+        return isNaN(t) ? 0 : t;
     }
-    return [];
-}
-
-/** @deprecated Use {@link ParsePayloadDrivers}. */
-export function parsePayloadDrivers(rawDrivers: unknown): PredictionDriver[] {
-    return ParsePayloadDrivers(rawDrivers);
-}
-
-/**
- * Parse a raw `MJ: Process Run Details` row into a decorated {@link PredictionHistoryItem}.
- */
-export function ParseHistoryItem(
-    detail: RawProcessRunDetail,
-    modelLookup?: Map<string, HistoryModelMetadata>,
-): PredictionHistoryItem {
-    let rawPayload: Record<string, unknown> | null = null;
-    let payloadSection: Record<string, unknown> | null = null;
-
-    if (detail.ResultPayload) {
-        try {
-            const parsed = JSON.parse(detail.ResultPayload);
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                rawPayload = parsed as Record<string, unknown>;
-                const outputObj = rawPayload['output'];
-                if (outputObj && typeof outputObj === 'object' && !Array.isArray(outputObj)) {
-                    payloadSection = outputObj as Record<string, unknown>;
-                } else {
-                    payloadSection = rawPayload;
-                }
-            }
-        } catch {
-            rawPayload = null;
-            payloadSection = null;
-        }
-    }
-
-    const payloadModelId = typeof payloadSection?.['modelId'] === 'string' ? payloadSection['modelId'] : null;
-    const modelMeta = payloadModelId && modelLookup ? modelLookup.get(payloadModelId) : undefined;
-
-    const rawScore = payloadSection?.['score'] ?? payloadSection?.['value'] ?? null;
-    const numericScore = ToNumber(rawScore);
-    const predictedClass = typeof payloadSection?.['class'] === 'string' ? payloadSection['class'] : null;
-
-    const probTypeStr = (typeof payloadSection?.['problemType'] === 'string' ? payloadSection['problemType'] : modelMeta?.ProblemType) ?? '';
-    const problemType: ModelProblemType = probTypeStr.toLowerCase() === 'regression' ? 'regression' : 'classification';
-
-    const kind = ValueKind(problemType, numericScore);
-    const displayValue = predictedClass ?? FormatValue(rawScore, numericScore, kind);
-
-    const targetVar = (typeof payloadSection?.['target'] === 'string' ? payloadSection['target'] : modelMeta?.TargetVariable) ?? '';
-    const label = ResolveLabel(targetVar, null);
-
-    const modelName = modelMeta?.Name ?? label;
-    const provenance = modelMeta?.Pipeline && modelMeta?.Version
-        ? `${modelMeta.Pipeline} v${modelMeta.Version}`
-        : (modelMeta?.Name ?? 'Predictive Model');
-
-    const completedAt = detail.CompletedAt ? (detail.CompletedAt instanceof Date ? detail.CompletedAt : new Date(detail.CompletedAt)) : null;
-    const drivers = ParsePayloadDrivers(payloadSection?.['drivers']);
-
-    const rawOutcomeConfig = (payloadSection?.['outcomeConfig'] ?? modelMeta?.outcomeConfig) as OutcomeConfig | undefined;
-    const outcomeConfig = rawOutcomeConfig
-        ? resolveOutcomeConfig({ outcomeConfig: rawOutcomeConfig })
-        : resolveOutcomeConfig({
-            Lineage: modelMeta?.Lineage ?? null,
-            TargetVariable: targetVar || modelMeta?.TargetVariable || null,
-            ProblemType: probTypeStr || modelMeta?.ProblemType || null,
-        });
-
-    let statusBand: OutcomeBand | null = null;
-    let badgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray' = 'gray';
-    let badgeIcon: string | null = null;
-    let statusLabel: string | null = null;
-
-    if (numericScore != null) {
-        statusBand = resolveScoreBand(numericScore, outcomeConfig);
-        if (statusBand) {
-            badgeColor = statusBand.BadgeColor;
-            badgeIcon = statusBand.Icon ?? null;
-            statusLabel = statusBand.Label;
-        }
-    } else if (predictedClass) {
-        const style = resolveOutcomeStyle(predictedClass, outcomeConfig);
-        badgeColor = style.BadgeColor;
-        badgeIcon = style.Icon ?? null;
-        statusLabel = style.DisplayLabel ?? predictedClass;
-    }
-
-    return {
-        id: detail.ID,
-        ProcessRunId: detail.ProcessRunID,
-        modelId: payloadModelId,
-        ModelName: modelName,
-        Provenance: provenance,
-        target: targetVar || label,
-        problemType,
-        NumericValue: numericScore,
-        PredictedClass: predictedClass,
-        DisplayValue: displayValue,
-        IsProbability: kind === 'probability',
-        Band: kind === 'probability' && numericScore != null ? BandFor(numericScore) : null,
-        StatusBand: statusBand,
-        StatusLabel: statusLabel,
-        BadgeColor: badgeColor,
-        BadgeIcon: badgeIcon,
-        status: detail.Status || 'Succeeded',
-        CompletedAt: completedAt,
-        FormattedTime: FormatHistoryTimestamp(completedAt),
-        Drivers: drivers,
-        ErrorMessage: detail.ErrorMessage,
-        RawPayload: rawPayload,
-    };
-}
-
-/** @deprecated Use {@link ParseHistoryItem}. */
-export function parseHistoryItem(
-    detail: RawProcessRunDetail,
-    modelLookup?: Map<string, HistoryModelMetadata>,
-): PredictionHistoryItem {
-    return ParseHistoryItem(detail, modelLookup);
-}
-
-/**
- * Filter prediction history by a selected model ID (or return all when null / 'ALL').
- */
-export function FilterHistoryByModel(
-    history: PredictionHistoryItem[],
-    selectedModelId: string | null,
-): PredictionHistoryItem[] {
-    if (!selectedModelId || selectedModelId === 'ALL') {
-        return history;
-    }
-    return history.filter(item => item.modelId === selectedModelId);
-}
-
-/** @deprecated Use {@link FilterHistoryByModel}. */
-export function filterHistoryByModel(
-    history: PredictionHistoryItem[],
-    selectedModelId: string | null,
-): PredictionHistoryItem[] {
-    return FilterHistoryByModel(history, selectedModelId);
-}
-
-/**
- * Aggregate unique models from prediction history for multi-model tabs / filters.
- */
-export function GetDistinctModelsFromHistory(history: PredictionHistoryItem[]): ModelHistorySummary[] {
-    const counts = new Map<string, { ModelName: string; count: number }>();
-    for (const item of history) {
-        const id = item.modelId ?? 'UNKNOWN';
-        const existing = counts.get(id);
-        if (existing) {
-            existing.count += 1;
-        } else {
-            counts.set(id, { ModelName: item.ModelName, count: 1 });
-        }
-    }
-    return Array.from(counts.entries()).map(([modelId, data]) => ({
-        modelId,
-        ModelName: data.ModelName,
-        count: data.count,
-    }));
-}
-
-/** @deprecated Use {@link GetDistinctModelsFromHistory}. */
-export function getDistinctModelsFromHistory(history: PredictionHistoryItem[]): ModelHistorySummary[] {
-    return GetDistinctModelsFromHistory(history);
 }

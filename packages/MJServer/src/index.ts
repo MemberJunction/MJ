@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, LimitsConfigResolver } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -40,15 +40,22 @@ import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
 import { TranslateBracketsToPG } from './postgresqlCompat.js';
-import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig, WarnIfPostgreSQLConnectionBudgetExceeded, ResolvePostgreSQLReadOnlyEndpoints } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective, ApplyBuiltInDirectivesTransformer } from './directives/index.js';
+import { ApplyScopeLimitedPrincipalGuards } from './auth/scopeLimitedAccess.js';
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { MJServerStartupState } from './startupState.js';
+import {
+  BeginServerWakeStartupGuard,
+  CompleteServerWakeStartupGuard,
+  GetServerWakeStartupGuardStatus,
+  ResetServerWakeStartupGuard,
+} from './wakeStartupLifecycle.js';
 import { AssertEntityMetadataLoaded, ENTITY_METADATA_CHECK_PHASE } from './metadataReadiness.js';
 import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
@@ -90,12 +97,15 @@ import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
-import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import { ClientToolRequestManager, AgentRunWatchdog, InstallDefaultResumeContinuationDispatcher, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { RegisterAudienceActionHostBindings } from './services/HostGrantedWorkflowSubmitter.js';
+import { InitializeConversationDetailWritePermissionProviders } from './services/ConversationDetailWritePermissionWiring.js';
 import { RegisterSemanticGraphExpansionService } from './services/RegisterSemanticGraphExpansion.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
+import { ConfigureCommsV2WorkQueue } from './services/CommsWorkQueueHandlers.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
@@ -258,8 +268,11 @@ export * from './resolvers/QueryResolver.js';
 export * from './services/TaskGraphProviderFactory.js';
 export * from './services/TaskGraphAgentRunner.js';
 export * from './services/StartTaskGraphDispatcher.js';
+export * from './services/HostGrantedWorkflowSubmitter.js';
+export * from './services/ConversationDetailWritePermissionWiring.js';
 export * from './services/TaskGraphPromptRunner.js';
 export * from './services/TaskGraphContinuationDeliverer.js';
+export * from './services/isolation/index.js';
 export * from './resolvers/TaskGraphFrameResolver.js';
 export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
@@ -275,6 +288,7 @@ export * from './resolvers/MCPResolver.js';
 export * from './resolvers/ActionResolver.js';
 export * from './resolvers/CacheStatsResolver.js';
 export * from './resolvers/EntityCommunicationsResolver.js';
+export * from './operations/CommsAdminOperations.js';
 export * from './resolvers/FeedbackResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
@@ -301,6 +315,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './rest/UploadTokenManager.js';
 export * from './routeRateLimitConfigUnits.js';
 export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
@@ -341,10 +356,12 @@ import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/Synthes
 import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
 import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
 import { LoadArtifactGuestShareOperations } from './operations/ArtifactGuestShareServerOperations.js';
+import { LoadCommsAdminOperations } from './operations/CommsAdminOperations.js';
 LoadSynthesizeArtifactFromSourcesOperation();
 LoadArtifactComplianceAuditOperation();
 LoadArtifactEvaluateAiFormulaOperation();
 LoadArtifactGuestShareOperations();
+LoadCommsAdminOperations();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
@@ -523,6 +540,7 @@ GetAttachmentService().BlobStore = new MJStorageBlobStore();
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const startup = MJServerStartupState.Instance;
   startup.Begin();
+  BeginServerWakeStartupGuard('MJServer.Serve');
   const httpServer = createServer(CreateStartupGate(app, startup));
   // Until the upgrade router is installed, every WebSocket upgrade is refused with a 503.
   httpServer.on('upgrade', (_request, socket) => {
@@ -625,13 +643,15 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes, DescribePgSsl } = await import('@memberjunction/postgresql-dataprovider');
 
     const pgEndpoint = ResolvePostgreSQLEndpoint();
     const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
     // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
     const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
-    const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
+    // One API pool, shared by the provider and the MSSQL-compat wrapper below. It carries the
+    // provider's type parsers, since the provider runs its queries on it.
+    const pgPool = new pg.default.Pool({ ...ToPGPoolConfig(pgConnectionConfig), types: MJPostgresTypes });
     // An idle connection the server drops is emitted on the pool; without a listener Node exits.
     pgPool.on('error', (err) => console.error('[PostgreSQL pool] Idle connection error (connection evicted):', err.message));
 
@@ -639,7 +659,7 @@ const setupComplete$ = new ReplaySubject(1);
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
-    startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+    startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase} (${DescribePgSsl(pgConnectionConfig.SSL)})`);
 
     // Two distinct read-only pools on the read-only login when configured:
     // 1. Application read-only pool ('read-only'): sized up to apiMax / connectionPool.readOnlyMax
@@ -648,10 +668,13 @@ const setupComplete$ = new ReplaySubject(1);
     //    for untrusted caller-supplied SQL (ExecuteAdhocQuery, TestQuerySQL, GetDataContextData).
     const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
     if (pgReadOnlyCredentials) {
+      // Both pools use the read-only login; a configured read replica takes the ad-hoc pool (and,
+      // when asked, the application read-only pool).
+      const readOnlyEndpoints = ResolvePostgreSQLReadOnlyEndpoints({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings);
       // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
       // come back as numbers here as they do on the provider's own pool.
       const readOnlyPgPool = new pg.default.Pool({
-        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig(readOnlyEndpoints.Application, configInfo.databaseSettings, 'read-only')),
         types: MJPostgresTypes,
       });
       readOnlyPgPool.on('error', (err) => console.error('[PostgreSQL read-only pool] Idle connection error (connection evicted):', err.message));
@@ -666,14 +689,18 @@ const setupComplete$ = new ReplaySubject(1);
       PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
 
       const adhocReadOnlyPgPool = new pg.default.Pool({
-        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'adhoc-read-only')),
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig(readOnlyEndpoints.Adhoc, configInfo.databaseSettings, 'adhoc-read-only')),
         types: MJPostgresTypes,
       });
       adhocReadOnlyPgPool.on('error', (err) => console.error('[PostgreSQL adhoc read-only pool] Idle connection error (connection evicted):', err.message));
       PostgreSQLReadOnlyPool.Instance.AdhocPool = adhocReadOnlyPgPool;
 
-      startupLog.LogIf('verbose', 'Read-only PostgreSQL pools (application & ad-hoc) have been initialized.');
+      startupLog.LogIf('verbose', `Read-only PostgreSQL pools initialized (application → ${readOnlyEndpoints.Application.Host}:${readOnlyEndpoints.Application.Port}, ad-hoc → ${readOnlyEndpoints.Adhoc.Host}:${readOnlyEndpoints.Adhoc.Port}).`);
     }
+    await WarnIfPostgreSQLConnectionBudgetExceeded(
+      pgPool, configInfo.databaseSettings, pgReadOnlyCredentials != null,
+      !!(process.env.CODEGEN_DB_USERNAME && process.env.CODEGEN_DB_PASSWORD), LogStatus,
+    );
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -698,7 +725,10 @@ const setupComplete$ = new ReplaySubject(1);
     pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     pgConfigData.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const provider = new PostgreSQLDataProvider();
-    await provider.Config(pgConfigData);
+    // Share the API pool rather than letting Config() open a second pool of the same size.
+    if (!(await provider.ConfigWithSharedPool(pgConfigData, pgPool))) {
+      throw new Error('PostgreSQL provider configuration failed; see the error logged above.');
+    }
     SetProvider(provider);
 
     // Warm the user cache — dialect-neutral, same call the SQL Server path makes
@@ -781,7 +811,7 @@ const setupComplete$ = new ReplaySubject(1);
           configInfo.databaseSettings,
           'codegen',
         );
-        const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
+        const codegenPgPool = new pg.default.Pool({ ...ToPGPoolConfig(codegenPgConnectionConfig), types: MJPostgresTypes });
         codegenPgPool.on('error', (err) => console.error('[PostgreSQL CodeGen pool] Idle connection error (connection evicted):', err.message));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
@@ -803,7 +833,11 @@ const setupComplete$ = new ReplaySubject(1);
           false,
         );
         const codegenPgProvider = new PostgreSQLDataProvider();
-        await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
+        // Shares codegenPgPool (the CodeGen connection below uses it too) rather than opening a second
+        // CodeGen-sized pool. Still separate from the global API provider's pool.
+        if (!(await codegenPgProvider.ConfigWithSharedPool(codegenPgConfigData, codegenPgPool))) {
+          throw new Error('PostgreSQL CodeGen provider configuration failed; see the error logged above.');
+        }
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenPgProvider);
         startupLog.LogIf('verbose', 'RSU DDL provider initialized with CodeGen credentials (PostgreSQL).');
 
@@ -1050,6 +1084,9 @@ const setupComplete$ = new ReplaySubject(1);
     MJGlobal.Instance.GetGlobalObjectStore()['queryDialects'] = configInfo.queryDialects;
   }
 
+  // Register optional Tier 2 (`MjConfig`) execution limits with LimitsConfigResolver
+  LimitsConfigResolver.Instance.RegisterMjConfigLimits(configInfo.limits ?? null);
+
   // Initialize server telemetry based on config
   const tm = TelemetryManager.Instance;
   if (configInfo.telemetry?.enabled) {
@@ -1086,6 +1123,8 @@ const setupComplete$ = new ReplaySubject(1);
   // ExecuteAdhocQuery's table check and timeout limit.
   ActionEngineServer.Instance.SetReadOnlyProviderFactory(() => CreateReadOnlyProvider(dataSources));
   ActionEngineServer.Instance.SetAdhocSQLAuthorizer(CreateAdhocSQLAuthorizer(configInfo.databaseSettings.requestTimeout));
+  RegisterAudienceActionHostBindings();
+  InitializeConversationDetailWritePermissionProviders();
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
@@ -1331,6 +1370,12 @@ const setupComplete$ = new ReplaySubject(1);
     await new Promise<void>((res, rej) => profSession!.post('Profiler.enable', (e) => (e ? rej(e) : res())));
     await new Promise<void>((res, rej) => profSession!.post('Profiler.start', (e) => (e ? rej(e) : res())));
   }
+
+  // Attach the scope-limited-principal guard to every root field marked
+  // @RefuseScopeLimitedPrincipals(). Every resolver module is imported by now (MJServer's own,
+  // the dynamic paths, and middleware-contributed ones), and buildSchemaSync reads middleware
+  // metadata, so this must run here.
+  ApplyScopeLimitedPrincipalGuards();
 
   const tBuild = performance.now();
   const builtSchema = buildSchemaSync({
@@ -1852,6 +1897,8 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
   AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+  // Wire default fresh-worker continuation dispatcher for checkpoint-resumed paused runs (CR-14).
+  InstallDefaultResumeContinuationDispatcher();
   // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
   ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
 
@@ -1919,6 +1966,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   // The port was bound at the top of Serve; from here on requests reach the app.
   startup.MarkReady();
+  CompleteServerWakeStartupGuard();
   // The summary headline reports TRUE wall-clock since process start (see
   // StartupLogger.buildStartupLine), so we don't push a synthetic "total" phase row
   // (that double-counted the headline). Keep a verbose-only line for the serve()-scoped span.
@@ -2029,6 +2077,9 @@ const setupComplete$ = new ReplaySubject(1);
   // re-plans on a timer, and self-registers with ShutdownRegistry, so gracefulShutdown's awaited
   // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
   // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
+  // Configure Comms V2 tracking URL, HMAC secret, and WorkQueue enqueue hook on all nodes (including API-only nodes)
+  ConfigureCommsV2WorkQueue(ApiRoute('/comms', { absolute: true }), undefined, Boolean(configInfo.workQueue?.enabled));
+
   const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
   if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
     const workQueuePool = dataSources[0]?.dataSource;
@@ -2721,6 +2772,16 @@ export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
 export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
 export type { StartupSummarySnapshot } from './logging/StartupLogger.js';
+export { CreateCommsWebhookHandler } from './rest/CommsWebhookHandler.js';
+export type { CommsActivityWorkPayload, CommsWebhookHandlerOptions } from './rest/CommsWebhookHandler.js';
+export { CommsTrackingEventBuffer } from './rest/CommsTrackingEventBuffer.js';
+export type { CommsTrackingEventBufferOptions } from './rest/CommsTrackingEventBuffer.js';
 
 export * from './generic/RedisClusterPubSubEngine.js';
 export { WrapSharedCacheWithL1 } from './sharedCache.js';
+export {
+  BeginServerWakeStartupGuard,
+  CompleteServerWakeStartupGuard,
+  GetServerWakeStartupGuardStatus,
+  ResetServerWakeStartupGuard,
+};

@@ -19,6 +19,8 @@ export interface BusinessPredictionInput extends TrustInput {
   Name: string;
   /** When the model was last trained/updated, for a "last run" hint. */
   UpdatedAt?: Date | null;
+  /** The `MJ: ML Training Runs` ID whose `ValidationResults` the verdict reads; null when the model has no run. */
+  RunID: string | null;
 }
 
 /** One card in the business Predictions catalog. */
@@ -33,6 +35,8 @@ export interface BusinessPredictionCard {
   /** When not openable, the plain reason (the stored gate reason, or "not evaluated"); else null. */
   blockedReason: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   updatedAt: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The training run the verdict was read from (what the trust line's numbers are traced to); null when there is none. */
+  runId: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The business Predictions catalog: published models mapped to trust-gated cards, in catalog order. */
@@ -47,6 +51,7 @@ export class BusinessPredictions {
       canOpen: trust.CanAct,
       blockedReason: BusinessPredictions.blockedReason(trust),
       updatedAt: input.UpdatedAt || null,
+      runId: input.RunID || null,
     };
   }
 
@@ -57,11 +62,13 @@ export class BusinessPredictions {
       .sort((a, b) => BusinessPredictions.catalogRank(a.trust) - BusinessPredictions.catalogRank(b.trust));
   }
 
+  /** Why a card cannot be opened; null when it can. */
   private static blockedReason(trust: TrustVerdict): string | null {
     if (trust.CanAct) return null;
     return trust.Kind === 'not-evaluated' ? 'Not evaluated under an Evaluation Protocol yet — an analyst needs to retrain it.' : trust.Reason;
   }
 
+  /** A verdict's place in the catalog order. */
   private static catalogRank(t: TrustVerdict): number {
     switch (t.Outcome) {
       case 'model':

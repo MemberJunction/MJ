@@ -397,6 +397,26 @@ describe('AgentUserPolicyEngine', () => {
             expect(engine.EvaluateCalendarOperation(autonomousCal, true).verdict).toBe('Allow');
             expect(engine.EvaluateEmailOperation(autonomousCal, 'Send').verdict).toBe('RequireApproval');
         });
+
+        it('evaluates PhoneChannelMode verdicts and disables phone calls when PhoneChannelMode is Disabled', () => {
+            const disabledPhone = buildPolicy({ PhoneChannelMode: 'Disabled' });
+            expect(engine.EvaluatePhoneOperation(disabledPhone, 'Inbound').verdict).toBe('Deny');
+            expect(engine.EvaluatePhoneOperation(disabledPhone, 'Outbound').verdict).toBe('Deny');
+
+            const inboundOnly = buildPolicy({ PhoneChannelMode: 'InboundOnly' });
+            expect(engine.EvaluatePhoneOperation(inboundOnly, 'Inbound').verdict).toBe('Allow');
+            expect(engine.EvaluatePhoneOperation(inboundOnly, 'Outbound').verdict).toBe('Deny');
+
+            const outboundApproval = buildPolicy({ PhoneChannelMode: 'OutboundWithApproval' });
+            expect(engine.EvaluatePhoneOperation(outboundApproval, 'Inbound').verdict).toBe('Allow');
+            expect(engine.EvaluatePhoneOperation(outboundApproval, 'Outbound').verdict).toBe('RequireApproval');
+
+            const outboundAutoApproval = buildPolicy({ PhoneChannelMode: 'OutboundAutonomous', RequireApprovalForExternalComms: true });
+            expect(engine.EvaluatePhoneOperation(outboundAutoApproval, 'Outbound').verdict).toBe('RequireApproval');
+
+            const outboundAuto = buildPolicy({ PhoneChannelMode: 'OutboundAutonomous', RequireApprovalForExternalComms: false });
+            expect(engine.EvaluatePhoneOperation(outboundAuto, 'Outbound').verdict).toBe('Allow');
+        });
     });
 });
 
@@ -687,6 +707,54 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
         const savedPolicy = buildPolicy({ ID: 'pol-saved-fresh', EmailChannelMode: 'Disabled' });
         engine.SetCachedPolicy(savedPolicy);
         expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-saved-fresh');
+    });
+
+    it('never retains per-request provider entries in defaultPolicyCache and supports WeakMap scoping without arbitrary caps', async () => {
+        const runViewFn = vi.fn().mockResolvedValue({
+            Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1,
+        });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: runViewFn,
+        } as Partial<RunView> as RunView);
+
+        // MJServer builds one provider per request; each one lives in a WeakMap keyed by provider identity,
+        // so defaultPolicyCache stays at 0 and all concurrent live providers remain cached without eviction.
+        const liveProviders: IMetadataProvider[] = [];
+        for (let i = 0; i < 2_500; i++) {
+            const perRequestProvider = {} as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider;
+            liveProviders.push(perRequestProvider);
+            await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+                provider: perRequestProvider,
+            });
+        }
+        expect(engine.DefaultCachedPolicySlotCount).toBe(0);
+
+        // Repeat lookup on provider #0 still hits its WeakMap slot (not arbitrarily evicted by provider #2499)
+        await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider: liveProviders[0],
+        });
+        expect(runViewFn).toHaveBeenCalledTimes(2_500);
+
+        // Clearing the pair invalidates every still-live provider's slot via generation stamp
+        engine.ClearCache('agent-cos', 'user-alice-1');
+        await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider: liveProviders[0],
+        });
+        expect(runViewFn).toHaveBeenCalledTimes(2_501);
+    });
+
+    it('clears one (agent, user) pair across providers without touching other pairs', () => {
+        const providerA = {} as Partial<IMetadataProvider> as IMetadataProvider;
+        const providerB = {} as Partial<IMetadataProvider> as IMetadataProvider;
+        engine.SetCachedPolicy(buildPolicy({ ID: 'alice-a' }), providerA);
+        engine.SetCachedPolicy(buildPolicy({ ID: 'alice-b' }), providerB);
+        engine.SetCachedPolicy(buildPolicy({ ID: 'bob-a', UserID: 'user-bob-2' }), providerA);
+
+        engine.ClearCache('agent-cos', 'user-alice-1');
+
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerA)).toBeNull();
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)).toBeNull();
+        expect(engine.GetCachedPolicy('agent-cos', 'user-bob-2', providerA)?.ID).toBe('bob-a');
     });
 
     it('never leaks a cached "none" across providers and expires negative cache entries after TTL', async () => {

@@ -1,20 +1,29 @@
 import '@angular/compiler';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { of, Subject } from 'rxjs';
-import type { IMetadataProvider } from '@memberjunction/core';
-import { ResourceData, type MJListDetailEntity, type MJListEntity, type MJMLModelEntity, type MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
+import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, ResourceData, type MJListEntity, type MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RenderComponentFixture, CreateFakeProvider, Query } from '@memberjunction/ng-test-utils';
-import { AtRiskRules, TRAINING_RUN_RESULTS_SCHEMA, type AtRiskRow, type GateDecision, type StoredGateRecord } from '@memberjunction/predictive-studio-core';
+import { AtRiskRules, GateRules, TRAINING_RUN_RESULTS_SCHEMA, TracedNumbers, type AtRiskRow, type GateDecision, type SemanticsCheckBinding, type StoredGateRecord, type TrainerRequestConfig } from '@memberjunction/predictive-studio-core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import type { PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
+import { PSPredictionsGridComponent, type PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
+import type { LatestPredictionRow } from '../latest-prediction-rows';
+import type { ApplyResult } from '@memberjunction/lists-base';
 import { PSPredictionsResourceComponent } from './ps-predictions-resource.component';
+import { TestEntityRows } from '../../__tests__/fixtures/test-entity-rows';
+
+vi.mock('@memberjunction/graphql-dataprovider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/graphql-dataprovider')>();
+  return { ...actual, GraphQLListsClient: vi.fn(function GraphQLListsClientDouble() { return listsClient; }) };
+});
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -64,12 +73,14 @@ class LoadingStub {
 /** Stands in for <ps-predictions-grid>: records its run input and lets the test emit its outputs. */
 @Component({ standalone: true, selector: 'ps-predictions-grid', template: '<div data-testid="grid-stub"></div>' })
 class GridStub {
-  @Input() modelId: string | null = null;
-  @Input() runId: string | null = null;
-  @Input() title: string | null = null;
-  @Input() entityName: string | null = null;
-  @Input() problemType: string | null = null;
-  @Input() height = '';
+  @Input() ModelId: string | null = null;
+  @Input() RunId: string | null = null;
+  @Input() Surface = '';
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() Title: string | null = null;
+  @Input() EntityName: string | null = null;
+  @Input() ProblemType: string | null = null;
+  @Input() Height = '';
   @Output() RowsLoaded = new EventEmitter<PredictionGridRowsLoadedEvent>();
   @Output() RowsLoadFailed = new EventEmitter<string>();
 }
@@ -77,7 +88,8 @@ class GridStub {
 const MODEL_ID = 'M0000000-0000-4000-8000-000000000001';
 const ENTITY_ID = 'E0000000-0000-4000-8000-000000000001';
 
-const model = {
+/** The published model's stored fields (built into a typed entity row by {@link fakeEngine}). */
+const model: Partial<MJMLModelEntity> = {
   ID: MODEL_ID,
   Status: 'Published',
   ProblemType: 'classification',
@@ -88,26 +100,34 @@ const model = {
   FeatureImportance: null,
   PipelineID: 'P1',
   __mj_UpdatedAt: new Date('2026-10-01T00:00:00Z'),
-} as unknown as MJMLModelEntity;
+};
 
 const SHIPPED: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null };
 const NO_SIGNAL: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
 const KEEP_GLM: GateDecision = { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null };
 
+/** What a stored run may hold besides its decision: other intervals, and the trainer request naming the candidates' drivers. */
+interface StoredResultsOptions {
+  readonly Intervals?: Partial<StoredGateRecord['intervals']>;
+  readonly TrainerRequest?: TrainerRequestConfig | null;
+  /** The stored reason; absent, a fixed sentence that quotes no number. */
+  readonly Reason?: StoredGateRecord['reason'];
+}
+
 /** The `ValidationResults` a unit training run stores, with this gate decision measured on 1,205 holdout rows. */
-function storedResults(decision: GateDecision): string {
+function storedResults(decision: GateDecision, o: StoredResultsOptions = {}): string {
   const gate: StoredGateRecord = {
     evaluationProtocolId: 'EP-1', margin: 0, primaryMetric: 'log-loss', holdoutRows: 1205,
-    intervals: { modelName: 'xgb', modelVsDummy: { value: 0.0177, lower: 0.0098, upper: 0.0254 }, modelVsBestSimple: null, memberVsDummy: {}, memberScores: {}, deliveredMember: null },
+    intervals: { modelName: 'xgb', modelVsDummy: { value: 0.0177, lower: 0.0098, upper: 0.0254 }, modelVsBestSimple: null, memberVsDummy: {}, memberScores: {}, deliveredMember: null, ...o.Intervals },
     guards: { taskKind: 'binary', holdoutClassCounts: { '0': 900, '1': 305 }, modelAucInterval: { level: 0.95, lower: 0.6, upper: 0.7 }, minMinorityClassRows: 20 },
     transcribed: decision, decision, guardRefusal: null,
-    reason: { code: decision.outcome === 'no-signal' ? 'nothing-beats-dummy' : 'only-model-beats-dummy', text: decision.outcome === 'no-signal' ? 'Nothing beats the flat guess.' : 'The model beats the flat guess.' },
+    reason: o.Reason || { code: decision.outcome === 'no-signal' ? 'nothing-beats-dummy' : 'only-model-beats-dummy', text: decision.outcome === 'no-signal' ? 'Nothing beats the flat guess.' : 'The model beats the flat guess.' },
     incumbentDiff: null, sliceCoverage: { missingSubgroups: [], missingPeriods: [], slicesWithoutInterval: 0 },
   };
   return JSON.stringify({
     schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
     unitResolution: { rowsRead: 1205, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1205, dataCutoff: '2026-07-30' },
-    trainer: null, trainerRequest: null, carve: null, gate,
+    trainer: null, trainerRequest: o.TrainerRequest || null, carve: null, gate,
   });
 }
 
@@ -116,35 +136,43 @@ function storedResults(decision: GateDecision): string {
  * driver); the comparison between them is not 0 [0, 0].
  */
 function keptGlmResults(): string {
-  const parsed: { gate: StoredGateRecord } & Record<string, unknown> = JSON.parse(storedResults(KEEP_GLM));
-  parsed.gate = {
-    ...parsed.gate,
-    intervals: { ...parsed.gate.intervals, modelName: 'lr-tuned', modelVsBestSimple: { value: 0.004, lower: -0.001, upper: 0.009 }, memberVsDummy: { glm: { value: 0.0239, lower: 0.011, upper: 0.036 } }, memberScores: { glm: 0.3652 } },
-  };
-  parsed['trainerRequest'] = {
-    evaluationProtocolId: 'EP-1', seed: 7, threads: 1, timeoutSeconds: 600, maxRetries: 0,
-    candidates: [{ name: 'lr-tuned', algorithmId: 'A-1', driverKey: 'logistic_regression', hyperparameters: {} }],
-  };
-  return JSON.stringify(parsed);
+  return storedResults(KEEP_GLM, {
+    Intervals: { modelName: 'lr-tuned', modelVsBestSimple: { value: 0.004, lower: -0.001, upper: 0.009 }, memberVsDummy: { glm: { value: 0.0239, lower: 0.011, upper: 0.036 } }, memberScores: { glm: 0.3652 } },
+    TrainerRequest: {
+      evaluationProtocolId: 'EP-1', seed: 7, threads: 1, timeoutSeconds: 600, maxRetries: 0,
+      candidates: [{ name: 'lr-tuned', algorithmId: 'A-1', driverKey: 'logistic_regression', hyperparameters: {} }],
+    },
+  });
 }
 
-/** The engine members the workspace reads. `LoadRunDetails` must never be called: the grid reads the run. */
-function fakeEngine(validationResults: string | null = storedResults(SHIPPED), lineage: string | null = null) {
-  const published = { ...model, Lineage: lineage } as MJMLModelEntity;
+/**
+ * The engine the workspace reads: the real engine instance (what `GetProviderInstance` returns here), its cache getters
+ * answering typed entity rows and its methods spied. `LoadRunDetails` must never be called: the grid reads the run.
+ */
+async function fakeEngine(validationResults: string | null = storedResults(SHIPPED), lineage: string | null = null) {
+  const engine = PredictiveStudioEngine.Instance;
+  const published = await TestEntityRows.Of(MJMLModelEntity, 'MJ: ML Models', { ...model, Lineage: lineage });
+  // newest first, as the engine loads them: the older run of the same model must not be the one the card reads
+  const runs = await TestEntityRows.Many(MJMLTrainingRunEntity, 'MJ: ML Training Runs', [
+    { ID: 'run-new', ResultingModelID: MODEL_ID.toLowerCase(), ValidationResults: validationResults },
+    { ID: 'run-old', ResultingModelID: MODEL_ID, ValidationResults: storedResults(NO_SIGNAL) },
+  ]);
+  const pipelines = await TestEntityRows.Many(MJMLTrainingPipelineEntity, 'MJ: ML Training Pipelines', [{ ID: 'P1', TargetEntityID: ENTITY_ID }]);
+  vi.spyOn(engine, 'Models', 'get').mockReturnValue([published]);
+  vi.spyOn(engine, 'PublishedModels', 'get').mockReturnValue([published]);
+  vi.spyOn(engine, 'Sessions', 'get').mockReturnValue([]);
+  vi.spyOn(engine, 'TrainingRuns', 'get').mockReturnValue(runs);
+  vi.spyOn(engine, 'Pipelines', 'get').mockReturnValue(pipelines);
+  vi.spyOn(engine, 'ModelDisplayName').mockReturnValue('Who will renew?');
   return {
-    Config: vi.fn(async () => undefined),
-    Models: [published],
-    Sessions: [],
-    PublishedModels: [published],
-    // newest first, as the engine loads them: the older run of the same model must not be the one the card reads
-    TrainingRuns: [
-      { ID: 'run-new', ResultingModelID: MODEL_ID.toLowerCase(), ValidationResults: validationResults },
-      { ID: 'run-old', ResultingModelID: MODEL_ID, ValidationResults: storedResults(NO_SIGNAL) },
-    ],
-    Pipelines: [{ ID: 'P1', TargetEntityID: ENTITY_ID } as unknown as MJMLTrainingPipelineEntity],
-    ModelDisplayName: () => 'Who will renew?',
-    LoadRecentRunsForModel: vi.fn(async () => [{ ID: 'run-1' }]),
-    LoadRunDetails: vi.fn(async () => ({ Rows: [], Capped: false })),
+    Engine: engine,
+    Config: vi.spyOn(engine, 'Config').mockResolvedValue(undefined),
+    LoadRecentRunsForModel: vi.spyOn(engine, 'LoadRecentRunsForModel').mockResolvedValue([
+      { ID: 'run-1', Status: 'Complete', StartTime: null, CreatedAt: null, SuccessCount: 0, ProcessName: null, EntityName: null, DryRun: false },
+    ]),
+    LoadRunDetails: vi.spyOn(engine, 'LoadRunDetails').mockResolvedValue({ Rows: [], Capped: false }),
+    // the embedded grid reads its model pipeline's scoring bindings from the engine's cache
+    ScoringBindingsForPipeline: vi.spyOn(engine, 'ScoringBindingsForPipeline').mockReturnValue([]),
   };
 }
 
@@ -170,11 +198,11 @@ const settle = async (fixture: ComponentFixture<PSPredictionsResourceComponent>)
   fixture.detectChanges();
 };
 
-async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null, lineage: string | null = null) {
-  const engine = fakeEngine(validationResults, lineage);
-  vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(engine as unknown as PredictiveStudioEngine);
+async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null, lineage: string | null = null, grid: typeof GridStub | typeof PSPredictionsGridComponent = GridStub) {
+  const engine = await fakeEngine(validationResults, lineage);
+  vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(engine.Engine);
   const fixture = RenderComponentFixture(PSPredictionsResourceComponent, {
-    imports: [MJButtonDirective, PageHeaderInteriorStub, PageBodyInteriorStub, SplitStub, SplitAreaStub, LoadingStub, GridStub],
+    imports: [MJButtonDirective, PageHeaderInteriorStub, PageBodyInteriorStub, SplitStub, SplitAreaStub, LoadingStub, grid],
     declarations: [PSPredictionsResourceComponent],
     providers: [{ provide: NavigationService, useValue: fakeNavigation() }],
     setup: (instance) => {
@@ -204,36 +232,110 @@ const gridStub = (fixture: ComponentFixture<PSPredictionsResourceComponent>): Gr
 
 afterEach(() => vi.restoreAllMocks());
 
-/** A List Detail double: the group it joined, its latest result, and a save that queues it (or refuses it). */
-interface ListDetailDouble { ListID: string; RecordID: string; TransactionGroup: object | null; LatestResult: { CompleteMessage: string }; Save: () => Promise<boolean> }
+/** The bulk list client "Send to a list" calls: one spy per server operation it may use. */
+const listsClient = {
+  AddRecordsToList: vi.fn<(listId: string, recordIds: readonly string[], opts?: { Status?: string; SequenceFromOrder?: boolean }) => Promise<ApplyResult>>(),
+};
+
+/** The `MJ: ML Output Bindings` fields the embedded grid reads. */
+type BindingRow = Pick<MJMLOutputBindingEntity, 'ID' | 'ModelID' | 'Surface' | 'SortsBy' | 'DriverDirectionRelativeTo' | 'Label'>;
+
+/** The model fields the embedded grid reads. */
+type GridModelRow = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'ProblemType' | 'TargetVariable' | 'Lineage' | 'OutputSemantics'>;
+
+/** What {@link RenderResource} renders: the model, its at-risk-list binding row's fields under test, the latest run's scores. */
+interface RenderResourceOptions {
+  model: GridModelRow;
+  binding: Partial<SemanticsCheckBinding>;
+  scores: number[];
+}
+
+/** The latest Champion Model value of `recordId` for a model whose class order is ['true', 'false']: the score is P(false). */
+const latestValue = (recordId: string, score: number): LatestPredictionRow => ({
+  ID: `LV-${recordId}`, RecordID: recordId, ValueText: 'false', ValueNumeric: score, Confidence: score,
+  ValueJSON: JSON.stringify({ Probabilities: { true: 1 - score, false: score }, Drivers: [] }),
+  ComputedAt: new Date('2026-10-01T00:00:00Z'),
+});
 
 /**
- * A provider whose List saves and whose List Details join one transaction group the test controls: `submit` decides the
- * group's outcome and `queues(i)` whether the i-th detail's save queues it.
+ * Opens the prediction in the workspace with the real embedded grid (appended to `host`): the provider serves the model
+ * and its at-risk-list binding row, the latest run holds `scores` in that stored order.
  */
-function listProvider(submit: () => Promise<boolean>, queues: (i: number) => boolean = () => true) {
-  const Details: ListDetailDouble[] = [];
-  const Submit = vi.fn(submit);
-  const Group = { Submit };
+async function RenderResource(host: HTMLElement, options: RenderResourceOptions): Promise<{ Reads: RunViewParams[]; Engine: Awaited<ReturnType<typeof fakeEngine>> }> {
+  const reads: RunViewParams[] = [];
+  const binding: BindingRow = {
+    ID: 'B-list', ModelID: options.model.ID, Surface: options.binding.Surface || 'at-risk-list', SortsBy: options.binding.SortsBy || 'adverse-probability-desc',
+    DriverDirectionRelativeTo: options.binding.DriverDirectionRelativeTo || 'adverse-class', Label: options.binding.Label || 'false risk',
+  };
+  const served = (p: RunViewParams): Array<GridModelRow | BindingRow | LatestPredictionRow> => {
+    reads.push(p);
+    if (p.EntityName === 'MJ: ML Models') return [options.model];
+    if (p.EntityName === 'MJ: Latest Feature Values') return options.scores.map((score, i) => latestValue(`r${i}`, score));
+    if (p.EntityName === 'MJ: ML Output Bindings') return (typeof p.ExtraFilter === 'string' ? p.ExtraFilter : '').includes(`Surface='${binding.Surface}'`) ? [binding] : [];
+    return [];
+  };
+  const provider = CreateFakeProvider<GridModelRow | BindingRow | LatestPredictionRow>({ entities: [{ ID: ENTITY_ID, Name: 'Members' }], runViewResults: served });
+  const { fixture, resource, engine } = await renderCatalog(provider, undefined, null, PSPredictionsGridComponent);
+  // the engine's cached scoring binding of the model's pipeline: the double carries only the members the grid reads
+  engine.ScoringBindingsForPipeline.mockReturnValue([
+    await TestEntityRows.Of(MJMLModelScoringBindingEntity, 'MJ: ML Model Scoring Bindings', { ID: 'SB1', MLTrainingPipelineID: options.model.PipelineID, FeatureName: 'Renewal risk', TargetEntityID: ENTITY_ID, Status: 'Active' }),
+  ]);
+  resource.Open(resource.Cards[0]);
+  await settle(fixture);
+  await settle(fixture);
+  host.appendChild(fixture.nativeElement);
+  return { Reads: reads, Engine: engine };
+}
+
+/** The scores of the at-risk list's rows as the embedded grid shows them, top row first. */
+const AtRiskRowScores = (host: HTMLElement): number[] =>
+  Array.from(host.querySelectorAll('[data-testid="ps-atrisk-list"] .ag-center-cols-container .ag-row'))
+    .sort((a, b) => Number(a.getAttribute('row-index')) - Number(b.getAttribute('row-index')))
+    .map((r) => Number(r.querySelector('[data-testid="ps-score-cell"]')?.getAttribute('data-score')));
+
+/** The open prediction's at-risk-list binding row with `sortsBy`. */
+const atRiskListBinding = (sortsBy: SemanticsCheckBinding['SortsBy']): SemanticsCheckBinding => ({
+  BindingID: 'B-list', Surface: 'at-risk-list', SortsBy: sortsBy, DriverDirectionRelativeTo: sortsBy === 'none' ? 'raw-contribution' : 'adverse-class', Label: sortsBy === 'none' ? 'Predicted class' : 'false risk',
+});
+
+/**
+ * A GraphQL provider whose List saves; it records the name of every entity object the workspace creates, and `add`
+ * is the server's answer to the bulk add.
+ */
+function listProvider(add: ApplyResult) {
+  const EntityObjectNames: string[] = [];
   const base = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
-  const Provider = {
+  const fake = {
     ...base,
-    CreateTransactionGroup: vi.fn(async () => Group),
+    CreateTransactionGroup: vi.fn(async () => ({ Submit: async () => true })),
     GetEntityObject: vi.fn(async (entityName: string) => {
-      if (entityName === 'MJ: Lists') return { ID: 'L1', Name: '', Save: async () => true } as unknown as MJListEntity;
-      const i = Details.length;
-      const d: ListDetailDouble = { ListID: '', RecordID: '', TransactionGroup: null, LatestResult: { CompleteMessage: `detail ${i} refused` }, Save: async () => queues(i) };
-      Details.push(d);
-      return d as unknown as MJListDetailEntity;
+      EntityObjectNames.push(entityName);
+      return { ID: 'L1', Name: '', Save: async () => true } as unknown as MJListEntity;
     }),
-  } as unknown as IMetadataProvider;
-  return { Provider, Group, Submit, Details };
+  };
+  Object.setPrototypeOf(fake, GraphQLDataProvider.prototype);
+  listsClient.AddRecordsToList.mockReset();
+  listsClient.AddRecordsToList.mockResolvedValue(add);
+  return { Provider: fake as unknown as IMetadataProvider, EntityObjectNames, CreateTransactionGroup: fake.CreateTransactionGroup };
+}
+
+/** The server's answer to an add of `added` new members with `failed` failures. */
+function addResult(added: number, failed = 0, errors?: string[]): ApplyResult {
+  const ok = failed === 0;
+  return {
+    Success: ok,
+    ResultCode: ok ? 'SUCCESS' : 'PARTIAL_SUCCESS',
+    Message: ok ? `Added ${added}, removed 0 member(s)` : `Added ${added}, removed 0 member(s), ${failed} failed`,
+    TargetListId: 'L1',
+    Counts: { Added: added, Removed: 0, Failed: failed },
+    Errors: errors,
+  };
 }
 
 /** Loads 250 records at or above the list's risk floor (plus 10 below it) and sends them to a list. */
-async function sendAtRisk(fixture: ComponentFixture<PSPredictionsResourceComponent>, resource: PSPredictionsResourceComponent): Promise<void> {
+async function sendAtRisk(fixture: ComponentFixture<PSPredictionsResourceComponent>, resource: PSPredictionsResourceComponent, binding: SemanticsCheckBinding | null = null): Promise<void> {
   const rows = [...Array.from({ length: 250 }, (_, i) => row(`hi-${i}`, 80)), ...Array.from({ length: 10 }, (_, i) => row(`lo-${i}`, 10))];
-  gridStub(fixture)?.RowsLoaded.emit({ Rows: rows, Capped: false });
+  gridStub(fixture)?.RowsLoaded.emit({ Rows: rows, Capped: false, Binding: binding });
   await settle(fixture);
   await resource.SendToList();
   fixture.detectChanges();
@@ -281,6 +383,46 @@ describe('PSPredictionsResourceComponent (DOM) — trust renders the stored gate
     expect(card?.querySelector('[data-testid="ps-open-prediction"]')).toBeNull();
   });
 
+  it("every number the trust banner renders is a traced number of the card's run, and recomputes from the run's stored JSON", async () => {
+    const decision: GateDecision = { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null };
+    const intervals = { modelName: 'xgb', modelVsDummy: { value: 0.02, lower: 0.01, upper: 0.03 }, modelVsBestSimple: { value: 0.006, lower: -0.001, upper: 0.011 }, memberVsDummy: {}, memberScores: {}, deliveredMember: null };
+    const reason = GateRules.DescribeGate(intervals, { Transcribed: decision, Decision: decision, GuardRefusal: null }, 'log-loss');
+    expect(reason.code).toBe('model-beats-best-simple');
+    const json = storedResults(decision, { Intervals: intervals, Reason: reason });
+    const { fixture, resource } = await renderCatalog(defaultProvider(), json);
+    resource.Open(resource.Cards[0]);
+    await settle(fixture);
+    const card = resource.Selected;
+    expect(card?.runId).toBe('run-new');
+    if (card === null) return;
+    const numbers = resource.TrustNumbers(card);
+    const vsDummy = ['value', 'lower', 'upper'].map((k) => `$.gate.intervals.modelVsDummy.${k}`);
+    const vsBest = ['value', 'lower', 'upper'].map((k) => `$.gate.intervals.modelVsBestSimple.${k}`);
+    expect(numbers.map((n) => [n.Text, n.Source.Path])).toEqual([
+      ['1,205', '$.gate.holdoutRows'],
+      ['0.0200', vsDummy[0]], ['0.0100', vsDummy[1]], ['0.0300', vsDummy[2]],
+      ['0.0200', vsDummy[0]], ['0.0100', vsDummy[1]], ['0.0300', vsDummy[2]],
+      ['0.0060', vsBest[0]], ['-0.0010', vsBest[1]], ['0.0110', vsBest[2]],
+    ]);
+    const banner = Query(fixture, '[data-testid="ps-trust-banner"]');
+    const rendered = ['.ps-trust-evidence', '.ps-trust-line', '.ps-trust-explain'].map((sel) => banner?.querySelector(sel)?.textContent || '').join(' ');
+    const tokens = rendered.match(/-?\d[\d,]*(?:\.\d+)?%?/g) || [];
+    expect(tokens).toEqual(['1,205', '0.0200', '0.0100', '0.0300', '0.0200', '0.0100', '0.0300', '0.0060', '-0.0010', '0.0110']);
+    const texts = new Set(numbers.map((n) => n.Text));
+    for (const token of tokens) expect(texts.has(token)).toBe(true);
+    for (const n of numbers) {
+      expect(n.Source).toEqual({ EntityName: 'MJ: ML Training Runs', RecordID: 'run-new', Path: n.Source.Path });
+      expect(TracedNumbers.Recompute(n, json)).toBeCloseTo(n.Value, 12);
+    }
+  });
+
+  it('a card without a training run renders the trust line without a count and traces no number', async () => {
+    const { resource } = await renderCatalog(defaultProvider());
+    const cardWithoutRun = { ...resource.Cards[0], runId: null };
+    expect(resource.Evidence(cardWithoutRun)).toBe('Checked against past records it had never seen.');
+    expect(resource.TrustNumbers(cardWithoutRun)).toEqual([]);
+  });
+
   it('a published model whose run stores no gate decision is not evaluated and does not open', async () => {
     const { fixture, resource } = await renderCatalog(defaultProvider(), null);
     const card = Query(fixture, '[data-testid="ps-prediction-card"]');
@@ -293,11 +435,13 @@ describe('PSPredictionsResourceComponent (DOM) — trust renders the stored gate
 });
 
 describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
-  it('passes the resolved latest run to the grid and takes its rows from RowsLoaded, never reading the run itself', async () => {
+  it('leaves the grid to read the latest values and takes its rows from RowsLoaded, never reading a run itself', async () => {
     const { fixture, resource, engine } = await renderWorkspace();
     const grid = gridStub(fixture);
-    expect(grid?.runId).toBe('run-1');
-    grid?.RowsLoaded.emit({ Rows: [row('a', 90), row('b', 20)], Capped: false });
+    expect(grid?.RunId).toBeNull();
+    expect(engine.LoadRecentRunsForModel).not.toHaveBeenCalled();
+    expect(grid?.Surface).toBe('at-risk-list');
+    grid?.RowsLoaded.emit({ Rows: [row('a', 90), row('b', 20)], Capped: false, Binding: null });
     await settle(fixture);
     expect(resource.AtRiskRows.map((r) => r.RecordID)).toEqual(['a', 'b']);
     expect(resource.AtRiskLoading).toBe(false);
@@ -307,7 +451,7 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
 
   it('shows the capped notice without promising list coverage', async () => {
     const { fixture } = await renderWorkspace();
-    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: true });
+    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: true, Binding: null });
     await settle(fixture);
     expect(Query(fixture, '[data-testid="ps-atrisk-capped"]')?.textContent?.trim()).toBe(
       'The latest run has more than 50,000 predictions; this list shows the first 50,000.',
@@ -316,7 +460,7 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
 
   it('resets the rows and the capped notice when the prediction is reopened', async () => {
     const { fixture, resource } = await renderWorkspace();
-    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: true });
+    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: true, Binding: null });
     await settle(fixture);
     resource.BackToCatalog();
     resource.Open(resource.Cards[0]);
@@ -327,38 +471,65 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
   });
 
   it('reports how many of the qualifying records "Send to a list" added', async () => {
-    const lists = listProvider(async () => true);
+    const lists = listProvider(addResult(200));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     await sendAtRisk(fixture, resource);
-    expect(lists.Details.length).toBe(200);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 200 of 250 at-risk records (highest risk first)');
   });
 
-  it('queues every member on one transaction group and submits it once, so the adds take one round trip', async () => {
-    const lists = listProvider(async () => true);
+  it("a list whose at-risk-list binding sorts by 'none' cannot be sent: the control is off, says why, and nothing is written", async () => {
+    const lists = listProvider(addResult(200));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
-    await sendAtRisk(fixture, resource);
-    expect([lists.Submit.mock.calls.length, lists.Details.every((d) => d.TransactionGroup === lists.Group)]).toEqual([1, true]);
+    await sendAtRisk(fixture, resource, atRiskListBinding('none'));
+    const button = Query(fixture, '[data-testid="ps-act-list"]');
+    expect(button instanceof HTMLButtonElement && button.disabled).toBe(true);
+    expect(Query(fixture, '[data-testid="ps-act-list-reason"]')?.textContent?.trim()).toBe('This list is not ranked by risk: its At-Risk list binding sorts by none.');
+    expect(button?.getAttribute('title')).toBe(AtRiskRules.NoRankingReason);
+    expect([lists.EntityObjectNames.length, listsClient.AddRecordsToList.mock.calls.length, Query(fixture, '[data-testid="ps-list-result"]')]).toEqual([0, 0, null]);
   });
 
-  it('counts nothing added when the batch fails, naming the first error', async () => {
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const lists = listProvider(async () => false);
+  it("a list whose at-risk-list binding sorts by adverse probability is sent as before", async () => {
+    const lists = listProvider(addResult(200));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
-    await sendAtRisk(fixture, resource);
-    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 0 of 200 records to “At-Risk: ');
-    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('200 failed to add (first error: detail 0 refused)');
-    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 200/200 adds failed. First: detail 0 refused')]);
+    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: false, Binding: atRiskListBinding('adverse-probability-desc') });
+    await settle(fixture);
+    const button = Query(fixture, '[data-testid="ps-act-list"]');
+    expect(button instanceof HTMLButtonElement && button.disabled).toBe(false);
+    expect(Query(fixture, '[data-testid="ps-act-list-reason"]')).toBeNull();
+    await sendAtRisk(fixture, resource, atRiskListBinding('adverse-probability-desc'));
+    expect(listsClient.AddRecordsToList.mock.calls[0][1].length).toBe(200);
   });
 
-  it('counts a member refused before it joined the batch as failed, and the rest as added', async () => {
+  it('adds every member with one server call, highest risk first, and creates no List Details rows in the browser', async () => {
+    const lists = listProvider(addResult(200));
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(listsClient.AddRecordsToList.mock.calls.length).toBe(1);
+    const [listId, recordIds, opts] = listsClient.AddRecordsToList.mock.calls[0];
+    expect(opts).toEqual({ Status: 'Active', SequenceFromOrder: true });
+    expect([listId, recordIds.length, recordIds[0]]).toEqual(['L1', 200, 'hi-0']);
+    expect(lists.EntityObjectNames).toEqual(['MJ: Lists']);
+    expect(lists.CreateTransactionGroup).not.toHaveBeenCalled();
+  });
+
+  it('counts the failed members of a partial add, naming the first error', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const lists = listProvider(async () => true, (i) => i !== 3);
+    const lists = listProvider(addResult(199, 1, ["Failed to add 'hi-3': refused"]));
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     await sendAtRisk(fixture, resource);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 199 of 200 records');
-    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('1 failed to add (first error: detail 3 refused)');
-    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 1/200 adds failed. First: detail 3 refused')]);
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain("1 failed to add (first error: Failed to add 'hi-3': refused)");
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining("sendToList: 1/200 adds failed. First: Failed to add 'hi-3': refused")]);
+  });
+
+  it('counts nothing added when the server refuses the add, naming its message', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const lists = listProvider({ Success: false, ResultCode: 'TARGET_NOT_FOUND', Message: 'List L1 not found' });
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 0 of 200 records to “At-Risk: ');
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('200 failed to add (first error: List L1 not found)');
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 200/200 adds failed. First: List L1 not found')]);
   });
 });
 
@@ -373,5 +544,35 @@ describe('PSPredictionsResourceComponent (DOM) — the co-pilot agent lookup', (
     expect(config.mock.calls.map((c) => c[2] === provider)).toEqual([true]);
     // the stubbed engine holds no agents, so the lookup logs that chat falls back to default routing
     expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining("'Model Development Agent' not found")]);
+  });
+});
+
+describe('PSPredictionsResourceComponent (DOM) — the At-Risk list from its binding row', () => {
+  /** A model named for renewal whose adverse class is `Renewed = false`: the score is P(not renewed), so it is not inverted. */
+  const renewalNamed: GridModelRow = {
+    ID: MODEL_ID, PipelineID: 'P1', ProblemType: 'classification', TargetVariable: 'Renewed', Lineage: null,
+    OutputSemantics: JSON.stringify({ task: { kind: 'binary', classOrder: ['true', 'false'], adverseIndex: 1 } }),
+  };
+  let fixture: HTMLElement;
+  beforeEach(() => {
+    fixture = document.createElement('div');
+    document.body.appendChild(fixture);
+  });
+  afterEach(() => fixture.remove());
+
+  it('sorts the At-Risk list by the binding row', async () => {
+    await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc' }, scores: [0.9, 0.2, 0.6] });
+    expect(AtRiskRowScores(fixture)).toEqual([0.9, 0.6, 0.2]);   // adverse probability, highest first
+  });
+
+  it("reads the At-Risk list from MJ: Latest Feature Values for the binding's feature, never a run's details", async () => {
+    const { Reads, Engine } = await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc' }, scores: [0.9] });
+    expect(Reads.find((p) => p.EntityName === 'MJ: Latest Feature Values')?.ExtraFilter).toBe(`EntityID='${ENTITY_ID}' AND FeatureName='Renewal risk' AND Source='Model'`);
+    expect(Engine.LoadRunDetails).not.toHaveBeenCalled();
+  });
+
+  it("keeps the stored scoring order when the binding row sorts by 'none'", async () => {
+    await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'none' }, scores: [0.9, 0.2, 0.6] });
+    expect(AtRiskRowScores(fixture)).toEqual([0.9, 0.2, 0.6]);
   });
 });

@@ -151,6 +151,7 @@ import {
     MJQueryParameterEntity,
     MJUserViewEntityExtended,
     QueryEngine,
+    UserCanApproveQueries,
     ViewInfo,
 } from '@memberjunction/core-entities';
 
@@ -267,7 +268,7 @@ interface QueryColumnFilter {
  */
 /**
  * Thrown when a nested savepoint fails because the ambient physical transaction
- * was already rolled back by the server (mssql ENOTBEGUN/EABORT, pg 25P01).
+ * was already rolled back or aborted by the server (mssql ENOTBEGUN/EABORT, pg 25P01/25P02).
  * Opening a second physical TX would commit inner work after the outer writes
  * were gone. Callers must fail the outer unit — `Save()` returns false.
  */
@@ -409,6 +410,12 @@ export function FormatSqlParameterTypesForError(parameters: unknown): string {
         .map(s => `${s.name}:${s.type}${s.byteLength !== undefined ? `(${s.byteLength}B)` : ''}`)
         .join(', ');
 }
+
+/** The run-time checks of a saved query for one user, and why the draft screen refused it, if it did. */
+type QueryRunCheckResult = RenderedSQLCheckResult & {
+    /** Why {@link GenericDatabaseProvider.draftScreenRefusal} refused a draft. For the operator log; never shown to the user. */
+    draftScreenRefusal?: string;
+};
 
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase implements ClientClauseScreeningProvider {
     private static readonly _sqlObserversGlobalKey = '___MJ_SQL_OBSERVERS___';
@@ -4936,6 +4943,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
+            // The denylist alone cannot close the unquoted-format hole its own comment above
+            // describes: a term made of balanced parentheses and comparison operators carries no
+            // forbidden keyword yet still rewrites the predicate structure around `{0}`. When a
+            // format splices the term outside a string literal, refuse the characters that give
+            // SQL its STRUCTURE — parens, quotes, comparison operators, brackets, semicolons.
+            // Ordinary search text (words, numbers, emails, hyphens) is unaffected. A format that
+            // quotes its slot (` = '{0}'`) keeps the quote-doubled term inside the literal, so
+            // those characters are data there and stay allowed.
+            if (this.userSearchFieldsSpliceTermUnquoted(entityInfo, deniedSearchFields) && /[()=<>;'"[\]`]/.test(safeUserSearchString)) {
+                throw new Error(
+                    `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
+                    `which splices the term directly into SQL unquoted, so structural SQL characters ` +
+                    `(parentheses, quotes, comparison operators, brackets, semicolons) are not allowed in the term.`,
+                );
+            }
             // The built-in predicates have no phrase syntax, so they search a quoted phrase without its
             // quotes (UnwrapPhraseQuotes). A custom format is SQL, screened above as typed, so it gets
             // the term as typed.
@@ -5010,6 +5032,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                  !!f.UserSearchParamFormatAPI && f.UserSearchParamFormatAPI.length > 0 &&
                  !deniedFields?.has(f.Name.trim().toLowerCase()),
         );
+    }
+
+    /**
+     * True when a searchable field's custom format puts the term outside a string literal, as
+     * ` = {0}` does. Fields denied by field security are left out, as in
+     * {@link userSearchFieldsUseCustomFormat}.
+     */
+    protected userSearchFieldsSpliceTermUnquoted(entityInfo: EntityInfo, deniedFields?: Set<string>): boolean {
+        return entityInfo.Fields.some(
+            f => f.IncludeInUserSearchAPI &&
+                 !!f.UserSearchParamFormatAPI &&
+                 !deniedFields?.has(f.Name.trim().toLowerCase()) &&
+                 !this.customSearchFormatQuotesTerm(f.UserSearchParamFormatAPI),
+        );
+    }
+
+    /**
+     * True when the `{0}` slot of a custom search format sits inside a single-quoted SQL string
+     * literal, or the format has no slot. Only the first `{0}` is substituted, so only it is read.
+     */
+    protected customSearchFormatQuotesTerm(format: string): boolean {
+        const slot = format.indexOf('{0}');
+        if (slot < 0) return true;
+        const closers: Record<string, string> = { "'": "'", '[': ']', '"': '"' };
+        let openedBy: string | null = null;
+        for (const ch of format.slice(0, slot)) {
+            if (openedBy === null) {
+                if (ch in closers) openedBy = ch;
+            } else if (ch === closers[openedBy]) {
+                // A doubled quote inside a literal closes and reopens it, which leaves the state right.
+                openedBy = null;
+            }
+        }
+        return openedBy === "'";
     }
 
     /**
@@ -6589,7 +6645,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!item.cacheStatus || this.clientSlotDefinitionDiffers(item.cacheStatus, definition)) {
                     // No slot, or the client's slot holds rows of another definition of the query:
                     // whatever CacheValidationSQL says about the data, those rows came from other SQL.
-                    if (query.CacheValidationSQL) {
+                    if (GenericDatabaseProvider.validationSQLOf(query)) {
                         // First fetch for a validated query — run the validation status
                         // anyway so the fresh response is STAMPED with the validation
                         // SQL's maxUpdatedAt/rowCount. Slots stamped from result rows
@@ -6602,7 +6658,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
-                if (!query.CacheValidationSQL) {
+                if (!GenericDatabaseProvider.validationSQLOf(query)) {
                     itemsWithoutValidationSQL.push({ index: i, item, query });
                     continue;
                 }
@@ -6677,7 +6733,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     ): { canRun: boolean; deniedEntities: string[]; renderError?: string } {
         const mayAnswerWithoutRunning = !!item.cacheStatus
             && !this.clientSlotDefinitionDiffers(item.cacheStatus, definition)
-            && !!query.CacheValidationSQL;
+            && !!GenericDatabaseProvider.validationSQLOf(query);
         if (mayAnswerWithoutRunning) {
             return this.authorizeQueryRun(query, item.params.Parameters, user);
         }
@@ -7008,11 +7064,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     private logQueryRunRefusal(
         query: MJQueryEntityExtended,
         user: UserInfo,
-        result: { deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation },
+        result: { deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation; draftScreenRefusal?: string },
     ): void {
         const v = result.fieldSecurityViolation;
         const queryRoles = (query.QueryPermissions ?? []).map(p => p.Role).join(', ');
-        const reason = v
+        const reason = result.draftScreenRefusal
+            ? `the draft screen (status '${query.Status}', and the user does not hold Queries: Approve): ${result.draftScreenRefusal}`
+            : v
             ? `field-level security (${v.Kind}: ${v.Reference}${v.Entity ? ` on ${v.Entity.Name}` : ''})`
             : result.deniedEntities.length > 0
                 ? `unreadable entities (${result.deniedEntities.join(', ')})`
@@ -7032,13 +7090,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * projection stars are read first ({@link projectionStarOffsets}), so a plain `*` can run with
      * its denied columns dropped instead of being refused.
      */
-    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo, logRefusal = true): RenderedSQLCheckResult {
-        const stars = this.projectionStarOffsets(renderedSQL, user);
-        const result = query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey, stars ? { ProjectionStarOffsets: stars } : undefined);
+    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo, logRefusal = true): QueryRunCheckResult {
+        const draftScreenRefusal = this.draftScreenRefusal(query, renderedSQL, user);
+        const stars = draftScreenRefusal ? undefined : this.projectionStarOffsets(renderedSQL, user);
+        const result: QueryRunCheckResult = draftScreenRefusal
+            ? { canRun: false, deniedEntities: [], draftScreenRefusal }
+            : query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey, stars ? { ProjectionStarOffsets: stars } : undefined);
         if (!result.canRun && logRefusal) {
             this.logQueryRunRefusal(query, user, result);
         }
         return result;
+    }
+
+    /**
+     * SECURITY — the draft screen. A draft (any status but Approved) is SQL nobody holding
+     * `Queries: Approve` has vouched for, so for a user who does not hold that authorization it gets
+     * the screen ad-hoc SQL gets ({@link ClientClauseScreen.AssertStatementReadsUnscopedEntityViews}),
+     * on the SQL as it will run: one read statement whose every SELECT is accounted for, reading only
+     * entity base views that user reads unscoped — no row-level or API-key row filter, no denied
+     * field, not confined by RunView's server hooks. Base tables, system catalogs, table functions,
+     * and SQL the statement reader cannot fully account for are refused. Raw SQL applies none of the
+     * policy RunView applies, so a draft must not read where that policy would narrow the user.
+     *
+     * Not screened: an Approved query, which runs with its approver's trust; a query with a role list
+     * (`MJ: Query Permissions`), which authorizes on its own; and a user who holds `Queries: Approve`
+     * (or is an Owner), who could approve the draft and run anything it reads, so screening them
+     * would protect nothing, unless their session carries an API-key row filter.
+     *
+     * @returns why the screen refused the draft, for the operator log; null when it may run
+     */
+    private draftScreenRefusal(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo): string | null {
+        if (query.Status === 'Approved' || GenericDatabaseProvider.roleListGrants(query)) return null;
+        if (GenericDatabaseProvider.exemptFromDraftScreen(user, this)) return null;
+        try {
+            ClientClauseScreen.AssertStatementReadsUnscopedEntityViews(renderedSQL, this.Entities, this.Dialect, user, `draft query '${query.Name}'`);
+            return null;
+        } catch (e) {
+            return e instanceof Error ? e.message : String(e);
+        }
+    }
+
+    /**
+     * Whether a user's runs of drafts skip the screen: they hold `Queries: Approve` (or are an
+     * Owner), and the session carries no API-key row filter. A key's row filter narrows what the
+     * session may read whatever its user could approve, so such a session is screened.
+     */
+    private static exemptFromDraftScreen(user: UserInfo, provider: GenericDatabaseProvider): boolean {
+        return !user.APIKeyRowFilters?.length && UserCanApproveQueries(user, provider);
     }
 
     /** Projection-star offsets per rendered statement and dialect ({@link FindProjectionStars}). */
@@ -7092,6 +7190,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return { canRun: false, deniedEntities: [], renderError: e instanceof Error ? e.message : String(e) };
         }
         return this.checkRenderedQuery(query, renderedSQL, user, logRefusal);
+    }
+
+    /**
+     * The query's `CacheValidationSQL` when a cache check may run it: only for an Approved query.
+     * That SQL runs as written, with none of the checks the query's own SQL goes through, so a
+     * draft's is never run. A draft goes down the `no_validation` route instead, whose fresh rows
+     * come from the normal (checked) run.
+     */
+    private static validationSQLOf(query: MJQueryEntityExtended): string | null {
+        return query.Status === 'Approved' && query.CacheValidationSQL ? query.CacheValidationSQL : null;
     }
 
     /** True when the query carries a role list (`MJ: Query Permissions` rows), which authorizes a run by itself. */
@@ -10244,6 +10352,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Unlike {@link MetadataMemberRefreshMustWait} (which defers a local member-entity write until
+     * that transaction commits), a peer metadata notice comes from another server whose write has
+     * already committed and persisted its snapshot to the shared cache. Because
+     * {@link datasetReadsOnPool} runs `MJ_Metadata` status and dataset reads on the connection pool
+     * (`ignoreAmbientTransaction: true`) whenever {@link MetadataReadsJoinTransaction} is false, an
+     * unrelated local transaction on the global provider (such as a scheduled job saving
+     * `MJ: Entity Record Documents`) must not defer adopting a peer's metadata update.
+     */
+    protected override get PeerMetadataNoticeMustWait(): boolean {
+        return this.MetadataReadsJoinTransaction && this.MetadataMemberRefreshMustWait;
+    }
+
+    /**
      * Throw if a statement from a member of the ambient transaction would run on the pool while its
      * frames are still open after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
      * — outermost begin has depth 1 before the handle is published, and concurrent reads on SQL
@@ -10782,7 +10903,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         for (let i = 0; i < 5 && current; i++) {
             if (current && typeof current === 'object' && 'code' in current) {
                 const code = String((current as { code: unknown }).code);
-                if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01') {
+                // PostgreSQL: 25P02 in_failed_sql_transaction ("current transaction is aborted") is the code
+                // an aborted transaction answers with; 25P01 no_active_sql_transaction means it is gone.
+                if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01' || code === '25P02') {
                     return true;
                 }
             }

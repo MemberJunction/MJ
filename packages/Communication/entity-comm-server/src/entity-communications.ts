@@ -1,9 +1,10 @@
-import { CommunicationEngine } from "@memberjunction/communication-engine";
-import { MJCommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
+import { CommunicationEngine, ProcessedMessageServer } from "@memberjunction/communication-engine";
+import { MJCommunicationProviderEntityExtended, Message, MessageRecipient, RenderAndSendParams, SendingEnvelope, SendV2Result } from "@memberjunction/communication-types";
 import { EntityInfo, IMetadataProvider, IRunViewProvider, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJListDetailEntityType, MJListEntityType, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import { MJEntityCommunicationMessageTypeEntityExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationResultItem, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
+import { TemplatedCommunicationService } from "./TemplatedCommunicationService";
 
  
 /** One row of a recipient or related-entity view, as RunView returns it with `ResultType: 'simple'`. */
@@ -58,12 +59,30 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const entityInfo = this.EntityLookupFor(provider).Entities.find(e => UUIDsEqual(e.ID, params.EntityID));
             if (!entityInfo)
                 throw new Error(`Entity ${params.EntityID} not found`);
-            if (!this.EntitySupportsCommunication(params.EntityID))
-                throw new Error(`Entity ${params.EntityID} does not support communication`);
+            if (!this.EntitySupportsCommunication(params.EntityID)) {
+                // Refresh once in case an entity communication mapping was just created at runtime
+                await this.Config(true, contextUser, provider);
+                if (!this.EntitySupportsCommunication(params.EntityID))
+                    throw new Error(`Entity ${params.EntityID} does not support communication`);
+            }
 
             await CommunicationEngine.Instance.Config(false, contextUser);
             const entityMessageType = this.ResolveEntityMessageType(params);
             const records = await this.RunRecipientView(entityInfo, params.RunViewParams, contextUser, provider);
+
+            const optInV2 =
+                params.UseV2 === true ||
+                params.Message.ContextData?.['UseV2'] === true;
+            const usesV1OnlyFeatures = Boolean(
+                params.Message.From ||
+                (params.Message.CCRecipients && params.Message.CCRecipients.length > 0) ||
+                (params.Message.BCCRecipients && params.Message.BCCRecipients.length > 0) ||
+                (params.Message.Subject && (params.Message.BodyTemplate || params.Message.HTMLBodyTemplate) && !params.Message.SubjectTemplate),
+            );
+            if (optInV2 && !usesV1OnlyFeatures) {
+                return await this.runEntityCommunicationV2(params, entityInfo, entityMessageType, records, contextUser, provider);
+            }
+
             const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, params.Message, records, contextUser, provider);
             return await this.SendToRecipients(params, recipients, contextUser);
         }
@@ -84,8 +103,16 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
      */
     protected async SendToRecipients(params: EntityCommunicationParams, recipients: EntityCommunicationRecipient[], contextUser: UserInfo): Promise<EntityCommunicationResult> {
         const sendable = recipients.filter(r => !r.SkipReason).map(r => r.Recipient);
+        const gatedMessage: Message = Object.assign(
+            Object.create(Object.getPrototypeOf(params.Message) as object),
+            params.Message,
+            {
+                MessageClass: params.Message.MessageClass ?? 'Operational',
+                CheckComplianceGate: params.Message.CheckComplianceGate ?? true,
+            },
+        );
         const sendResult = sendable.length === 0 ? [] :
-            await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, params.Message, sendable, params.PreviewOnly, undefined, contextUser);
+            await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, gatedMessage, sendable, params.PreviewOnly, undefined, contextUser);
         if (!sendResult || sendResult.length !== sendable.length) {
             return {
                 Success: false,
@@ -379,5 +406,212 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         }
         // if we get here, we are good, otherwise we will have thrown an exception
         return true;
+    }
+
+    /**
+     * Routes V1 `RunEntityCommunication()` through the V2 pipeline, preserving V1's
+     * `EntityCommunicationResult` shape. The envelope uses the default sender (`IsDefault = 1`),
+     * `MessageClass = 'Operational'`, no preference, and the provider named in the V1 params.
+     * Messages without templates go straight to `CommunicationEngine.Send()`; templated messages go
+     * through `TemplatedCommunicationService` with `AutoAppendComplianceFooter = true`.
+     */
+    private async runEntityCommunicationV2(
+        params: EntityCommunicationParams,
+        entityInfo: EntityInfo,
+        entityMessageType: MJEntityCommunicationMessageTypeEntityExtended,
+        records: EntityCommunicationRecord[],
+        contextUser: UserInfo,
+        provider?: RequestProvider,
+    ): Promise<EntityCommunicationResult> {
+        const recordLevelPref = (entityInfo.PreferredCommunicationField?.length ?? 0) > 0;
+        const entityLevelPrefField = [...entityMessageType.CommunicationFields].sort((a, b) => a.Priority - b.Priority)[0];
+        const deniedRead = entityInfo.FieldLevelSecurityApplies ? entityInfo.GetDeniedReadFields(contextUser) : new Set<string>();
+        const pkFieldName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: recipient key is single-column PK
+
+        const skippedUnreadable: EntityCommunicationResultItem[] = [];
+        const readableRecipients: RenderAndSendParams['Recipients'] = [];
+
+        for (const r of records) {
+            const addressField = !recordLevelPref
+                ? entityLevelPrefField?.FieldName
+                : (r[entityInfo.PreferredCommunicationField] as string | undefined);
+            if (!this.IsAddressFieldReadable(entityInfo, addressField, deniedRead, recordLevelPref)) {
+                skippedUnreadable.push({
+                    RecipientData: { To: undefined, ContextData: {} },
+                    Message: undefined,
+                    Skipped: true,
+                    SkipReason: RECIPIENT_ADDRESS_UNREADABLE_MESSAGE,
+                });
+                continue;
+            }
+            const hasTemplatesForQueue = Boolean(
+                params.Message.SubjectTemplate ||
+                params.Message.BodyTemplate ||
+                params.Message.HTMLBodyTemplate,
+            );
+            const rawAddress = addressField ? r[addressField] : undefined;
+            readableRecipients.push({
+                Principal: {
+                    EntityID: params.EntityID,
+                    RecordID: String(r[pkFieldName] ?? ''),
+                    ...(hasTemplatesForQueue && !params.PreviewOnly ? {} : { RecordData: r }),
+                },
+                Endpoint: rawAddress ? { Address: String(rawAddress) } : undefined,
+                ContextData: params.Message.ContextData,
+            });
+        }
+
+        if (readableRecipients.length === 0) {
+            return {
+                Success: false,
+                ErrorMessage: `${RECIPIENT_ADDRESS_UNREADABLE_MESSAGE} (${skippedUnreadable.length} recipient${skippedUnreadable.length === 1 ? '' : 's'})`,
+                Results: skippedUnreadable,
+            };
+        }
+
+        const providerEntity = CommunicationEngine.Instance.Providers.find(
+            (p) => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase(),
+        );
+
+        const envelope: SendingEnvelope = {
+            SenderID: undefined, // V2SendService defaults to IsDefault = 1
+            MessageClass: 'Operational',
+            ChannelID: entityMessageType.BaseMessageTypeID,
+            ProviderID: providerEntity?.ID,
+            ScheduledAt: params.Message.SendAt,
+            DryRun: params.Message.DryRun,
+        };
+
+        const hasTemplates = Boolean(
+            params.Message.SubjectTemplate ||
+            params.Message.BodyTemplate ||
+            params.Message.HTMLBodyTemplate,
+        );
+
+        if (!hasTemplates && !params.PreviewOnly) {
+            const sendResult = await CommunicationEngine.Instance.Send(
+                {
+                    Envelope: envelope,
+                    Payload: {
+                        Subject: params.Message.Subject,
+                        Body: params.Message.Body,
+                        HTMLBody: params.Message.HTMLBody,
+                        Headers: params.Message.Headers,
+                    },
+                    Recipients: readableRecipients.map((r) => ({
+                        Principal: r.Principal,
+                        Endpoint: r.Endpoint,
+                    })),
+                },
+                contextUser,
+            );
+            return this.MapV2SendResult(params, sendResult, skippedUnreadable);
+        }
+
+        const renderParams: RenderAndSendParams = {
+            Envelope: envelope,
+            EntityID: params.EntityID,
+            Recipients: readableRecipients,
+            Templates: {
+                SubjectTemplateID: params.Message.SubjectTemplate?.ID,
+                BodyTemplateID: params.Message.BodyTemplate?.ID,
+                HTMLBodyTemplateID: params.Message.HTMLBodyTemplate?.ID,
+                SharedContextData: params.Message.ContextData,
+            },
+            AutoAppendComplianceFooter: true,
+            RenderMode: params.PreviewOnly || params.IncludeProcessedMessages ? 'Inline' : 'WorkQueue',
+        };
+
+        if (params.PreviewOnly) {
+            const preview = await TemplatedCommunicationService.Instance.RenderAndPreview(
+                renderParams,
+                contextUser,
+                provider,
+            );
+            const previewItems: EntityCommunicationResultItem[] = [
+                ...skippedUnreadable,
+                ...preview.Blocked.map((b) => ({
+                    RecipientData: { To: b.Endpoint?.RawValue, ContextData: {} },
+                    Message: undefined,
+                    Skipped: true,
+                    SkipReason: b.Reason,
+                })),
+                ...preview.Rendered.filter((r) => r.RenderError === undefined).map((r) => {
+                    const msg = new ProcessedMessageServer(params.Message);
+                    msg.To = r.Recipient.Endpoint.RawValue;
+                    msg.ProcessedSubject = r.Subject ?? params.Message.Subject ?? '';
+                    msg.ProcessedBody = r.Body ?? params.Message.Body ?? '';
+                    msg.ProcessedHTMLBody = r.HTMLBody ?? params.Message.HTMLBody ?? '';
+                    return {
+                        RecipientData: { To: r.Recipient.Endpoint.RawValue, ContextData: r.Recipient.ContextData ?? {} },
+                        Message: msg,
+                    };
+                }),
+            ];
+            // Mirror V1: a recipient whose message could not be built keeps its result item and its
+            // error, and fails the run; recipients that were skipped do not.
+            const renderFailures = preview.Rendered.filter((r) => r.RenderError !== undefined);
+            for (const r of renderFailures) {
+                previewItems.push({
+                    RecipientData: { To: r.Recipient.Endpoint.RawValue, ContextData: r.Recipient.ContextData ?? {} },
+                    Message: undefined,
+                });
+            }
+            const previewErrors = [
+                ...renderFailures.map((r) => `${r.Recipient.Endpoint.RawValue}: ${r.RenderError}`),
+                ...previewItems.filter((i) => i.Skipped).map((i) => i.SkipReason),
+            ];
+            return {
+                Success: renderFailures.length === 0 && preview.Rendered.length > renderFailures.length,
+                ErrorMessage: previewErrors.join('; '),
+                Results: previewItems,
+            };
+        }
+
+        const sendResult = await TemplatedCommunicationService.Instance.RenderAndSend(
+            renderParams,
+            contextUser,
+            provider,
+        );
+
+        return this.MapV2SendResult(params, sendResult, skippedUnreadable);
+    }
+
+    /**
+     * Maps a V2 send result onto V1's `EntityCommunicationResult`, with V1's failure semantics:
+     * `Blocked` and `Deferred` recipients are skipped; a `Failed` recipient keeps its result item,
+     * adds its error to `ErrorMessage` and makes the whole result unsuccessful, as a failed send
+     * does in `SendToRecipients`.
+     */
+    protected MapV2SendResult(
+        params: EntityCommunicationParams,
+        sendResult: SendV2Result,
+        skippedUnreadable: EntityCommunicationResultItem[],
+    ): EntityCommunicationResult {
+        const results: EntityCommunicationResultItem[] = [...skippedUnreadable];
+        const errors: string[] = [];
+        for (const o of sendResult.Outcomes ?? []) {
+            const to = o.Endpoint?.RawValue;
+            if (o.Status === 'Blocked' || o.Status === 'Deferred') {
+                results.push({ RecipientData: { To: to, ContextData: {} }, Message: undefined, Skipped: true, SkipReason: o.Reason ?? o.Status });
+                continue;
+            }
+            // 'Sent' and 'DryRun' are successes (a V1 dry run also reports a successful result with
+            // its message); 'Failed', including 'OutcomeUnknown', is a failure.
+            const msg = new ProcessedMessageServer(params.Message);
+            msg.To = to ?? '';
+            results.push({ RecipientData: { To: to, ContextData: {} }, Message: msg });
+            if (o.Status === 'Failed') {
+                errors.push(`${to ?? 'recipient'}: ${[o.Reason, o.Detail].filter(Boolean).join(' - ') || 'Failed'}`);
+            }
+        }
+        if (sendResult.ErrorMessage) errors.unshift(sendResult.ErrorMessage);
+        const anyFailed = (sendResult.Outcomes ?? []).some((o) => o.Status === 'Failed');
+        const skipReasons = results.filter((i) => i.Skipped).map((i) => i.SkipReason ?? '');
+        return {
+            Success: sendResult.Success && !anyFailed && sendResult.QueuedCount + (sendResult.DryRunCount ?? 0) > 0,
+            ErrorMessage: [...errors, ...skipReasons].filter(Boolean).join('; '),
+            Results: results,
+        };
     }
 }

@@ -158,6 +158,27 @@ export function QuoteConstraintNames(sql: string): string {
 }
 
 /**
+ * Make SQL Server default-constraint drops idempotent on PostgreSQL.
+ *
+ * PostgreSQL migrations define column defaults inline (`"Col" VARCHAR(20) NOT NULL DEFAULT 'X'`)
+ * or via `ALTER COLUMN ... SET DEFAULT ...` without creating named `DF_*` constraint objects.
+ * Rewriting `DROP CONSTRAINT "DF_..."` to `DROP CONSTRAINT IF EXISTS "DF_..."` prevents
+ * `constraint "DF_..." of relation "..." does not exist` failures while still dropping any
+ * explicitly named constraint if one exists.
+ */
+export function MakeDropDefaultConstraintIdempotent(sql: string): string {
+  return TransformCodeOnly(sql, (code) =>
+    code.replace(
+      /\bDROP\s+CONSTRAINT\s+(?!IF\s+EXISTS\b)("?DF_[\w$]+"?)/gi,
+      (_match, name: string) => {
+        const quoted = name.startsWith('"') ? name : `"${name}"`;
+        return `DROP CONSTRAINT IF EXISTS ${quoted}`;
+      }
+    )
+  );
+}
+
+/**
  * Emit a DO-block that drops every overload of a function in a given schema.
  *
  * PG dispatches functions by `(name, ordered-arg-type-list)`. `CREATE OR
@@ -831,15 +852,28 @@ export function ConvertTopToLimit(sql: string): string {
     const before = sql.slice(0, r.start);
     const after = sql.slice(r.end);
 
-    // Find end of this SELECT statement (semicolon, closing paren at depth 0, or end)
+    // Find end of this SELECT statement (semicolon, closing paren at depth 0,
+    // statement/control-flow boundary on a new line at depth 0, or end)
     let depth = 0;
     let endPos = after.length;
+    const isProtected = (absPos: number): boolean =>
+      protectedRanges.some(pr => absPos >= pr.start && absPos < pr.end);
     for (let j = 0; j < after.length; j++) {
+      if (isProtected(r.end + j)) continue;
       if (after[j] === '(') depth++;
       else if (after[j] === ')') {
         if (depth === 0) { endPos = j; break; }
         depth--;
-      } else if (after[j] === ';' && depth === 0) { endPos = j; break; }
+      } else if (after[j] === ';' && depth === 0) {
+        endPos = j;
+        break;
+      } else if (after[j] === '\n' && depth === 0) {
+        const nextLine = after.slice(j + 1).replace(/^[ \t]+/, '');
+        if (/^(?:ELSE|ELSIF|END|IF|RETURN|UPDATE|INSERT|DELETE|SET|DECLARE|BEGIN|COMMIT|ROLLBACK|EXEC|PERFORM|RAISE)\b/i.test(nextLine)) {
+          endPos = j;
+          break;
+        }
+      }
     }
 
     const selectBody = after.slice(0, endPos);
@@ -1841,4 +1875,71 @@ export function ConvertInRoutineSchema(sql: string, convert: (coreSchemaSql: str
 export function NeedsHandAuthoring(kind: string, reason: string, sql: string): string {
   const commented = sql.trim().split('\n').map((l) => `-- ${l}`).join('\n');
   return `${GAP_MARKER_NEEDS_HAND_AUTHORING}: ${kind} — ${reason}\n${commented}\n`;
+}
+
+/**
+ * Add `ON TRUE` after a `LEFT JOIN LATERAL (...)` that has no join condition — PostgreSQL requires
+ * one, T-SQL's `OUTER APPLY` has none. Line-based: tracks paren depth from the LATERAL keyword to the
+ * line that closes it, then inserts `ON TRUE` unless the next line already starts with `ON`.
+ *
+ * Only a LEFT join gets one. This logic used to live in ViewRule and fired on any LATERAL, which put
+ * `ON TRUE` after `CROSS JOIN LATERAL` too — a PostgreSQL syntax error (`syntax error at or near "on"`).
+ *
+ * @param sql - SQL whose `APPLY` clauses have already been rewritten to `LATERAL`.
+ * @returns The SQL with each unconditioned LATERAL join given `ON TRUE`.
+ */
+export function AddLateralOnTrue(sql: string): string {
+  const lines = sql.split('\n');
+  const result: string[] = [];
+  let lateralDepth = 0;
+  let inLateral = false;
+  const needsOnAfter = (i: number): boolean => !(i + 1 < lines.length ? lines[i + 1].trim().toUpperCase() : '').startsWith('ON ');
+
+  for (let i = 0; i < lines.length; i++) {
+    result.push(lines[i]);
+
+    // Detect LEFT JOIN LATERAL block start
+    if (/\bLEFT\s+(?:OUTER\s+)?JOIN\s+LATERAL\b/i.test(lines[i]) && !inLateral) {
+      const rest = lines[i].slice(lines[i].search(/\bLATERAL\b/i));
+      const openCount = [...rest].filter((ch) => ch === '(').length;
+      const closeCount = [...rest].filter((ch) => ch === ')').length;
+      if (openCount > closeCount) {
+        // Multi-line LATERAL: opening paren not closed on this line
+        inLateral = true;
+        lateralDepth = openCount - closeCount;
+      } else if (openCount > 0 && openCount === closeCount && needsOnAfter(i)) {
+        // Single-line LATERAL: fully closed on this line
+        result.push('    ON TRUE');
+      }
+      continue;
+    }
+
+    // Track multi-line LATERAL depth
+    if (inLateral) {
+      for (const ch of lines[i]) {
+        if (ch === '(') lateralDepth++;
+        else if (ch === ')') lateralDepth--;
+      }
+      if (lateralDepth <= 0) {
+        inLateral = false;
+        if (needsOnAfter(i)) result.push('    ON TRUE');
+      }
+    }
+  }
+  return result.join('\n');
+}
+
+/**
+ * Rewrite T-SQL `OUTER APPLY` / `CROSS APPLY` to PostgreSQL LATERAL joins: `OUTER APPLY (...) x`
+ * becomes `LEFT JOIN LATERAL (...) x ON TRUE`, and `CROSS APPLY` becomes `CROSS JOIN LATERAL`.
+ *
+ * @param sql - T-SQL text (views, inline table-valued function bodies).
+ * @returns The rewritten SQL.
+ */
+export function ConvertApplyToLateral(sql: string): string {
+  if (!/\b(?:OUTER|CROSS)\s+APPLY\b/i.test(sql)) return sql;
+  const rewritten = sql
+    .replace(/\bCROSS\s+APPLY\b/gi, 'CROSS JOIN LATERAL')
+    .replace(/\bOUTER\s+APPLY\b/gi, 'LEFT JOIN LATERAL');
+  return AddLateralOnTrue(rewritten);
 }

@@ -1,5 +1,148 @@
 # Change Log - @memberjunction/cli
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 374e799: Add `mj test regression new`, which scaffolds a regression test file and its suite member.
+- 0507590: Add Azure Service Bus WorkQueue transport (`@memberjunction/work-queue-azure`), `@memberjunction/work-queue-engine/azure` driver factory and SQL filter manifest enricher, `ServiceBusMessagePump`, `@memberjunction/work-queue-azure/functions` Azure Functions serverless adapter, full Azure samples suite, and opt-in live-cloud integration tests.
+- 8626f1c: Add Google Cloud Pub/Sub WorkQueue transport (`@memberjunction/work-queue-gcp`), `@memberjunction/work-queue-engine/gcp` driver factory and Pub/Sub filter manifest enricher, `PubSubMessagePump`, `@memberjunction/work-queue-gcp/cloudrun` Cloud Run HTTP Push adapter, full GCP samples suite, and opt-in live-cloud integration tests.
+- 87f0917: PostgreSQL on managed hosts: one TLS setting for every client, token logins, and one API pool instead of two.
+  - **TLS.** MJAPI's pools, the PostgreSQL provider, CodeGen, `mj migrate` (and its connection check), MetadataSync and the pgvector provider all take TLS from one resolver, `BuildPgSslConfig`. It reads `PG_SSL_MODE` (`disable` | `require` | `verify-ca` | `verify-full`), `PG_SSL_CA_FILE` and `PG_SSL_SERVERNAME`; MJAPI also reads `databaseSettings.postgres.ssl` in `mj.config.cjs`. **Behavior change:** with no setting, a host on this machine or a bare service name (`localhost`, `postgres`, `db`) uses plain TCP and any other host uses `verify-full`. Before, MJAPI's own pools never used TLS and CodeGen never did; a remote server without TLS now needs `PG_SSL_MODE=disable`. `PG_VECTOR_SSL=true` now verifies the server certificate (it used to skip the check); `PG_SSL_MODE=require` restores the old behavior.
+  - **Token logins.** `PG_AUTH_MODE` (or `databaseSettings.postgres.authMode`) selects a `BasePgCredentialProvider` registered under that key, which supplies a token for each new connection. Two ship with the provider: `azure-entra` (Microsoft Entra ID via `DefaultAzureCredential`, for Azure Database for PostgreSQL and Azure HorizonDB) and `aws-rds-iam` (RDS/Aurora IAM tokens). Their SDKs, `@azure/identity` and `@aws-sdk/rds-signer`, are optional peer dependencies loaded only in that mode. Token modes require a verified TLS connection. `PGConnectionConfig.PasswordSource` carries the callback.
+  - **Connections.** MJAPI and MetadataSync configure the PostgreSQL provider on the pool they already opened (`ConfigWithSharedPool`) instead of letting it open a second one, which removes up to `connectionPool.max` connections per MJAPI. At startup MJAPI warns when its pools could open more than 80% of the server's usable `max_connections`; `connectionPool.expectedInstances` multiplies the estimate for a fleet.
+  - **Read replicas.** `PG_READ_REPLICA_HOST` / `PG_READ_REPLICA_PORT` (or `databaseSettings.postgres.readReplica`) points the ad-hoc read-only pool (caller-supplied SQL, reports, agents) at a replica; `PG_READ_REPLICA_POOLS=all-read-only` moves the application read-only pool too. Both keep the read-only login. Unset, nothing changes.
+  - `mj migrate`'s connection check explains a PostgreSQL certificate it cannot verify (point `PG_SSL_CA_FILE` at the CA) and a server that only accepts TLS.
+  - **User search** on PostgreSQL matches case-insensitively (`ILIKE`), as SQL Server does under its default collation. Before, searching "acme" did not find "Acme Corp" on PostgreSQL.
+
+- 0ad5413: Complete `@memberjunction/cli` documentation across all 32 command domains (129 commands) with an automated Vitest CLI docs coverage guard, restore full domain discovery in `mj usage` / `mj <domain> usage`, add tier-2 `usage` commands for all remaining domains, and add memoized per-vendor CLI binary executability probing (`<binary> --version` -> `Binary Missing`) to `HarnessAccountPoolService` and `mj harness account list`.
+- 5e78d71: Open Apps can declare `publicPages` in `mj-app.json`: pages the host serves before sign-in, at `/p/<slug>`. A page answers the addresses under its slug only with `"subPaths": true`. An entry with `"role": "error"` and a `scope` is an error page for a folder under `/p/` (empty scope: all of `/p/`). The manifest rejects reserved slugs such as `login`, `auth` and `admin`. `mj app install` and `mj app upgrade` write the entries to a top-level `publicPages` array in `mj.config.cjs` and fail when another installed app owns a slug; `mj app remove`, `enable` and `disable` remove or toggle them. `mj codegen manifest --open-app-client-bootstrap` now also writes the host's page list, `public-pages.generated.ts`, beside the class manifest, and warns when the host's `main.ts` does not call `StartExplorer()`. The new `mj explorer postbuild --dir <build folder>` is the host's `postbuild` script: it runs the service worker cache check and writes `public-pages/<slug>.html` for each page, with its title, link preview tags, a robots tag and a Content Security Policy that allows only the site's own scripts, and without the map library tags. It also writes `public-pages/_fallback.html`, with the same policy and a `noindex` robots tag, for the `/p/` addresses that have no page file. When the build folder has a `staticwebapp.config.json` (Azure Static Web Apps), it also adds a rewrite for each page and for the fallback file.
+- 488d789: PostgreSQL converter fixes. Legacy path: one boolean-column registry per run (latest baseline plus each converted file), so a view over a table an earlier migration created compares with `TRUE` (#5016); `HASHBYTES` and `CONVERT(VARCHAR, <binary>, 1|2)` become sha256/sha512/md5 and hex text (#6538); unique indexes and constraints get `NULLS NOT DISTINCT` (#5194). Split path: `DATEDIFF(day)` as date subtraction, mixed-case user functions keep their name, a self-aliased `UPDATE … FROM … LEFT JOIN` becomes a ctid self-join, the same HASHBYTES / unique-index fixes, `DROP COLUMN` drops dependent views first, and MJ's catalog views use their hand-written PG text (#6348, #6538, #3345). Bake: the working DB's boolean columns are re-read after each migration; `mj migrate rebake --file … [--capture-only]` keeps a baked file's hand region and replaces only its CodeGen section, a full `rebake` is a dry run without `--write`, and a capture failure after the apply names the resume command. `convert` skips migrations older than the oldest baseline.
+- d74bfbb: PostgreSQL fixes found by running the deterministic integration tier against PostgreSQL.
+  - **A commit that PostgreSQL rolled back no longer reports success.** Once a statement fails inside a PostgreSQL transaction, `COMMIT` does not error: the server rolls the transaction back and answers `ROLLBACK`. The PostgreSQL provider now checks that reply and throws `DoomedTransactionError`, so the caller learns its writes did not persist.
+  - **An aborted PostgreSQL transaction is recognized as doomed.** SQLSTATE `25P02` (`in_failed_sql_transaction`) now marks the ambient transaction doomed, as `25P01` and the SQL Server codes already did, so nested units and saves inside it refuse instead of failing with a raw driver error.
+  - **Saving a record whose nullable boolean is NULL no longer reports a false concurrency conflict.** The conflict check read the caller's `null` old value as `false` but compared it with the stored `NULL` as is, so on PostgreSQL (which stores NULL where SQL Server's column default stores 0) every edit of such a field was rejected as "Concurrent modification conflict". The stored side now gets the same rule.
+  - **`mj app install` and Open App migrations follow the PostgreSQL TLS and login settings.** The migration run and the metadata refresh after it now use the same `PG_SSL_*` and `PG_AUTH_MODE` resolution as `mj migrate`, through a new `SSL` option on the engine's database config. Before, both connected without TLS and failed against a server that requires it.
+  - Integration checks that assumed SQL Server: `ISNULL` in a filter, `[RecordChange]` bracket quoting, a constraint lookup that compared PostgreSQL's mixed-case names in lowercase, and the list-from-query fixture's bracket-quoted SQL, which the provider now quotes.
+
+- e750895: `mj migrate` on PostgreSQL now checks the database before it applies the first migration, and `mj doctor --db` runs the same checks on their own. The checks cover the server version (14 or later), the `cdp_*` group roles, the extensions the pending migrations create (including the `azure.extensions` allowlist on Azure), whether the migrate login has `CREATE` on the database and owns the target schema, TLS, and `max_connections`. When a check fails, the command exits non-zero with the SQL an administrator must run. That SQL comes from the installer's `BuildPostgresSetupSteps`, which `@memberjunction/installer` now exports with `POSTGRES_MJ_GROUP_ROLES`, `POSTGRES_MJ_EXTENSIONS`, `QuotePgIdentifier`, `QuotePgLiteral` and `PgSetupStep`. Before this, an unprovisioned database failed partway through the baseline. Pass `--skip-preflight` to skip the checks.
+- 8a73d1b: PostgreSQL converter: an Open App's `[${mjSchema}].sp…` core calls in an mj-sync log now convert on the legacy path, keeping `${mjSchema}` for the installer to substitute; and on the split / bake path an mj-sync log is converted inline (one `DO` block per save) instead of becoming a "re-seeded by `mj sync push`" marker, so a migrate-only install gets its seed rows (#5543). A save that does not convert is a reported gap.
+- 62245bf: `mj test suite --test <name>` and `mj test regression up --test <name>` run only the named tests of a suite (repeat the flag for more than one). `mj test scripts` takes `--format` (console, markdown or json) and `--output`, so its drift report can go into a PR body, and it now exits when it is done instead of staying open.
+- d498eb9: Security hardening across MCP Server, MJServer resolvers/dev-auth, eSignature webhooks, CoreActions, API keys, and Docker configurations.
+  - MCP Server: auth mode `none` is refused when `NODE_ENV=production` and binds strictly to `127.0.0.1` otherwise; session IDs are logged as truncated prefixes; API keys in URL query parameters log a warning and are ignored; API-key scope lookup escapes `apiKeyId` and passes `systemUser` as `contextUser`; OAuth `user_not_found` / `user_inactive` resolutions return a generic 403 `Access denied` without echoing the probed email.
+  - MJServer: `CheckEntityPermissionsSystemUser` is gated with `@RequireSystemUser()`; `UserFavoriteResolver` verifies that the requested `UserID` matches the caller (system user excepted); `SqlLoggingConfigResolver` rejects `fileName`s containing path separators or `..` and validates containment with `path.relative`; `localDevAuth` trusts Docker bridge source IPs only when `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true` is explicitly set (never inferred from `/.dockerenv`).
+  - eSignature: webhooks where `VerifyWebhookSignature === 'NotConfigured'` are refused by default unless `MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true` is explicitly enabled.
+  - CoreActions & APIKeys: `URLLinkValidatorAction.checkSSL` routes through `SafeFetch` for SSRF protection on redirects; `APIKeyEngine` escapes `apiKey.UserID` in its `RunView` filter.
+  - Angular AI Test Harness: `RenderMarkdown` restricts anchor emission to `http:`, `https:`, and `mailto:` URLs with `rel="noopener noreferrer"` before `bypassSecurityTrustHtml`.
+  - Docker: MJAPI image no longer bakes `root:Docker!` into image layers (set at container startup only when `WEBSITE_INSTANCE_ID` starts Azure App Service `sshd`); regression compose binds test SQL Server port `11433` to `127.0.0.1`.
+
+- 736858d: `mj migrate convert --split` / `--bake-codegen`: Open App CodeGen metadata written against `${mjSchema}` (EntityField / Entity / ApplicationEntity UPDATEs, EntitySetting and GeneratedCode INSERTs) is recovered from the CodeGen block; a `vw…` view in a feature migration with no CodeGen banner and no CodeGen routines is treated as hand-written and transpiled; metadata DML dropped in statement mode outside an mj-sync log is a named `METADATA-DML-DROPPED` gap; CodeGen's core refresh calls (`spUpdateExistingEntitiesFromSchema` and siblings) convert to PostgreSQL calls, with `@IncludedSchemaNames` turned into an apply-time excluded list and `@EntityIDs` passed to the two that take it; each `sp_refreshview` is a named, non-blocking warning on both paths; and the bake runs the PostgreSQL field sync between apply and capture, baking `DefaultValue` changes into the file (#5550, #5551, #5919, #5649, #5650).
+- 9f70e4f: PostgreSQL conversion: `DROP INDEX name ON table` (bare or behind an `IF EXISTS (… sys.indexes …)` guard) becomes `DROP INDEX IF EXISTS schema."name"` on both converter paths (#5955); `WITH c AS (…) DELETE FROM c` over one table becomes a `ctid` delete on that table, and any other CTE-targeted delete is a counted gap (#3166). `mj migrate convert` renumbers EntityField Sequence collisions only in the files the run wrote, never in committed `.pg.sql` files (#3166).
+- 9920c0b: Work queue hosts mint a provider per delivery and release it when the handler settles (`IndependentProviderSource`, `WorkQueueProviderSource.ReleaseProvider`); a release failure is logged and never discards the handler's outcome. A long-running `mj queue work` sweeps every 60 s and re-plans every 30 s by default (`--sweeper-interval-ms`, `--reconcile-interval-ms`); `--once` keeps both off. New `mj queue sweep [--json]` runs one sweeper pass for a cron and exits 1 when the pass or any step fails. `MJServerWorkQueueProviderSource` releases the instances it mints.
+- Updated dependencies [e6572e6]
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [765e17f]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [9b51f61]
+- Updated dependencies [0d127f7]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [0507590]
+- Updated dependencies [8626f1c]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [175fed8]
+- Updated dependencies [59afb5f]
+- Updated dependencies [1d4a3f0]
+- Updated dependencies [9499d4b]
+- Updated dependencies [87f0917]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [0ad5413]
+- Updated dependencies [3d5adab]
+- Updated dependencies [3bb566f]
+- Updated dependencies [5e78d71]
+- Updated dependencies [fdf5184]
+- Updated dependencies [488d789]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [e750895]
+- Updated dependencies [8a73d1b]
+- Updated dependencies [3651ef2]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [6757289]
+- Updated dependencies [62245bf]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [447f7fa]
+- Updated dependencies [6946765]
+- Updated dependencies [96bf010]
+- Updated dependencies [736858d]
+- Updated dependencies [b150b0e]
+- Updated dependencies [9f70e4f]
+- Updated dependencies [7f49eac]
+- Updated dependencies [a2ab9a1]
+- Updated dependencies [066bf01]
+- Updated dependencies [3b613c8]
+- Updated dependencies [b7ee801]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [9920c0b]
+  - @memberjunction/ai-agent-harness@6.3.0-edge.2
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core-entities-server@6.3.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/codegen-lib@6.3.0-edge.2
+  - @memberjunction/standards@6.3.0-edge.2
+  - @memberjunction/db-auto-doc@6.3.0-edge.2
+  - @memberjunction/work-queue-engine@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.2
+  - @memberjunction/postgresql-dataprovider@6.3.0-edge.2
+  - @memberjunction/metadata-sync@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/open-app-engine@6.3.0-edge.2
+  - @memberjunction/sql-converter@6.3.0-edge.2
+  - @memberjunction/sqlglot-ts@6.3.0-edge.2
+  - @memberjunction/installer@6.3.0-edge.2
+  - @memberjunction/testing-cli@6.3.0-edge.2
+  - @memberjunction/ai-cli@6.3.0-edge.2
+  - @memberjunction/query-gen@6.3.0-edge.2
+  - @memberjunction/record-cloning@6.3.0-edge.2
+  - @memberjunction/redis-provider@6.3.0-edge.2
+  - @memberjunction/cli-core@6.3.0-edge.2
+  - @memberjunction/diagnostics@6.3.0-edge.2
+  - @memberjunction/config@6.3.0-edge.2
+  - @memberjunction/dynamic-packages@6.3.0-edge.2
+  - @memberjunction/work-queue-core@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

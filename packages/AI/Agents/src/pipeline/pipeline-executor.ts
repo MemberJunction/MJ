@@ -13,7 +13,7 @@
  *
  * @module @memberjunction/ai-agents
  */
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     ClampGraphDepth,
     ClampGraphMaxNodes,
@@ -38,11 +38,11 @@ import { ResolveParams, TemplateScope } from './template';
 import { GetValue, GetValues } from './path';
 import { SizeOf, PreviewOf, DescribeEmptyMatch } from './coerce';
 
-export const MAX_PIPELINE_STAGES = 20;
-export const MAX_MAP_ELEMENTS = 1000;
+export const MAX_PIPELINE_STAGES = CODE_FALLBACK_LIMITS.ResourceGuards.MaxPipelineStages;
+export const MAX_MAP_ELEMENTS = CODE_FALLBACK_LIMITS.ResourceGuards.MaxMapElements;
 export const MAP_CONCURRENCY = 8;
 /** Default wall-clock budget for an entire pipeline (incl. all map/let sub-pipelines). */
-export const DEFAULT_PIPELINE_DEADLINE_MS = 120_000;
+export const DEFAULT_PIPELINE_DEADLINE_MS = CODE_FALLBACK_LIMITS.ResourceGuards.PipelineDeadlineMs;
 
 /** Optional runtime controls for a pipeline execution. */
 export interface PipelineExecutorOptions {
@@ -99,10 +99,10 @@ export class PipelineExecutor {
 
     constructor(
         private readonly registry: PipelineToolRegistry,
-        private readonly maxStages: number = MAX_PIPELINE_STAGES,
+        private readonly maxStages: number = LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxPipelineStages,
         opts: PipelineExecutorOptions = {},
     ) {
-        this.deadlineMs = opts.deadlineMs ?? DEFAULT_PIPELINE_DEADLINE_MS;
+        this.deadlineMs = opts.deadlineMs ?? LimitsConfigResolver.Resolve().Limits.ResourceGuards.PipelineDeadlineMs;
         this.signal = opts.signal;
         this.initialValue = opts.initialValue ?? null;
         this.initialScope = opts.initialScope ? { ...opts.initialScope } : {};
@@ -132,6 +132,7 @@ export class PipelineExecutor {
 
     /** Validate + run a pipeline. Returns a structured result; never throws on stage failure. */
     public async Execute(stages: PipelineStage[]): Promise<PipelineExecutionResult> {
+        this.registry.ResetTaint();
         const shapeError = this.validateShape(stages);
         if (shapeError) {
             return { success: false, finalOutput: null, steps: [], error: shapeError, contextBytesSaved: 0 };
@@ -194,6 +195,7 @@ export class PipelineExecutor {
             // Surface the hint only when the FINAL result is itself degenerate (empty, or all-null
             // elements); a deliberate empty result mid-pipeline that's later repopulated shouldn't nag.
             diagnostic: looksDegenerate(current) ? firstDiagnostic : undefined,
+            ...(this.registry.HighestTaint ? { Taint: this.registry.HighestTaint } : {}),
         };
     }
 
@@ -274,8 +276,9 @@ export class PipelineExecutor {
         if (!Array.isArray(current)) {
             throw new Error(`"map" expects an array to iterate, but the upstream value is ${Array.isArray(current) ? 'an array' : typeof current}.`);
         }
-        if (current.length > MAX_MAP_ELEMENTS) {
-            throw new Error(`"map" capped at ${MAX_MAP_ELEMENTS} elements (got ${current.length}). Narrow upstream with where/first.`);
+        const maxMapElements = LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxMapElements;
+        if (current.length > maxMapElements) {
+            throw new Error(`"map" capped at ${maxMapElements} elements (got ${current.length}). Narrow upstream with where/first.`);
         }
 
         const failFast = cfg.continueOnError === false;

@@ -83,5 +83,72 @@
       "lastModified": "2026-11-10T23:41:22.400Z",
       "checksum": "c4c7629e469272e3dd8e9126a5a0c55740d0b179130596a273e6d4c9153f5e86"
     }
+  },
+  {
+    "fields": {
+      "Name": "Library Knowledge",
+      "Description": "Knowledge graph over the documents people write in MJ Docs. The Content Pipeline synthesizes concepts from their text; [[Name]] links and shared concepts relate documents to each other. Every node is visible only to people who can open the document it came from.",
+      "GraphTypeID": "@lookup:MJ: Graph Types.Name=Knowledge",
+      "LoadMode": "OnDemand",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F38FAED7-250E-4A27-ABD5-70A633FA063A"
+    },
+    "relatedEntities": {
+      "MJ: Graph Edge Providers": [
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Document Links",
+            "Description": "LinksTo edges from the [[Name]] references in a document, recorded as MJ: Record Links by the artifact graph indexer.",
+            "DriverClass": "RecordLinkEdgeProvider",
+            "Configuration": {
+              "LinkTypes": [
+                "LinksTo"
+              ],
+              "EdgeType": "LinksTo",
+              "DefaultWeight": 0.8
+            },
+            "Sequence": 10,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "607AA7B2-1E8C-45C7-AE97-373683763E56"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:48.304Z",
+            "checksum": "e127b2979035117debb6b8c75a15aaad2583b28f5a0df5e6a1a59f4f75f3dd8f"
+          }
+        },
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Shared Concepts",
+            "Description": "SharesConceptWith edges between documents that were sources of the same synthesized concept, derived on read and weighted by how many concepts they share.",
+            "DriverClass": "SharedConceptEdgeProvider",
+            "Configuration": {
+              "EntityNames": [
+                "MJ: Artifacts"
+              ],
+              "MinSharedConcepts": 1
+            },
+            "Sequence": 20,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "431D637F-5121-40D6-830B-129A93B14638"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:48.321Z",
+            "checksum": "612ce604c9ff3d23b05ee5cb2237736f6620b3ed6e4328c2ef6f3c2f653b31fc"
+          }
+        }
+      ]
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:48.239Z",
+      "checksum": "99cfe339c2795a0d2e1e2a95322aa8dbfac85cd2dc24fa907a9f4fe9fb6d31ed"
+    }
   }
 ]

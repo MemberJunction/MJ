@@ -300,6 +300,8 @@ class DecisionFlowHarness {
             }
             throw new Error(`DecisionFlowHarness: unexpected GetEntityObject('${entityName}')`);
         },
+        RunView: async () => ({ Success: true, Results: [] }),
+        RunViews: async () => [],
     };
 
     public get run(): FakeRun {

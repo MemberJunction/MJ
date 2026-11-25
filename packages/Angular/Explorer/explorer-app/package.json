@@ -1,12 +1,24 @@
 {
   "name": "@memberjunction/ng-explorer-app",
-  "version": "6.3.0-edge.1",
+  "version": "6.3.0-edge.2",
   "description": "MemberJunction Explorer Application Shell - Complete branded entry point for Explorer-style applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./bootstrap": {
+      "types": "./dist/bootstrap.d.ts",
+      "default": "./dist/bootstrap.js"
+    },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "ngc && npm run copy-assets",
-    "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat && cpy 'node_modules/@memberjunction/ng-conversations/dist/assets/edge-ai.worker.js' dist/assets --flat",
+    "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat && cpy 'node_modules/@memberjunction/ng-conversations/dist/assets/edge-ai.worker.js' dist/assets --flat && cpy 'node_modules/@fortawesome/fontawesome-free/css/all.min.css' dist/styles/fontawesome/css --flat && cpy 'node_modules/@fortawesome/fontawesome-free/webfonts/*' dist/styles/fontawesome/webfonts --flat",
     "watch": "ngc --watch",
     "clean": "rimraf dist",
     "build:clean": "npm run clean && npm run build",
@@ -23,28 +35,31 @@
   "author": "MemberJunction",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai-agent-client": "6.3.0-edge.1",
-    "@memberjunction/ai-core-plus": "6.3.0-edge.1",
-    "@memberjunction/core": "6.3.0-edge.1",
-    "@memberjunction/core-entities": "6.3.0-edge.1",
-    "@memberjunction/ng-agent-client": "6.3.0-edge.1",
-    "@memberjunction/ng-auth-services": "6.3.0-edge.1",
-    "@memberjunction/ng-base-application": "6.3.0-edge.1",
-    "@memberjunction/ng-base-types": "6.3.0-edge.1",
-    "@memberjunction/ng-bootstrap": "6.3.0-edge.1",
-    "@memberjunction/ng-conversations": "6.3.0-edge.1",
-    "@memberjunction/ng-explorer-core": "6.3.0-edge.1",
-    "@memberjunction/ng-explorer-service-worker": "6.3.0-edge.1",
-    "@memberjunction/ng-feedback": "6.3.0-edge.1",
-    "@memberjunction/ng-notifications": "6.3.0-edge.1",
-    "@memberjunction/ng-realtime-channels": "6.3.0-edge.1",
-    "@memberjunction/ng-shared": "6.3.0-edge.1",
-    "@memberjunction/ng-workspace-initializer": "6.3.0-edge.1",
-    "@memberjunction/theme-engine": "6.3.0-edge.1"
+    "@fortawesome/fontawesome-free": "6.7.2",
+    "@memberjunction/ai-agent-client": "6.3.0-edge.2",
+    "@memberjunction/ai-core-plus": "6.3.0-edge.2",
+    "@memberjunction/core": "6.3.0-edge.2",
+    "@memberjunction/core-entities": "6.3.0-edge.2",
+    "@memberjunction/ng-agent-client": "6.3.0-edge.2",
+    "@memberjunction/ng-auth-services": "6.3.0-edge.2",
+    "@memberjunction/ng-base-application": "6.3.0-edge.2",
+    "@memberjunction/ng-base-types": "6.3.0-edge.2",
+    "@memberjunction/ng-bootstrap": "6.3.0-edge.2",
+    "@memberjunction/ng-conversations": "6.3.0-edge.2",
+    "@memberjunction/ng-explorer-core": "6.3.0-edge.2",
+    "@memberjunction/ng-explorer-service-worker": "6.3.0-edge.2",
+    "@memberjunction/ng-feedback": "6.3.0-edge.2",
+    "@memberjunction/ng-notifications": "6.3.0-edge.2",
+    "@memberjunction/ng-public-host": "6.3.0-edge.2",
+    "@memberjunction/ng-realtime-channels": "6.3.0-edge.2",
+    "@memberjunction/ng-shared": "6.3.0-edge.2",
+    "@memberjunction/ng-workspace-initializer": "6.3.0-edge.2",
+    "@memberjunction/theme-engine": "6.3.0-edge.2"
   },
   "peerDependencies": {
     "@angular/common": "^21.2.22",
     "@angular/core": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
     "@angular/router": "^21.2.22",
     "rxjs": "^7.8.2"
   },

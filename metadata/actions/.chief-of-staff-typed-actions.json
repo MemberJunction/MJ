@@ -1,0 +1,1472 @@
+[
+  {
+    "fields": {
+      "Name": "Get My Agent Context",
+      "Description": "Returns the calling user's identity, active MJ: AI Agent User Policies posture, granted AI skills, and active routine summary without requiring raw SQL.",
+      "DriverClass": "Get My Agent Context",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-id-badge"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional AI Agent ID (defaults to calling agent or Chief of Staff).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FEC86518-C4CF-421B-9810-7E7AEA837A98"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.615Z",
+            "checksum": "91d3342573cc24e3036ef2426f7bb67bce140ca3ab5557ccf49d01ae2be16f82"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional AI Agent name (defaults to Chief of Staff).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "29F9E7A2-F823-42B9-BC7F-E82600DD1660"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.631Z",
+            "checksum": "2ed1df69f015db30e5c3a1c1388d16a64c78c3d0e7f917abd20f7f8aa4bb8109"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON summary of caller user, active policy, granted skills, and routines count.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0B91FC04-61E0-4D83-BD65-C75A82562A5C"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.646Z",
+            "checksum": "aa394553a420f2f2a8ac6f6353661fba167a8fa0d1c52cd916122a23f8328736"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9D97A833-CBB7-4BDC-B201-600391704C28"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.350Z",
+      "checksum": "dcf865cf7b7045b905ffa8d3b103be64f81cfe0d471bca687830923947afada0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Assemble My Briefing",
+      "Description": "Deterministically fans out in parallel across all Briefing-role actions bound to the agent's active permitted skills (AISkillAction.Role IN ('Briefing', 'Both')) and combines them with core pending approvals, active routines, open Agent Channels, and open suggestions.",
+      "DriverClass": "Assemble My Briefing",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-newspaper"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional AI Agent ID (defaults to calling agent or Chief of Staff).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7C1FC490-BF1A-44C5-ADC4-06662C0DAED8"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.662Z",
+            "checksum": "91d3342573cc24e3036ef2426f7bb67bce140ca3ab5557ccf49d01ae2be16f82"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional AI Agent name (defaults to Chief of Staff).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "903AA635-8CE5-40B5-A851-667F864F0AC3"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.676Z",
+            "checksum": "2ed1df69f015db30e5c3a1c1388d16a64c78c3d0e7f917abd20f7f8aa4bb8109"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HorizonDays",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Lookahead horizon in days (1-30, default 7) passed to each skill briefing contributor.",
+            "IsRequired": false,
+            "DefaultValue": "7"
+          },
+          "primaryKey": {
+            "ID": "37E3229F-29E9-4560-8A57-8EC531E2DFD8"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.691Z",
+            "checksum": "217f99b107ba23d12461a932756443f7d6a810bdf9e62e295988c27064dc5f06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeSkillNames",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional comma-separated list of skill names to restrict briefing fan-out.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4DB6A70C-2E33-430B-A34A-0DCE78A724D2"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.704Z",
+            "checksum": "486529e4a4830bfb10ea421af0691b3431dede14bb1ac54aabc4ae73ce8ba8a0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContributorTimeoutMs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Per-contributor timeout in milliseconds (default 10000, range 20-60000). Timed-out contributors return TIMEOUT without stalling peer contributors.",
+            "IsRequired": false,
+            "DefaultValue": "10000"
+          },
+          "primaryKey": {
+            "ID": "B964EF37-D9EC-41C5-B54F-D644E139FA45"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.817Z",
+            "checksum": "ead9e38babb807ea2c0e493bd718b45ded43685fb06ce5c75c03807d8e97f45c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxContributorChars",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum serialized characters per briefing contributor payload (default 32768). Oversized payloads are truncated with Truncated, OriginalChars, and Preview.",
+            "IsRequired": false,
+            "DefaultValue": "32768"
+          },
+          "primaryKey": {
+            "ID": "CE3613C3-A8A6-44D6-822F-2391CAD5C4C7"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.857Z",
+            "checksum": "3d9102ae6a93155f7f40d7f171e73fc229400bddb6e6a8c7ca88869d3f80652d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BriefingJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Assembled briefing JSON combining Core state and per-skill briefing payloads.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "726F8DD6-86FB-4752-AD9C-C8B998A798BA"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.717Z",
+            "checksum": "0afefeb91d611ef667518811fa62b155792a755dc52a5ad91e51d87c8535c46f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "EA939F6D-8548-438A-B99C-77CFF1DD1CC4"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.372Z",
+      "checksum": "8cab0f1f50f02bcef37d2542708c3e16c68f9e9eab3b7960d9f8415d9f27b643"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List My Agent Routines",
+      "Description": "Lists the calling user's MJ: User Routines for the agent, with schedule mode, cron expression, timezone, next run time, and workstream key.",
+      "DriverClass": "List My Agent Routines",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional routine status filter: Active, Paused, Disabled, or All (default All).",
+            "IsRequired": false,
+            "DefaultValue": "All"
+          },
+          "primaryKey": {
+            "ID": "AD71133C-B0F7-4D4A-A4EF-F554C85F8154"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.731Z",
+            "checksum": "0fad5a0f3ea7f8c98804fbbd0906a3b1ba94dbac825e599fd95e6ca0aaca94dd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkstreamKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional exact WorkstreamKey filter.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2D34683D-310A-4604-AC7A-9D8E867D8854"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.744Z",
+            "checksum": "184ad7e50a8c5b07dfc6011ab004990f8e05338d6b7b48e419e16d4a705c5e3a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of routines to return (1-100, default 50).",
+            "IsRequired": false,
+            "DefaultValue": "50"
+          },
+          "primaryKey": {
+            "ID": "6EDB8E71-BE64-4254-8FAF-2C9D41FC9D17"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.758Z",
+            "checksum": "ffde9666c5e33d7b9f8af0967637d5d6bcdff29ba0098ac60a16872b13c14b16"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoutinesJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON list of the user's agent routines.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A5B55D4F-6F4E-4387-ABAD-12DF8E34B9BF"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.773Z",
+            "checksum": "6cc4b55ff141af4bbb327a0a18cfb963167fbe363de065ebbb14a7c01c39c7dd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "24F2239E-8D94-4C89-B7AA-92D7BA111B5B"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.390Z",
+      "checksum": "8346fcc8ad5536228f1f3bc5ee0dbd5129ad9e030223232fe2b631ceba3ad9d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Routine Run Results",
+      "Description": "Retrieves recent execution history (MJ: User Routine Runs) for the calling user's routines, filtered optionally by RoutineID or WorkstreamKey.",
+      "DriverClass": "Get Routine Run Results",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-clock-rotate-left"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoutineID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional routine ID owned by the caller.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EBEDA3A0-EBCD-467C-A46C-DED22299760C"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.789Z",
+            "checksum": "ac11101cbfd0d3a7dda928281339b640f1bcc0dec1e946ec71aa56120438cad9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkstreamKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional workstream key identifying the routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6E482CE9-C7CC-432A-BB39-4AD06457EF72"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.803Z",
+            "checksum": "8ad9344ff826a995a9263e56edf429a388668552ee98c28901c23f4d35cbb067"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of recent runs to return (1-50, default 10).",
+            "IsRequired": false,
+            "DefaultValue": "10"
+          },
+          "primaryKey": {
+            "ID": "3FEB0A3C-994B-4125-A892-60B2E969CC2B"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.820Z",
+            "checksum": "b6e06f458af613243410127ac91e4076f7348246d93f6668359f6147aa6dead6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RunsJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON summary of recent routine run results.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B5C194DF-E78D-4F43-BC8A-E394D96345D1"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.837Z",
+            "checksum": "c33848c7da59cda8180f3f0771665ff74dfaf5a15c8cd1fbea006188e02cbfe3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3A820AB2-E9F6-4FF5-A715-E00E0E7F30BD"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.414Z",
+      "checksum": "a7e02dcc1f218af5b0593f71b13dacb45a010abc9b2534998fef823cf4de6e8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List My Pending Approvals",
+      "Description": "Lists pending (or filtered-status) MJ: AI Agent Requests addressed to the calling user.",
+      "DriverClass": "List My Pending Approvals",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-clipboard-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional status filter: Requested (default), Approved, Rejected, Responded, Expired, or All.",
+            "IsRequired": false,
+            "DefaultValue": "Requested"
+          },
+          "primaryKey": {
+            "ID": "B329CF1D-E377-45B3-998C-3CB8F3B6AFDB"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.854Z",
+            "checksum": "7e960a6467b64b8ffa606a5ec589b341ec214e4c7170644d2919db0b7a109837"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of approval requests to return (1-100, default 50).",
+            "IsRequired": false,
+            "DefaultValue": "50"
+          },
+          "primaryKey": {
+            "ID": "DB8B1535-C7CD-4753-BC0B-0B2619E7F9E8"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.869Z",
+            "checksum": "b38c74029c11473d2b0d44d4eb726968afd43c524404d0ba191ec0d59ce2ed4d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ApprovalsJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON list of matching approval and coordination requests.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ED83566C-F4E6-42C1-B0B3-0A8FA4E09679"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.883Z",
+            "checksum": "579380be58ac80a83afeaa403cd7eedb220d95f92c60a849ba9b798e6f3caa7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "075869EF-F7E8-4565-A081-20998B52AF8A"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.434Z",
+      "checksum": "2ee0f3f1fd39d24bcf76781ff62a4a829dad9c593fd47dc82e2667b8c49f3dcf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cancel Agent Wake",
+      "Description": "Disables/cancels an active wake routine owned by the calling user by RoutineID or WorkstreamKey.",
+      "DriverClass": "Cancel Agent Wake",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-bell-slash"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoutineID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Routine ID to cancel (provide RoutineID or WorkstreamKey).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "065394B8-18DB-4B3E-8C48-97423B3FECA6"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.897Z",
+            "checksum": "c1aeaf775101839e3ed664abe4b855545a1463ea42a6dfad855a98fb5eb884d2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkstreamKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "WorkstreamKey of the wake routine to cancel.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1DE3EBF4-25D9-4CE3-9793-DE7D69AD66B3"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.912Z",
+            "checksum": "78f743e4e614eaec8d2002e800fb3e9a8287f70963295c6fcf89ad536836075b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Reason",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional reason recorded on the cancelled routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "270DD0C6-6763-4AB8-A331-6AA23E2D904E"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.927Z",
+            "checksum": "c88defe0af29c9b8e9e41698070cf56379a2ae4118e50339da3ccfc0995103f2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "52FDC1CD-3498-47E9-85C1-0D20AD98AC84"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.454Z",
+      "checksum": "cf6aecd003ef2b8cc501499dc51dba29153dd856de700c407850db43dcb3155d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Find Colleague",
+      "Description": "Searches active internal MJ Users by name or email and reports whether each colleague accepts inter-agent coordination.",
+      "DriverClass": "Find Colleague",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-address-book"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Colleague name, partial name, or email address to search for.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B3552451-0358-473A-8E78-D2963CBE9B7F"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.947Z",
+            "checksum": "46f52dbf2ce1db786a63b74c78befe0d2a3fae0cd760b919cfc4be7ee1430446"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of matching colleagues to return (1-25, default 10).",
+            "IsRequired": false,
+            "DefaultValue": "10"
+          },
+          "primaryKey": {
+            "ID": "FC931C3A-255F-4CD5-AE74-29FEA3547AB7"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.967Z",
+            "checksum": "a7ec0d65f037317e3c3f8081fbf4c1f5b2a933d7683e273c6ed4c23372d5a490"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeSelf",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, includes the calling user in results (default false).",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "3B0977BB-0FBE-4EF3-BB16-EE88554A065A"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.986Z",
+            "checksum": "b6b90cfab7faeaad95d434e2ea86742e2e47231e87ea4ab5576a7a8fd43201fd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ColleaguesJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON list of matching colleagues with inter-agent availability flag.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E663A5C9-FDA4-4872-B4C1-5726ACC1A797"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.008Z",
+            "checksum": "8f2f6dc6a1739c2ef9be8e8b4214fb81feaa945181b25c7aec663b0cc80e3b20"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1822CD2B-9B8A-4CF6-B1BF-ED041320E2CD"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.474Z",
+      "checksum": "874ab6e0902f9dcc47aa30dbd88a8a1de1bf488f80bd62ea6fb5afa8b2838a7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Available Rhythms",
+      "Description": "Lists offered MJ: AI Agent Rhythm Templates contributed by core or installed skills for this agent, annotated with whether the user already enabled or declined each rhythm.",
+      "DriverClass": "List Available Rhythms",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-repeat"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OfferAt",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional filter: Onboarding, Install, Both, or All.",
+            "IsRequired": false,
+            "DefaultValue": "All"
+          },
+          "primaryKey": {
+            "ID": "0A124975-1D4C-4272-9CF6-DD360AEB54B0"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.030Z",
+            "checksum": "c093abd1595289506f8549c849d4cfa9667ed793205740dc80983123b64ebd01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeEnabled",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include rhythms already enabled for the user (default true).",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "6FC21DBD-6FF0-40E5-A889-D59B223D793A"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.052Z",
+            "checksum": "439838a4dec5bf4c97f1b613fb5498cf85ab18f54b3e697c589d48adeda034d6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeDeclined",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include rhythms previously declined by the user (default false).",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "E023134D-E888-4463-A5E4-A89D055291F1"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.072Z",
+            "checksum": "81c3ae14a015961d0b9989a7a714a46dd5ae23e8afe6ec6782586c48c4532951"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RhythmsJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON list of available offered rhythm templates.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0C83389C-0F22-4836-9689-66C446FE1C4B"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.091Z",
+            "checksum": "219d8585798726a6a02c166e79b876f622004866a8f54acad27b59f36e6080ea"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "532FE730-4595-474D-B1AF-BB9A3407C401"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.497Z",
+      "checksum": "e4c048f85a198c105f864e18fc057757403ab566a0813bacd1f2fb8e8569c08e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Enable Agent Rhythm",
+      "Description": "Materializes an offered MJ: AI Agent Rhythm Templates entry into an active recurring MJ: User Routines row for the calling user after explicit user confirmation.",
+      "DriverClass": "Enable Agent Rhythm",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-plus"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RhythmTemplateID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the rhythm template to enable (or supply WorkstreamKey).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "060FE094-A100-4288-A2A9-5D775F15D689"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.113Z",
+            "checksum": "f7045b3f0496fbf3619b53cc6cc8888257ac09a3c10c48816929b2e9cb7c902e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkstreamKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Stable WorkstreamKey of the offered rhythm template (for example 'calendar-daily-review').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "32F6772B-0B53-42AB-A587-60A2BA65BB99"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.136Z",
+            "checksum": "cfb3362df3529c8836c07f11b8d5349e34a2e6208cb65c4ecfbee43be23a139c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CronExpression",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional custom 5-field cron overriding the template default.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "39065E94-4CF2-4F30-9E1E-DA76CC41AB6D"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.157Z",
+            "checksum": "6772de5744570581f797b28d1e6e07958b53942acc9de97d7e5aab68cf9c327b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Timezone",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "IANA timezone for the cron schedule (for example 'America/Chicago').",
+            "IsRequired": false,
+            "DefaultValue": "UTC"
+          },
+          "primaryKey": {
+            "ID": "82F27E4F-A9D4-411F-BE43-F9AC9A7699BA"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.180Z",
+            "checksum": "a3781c197ba54bb809721a03020cdd7e8f4d397dc8c9759c490faec0123d370c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentConfigurationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: AI Configurations UUID (or configuration name) overriding the template DefaultAgentConfigurationID for this user's routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9705E1CA-E205-4F62-BCE7-472589609FD5"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:55.992Z",
+            "checksum": "d21622adfc4107e36c2bfb10e5e5ef2616b57164b85b153c804fb47a1f0f8a31"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelTier",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional logical model tier ('Draft', 'Standard', or 'High') resolved to Fast / Standard / High Power in MJ: AI Configurations when AgentConfigurationID is not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2BB1CF15-D8BF-4F26-8B44-C88B0AB78DC2"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:56.013Z",
+            "checksum": "6e079a76805ee2223e5c2d466986fbe65bf5b2d3c7396009277e587bd22d0a9c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedByUser",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Deprecated self-attestation flag (ignored during agent execution — pass a server-verified ConfirmedApprovalRequestID instead).",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "7861F334-120F-4FAC-987B-682CE2C388DC"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.892Z",
+            "checksum": "0161f282d1b0debd7ecb7a47e538dc94010a5dccfc0e8b631ec864ae34b5659c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of a server-verified Approved MJ: AI Agent Requests row owned by the calling user and matching the target agent. Required when an executing agent enables a recurring rhythm.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "52B75B42-EA59-4D1C-8C4A-6BC70D7E2967"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.927Z",
+            "checksum": "12b5d3d0ff49086949c5756d33d2319bc449f6a9926e4ebd698a6fe1691c7b31"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoutineID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created or updated User Routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BD585148-C6E6-498A-889D-55508D744C28"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.222Z",
+            "checksum": "2b156a1012106cebdf64512b43a58ec8a6040737800cfa12f88a9ac0dd206b81"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "55A38E40-74A4-491A-B415-F3E480AC288B"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.520Z",
+      "checksum": "c1c46f28dbdd1b48f27d7bb458a60e579200a9be36db94fe25343259b556d706"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manage Agent Suggestions",
+      "Description": "Lists, records, or updates proactive capability/rhythm suggestions in MJ: AI Agent Suggestions so declined suggestions are respected and never re-offered.",
+      "DriverClass": "Manage Agent Suggestions",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-lightbulb"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Operation to perform: List, RecordOffer, or Respond.",
+            "IsRequired": true,
+            "DefaultValue": "List"
+          },
+          "primaryKey": {
+            "ID": "D726EC42-5420-486A-BA70-0FCF78D2C989"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.248Z",
+            "checksum": "9efafb31d15b92aaf21a328181e6436983cca5862f5b0d9100f12e34a0eb9e0a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Kind",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Suggestion category: Rhythm, Skill, Behavior, or Integration.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7DDB9839-665A-461E-B79F-BCB1F58D59D2"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.274Z",
+            "checksum": "218137dab1424a9d5e8b00cf4fedee828e2c1f130369c4b0cfb9f556140821ab"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Stable deduplication key (for example a rhythm WorkstreamKey or skill name).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EF065236-C8EF-42E8-B656-D19948671951"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.303Z",
+            "checksum": "29f5aa4a15d760b1e2c001897359984c320fc8d7152fb7b3040d2b0a09aca21b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Concise description of the suggestion (required for RecordOffer).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C4970A5E-5194-4323-8730-30B8752C276D"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.332Z",
+            "checksum": "a32f8478989f2b752ce7d28798bf87a0bb4b1a601c0a31047c007ab1e4b595ca"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SuggestionID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Suggestion UUID (optional for Respond when TargetKey is provided).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5CDFA89A-D696-4F4C-B57E-1E4807DC9EF3"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.361Z",
+            "checksum": "62b6102ad7a490de3eb1f516e51ae3a27d94e829b361abfaeb769dd90f6c8fcc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Status filter for List or outcome for Respond (Accepted, Declined, Expired).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4C02C27E-1169-4E68-BE15-32FCB8FAD26A"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.389Z",
+            "checksum": "b6ce0d9f883d879360365fbc0394f995231fe1c7e1f168c2bce47e9c89eed63b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SuggestionsJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON payload returned by List.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0666065C-6935-4A6F-98D0-3E7B880E3CF8"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.411Z",
+            "checksum": "4a9fb86f598175411d0b5558d67efae25140df04db5a065fe7ee78d500780433"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "419BBE01-A925-4BB9-987C-DDF71E541121"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.542Z",
+      "checksum": "8e4af9be14faf0dad357bb0b3918fb2eb1a9b07f4e082a6eb66dc2b91f47a813"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Open Agent Channel",
+      "Description": "Opens a shared, observable Agent Channel (IS-A Conversation) either between two of the caller's own personal/shared agents (via TargetAgentID/TargetAgentName, e.g., Pepper <-> Cato) or between the caller's agent and one or more colleagues' agents (via TargetUserIDs), enforcing CoordinationMode and waking peer agents under loop-guard and rate-limit bounds.",
+      "DriverClass": "Open Agent Channel",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-comments"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Topic",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Short executive topic describing what the participating agents are coordinating on.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D41E17A2-4DF1-4478-954C-CC9B0E72D843"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.431Z",
+            "checksum": "6f325705f330ebab5f148d226c14c15e642e43169f3fe855740fa0ca0162b597"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetUserIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional comma-separated list or JSON array of colleague User IDs to include in a cross-user channel. Omit when opening a channel with another personal/shared agent of the caller via TargetAgentID or TargetAgentName.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FF476CBB-12D0-4AC6-A9D2-7E445B20F5B7"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:56.273Z",
+            "checksum": "9f250312b586e6990070da8e28874c7612988fb036f143ca1c5ac0511c32c765"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the target peer AI Agent (for example another personal agent instance like Cato or FDA Clinical Scout, or a colleague's target agent).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "77C0D048-EEEA-45F1-813A-BFAA584A169D"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:56.296Z",
+            "checksum": "9b03bfdaac87a1c723c104dcc3afcd77d22077eff0ffeaf085484dd61a9abe43"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional name of the target peer AI Agent (for example 'Cato', 'Pepper', 'Jarvis') when opening a channel with a sibling personal agent or colleague agent.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3459FCDC-047A-48A4-860E-90FA255A1F7F"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:56.320Z",
+            "checksum": "174078e5cc64f159af0dc4a87f3d627d262387e0dd95396b226d38324477710f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InitialMessage",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Opening coordination message posted to the Agent Channel.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0CAE71A4-A657-4B46-9A85-D6A3DB1D1D19"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.469Z",
+            "checksum": "c9268ac8ee746e2f4b0af227626511e20c6ad6c7d2be2daceb9cd84946795602"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ReplyByISO",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ISO-8601 response deadline.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6AD8A5A4-A77C-4459-A9AA-1E96FE4A693F"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.488Z",
+            "checksum": "dada97028d35e91c8f6f506c0f63ab9ad0e332b798f8800cbd13931157a234dc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Approved MJ: AI Agent Requests ID required when CoordinationMode is Coordinator during an autonomous cross-user agent run.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0E84B3AD-AA68-45B0-A8C1-14607C76EAF7"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:56.389Z",
+            "checksum": "84b87adc260c62b02bad2e16c4134f412c9cea9eca19dd7b52f60ee18b49a010"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ChannelID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Created Agent Channel (Conversation) ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "773A90FC-7E95-4AC1-B7E7-27023ABCCEDF"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.528Z",
+            "checksum": "a1c765f56609ddbee6de1488b6c5eb171c43583b0ebb800ec928aa66e7264f33"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B0DE6FAA-9E27-40CD-A720-98E9F4024F3B"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:26:55.082Z",
+      "checksum": "6416a8bc132ce3a5b7a9b119dc819fc274b04d52af0e22d52680085b121c371f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reply In Agent Channel",
+      "Description": "Posts a reply into an existing Agent Channel conversation, enforcing participant membership, loop-guard/rate-limit counters, and optional resolution.",
+      "DriverClass": "Reply In Agent Channel",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-reply"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ChannelID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Agent Channel ID to post the reply into.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "2DE0CF44-674C-4AA6-AB4A-5DAE24B787E1"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.547Z",
+            "checksum": "19539be945cc7d29ce9cae2a502937ee4358d7dbd22fdce13543393251408012"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Message",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Reply text to post into the channel.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "1B0F7CF8-C395-487B-864E-0BE0CF48C99A"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.565Z",
+            "checksum": "2bb7849689e2e39dfa6b55e3ca6cd151153abdff4b2bf92efedbf5d2daabf5c4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResolveChannel",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, marks the channel Resolved after posting the reply.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "42024B36-D4DD-4DCE-BFA9-E60C1FE0BB3B"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.587Z",
+            "checksum": "9e4205edbc6ff6a03af6f52588b55459623520c270f4b0513e5e3473f65fa8e7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConversationDetailID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the newly created ConversationDetail message.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0CA5912B-C582-4324-B1CE-4CBFEF55933F"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.609Z",
+            "checksum": "2a9e308ef19e55684c7917ba4863370ce15f514ff6ac32cc811fd998359d59b6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D9280EA6-6666-40C2-8FF5-09C5275D215F"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.581Z",
+      "checksum": "ad6e70980d3da645d45e01af5bfe85904ecab52fe86de1b25517f0534d872d1e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Agent Channel",
+      "Description": "Reads an Agent Channel's details, participants, guard counters, and message transcript, or lists the caller's Agent Channels when ChannelID is omitted.",
+      "DriverClass": "Get Agent Channel",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ChannelID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional Agent Channel ID. Omit to list the caller's Agent Channels.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E84196EC-5019-4759-89BB-76F1A3FBB0FC"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.633Z",
+            "checksum": "987afa8dd9a38e97fcf5ec821c18761093aab883f1fc65c42482f05bddc89a2c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional status filter when listing channels: Open, Paused For Human, Resolved, or All.",
+            "IsRequired": false,
+            "DefaultValue": "All"
+          },
+          "primaryKey": {
+            "ID": "3558A643-92EF-41A4-8A45-2E572A603EF9"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.654Z",
+            "checksum": "98207dfde1042a78c2bc05bd0af02029129e74b9391a0bac8a1bb4b6df8ef62a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxMessages",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of messages to return when ChannelID is provided (1-100, default 30).",
+            "IsRequired": false,
+            "DefaultValue": "30"
+          },
+          "primaryKey": {
+            "ID": "E2822691-AE93-42C1-9812-AE3EB1A975D0"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.674Z",
+            "checksum": "488e0b5413064d0535f1a47edbe43b6f2516be8974de1f2289ad523bd626d8c5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ChannelJSON",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON channel transcript or list of channels.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D3965952-15B2-4537-AFC8-E686175A1518"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:27.693Z",
+            "checksum": "d08a4f520e3dc7af7d441584cee267186ec4c30e23cc11c92400f982a18e744f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9F829D3A-70E2-4FDC-9D85-06A19F83AE66"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:26.601Z",
+      "checksum": "eb3a3bbad9c9b7f07a6cd3565ecf39554071c7518154df3b5c353699517585b7"
+    }
+  }
+]

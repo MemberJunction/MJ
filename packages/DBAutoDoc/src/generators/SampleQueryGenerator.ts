@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
-import { TokenPricingConfig } from '../types/config.js';
+import { DatabaseConfig, TokenPricingConfig } from '../types/config.js';
 import { IterationTracker } from '../state/IterationTracker.js';
 import {
   SampleQuery,
@@ -26,6 +26,20 @@ import {
 } from '../types/sample-queries.js';
 import { SchemaDefinition, TableDefinition, DatabaseDocumentation } from '../types/state.js';
 import { StateManager } from '../state/StateManager.js';
+
+/** Database platform supported by sample query generation and validation. */
+export type SampleQueryProvider = NonNullable<DatabaseConfig['provider']>;
+
+const SUPPORTED_PROVIDER_LABELS: Readonly<Record<SampleQueryProvider, string>> = {
+  sqlserver: 'SQL Server',
+  postgresql: 'PostgreSQL',
+  mysql: 'MySQL',
+  oracle: 'Oracle',
+};
+
+function isSampleQueryProvider(value: string): value is SampleQueryProvider {
+  return Object.prototype.hasOwnProperty.call(SUPPORTED_PROVIDER_LABELS, value);
+}
 
 interface QueryGenerationPromptResponse {
   queries: Array<{
@@ -194,6 +208,8 @@ export class SampleQueryGenerator {
     };
 
     try {
+      // Fail fast on unsupported providers before iterating schemas/tables.
+      this.resolveProvider();
       for (const schema of schemas) {
         LogStatus(`[SampleQueryGenerator] Generating queries for schema: ${schema.name}`);
 
@@ -607,8 +623,57 @@ export class SampleQueryGenerator {
     };
   }
 
+  /**
+   * Formats a database provider identifier as the human-readable dialect name
+   * injected into sample-query prompts. Exhaustive over {@link SampleQueryProvider}.
+   */
+  public static FormatDatabaseType(provider: SampleQueryProvider): string {
+    return SUPPORTED_PROVIDER_LABELS[provider];
+  }
+
+  /**
+   * Prepares a generated query for validation execution by substituting sample
+   * values for `@param` placeholders and enforcing a dialect-appropriate row limit
+   * when the top-level query does not already declare one.
+   */
+  public static PrepareValidationQuery(
+    sqlQuery: string,
+    provider: SampleQueryProvider = 'sqlserver'
+  ): string {
+    const validationQuery = substituteSampleParameters(
+      sqlQuery,
+      SampleQueryGenerator.getSampleParameterValue
+    );
+
+    const topLevelMask = maskNonTopLevelSQL(validationQuery);
+    if (hasTopLevelRowLimit(validationQuery, topLevelMask)) {
+      return validationQuery;
+    }
+
+    switch (provider) {
+      case 'postgresql':
+      case 'mysql':
+        return appendTrailingRowLimit(validationQuery, 'LIMIT 10');
+      case 'oracle':
+        return appendTrailingRowLimit(validationQuery, 'FETCH FIRST 10 ROWS ONLY');
+      case 'sqlserver':
+        return injectSqlServerTopLimit(validationQuery, topLevelMask, 10);
+    }
+  }
+
+  private resolveProvider(): SampleQueryProvider {
+    const raw = this.driver.GetProviderName().trim().toLowerCase();
+    if (isSampleQueryProvider(raw)) {
+      return raw;
+    }
+    const supported = Object.keys(SUPPORTED_PROVIDER_LABELS).join(', ');
+    throw new Error(
+      `Unsupported database provider "${this.driver.GetProviderName()}" for sample query generation. Supported providers: ${supported}`
+    );
+  }
+
   private getDatabaseType(): string {
-    return 'SQL Server';
+    return SampleQueryGenerator.FormatDatabaseType(this.resolveProvider());
   }
 
   private getSeedContextDescription(schema: SchemaDefinition): string | undefined {
@@ -1057,33 +1122,10 @@ export class SampleQueryGenerator {
   }
 
   private prepareValidationQuery(sqlQuery: string): string {
-    let validationQuery = sqlQuery;
-
-    const parameterPattern = /@(\w+)/g;
-    const matches = [...sqlQuery.matchAll(parameterPattern)];
-
-    for (const match of matches) {
-      const paramName = match[1];
-      const sampleValue = this.getSampleParameterValue(paramName);
-      validationQuery = validationQuery.replace(match[0], sampleValue);
-    }
-
-    if (!validationQuery.toLowerCase().includes('top ') &&
-        !validationQuery.toLowerCase().includes('limit ')) {
-      const selectMatch = validationQuery.match(/SELECT\s+/i);
-      if (selectMatch) {
-        const insertPosition = selectMatch.index! + selectMatch[0].length;
-        validationQuery =
-          validationQuery.slice(0, insertPosition) +
-          'TOP 10 ' +
-          validationQuery.slice(insertPosition);
-      }
-    }
-
-    return validationQuery;
+    return SampleQueryGenerator.PrepareValidationQuery(sqlQuery, this.resolveProvider());
   }
 
-  private getSampleParameterValue(paramName: string): string {
+  private static getSampleParameterValue(paramName: string): string {
     const nameLower = paramName.toLowerCase();
 
     if (nameLower.includes('date') || nameLower.includes('start') || nameLower.includes('end')) {
@@ -1185,4 +1227,190 @@ export class SampleQueryGenerator {
     this.aggregateQueryMetrics(queries, summary);
     return summary;
   }
+}
+
+interface NonCodeToken {
+  End: number;
+  Kind: 'lineComment' | 'blockComment' | 'delimited';
+}
+
+function skipDelimitedToken(sql: string, start: number, close: string): number {
+  let i = start + 1;
+  while (i < sql.length) {
+    if (sql[i] === close) {
+      if (sql[i + 1] === close) {
+        i += 2;
+        continue;
+      }
+      return i + 1;
+    }
+    i++;
+  }
+  return i;
+}
+
+function skipBlockComment(sql: string, start: number): number {
+  let i = start + 2;
+  while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) {
+    i++;
+  }
+  return i < sql.length ? i + 2 : i;
+}
+
+function readNonCodeToken(sql: string, start: number): NonCodeToken | null {
+  const ch = sql[start];
+  const next = sql[start + 1];
+
+  if (ch === '-' && next === '-') {
+    let end = start + 2;
+    while (end < sql.length && sql[end] !== '\n') {
+      end++;
+    }
+    return { End: end, Kind: 'lineComment' };
+  }
+  if (ch === '/' && next === '*') {
+    return { End: skipBlockComment(sql, start), Kind: 'blockComment' };
+  }
+  if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
+    return { End: skipDelimitedToken(sql, start, ch === '[' ? ']' : ch), Kind: 'delimited' };
+  }
+  return null;
+}
+
+function isParamChar(ch: string | undefined): boolean {
+  return ch !== undefined && /\w/.test(ch);
+}
+
+/**
+ * Replaces `@param` placeholders in SQL code with sample values in a single linear O(n) pass,
+ * skipping string literals, quoted identifiers, comments, and SQL Server `@@` system variables.
+ */
+function substituteSampleParameters(
+  sql: string,
+  resolveValue: (paramName: string) => string
+): string {
+  const out: string[] = [];
+  let i = 0;
+
+  while (i < sql.length) {
+    const token = readNonCodeToken(sql, i);
+    if (token) {
+      out.push(sql.slice(i, token.End));
+      i = token.End;
+      continue;
+    }
+    if (sql[i] === '@' && sql[i + 1] === '@') {
+      let end = i + 2;
+      while (isParamChar(sql[end])) end++;
+      out.push(sql.slice(i, end));
+      i = end;
+      continue;
+    }
+    if (sql[i] === '@' && isParamChar(sql[i + 1])) {
+      let end = i + 2;
+      while (isParamChar(sql[end])) end++;
+      out.push(resolveValue(sql.slice(i + 1, end)));
+      i = end;
+      continue;
+    }
+    out.push(sql[i]);
+    i++;
+  }
+
+  return out.join('');
+}
+
+/**
+ * Replaces characters inside SQL strings, quoted identifiers, comments, and parenthesized
+ * subexpressions with spaces while preserving original indices, so top-level keyword scans
+ * ignore CTE bodies, subqueries, literals, and comments in linear O(n) time.
+ */
+function maskNonTopLevelSQL(sql: string): string {
+  const out: string[] = [];
+  let depth = 0;
+  let i = 0;
+
+  while (i < sql.length) {
+    const token = readNonCodeToken(sql, i);
+    if (token) {
+      for (let k = i; k < token.End; k++) {
+        out.push(sql[k] === '\n' ? '\n' : ' ');
+      }
+      i = token.End;
+      continue;
+    }
+
+    const ch = sql[i];
+    if (ch === '(') {
+      depth++;
+      out.push(' ');
+    } else if (ch === ')') {
+      depth = Math.max(0, depth - 1);
+      out.push(' ');
+    } else {
+      out.push(depth === 0 ? ch : ' ');
+    }
+    i++;
+  }
+
+  return out.join('');
+}
+
+function hasTopLevelRowLimit(sql: string, topLevelMask: string): boolean {
+  if (
+    /\blimit\s+\d+\b/i.test(topLevelMask) ||
+    /\bfetch\s+(?:first|next)\b/i.test(topLevelMask) ||
+    /\brownum\b/i.test(topLevelMask)
+  ) {
+    return true;
+  }
+
+  const topPattern = /\btop\b/gi;
+  let match: RegExpExecArray | null;
+  while ((match = topPattern.exec(topLevelMask)) !== null) {
+    const tail = sql.slice(match.index + match[0].length);
+    if (/^\s+\d+\b/.test(tail) || /^\s*\(\s*\d+\s*\)/.test(tail)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function injectSqlServerTopLimit(sql: string, topLevelMask: string, limit: number): string {
+  const selectMatch = /\bSELECT\b/i.exec(topLevelMask);
+  if (!selectMatch) {
+    return sql;
+  }
+
+  let insertPos = selectMatch.index + selectMatch[0].length;
+  const qualifierMatch = /^\s+(?:DISTINCT|ALL)\b/i.exec(topLevelMask.slice(insertPos));
+  if (qualifierMatch) {
+    insertPos += qualifierMatch[0].length;
+  }
+
+  return `${sql.slice(0, insertPos)} TOP ${limit}${sql.slice(insertPos)}`;
+}
+
+function appendTrailingRowLimit(sql: string, clause: string): string {
+  const trimmedRight = sql.trimEnd();
+  const hadSemicolon = trimmedRight.endsWith(';') && !endsWithLineComment(trimmedRight);
+  const withoutSemicolon = hadSemicolon ? trimmedRight.replace(/\s*;+$/, '') : trimmedRight;
+  const separator = endsWithLineComment(withoutSemicolon) ? '\n' : ' ';
+  return `${withoutSemicolon}${separator}${clause}${hadSemicolon ? ';' : ''}`;
+}
+
+function endsWithLineComment(sql: string): boolean {
+  let i = 0;
+  while (i < sql.length) {
+    const token = readNonCodeToken(sql, i);
+    if (token) {
+      if (token.Kind === 'lineComment' && token.End === sql.length) {
+        return true;
+      }
+      i = token.End;
+      continue;
+    }
+    i++;
+  }
+  return false;
 }

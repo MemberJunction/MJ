@@ -16,6 +16,12 @@ const { db, writes, saveOptions } = vi.hoisted(() => ({
         querySQLs: [] as Array<Record<string, unknown>>,
         queryParameters: [] as Array<Record<string, unknown>>,
         views: [] as RunViewParams[],
+        /** Whether the context user holds `Queries: Approve`. */
+        canApproveQueries: true,
+        /** The (user, provider) each `UserCanApproveQueries` call was given. */
+        approveChecks: [] as unknown[][],
+        /** Whether the context user has Update on MJ: Queries (the UI role does not). */
+        canUpdateQueries: true,
     },
     writes: [] as Array<Record<string, unknown>>,
     saveOptions: [] as Array<EntitySaveOptions | undefined>,
@@ -61,6 +67,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             };
         }
         public GetFieldByName(): { Dirty: boolean } { return { Dirty: false }; }
+        public FieldIsDirty(): boolean { return false; }
         public async GenerateEmbeddingsByFieldName(): Promise<boolean> { return true; }
         public async Save(options?: EntitySaveOptions): Promise<boolean> {
             writes.push({
@@ -111,16 +118,21 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public DeclaredParameters = { Items: [] };
         public DeclaredFields = { Items: [] };
         public DeclaredEntities = { Items: [] };
-        public EntityInfo = { Name: 'MJ: Queries' };
+        public EntityInfo = { Name: 'MJ: Queries', GetUserPermisions: () => ({ CanUpdate: db.canUpdateQueries }) };
         public Status = 'Approved';
         public SQL = 'SELECT 1';
         public UsesTemplate = false;
         public ExternalDataSourceID: string | null = null;
         public Description = 'kept';
+        public CacheValidationSQL: string | null = null;
     }
 
     return {
         ...actual,
+        UserCanApproveQueries: (...args: unknown[]) => {
+            db.approveChecks.push(args);
+            return db.canApproveQueries;
+        },
         MJDashboardEntityExtended: StubDashboard,
         MJComponentEntityExtended: StubComponent,
         MJUserViewEntityExtended: StubUserView,
@@ -156,6 +168,9 @@ beforeEach(() => {
     db.querySQLs = [];
     db.queryParameters = [];
     db.views = [];
+    db.canApproveQueries = true;
+    db.approveChecks = [];
+    db.canUpdateQueries = true;
     writes.length = 0;
     saveOptions.length = 0;
 });
@@ -286,5 +301,103 @@ describe('MJQueryEntityServer', () => {
             { ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1', DefinitionFingerprint: await ComputeQueryFingerprintAsync(query, rows) },
         ]);
         expect(db.views.map(v => v.EntityName)).toEqual(['MJ: Queries', 'MJ: Query SQLs', 'MJ: Query Parameters']);
+    });
+
+    it('refuses an approving save, writing nothing, when the user does not hold Queries: Approve (#6746)', async () => {
+        db.stored = { Status: 'Pending', ...PENDING };
+        db.canApproveQueries = false;
+        const query = create(MJQueryEntityServer);
+        // The authorizations come from the query's own provider, not the process-global one.
+        const provider = { RunView: vi.fn(), GetEntityObject: vi.fn(), Authorizations: [] };
+        Object.defineProperty(query, 'ProviderToUse', { value: provider });
+        expect(await query.Save()).toBe(false);
+        expect(writes).toHaveLength(0);
+        expect(db.approveChecks).toEqual([[{ ID: 'approver-1' }, provider]]);
+        expect(query.RegisterResultHistoryEntry).toHaveBeenCalledWith(expect.objectContaining({
+            Success: false,
+            Message: expect.stringContaining("needs the 'Queries: Approve' authorization"),
+        }));
+    });
+
+    it('skips the fingerprint stamp, quietly, for a user who may create queries but not update them', async () => {
+        db.stored = { Status: 'Pending', ...PENDING };
+        db.canApproveQueries = false;
+        db.canUpdateQueries = false;
+        const query = create(MJQueryEntityServer);
+        query.Status = 'Pending';
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            expect(await query.Save()).toBe(true);
+            expect(writes).toHaveLength(1);
+            expect(errors).not.toHaveBeenCalled();
+        } finally {
+            errors.mockRestore();
+        }
+    });
+
+    it('an approving save by a holder without Update still stamps the approved fingerprint', async () => {
+        db.stored = { Status: 'Pending', ...PENDING };
+        db.canUpdateQueries = false;
+        const query = create(MJQueryEntityServer);
+        expect(await query.Save()).toBe(true);
+        expect(writes).toHaveLength(2);
+        expect(writes[1].ApprovedFingerprint).not.toBeNull();
+    });
+
+    describe('CacheValidationSQL, which a cache check runs as written', () => {
+        /** A saved query whose CacheValidationSQL this save sets (or, with `dirty` false, leaves as stored). */
+        function withValidationSQL(text: string | null, dirty = true): MJQueryEntityServer {
+            const query = create(MJQueryEntityServer);
+            query.Status = 'Pending';
+            query.CacheValidationSQL = text;
+            Object.defineProperty(query, 'FieldIsDirty', { value: (name: string) => dirty && name === 'CacheValidationSQL' });
+            return query;
+        }
+
+        it('refuses it, writing nothing, from a user who does not hold Queries: Approve', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            db.canApproveQueries = false;
+            const query = withValidationSQL('SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM __mj.User');
+            expect(await query.Save()).toBe(false);
+            expect(writes).toHaveLength(0);
+            expect(query.RegisterResultHistoryEntry).toHaveBeenCalledWith(expect.objectContaining({
+                Success: false,
+                Message: expect.stringContaining("cache validation SQL needs the 'Queries: Approve' authorization"),
+            }));
+        });
+
+        it('refuses it on a new query, whose fields are all written, from a user who does not hold Queries: Approve', async () => {
+            db.canApproveQueries = false;
+            const query = withValidationSQL('SELECT 1 AS TotalRows', false);
+            query.IsSaved = false;
+            expect(await query.Save()).toBe(false);
+            expect(writes).toHaveLength(0);
+        });
+
+        it('leaves an unchanged one alone when a user who does not hold Queries: Approve edits something else', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            db.canApproveQueries = false;
+            expect(await withValidationSQL('SELECT 1 AS TotalRows', false).Save()).toBe(true);
+        });
+
+        it('accepts it from a holder', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            expect(await withValidationSQL('SELECT 1 AS TotalRows').Save()).toBe(true);
+        });
+
+        it('lets anyone clear it', async () => {
+            db.stored = { Status: 'Pending', ...PENDING };
+            db.canApproveQueries = false;
+            expect(await withValidationSQL(null).Save()).toBe(true);
+        });
+    });
+
+    it('still saves a draft for a user who does not hold Queries: Approve', async () => {
+        db.stored = { Status: 'Pending', ...PENDING };
+        db.canApproveQueries = false;
+        const query = create(MJQueryEntityServer);
+        query.Status = 'Pending';
+        expect(await query.Save()).toBe(true);
+        expect(writes[0]).toMatchObject({ ApprovedByUserID: null, ApprovedFingerprint: null });
     });
 });

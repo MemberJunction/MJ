@@ -8,25 +8,24 @@
  * and never depends on Predictive Studio (mirrors how the `'ML Model'` Record Set
  * Processing work type stays decoupled via the registry).
  *
- * The model determines the target entity (the processor assembles features against the
- * model's `targetEntityName`), so the enrichment only needs each row's PRIMARY KEY — it
- * passes those keys as the scorer's `records` scope, scores WITHOUT write-back so the
- * predictions are ephemeral, then joins them back onto the rows by record id.
+ * The model determines the entity the keys are read against, so the enrichment only needs
+ * each row's PRIMARY KEY: it passes those keys as a `records` scope to `ScoringService.Predict`
+ * (path `'predict'`), which writes nothing, then joins the predictions back onto the rows by
+ * record id.
  *
  * Resilience: the enricher degrades gracefully (logs + returns the input rows unchanged)
- * for recoverable conditions — missing config, no primary keys — and RunQuery additionally
- * guards the call, so a scoring problem can never break the underlying query.
+ * for recoverable conditions — missing config, no primary keys. A refused or failed scoring
+ * run throws its `ScoringRefusedError` (code, refusal and scoring run); RunQuery guards the
+ * call, so a scoring problem can never break the underlying query.
  */
 
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, QueryResultEnricherBase, type IMetadataProvider, type QueryInfo, type UserInfo } from '@memberjunction/core';
 
-import type {
-  EphemeralPrediction,
-  IScoreRecordSetRunner,
-  ScoringScope,
-} from '../actions/score-record-set.action';
-import { BuildScoreRecordSetRunner } from '../operations/delegation';
+import type { PredictiveStudioScoredPrediction } from '@memberjunction/core-entities';
+
+import type { IScoreRecordSetRunner } from '../actions/score-record-set.action';
+import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 
 /** The ClassFactory key the enricher registers under — the `EnricherKey` callers pass on `RunQueryParams.Enrichment`. */
 export const ML_MODEL_SCORE_ENRICHER_KEY = 'ML Model Score';
@@ -89,16 +88,10 @@ export class MLModelScoreEnricher extends QueryResultEnricherBase {
       throw new Error('MLModelScoreEnricher: a provider is required to score query rows (RunQuery passes its own provider).');
     }
 
-    // Score WITHOUT write-back → ephemeral predictions. The model supplies the target
-    // entity, so bare primary keys are a sufficient `records` scope.
-    const result = await this.createRunner().run({
-      modelId: config.modelId,
-      scope: { records: ids } as ScoringScope,
-      contextUser,
-      provider,
-    });
+    // Predict (writes nothing). The model supplies the entity, so bare primary keys are a sufficient `records` scope.
+    const result = await this.createRunner().run({ modelId: config.modelId, scope: { records: ids }, contextUser, provider });
 
-    const predictionById = this.indexPredictionsById(result.predictions);
+    const predictionById = this.indexPredictionsById(result.Predictions);
     if (predictionById.size === 0) {
       return rows;
     }
@@ -118,10 +111,10 @@ export class MLModelScoreEnricher extends QueryResultEnricherBase {
   /**
    * The scoring runner to delegate to. Overridable so unit tests inject a fake with no
    * live DB / sidecar (mirrors the Score action / operation `createRunner` seam). The
-   * production default wires the model loader / sidecar / artifact loader.
+   * production default calls `ScoringService.Predict` on the `'predict'` path.
    */
   protected createRunner(): IScoreRecordSetRunner {
-    return BuildScoreRecordSetRunner();
+    return new ProductionScoreRecordSetRunner({ path: 'predict' });
   }
 
   /**
@@ -158,14 +151,10 @@ export class MLModelScoreEnricher extends QueryResultEnricherBase {
     return value == null ? undefined : String(value);
   }
 
-  /** Index ephemeral predictions by their `recordId` for an O(1) join back onto rows. */
-  protected indexPredictionsById(predictions: EphemeralPrediction[] | undefined): Map<string, EphemeralPrediction> {
-    const map = new Map<string, EphemeralPrediction>();
-    for (const prediction of predictions ?? []) {
-      if (prediction.recordId != null) {
-        map.set(String(prediction.recordId), prediction);
-      }
-    }
+  /** Index the predictions by their (bare) `recordId` for an O(1) join back onto rows. */
+  protected indexPredictionsById(predictions: readonly PredictiveStudioScoredPrediction[]): Map<string, PredictiveStudioScoredPrediction> {
+    const map = new Map<string, PredictiveStudioScoredPrediction>();
+    for (const prediction of predictions) map.set(prediction.recordId, prediction);
     return map;
   }
 }

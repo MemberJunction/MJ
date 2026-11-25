@@ -29,22 +29,23 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 12
+            "Priority": 12,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "7859CC40-5745-495D-BB51-ADBB567AA616"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.479Z",
-            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+            "lastModified": "2026-11-24T20:27:01.130Z",
+            "checksum": "857b86ebe8f9fee6c8af3f9c41a9990e43d8222ad23ed230242389f7dc978c2d"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3.6 27B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 11
           },
@@ -52,8 +53,8 @@
             "ID": "7AB18736-0371-41F8-8408-46903C1B3ECC"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.218Z",
-            "checksum": "c383e1e5d16a6fca8ae4f2d96d5f4b8626eff2c0a24a4f44e801accb9289560a"
+            "lastModified": "2026-11-24T20:27:01.149Z",
+            "checksum": "bd8673640a011a716b9533fdcdb55a6a0e2c2c95ace9879a7f44abe1481fe9d4"
           }
         },
         {
@@ -74,26 +75,23 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 11
+            "Priority": 11,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "6CAA347F-B9F0-4212-95B7-D765985700E5"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.510Z",
-            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+            "lastModified": "2026-11-24T20:27:01.158Z",
+            "checksum": "00f076875b181ac3208836aa63b2a5157f1a325ff192e5622e4536339f02aef1"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
-    },
-    "sync": {
-      "lastModified": "2026-10-20T23:18:49.230Z",
-      "checksum": "70b202e7ae775bd31960677e8512ece5c011e11dbe6842f6a3d3e9e4cb8d8f22"
     }
   },
   {
@@ -126,22 +124,23 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 12
+            "Priority": 12,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "4AE61AD6-A4DC-469A-9F1E-5CA171BF34F7"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.527Z",
-            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+            "lastModified": "2026-11-24T20:27:01.167Z",
+            "checksum": "857b86ebe8f9fee6c8af3f9c41a9990e43d8222ad23ed230242389f7dc978c2d"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3.6 27B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 11
           },
@@ -149,8 +148,8 @@
             "ID": "9BDC20EE-B8BC-44E6-99B8-2D3C60DBB16B"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.221Z",
-            "checksum": "c383e1e5d16a6fca8ae4f2d96d5f4b8626eff2c0a24a4f44e801accb9289560a"
+            "lastModified": "2026-11-24T20:27:01.176Z",
+            "checksum": "bd8673640a011a716b9533fdcdb55a6a0e2c2c95ace9879a7f44abe1481fe9d4"
           }
         },
         {
@@ -171,26 +170,23 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 11
+            "Priority": 11,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "BD10C051-1F41-47DE-B1D1-8E84B1647F50"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.543Z",
-            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+            "lastModified": "2026-11-24T20:27:01.184Z",
+            "checksum": "00f076875b181ac3208836aa63b2a5157f1a325ff192e5622e4536339f02aef1"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
-    },
-    "sync": {
-      "lastModified": "2026-05-29T19:48:58.348Z",
-      "checksum": "9da0d1f572a412e5a620df454b78b6cca72a1dfd8bd8e10984715678b014ed09"
     }
   },
   {
@@ -223,16 +219,17 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 12
+            "Priority": 12,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "596CE88F-AF19-4829-AB83-F44BD18D7B00"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.557Z",
-            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+            "lastModified": "2026-11-24T20:27:01.194Z",
+            "checksum": "857b86ebe8f9fee6c8af3f9c41a9990e43d8222ad23ed230242389f7dc978c2d"
           }
         },
         {
@@ -253,7 +250,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3.6 27B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 10
           },
@@ -261,33 +258,30 @@
             "ID": "C62C4C5F-3A99-45ED-B4AF-CB2F160EF68E"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.223Z",
-            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
+            "lastModified": "2026-11-24T20:27:01.201Z",
+            "checksum": "8ea51745f6dc47690fa84705cee24991ca9b53f093a158a4b4e858728b3a46cb"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 11
+            "Priority": 11,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "2FEAD16A-6E40-4800-9098-42D6DB8DE4E6"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.589Z",
-            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+            "lastModified": "2026-11-24T20:27:01.210Z",
+            "checksum": "00f076875b181ac3208836aa63b2a5157f1a325ff192e5622e4536339f02aef1"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
-    },
-    "sync": {
-      "lastModified": "2026-10-02T21:42:09.611Z",
-      "checksum": "a08f95b0062af665ca0cada3874f36d8db1283220748df22381f2e97eb028553"
     }
   },
   {
@@ -320,16 +314,17 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 12
+            "Priority": 12,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "0914BFC0-D669-4672-B849-01CD5F599F26"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.608Z",
-            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+            "lastModified": "2026-11-24T20:27:01.217Z",
+            "checksum": "857b86ebe8f9fee6c8af3f9c41a9990e43d8222ad23ed230242389f7dc978c2d"
           }
         },
         {
@@ -350,7 +345,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3.6 27B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 10
           },
@@ -358,33 +353,30 @@
             "ID": "309F9BE7-E490-4B00-8C82-C4762D40DADE"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.225Z",
-            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
+            "lastModified": "2026-11-24T20:27:01.226Z",
+            "checksum": "8ea51745f6dc47690fa84705cee24991ca9b53f093a158a4b4e858728b3a46cb"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 11
+            "Priority": 11,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "D598BE14-122F-4ED0-ACFF-53E5FF8C7956"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.626Z",
-            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+            "lastModified": "2026-11-24T20:27:01.234Z",
+            "checksum": "00f076875b181ac3208836aa63b2a5157f1a325ff192e5622e4536339f02aef1"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "FA0031BB-4838-4C16-A161-ED670E9A147B"
-    },
-    "sync": {
-      "lastModified": "2026-11-18T00:23:43.102Z",
-      "checksum": "fd64241a028e84d18851f99c6b09240e6ac9d1b154cab5a0858544660249f40a"
     }
   }
 ]

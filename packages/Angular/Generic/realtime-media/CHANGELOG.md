@@ -1,5 +1,18 @@
 # @memberjunction/ng-realtime-media
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- df69cd5: Improve mobile audio UX for realtime voice sessions: remove the 420px horizontal overflow floor on narrow viewports, scale the hero orb and banner for phone screens, clamp the microphone device menu inside the viewport, prevent iOS Safari focus zoom on picker/composer inputs, hide dead side-panel controls below 860px, and omit desktop-only side-panel channels (such as Whiteboard) on mobile with clear desktop-only context messaging so the co-agent explains why instead of reporting a permissions error.
+- Updated dependencies [3c70bf7]
+- Updated dependencies [60b406c]
+- Updated dependencies [6e740d7]
+- Updated dependencies [66258b1]
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/ai-realtime-client@6.3.0-edge.2
+  - @memberjunction/ng-ui-components@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes
