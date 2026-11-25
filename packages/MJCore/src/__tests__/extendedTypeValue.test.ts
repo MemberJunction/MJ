@@ -48,6 +48,23 @@ describe('Image ExtendedType helpers', () => {
         expect(IsPermittedImageFieldValue('https://x.test/a')).toBe(true);
     });
 
+    it('CoerceImageSrc refuses a script or non-image scheme that holds characters a browser removes', () => {
+        const refused = [
+            'java\tscript:x',
+            'java\nscript:x',
+            'java\rscript:x',
+            '\u0001javascript:x',
+            '\u0000\u001fvbscript:x',
+            'fi\tle:///etc/hosts',
+            'da\nta:text/html;base64,PHNjcmlwdD4=',
+            '\u0002data:text/html,x',
+        ];
+        for (const value of refused) {
+            expect(CoerceImageSrc(value), JSON.stringify(value)).toBeNull();
+            expect(IsPermittedImageFieldValue(value), JSON.stringify(value)).toBe(false);
+        }
+    });
+
     it('caps stored size at MaxLength when set, else a 1 MiB practical cap', () => {
         expect(MaxStoredImageChars(500)).toBe(500);
         expect(MaxInlineImageBytes(500)).toBe(Math.floor((500 - 32) * 3 / 4));

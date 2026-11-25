@@ -1,5 +1,6 @@
 import { Component, ViewChild, AfterViewInit, OnInit, Output, EventEmitter, ChangeDetectorRef, Type } from '@angular/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { ArtifactVersionAuthorName, IsArtifactVersionWrittenByUser } from '../../utils/component-run-consent.util';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import { ComponentVersionDiffComponent } from '../version-diff/component-version-diff.component';
 import { MJReactComponent, AngularAdapterService, PdfOrientation } from '@memberjunction/ng-react';
@@ -315,11 +316,35 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     super();
   }
 
+  /** True after the viewer agreed to run code that a different user wrote. Resets for each version. */
+  public RunApproved = false;
+
+  /**
+   * True when a spec is loaded and the current user did not write this version. A spec can run
+   * code through its dependencies or the registry even with no top-level code, so every spec counts.
+   * A version with no known author, or a viewer with no known user, also needs consent.
+   */
+  public get IsRunConsentRequired(): boolean {
+    if (this.RunApproved || !this.Component) return false;
+    return !IsArtifactVersionWrittenByUser(this.artifactVersion, this.ProviderToUse?.CurrentUser);
+  }
+
+  /** Display name of the user who wrote this version, for the run prompt. */
+  public get CodeAuthorName(): string {
+    return ArtifactVersionAuthorName(this.artifactVersion);
+  }
+
+  /** Runs the component after the viewer agrees in the run prompt. */
+  public ApproveRun(): void {
+    this.RunApproved = true;
+  }
+
   protected override onArtifactVersionChanged(
     _previous: MJArtifactVersionEntity | undefined,
     _current: MJArtifactVersionEntity,
     isFirstChange: boolean,
   ): void {
+    this.RunApproved = false;
     this.loadComponentSpec();
     if (!isFirstChange) {
       this.tabsChanged.emit();

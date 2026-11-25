@@ -10,10 +10,13 @@ function makeVersion(
   num: number,
   content: string,
   provider?: IMetadataProvider,
+  authorId: string | null = null,
 ): MJArtifactVersionEntity {
   const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
   Object.defineProperties(ver, {
     ID: { value: id, enumerable: true },
+    UserID: { value: authorId, enumerable: true, configurable: true },
+    User: { value: null, enumerable: true, configurable: true },
     ArtifactID: { value: 'art-comp-1', enumerable: true },
     VersionNumber: { value: num, enumerable: true },
     Content: { value: content, enumerable: true },
@@ -105,8 +108,8 @@ describe('ComponentVersionDiffComponent DOM', () => {
     const f = renderComponentFixture(ComponentVersionDiffComponent, {
       imports: [ComponentVersionDiffComponent],
       inputs: {
-        BaseVersion: makeVersion('cv1', 1, baseContent, mockProvider),
-        TargetVersion: makeVersion('cv2', 2, targetContent, mockProvider),
+        BaseVersion: makeVersion('cv1', 1, baseContent, mockProvider, fakeUser.ID),
+        TargetVersion: makeVersion('cv2', 2, targetContent, mockProvider, fakeUser.ID),
       },
     });
     f.detectChanges();
@@ -147,5 +150,48 @@ describe('ComponentVersionDiffComponent DOM', () => {
     expect(query(f, '[data-testid="comp-diff-base-permission-blocked"]')).not.toBeNull();
     expect(query(f, '[data-testid="comp-diff-target-permission-blocked"]')).not.toBeNull();
     expect(queryAll(f, 'mj-react-component').length).toBe(0);
+  });
+});
+
+describe('ComponentVersionDiffComponent preview of code written by a different user', () => {
+  function makeAuthoredVersion(
+    id: string,
+    num: number,
+    content: string,
+    author: { UserID: string; User: string },
+  ): MJArtifactVersionEntity {
+    const ver = makeVersion(id, num, content, undefined, author.UserID);
+    Object.defineProperty(ver, 'User', { value: author.User, enumerable: true });
+    return ver;
+  }
+
+  it('mounts a version by a different user only after the viewer agrees, and names the author', () => {
+    const viewer = Object.assign(Object.create(null) as UserInfo, { ID: 'C0000000-0000-0000-0000-000000000001', Name: 'Viewer' });
+    const provider = Object.assign(Object.create(null) as IMetadataProvider, {
+      CurrentUser: viewer,
+      EntityByName: () => undefined,
+    });
+    const f = renderComponentFixture(ComponentVersionDiffComponent, {
+      imports: [ComponentVersionDiffComponent],
+      inputs: {
+        Provider: provider,
+        BaseVersion: makeAuthoredVersion('cv1', 1, JSON.stringify({ name: 'BaseWidget', code: 'return <div/>;' }),
+          { UserID: 'C0000000-0000-0000-0000-000000000002', User: 'Bob Base' }),
+        TargetVersion: makeAuthoredVersion('cv2', 2, JSON.stringify({ name: 'TargetWidget', code: 'return <span/>;' }),
+          { UserID: viewer.ID.toLowerCase(), User: 'Viewer' }),
+      },
+    });
+    f.detectChanges();
+    f.componentInstance.SetTab('preview');
+    f.detectChanges();
+
+    expect(queryAll(f, 'mj-react-component').length).toBe(1);
+    expect(text(f, '[data-testid="comp-diff-base-run-consent"]')).toContain('Bob Base');
+    expect(query(f, '[data-testid="comp-diff-target-run-consent"]')).toBeNull();
+
+    (query(f, '[data-testid="comp-diff-base-run-consent"] button') as HTMLButtonElement).click();
+    f.detectChanges();
+
+    expect(queryAll(f, 'mj-react-component').length).toBe(2);
   });
 });

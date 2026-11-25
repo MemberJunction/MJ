@@ -18,6 +18,18 @@
           </details>
         }
       </div>
+    } @else if (IsRunConsentRequired) {
+      <!-- Code written by a different user runs only after the viewer agrees -->
+      <div class="permission-warning run-consent">
+        <div class="permission-warning-icon">
+          <i class="fa-solid fa-code"></i>
+        </div>
+        <h3>Run this component?</h3>
+        <p>This component was written by <strong>{{ CodeAuthorName }}</strong>. Its code runs in your session with your access.</p>
+        <button type="button" mjButton variant="primary" size="sm" (click)="ApproveRun()">
+          <i class="fa-solid fa-play"></i> Run component
+        </button>
+      </div>
     } @else if (isPermissionBlocked) {
       <!-- Permission warning — user lacks access to one or more data sources -->
       <div class="permission-warning">
