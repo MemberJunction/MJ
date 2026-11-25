@@ -434,6 +434,8 @@ export interface TourStepDefinition<TConfig extends object = ITourStepConfigurat
     StepType: TourStepTypeKey;
     /** Optional per-step driver class override key registered with `BaseTourStepType`. */
     DriverClass?: string | null;
+    /** Optional renderer class key registered with `BaseTourStepRenderer` (from `TourStepType.RendererClass`). */
+    RendererClass?: string | null;
     Title: string;
     Body?: string;
     Configuration?: TConfig;
@@ -700,6 +702,8 @@ export interface TourStepView<TConfig extends object = ITourStepConfiguration> {
     StepIndex: number;
     TotalSteps: number;
     StepType: TourStepTypeKey;
+    DriverClass?: string | null;
+    RendererClass?: string | null;
     Title: string;
     Body: string;
     Placement: TourStepPlacement;

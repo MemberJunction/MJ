@@ -1,0 +1,312 @@
+[
+  {
+    "fields": {
+      "Name": "External Integrations & Field Mapping",
+      "TourKey": "core.integrations",
+      "Description": "Walk through managing external system connections, mapping source objects and fields to MemberJunction entities, and monitoring sync schedules and run activity.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Integrations",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "AppName": "Integrations",
+        "Description": "User learns how Integrations manage connections, entity/field mappings, schedules, and run activity."
+      },
+      "StartLocation": {
+        "Application": "Integrations",
+        "NavItem": "IntegrationOverview"
+      }
+    },
+    "primaryKey": {
+      "ID": "C6F5F335-B62F-46A5-89A6-E7CCB3F9A273"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "integrations-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Connect External Systems",
+            "Body": "The **Integrations** app brings together external connections, entity and field mappings, sync schedules, and run-by-run diagnostics.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Integrations",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6557B3DF-FAA1-491A-8DFB-44C1270CBA0C"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "integrations-connections",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Connections & Entity Field Mapping",
+            "Body": "Open **Integrations** to add or test external system connections, run incremental or full pulls, and open the **Mapping Workspace** to map source objects to existing or new MJ entities field by field.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "IntegrationConnections"
+            },
+            "Prepare": {
+              "ApplicationName": "Integrations"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "EFADCA40-8FCA-4222-9C90-F6A036C39AF9"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "integrations-schedules",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Scheduled Syncs & Activity Monitoring",
+            "Body": "Review upcoming 24-hour sync windows in **Schedules** and inspect per-entity record counts, sync watermarks, and API logs in **Activity**.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "IntegrationSchedules"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "993E83FD-569D-41C2-942B-3130F48105CC"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "integrations-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Monitor Pipeline Health",
+            "Body": "Use **Overview** anytime to check pipeline throughput, active runs, and success rates across every connected system.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "7394403F-F077-40DB-BB0F-0F9A05EE2ED6"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Integrations"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "173DD20E-C2AE-43C4-87A0-0B430591E8DA"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cloud File Browser & Artifact Library",
+      "TourKey": "core.files-library",
+      "Description": "Learn how to browse connected MJ: Files storage providers, preview files from the Omnibar, and organize artifacts inside Library collections.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=File Browser",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "AppName": "File Browser",
+        "Description": "User learns how MJ: Files storage providers, Omnibar file previews, and Library collections work together."
+      },
+      "StartLocation": {
+        "Application": "File Browser",
+        "NavItem": "FileBrowserResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "CF1A0C15-60DB-4DFF-A51C-9A73EC0BC3C8"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "files-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Unified Files & Artifact Library",
+            "Body": "Browse files across connected **MJ: Files** storage accounts, preview items anywhere with the Omnibar, and curate shared collections in **Library**.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Files & Library",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "9827439A-6DF5-4750-A0E1-907FFA23C106"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "files-providers-omnibar",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Search Storage Providers & Omnibar Previews",
+            "Body": "Select any **MJ: Files** storage account on the left to browse folders, upload files via drag-and-drop, or toggle **All Accounts** search. You can also search and preview indexed files directly from the **Omnibar**.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.omnibar"
+            },
+            "Prepare": {
+              "ApplicationName": "File Browser"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "89CBFE9B-AB88-43C5-8D60-F3F8DBEB9372"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "files-library-collections",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Organize Artifacts in Library Collections",
+            "Body": "Switch to the **Library** app anytime to organize documents, spreadsheets, presentations, and connected cloud drives into shareable **Collections** with version history.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.app-switcher"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "08237171-2050-4F83-BC08-F8D3B1E88277"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "files-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Ready to Manage Files & Artifacts",
+            "Body": "Combine File Browser for direct storage provider operations with Library collections for collaborative documents and artifacts.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "C51BB8F7-3D8B-4BBC-B85A-3F6FD5269E90"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "File Browser"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "60D6E4B1-3F0A-40A4-8885-7E571A7CC334"
+          }
+        }
+      ]
+    }
+  }
+]

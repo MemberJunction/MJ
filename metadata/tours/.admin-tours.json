@@ -13,11 +13,11 @@
       "AllowAgentActions": false,
       "AudienceFilter": {
         "logic": "and",
-        "rules": [
+        "filters": [
           {
-            "field": "roles",
+            "field": "user.Roles",
             "operator": "contains",
-            "value": "Administrator"
+            "value": "Developer"
           }
         ]
       },
@@ -69,13 +69,13 @@
             "Sequence": 2,
             "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
             "Title": "User Tour Launcher",
-            "Body": "Users always discover available tours and learning paths on demand from this header launcher.",
+            "Body": "Open the **User Avatar Menu** and select **Tours & Learning Paths** to browse **For This Screen**, **All Apps**, and **Paths** anytime without cluttering the Home screen.",
             "Configuration": {
               "ShowProgress": true
             },
             "Anchor": {
               "Strategy": "Registered",
-              "Key": "core.shell.tours-launcher"
+              "Key": "core.shell.user-menu"
             },
             "Placement": "Bottom",
             "Mode": "Guide",
@@ -126,6 +126,7 @@
             "Body": "Assign learning paths to roles via Actions or Tour Studio to automatically deliver clickable Tour notifications.",
             "Configuration": {
               "Tone": "info",
+              "CtaText": "Finish",
               "Dismissible": true
             },
             "Anchor": {

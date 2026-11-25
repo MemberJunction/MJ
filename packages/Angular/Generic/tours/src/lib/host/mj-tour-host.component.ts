@@ -47,7 +47,7 @@ import { TourGlobalStylesComponent } from '../overlay/tour-global-styles.compone
 import { BaseTourPresenter } from '../presenters/base-tour-presenter';
 import type { TourVoiceBarContext } from '../presenters/tour-voice-dock.component';
 import { EnsureStandardTourPresentersRegistered } from '../presenters/register-standard-presenters';
-import { EnsureStepRendererLoaded } from '../renderers/lazy-step-renderers';
+import { EnsureStepRendererLoaded, ResolveTourStepRendererKey } from '../renderers/lazy-step-renderers';
 import {
   MJ_TOUR_DEFINITION_SOURCE,
   MJ_TOUR_HOST,
@@ -203,6 +203,7 @@ export class MJTourHostComponent
   private presenterSubs = new Subscription();
   private resolvedAnchorEl: HTMLElement | null = null;
   private resolvedExtraAnchorEls: HTMLElement[] = [];
+  private availableTourKeys: ReadonlySet<string> | null = null;
   private pendingPresenterMount = false;
   private readonly eventListeners = new Map<string, Set<(args: TourSessionEventArgs) => void>>();
 
@@ -271,10 +272,13 @@ export class MJTourHostComponent
     const host = this.resolveHost();
     const { source, store, predicates } = await this.resolveDataAdapters();
 
+    const allKnownTours = await source.GetTours(host.GetCurrentLocation?.() ?? {}).catch(() => []);
+    this.availableTourKeys = allKnownTours.length > 0 ? new Set(allKnownTours.map((t) => t.TourKey)) : null;
+
     const definition =
       typeof tourOrKey === 'string'
         ? (await source.GetTourByKey?.(tourOrKey)) ??
-          (await source.GetTours(host.GetCurrentLocation?.() ?? {})).find((t) => t.TourKey === tourOrKey) ??
+          allKnownTours.find((t) => t.TourKey === tourOrKey) ??
           null
         : tourOrKey;
 
@@ -365,7 +369,7 @@ export class MJTourHostComponent
     }
 
     if (view.CurrentStep) {
-      await EnsureStepRendererLoaded(view.CurrentStep.StepType);
+      await EnsureStepRendererLoaded(ResolveTourStepRendererKey(view.CurrentStep));
       await this.resolveStepElements(view.CurrentStep);
     }
 
@@ -520,6 +524,7 @@ export class MJTourHostComponent
     this.presenterRef.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
     this.presenterRef.setInput('VoiceGuideActive', this.VoiceGuideActive);
     this.presenterRef.setInput('EstimatedMinutes', this.activeSession?.Tour.EstimatedMinutes);
+    this.presenterRef.setInput('AvailableTourKeys', this.availableTourKeys);
     this.presenterRef.changeDetectorRef.detectChanges();
   }
 

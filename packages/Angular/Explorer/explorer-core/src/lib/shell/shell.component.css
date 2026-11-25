@@ -1245,9 +1245,9 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    width: 360px;
+    width: 392px;
     max-width: calc(100vw - var(--mj-space-6));
-    max-height: 520px;
+    max-height: 560px;
     display: flex;
     flex-direction: column;
     background: var(--mj-bg-surface-elevated);
@@ -1256,6 +1256,76 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
     box-shadow: var(--mj-shadow-lg);
     z-index: 1050;
     overflow: hidden;
+}
+.tours-popover-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--mj-space-1-5);
+}
+.tours-popover-close {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--mj-radius-sm);
+    background: transparent;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    transition: var(--mj-transition-colors);
+}
+.tours-popover-close:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+.tours-path-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: var(--mj-space-1);
+}
+.tours-path-tour-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--mj-space-2);
+    width: 100%;
+    padding: var(--mj-space-1) var(--mj-space-1-5);
+    border: none;
+    border-radius: var(--mj-radius-sm);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
+    font-size: var(--mj-text-xs);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: var(--mj-transition-colors);
+}
+.tours-path-tour-btn:hover {
+    background: var(--mj-bg-surface-hover);
+}
+.tours-path-tour-btn i {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+    flex-shrink: 0;
+}
+.tours-path-tour-btn i.is-done {
+    color: var(--mj-status-success);
+}
+.tours-path-tour-btn i.is-active {
+    color: var(--mj-brand-primary);
+}
+.tours-path-tour-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tours-path-tour-cta {
+    color: var(--mj-brand-primary);
+    font-weight: var(--mj-font-semibold);
+    flex-shrink: 0;
 }
 .tours-popover-header {
     display: flex;
@@ -1333,6 +1403,8 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
     gap: var(--mj-space-2);
 }
 .tours-popover-body {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: var(--mj-space-3) var(--mj-space-3-5);
     display: flex;
@@ -1351,6 +1423,7 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
     display: flex;
     flex-direction: column;
     gap: var(--mj-space-2);
+    flex-shrink: 0;
 }
 .tours-section-title {
     font-size: var(--mj-text-xs);
@@ -1488,6 +1561,7 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
     text-decoration: underline;
 }
 .tours-popover-prefs {
+    flex-shrink: 0;
     padding: var(--mj-space-2-5) var(--mj-space-3-5);
     border-top: 1px solid var(--mj-border-default);
     background: var(--mj-bg-surface-sunken);
@@ -1515,6 +1589,7 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
 }
 .tours-mode-pills {
     display: inline-flex;
+    flex-shrink: 0;
     border: 1px solid var(--mj-border-default);
     border-radius: var(--mj-radius-sm);
     overflow: hidden;
@@ -1539,6 +1614,7 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
     align-self: flex-start;
     width: 100%;
     display: flex;
+    flex-shrink: 0;
 }
 .tours-tab-pills .tours-mode-pill {
     flex: 1;

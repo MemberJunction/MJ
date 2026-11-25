@@ -1,0 +1,593 @@
+[
+  {
+    "fields": {
+      "Name": "Hybrid Search & Omnibar Discovery",
+      "TourKey": "kh.search-discovery",
+      "Description": "Discover how Knowledge Hub fuses full-text lexical search with vector similarity via Reciprocal Rank Fusion (RRF), Search Scopes, Omnibar instant previews, and facet drilldown.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Knowledge Hub",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 85,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User explores hybrid RRF search, Search Scopes, Omnibar previews, and facet drilldown."
+      },
+      "StartLocation": {
+        "Application": "Knowledge Hub"
+      }
+    },
+    "primaryKey": {
+      "ID": "C12081BC-23C2-4580-8A29-C0BB510541F1"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-search-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Hybrid Lexical + Vector Search",
+            "Body": "Knowledge Hub combines exact keyword matching with semantic vector embeddings using Reciprocal Rank Fusion (RRF) so both exact terms and conceptual matches surface cleanly.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Search",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "1297823B-D685-4515-9A9D-EEF708E38EF3"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-search-omnibar",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Omnibar Instant Previews & Entity Jumps",
+            "Body": "Use the global Omnibar from any workspace to run hybrid searches with instant previews across entities, documents, tags, and Knowledge Hub saved searches.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.omnibar"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "C813B6D8-B2C5-45CF-90AA-7CE114C1D3BC"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-search-scopes",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Configuring MJ: Search Scopes & Permissions",
+            "Body": "In Knowledge Hub Configuration, define MJ: Search Scopes to bundle providers, entity filters, storage accounts, fusion weights, and user/role Search grants.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "kh.config.header"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "KnowledgeConfigResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6038B2B4-E9E2-4E58-904E-FE608C7FA9C5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-search-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Score Breakdown & Facet Drilldown",
+            "Body": "Every search hit exposes its RRF relevance score breakdown, matched tags, and related semantic neighbors — next, see how Entity Documents power those vector indexes.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "kh.entity-vectors",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "67EA17DA-A31F-461D-AD60-F2F0E579763B"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Knowledge Hub"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 85,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0A2A3636-4440-47F1-B8ED-E9252065D31B"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Entity Documents & Vector Indexes",
+      "TourKey": "kh.entity-vectors",
+      "Description": "Configure MJ: Entity Documents with Nunjucks embedding templates, sensitive-field guards, and scheduled sync into Simple Vector Service or external vector databases.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Knowledge Hub",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User reviews Entity Documents, Nunjucks embedding templates, sensitive-field guards, and vector sync."
+      },
+      "StartLocation": {
+        "Application": "Knowledge Hub",
+        "DriverClass": "VectorManagementResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "8C422743-2ECE-435C-A052-2872D29D4879"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-vectors-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Turning Entity Records into Embeddings",
+            "Body": "MJ: Entity Documents describe how structured database records are rendered into rich text chunks and embedded into searchable vector indexes.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Inspect Vector Sync",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "VectorManagementResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "B108486C-8F11-44BC-AC8F-D621839AA138"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-vectors-templates",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Nunjucks Templates & Sensitive-Field Guards",
+            "Body": "Review each entity's Entity Sync Status row, edit or AI-suggest its Nunjucks embedding template, and keep PII or encrypted fields excluded with sensitive-field guards.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.vectors.sync-table"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "VectorManagementResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "43EBD7ED-4886-4BF8-9556-06257D02EE4D"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-vectors-storage",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Simple Vector Service & External Vector DB Sync",
+            "Body": "Check Vector DB Health, active embedding dimensions, and coverage here — supporting both zero-config Simple Vector Service and external vector stores like Pinecone, Qdrant, or Weaviate.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.vectors.sidebar"
+            },
+            "Placement": "Left",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "3F902808-D7B5-4050-B5D6-6C94A432FD60"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-vectors-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Scheduling Incremental Vector Updates",
+            "Body": "Trigger on-demand syncs or attach recurring schedules per Entity Document so new and modified records stay indexed automatically.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "kh.autotagging-clusters",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6A81D66E-3ADC-45F7-8C46-71C3E67D00E8"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Autotagging Pipelines & Cluster Maps",
+      "TourKey": "kh.autotagging-clusters",
+      "Description": "Ingest MJ: Content Sources, curate hierarchical MJ: Tags and MJ: Tagged Items, and explore 2D/3D semantic clusters and tag clouds.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Knowledge Hub",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User explores Content Sources, taxonomy Tags/Tagged Items, and semantic Cluster Visualization."
+      },
+      "StartLocation": {
+        "Application": "Knowledge Hub",
+        "DriverClass": "AutotaggingPipelineResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "C2BFDF9B-F569-4280-B8FC-6337FCC3E912"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-classify-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Automated Content Ingestion & Tagging",
+            "Body": "Knowledge Hub ingests web, RSS, file, and entity sources through an autotagging pipeline that extracts topics, scores confidence, and maps items onto your taxonomy.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Classification",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "AutotaggingPipelineResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "EFD7122F-679C-45A5-B4EE-26A3359E40F7"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-classify-sources",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Configuring MJ: Content Sources & Pipelines",
+            "Body": "Switch between Pipeline, Sources, Content Types, and Run History here to register MJ: Content Sources, preview dry runs, and schedule ingestion.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "kh.classify.nav"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "AutotaggingPipelineResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "10C24BD6-BFEF-47DE-9A0B-B81747B1D088"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-classify-tags",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Governing Taxonomy MJ: Tags & Tagged Items",
+            "Body": "Curate canonical MJ: Tags, review AI-suggested taxonomy merges, and audit polymorphic MJ: Tagged Items links across every classified entity and document.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "kh.tags.header"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "Tags"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "FFF50B1E-AC1A-43DE-AC37-84A4DCBD3FE5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-classify-clusters-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "2D/3D Semantic Cluster Maps & Tag Clouds",
+            "Body": "Open Visualize to project your embeddings onto 2D/3D semantic cluster maps, inspect silhouette quality scores, and drill straight into underlying records.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "kh.duplicate-detection",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "VisualizationResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "393B425D-F4DB-433D-92C0-A1DD4B51A851"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Semantic Duplicate Detection & Merge Review",
+      "TourKey": "kh.duplicate-detection",
+      "Description": "Run MJ: Duplicate Runs, calibrate potential (0.70) vs absolute (0.95) similarity thresholds, inspect side-by-side field diffs, and approve stewardship merges.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Knowledge Hub",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 70,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User reviews Duplicate Runs, similarity thresholds, side-by-side field diffing, and stewardship approval."
+      },
+      "StartLocation": {
+        "Application": "Knowledge Hub",
+        "DriverClass": "DuplicateDetectionResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "6111ED9F-5A8B-4C7D-BC63-CA647F50DC3B"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-duplicates-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Semantic Deduplication Across Entities",
+            "Body": "Knowledge Hub uses vector embeddings and optional LLM reasoning to catch fuzzy and near-duplicate records that exact-string rules miss.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Inspect Duplicates",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "DuplicateDetectionResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "F8E05A9C-9553-4064-9DF7-2903E59A9B45"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-duplicates-thresholds",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "MJ: Duplicate Runs & Similarity Thresholds",
+            "Body": "Pick an Entity Document above to launch MJ: Duplicate Runs and tune Potential Match (default 0.70) vs Absolute Match (default 0.95) thresholds, plus optional LLM borderline judging.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "kh.duplicates.header"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Knowledge Hub",
+              "DriverClass": "DuplicateDetectionResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "80927DAD-29D2-444A-A6B1-BA06F36EDCA7"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-duplicates-review",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Side-by-Side Field Diffing & Kanban Triage",
+            "Body": "Track Pending, Approved, and Rejected match groups in this strip, then click any match card on the Kanban board to open side-by-side field diffing.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "kh.duplicates.kpi-strip"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "60879589-E16F-40A6-A3E7-6CDDC8AE1D80"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "kh-duplicates-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Stewardship Approval & Safe Record Merging",
+            "Body": "Choose the surviving record, confirm field-level winners, and approve merges with full auditability across related child records.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "E9CDB3B9-83FD-4EC9-8856-44D21CD87C73"
+          }
+        }
+      ]
+    }
+  }
+]

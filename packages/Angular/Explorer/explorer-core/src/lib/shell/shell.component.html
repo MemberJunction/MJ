@@ -159,36 +159,146 @@
           }
         </div>
       }
-      <!-- Guided Tours & Help Launcher -->
-      <div class="tours-launcher-wrap desktop-only">
+      <!-- Active Guided Tour quick status pill (only while a tour is in progress; full launcher lives in User Menu) -->
+      @if (ActiveTourView && ActiveTourView.Status === 'In Progress') {
         <button
           type="button"
-          class="icon-btn tours-launcher-btn"
-          [class.is-active-tour]="ActiveTourView && ActiveTourView.Status === 'In Progress'"
-          data-mj-tour-anchor="core.shell.tours-launcher"
-          aria-label="Tours & Help"
-          title="Tours & Help"
+          class="icon-btn tours-launcher-btn is-active-tour desktop-only"
+          aria-label="Active Tour Controls"
+          title="Active Tour Controls"
           [attr.aria-expanded]="ToursMenuOpen"
           aria-haspopup="dialog"
           (click)="ToggleToursMenu($event)">
           <i class="fa-solid fa-route" aria-hidden="true"></i>
-          @if (ActiveTourView && ActiveTourView.Status === 'In Progress') {
-            <span class="tours-active-dot" aria-hidden="true"></span>
+          <span class="tours-active-dot" aria-hidden="true"></span>
+        </button>
+      }
+
+      @if (ShowNotifications) {
+        <button class="icon-btn desktop-only notification-btn" title="Notifications"
+          data-mj-tour-anchor="core.shell.notifications"
+          (click)="showNotifications()">
+          <i class="fa-solid fa-bell"></i>
+          @if (unreadNotificationCount > 0) {
+            <span class="notification-badge">
+              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+            </span>
           }
         </button>
+      }
+      <!-- Nav Bar Apps: Left of User Menu -->
+      @if (leftOfUserMenuApps.length > 0 && !appSwitchingLocked && ShowAppSwitcher) {
+        <div class="nav-bar-apps left-of-user-menu">
+          @for (app of leftOfUserMenuApps; track app) {
+            <button
+              class="nav-bar-app-btn"
+              [class.active]="IsActiveApp(app)"
+              [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
+              [title]="app.Name"
+              [style.--app-color]="app.GetColor()"
+              (click)="onNavBarAppClick(app, $event)"
+              (dblclick)="onNavBarAppDblClick(app, $event)">
+              <i [class]="app.Icon"></i>
+            </button>
+          }
+        </div>
+      }
+
+      <div class="user-menu">
+        <button class="avatar-btn" (click)="toggleUserMenu($event)"
+          data-mj-tour-anchor="core.shell.user-menu"
+          [attr.aria-label]="avatarAriaLabel"
+          [attr.aria-expanded]="userMenuVisible">
+          @if (userImageURL) {
+            <img [src]="userImageURL" alt="" aria-hidden="true" class="avatar-img" />
+          } @else {
+            <div class="icon-fallback" aria-hidden="true">
+              <i [class]="userIconClass || 'fa-solid fa-user'"></i>
+            </div>
+          }
+        </button>
+        <!-- User Context Menu (Dynamic) -->
+        @if (userMenuVisible) {
+          <div class="user-context-menu"
+            [class.menu-fade]="getUserMenuOptions()?.animationStyle === 'fade'"
+            [class.menu-slide]="getUserMenuOptions()?.animationStyle === 'slide'"
+            (click)="$event.stopPropagation()">
+            <!-- User Header -->
+            @if (getUserMenuOptions()?.showUserName) {
+              <div class="user-menu-header">
+                <div class="user-info">
+                  <span class="user-name">{{ getUserDisplayInfo()?.name || userName }}</span>
+                  @if (getUserMenuOptions()?.showUserEmail && getUserDisplayInfo()?.email) {
+                    <span class="user-email">
+                      {{ getUserDisplayInfo()?.email }}
+                    </span>
+                  }
+                  @if (getUserDisplayInfo()?.subtitle) {
+                    <span class="user-subtitle">{{ getUserDisplayInfo()?.subtitle }}</span>
+                  }
+                </div>
+              </div>
+              <div class="user-menu-divider"></div>
+            }
+            <!-- Dynamic Menu Items -->
+            @for (element of GetVisibleUserMenuElements(); track element) {
+              <!-- Divider -->
+              @if (isMenuDivider(element)) {
+                <div class="user-menu-divider"></div>
+              }
+              <!-- Menu Item -->
+              @if (!isMenuDivider(element)) {
+                @if (asMenuItem(element); as item) {
+                  @if (item.id === 'toggle-theme') {
+                    <div class="user-menu-item theme-toggle-item"
+                      [title]="item.tooltip || ''"
+                      (click)="onUserMenuItemClick(item.id)">
+                      <i [class]="item.icon"></i>
+                      <span class="menu-label">{{ item.label }}</span>
+                      <div class="theme-toggle-track" [class.dark]="IsDarkMode">
+                        <div class="theme-toggle-thumb">
+                          <i [class]="IsDarkMode ? 'fa-solid fa-moon' : 'fa-solid fa-sun'" class="theme-toggle-icon"></i>
+                        </div>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="user-menu-item"
+                      [class.disabled]="!item.enabled"
+                      [class.danger]="item.cssClass === 'danger'"
+                      [attr.data-mj-tour-anchor]="item.id === 'tours-and-help' ? 'core.shell.tours-launcher' : null"
+                      [style.color]="item.color || null"
+                      [title]="item.tooltip || ''"
+                      (click)="$event.stopPropagation(); item.enabled && onUserMenuItemClick(item.id)">
+                      <i [class]="item.icon"></i>
+                      <span class="menu-label">{{ item.label }}</span>
+                      @if (item.shortcut) {
+                        <span class="menu-shortcut">{{ item.shortcut }}</span>
+                      }
+                    </div>
+                  }
+                }
+              }
+            }
+          </div>
+        }
 
         @if (ToursMenuOpen) {
-          <div class="tours-launcher-popover" role="dialog" aria-label="Tours and Help" (click)="$event.stopPropagation()">
+          <div class="tours-launcher-popover" role="dialog" aria-label="Tours and Learning Paths" (click)="$event.stopPropagation()">
             <div class="tours-popover-header">
               <div class="tours-popover-title">
                 <i class="fa-solid fa-route" aria-hidden="true"></i>
-                <span>Tours &amp; Help</span>
+                <span>Tours &amp; Learning Paths</span>
               </div>
-              @if (UseOmnibar && ShowSearchBar) {
-                <button type="button" class="tours-omnibar-link" (click)="OpenToursOmnibar()" title="Search all tours in Omnibar (?)">
-                  <kbd>?</kbd> Search
+              <div class="tours-popover-header-actions">
+                @if (UseOmnibar && ShowSearchBar) {
+                  <button type="button" class="tours-omnibar-link" (click)="OpenToursOmnibar()" title="Search all tours in Omnibar (?)">
+                    <kbd>?</kbd> Search
+                  </button>
+                }
+                <button type="button" class="tours-popover-close" aria-label="Close Tours and Learning Paths" (click)="CloseToursMenu()">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
-              }
+              </div>
             </div>
 
             @if (ActiveTourView && ActiveTourView.Status === 'In Progress') {
@@ -223,7 +333,7 @@
               @if (ToursLoading) {
                 <div class="tours-popover-loading">
                   <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                  <span>Finding tours for this screen…</span>
+                  <span>Finding tours &amp; learning paths…</span>
                 </div>
               } @else {
                 <div class="tours-mode-pills tours-tab-pills" role="tablist" aria-label="Tour views">
@@ -337,12 +447,24 @@
                                 <span class="tours-path-name">{{ lp.Path.Name }}</span>
                                 <span class="tours-path-pct">{{ lp.CompletedCount }}/{{ lp.TotalCount }}</span>
                               </div>
+                              @if (lp.Path.Description) {
+                                <div class="tours-item-desc">{{ lp.Path.Description }}</div>
+                              }
                               <div class="tours-path-bar" role="progressbar" [attr.aria-valuenow]="lp.PercentComplete" aria-valuemin="0" aria-valuemax="100">
                                 <div class="tours-path-bar-fill" [style.width.%]="lp.PercentComplete"></div>
                               </div>
+                              <div class="tours-path-checklist">
+                                @for (stepTour of lp.Tours; track stepTour.TourKey) {
+                                  <button type="button" class="tours-path-tour-btn" (click)="StartLauncherTour(stepTour.TourKey)">
+                                    <i [class]="stepTour.Completed ? 'fa-solid fa-circle-check is-done' : stepTour.InProgress ? 'fa-solid fa-circle-half-stroke is-active' : 'fa-regular fa-circle'" aria-hidden="true"></i>
+                                    <span class="tours-path-tour-name">{{ stepTour.Name }}</span>
+                                    <span class="tours-path-tour-cta">{{ stepTour.Completed ? 'Replay' : stepTour.InProgress ? 'Resume' : 'Start' }}</span>
+                                  </button>
+                                }
+                              </div>
                               @if (lp.NextTourKey) {
                                 <button type="button" class="tours-path-next" (click)="StartLauncherTour(lp.NextTourKey)">
-                                  <i class="fa-solid fa-play" aria-hidden="true"></i> Next: {{ lp.NextTourName }}
+                                  <i class="fa-solid fa-play" aria-hidden="true"></i> Continue: {{ lp.NextTourName }}
                                 </button>
                               }
                             </div>
@@ -365,128 +487,23 @@
                 <input type="checkbox" [checked]="TourPrefs.ShowBeacons" (change)="ToggleTourBeaconsPref()" />
                 <span>Show feature hints &amp; beacons</span>
               </label>
-              <div class="tours-pref-modes">
-                <span class="tours-pref-mode-label">Guide mode:</span>
-                <div class="tours-mode-pills">
-                  @for (mode of TourGuideModeOptions; track mode) {
-                    <button
-                      type="button"
-                      class="tours-mode-pill"
-                      [class.active]="TourPrefs.PreferredGuideMode === mode"
-                      (click)="SetPreferredGuideMode(mode)">
-                      {{ mode }}
-                    </button>
-                  }
+              @if (TourVoiceGuideAvailable) {
+                <div class="tours-pref-modes">
+                  <span class="tours-pref-mode-label">Guide mode:</span>
+                  <div class="tours-mode-pills">
+                    @for (mode of TourGuideModeOptions; track mode) {
+                      <button
+                        type="button"
+                        class="tours-mode-pill"
+                        [class.active]="TourPrefs.PreferredGuideMode === mode"
+                        (click)="SetPreferredGuideMode(mode)">
+                        {{ mode }}
+                      </button>
+                    }
+                  </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        }
-      </div>
-
-      @if (ShowNotifications) {
-        <button class="icon-btn desktop-only notification-btn" title="Notifications"
-          data-mj-tour-anchor="core.shell.notifications"
-          (click)="showNotifications()">
-          <i class="fa-solid fa-bell"></i>
-          @if (unreadNotificationCount > 0) {
-            <span class="notification-badge">
-              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
-            </span>
-          }
-        </button>
-      }
-      <!-- Nav Bar Apps: Left of User Menu -->
-      @if (leftOfUserMenuApps.length > 0 && !appSwitchingLocked && ShowAppSwitcher) {
-        <div class="nav-bar-apps left-of-user-menu">
-          @for (app of leftOfUserMenuApps; track app) {
-            <button
-              class="nav-bar-app-btn"
-              [class.active]="IsActiveApp(app)"
-              [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
-              [title]="app.Name"
-              [style.--app-color]="app.GetColor()"
-              (click)="onNavBarAppClick(app, $event)"
-              (dblclick)="onNavBarAppDblClick(app, $event)">
-              <i [class]="app.Icon"></i>
-            </button>
-          }
-        </div>
-      }
-
-      <div class="user-menu">
-        <button class="avatar-btn" (click)="toggleUserMenu($event)"
-          data-mj-tour-anchor="core.shell.user-menu"
-          [attr.aria-label]="avatarAriaLabel"
-          [attr.aria-expanded]="userMenuVisible">
-          @if (userImageURL) {
-            <img [src]="userImageURL" alt="" aria-hidden="true" class="avatar-img" />
-          } @else {
-            <div class="icon-fallback" aria-hidden="true">
-              <i [class]="userIconClass || 'fa-solid fa-user'"></i>
-            </div>
-          }
-        </button>
-        <!-- User Context Menu (Dynamic) -->
-        @if (userMenuVisible) {
-          <div class="user-context-menu"
-            [class.menu-fade]="getUserMenuOptions()?.animationStyle === 'fade'"
-            [class.menu-slide]="getUserMenuOptions()?.animationStyle === 'slide'">
-            <!-- User Header -->
-            @if (getUserMenuOptions()?.showUserName) {
-              <div class="user-menu-header">
-                <div class="user-info">
-                  <span class="user-name">{{ getUserDisplayInfo()?.name || userName }}</span>
-                  @if (getUserMenuOptions()?.showUserEmail && getUserDisplayInfo()?.email) {
-                    <span class="user-email">
-                      {{ getUserDisplayInfo()?.email }}
-                    </span>
-                  }
-                  @if (getUserDisplayInfo()?.subtitle) {
-                    <span class="user-subtitle">{{ getUserDisplayInfo()?.subtitle }}</span>
-                  }
-                </div>
-              </div>
-              <div class="user-menu-divider"></div>
-            }
-            <!-- Dynamic Menu Items -->
-            @for (element of GetVisibleUserMenuElements(); track element) {
-              <!-- Divider -->
-              @if (isMenuDivider(element)) {
-                <div class="user-menu-divider"></div>
               }
-              <!-- Menu Item -->
-              @if (!isMenuDivider(element)) {
-                @if (asMenuItem(element); as item) {
-                  @if (item.id === 'toggle-theme') {
-                    <div class="user-menu-item theme-toggle-item"
-                      [title]="item.tooltip || ''"
-                      (click)="onUserMenuItemClick(item.id)">
-                      <i [class]="item.icon"></i>
-                      <span class="menu-label">{{ item.label }}</span>
-                      <div class="theme-toggle-track" [class.dark]="IsDarkMode">
-                        <div class="theme-toggle-thumb">
-                          <i [class]="IsDarkMode ? 'fa-solid fa-moon' : 'fa-solid fa-sun'" class="theme-toggle-icon"></i>
-                        </div>
-                      </div>
-                    </div>
-                  } @else {
-                    <div class="user-menu-item"
-                      [class.disabled]="!item.enabled"
-                      [class.danger]="item.cssClass === 'danger'"
-                      [style.color]="item.color || null"
-                      [title]="item.tooltip || ''"
-                      (click)="item.enabled && onUserMenuItemClick(item.id)">
-                      <i [class]="item.icon"></i>
-                      <span class="menu-label">{{ item.label }}</span>
-                      @if (item.shortcut) {
-                        <span class="menu-shortcut">{{ item.shortcut }}</span>
-                      }
-                    </div>
-                  }
-                }
-              }
-            }
+            </div>
           </div>
         }
       </div>
@@ -563,9 +580,9 @@
         </button>
       }
       @if (UseOmnibar && ShowSearchBar) {
-        <button class="mobile-nav-action" title="Tours & Help" (click)="OpenToursOmnibar(); closeMobileNav()">
+        <button class="mobile-nav-action" title="Tours & Learning Paths" (click)="OpenToursFromMenu(); closeMobileNav()">
           <i class="fa-solid fa-route"></i>
-          <span>Tours &amp; Help</span>
+          <span>Tours &amp; Learning Paths</span>
         </button>
       }
       @if (ShowNotifications) {

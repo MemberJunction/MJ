@@ -1,0 +1,855 @@
+[
+  {
+    "fields": {
+      "Name": "AI Models, Vendors & Local Embeddings",
+      "TourKey": "ai.models-routing",
+      "Description": "Learn how MemberJunction governs AI models, routes requests across cloud vendors with automatic failover, and runs zero-key local ONNX/WASM embeddings.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=AI",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 85,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User reviews AI model routing, multi-vendor failover, and local embedding options."
+      },
+      "StartLocation": {
+        "Application": "AI"
+      }
+    },
+    "primaryKey": {
+      "ID": "57D19D22-CAC8-4DB8-A1E2-2F9268866A72"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "models-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "AI Model Governance & Routing",
+            "Body": "MemberJunction separates logical AI capabilities from specific vendor endpoints so prompts and agents can route across providers, track costs, and fail over automatically.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore AI Models",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "AI"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "FCF8B270-6F77-40EB-9696-5E51CFBF6E9D"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "models-monitor",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Live AI Monitor & Cost Telemetry",
+            "Body": "Start on the AI Overview monitor to watch active prompt executions, token burn, latency spikes, and provider health in real time.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "AIMonitorResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIMonitorResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "C8D70208-FAE6-4833-9295-1A25E2A259DA"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "models-strategy-choice",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Choice",
+            "Title": "Choose Your Model Deployment Strategy",
+            "Body": "Pick which deployment pattern you want to inspect first in the Models workspace.",
+            "Configuration": {
+              "Question": "Which AI model deployment strategy would you like to explore?",
+              "Options": [
+                {
+                  "Key": "cloud-frontier",
+                  "Label": "Cloud Frontier Models & Failover",
+                  "Description": "Multi-vendor routing across OpenAI, Anthropic, Gemini, Groq, and Bedrock with automatic failover."
+                },
+                {
+                  "Key": "local-embeddings",
+                  "Label": "Zero-Key Local Embeddings",
+                  "Description": "In-process ONNX/WASM vector models (gte-small / bge-small) with zero external API keys or token cost."
+                }
+              ],
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "85AB4BE7-C6CF-4CD5-A190-CA7004554DCA"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "models-cloud-branch",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Branch: Cloud Vendors, API Cost & Failover",
+            "Body": "Each logical AI Model binds one or more MJ: AI Model Vendors with Power, Speed, and Cost ranks plus MJ: AI Model Costs pricing tiers so MJ can fail over cleanly when a provider throttles.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.models.header"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIModelsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "FDD1916A-A54A-49DC-9631-EB05B3902810"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "models-local-branch",
+            "Sequence": 5,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Branch: Local Embeddings & Privacy-First Search",
+            "Body": "Filter for Embedding models in the toolbar to inspect local ONNX/WASM drivers such as gte-small and bge-small — ideal for air-gapped environments, zero API token cost, and fast semantic indexing.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.models.toolbar"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIModelsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "9E14C390-3079-4B12-83FE-3261D3618041"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "models-summary",
+            "Sequence": 6,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "AI Configurations & Model Priority",
+            "Body": "Use AI Configurations to group environment-specific model preferences, context compression prompts, and runtime parameters — then continue to see how Prompts bind to models.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "ai.prompts-templates",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIConfigResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "7CC1F47B-2601-41DC-B7A8-DE3489B9FA12"
+          }
+        }
+      ],
+      "MJ: Tour Step Paths": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "85AB4BE7-C6CF-4CD5-A190-CA7004554DCA",
+            "ToStepID": "FDD1916A-A54A-49DC-9631-EB05B3902810",
+            "Condition": "Choice:cloud-frontier",
+            "Label": "Cloud Frontier Models & Failover",
+            "Priority": 100,
+            "Sequence": 1,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "2A348E96-9FEA-4F9F-BE3B-4B057B375D81"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "85AB4BE7-C6CF-4CD5-A190-CA7004554DCA",
+            "ToStepID": "9E14C390-3079-4B12-83FE-3261D3618041",
+            "Condition": "Choice:local-embeddings",
+            "Label": "Zero-Key Local Embeddings",
+            "Priority": 90,
+            "Sequence": 2,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "BF7B99A4-9785-4E8D-98A7-D11C0ADB0C18"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "85AB4BE7-C6CF-4CD5-A190-CA7004554DCA",
+            "ToStepID": "FDD1916A-A54A-49DC-9631-EB05B3902810",
+            "Condition": null,
+            "Label": "Default",
+            "Priority": 0,
+            "Sequence": 3,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "AF423874-2C19-46BA-BDFD-808A60127E52"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "FDD1916A-A54A-49DC-9631-EB05B3902810",
+            "ToStepID": "7CC1F47B-2601-41DC-B7A8-DE3489B9FA12",
+            "Condition": null,
+            "Label": "Continue",
+            "Priority": 10,
+            "Sequence": 1,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "14F0BB78-FC50-45E6-BAB8-1CB8EC6B3329"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "AI"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 85,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F3FF7AC5-FAF7-451B-BAB0-3ECF13FFAFCD"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Prompts, Templates & Priority Matrix",
+      "TourKey": "ai.prompts-templates",
+      "Description": "Explore how MJ: AI Prompts pair with Nunjucks MJ: Templates, enforce structured JSON output validation, and bind models via the priority matrix.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=AI",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User reviews AI Prompts, Nunjucks templates, output validation, and model-prompt priority bindings."
+      },
+      "StartLocation": {
+        "Application": "AI",
+        "DriverClass": "AIPromptsResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "4BC902E3-0E03-4C61-8519-6CBADE00DD47"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "prompts-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Prompt Engineering & Lifecycle",
+            "Body": "MemberJunction treats prompts as versioned, parameterized metadata assets backed by templates, validation rules, and multi-model routing.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Inspect Prompts",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIPromptsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "EDAF8A3D-E174-479D-95D9-A4A25002C9DA"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "prompts-templates",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Nunjucks Templates & Typed Parameters",
+            "Body": "In AIPromptsResource, each prompt binds to an MJ: Templates record with Nunjucks placeholders, typed input parameters, and interactive test execution.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.prompts.header"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIPromptsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "BA991865-55DA-4857-AE27-4CE8EAFA855F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "prompts-validation",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Structured Output Validation & Retries",
+            "Body": "Open any prompt card to inspect ResponseFormat, ResultSelector, and ValidationBehavior — ensuring malformed JSON triggers targeted validation retries before returning.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.prompts.body"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "DBCDFBA5-D247-435B-BC7B-96ED5EAFF3FC"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "prompts-priority-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Model-Prompt Priority Matrix & Bindings",
+            "Body": "Use MJ: AI Prompt Models and the priority matrix to rank preferred models per prompt, override selection strategies per configuration, and promote tested prompt versions safely.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "ai.agents-orchestration",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "7007F99F-5B75-4BD2-A2A8-8D1DBD34DBF4"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Agents: Loop vs Flow Orchestration",
+      "TourKey": "ai.agents-orchestration",
+      "Description": "Compare autonomous Loop Agents and deterministic Flow Agents, inspect agent hierarchies and actions, and trace sub-agent executions.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=AI",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 4,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User compares Loop and Flow agent architectures and inspects agent hierarchy and run traces."
+      },
+      "StartLocation": {
+        "Application": "AI",
+        "DriverClass": "AIAgentsResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "A4615416-5AB5-4488-AEC9-32187CBE8694"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "agents-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Autonomous & Deterministic AI Agents",
+            "Body": "MemberJunction agents combine prompts, Actions, sub-agents, and context compression into observable runs with full parent-child audit trails.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Agents",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIAgentsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "EE5C4978-6B0B-490B-AF79-654A01E19977"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "agents-hierarchy",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Agent Hierarchy, Actions & Scoped Skills",
+            "Body": "Use the Agents workspace to filter by category or type, inspect parent-child sub-agent hierarchies, and review attached MJ: Actions and context rules.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.agents.header"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIAgentsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "B0C57183-ACC0-485B-B8E4-B2D02E42E765"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "agents-pattern-choice",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Choice",
+            "Title": "Which Agent Execution Pattern Fits Your Task?",
+            "Body": "Choose an orchestration style to see how MemberJunction executes and governs it.",
+            "Configuration": {
+              "Question": "Which agent execution pattern fits your task?",
+              "Options": [
+                {
+                  "Key": "loop-agent",
+                  "Label": "Loop Agent (Dynamic Reasoning)",
+                  "Description": "Iterative ReAct loop that plans tool calls, sub-agents, and context compaction dynamically."
+                },
+                {
+                  "Key": "flow-agent",
+                  "Label": "Flow Agent (Deterministic DAG)",
+                  "Description": "Explicit step-and-edge state machine with guaranteed guardrails and predictable branching."
+                }
+              ],
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "A9FF5F9F-56BA-424E-AB23-8533AE97707C"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "agents-loop-branch",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Pattern: Loop Agents & Tool Governance",
+            "Body": "Loop Agents iterate through reasoning turns, invoking allowed MJ: Actions or delegating to child sub-agents while PayloadManager and context compression keep token budgets bounded.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.agents.body"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6406270D-C52B-41DB-B5BC-B669E5C4EA0C"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "agents-flow-branch",
+            "Sequence": 5,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Pattern: Flow Agents & Boolean Edge Guards",
+            "Body": "Flow Agents execute authored MJ: AI Agent Steps connected by MJ: AI Agent Step Paths with deterministic boolean expressions — ideal for regulated or repeatable multi-step pipelines.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.agents.body"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "B019951C-D2BD-4A40-AA52-5BF7E61C0216"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "agents-summary",
+            "Sequence": 6,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Inspecting Agent Runs & Sub-Agent Traces",
+            "Body": "Every execution records MJ: AI Agent Runs and nested MJ: AI Agent Run Steps with input/output payloads, prompt runs, and action outcomes. Continue to explore Analytics and MCP.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "ai.analytics-mcp",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "16989A72-AC53-4039-9FF5-ACD51BEA0BBD"
+          }
+        }
+      ],
+      "MJ: Tour Step Paths": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "A9FF5F9F-56BA-424E-AB23-8533AE97707C",
+            "ToStepID": "6406270D-C52B-41DB-B5BC-B669E5C4EA0C",
+            "Condition": "Choice:loop-agent",
+            "Label": "Loop Agent (Dynamic Reasoning)",
+            "Priority": 100,
+            "Sequence": 1,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "5C28FB94-CF51-4D61-9E14-57E8742F868A"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "A9FF5F9F-56BA-424E-AB23-8533AE97707C",
+            "ToStepID": "B019951C-D2BD-4A40-AA52-5BF7E61C0216",
+            "Condition": "Choice:flow-agent",
+            "Label": "Flow Agent (Deterministic DAG)",
+            "Priority": 90,
+            "Sequence": 2,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "1EB5452E-FF7C-4A59-A3B1-38FB16872B0B"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "A9FF5F9F-56BA-424E-AB23-8533AE97707C",
+            "ToStepID": "6406270D-C52B-41DB-B5BC-B669E5C4EA0C",
+            "Condition": null,
+            "Label": "Default",
+            "Priority": 0,
+            "Sequence": 3,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "00306E4E-91EB-4200-ACDF-8BDA22F9EE5F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "6406270D-C52B-41DB-B5BC-B669E5C4EA0C",
+            "ToStepID": "16989A72-AC53-4039-9FF5-ACD51BEA0BBD",
+            "Condition": null,
+            "Label": "Continue",
+            "Priority": 10,
+            "Sequence": 1,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "B4EBCFEE-D5D8-4E14-8FB6-8F3199720EB3"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Analytics, Credentials & MCP Servers",
+      "TourKey": "ai.analytics-mcp",
+      "Description": "Monitor token spend and latency in AI Analytics, govern encrypted MJ: Credentials rotation, and connect external tools via MJ: MCP Servers.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=AI",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 70,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User reviews AI Analytics, encrypted Credentials management, and MCP Server tool integration."
+      },
+      "StartLocation": {
+        "Application": "AI",
+        "DriverClass": "AIAnalyticsResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "21FC78AC-44B6-46AD-81C9-76E0C3C88C5D"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "analytics-mcp-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Observability, Security & External Tools",
+            "Body": "Track cost and latency across every prompt and agent run, secure API secrets with encrypted credentials, and extend agents with Model Context Protocol servers.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Review Analytics & MCP",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIAnalyticsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "549993D2-8E22-4A34-BB6E-5885E810B33F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "analytics-telemetry",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Token, Cost & Latency Analytics",
+            "Body": "Slice Executive Summary, Prompt Runs, Agent Runs, Model Performance, Error Analysis, and Cost & Budget dashboards by time window, model, and vendor.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "AIAnalyticsResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIAnalyticsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "15DF435E-8CAA-40DB-8796-752075053403"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "credentials-rotation",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Encrypted Credentials & Key Rotation",
+            "Body": "AI configurations and vendor connections reference encrypted MJ: Credentials rows instead of plaintext keys, making multi-tenant key rotation and environment promotion auditable.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ai.config.header"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "AIConfigResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "F048E8AD-2184-4194-98C7-64C7099A1606"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "mcp-servers-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "MCP Servers & Tool Governance",
+            "Body": "Register MJ: MCP Servers and MJ: MCP Server Connections to discover remote tools, test inputs interactively, and bind vetted MCP tools directly into your agents.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "AI",
+              "DriverClass": "MCPResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "F15C0CFF-550A-4094-9AF7-94285D4E204D"
+          }
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,438 @@
+[
+  {
+    "fields": {
+      "Name": "Problem Framing & Leakage-Safe Feature Pipelines",
+      "TourKey": "ps.problem-pipelines",
+      "Description": "Frame predictive problems with clean target labels, enforce observation point-in-time cutoffs, and assemble leakage-safe MJ: Record Processes feature pipelines.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Predictive Studio",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Application": "Predictive Studio",
+        "Description": "User explores Prediction Units, Evaluation Protocols, and Training Pipelines in Predictive Studio."
+      },
+      "StartLocation": {
+        "Application": "Predictive Studio"
+      }
+    },
+    "primaryKey": {
+      "ID": "65A6D7D1-D272-4399-B1E5-859CD5431DB9"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "problem-framing-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Framing Predictive Problems Cleanly",
+            "Body": "Predictive Studio separates what you want to predict from how features are assembled and evaluated — preventing target leakage before training even begins.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Studio",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Predictive Studio"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "7A4B0876-61EB-4D3D-855D-180F8E965253"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "target-label-definition",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Target Label Definition in Studio",
+            "Body": "Open the Studio workbench to define versioned MJ: ML Prediction Units — specifying the target entity, outcome column, and classification or regression objective.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "PredictiveStudioStudioResource",
+              "DriverClass": "PredictiveStudioStudioResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "74A5AE3F-66FB-4B6A-A2E9-D4858ABB1823"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "point-in-time-cutoffs",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Observation Point-in-Time Cutoffs",
+            "Body": "Pair each Prediction Unit with an Evaluation Protocol that locks the observation cutoff timestamp so future fields or post-outcome events never leak into training.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "PredictiveStudioStudioResource",
+              "DriverClass": "PredictiveStudioStudioResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "C50F0CFF-FB8C-46D8-AD43-AFC200BB878F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "record-process-pipelines",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Leakage-Safe MJ: Record Processes Pipelines",
+            "Body": "Compose feature pipelines backed by MJ: Record Processes across entities, queries, and vectors — with automatic as-of snapshot assembly and column deny-lists.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Next: Training & Comparison",
+              "NextTourKey": "ps.training-compare",
+              "LearningPathKey": "ps.mastery",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "10167AD5-5A09-44E2-8633-83A405DB5F9E"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Predictive Studio"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8B2B4F0B-02F7-41DF-B04A-4F42CE21D7D8"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Training Experiments & Champion Model Selection",
+      "TourKey": "ps.training-compare",
+      "Description": "Run structured training experiments under evaluation protocols, inspect ROC/PR/calibration curves and holdout splits, and promote a champion model.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Predictive Studio",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Application": "Predictive Studio",
+        "Description": "User learns how experiment comparison and champion model promotion work."
+      },
+      "StartLocation": {
+        "Application": "Predictive Studio"
+      }
+    },
+    "primaryKey": {
+      "ID": "E603A13B-338B-431F-998B-9AB096D0E3FC"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "training-protocols-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Structured Training Protocols",
+            "Body": "Every training run executes against an explicit Evaluation Protocol — enforcing consistent train/validation/holdout splits and success metrics across algorithms.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Review Experiments",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Predictive Studio"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "8DEF7706-24AF-493A-A5C1-E43637A822B5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "roc-pr-calibration",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "ROC, PR & Calibration Diagnostics",
+            "Body": "In Studio's Experiments and Compare Runs views, inspect ranked iterations alongside ROC-AUC, Precision-Recall, and probability calibration metrics.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "PredictiveStudioStudioResource",
+              "DriverClass": "PredictiveStudioStudioResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "2A93D545-4C44-4F65-ADEE-36BB49C041FF"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "holdout-splits-and-registry",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Holdout Splits & Model Registry Gate",
+            "Body": "Open Models to inspect versioned trained artifacts, verify holdout evaluation gates, and review why any candidate run was withheld or passed.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "PredictiveStudioModelsResource",
+              "DriverClass": "PredictiveStudioModelsResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "28846F51-15EA-41B8-ABB5-B68DE13754CE"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "promote-champion-model",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Promoting a Champion Model to Production",
+            "Body": "Promote a verified model version to Published in the Model Registry, then schedule batch scoring or bind outputs directly to target entity columns.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Next: Live Predictions",
+              "NextTourKey": "ps.serving-explainability",
+              "LearningPathKey": "ps.mastery",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "35DA46B0-2433-41F2-A09C-48781AC5EB28"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Live Predictions & Per-Record Drivers",
+      "TourKey": "ps.serving-explainability",
+      "Description": "Explore batch and real-time scoring grids, filter by confidence and risk bands, and inspect per-row positive and negative feature drivers.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Predictive Studio",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 70,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Application": "Predictive Studio",
+        "Description": "User learns to filter scored cohorts, inspect decile distributions, and read per-row feature drivers."
+      },
+      "StartLocation": {
+        "Application": "Predictive Studio"
+      }
+    },
+    "primaryKey": {
+      "ID": "1547EA6C-45F6-4793-A54C-DF47759932C4"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "predictions-scoring-intro",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Batch & Real-Time Scoring Views",
+            "Body": "The Predictions workspace turns published models into actionable scorecards — complete with trust verdicts, cohort summaries, and exportable record lists.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Inspect Scoring Grid",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Predictive Studio",
+              "DriverClass": "PredictiveStudioPredictionsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "F2681757-70E4-49F1-9A41-5DE983375C9F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "confidence-bands-filtering",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Filtering by Confidence & Risk Bands",
+            "Body": "Use the tier filter pills and search toolbar to focus on high-confidence predictions, toggle between Grid and Chart views, or save filtered cohorts as an MJ List.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ps.predictions-toolbar"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6E05614D-92F6-4E11-A15A-26E247AD40D3"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "scored-cohort-results",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Inspecting Scored Rows & Decile Histograms",
+            "Body": "Click any row in the scoring grid or drill into a histogram decile to open the slide-in detail panel with score history across runs.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "ps.predictions-results"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "90BD1385-E598-4AE5-9D88-F05C48AA84A7"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "per-record-drivers-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Per-Row Positive & Negative Feature Drivers",
+            "Body": "Inside every record's prediction drawer, review the top positive and negative feature drivers behind that row's score — clearly marked as model associations to guide human action.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish Path",
+              "LearningPathKey": "ps.mastery",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "1D055421-FBA6-4FE6-A8BA-0FF11D175B9E"
+          }
+        }
+      ]
+    }
+  }
+]

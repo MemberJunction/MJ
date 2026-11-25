@@ -30,7 +30,7 @@ import {
   type SpotlightCutoutRect,
 } from '../overlay/tour-spotlight-overlay.component';
 import { BaseTourStepRenderer } from '../renderers/base-step-renderer';
-import { EnsureStepRendererLoaded } from '../renderers/lazy-step-renderers';
+import { EnsureStepRendererLoaded, ResolveTourStepRendererKey } from '../renderers/lazy-step-renderers';
 import { EnsureStandardTourRenderersRegistered } from '../renderers/register-standard-renderers';
 import { TourCardHairlineComponent } from '../renderers/tour-step-chrome.component';
 import { BaseTourPresenter } from './base-tour-presenter';
@@ -194,6 +194,7 @@ export class OverlayTourPresenterComponent
   @Input() public override VoiceGuideAvailable = false;
   @Input() public override VoiceGuideActive = false;
   @Input() public override EstimatedMinutes: number | undefined = undefined;
+  @Input() public override AvailableTourKeys: ReadonlySet<string> | null = null;
 
   @ViewChild('stepHost', { read: ViewContainerRef }) private stepHost?: ViewContainerRef;
   @ViewChild('floatingDialog', { read: ElementRef }) private floatingDialogRef?: ElementRef<HTMLElement>;
@@ -269,23 +270,25 @@ export class OverlayTourPresenterComponent
   }
 
   protected isModalStep(step: TourStepView): boolean {
-    if (step.StepType === 'Spotlight') {
+    const key = ResolveTourStepRendererKey(step);
+    if (key === 'Spotlight') {
       return true;
     }
-    if (step.StepType === 'Action' || step.StepType === 'Beacon' || step.StepType === 'Banner') {
+    if (key === 'Action' || key === 'Beacon' || key === 'Banner') {
       return false;
     }
-    return MODAL_STEP_TYPES.has(step.StepType);
+    return MODAL_STEP_TYPES.has(key);
   }
 
   protected isCenteredModal(step: TourStepView): boolean {
-    if (step.StepType === 'Modal') {
+    const key = ResolveTourStepRendererKey(step);
+    if (key === 'Modal') {
       return true;
     }
-    if (step.StepType === 'Banner' || step.StepType === 'Beacon') {
+    if (key === 'Banner' || key === 'Beacon') {
       return false;
     }
-    return step.Placement === 'center' || (!this.AnchorElement && step.StepType !== 'Action');
+    return step.Placement === 'center' || (!this.AnchorElement && key !== 'Action');
   }
 
   private async mountStepRenderer(step: TourStepView, session: TourSessionView): Promise<void> {
@@ -295,7 +298,8 @@ export class OverlayTourPresenterComponent
     this.mountedStepKey = step.StepKey;
     this.mountedStepType = step.StepType;
 
-    await EnsureStepRendererLoaded(step.StepType);
+    const rendererKey = ResolveTourStepRendererKey(step);
+    await EnsureStepRendererLoaded(rendererKey);
 
     // Guard against step changing while lazy chunk loaded
     if (this.Session?.CurrentStep?.StepKey !== step.StepKey || !this.stepHost) {
@@ -304,7 +308,6 @@ export class OverlayTourPresenterComponent
 
     this.destroyRenderer();
 
-    const rendererKey = resolveRendererKey(step);
     const created = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseTourStepRenderer>(
       BaseTourStepRenderer,
       rendererKey,
@@ -366,6 +369,7 @@ export class OverlayTourPresenterComponent
     ref.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
     ref.setInput('VoiceGuideActive', this.VoiceGuideActive);
     ref.setInput('EstimatedMinutes', this.EstimatedMinutes);
+    ref.setInput('AvailableTourKeys', this.AvailableTourKeys);
   }
 
   private refreshPositioningAndInert(): void {
@@ -511,10 +515,4 @@ export class OverlayTourPresenterComponent
     this.inertManager.Restore();
     this.focusManager.DetachAndRestore();
   }
-}
-
-function resolveRendererKey(step: TourStepView): string {
-  const cfg = step.Configuration as Record<string, unknown> | undefined;
-  const configuredRenderer = typeof cfg?.['RendererClass'] === 'string' ? cfg['RendererClass'] : null;
-  return configuredRenderer || step.StepType;
 }

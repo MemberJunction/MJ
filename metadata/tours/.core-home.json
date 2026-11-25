@@ -52,19 +52,19 @@
         {
           "fields": {
             "TourID": "@parent:ID",
-            "StepKey": "learning-paths-card",
+            "StepKey": "pinned-resources",
             "Sequence": 2,
             "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
-            "Title": "Track Learning Paths",
-            "Body": "Follow recommended checklists to master core workflows and resume any tour right from where you left off.",
+            "Title": "Pin Your Go-To Dashboards & Views",
+            "Body": "Pin dashboards, saved views, queries, and quick actions into named groups so your daily tools are always one click away.",
             "Configuration": {
               "ShowProgress": true
             },
             "Anchor": {
               "Strategy": "Registered",
-              "Key": "core.home.learning-paths"
+              "Key": "core.home.pinned"
             },
-            "Placement": "Top",
+            "Placement": "Bottom",
             "Mode": "Guide",
             "Completion": {
               "Type": "NextButton"
@@ -79,18 +79,18 @@
         {
           "fields": {
             "TourID": "@parent:ID",
-            "StepKey": "home-return",
+            "StepKey": "user-menu-tours",
             "Sequence": 3,
             "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
-            "Title": "Return Anytime",
-            "Body": "Click Home in the header at any point to return to your personalized workspace.",
+            "Title": "Tours & Learning Paths Anytime",
+            "Body": "Open your profile menu and select **Tours & Learning Paths** whenever you want to explore guided walkthroughs or track multi-tour learning paths across apps.",
             "Configuration": {
               "ShowProgress": true,
               "NextButtonText": "Done"
             },
             "Anchor": {
               "Strategy": "Registered",
-              "Key": "core.shell.home"
+              "Key": "core.shell.user-menu"
             },
             "Placement": "Bottom",
             "Mode": "Show",

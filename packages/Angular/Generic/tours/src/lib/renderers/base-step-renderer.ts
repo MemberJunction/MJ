@@ -30,6 +30,7 @@ export abstract class BaseTourStepRenderer<TConfig extends object = object> exte
   @Input() public VoiceGuideAvailable = false;
   @Input() public VoiceGuideActive = false;
   @Input() public EstimatedMinutes?: number;
+  @Input() public AvailableTourKeys: ReadonlySet<string> | null = null;
 
   @Output() public NextRequested = new EventEmitter<TourStepIntentEventArgs>();
   @Output() public BackRequested = new EventEmitter<TourStepIntentEventArgs>();

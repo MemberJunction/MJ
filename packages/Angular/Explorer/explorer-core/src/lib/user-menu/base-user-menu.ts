@@ -133,6 +133,18 @@ export class BaseUserMenu {
                 tooltip: 'View and edit your profile'
             },
             {
+                id: 'tours-and-help',
+                label: 'Tours & Learning Paths',
+                icon: 'fa-solid fa-route',
+                group: 'primary',
+                order: 15,
+                developerOnly: false,
+                adminOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: 'Browse guided tours, learning paths, and interactive help'
+            },
+            {
                 id: 'pin-to-home',
                 label: 'Pin to Home',
                 icon: 'fa-solid fa-house-chimney',
@@ -356,6 +368,18 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'profile'
+        };
+    }
+
+    /**
+     * Handle "Tours & Learning Paths" click — signals the shell to open the
+     * Guided Tours & Learning Paths launcher drawer.
+     */
+    protected async Handle_tours_and_help(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'tours-and-help'
         };
     }
 

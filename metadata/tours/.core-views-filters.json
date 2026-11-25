@@ -1,0 +1,157 @@
+[
+  {
+    "fields": {
+      "Name": "Explore Data, Views & Smart Filters",
+      "TourKey": "core.views-filters",
+      "Description": "Discover how to search entities in Data Explorer, apply Smart Filters and Filter Builder rules, switch between Grid, Card, and Timeline views, and save reusable User Views.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Data Explorer",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 85,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "AppName": "Data Explorer",
+        "Description": "User explores Data Explorer search, entity browsing, view switching, and saved views."
+      },
+      "StartLocation": {
+        "Application": "Data Explorer"
+      }
+    },
+    "primaryKey": {
+      "ID": "8EAAD7AB-82B5-490C-887B-1BD3CF1C4A6D"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "de-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Welcome to Data Explorer",
+            "Body": "Browse every entity you have access to, filter records with Smart Filters, switch layouts on the fly, and save personal or shared User Views.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Data Explorer",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "DCCD45AB-C990-42F6-80B7-B226B1E5E261"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "de-search",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Search Entities & Toggle Favorites",
+            "Body": "Type `/` or click here to filter record types across all apps, and switch between **All Data** and **My Favorites**. Inside any entity, the top Smart Filter bar and Filter Builder refine records in real time.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.data-explorer.search"
+            },
+            "Prepare": {
+              "ApplicationName": "Data Explorer"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "57A7B123-77E5-4D79-B81C-59B62CDF3F10"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "de-entities",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Switch View Modes & Save User Views",
+            "Body": "Select any record type to open its View Workspace. Use the view-type switcher for **Grid**, **Cards**, **Timeline**, or **Map** layouts, save custom **User Views**, and open **Quick Access** for recent or favorite records.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.data-explorer.entities"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "F0D8393A-17D6-4C2D-BFAA-C0AD11E81665"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "de-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Turn Views into Actionable Lists",
+            "Body": "Export filtered results to Excel, CSV, or JSON directly from the toolbar — or pair your saved User Views with dynamic **Lists** for recurring tracking and set operations.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "lists.create-refresh",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "317F5BBA-DA98-4A49-AAAE-F1102C44A143"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Data Explorer"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 85,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7D595C5F-FADB-4E8C-9394-822FAA76F14F"
+          }
+        }
+      ]
+    }
+  }
+]

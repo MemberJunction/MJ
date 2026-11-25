@@ -15,6 +15,20 @@
   },
   {
     "fields": {
+      "FeatureKey": "Tours.SageVoiceGuide.Enabled",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Tours",
+      "DisplayName": "Enable Sage Voice Guide in Tours",
+      "Description": "Global feature flag controlling whether Sage AI voice and chat walkthrough mode is offered inside Guided Tours. Disabled by default so tours run in crisp visual self-paced mode unless explicitly turned on.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "C84F2D19-5B3E-4A72-9D14-6E80B3F29C11"
+    }
+  },
+  {
+    "fields": {
       "FeatureKey": "Tours.InterruptionBudget",
       "Value": "{\"maxOffersPerSession\":1,\"maxBeaconsVisible\":2,\"cooldownHoursAfterDismiss\":24,\"quietWhenDirtyForm\":true,\"quietWhenModalOpen\":true,\"quietDuringRealtimeVoice\":true}",
       "ValueType": "json",

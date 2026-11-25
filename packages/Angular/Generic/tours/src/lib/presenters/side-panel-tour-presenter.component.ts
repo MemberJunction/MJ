@@ -16,7 +16,7 @@ import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import type { TourSessionView, TourStepView } from '@memberjunction/tours-runtime';
 import { Subscription } from 'rxjs';
 import { BaseTourStepRenderer } from '../renderers/base-step-renderer';
-import { EnsureStepRendererLoaded } from '../renderers/lazy-step-renderers';
+import { EnsureStepRendererLoaded, ResolveTourStepRendererKey } from '../renderers/lazy-step-renderers';
 import { EnsureStandardTourRenderersRegistered } from '../renderers/register-standard-renderers';
 import { TourCardHairlineComponent } from '../renderers/tour-step-chrome.component';
 import { BaseTourPresenter } from './base-tour-presenter';
@@ -110,6 +110,7 @@ export class SidePanelTourPresenterComponent
   @Input() public override VoiceGuideAvailable = false;
   @Input() public override VoiceGuideActive = false;
   @Input() public override EstimatedMinutes: number | undefined = undefined;
+  @Input() public override AvailableTourKeys: ReadonlySet<string> | null = null;
 
   @ViewChild('stepHost', { read: ViewContainerRef }) private stepHost?: ViewContainerRef;
 
@@ -163,6 +164,7 @@ export class SidePanelTourPresenterComponent
     ref.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
     ref.setInput('VoiceGuideActive', this.VoiceGuideActive);
     ref.setInput('EstimatedMinutes', this.EstimatedMinutes);
+    ref.setInput('AvailableTourKeys', this.AvailableTourKeys);
   }
 
   private async mountStep(step: TourStepView, session: TourSessionView): Promise<void> {
@@ -170,7 +172,8 @@ export class SidePanelTourPresenterComponent
       return;
     }
     this.mountedKey = step.StepKey;
-    await EnsureStepRendererLoaded(step.StepType);
+    const rendererKey = ResolveTourStepRendererKey(step);
+    await EnsureStepRendererLoaded(rendererKey);
     if (this.Session?.CurrentStep?.StepKey !== step.StepKey || !this.stepHost) {
       return;
     }
@@ -178,7 +181,7 @@ export class SidePanelTourPresenterComponent
 
     const created = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseTourStepRenderer>(
       BaseTourStepRenderer,
-      step.StepType,
+      rendererKey,
     );
     if (!created.Resolved || !created.Instance) {
       return;

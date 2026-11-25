@@ -185,6 +185,8 @@ export class TourEngine
 
     /** `MJ: Instance Configurations` key controlling the Guided Tours kill switch (default `true`). */
     public static readonly ToursEnabledConfigKey = 'Tours.Enabled';
+    /** `MJ: Instance Configurations` key controlling Sage AI voice/chat guidance inside tours (default `false`). */
+    public static readonly SageVoiceGuideEnabledConfigKey = 'Tours.SageVoiceGuide.Enabled';
     /** `MJ: Instance Configurations` key for global interruption budget defaults. */
     public static readonly InterruptionBudgetConfigKey = 'Tours.InterruptionBudget';
     /** `MJ: Instance Configurations` key for the fallback Guide Agent ID. */
@@ -324,6 +326,24 @@ export class TourEngine
             return false;
         }
         return this.getInstanceConfigEngine().GetBoolean(TourEngine.ToursEnabledConfigKey, true);
+    }
+
+    /**
+     * Whether Sage AI voice/chat tour guidance is enabled globally (`Tours.SageVoiceGuide.Enabled`).
+     * Disabled (`false`) by default until explicitly enabled via Instance Configuration or
+     * `MJ_TOURS_SAGE_VOICE_GUIDE_ENABLED=true`.
+     */
+    public get IsSageVoiceGuideEnabled(): boolean {
+        if (!this.IsEnabled) {
+            return false;
+        }
+        const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+        const env = proc?.env?.MJ_TOURS_SAGE_VOICE_GUIDE_ENABLED;
+        if (env !== undefined && env !== null && env.trim().length > 0) {
+            const normalized = env.trim().toLowerCase();
+            return normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes';
+        }
+        return this.getInstanceConfigEngine().GetBoolean(TourEngine.SageVoiceGuideEnabledConfigKey, false);
     }
 
     /** Returns the effective interruption budget configuration from `Tours.InterruptionBudget`. */
@@ -1059,6 +1079,7 @@ export class TourEngine
             Sequence: step.Sequence,
             StepType: (step.StepTypeName || stepTypeRow?.Name || 'Spotlight') as TourStepTypeKey,
             DriverClass: step.DriverClass ?? step.StepTypeDriverClass ?? stepTypeRow?.DriverClass ?? null,
+            RendererClass: step.StepTypeRendererClass ?? stepTypeRow?.RendererClass ?? null,
             Title: step.Title,
             Body: step.Body ?? undefined,
             Configuration: this.mapStepConfiguration(step.Configuration),
@@ -1091,6 +1112,7 @@ export class TourEngine
             Sequence: step.Sequence,
             StepType: stepTypeName,
             DriverClass: step.DriverClass ?? stepTypeRow?.DriverClass ?? null,
+            RendererClass: stepTypeRow?.RendererClass ?? null,
             Title: step.Title,
             Body: step.Body ?? undefined,
             Configuration: this.mapStepConfiguration(step.ConfigurationObject),

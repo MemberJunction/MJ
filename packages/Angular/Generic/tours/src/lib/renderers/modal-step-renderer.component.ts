@@ -112,7 +112,7 @@ import { TourProgressRailComponent, TourStepHeaderComponent } from './tour-step-
           }
         </div>
         <div class="mjt-footer-actions">
-          @if (NextTourKey) {
+          @if (ShowNextTourButton) {
             <button
               type="button"
               mjButton
@@ -214,6 +214,17 @@ export class ModalStepRenderer extends BaseTourStepRenderer<IModalStepConfig> im
 
   public get NextTourKey(): string | undefined {
     return this.Step?.Configuration?.NextTourKey;
+  }
+
+  public get ShowNextTourButton(): boolean {
+    const key = this.NextTourKey;
+    if (!key) {
+      return false;
+    }
+    if (this.AvailableTourKeys && this.AvailableTourKeys.size > 0) {
+      return this.AvailableTourKeys.has(key);
+    }
+    return true;
   }
 
   public SelectMode(mode: 'visual' | 'voice'): void {

@@ -250,6 +250,7 @@ describe('BaseUserMenu — Admin Menu Item Scoping', () => {
             .map((item) => item.id);
 
         expect(visibleIds).toContain('profile');
+        expect(visibleIds).toContain('tours-and-help');
         expect(visibleIds).toContain('select-theme-system');
         expect(visibleIds).toContain('logout');
 

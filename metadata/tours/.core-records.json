@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Working with a Record",
       "TourKey": "core.records",
-      "Description": "Contextual walkthrough of any entity record form: sections, history rail, toolbar actions, and asking Sage about the record.",
+      "Description": "Contextual walkthrough of any entity record form: sections, history rail, toolbar actions, tags, record links, and audit trails.",
       "ApplicationID": null,
       "RunInAuthenticatedHosts": true,
       "Status": "Draft",
@@ -14,7 +14,7 @@
       "Goal": {
         "Type": "Signal",
         "Signal": "core.records.explored",
-        "Description": "User explores record sections, rail tools, or asks AI about the open record."
+        "Description": "User explores record sections, rail tools, tags, record links, and audit trails on an open record."
       },
       "StartLocation": {
         "RequiresOpenRecord": true
@@ -39,7 +39,7 @@
             "Anchor": {
               "Strategy": "FormSection",
               "Entity": "{{Context.Record.EntityName}}",
-              "Section": "Details"
+              "SectionKey": "Details"
             },
             "Placement": "Top",
             "Mode": "Guide",
@@ -110,19 +110,18 @@
         {
           "fields": {
             "TourID": "@parent:ID",
-            "StepKey": "record-ask-agent",
+            "StepKey": "record-tags-audit",
             "Sequence": 4,
-            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=AskAgent",
-            "Title": "Ask AI About This Record",
-            "Body": "Launch Sage with this record already attached to summarize changes or check related data.",
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Tags, Record Links & Audit Trail",
+            "Body": "Categorize any record with polymorphic **MJ: Tagged Items**, navigate connected records through **Record Links**, and review field-level **Record Changes** history anytime from the form.",
             "Configuration": {
-              "SeedPrompt": "Summarize this {{Context.Record.EntityName}} record and highlight key relationships.",
-              "PreferVoice": false,
-              "AllowNextButtonFallback": true,
-              "NextButtonText": "Finish"
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
             },
             "Placement": "Center",
-            "Mode": "Guide",
+            "Mode": "Show",
             "Completion": {
               "Type": "NextButton"
             },

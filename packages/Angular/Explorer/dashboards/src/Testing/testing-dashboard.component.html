@@ -2,7 +2,8 @@
   <mj-page-header
     Title="Testing"
     Icon="fa-solid fa-vial-circle-check"
-    Subtitle="Evaluate AI agents, workflows, and system components">
+    Subtitle="Evaluate AI agents, workflows, and system components"
+    data-mj-tour-anchor="testing.header">
     <div meta>
       @if (ActiveRuns.length > 0) {
         <mj-stat-badge
@@ -13,10 +14,10 @@
         </mj-stat-badge>
       }
     </div>
-    <div actions>
+    <div actions data-mj-tour-anchor="testing.eval-mode">
       <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
     </div>
-    <div toolbar>
+    <div toolbar data-mj-tour-anchor="testing.tabs">
       <mj-tab-nav
         [Tabs]="Tabs"
         [ActiveKey]="activeTab"
@@ -43,7 +44,7 @@
       </div>
     }
 
-    <div class="dashboard-content">
+    <div class="dashboard-content" data-mj-tour-anchor="testing.workspace">
       @if (activeTab === 'dashboard' && hasVisited('dashboard')) {
         <app-testing-dashboard-tab
           [initialState]="dashboardState"

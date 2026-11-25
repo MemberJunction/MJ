@@ -1,0 +1,448 @@
+[
+  {
+    "fields": {
+      "Name": "Identity, Roles, Permissions & API Keys",
+      "TourKey": "admin.identity-permissions",
+      "Description": "Walk through MJ: Users, MJ: Roles, MJ: Application Roles, entity CRUD permissions, and scoped MJ: API Keys in Admin.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "Administrator reviews identity, roles, entity CRUD permissions, and scoped API keys."
+      },
+      "StartLocation": {
+        "Application": "Admin",
+        "NavItem": "AdminIdentityAccess"
+      }
+    },
+    "primaryKey": {
+      "ID": "60183DF8-AB6F-4191-AD00-B270E40B96F5"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "identity-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Identity, Roles & Access Governance",
+            "Body": "MemberJunction centralizes user accounts, role assignments, entity CRUD permissions, and programmatic API keys inside Admin → Identity & Access.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Identity & Access",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Admin",
+              "NavItemKey": "AdminIdentityAccess"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "5046D71B-4618-4B9B-93CE-EFC75419DF69"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "identity-nav-sections",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Users, Roles & Application Roles",
+            "Body": "Switch between **MJ: Users**, **MJ: Roles**, and **MJ: Application Roles** in this navigation rail to control which applications and workspaces each role can access.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "admin.container.nav"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "D294B38F-757C-497E-870F-81F6DDAFB9AE"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "identity-permissions-apikeys",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Entity CRUD Permissions & Scoped API Keys",
+            "Body": "Configure **Read / Create / Update / Delete** entity permissions and row-level filters per role, and issue least-privilege **MJ: API Keys** with explicit scopes for service integrations.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "admin.container.content"
+            },
+            "Placement": "Left",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "490CF34E-1BFC-4400-9A79-06CE4FCD5340"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "identity-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Access Control Ready",
+            "Body": "Audit role and permission updates anytime via record history, or continue to **Health Observatory, Diagnostics & Version History**.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "admin.health-diagnostics"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "A0A3687E-59BD-4E9F-A843-FFD14087DA64"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Admin"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "16FB29F9-5112-439C-A18B-54BF0093D578"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Health Observatory, Diagnostics & Version History",
+      "TourKey": "admin.health-diagnostics",
+      "Description": "Monitor live Health Observatory probes, capture .mjdiag diagnostic bundles, inspect Version History snapshot labels and diffs, and review OpenApp install histories.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "Administrator inspects Health Observatory probes, diagnostics bundles, and version history."
+      },
+      "StartLocation": {
+        "Application": "Admin",
+        "NavItem": "AdminMonitoring"
+      }
+    },
+    "primaryKey": {
+      "ID": "17A4E91E-A71E-4818-BCBB-AA7A9C4CB7C0"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "health-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Platform Observability & Recovery",
+            "Body": "Inspect live system probes, export `.mjdiag` diagnostic bundles, track **Version History** snapshot labels and diffs, and review OpenApp install histories.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Inspect Health Tools",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Admin",
+              "NavItemKey": "AdminMonitoring"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "94DC5D3F-F60D-4B2E-9FC3-391DF04354D7"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "health-observatory-probes",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Live Health Observatory Probes",
+            "Body": "Select **Health & Telemetry Observatory** in this rail to view live database, API, storage, and ring-buffer telemetry probes in real time.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "admin.container.nav"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "07699A95-0B0B-44E4-81D8-E7DF8825D9CB"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "health-diagnostics-bundle",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Diagnostic Bundles (.mjdiag) & SQL Logs",
+            "Body": "Use **Diagnostics** to capture and export `.mjdiag` bundles containing environment checks, connectivity results, and runtime telemetry, or switch to **SQL Logging** to inspect captured queries.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "admin.container.content"
+            },
+            "Placement": "Left",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "521285D6-7231-48D3-A556-0C787EED1F55"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "health-version-history-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Version History Labels, Diffs & OpenApp Installs",
+            "Body": "Open the **Version History** app from the switcher to create snapshot labels, inspect record diffs, and restore prior states alongside OpenApp install histories — or continue to Studios.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "admin.studios"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "67692143-2A13-4B55-BE8F-0557D8979A1E"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Component, Theme & Login Studios",
+      "TourKey": "admin.studios",
+      "Description": "Explore Component Studio interactive React specs, Theme Studio light/dark design tokens, and Login Studio branded authentication experiences.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Component Studio",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "Builder explores Component Studio, Theme Studio, and Login Studio."
+      },
+      "StartLocation": {
+        "Application": "Component Studio",
+        "NavItem": "ComponentStudioResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "CCAAC6E2-EB14-45F8-8D79-17661F226278"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "studios-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Metadata-Driven Design Studios",
+            "Body": "Customize interactive UI components, organization brand tokens, and sign-in experiences as portable metadata across **Component Studio**, **Theme Studio**, and **Login Studio**.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Studios",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Component Studio",
+              "NavItemKey": "ComponentStudioResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "71BB602F-F130-4A31-BAC7-6BD0C6AF28E5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "studios-component-studio",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Component Studio & Interactive React Specs",
+            "Body": "Author, preview, and test interactive React **ComponentSpec** artifacts and drag-and-drop form overrides directly in **Component Studio** before embedding them in dashboards or tours.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "ComponentStudioResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "4028A8A4-F505-4A70-8A30-E98FA8CFA8D9"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "studios-theme-login",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Theme Studio Tokens & Login Studio Auth",
+            "Body": "Use the **Application Switcher** to open **Theme Studio** for live light/dark `--mj-*` design tokens with WCAG contrast validation, and **Login Studio** to compose branded sign-in layouts.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.app-switcher"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "DDF25965-56E0-4399-ACDC-56A23865FBAC"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "studios-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Ship Branded Experiences Without Redeploys",
+            "Body": "Every component spec, theme token set, and login layout is stored as versioned metadata ready to promote across environments.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "781311B2-AE48-458A-9F7C-D0DA087DB5E9"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Component Studio"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "359FF11A-FFF8-4E54-815D-F1875BCAE58D"
+          }
+        }
+      ]
+    }
+  }
+]

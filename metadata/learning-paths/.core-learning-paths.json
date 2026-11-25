@@ -3,7 +3,7 @@
     "fields": {
       "Name": "MJ Essentials",
       "PathKey": "core.essentials",
-      "Description": "Core orientation checklist for every MemberJunction user covering workspace navigation, Home, entity records, and collaborating with Sage.",
+      "Description": "Core orientation checklist for every MemberJunction user covering workspace navigation, Home, entity records, Data Explorer views, Dashboards, and collaborating with Sage.",
       "ApplicationID": null,
       "Status": "Active",
       "Configuration": {
@@ -65,6 +65,28 @@
           "primaryKey": {
             "ID": "2221F96E-10BB-4EE7-AAC1-B4CA650DC27C"
           }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=core.views-filters",
+            "Sequence": 5,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CDECD818-70BE-465B-88CA-08D97695DACB"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=core.dashboards-pins",
+            "Sequence": 6,
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F32F8E8A-4B1C-44EE-A663-890040E0A1B9"
+          }
         }
       ]
     }
@@ -77,11 +99,11 @@
       "ApplicationID": "@lookup:MJ: Applications.Name=Tour Studio",
       "AudienceFilter": {
         "logic": "and",
-        "rules": [
+        "filters": [
           {
-            "field": "roles",
+            "field": "user.Roles",
             "operator": "contains",
-            "value": "Administrator"
+            "value": "Developer"
           }
         ]
       },

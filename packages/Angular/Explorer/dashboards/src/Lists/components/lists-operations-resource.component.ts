@@ -83,7 +83,7 @@ interface EntityOption {
       <!-- Main Content -->
       <div class="operations-content">
         <!-- Left Panel: List Selection -->
-        <div class="selection-panel">
+        <div class="selection-panel" data-mj-tour-anchor="lists.operations.operands">
           <div class="panel-header">
             <h3>Selected Operands</h3>
             @if (totalOperandCount > 0) {
@@ -249,7 +249,7 @@ interface EntityOption {
         </div>
 
         <!-- Center: Venn Diagram -->
-        <div class="venn-panel">
+        <div class="venn-panel" data-mj-tour-anchor="lists.operations.venn">
           @if (totalOperandCount > 0) {
             <mj-venn-diagram
               [data]="vennData"
@@ -274,7 +274,7 @@ interface EntityOption {
         </div>
     
         <!-- Right Panel: Selected Region / Results -->
-        <div class="results-panel">
+        <div class="results-panel" data-mj-tour-anchor="lists.operations.results">
           <div class="panel-header">
             <h3>
               <i class="fa-solid fa-crosshairs"></i>

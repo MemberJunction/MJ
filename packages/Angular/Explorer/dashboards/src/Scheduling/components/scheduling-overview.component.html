@@ -36,7 +36,7 @@
   @if (!IsLoading && Kpis) {
     <div class="overview-content">
       <!-- Health Banner -->
-      <div class="health-banner" [style.border-color]="GetHealthColor()">
+      <div class="health-banner" data-mj-tour-anchor="scheduling.overview.health" [style.border-color]="GetHealthColor()">
         <div class="health-ring">
           <svg viewBox="0 0 80 80" class="health-svg">
             <circle cx="40" cy="40" r="36" fill="none" class="health-ring-track" stroke-width="6"/>
@@ -59,7 +59,7 @@
         </div>
       </div>
       <!-- KPI Cards -->
-      <div class="kpi-grid">
+      <div class="kpi-grid" data-mj-tour-anchor="scheduling.overview.kpis">
         <div class="kpi-card">
           <div class="kpi-icon blue">
             <i class="fa-solid fa-calendar-check"></i>

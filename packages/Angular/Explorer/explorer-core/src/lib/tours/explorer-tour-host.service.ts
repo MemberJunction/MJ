@@ -271,7 +271,10 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
   }
 
   public get IsVoiceGuideAvailable(): boolean {
-    return this.realtimeSession !== null;
+    if (!this.realtimeSession || !this.providerToUse) {
+      return false;
+    }
+    return Boolean(this.tourEngine.IsSageVoiceGuideEnabled);
   }
 
   public get TourVoiceAgentName(): string {
@@ -304,22 +307,22 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     }
   }
 
-  private get providerToUse(): IMetadataProvider {
+  private get providerToUse(): IMetadataProvider | undefined {
     return this.provider ?? Metadata.Provider;
   }
 
   private get tourEngine(): TourEngine {
-    return TourEngine.GetProviderInstance<TourEngine>(this.providerToUse, TourEngine) as TourEngine;
+    return TourEngine.GetProviderInstance<TourEngine>(this.providerToUse as IMetadataProvider, TourEngine) as TourEngine;
   }
 
   private get userInfoEngine(): UserInfoEngine {
-    return UserInfoEngine.GetProviderInstance<UserInfoEngine>(this.providerToUse, UserInfoEngine) as UserInfoEngine;
+    return UserInfoEngine.GetProviderInstance<UserInfoEngine>(this.providerToUse as IMetadataProvider, UserInfoEngine) as UserInfoEngine;
   }
 
   public get Principal(): TourPrincipal {
     const md = this.providerToUse;
-    const user = md.CurrentUser;
-    if (!user && !this.simulatedRolesOverride) {
+    const user = md?.CurrentUser;
+    if (!md || (!user && !this.simulatedRolesOverride)) {
       return { Kind: 'Anonymous' };
     }
     const roles = this.simulatedRolesOverride
@@ -361,6 +364,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     try {
       const md = this.providerToUse;
       const navService = this.navigationService;
+      if (!md) {
+        return false;
+      }
 
       // 1. Open a specific entity record
       if (intent.EntityName && intent.RecordId && navService) {
@@ -491,6 +497,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
       }
       return true;
     }
+    if (!this.IsVoiceGuideAvailable) {
+      return false;
+    }
     if (this.isRealtimeActive) {
       this.realtimeSession.SetMinimized(true);
       return true;
@@ -498,7 +507,11 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
 
     this.pendingVoiceGuideMinimize = true;
     try {
-      await AIEngineBase.Instance.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
+      const md = this.providerToUse;
+      if (!md) {
+        return false;
+      }
+      await AIEngineBase.Instance.Config(false, md.CurrentUser, md).catch(() => undefined);
       const agents = AIEngineBase.Instance.Agents ?? [];
       const sageAgent =
         agents.find((a) => a.Name?.trim().toLowerCase() === 'sage' && a.Status !== 'Disabled') ??
@@ -508,7 +521,7 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
         return false;
       }
 
-      this.realtimeSession.Provider = this.providerToUse;
+      this.realtimeSession.Provider = md;
       await this.realtimeSession.StartRealtimeSession(
         sageAgent.ID,
         null,
@@ -548,12 +561,12 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     SignalPayload?: Record<string, unknown>;
     EntityEvent?: TourEntityEventPayload;
   }): Promise<void> {
-    if (this.Principal.Kind !== 'MJUser' || this.isTourInProgress()) {
+    if (this.Principal.Kind !== 'MJUser' || this.isTourInProgress() || !this.providerToUse) {
       return;
     }
 
     const engine = this.tourEngine;
-    await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
+    await engine.Config(false, this.providerToUse?.CurrentUser, this.providerToUse).catch(() => undefined);
 
     if (this.isTourInProgress()) {
       return;
@@ -686,7 +699,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
       return this.toolkit;
     }
     const engine = this.tourEngine;
-    await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
+    if (this.providerToUse) {
+      await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
+    }
 
     this.toolkit = new TourAgentToolkit({
       Host: this,
@@ -772,7 +787,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     options: ExplorerStartTourOptions = {},
   ): Promise<TourSession | null> {
     const engine = this.tourEngine;
-    await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
+    if (this.providerToUse) {
+      await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
+    }
     const toolkit = await this.EnsureToolkit();
 
     const location = this.GetCurrentLocation();
@@ -789,13 +806,17 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
 
     const prefs = this.GetPreferences();
     this.pendingOfferSubject.next(null);
-    const preferredMode: TourSessionGuideMode =
+    const rawPreferredMode: TourSessionGuideMode =
       options.Mode ??
       (tour.DefaultGuideMode === 'Chat' || tour.DefaultGuideMode === 'Voice' || tour.DefaultGuideMode === 'Visual'
         ? tour.DefaultGuideMode
         : prefs.PreferredGuideMode === 'Chat' || prefs.PreferredGuideMode === 'Voice'
           ? prefs.PreferredGuideMode
           : 'Visual');
+    const preferredMode: TourSessionGuideMode =
+      !this.IsVoiceGuideAvailable && (rawPreferredMode === 'Voice' || rawPreferredMode === 'Chat')
+        ? 'Visual'
+        : rawPreferredMode;
 
     if (this.tourHostComponent) {
       this.simulatedRolesOverride = options.SimulatedRoles ?? null;
@@ -887,6 +908,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
   public async GetEligibleTours(
     forCurrentLocation = true,
   ): Promise<Array<{ Tour: TourDefinition; RecommendedPrerequisites?: string[] }>> {
+    if (!this.providerToUse) {
+      return [];
+    }
     const engine = this.tourEngine;
     await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
 
@@ -914,6 +938,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
 
   /** Returns cached/persisted tour runs for the current user. */
   public async GetRuns(): Promise<TourRunRecord[]> {
+    if (!this.providerToUse) {
+      return [];
+    }
     const engine = this.tourEngine;
     await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
     return engine.GetRuns();
@@ -984,6 +1011,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
    */
   public async GetLearningPathSummaries(): Promise<ExplorerLearningPathSummary[]> {
     const md = this.providerToUse;
+    if (!md) {
+      return [];
+    }
     const rv = RunView.FromMetadataProvider(md);
     const userId = md.CurrentUser?.ID;
 
@@ -1105,6 +1135,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
 
   /** Reads per-user tour preferences from `UserInfoEngine` (`mj.tours.preferences.v1`). */
   public GetPreferences(): TourPreferences {
+    if (!this.providerToUse) {
+      return { ...DEFAULT_TOUR_PREFERENCES };
+    }
     const raw = this.userInfoEngine.GetSetting(TOUR_PREFERENCES_SETTING_KEY);
     if (!raw) {
       return { ...DEFAULT_TOUR_PREFERENCES };
@@ -1128,6 +1161,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
   public SavePreferences(prefs: TourPreferences): void {
     if (!prefs.OffersEnabled) {
       this.pendingOfferSubject.next(null);
+    }
+    if (!this.providerToUse) {
+      return;
     }
     this.userInfoEngine.SetSettingDebounced(
       TOUR_PREFERENCES_SETTING_KEY,

@@ -16,7 +16,7 @@ import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import type { TourSessionView, TourStepView } from '@memberjunction/tours-runtime';
 import { Subscription } from 'rxjs';
 import { BaseTourStepRenderer } from '../renderers/base-step-renderer';
-import { EnsureStepRendererLoaded } from '../renderers/lazy-step-renderers';
+import { EnsureStepRendererLoaded, ResolveTourStepRendererKey } from '../renderers/lazy-step-renderers';
 import { EnsureStandardTourRenderersRegistered } from '../renderers/register-standard-renderers';
 import { TourCardHairlineComponent } from '../renderers/tour-step-chrome.component';
 import { BaseTourPresenter } from './base-tour-presenter';
@@ -70,6 +70,7 @@ export class EmbeddedTourPresenterComponent
   @Input() public override VoiceGuideAvailable = false;
   @Input() public override VoiceGuideActive = false;
   @Input() public override EstimatedMinutes: number | undefined = undefined;
+  @Input() public override AvailableTourKeys: ReadonlySet<string> | null = null;
 
   @ViewChild('stepHost', { read: ViewContainerRef }) private stepHost?: ViewContainerRef;
 
@@ -93,6 +94,7 @@ export class EmbeddedTourPresenterComponent
       this.activeRendererRef.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
       this.activeRendererRef.setInput('VoiceGuideActive', this.VoiceGuideActive);
       this.activeRendererRef.setInput('EstimatedMinutes', this.EstimatedMinutes);
+      this.activeRendererRef.setInput('AvailableTourKeys', this.AvailableTourKeys);
     }
   }
 
@@ -112,7 +114,8 @@ export class EmbeddedTourPresenterComponent
       return;
     }
     this.mountedKey = step.StepKey;
-    await EnsureStepRendererLoaded(step.StepType);
+    const rendererKey = ResolveTourStepRendererKey(step);
+    await EnsureStepRendererLoaded(rendererKey);
     if (this.Session?.CurrentStep?.StepKey !== step.StepKey || !this.stepHost) {
       return;
     }
@@ -120,7 +123,7 @@ export class EmbeddedTourPresenterComponent
 
     const created = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseTourStepRenderer>(
       BaseTourStepRenderer,
-      step.StepType,
+      rendererKey,
     );
     if (!created.Resolved || !created.Instance) {
       return;
@@ -133,6 +136,7 @@ export class EmbeddedTourPresenterComponent
     ref.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
     ref.setInput('VoiceGuideActive', this.VoiceGuideActive);
     ref.setInput('EstimatedMinutes', this.EstimatedMinutes);
+    ref.setInput('AvailableTourKeys', this.AvailableTourKeys);
 
     this.subs = new Subscription();
     this.subs.add(ref.instance.NextRequested.subscribe((e) => this.NextRequested.emit(e)));

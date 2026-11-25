@@ -1584,6 +1584,8 @@ export class TourSession {
             StepIndex: idx,
             TotalSteps: ordered.length,
             StepType: step.StepType,
+            DriverClass: step.DriverClass ?? null,
+            RendererClass: step.RendererClass ?? null,
             Title: copy.Title,
             Body: copy.Body,
             Placement: step.Placement ?? 'auto',

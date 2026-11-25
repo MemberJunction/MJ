@@ -13,7 +13,7 @@
         </div>
 
         <!-- Pinned Section: collapses to its header (title, Add Pin / Dashboards / Edit, or Done) -->
-        <mj-accordion-panel class="pinned-section" [Bare]="true" [TitleIconMuted]="true" [HeadingLevel]="2" [FlushBody]="true"
+        <mj-accordion-panel class="pinned-section" data-mj-tour-anchor="core.home.pinned" [Bare]="true" [TitleIconMuted]="true" [HeadingLevel]="2" [FlushBody]="true"
             [Expanded]="PinnedExpanded" (ExpandedChange)="OnPinnedExpandedChange($event)">
           <ng-template mjAccordionTitle>
             <span class="pinned-title"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i> Pinned</span>
@@ -194,102 +194,8 @@
           </ng-template>
         </mj-accordion-panel>
 
-        <!-- Learning Paths & Getting Started -->
-        @if (LearningPathCards.length > 0) {
-          <mj-accordion-panel
-            class="learning-paths-section"
-            data-mj-tour-anchor="core.home.learning-paths"
-            [Bare]="true"
-            [TitleIconMuted]="true"
-            [HeadingLevel]="2"
-            [FlushBody]="true"
-            [Expanded]="LearningPathsExpanded"
-            (ExpandedChange)="OnLearningPathsExpandedChange($event)">
-            <ng-template mjAccordionTitle>
-              <span class="pinned-title"><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i> Learning Paths &amp; Getting Started</span>
-            </ng-template>
-            <ng-template mjAccordionActions>
-              <span class="lp-summary-pill">{{ LearningPathCards.length }} {{ LearningPathCards.length === 1 ? 'path' : 'paths' }}</span>
-            </ng-template>
-            <ng-template mjAccordionBody>
-              <div class="learning-paths-grid">
-                @for (path of LearningPathCards; track path.ID) {
-                  <article class="lp-card">
-                    <div class="lp-card-header">
-                      <div class="lp-card-title-group">
-                        <h3 class="lp-card-title">{{ path.Name }}</h3>
-                        @if (path.Description) {
-                          <p class="lp-card-desc">{{ path.Description }}</p>
-                        }
-                      </div>
-                      <span class="lp-progress-badge" [class.is-complete]="path.PercentComplete === 100">
-                        {{ path.CompletedCount }}/{{ path.TotalCount }}
-                      </span>
-                    </div>
-
-                    <div class="lp-progress-track" role="progressbar" [attr.aria-valuenow]="path.PercentComplete" aria-valuemin="0" aria-valuemax="100" [attr.aria-label]="path.Name + ' progress'">
-                      <div class="lp-progress-fill" [style.width.%]="path.PercentComplete"></div>
-                    </div>
-
-                    <ol class="lp-checklist">
-                      @for (item of path.Tours; track item.TourID) {
-                        <li class="lp-checklist-item" [class.is-done]="item.Completed" [class.is-active]="item.InProgress">
-                          <span class="lp-check-icon" aria-hidden="true">
-                            @if (item.Completed) {
-                              <i class="fa-solid fa-circle-check"></i>
-                            } @else if (item.InProgress) {
-                              <i class="fa-solid fa-circle-half-stroke"></i>
-                            } @else {
-                              <i class="fa-regular fa-circle"></i>
-                            }
-                          </span>
-                          <div class="lp-item-info">
-                            <span class="lp-item-name">{{ item.Name }}</span>
-                            <span class="lp-item-meta">
-                              @if (item.IsRequired) {
-                                <span>Required</span>
-                              } @else {
-                                <span>Optional</span>
-                              }
-                              @if (item.EstimatedMinutes) {
-                                · ~{{ item.EstimatedMinutes }}m
-                              }
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            mjButton
-                            [variant]="item.Completed ? 'flat' : 'secondary'"
-                            size="sm"
-                            (click)="LaunchLearningPathTour(item.TourKey)">
-                            @if (item.Completed) {
-                              Replay
-                            } @else if (item.InProgress) {
-                              Resume
-                            } @else {
-                              Start
-                            }
-                          </button>
-                        </li>
-                      }
-                    </ol>
-
-                    @if (path.NextTourKey) {
-                      <div class="lp-card-footer">
-                        <button type="button" mjButton variant="primary" size="sm" (click)="LaunchLearningPathTour(path.NextTourKey)">
-                          <i class="fa-solid fa-play" aria-hidden="true"></i> Continue: {{ path.NextTourName }}
-                        </button>
-                      </div>
-                    }
-                  </article>
-                }
-              </div>
-            </ng-template>
-          </mj-accordion-panel>
-        }
-
         <!-- My applications -->
-        <section class="apps-section">
+        <section class="apps-section" data-mj-tour-anchor="core.home.apps">
           <h2 class="section-title">My applications</h2>
           <div class="apps-grid">
             @for (appData of AppsDisplayData; track TrackByApp($index, appData)) {

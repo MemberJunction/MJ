@@ -1,0 +1,55 @@
+[
+  {
+    "fields": {
+      "Name": "Testing & Rubrics Mastery",
+      "PathKey": "testing.mastery",
+      "Description": "Complete curriculum for designing test suites and deterministic/rubric evaluations, calibrating human vs. AI scoring, and enforcing release regression gates.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Testing",
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": true,
+        "ShowNextConcreteStep": true
+      }
+    },
+    "primaryKey": {
+      "ID": "4634F9F3-70EC-4829-8165-AAC0F3F1937B"
+    },
+    "relatedEntities": {
+      "MJ: Learning Path Tours": [
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=testing.suites-cases",
+            "Sequence": 1,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "E9ED4EB4-FB77-446F-87D5-AC93EE8F573E"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=testing.rubrics-calibration",
+            "Sequence": 2,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "1DCCAB6A-B0F8-4A6A-9D41-88AA4C245D2F"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=testing.analytics-gates",
+            "Sequence": 3,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D060E2DA-74CD-4C74-944E-568CD7196793"
+          }
+        }
+      ]
+    }
+  }
+]

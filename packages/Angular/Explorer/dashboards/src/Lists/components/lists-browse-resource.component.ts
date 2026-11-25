@@ -52,7 +52,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
   selector: 'mj-lists-browse-resource',
   template: `
     <mj-page-layout>
-      <mj-page-header Title="Lists" Icon="fa-solid fa-list-check" [Subtitle]="BrowseSubtitle">
+      <mj-page-header data-mj-tour-anchor="lists.browse.header" Title="Lists" Icon="fa-solid fa-list-check" [Subtitle]="BrowseSubtitle">
         <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
         <div meta>
           <mj-stat-badge
@@ -64,11 +64,11 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
         <div actions>
           <!-- Single primary CTA; all filters live behind the Filter button in
                the control bar below (concise chrome). -->
-          <button mjButton variant="primary" size="sm" (click)="createNewList()">
+          <button mjButton variant="primary" size="sm" data-mj-tour-anchor="lists.browse.new-list" (click)="createNewList()">
             <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New List</span>
           </button>
         </div>
-        <div toolbar>
+        <div toolbar data-mj-tour-anchor="lists.browse.toolbar">
           <!-- Control bar: search · Filter · view. Owner, Entity and Favorites
                all live behind the one Filter button; applied filters (including
                tags) show as removable chips below. On mobile the popover docks

@@ -147,4 +147,25 @@ describe('ModalStepRenderer', () => {
     flatBtn.click();
     expect(dismissSpy).toHaveBeenCalledWith({ StepKey: 'modal-1' });
   });
+
+  it('hides Start next tour button when AvailableTourKeys is provided and excludes NextTourKey', () => {
+    const step = makeModalStep(
+      { Variant: 'summary', NextTourKey: 'accounting.journal-batches' },
+      { StepIndex: 3, Body: 'Order tour complete.' },
+    );
+    const fixture = TestBed.createComponent(ModalStepRenderer);
+    fixture.componentRef.setInput('Step', step);
+    fixture.componentRef.setInput('Session', makeSession(step, false));
+    fixture.componentRef.setInput('AvailableTourKeys', new Set(['orders.order-to-cash', 'common.directory']));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Start next tour');
+
+    fixture.componentRef.setInput(
+      'AvailableTourKeys',
+      new Set(['orders.order-to-cash', 'accounting.journal-batches']),
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Start next tour');
+  });
 });

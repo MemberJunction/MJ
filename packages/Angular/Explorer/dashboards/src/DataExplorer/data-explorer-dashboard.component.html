@@ -108,6 +108,7 @@
           <!-- Quick Access panel toggle -->
           <button
             class="header-action-btn"
+            data-mj-tour-anchor="core.data-explorer.quick-access"
             [class.active]="state.quickAccessPanelOpen"
             (click)="toggleQuickAccessPanel()"
             title="Recents & Favorites">
@@ -144,7 +145,7 @@
           } @else {
             <div class="home-main-area" [class.panel-open]="state.quickAccessPanelOpen">
               <!-- Search Hero -->
-              <div class="search-hero">
+              <div class="search-hero" data-mj-tour-anchor="core.data-explorer.search">
                 <div class="search-hero-container">
                   <i class="fa-solid fa-magnifying-glass search-hero-icon"></i>
                   <input
@@ -189,7 +190,7 @@
               </div>
 
               <!-- Entity Groups Area -->
-              <div class="entity-groups-area">
+              <div class="entity-groups-area" data-mj-tour-anchor="core.data-explorer.entities">
                 @if (entityFilter?.applicationId) {
                   <!-- Single-app mode: flat entity grid (no grouping) -->
                   <div class="entity-item-grid">

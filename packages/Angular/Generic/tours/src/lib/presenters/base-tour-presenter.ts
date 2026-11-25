@@ -22,6 +22,7 @@ export abstract class BaseTourPresenter extends BaseAngularComponent {
   @Input() public VoiceGuideAvailable = false;
   @Input() public VoiceGuideActive = false;
   @Input() public EstimatedMinutes: number | undefined = undefined;
+  @Input() public AvailableTourKeys: ReadonlySet<string> | null = null;
 
   @Output() public NextRequested = new EventEmitter<TourStepIntentEventArgs>();
   @Output() public BackRequested = new EventEmitter<TourStepIntentEventArgs>();

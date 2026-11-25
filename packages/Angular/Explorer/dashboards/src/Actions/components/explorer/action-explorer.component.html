@@ -14,7 +14,7 @@
       <!-- Verbs only per §3: secondary Refresh + the one primary CTA (rightmost). -->
       <mj-refresh-button (Clicked)="onRefresh()"></mj-refresh-button>
 
-      <button mjButton variant="primary" size="sm" (click)="onNewAction()" title="New Action">
+      <button mjButton variant="primary" size="sm" (click)="onNewAction()" title="New Action" data-mj-tour-anchor="actions.explorer.new-action">
         <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New Action</span>
       </button>
     </div>
@@ -107,6 +107,7 @@
 
   <!-- Tree Panel (Left Sidebar) -->
   <mj-action-tree-panel
+    data-mj-tour-anchor="actions.explorer.tree"
     [Categories]="Categories"
     [Actions]="Actions"
     (CategorySelected)="onCategorySelect($event)"
@@ -124,7 +125,7 @@
     </mj-action-breadcrumb>
 
     <!-- Content Area -->
-    <div class="explorer-content">
+    <div class="explorer-content" data-mj-tour-anchor="actions.explorer.catalog">
       @if (FilteredActions.length === 0 && !IsLoading) {
         <mj-empty-state
           [Variant]="IsListNarrowed ? 'no-results' : 'empty'"

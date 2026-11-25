@@ -1,0 +1,44 @@
+[
+  {
+    "fields": {
+      "Name": "Video Studio Mastery",
+      "PathKey": "video.mastery",
+      "Description": "Master brand identity setup with Brand Kits, reusable Video Archetypes, storyboard composition, and cloud video rendering in Video Studio.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Video Studio",
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": true,
+        "ShowNextConcreteStep": true
+      }
+    },
+    "primaryKey": {
+      "ID": "F43010B3-6C8C-4C19-88B7-AF21ACA8F9A7"
+    },
+    "relatedEntities": {
+      "MJ: Learning Path Tours": [
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=video.brand-kits",
+            "Sequence": 1,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "BEB48D20-C889-4661-8E72-98DD195ABD93"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=video.productions-render",
+            "Sequence": 2,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "525545EC-1A3D-416E-864E-CF925670E26E"
+          }
+        }
+      ]
+    }
+  }
+]

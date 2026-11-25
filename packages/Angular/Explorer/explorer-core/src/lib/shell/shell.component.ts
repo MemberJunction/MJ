@@ -3339,24 +3339,45 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     return this.SkipToMainContent(event);
   }
 
+  private removeUserMenuOutsideListener: (() => void) | null = null;
+
   /**
    * Toggle user menu visibility
    */
   ToggleUserMenu(event: Event): void {
     event.stopPropagation();
+    this.ToursMenuOpen = false;
+    this.clearUserMenuOutsideListener();
     this.UserMenuVisible = !this.UserMenuVisible;
 
     if (this.UserMenuVisible) {
-      // Close menu when clicking outside. CAPTURE phase so clicks whose
+      // Close menu when clicking outside .user-menu. CAPTURE phase so clicks whose
       // bubbling something stopped (e.g. the origin crumb's GL-focus
-      // stoppers) still dismiss the menu.
-      const closeHandler = () => {
+      // stoppers) still dismiss the menu, while clicks inside .user-menu reach their item handler.
+      const closeHandler = (clickEvent: Event) => {
+        const target = clickEvent.target as HTMLElement | null;
+        if (target?.closest?.('.user-menu')) {
+          return;
+        }
         this.UserMenuVisible = false;
+        this.clearUserMenuOutsideListener();
+        this.cdr.markForCheck();
+      };
+      this.removeUserMenuOutsideListener = () => {
         document.removeEventListener('click', closeHandler, true);
       };
       setTimeout(() => {
-        document.addEventListener('click', closeHandler, true);
+        if (this.UserMenuVisible && this.removeUserMenuOutsideListener) {
+          document.addEventListener('click', closeHandler, true);
+        }
       }, 0);
+    }
+  }
+
+  private clearUserMenuOutsideListener(): void {
+    if (this.removeUserMenuOutsideListener) {
+      this.removeUserMenuOutsideListener();
+      this.removeUserMenuOutsideListener = null;
     }
   }
 
@@ -3457,6 +3478,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   async OnUserMenuItemClick(itemId: string): Promise<void> {
     if (!this.userMenu) return;
+    this.clearUserMenuOutsideListener();
+
+    if (itemId === 'tours-and-help') {
+      this.OpenToursFromMenu();
+      return;
+    }
 
     if (!this.ShowAdminMenuItems) {
       const targetItem = this.userMenu.GetMenuItems().find(i => i.id === itemId);
@@ -3542,6 +3569,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         avatarUrl: this.UserImageURL || null,
         avatarIconClass: this.UserIconClass || null
       });
+      return;
+    }
+
+    if (result.message === 'tours-and-help') {
+      this.OpenToursFromMenu();
       return;
     }
 
@@ -4223,14 +4255,21 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   /** Close the Activity drawer or Tours & Help popover when clicking anywhere outside them. */
-  @HostListener('document:click')
-  onDocumentClickCloseActivity(): void {
+  @HostListener('document:click', ['$event'])
+  onDocumentClickCloseActivity(event?: Event): void {
+    const target = event?.target as HTMLElement | null;
     let changed = false;
-    if (this.ActivityOpen) {
+    if (this.ActivityOpen && !target?.closest?.('.activity-indicator')) {
       this.ActivityOpen = false;
       changed = true;
     }
-    if (this.ToursMenuOpen) {
+    if (
+      this.ToursMenuOpen &&
+      !target?.closest?.('.user-menu') &&
+      !target?.closest?.('.user-context-menu') &&
+      !target?.closest?.('.tours-launcher-popover') &&
+      !target?.closest?.('.tours-launcher-btn')
+    ) {
       this.ToursMenuOpen = false;
       changed = true;
     }
@@ -4255,6 +4294,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.cdr.markForCheck();
   }
 
+  public OpenToursFromMenu(initialTab: 'screen' | 'all' | 'paths' = 'screen'): void {
+    this.ActivityOpen = false;
+    this.UserMenuVisible = false;
+    this.ToursMenuOpen = true;
+    this.ToursPopoverTab = initialTab;
+    void this.RefreshToursLauncher();
+    this.cdr.detectChanges();
+  }
+
   public CloseToursMenu(): void {
     if (this.ToursMenuOpen) {
       this.ToursMenuOpen = false;
@@ -4272,6 +4320,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return;
     }
     this.ToursLoading = true;
+    this.TourVoiceGuideAvailable = this.tourHost.IsVoiceGuideAvailable;
     this.TourPrefs = this.tourHost.GetPreferences();
     this.cdr.markForCheck();
     try {
@@ -4280,9 +4329,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         this.tourHost.GetAllToursByApplication(),
         this.tourHost.GetLearningPathSummaries(),
       ]);
-      this.SuggestedTours = suggested.slice(0, 6);
+      this.SuggestedTours = suggested.slice(0, 8);
       this.AllAppTourGroups = allGroups;
-      this.LauncherLearningPaths = paths.slice(0, 4);
+      this.LauncherLearningPaths = paths;
       if (this.SuggestedTours.length === 0 && this.AllAppTourGroups.length > 0 && this.ToursPopoverTab === 'screen') {
         this.ToursPopoverTab = 'all';
       }

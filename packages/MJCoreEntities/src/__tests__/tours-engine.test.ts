@@ -352,6 +352,16 @@ describe('TourEngine', () => {
         expect(TourEngine.Instance.GetRunStepRetentionDays()).toBe(90);
     });
 
+    it('disables Sage Voice Guide by default and enables it when Tours.SageVoiceGuide.Enabled is true', () => {
+        expect(TourEngine.Instance.IsSageVoiceGuideEnabled).toBe(false);
+
+        mockInstanceConfigs.set('Tours.SageVoiceGuide.Enabled', 'true');
+        expect(TourEngine.Instance.IsSageVoiceGuideEnabled).toBe(true);
+
+        mockInstanceConfigs.set('Tours.Enabled', 'false');
+        expect(TourEngine.Instance.IsSageVoiceGuideEnabled).toBe(false);
+    });
+
     it('compiles Active tours from immutable TourVersion.DefinitionObject and Draft tours from live step/path rows', async () => {
         backing._stepTypes = [createStepTypeRow()];
         backing._tours = [

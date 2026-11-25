@@ -4,6 +4,7 @@
       Title="Productions"
       Icon="fa-solid fa-clapperboard"
       Subtitle="Browse, preview, and iterate on video productions"
+      data-mj-tour-anchor="video.productions-header"
     >
     <div meta>
       <mj-stat-badge
@@ -23,6 +24,7 @@
         mjButton
         Variant="primary"
         data-testid="productions-open-copilot-button"
+        data-mj-tour-anchor="video.new-production"
         [attr.aria-expanded]="IsCopilotSlideInOpen"
         title="Start a new video production"
         (click)="OpenNewProductionCopilot()"
@@ -76,7 +78,7 @@
   </mj-page-header>
 
   <mj-page-body>
-    <div class="vs-productions-main">
+    <div class="vs-productions-main" data-mj-tour-anchor="video.productions-workspace">
       @if (IsLoading && AllProductions.length === 0) {
         <div class="vs-loading-state" data-testid="productions-loading">
           <mj-loading Text="Loading video productions..." Size="medium" />

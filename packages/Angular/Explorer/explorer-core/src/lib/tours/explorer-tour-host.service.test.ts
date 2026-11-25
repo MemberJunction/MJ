@@ -65,6 +65,7 @@ const mocks = vi.hoisted(() => {
   >(async () => undefined);
 
   const mockTourEngine = {
+    IsSageVoiceGuideEnabled: false,
     Config: vi.fn(async () => undefined),
     GetTours: vi.fn(async (): Promise<TourDefinition[]> => []),
     GetTourByKey: vi.fn(async (): Promise<TourDefinition | null> => null),
@@ -187,6 +188,7 @@ describe('ExplorerTourHost — Wave 2 Sage & DemonstrateStep', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.mockTourEngine.IsSageVoiceGuideEnabled = false;
     mocks.mockTourEngine.GetTours.mockResolvedValue([]);
     mocks.mockTourEngine.GetTourByKey.mockResolvedValue(null);
     mocks.mockTourEngine.GetRuns.mockResolvedValue([]);
@@ -219,9 +221,13 @@ describe('ExplorerTourHost — Wave 2 Sage & DemonstrateStep', () => {
     mocks.tokenServices.set(RealtimeSessionService, mocks.realtimeSession);
   });
 
-  it('registers TourChannel at module load via LoadTourChannel()', () => {
+  it('registers TourChannel at module load and gates IsVoiceGuideAvailable on TourEngine.IsSageVoiceGuideEnabled (false by default)', async () => {
     const host = new ExplorerTourHost();
     expect(initialLoadTourChannelCalls).toBe(1);
+    expect(host.IsVoiceGuideAvailable).toBe(false);
+    expect(await host.RequestVoiceGuide(true)).toBe(false);
+
+    mocks.mockTourEngine.IsSageVoiceGuideEnabled = true;
     expect(host.IsVoiceGuideAvailable).toBe(true);
     expect(host.TourVoiceAgentName).toBe('Sage');
     host.ngOnDestroy();
@@ -325,6 +331,7 @@ describe('ExplorerTourHost — Wave 2 Sage & DemonstrateStep', () => {
   });
 
   it('RequestVoiceGuide(true) starts Sage with ClientContextChannel + TourChannel and minimizes overlay; ExpandVoiceOverlay restores it', async () => {
+    mocks.mockTourEngine.IsSageVoiceGuideEnabled = true;
     const host = new ExplorerTourHost();
     const started = await host.RequestVoiceGuide(true);
 

@@ -1,8 +1,20 @@
 import { MJGlobal } from '@memberjunction/global';
+import type { TourStepView } from '@memberjunction/tours-runtime';
 import { BaseTourStepRenderer } from './base-step-renderer';
 
 const loadedKeys = new Set<string>();
 const inFlight = new Map<string, Promise<void>>();
+
+/**
+ * Resolves the `BaseTourStepRenderer` ClassFactory registration key for a step,
+ * honoring per-step `Configuration.RendererClass`, `TourStepType.RendererClass`,
+ * `DriverClass`, and finally `StepType`.
+ */
+export function ResolveTourStepRendererKey(step: TourStepView): string {
+  const cfg = step.Configuration as Record<string, unknown> | undefined;
+  const configuredRenderer = typeof cfg?.['RendererClass'] === 'string' ? cfg['RendererClass'].trim() : '';
+  return configuredRenderer || step.RendererClass?.trim() || step.DriverClass?.trim() || step.StepType;
+}
 
 /**
  * Lazy-loads heavy step renderer chunks (`EmbeddedComponent` / `InteractiveComponent`,

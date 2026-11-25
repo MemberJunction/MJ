@@ -1,0 +1,141 @@
+[
+  {
+    "fields": {
+      "Name": "Platform Administration & Studios",
+      "PathKey": "admin.platform-ops",
+      "Description": "End-to-end onboarding for platform administrators and builders covering Tour Studio governance, identity and permissions, system health and version history, and visual studios.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": true,
+        "ShowNextConcreteStep": true
+      }
+    },
+    "primaryKey": {
+      "ID": "1C944FE4-7FB3-4015-B8CB-6AB3DD3F5979"
+    },
+    "relatedEntities": {
+      "MJ: Learning Path Tours": [
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=admin.tours",
+            "Sequence": 1,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "2D92921A-4299-48E8-AC4C-12218B081284"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=admin.identity-permissions",
+            "Sequence": 2,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "39F4E37C-EA03-4A30-8486-BD4FCA55E57C"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=admin.health-diagnostics",
+            "Sequence": 3,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "7F81F972-91B7-4747-B68A-3C30C07E6F46"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=admin.studios",
+            "Sequence": 4,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "8E28BAB7-1B21-449B-ADB9-B284AEA23555"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Automation, Queues & Communications",
+      "PathKey": "workflows.automation-essentials",
+      "Description": "Operational track covering reusable Actions, declarative Workflows, cron-locked Scheduled Jobs, durable Work Queues, and Communication providers and templates.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Workflows",
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": true,
+        "ShowNextConcreteStep": true
+      }
+    },
+    "primaryKey": {
+      "ID": "80C23F39-F54E-4302-A4EB-14AE32637674"
+    },
+    "relatedEntities": {
+      "MJ: Learning Path Tours": [
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=actions.catalog-test",
+            "Sequence": 1,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "31BF6DE9-70F8-4188-A2AA-896E61D66AB1"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=workflows.builder-runs",
+            "Sequence": 2,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A61DA081-5B79-49CA-AE31-6629AF265C34"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=scheduling.jobs-activity",
+            "Sequence": 3,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "32816AB0-0610-44F8-A2F1-EB7738171297"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=scheduling.work-queue",
+            "Sequence": 4,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "27A63DFC-44A9-4C8D-B2E1-22E777212FF0"
+          }
+        },
+        {
+          "fields": {
+            "LearningPathID": "@parent:ID",
+            "TourID": "@lookup:MJ: Tours.TourKey=comm.providers-templates",
+            "Sequence": 5,
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "82D45B6E-4BB6-4AC2-8A81-2D22F6F0D193"
+          }
+        }
+      ]
+    }
+  }
+]

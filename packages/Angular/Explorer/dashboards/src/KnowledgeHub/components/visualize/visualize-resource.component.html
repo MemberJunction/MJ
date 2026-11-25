@@ -1,10 +1,11 @@
 <mj-page-layout>
   <mj-page-header
+    data-mj-tour-anchor="kh.visualize.header"
     Title="Visualize"
     Icon="fa-solid fa-circle-nodes"
     Subtitle="Explore your knowledge base as clusters or a tag cloud">
     <div toolbar>
-      <div class="mode-switch" role="tablist">
+      <div class="mode-switch" role="tablist" data-mj-tour-anchor="kh.visualize.mode-switch">
         @for (mode of Modes; track TrackByMode($index, mode)) {
           <button
             type="button"

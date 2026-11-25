@@ -16,12 +16,12 @@
     </div>
 
     <div toolbar>
-      <mj-tab-nav [Tabs]="Tabs" [ActiveKey]="ActiveTab" (TabChange)="OnTabChange($any($event))"></mj-tab-nav>
+      <mj-tab-nav data-mj-tour-anchor="scheduling.work-queue.tabs" [Tabs]="Tabs" [ActiveKey]="ActiveTab" (TabChange)="OnTabChange($any($event))"></mj-tab-nav>
     </div>
   </mj-page-header>
 
   <mj-page-body>
-    <div class="work-queue-body">
+    <div class="work-queue-body" data-mj-tour-anchor="scheduling.work-queue.body">
       @if (LoadError) {
         <mj-alert Variant="error" Title="Work queue data could not be loaded" [Message]="LoadError"></mj-alert>
       }
@@ -30,19 +30,19 @@
       }
       @switch (ActiveTab) {
         @case ('overview') {
-          <mj-work-queue-overview [Rows]="Rows" [IsLoading]="IsLoading" [LastRefreshedAt]="LastRefreshedAt"
+          <mj-work-queue-overview data-mj-tour-anchor="scheduling.work-queue.overview" [Rows]="Rows" [IsLoading]="IsLoading" [LastRefreshedAt]="LastRefreshedAt"
             (SubscriptionSelected)="OnOverviewSubscriptionSelected($event)" (OpenRecord)="OnOpenRecord($event)"></mj-work-queue-overview>
         }
         @case ('dead-letters') {
-          <mj-work-queue-dead-letters [Provider]="ProviderToUse" [Subscriptions]="SubscriptionOptions" [SelectedSubscription]="SelectedSubscription" [CanOperate]="CanOperate"
+          <mj-work-queue-dead-letters data-mj-tour-anchor="scheduling.work-queue.dead-letters" [Provider]="ProviderToUse" [Subscriptions]="SubscriptionOptions" [SelectedSubscription]="SelectedSubscription" [CanOperate]="CanOperate"
             (SelectedSubscriptionChange)="OnSubscriptionChange($event)" (Changed)="OnQueueChanged()" (Loaded)="OnDeadLettersLoaded($event)"></mj-work-queue-dead-letters>
         }
         @case ('partitions') {
-          <mj-work-queue-partitions [Provider]="ProviderToUse" [Subscriptions]="SubscriptionOptions" [SelectedSubscription]="SelectedSubscription" [Condition]="PartitionCondition" [CanOperate]="CanOperate"
+          <mj-work-queue-partitions data-mj-tour-anchor="scheduling.work-queue.partitions" [Provider]="ProviderToUse" [Subscriptions]="SubscriptionOptions" [SelectedSubscription]="SelectedSubscription" [Condition]="PartitionCondition" [CanOperate]="CanOperate"
             (SelectedSubscriptionChange)="OnSubscriptionChange($event)" (ConditionChange)="OnConditionChange($event)" (Changed)="OnQueueChanged()" (Loaded)="OnPartitionsLoaded($event)"></mj-work-queue-partitions>
         }
         @case ('bindings') {
-          <mj-work-queue-bindings [Provider]="ProviderToUse" [Transports]="TransportOptions" (Loaded)="OnBindingsLoaded($event)"></mj-work-queue-bindings>
+          <mj-work-queue-bindings data-mj-tour-anchor="scheduling.work-queue.bindings" [Provider]="ProviderToUse" [Transports]="TransportOptions" (Loaded)="OnBindingsLoaded($event)"></mj-work-queue-bindings>
         }
       }
     </div>

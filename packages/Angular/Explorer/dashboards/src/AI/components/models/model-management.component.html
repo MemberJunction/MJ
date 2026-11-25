@@ -5,6 +5,7 @@
     </div>
   } @else {
     <mj-page-header
+      data-mj-tour-anchor="ai.models.header"
       Title="Models"
       Icon="fa-solid fa-microchip">
       <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
@@ -21,7 +22,7 @@
           <span class="action-btn-label">New Model</span>
         </button>
       </div>
-      <div toolbar>
+      <div toolbar data-mj-tour-anchor="ai.models.toolbar">
         <mj-page-search
           Placeholder="Search models..."
           [Value]="searchTerm"
@@ -68,7 +69,7 @@
       </div>
     </mj-page-header>
 
-    <mj-page-body [Flex]="true">
+    <mj-page-body [Flex]="true" data-mj-tour-anchor="ai.models.grid">
           @if (filteredModels.length === 0) {
             <mj-empty-state
               [Variant]="hasActiveFilters ? 'no-results' : 'empty'"
