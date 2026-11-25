@@ -1,5 +1,49 @@
 # @memberjunction/integration-schema-builder
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 8b8b278: Emit column descriptions on `ALTER TABLE ADD COLUMN` across both `@memberjunction/schema-engine` and `@memberjunction/integration-schema-builder`, and harden description escaping and migration batch/statement splitting in `@memberjunction/sql-dialect`:
+  - `@memberjunction/sql-dialect`: drive `SplitStatements` and new `SplitBatches` from each dialect's `DialectLexicalRules` facet (covering single-quoted strings, quoted identifiers, line/block comments, and PostgreSQL `E'...'`/dollar-quoted blocks without misreading `$` inside unquoted identifiers) so `;\n`, `GO`, and `$$` inside description literals never break RSU batch chunking; add `MaxCommentLength` (3,700 UTF-16 code units, surrogate-pair safe, on SQL Server to stay under `sp_addextendedproperty`'s 7,500-byte `sql_variant` limit; uncapped on PostgreSQL) and NUL-byte stripping in `CommentOnObject` / `CommentOnColumn`; quote schema names consistently via `Writer.QuoteSchema` in PostgreSQL `CommentOnObject` / `CommentOnColumn`.
+  - `@memberjunction/schema-engine`: emit idempotent column descriptions (`CommentOnColumnIfAbsent`) in `DDLGenerator.GenerateAlterTableAddColumn`, skip whitespace-only / NUL-only descriptions and validate identifiers in `DDLGenerator.GenerateDescriptions`, and route `RuntimeSchemaManager.executeMigration` batch/chunk splitting through `RuntimeSchemaManager.SplitMigrationBatches` and `SQLDialect.SplitBatches`.
+  - `@memberjunction/integration-schema-builder`: emit idempotent column descriptions in `DDLGenerator.GenerateAlterTableAddColumn`, delegate all description SQL in `DDLGenerator` (`GenerateDescriptions` / `GenerateExtendedProperties`) to `SQLDialect`, and share frozen, strongly-typed `STANDARD_COLUMN_DESCRIPTIONS` across `DDLGenerator`, `SchemaBuilder`, and `SchemaEvolution` (existing already-present columns on evolved tables are not retroactively backfilled).
+  - `@memberjunction/integration-test-suite`: add live-database check `integration-schema-pipeline.ISP5` verifying `ALTER TABLE ADD COLUMN` column descriptions, multi-line `;\n`/`GO`/`$$` preservation, `MaxCommentLength` truncation, whitespace-only skipping, and re-run idempotency through `RuntimeSchemaManager.SplitMigrationBatches`.
+
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [30460b0]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [b428089]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [942e220]
+- Updated dependencies [346795c]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [193d979]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/integration-engine@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/schema-engine@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

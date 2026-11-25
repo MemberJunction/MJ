@@ -24,6 +24,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=Scope"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.292Z",
+            "checksum": "7df49c6b39cbb540d00d1a5037f7d8ee36b9e20a37b1916312ec941f3ad8383c"
           }
         },
         {
@@ -37,6 +41,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=ReadPolicy"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.306Z",
+            "checksum": "cbe71d4ec4e14b37f96336185163ce3d14bc7f8e802d793bbe65976630e7da0c"
           }
         },
         {
@@ -50,6 +58,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=RequestedBy"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.322Z",
+            "checksum": "c04582318c32e353fe11a4ee7a6b00a67cbc35444c3fe4cc32f7fc83982d9048"
           }
         },
         {
@@ -63,6 +75,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=EntityMapping"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.336Z",
+            "checksum": "aa500a5b72d7a0c61f7b0c4362f47c6310a0b322db0feb0a52d1f8dc6002dd6d"
           }
         },
         {
@@ -76,6 +92,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=Refusal"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.349Z",
+            "checksum": "161afbb73a07de230264a73031e7e25b4ab99826c097b848b6ea2276d52fe113"
           }
         },
         {
@@ -89,6 +109,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Scoring Runs&Name=FirstErrors"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.364Z",
+            "checksum": "005c5f4a6fb7e51737f87c6e826754ab40ab59361b5bcbdfd03f1abca556d3b0"
           }
         }
       ]

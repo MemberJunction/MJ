@@ -870,7 +870,8 @@ coverage loss):
 | `agent-runner` | AR1 (1) | server | lifecycle | IT17 (live-model) | Real agent run, deep-verified (steps → prompt runs → action logs → sub-agents) |
 | `concurrent` | CC1–CC2 (2) | server | lifecycle | IT18 (live-model) | N concurrent prompt/agent runs persist independently |
 | `remote-op-ai-authoring` | RO4-1→RO4-3 (3) | server | AI-generated Remote Operation | IT19 (live-model) | The AI-authored operation loop (save → approve → emit) |
-| `lists` | LS1–LS3 (3) | server | List fixture | IT20 | Lists substrate + the ListSource keyset-pagination change |
+| `lists` | LS1–LS4 (4) | server | List fixture | IT20 | Lists substrate + the ListSource keyset-pagination change |
+| `lists-members-client` | LC1 (1) | client | two throwaway lists | IT193 | List member mutations over the API: add, move, remove |
 | `open-app-teardown` | OAT1–OAT2 (2) | server | seeded Open-App metadata | IT21 | Open-App metadata teardown seam |
 | `user-routines` | UR1–UR18 (18) | server | routine fixtures | IT22 | User Routines entity servers + dispatcher, end to end; UR17–UR18 the manual-run path (`RunRoutineNow`) keeps a one-shot's schedule |
 | `chief-of-staff` | COS1–COS8 (8) | server | own policy (skips COS6–COS8 if one exists) + routine fixtures | IT157 | Chief of Staff MJ-core layers, no Open App: policy and request ownership guards, Run User Routine Now, the policy cache following a save, email approval before transport |

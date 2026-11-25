@@ -1,5 +1,162 @@
 # @memberjunction/ai-agents
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- c6b3913: Pre-freeze AI Agents improvements (Epics B, C, D, and post-`#6852` Epic E hardening):
+  - **Chief of Staff routing parity (Epic B):** Enabled `"enableHandoff": true` on Chief of Staff (`metadata/agents/.chief-of-staff-agent.json`), extracted Section 4 ("Agent Delegation") into a shared `{@include ../_includes/agent-delegation.md}` fragment parameterized by `{{ agentName }}` with zero hard-coded `"Sage"` references, included it in both Sage and Chief of Staff system prompts while keeping each agent's own sub-agents separate, and verified `BaseAgentID` prototype inheritance passes `enableHandoff` cleanly to derived instances.
+  - **Per-user default agent (Epic C):** Extended `DefaultAgentResolver` (`ResolveWithDetails` + `Resolve`) with per-user `UserInfoEngine` preference (`Conversations.DefaultAgentID`, with read-only fallback to legacy `chat.defaultAgentId`) and automatic primary-instance (`IsPrimaryInstance = 1`) resolution for instantiable org/app default templates, validating `Active` status and full `BaseAgentID` ancestor `CanRun` permissions with graceful fallback and one-time non-blocking user notice. Added a "Default for new chats" toggle in `ConversationAgentPickerComponent` and unified Chat / My Agents default-agent settings and conversation-manager cache invalidation.
+  - **Remove hard-coded `'Sage'` assumptions (Epic D):** Updated `MemoryManagerAgent`, `LiveKitRoomResourceComponent`, Conversations UI (`conversation-chat-area`, `message-input`, `agent-handoff-card`, `agent-handoff-map`, `agent-turn-routing`, `realtime-*`), and `metadata/prompts/templates/sage/check-intent.template.md` (`{{ conversationManagerName }}`) to use the resolved conversation manager / default agent with neutral `'Assistant'` fallback, keeping `DefaultAgentResolver.FALLBACK_AGENT_NAME = 'Sage'` strictly as the last-resort safety net.
+  - **Post-`#6852` Agent Instances hardening (Epic E `E1`–`E5`):** Enforced `mj.config.cjs` (`MjConfig`) at the root ceiling of `LimitsConfigResolver` / `ResolveAgentRunLimits` so user policies can only narrow org ceilings unless an authorized admin override applies (`E2`/`F1`); resolved `Required` templates to the user's `IsPrimaryInstance = 1` across `AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage` and `UserRoutineDispatcherDriver` (`E1`); hid `"Set up My Chief of Staff"` / create CTAs in `MyAgentsSectionComponent` when the user lacks `CanCreate` on `MJ: AI Agents` (`E5`); and added unit tests covering `E1`–`E5` including derived-instance `ScopeCommonReach` / `SupportsAudience` enforcement and transitive ancestor `CanRun` validation.
+
+- 3c70bf7: Add AssemblyAI's current voice stack as a realtime model. `AssemblyAIVoiceRealtime` runs STT 3.7 Realtime Agent, an LLM Gateway model and TTS-1 as one voice agent inside MJAPI, and replaces the Voice Agent API that AssemblyAI retires on February 1, 2027 (`AssemblyAIRealtime`, unchanged here). Set `AI_VENDOR_API_KEY__AssemblyAIVoiceRealtime` to use it. MJAPI's realtime proxy can now connect a browser to an upstream that runs inside the process (`RealtimeProxyIssueParams.OpenInProcess`), so such a driver needs no host of its own and the prompt, tools and key stay on the server.
+- 2f41586: Default new AI agent user policies (`AIAgentUserPolicy`) to `Autonomous` coordination mode, `DraftOnly` email, `ProposeWithApproval` calendar changes requiring approval, and `Disabled` (Off) phone channel across database schema defaults, stored procedures, `AgentUserPolicyEngine`, `MJAIAgentUserPolicyEntityServer`, Chief of Staff actions, UI draft builders, and agent prompts, and verify the complete Epic 3 acceptance suite.
+- 916fe91: Add the extensible Chief of Staff skills platform, typed core actions, offered rhythms, suggestions, and Agent Channels (`V202611201630`):
+  - **Schema & CodeGen (`V202611201630`)**: Add `AISkillAction.Role` (`Tool` | `Briefing` | `Both`), `AIAgentSkill.AllowMetadataSyncUpdate`, `RowLevelSecurityFilter.PlatformVariants` (SQL Server + PostgreSQL dialect RLS), `MJ: AI Agent Rhythm Templates`, `MJ: AI Agent Suggestions`, `ConversationType` `AGENT_CHANNEL`, `MJ: Agent Channels` (IS-A `MJ: Conversations`), and `MJ: Agent Channel Participants`.
+  - **Policy & Briefing Engine**: Introduce `TypedActionPolicyGuard` in `@memberjunction/ai-core-plus` with sub-agent policy ceiling propagation across `BaseAgent` and `AgentUserPolicyEngine`, plus `AIEngine.GetBriefingActionsForAgent` / `GetSkillBriefingActionIDs` for dynamic cross-app briefing fan-out.
+  - **Core Typed Actions & Agent Channels**: Replace all raw SQL / generic CRUD actions on Chief of Staff with 13 scoped typed actions (including `Assemble My Briefing`, Offered Rhythms, Suggestions, Memory, and Agent Channel actions), add `AgentChannelConversationDriver` with loop-guard and hourly wake rate limits, and enforce recurring routine confirmation in `Schedule Next Agent Wake`.
+  - **Inbound Utility Mailbox Adapter**: Add `InboundUtilityMailboxIngestionService` and `EmailUtilityMailboxExtension` (`BaseServerExtension`) in `@memberjunction/messaging-adapters`.
+  - **Governance, Standards & UI**: Add `agent-skill-governance` repo standard, `ChiefOfStaffAgentChannelsComponent` and Governance `InstructionsOverride` size monitor in `@memberjunction/ng-dashboards`, and `IT157` (`COS9–COS12`) integration checks.
+
+- e6b15b9: Harden Chief of Staff security, governance, email ingestion, agent channels, wake policy enforcement, and briefing resilience:
+  - **Chief of Staff skill governance & SQL isolation (`@memberjunction/standards`, Chief of Staff metadata)**: Switched Chief of Staff `AcceptsSkills` from `All` to `Limited`, explicitly granted safe core skills (`Web Research`, `Data Visualization`, `Document Builder`) while excluding `Data Analysis & Queries`, and attached `Query Builder` as an explicit sub-agent bounded by the user's policy ceiling. Extended the `agent-skill-governance` repo standard to flag non-allow-listed agents setting `AcceptsSkills: 'All'` (or explicitly granting an SQL-bundling skill) when an active skill bundles `Run Ad-hoc Query`.
+  - **Server-verified approval & rhythm validation (`@memberjunction/core-actions`)**: Added `VerifyApprovedAgentRequest` and `VerifyActiveRhythmTemplate` helpers; hardened `ScheduleNextAgentWakeAction`, `EnableAgentRhythmAction`, and `SendInterAgentRequestAction` so agent-context execution rejects self-attested `ConfirmedByUser = true` and unverified/inactive/wrong-agent `RhythmTemplateID` values, requiring a server-verified `Approved` `MJ: AI Agent Requests` row (`ConfirmedApprovalRequestID`). Direct human/UI calls continue to work without requiring an approval request.
+  - **MS Graph & Gmail inbound mailbox ingestion + durable dedup (`@memberjunction/messaging-adapters`)**: Added `CommunicationProviderInboundMailboxFetcher` (supporting Microsoft Graph and Gmail via `CommunicationEngine`) and `InMemoryInboundMailboxFetcher`, auto-registered when `PollIntervalMs > 0`. Added native `POST <root>/inbound/msgraph` (including `validationToken` handshake) and `POST <root>/inbound/gmail` (Pub/Sub base64 payload) webhook normalizers and routes on `EmailUtilityMailboxExtension`. Added durable DB-backed deduplication in `InboundUtilityMailboxIngestionService` via `MJ: User Settings` under the System User so deduplication survives restarts and multi-instance concurrency.
+  - **Human replies in Agent Channels wake peer agents (`@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/ng-dashboards`)**: Added a decoupled `GetGlobalObjectStore()` hook (`RegisterAgentChannelHumanPostWakeHandler`) invoked by `AgentChannelConversationDriver.HandleHumanMessagePosted` and registered by `AgentWakeTriggerService`, ensuring human replies reopen paused channels and wake peer participant agents. Updated `ChiefOfStaffAgentChannelsComponent` to show clear resumed/notified confirmation banners.
+  - **Active policy enforcement for workstream wakes (`@memberjunction/ai-agents`)**: Updated `AgentWakeTriggerService.TriggerWakeForWorkstream` to require an `Active` `MJ: AI Agent User Policies` row for `(AgentID, UserID)`, cleanly suppressing wakes (`POLICY_DENIED`) for users who have not onboarded.
+  - **Briefing timeout/truncation & rhythm staggering (`@memberjunction/core-actions`, Chief of Staff metadata)**: Added per-contributor timeout (`ContributorTimeoutMs`, default 10s) and serialized payload truncation (`MaxContributorChars`, default 32,768 chars) to `AssembleMyBriefingAction`, and staggered the `Daily Calendar Guard & Conflict Check` rhythm template to `15 7 * * 1-5`.
+
+- 2122c07: Add code-only `BaseRemotableOperation` contracts and server implementations (`Limits.GetDiagnostics`, `Limits.ResumePausedRun`, `Limits.PauseRun`), wire the `AdminLimitsResourceComponent` execution-limits governance dashboard into Explorer's Admin application navigation, add end-to-end 5,000-node workflow and 2,000-turn agent-channel plus synthetic runaway tests, and document the 5-tier limits configuration architecture and sweep inventory.
+- 0711e70: Add per-workflow and per-graph execution isolation levels (`InProcess`, `Worker`, `Process`, `Container`), dual-dialect `AIAgent.Isolation` schema migrations backfilling existing rows to `InProcess`, `Workflow.Draft` default of `Worker`, `LimitsConfigResolver` isolation defaults/ceilings, and Node `worker_threads` / `child_process` / container isolation execution runners with documented fault-boundary guarantees.
+- 17406fc: Epic 4a Slice 2: add `Growth Coach` (`RequestedOnly`) core skill, biweekly `High`-tier `growth-coaching` rhythm template, bounded multi-source retrieval with budget/period deduplication writing private `ParentID` coaching side conversations, and conditional `Team` section in Chief of Staff briefings for managers with direct reports.
+- 59afb5f: Human-task providers can now be the install's default, opt-in, for workflows and for agents.
+  - **The contract moved to `@memberjunction/ai-core-plus`** (`BaseHumanTaskProvider`, `ResolveHumanTaskProvider`) so agents can use it; `@memberjunction/task-graph` no longer exports it. `RaiseTask` and `WithdrawTask` now receive a `Subject`: `{ Kind: 'WorkflowStep', TaskID, ParentTaskID }` or `{ Kind: 'AgentRequest', AgentRequestID, AgentRunID }`. `WithdrawTask` also receives a `Reason` (`'expired'`, `'cancelled'`, `'completed-elsewhere'`).
+  - **Opt-in default.** A provider declares it may be the default with `@RegisterClassEx(BaseHumanTaskProvider, { key, metadata: { CanBeDefault: true } })`; an install chooses it with `humanTasks.defaultProvider` in `mj.config.cjs` (env `MJ_HUMAN_TASKS_DEFAULT_PROVIDER`). Both are needed: installing a provider never reroutes approvals by itself. A configured provider that is missing or ineligible is ignored with an error and asks stay in the inbox.
+  - **Workflows.** Human steps that name no provider go to the default, chosen at submit and written into the step, so running workflows are not rerouted when the setting changes. `'AgentRequest'` still means the built-in inbox.
+  - **Agents.** A Chat step's feedback request is also raised through the default provider; the `MJ: AI Agent Requests` row stays the source of truth and still resumes the agent. New columns `HumanTaskProvider` and `HumanTaskExternalReference` record where it went. Providers answer with `AnswerAgentRequestFromProvider` (`@memberjunction/ai-agents`), which accepts only the provider the request was raised through, only while it is open, and saves as the request's owner. An answer given in the inbox or the conversation withdraws the provider's copy. Plan approvals stay in the inbox.
+
+- a5dbc84: Add DefaultAgentConfigurationID on MJ: AI Agent Rhythm Templates and AgentConfigurationID on MJ: User Routines to assign default model tiers (Draft/Fast, Standard, High/High Power) per rhythm, seed routines from their template defaults, and pass resolved configuration overrides into agent wake runs.
+- 96bf010: Add full-screen Present Mode with dual-window `BroadcastChannel` Presenter/Audience sync, progressive reveal steps, blackout/whiteout/laser/numeric-jump shortcuts, 5 new visual slide layouts (`KpiStrip`, `Timeline`, `BentoGrid`, `Quadrant`, `MetricComparison`), 8 designer theme presets, 1-click deterministic `BeautifySlide` ("Polish") + agent tools (`apply_design_preset`, `beautify_slide`, `list_design_options` with schema validation), canonical live-session channel tab ordering on resume with natural co-agent continuity, Docs/Sheets polish parity (YAML frontmatter cover strip + reading time, Sheets Freeze Panes menu, formula autocomplete, `SPARKLINE(...)` SVG inline cell rendering), calm single-row 40px progressive-disclosure toolbars with shared `Cmd/Ctrl+K` command palette across Docs/Sheets/Slides and floating slide design pill, passive focused-surface switch notes & all-channel `GetState()` snapshots, read-only `ContextTool` / `ArtifactWorkspace` peek (`get_workspace_state`, `get_state`), upfront artifact tool parameter schema validation, auto-returned document outline/blocks on missing `blockId`, and pre-display + runtime Media URL health checks.
+- 49a5866: Workflows gain waiting steps, a pluggable Human-step provider, durable retries, and lose the 50-step cap (minor: migrations `V202611181900__v6.3.x__TaskGraph_Waiting_Steps` and `V202611182100__v6.3.x__TaskGraph_Durable_Retry`).
+  - **External steps run.** A step reached by the dispatcher waits until something completes it through the new `TaskGraph.CompleteWaitingStep` operation (or `TaskGraphWaitingSteps.CompleteWaitingStep` in-process), by task ID or by `correlationKey`. The signal's payload is merged into the workflow payload; a signal that arrives early is held and applied when the step is reached; `expiresInHours` fails the step when nothing arrives. New column `Task.CorrelationKey`.
+  - **Wait steps.** `{ until }` (timestamp or `payload.<path>`) or `{ durationSeconds }`, durable on `Task.DueAt` and judged on the database clock.
+  - **Human-step providers.** A Human step may name `provider`; any package can register `@RegisterClass(BaseHumanTaskProvider, '<key>')`, raise the ask in its own system, and complete the step through the same completion path. Omitted or `AgentRequest` keeps the built-in inbox. Unregistered providers are refused at submit.
+  - Drawn workflows (`AIAgentStep`) accept `External` and `Wait` steps, and Save-as-Workflow now keeps Human, External and Wait steps instead of dropping them. The flow editor's palette offers Person, External Signal and Wait steps with fields for their settings, and the task-graph canvas renders Wait steps.
+  - A waiting step records its output taint like any runner: a Wait passes on its input taint, a signal that carries a payload taints what follows (it is outside content), and a provider's completion never clears taint.
+  - The 50-node cap now applies only to model-authored graphs (`MAX_TASKS_PER_AGENT_GRAPH`); code-built and drawn graphs are bounded by a 10,000-node blast-radius ceiling.
+  - Record-change triggers follow the workflow's status: bindings are `Active` only while the workflow is, and a removed trigger's binding is disabled. Two triggers on one entity and scope with different filters are reported instead of one silently overwriting the other.
+  - **Retries are durable.** A step with `policy.retryCount` that fails goes back to `Pending` with `Task.AttemptCount` and `Task.NextAttemptAt` (database clock) instead of being retried by sleeping inside the claim, so a retry survives a restart and runs on any instance. Action steps retry only when their action is idempotent (unchanged), Prompt and Decision steps now retry, Agent steps never do. Viewers receive a `ClaimChanged` frame with `ClaimEvent: 'retry-scheduled'`. `TaskGraph.RetryTask` resets the count.
+
+- 6cd3f38: Unify result expiration, compaction, execution limits, and lazy `ArtifactToolManager` spillover across directly-attached (`AIAgentAction`) and skill-bundled (`AISkillAction`) actions via `Action.Config` (`IActionConfiguration`), preserve external-data trust wrapping across artifact spillover, workspace tools, pipelines, message compaction/recovery, and sub-agent boundaries, defer artifact spillover until compaction/expiry/recovery fires, cap Sage at 20 iterations per run with a 120k context compaction budget, and configure 1-turn result compaction defaults on `Run Ad-hoc Query` and `Run Stored Query` (#6395). Active per-agent `AIAgentAction` rows with `ResultExpirationTurns` configured continue to take precedence over `Action.Config` defaults (set `ResultExpirationMode = 'None'` with `ResultExpirationTurns = 0` to opt a specific agent out), and `ExecuteAgentParams.messageExpirationOverride` (including `expirationMode: 'None'`) overrides both.
+- 9fa004a: Enforce fail-closed Active coordination policy wake gating via batched Simple RunView lookups across all event-driven and scheduled wake paths, coalesce per-(UserID, ApplicationID) event wakes into single bounded wake keys within configurable coalescing windows, and add an AIDP server startup/deployment guard watermark preventing spurious startup or retroactive wakes while preserving recovery of pre-existing pending routines.
+
+### Patch Changes
+
+- 4d51997: Add personal and shared AI Agent instances via multi-level prototype inheritance (`AIAgent.BaseAgentID`, `MaxDepth = 5`), `InstantiationMode` (`None | Optional | Required`), `AdditionalInstructions`, exclusive `IsPrimaryInstance` sibling sync, 2x2 RBAC with SQL Row-Level Security (`UserAccessibleAIAgents`), ancestor policy/limit ceiling intersection, unified text + Realtime voice personas with audience-aware tone framing, `Manage My Agent Instance` action, `LocalJsonCommunicationProvider` for local JSON-backed Email & Calendar testing, Frecency + FK-style Smart `@Mention` autocomplete, per-user Default Chat Agent (`chat.defaultAgentId`), and the unified **My Agents** Explorer application (`Overview`, `Agents`, `Agent Channels`).
+- 061fa06: Forward `ExecuteAgentParams.cancellationToken` as `AbortSignal` when `BaseAgent.ExecuteSingleAction` invokes `ActionEngineServer.Instance.RunAction`, so cancelling or timing out an agent run immediately propagates abort into long-running actions.
+- 3c2a521: Replace name-resolved `[[Name]]` doc links with durable record-mention tokens (`ConversationUtility.CreateRecordLink`), `[[` autocomplete in the MJ Docs editor (searching readable artifacts as the current user), batched permission-aware link chip rendering (`ArtifactPermissionEngine.ResolvePermissionsBatch` + batched PK-only entity `RunViews`), and plain-label export.
+- dfc0449: Add strongly-typed 5-tier `LimitsConfigResolver` with approved backstop defaults (`DEFAULT_MJ_LIMITS_CONFIG` / `CODE_FALLBACK_LIMITS`) in `@memberjunction/core`, migrate `RunawayGuard`, `ResourceGuard`, and `Tuning` work bounds across AI/TaskGraph/Actions/Bridge/Server to resolve through `LimitsConfigResolver.Instance`, commit the categorized `docs/limits-sweep-inventory.csv` sweep inventory, and enforce the `limits-literals` CI/Standards guard.
+- 1b3ae5f: Add multi-scope `BudgetEnforcementGuard` (dollar USD and wall-clock time across `PerRun`, `PerRoutine`, and `PerUserPerDay`), 6-signal `DeterministicProgressDetector`, sub-200ms `FastConvergenceJudge` (`Ambiguous`-only), and non-destructive pause/checkpoint/notification/resume (`RunawayCheckpointManager` and `BaseAgent` integration).
+- 90174df: Implement Slice 2 queued graph execution (`Dispatch: 'Queue'`), recoverable terminal caller notifications across restarts, `Enqueue` step waiting-state coordination, and bounded 10,000-item `ForEach` + `Enqueue` WorkQueue fan-out with early-completion reconciliation, idempotent deduplication, and terminal failure propagation.
+- 7df9dfd: Propagate a terminating child sub-agent's `artifactDirective`, `payloadArtifactTypeID` (on `ParentID` child and folded 1-node task-graph delegations, excluding `AgentRelationships` related-agent merges and parallel fan-out), and run `Message` through `BaseAgent` and `AgentRunner.ProcessAgentArtifacts` so router agents do not overwrite a specialist child agent's artifact type, directive, or final response message when `terminateAfter: true`, parking on a workflow, or returning a `Chat` step.
+- f3e942f: Add balanced top-level JSON decision-envelope extraction fallback in `BaseAgentType.parseJSONResponse` (handling trailing text and multi-JSON output from CLI harnesses such as `HarnessAgentType`) and guard non-string/undefined `action.name` values in `BaseAgent.resolveActionEntityForAgent` and `validateActionsNextStep` so malformed action entries return a clean `Retry` validation message instead of throwing `TypeError`.
+- d635ec5: Memory-leak audit Round 23 fixes.
+  - `ArtifactCollaborationServer` omits full `BaseVersionText` document bodies from server watermarks whenever a room's working state matches its persisted base version (`Working === Base`), retaining `BaseVersionText` only while uncompacted working-state edits exist and dropping it immediately on compaction — eliminating duplicate multi-MB artifact strings across closed rooms without an arbitrary watermark count cap.
+  - `ConversationToolManager` loads conversation history fresh per agent run via `ConversationEngine.LoadWindowRowsFresh` (memoized on the per-run manager instance and cleared in `BaseAgent.endRun`), preventing server-side agent runs from populating `ConversationEngine`'s process-global UI detail cache.
+  - The fallback artifact suggestion store shared by the document, spreadsheet and slide-deck tool libraries deletes superseded ephemeral content-hash keys when standalone suggestions are accepted and expires idle keys after 2 hours without an arbitrary count cap.
+  - `BaseResourceComponent` replaces `destroy$` with an already-fired notifier on destroy, so a `takeUntil(this.destroy$)` attached after an `await` in a component that was destroyed meanwhile ends immediately instead of living for the session.
+  - `DataExplorerDashboardComponent`, `FormBuilderResourceComponent`, `QueryPartComponent`, `ArtifactTypePluginViewerComponent`, and `PdfArtifactViewerComponent` guard post-`await` timers, subscriptions, plugin instantiations, and PDF document/blob-URL resources when destroyed mid-load.
+  - The MCP server closes Streamable HTTP sessions once idle past `mcpServerSettings.sessionIdleTtlMs` (default 24 hours, swept every `sessionSweepIntervalMs`) without evicting active sessions under a hard count cap, sets `transport.onclose` before `connect()` so the SDK's own close handling runs, and releases sessions whose first request fails.
+  - `CloudDetachedSessionRegistry` clears detached sessions deterministically on terminal turn completion or non-detached `EndSession()` teardown and expires abandoned sessions after their 24-hour idle TTL without an arbitrary count cap.
+
+- 346795c: Tests only: widen tight wall-clock ceilings added since v6.3.0-edge.1 so the publish gate's single shared runner doesn't flake. Pathological-input checks get 2 s; the fast-judge early-return and microtask coalescing checks stay below the timings they prove (500 ms).
+- c63e493: Optimize search, agent, and prompt hot paths and harden multi-tenant RunView deduplication:
+  - Partition `ProviderBase` RunView in-flight deduplication and linger cache keys by `contextUser` per-request isolation state (`TenantContext`, `MagicLinkScope`, `APIKeyActingContext`, `APIKeyRowFilters`, `WidgetGuestContext`, `AnonymousVisitorID`, and `IsMagicLinkAnonymous` roles) via an overridable `ComputeRunViewDedupContextScope(contextUser)` hook, preserving case sensitivity for non-UUID tenant IDs and bypassing dedup when unknown nested `TenantContext` object shapes are present.
+  - Add bounded 30s user-scoped LRU metadata caches (`UserScopedCacheKey`, max 100 entries) for `MJ: Vector Indexes` and `MJ: Vector Databases` plus non-colocated `VectorDBBase` client pooling in `VectorSearchProvider` with entity-mutation invalidation.
+  - Add `SearchParams.SkipNameEnrichment` and skip tag hydration in `FullTextSearchProvider` when no tag filter is active.
+  - Combine lane `ExtraFilter` and reader RLS into a single-pass `RunView` in `SearchEngine` using a non-serializable Symbol verification stamp while preserving `VerifyOriginRecords`, FLS projection, and per-reader audience isolation.
+  - Resolve Agent and Skill principals from `AIEngine.Instance` before falling back to `GetEntityObject.Load` in `ScopedSearchAction`.
+  - Coalesce and background intermediate `ConversationDetail.Save()` progress writes in `AgentRunner.RunAgentInConversation`, pass explicit `inputArtifacts: []` from `BaseAgent` sub-agent delegation to skip redundant `hydrateConversationArtifacts` scans without affecting realtime delegation, and defer `'System Only'` internal payload-only artifact persistence off the reply critical path when no `artifactDirective` is present (leaving `artifactInfo` undefined so no client artifact notification fires for internal payload state).
+  - Inherit `modelSelectionPrompt.ModelSpecificResponseFormat` in `AIPromptRunner` when `effectiveResponseFormat` is active and the executing prompt leaves `ModelSpecificResponseFormat` unset.
+- b7ee801: Only the user who started an agent run, or the owner of its conversation, can stop it.
+  - **The rule is enforced where the stop is saved.** `MJAIAgentRunEntityExtended.Save` refuses any unmarked save of an existing run with `Status = 'Cancelled'` (regardless of `CancellationReason` or client-supplied dirty flags) from any user other than the run's persisted starter (`UserID`) or the owner of its conversation (walking `ParentRunID` for child sub-agent runs; owner is the conversation's `UserID`, an Owner-level grant, or an inherited Owner-level folder grant: the same rule as Share), returning `false` with `StopRefusedMessage` in `LatestResult`. Already-cancelled rows in the database remain updatable, and trusted server-side cancellations (`BaseAgent.createCancelledResult`) authorize a single save via the non-field capability marker `MarkServerCancellation()`. Server-side only: on a client provider the server's own copy of the save runs the check. New: `MarkServerCancellation`, `IsStopRequest`, static `StopPermitted` (the rule, shared with the UI), `StopRefusedMessage`, `StopCheckFailedMessage`; `UserOwnsConversation` in core-entities beside `UserMayWriteConversation`.
+  - **The controls offer only what the rule allows.** In a shared conversation the composer's stop control and the per-reply Stop pill cover the runs the viewer started; the owner stops every run. While only other users' runs are in flight the slot stays Send and the status line says whose work it is ("Sage is working for another user", "2 agents working for other users"). A run whose starter cannot be told is treated as the viewer's own. New on the chat area: `CanStopAnyRun`, `CanStopDetail`, `StoppableDetailIds`, `StoppableCount`, `OthersInFlightCount`; the message list takes `StoppableDetailIds` and stamps `StopAllowed` on each item.
+
+- 93dbc99: Implement Sub-Epic S3 runtime and configuration seams (zero SQL migrations): add structural `ScopeCommonReach` Audience mode for O(1) start without reader-list enumeration (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/actions-base`, `@memberjunction/actions`), enforce and document invite-only external `userHandling` safeguards (`@memberjunction/server`), carry originating scope attribution on `SearchResultItem` across RRF fusion and deduplication (`@memberjunction/search-engine`, `@memberjunction/ai-agents`), and add deterministic query unquoting/normalization in the Scoped Search action (`@memberjunction/core-actions`).
+- 193d979: Implement SupportsAudience typed action/workflow seams, fail-closed server-side budget and audience controls, whole-workflow USD cost and wall-clock duration caps across agent trees and task graphs, and zero silent row-cap truncation enforcement on decision-critical RunView reads.
+- be7f58e: Execute the Video Studio post-release hardening workstreams (`plans/video-studio-hardening.md`): add shared real-render test gates (`VIDEO_STUDIO_RENDER_TESTS_REQUIRED=1`) and CI workflow (`.github/workflows/video-studio-render.yml`, WS1); fix `PayloadManager` dotted/bracketed keys and empty-array upstream merges, update `JSONValidator.CleanValidationSyntax` and `AIPromptRunner` so colon-bearing keys like `16:9` and unrecognized `:rule` suffixes stay intact (#4827), and remove all `INTERIM` workarounds across Video Studio including unused `RestoreStrippedFormatKeys` (WS2); record Consult & Handoff ownership and independent review findings (WS3); unify stage-name normalization in `gates.ts` and decompose long orchestrator methods in `VideoStudioAgent` (WS4); add the orchestrator Loop vs code-led decision record (WS5); and record shipped scope in `plans/video-studio.md` §15 (WS6-2).
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [d6c032f]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [18a02db]
+- Updated dependencies [3d5adab]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [3651ef2]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [447f7fa]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/actions@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/ai-prompts@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ai-vector-dupe@6.3.0-edge.2
+  - @memberjunction/ai-vector-sync@6.3.0-edge.2
+  - @memberjunction/search-engine@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/ai-reranker@6.3.0-edge.2
+  - @memberjunction/rubrics@6.3.0-edge.2
+  - @memberjunction/templates@6.3.0-edge.2
+  - @memberjunction/storage@6.3.0-edge.2
+  - @memberjunction/context-crush@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

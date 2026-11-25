@@ -1,7 +1,7 @@
 /**
- * lists.checks.ts — the 'lists' bundle (LS1–LS3): live integration checks for the Lists feature
- * substrate. Graduated VERBATIM from integration-test-scripts/lists-tests.ts (check bodies unchanged;
- * the fixture create/cleanup became a shared BundleLifecycle).
+ * lists.checks.ts — the 'lists' bundle (LS1–LS4): live integration checks for the Lists feature
+ * substrate. LS1–LS3 were graduated from integration-test-scripts/lists-tests.ts; the fixture
+ * create/cleanup is a shared BundleLifecycle.
  *
  * Covers the v5.48 ListSource keyset-pagination change (StartRow/OFFSET → AfterKey seek over
  * ListDetail.ID) against the real database:
@@ -9,18 +9,20 @@
  *   - LS2: resume from a persisted keyset cursor on a fresh instance — no overlap, no gaps
  *   - LS3: a legacy Offset cursor is honored for its resume batch and converts to keyset
  *
+ * LS4 deletes a list that has members and expects the database to remove the members with it.
+ *
  * Deterministic (no model calls). The lifecycle creates one throwaway `MJ: Lists` row + MEMBER_COUNT
  * `MJ: List Details` members (tagged "(mj-integration-test — safe to delete)") and deletes them.
  */
-import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { ListSource, ProcessCursor } from '@memberjunction/record-set-processor-base';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
-const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
+import { AddFixtureMembers, CountListMembers, CreateFixtureList, DeleteFixtureList, LISTS_FIXTURE_TAG } from './_lists-fixture';
+
+const FIXTURE_TAG = LISTS_FIXTURE_TAG;
 const MEMBER_COUNT = 25;
 const BATCH_SIZE = 10;
 
@@ -90,6 +92,24 @@ export const ListsChecks: NamedCheck[] = [
             Assert(tail.NextCursor.Key != null, 'legacy cursor did not convert to keyset');
             Assert(tail.Exhausted, 'source should be exhausted after the tail batch');
         }
+    },
+    {
+        Id: 'lists.LS4',
+        Name: 'LS4: deleting a list also deletes its members',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const list = await CreateFixtureList(ctx, `Lists delete suite ${FIXTURE_TAG}`);
+            const listId = list.ID;
+            await AddFixtureMembers(ctx, listId, 3);
+            AssertEqual(await CountListMembers(listId, ctx.User), 3, 'member count before delete');
+
+            try {
+                const deleted = await list.Delete();
+                Assert(deleted, `List delete failed: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                AssertEqual(await CountListMembers(listId, ctx.User), 0, 'member count after delete');
+            } finally {
+                await DeleteFixtureList(ctx, listId);
+            }
+        }
     }
 ];
 
@@ -99,60 +119,20 @@ for (const check of ListsChecks) {
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('lists', {
     Setup: async (ctx: IntegrationCheckContext) => {
-        const md = ctx.Provider;
-        const user = ctx.User;
-
-        // Reference (never mutate) an existing entity to satisfy MJ: Lists.EntityID.
-        const entResult = await new RunView().RunView({ EntityName: 'MJ: Entities', ResultType: 'simple', MaxRows: 1 }, user);
-        Assert(entResult.Success, `Resolving an entity failed: ${entResult.ErrorMessage}`);
-        const entityID = (entResult.Results?.[0] as { ID?: string } | undefined)?.ID;
-        Assert(!!entityID, 'Could not resolve an entity ID');
-
-        const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', user);
-        list.NewRecord();
-        list.Name = `Lists keyset suite ${FIXTURE_TAG}`;
-        list.Description = 'Fixture for the lists bundle — safe to delete';
-        list.EntityID = entityID!;
-        list.UserID = user.ID;
-        Assert(await list.Save(), `List fixture save failed: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        const list = await CreateFixtureList(ctx, `Lists keyset suite ${FIXTURE_TAG}`);
 
         // Publish the handle as soon as the list exists — Teardown sweeps members by ListID, so a
         // mid-loop crash still cleans up the list and any members already created.
         ctx.ListsFixture = { ListID: list.ID };
 
-        for (let i = 0; i < MEMBER_COUNT; i++) {
-            const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
-            detail.NewRecord();
-            detail.ListID = list.ID;
-            detail.RecordID = `lists-int-${String(i).padStart(2, '0')}`;
-            detail.Status = 'Active';
-            Assert(await detail.Save(), `ListDetail fixture ${i} save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        }
+        await AddFixtureMembers(ctx, list.ID, MEMBER_COUNT);
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.ListsFixture;
         if (!f) {
             return;
         }
-        const md = ctx.Provider;
-        const user = ctx.User;
-        const details = await new RunView().RunView<{ ID: string }>({
-            EntityName: 'MJ: List Details',
-            ExtraFilter: `ListID='${f.ListID}'`,
-            Fields: ['ID'],
-            ResultType: 'simple',
-            BypassCache: true,
-        }, user);
-        for (const row of details.Results ?? []) {
-            const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
-            if (await detail.Load(row.ID)) {
-                await detail.Delete().catch(() => undefined);
-            }
-        }
-        const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', user);
-        if (await list.Load(f.ListID)) {
-            await list.Delete().catch(() => undefined);
-        }
+        await DeleteFixtureList(ctx, f.ListID);
         ctx.ListsFixture = undefined;
     }
 });

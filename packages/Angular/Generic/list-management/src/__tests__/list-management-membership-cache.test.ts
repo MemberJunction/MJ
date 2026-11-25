@@ -8,6 +8,10 @@ vi.mock('@memberjunction/core', () => ({
 }));
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@angular/core', () => ({ Injectable: () => (c: unknown) => c }));
+vi.mock('@memberjunction/graphql-dataprovider', () => ({
+  GraphQLDataProvider: class {},
+  GraphQLListsClient: class {},
+}));
 
 import { ListManagementService } from '../lib/services/list-management.service';
 

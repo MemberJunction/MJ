@@ -1,5 +1,78 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 5f514f2: Implement the MJ Peer Sync (`MemberJunctionConnector`) core and in-process pipeline (#6021 / #6502), including the `RecordChange` T-SQL migration (`CHK_RecordChange_Source` `'Sync'`, `spCreateRecordChange_Internal` `@IntegrationID`, and `IX_RecordChange_EntityID_ChangedAt`), server-only `BaseEntity.SetSyncContext` (`RecordChange.Source = 'Sync'`, `Integration.ID` FK binding, and `IRecordChangeSyncContext` provenance with optional `OriginUserEmail` for service accounts across `MJCore` and SQL Server / PostgreSQL data providers), Tarjan SCC + two-pass nullable FK cycle planning in `@memberjunction/record-graph`, per-record `EntityVectorSyncer.VectorizeRecords` and batch `DuplicateRecordDetector.FindCandidatesForValues`, `ComputeThreeWayFieldMerge` and the `BaseIntegrationConnector.RunPipeline` seam (plus incremental push `'MJ: Record Changes'` and `EntityID` record-map lookup fixes), and the `SchemaPlanner`, `ChangeSetPlanner`, `PeerIdentityGate`, `PeerSyncApplier`, `PeerSyncEndpointService` (`InProcessPeerSyncTransport` + per-run `FlushDeferredForeignKeys`), `PeerSyncDoorbell`, and `MemberJunctionConnector` modules.
+
+### Patch Changes
+
+- 4feb8ad: Fix peer metadata change notices being silently dropped or stalled during concurrent background saves on SQL Server, eliminate redundant timestamp reads and `set`-notice jitter, and run the cross-server invalidation CI rig with `MJ_SERVER_ROLE=api`.
+- 31f66b3: Docs only: guides, READMEs and two doc comments now describe what the code does (semantic graphs and Canon, search-scope permissions, taxonomy tagging, the Classify and Tags dashboards, the hierarchy tree, AI providers, testing oracles, SQL Server binary saves, and draft workflows). No code logic changes.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [d6c032f]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [447f7fa]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.2
+  - @memberjunction/actions@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ai-vector-dupe@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/queue@6.3.0-edge.2
+  - @memberjunction/encryption@6.3.0-edge.2
+  - @memberjunction/query-processor@6.3.0-edge.2
+  - @memberjunction/ai-vectordb@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

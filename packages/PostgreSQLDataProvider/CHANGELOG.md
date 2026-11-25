@@ -1,5 +1,65 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 5f514f2: Implement the MJ Peer Sync (`MemberJunctionConnector`) core and in-process pipeline (#6021 / #6502), including the `RecordChange` T-SQL migration (`CHK_RecordChange_Source` `'Sync'`, `spCreateRecordChange_Internal` `@IntegrationID`, and `IX_RecordChange_EntityID_ChangedAt`), server-only `BaseEntity.SetSyncContext` (`RecordChange.Source = 'Sync'`, `Integration.ID` FK binding, and `IRecordChangeSyncContext` provenance with optional `OriginUserEmail` for service accounts across `MJCore` and SQL Server / PostgreSQL data providers), Tarjan SCC + two-pass nullable FK cycle planning in `@memberjunction/record-graph`, per-record `EntityVectorSyncer.VectorizeRecords` and batch `DuplicateRecordDetector.FindCandidatesForValues`, `ComputeThreeWayFieldMerge` and the `BaseIntegrationConnector.RunPipeline` seam (plus incremental push `'MJ: Record Changes'` and `EntityID` record-map lookup fixes), and the `SchemaPlanner`, `ChangeSetPlanner`, `PeerIdentityGate`, `PeerSyncApplier`, `PeerSyncEndpointService` (`InProcessPeerSyncTransport` + per-run `FlushDeferredForeignKeys`), `PeerSyncDoorbell`, and `MemberJunctionConnector` modules.
+
+### Patch Changes
+
+- 87f0917: PostgreSQL on managed hosts: one TLS setting for every client, token logins, and one API pool instead of two.
+  - **TLS.** MJAPI's pools, the PostgreSQL provider, CodeGen, `mj migrate` (and its connection check), MetadataSync and the pgvector provider all take TLS from one resolver, `BuildPgSslConfig`. It reads `PG_SSL_MODE` (`disable` | `require` | `verify-ca` | `verify-full`), `PG_SSL_CA_FILE` and `PG_SSL_SERVERNAME`; MJAPI also reads `databaseSettings.postgres.ssl` in `mj.config.cjs`. **Behavior change:** with no setting, a host on this machine or a bare service name (`localhost`, `postgres`, `db`) uses plain TCP and any other host uses `verify-full`. Before, MJAPI's own pools never used TLS and CodeGen never did; a remote server without TLS now needs `PG_SSL_MODE=disable`. `PG_VECTOR_SSL=true` now verifies the server certificate (it used to skip the check); `PG_SSL_MODE=require` restores the old behavior.
+  - **Token logins.** `PG_AUTH_MODE` (or `databaseSettings.postgres.authMode`) selects a `BasePgCredentialProvider` registered under that key, which supplies a token for each new connection. Two ship with the provider: `azure-entra` (Microsoft Entra ID via `DefaultAzureCredential`, for Azure Database for PostgreSQL and Azure HorizonDB) and `aws-rds-iam` (RDS/Aurora IAM tokens). Their SDKs, `@azure/identity` and `@aws-sdk/rds-signer`, are optional peer dependencies loaded only in that mode. Token modes require a verified TLS connection. `PGConnectionConfig.PasswordSource` carries the callback.
+  - **Connections.** MJAPI and MetadataSync configure the PostgreSQL provider on the pool they already opened (`ConfigWithSharedPool`) instead of letting it open a second one, which removes up to `connectionPool.max` connections per MJAPI. At startup MJAPI warns when its pools could open more than 80% of the server's usable `max_connections`; `connectionPool.expectedInstances` multiplies the estimate for a fleet.
+  - **Read replicas.** `PG_READ_REPLICA_HOST` / `PG_READ_REPLICA_PORT` (or `databaseSettings.postgres.readReplica`) points the ad-hoc read-only pool (caller-supplied SQL, reports, agents) at a replica; `PG_READ_REPLICA_POOLS=all-read-only` moves the application read-only pool too. Both keep the read-only login. Unset, nothing changes.
+  - `mj migrate`'s connection check explains a PostgreSQL certificate it cannot verify (point `PG_SSL_CA_FILE` at the CA) and a server that only accepts TLS.
+  - **User search** on PostgreSQL matches case-insensitively (`ILIKE`), as SQL Server does under its default collation. Before, searching "acme" did not find "Acme Corp" on PostgreSQL.
+
+- d74bfbb: PostgreSQL fixes found by running the deterministic integration tier against PostgreSQL.
+  - **A commit that PostgreSQL rolled back no longer reports success.** Once a statement fails inside a PostgreSQL transaction, `COMMIT` does not error: the server rolls the transaction back and answers `ROLLBACK`. The PostgreSQL provider now checks that reply and throws `DoomedTransactionError`, so the caller learns its writes did not persist.
+  - **An aborted PostgreSQL transaction is recognized as doomed.** SQLSTATE `25P02` (`in_failed_sql_transaction`) now marks the ambient transaction doomed, as `25P01` and the SQL Server codes already did, so nested units and saves inside it refuse instead of failing with a raw driver error.
+  - **Saving a record whose nullable boolean is NULL no longer reports a false concurrency conflict.** The conflict check read the caller's `null` old value as `false` but compared it with the stored `NULL` as is, so on PostgreSQL (which stores NULL where SQL Server's column default stores 0) every edit of such a field was rejected as "Concurrent modification conflict". The stored side now gets the same rule.
+  - **`mj app install` and Open App migrations follow the PostgreSQL TLS and login settings.** The migration run and the metadata refresh after it now use the same `PG_SSL_*` and `PG_AUTH_MODE` resolution as `mj migrate`, through a new `SSL` option on the engine's database config. Before, both connected without TLS and failed against a server that requires it.
+  - Integration checks that assumed SQL Server: `ISNULL` in a filter, `[RecordChange]` bracket quoting, a constraint lookup that compared PostgreSQL's mixed-case names in lowercase, and the list-from-query fixture's bracket-quoted SQL, which the provider now quotes.
+
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [30460b0]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [346795c]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [447f7fa]
+- Updated dependencies [193d979]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/query-processor@6.3.0-edge.2
+  - @memberjunction/ai-vectordb@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

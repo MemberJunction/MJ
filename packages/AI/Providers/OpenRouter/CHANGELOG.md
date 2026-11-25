@@ -1,5 +1,17 @@
 # @memberjunction/ai-openrouter
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [3c70bf7]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/ai-openai@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

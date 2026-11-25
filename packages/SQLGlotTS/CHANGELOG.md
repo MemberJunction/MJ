@@ -1,5 +1,13 @@
 # @memberjunction/sqlglot-ts
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 488d789: PostgreSQL converter fixes. Legacy path: one boolean-column registry per run (latest baseline plus each converted file), so a view over a table an earlier migration created compares with `TRUE` (#5016); `HASHBYTES` and `CONVERT(VARCHAR, <binary>, 1|2)` become sha256/sha512/md5 and hex text (#6538); unique indexes and constraints get `NULLS NOT DISTINCT` (#5194). Split path: `DATEDIFF(day)` as date subtraction, mixed-case user functions keep their name, a self-aliased `UPDATE … FROM … LEFT JOIN` becomes a ctid self-join, the same HASHBYTES / unique-index fixes, `DROP COLUMN` drops dependent views first, and MJ's catalog views use their hand-written PG text (#6348, #6538, #3345). Bake: the working DB's boolean columns are re-read after each migration; `mj migrate rebake --file … [--capture-only]` keeps a baked file's hand region and replaces only its CodeGen section, a full `rebake` is a dry run without `--write`, and a capture failure after the apply names the resume command. `convert` skips migrations older than the oldest baseline.
+- 736858d: `mj migrate convert --split` / `--bake-codegen`: Open App CodeGen metadata written against `${mjSchema}` (EntityField / Entity / ApplicationEntity UPDATEs, EntitySetting and GeneratedCode INSERTs) is recovered from the CodeGen block; a `vw…` view in a feature migration with no CodeGen banner and no CodeGen routines is treated as hand-written and transpiled; metadata DML dropped in statement mode outside an mj-sync log is a named `METADATA-DML-DROPPED` gap; CodeGen's core refresh calls (`spUpdateExistingEntitiesFromSchema` and siblings) convert to PostgreSQL calls, with `@IncludedSchemaNames` turned into an apply-time excluded list and `@EntityIDs` passed to the two that take it; each `sp_refreshview` is a named, non-blocking warning on both paths; and the bake runs the PostgreSQL field sync between apply and capture, baking `DefaultValue` changes into the file (#5550, #5551, #5919, #5649, #5650).
+- 9f70e4f: PostgreSQL conversion: `DROP INDEX name ON table` (bare or behind an `IF EXISTS (… sys.indexes …)` guard) becomes `DROP INDEX IF EXISTS schema."name"` on both converter paths (#5955); `WITH c AS (…) DELETE FROM c` over one table becomes a `ctid` delete on that table, and any other CTE-targeted delete is a counted gap (#3166). `mj migrate convert` renumbers EntityField Sequence collisions only in the files the run wrote, never in committed `.pg.sql` files (#3166).
+
 ## 6.3.0-edge.1
 
 ### Patch Changes
