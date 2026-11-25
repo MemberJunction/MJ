@@ -6,14 +6,14 @@ import { fileURLToPath } from 'node:url';
  *
  * Unlike the unit config (vitest.config.ts), these tests do NOT mock
  * @memberjunction/core — they exercise the real data/service layer against a
- * live MJAPI (GraphQL at http://localhost:4001/graphql). The suite is gated on
+ * live MJAPI (GraphQL at http://localhost:4000/graphql). The suite is gated on
  * `MJ_TEST_JWT`: with no token (or an unreachable backend) every describe block
  * skips gracefully, so this config is safe to run in CI.
  *
  * We reuse the unit suite's `react-native` -> stub alias so any service module
  * that transitively imports react-native still loads under Node.
  */
-const srcDir = fileURLToPath(new URL('./src', import.meta.url));
+const srcDir = fileURLToPath(new URL('./src', import.meta.url).href);
 
 export default defineConfig({
     resolve: {
@@ -22,7 +22,7 @@ export default defineConfig({
             '@': srcDir,
             // The real react-native entry is Flow-typed JS Vite can't parse and is a
             // native module. Alias it to the same lightweight stub the unit suite uses.
-            'react-native': fileURLToPath(new URL('./src/__tests__/rn-stub.ts', import.meta.url)),
+            'react-native': fileURLToPath(new URL('./src/__tests__/rn-stub.ts', import.meta.url).href),
         },
     },
     esbuild: { jsx: 'automatic' },

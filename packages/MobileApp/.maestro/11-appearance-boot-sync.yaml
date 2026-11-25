@@ -1,0 +1,17 @@
+# Appearance boot sync (P0 preference sync, server -> device).
+#
+# Precondition: `MJ: User Settings` holds `mobile.appearance = light` for the signed-in user
+# while the device's local mirror says something else (flow 10 leaves it at Dark). A cold
+# launch must hydrate the local mirror from the server, so the profile row reads Light.
+appId: org.memberjunction.mobile
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Ask an agent anything, or pick up where you left off."
+    timeout: 30000
+- openLink: "mjmobile://profile"
+- extendedWaitUntil:
+    visible: "Profile & settings"
+    timeout: 20000
+- assertVisible: "Appearance, Light"

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
  * logic modules; react-native / expo / MMKV are mocked per-test (or in setup.ts)
  * where a module under test transitively imports them.
  */
-const srcDir = fileURLToPath(new URL('./src', import.meta.url));
+const srcDir = fileURLToPath(new URL('./src', import.meta.url).href);
 
 export default defineConfig({
     resolve: {
@@ -18,7 +18,7 @@ export default defineConfig({
             '@': srcDir,
             // The real react-native entry is Flow-typed JS Vite can't parse and is a
             // native module. Alias it to a lightweight stub for the pure-UI tests.
-            'react-native': fileURLToPath(new URL('./src/__tests__/rn-stub.ts', import.meta.url)),
+            'react-native': fileURLToPath(new URL('./src/__tests__/rn-stub.ts', import.meta.url).href),
         },
     },
     // html-renderer.tsx uses JSX; use the automatic runtime (react/jsx-runtime).

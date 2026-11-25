@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useMJ } from '@/providers/mj-provider';
 import { CreateConversation } from '@/data/services/agents';
 import { Colors, Spacing, Type } from '@/theme/tokens';
@@ -26,7 +26,7 @@ export default function DevChat() {
     const { status } = useMJ();
     const [msg, setMsg] = useState('waiting for MJ…');
     useEffect(() => {
-        if (status !== 'ready') return;
+        if (!__DEV__ || status !== 'ready') return;
         let cancelled = false;
         (async () => {
             try {
@@ -42,6 +42,9 @@ export default function DevChat() {
         })();
         return () => { cancelled = true; };
     }, [status]);
+    if (!__DEV__) {
+        return <Redirect href="/" />;
+    }
     return (
         <View style={styles.c}>
             <ActivityIndicator color={Colors.brand} />
