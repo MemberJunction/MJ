@@ -236,18 +236,46 @@ describe('planShards — intra-package Vitest splitting', () => {
             ['@mj/a', 'vitest run'],
             ['@mj/b', 'vitest run'],
         ]);
-        // mega: 797 + 3 overhead = 800 → 2 halves of 400, each packed at 400 × 1.8 = 720.
-        // a, b: 497 + 3 = 500 each. 720 | 720, then one 500 onto each → 1220 | 1220.
-        // At face value the halves would pack as 400 and each shard would claim only 900.
+        // mega: 797 + 3 overhead = 800 (> mean shard weight 700) → 2 halves of 400, each packed
+        // at 400 × 1.8 = 720. a, b: 297 + 3 = 300 each. 720 | 720, then one 300 onto each →
+        // 1020 | 1020. At face value the halves would pack as 400 and each shard would claim 700.
         const shards = planShards(['@mj/mega', '@mj/a', '@mj/b'], 2, {
-            packages: { '@mj/mega': 797, '@mj/a': 497, '@mj/b': 497 },
+            packages: { '@mj/mega': 797, '@mj/a': 297, '@mj/b': 297 },
             defaultSeconds: 4,
             splitThresholdSeconds: 700,
             commands,
         });
         expect(SPLIT_SERIAL_COST_FACTOR).toBeGreaterThan(1);
-        expect(shards.map((s) => s.weight)).toEqual([1220, 1220]);
+        expect(shards.map((s) => s.weight)).toEqual([1020, 1020]);
         expect(shards.map((s) => s.splitPackages)).toEqual(['@mj/mega:1/2', '@mj/mega:2/2']);
+    });
+
+    it('keeps full-suite mega-packages unsplit when they fit below the mean shard weight, while splitting them on small scoped PRs', () => {
+        const table = loadWeights(WEIGHTS_PATH);
+        const allNames = Object.keys(table.packages);
+        const allCmds = new Map(allNames.map((p) => [p, 'vitest run']));
+
+        // Full-suite scope (~17,000s total → mean ~2,130s at 8 shards): ng-conversations (777s)
+        // and ai-agents (766s) are well below the mean shard weight, so they stay unsplit inside
+        // the concurrent block and every heavy Angular DOM suite lands on its own shard.
+        for (const shardCount of [6, 8]) {
+            const full = planShards(allNames, shardCount, {
+                ...table,
+                splitThresholdSeconds: 700,
+                commands: allCmds,
+            });
+            expect(full.every((s) => s.splitPackages === undefined)).toBe(true);
+        }
+
+        // Small scoped PR touching ng-conversations: 780s >> mean (~105s across 8 shards), so
+        // it splits into 1/2 and 2/2 across idle shards.
+        const scoped = planShards(['@memberjunction/ng-conversations', '@memberjunction/ng-shared'], 8, {
+            ...table,
+            splitThresholdSeconds: 700,
+            commands: allCmds,
+        });
+        const splits = scoped.flatMap((s) => (s.splitPackages ? s.splitPackages.split(',') : [])).sort();
+        expect(splits).toEqual(['@memberjunction/ng-conversations:1/2', '@memberjunction/ng-conversations:2/2']);
     });
 
     it('deals heavy whole suites out evenly instead of stacking them where weight alone would put them', () => {

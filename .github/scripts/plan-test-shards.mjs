@@ -121,11 +121,15 @@ export function extractTestPackages(dryRunJson) {
 /**
  * Bin-pack `packages` into at most `shardCount` groups, heaviest-first onto the lightest bin.
  *
- * When `splitThresholdSeconds > 0` and `shardCount >= 2`, any package whose weight exceeds the
- * threshold (and whose test command is pure `vitest run`, when `commands` is supplied) is split
- * into `ceil(weight / splitThresholdSeconds)` Vitest `--shard=j/k` work items so no single
- * mega-package caps wall time. Each sub-shard is packed at `SPLIT_SERIAL_COST_FACTOR` × its share
- * of the weight, because it runs on its own after the shard's concurrent block.
+ * When `splitThresholdSeconds > 0` and `shardCount >= 2`, a package whose weight exceeds BOTH
+ * `splitThresholdSeconds` AND the mean shard weight (`totalWeight / shardCount`) — and whose test
+ * command is pure `vitest run`, when `commands` is supplied — is split into
+ * `ceil(weight / splitThresholdSeconds)` Vitest `--shard=j/k` work items so no single
+ * mega-package caps wall time on small/scoped PRs. Each sub-shard is packed at
+ * `SPLIT_SERIAL_COST_FACTOR` × its share of the weight because it runs alone after the shard's
+ * concurrent block. Requiring `weight > totalWeight / shardCount` keeps full-suite runs unsplit
+ * (where every mega-package already fits inside a shard's concurrent block and serial post-block
+ * splits only add wall time).
  *
  * Returns only NON-EMPTY shards: a matrix entry that runs zero packages still pays ~4 minutes
  * of checkout+install for nothing, so a 3-package scope produces 3 shards, not 6. The returned
@@ -144,10 +148,20 @@ export function planShards(
     const weightOf = (name) => (typeof weights[name] === 'number' ? weights[name] : defaultSeconds) + PER_TASK_OVERHEAD_SECONDS;
     const canSplit = (name) => !commands || commands.get(name) === 'vitest run';
 
+    const sortedPackages = [...packages].sort();
+    const totalWeight = sortedPackages.reduce((sum, name) => sum + weightOf(name), 0);
+    const meanShardWeight = totalWeight / shardCount;
+
     const workItems = [];
-    for (const name of [...packages].sort()) {
+    for (const name of sortedPackages) {
         const w = weightOf(name);
-        if (splitThresholdSeconds > 0 && shardCount >= 2 && w > splitThresholdSeconds && canSplit(name)) {
+        if (
+            splitThresholdSeconds > 0 &&
+            shardCount >= 2 &&
+            w > splitThresholdSeconds &&
+            w > meanShardWeight &&
+            canSplit(name)
+        ) {
             const parts = Math.min(shardCount, Math.ceil(w / splitThresholdSeconds));
             const partWeight = (w / parts) * SPLIT_SERIAL_COST_FACTOR;
             for (let j = 1; j <= parts; j++) {

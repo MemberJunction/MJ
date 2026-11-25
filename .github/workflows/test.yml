@@ -802,13 +802,13 @@ jobs:
           if-no-files-found: error
 
       # Partition the in-scope packages into balanced shards for the matrix below. Runs after
-      # the build so the turbo dry-run it uses reads a warm graph. `--split-above=700` splits only
-      # the packages whose measured suite (>~11.5 min of aggregate weight, pure `vitest run`) is
-      # at or above a shard's whole wall-time budget — today ng-conversations and ai-agents — into
-      # Vitest `--shard=j/k` sub-shards on different runners. Lower is worse, not better: a
-      # sub-shard runs alone after the shard's concurrent block, so splitting a package that fits
-      # inside that block only adds serial time (420 split six packages and lengthened every shard
-      # it touched, in the planner's model, at both 6 and 8 shards).
+      # the build so the turbo dry-run it uses reads a warm graph. `--split-above=700` splits
+      # pure `vitest run` mega-packages (>~11.5 min, e.g. ng-conversations, ai-agents) into
+      # Vitest `--shard=j/k` sub-shards across runners when they exceed BOTH 700s AND the mean
+      # shard weight (`totalWeight / shardCount`) — i.e., small/scoped PRs where one mega-package
+      # dominates the critical path and idle shards are available. On full-suite runs every
+      # package fits well below the mean shard weight, so keeping them unsplit avoids serial
+      # post-block overhead and spreads heavy Angular DOM suites evenly across all 8 shards.
       - name: Plan test shards
         id: plan
         env:
