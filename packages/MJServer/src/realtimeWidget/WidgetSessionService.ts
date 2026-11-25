@@ -43,8 +43,15 @@ import { ResolveIdentityByEmail, MergeVisitorIdentity, ForgetVisitor, ClaimGuest
 
 const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
 const TOUR_SURFACE_ENTITY = 'MJ: Tour Surfaces';
-const TOUR_SURFACE_KEY_PREFIX = 'ts_';
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
+
+/** Matches the `NVARCHAR(150)` column length of `PublicKey` on widget instances and tour surfaces. */
+const MAX_PUBLIC_KEY_LENGTH = 150;
+
+/** Authoritative DB-resolved target for a guest session request (`Kind` is set only after entity lookup). */
+type ResolvedGuestTarget =
+  | { Kind: 'Widget'; Widget: MJConversationWidgetInstanceEntity }
+  | { Kind: 'Surface'; Surface: MJTourSurfaceEntity };
 
 /** Shape of the durable visitor anchor key (opaque base64url, same alphabet as generateSessionId). */
 const VISITOR_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
@@ -311,15 +318,14 @@ export class WidgetSessionService {
         return { success: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
       }
 
-      const surfacePublicKey = this.extractSurfacePublicKey(input.widgetKey, input.surfaceKey);
-      if (surfacePublicKey) {
-        return this.mintOrRefreshTourSurfaceSession(surfacePublicKey, input, contextUser, false);
-      }
-
-      const widget = await this.loadWidgetByKey(input.widgetKey ?? '', contextUser);
-      if (!widget) {
+      const target = await this.resolveGuestTarget(input, contextUser);
+      if (!target) {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, undefined);
       }
+      if (target.Kind === 'Surface') {
+        return this.mintOrRefreshTourSurfaceSession(target.Surface, input, contextUser, false);
+      }
+      const widget = target.Widget;
 
       const eligibility = EvaluateWidgetMint(
         { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
@@ -395,15 +401,14 @@ export class WidgetSessionService {
         return { success: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
       }
 
-      const surfacePublicKey = this.extractSurfacePublicKey(input.widgetKey, input.surfaceKey);
-      if (surfacePublicKey) {
-        return this.mintOrRefreshTourSurfaceSession(surfacePublicKey, input, contextUser, true);
-      }
-
-      const widget = await this.loadWidgetByKey(input.widgetKey ?? '', contextUser);
-      if (!widget) {
+      const target = await this.resolveGuestTarget(input, contextUser);
+      if (!target) {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, undefined);
       }
+      if (target.Kind === 'Surface') {
+        return this.mintOrRefreshTourSurfaceSession(target.Surface, input, contextUser, true);
+      }
+      const widget = target.Widget;
 
       const eligibility = EvaluateWidgetMint(
         { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
@@ -593,16 +598,11 @@ export class WidgetSessionService {
     try {
       const contextUser = this.resolveLookupUser();
       if (contextUser) {
-        if (key.startsWith(TOUR_SURFACE_KEY_PREFIX)) {
-          const surface = await this.loadTourSurfaceByKey(key, contextUser);
-          if (surface && surface.RateLimitPerMinute > 0) {
-            limit = surface.RateLimitPerMinute;
-          }
-        } else {
-          const widget = await this.loadWidgetByKey(key, contextUser);
-          if (widget && widget.RateLimitPerMinute > 0) {
-            limit = widget.RateLimitPerMinute;
-          }
+        const target = await this.resolveGuestTarget({ widgetKey: key }, contextUser);
+        if (target?.Kind === 'Surface' && target.Surface.RateLimitPerMinute > 0) {
+          limit = target.Surface.RateLimitPerMinute;
+        } else if (target?.Kind === 'Widget' && target.Widget.RateLimitPerMinute > 0) {
+          limit = target.Widget.RateLimitPerMinute;
         }
       }
     } catch (e) {
@@ -870,12 +870,12 @@ export class WidgetSessionService {
     if (!contextUser) {
       return { ok: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
     }
-    const resolvedSurfaceKey = this.extractSurfacePublicKey(widgetKey, surfaceKey);
-    if (resolvedSurfaceKey) {
-      const surface = await this.loadTourSurfaceByKey(resolvedSurfaceKey, contextUser);
-      if (!surface) {
-        return { ok: false, errorCode: 'not_found', error: 'Unknown surface key.' };
-      }
+    const target = await this.resolveGuestTarget({ widgetKey, surfaceKey }, contextUser);
+    if (!target) {
+      return { ok: false, errorCode: 'not_found', error: 'Unknown widget key.' };
+    }
+    if (target.Kind === 'Surface') {
+      const surface = target.Surface;
       const eligibility = EvaluateTourSurfaceMint(
         { Status: surface.Status, AllowedOrigins: surface.AllowedOrigins, AuthStrategy: surface.AuthStrategy },
         origin,
@@ -892,10 +892,7 @@ export class WidgetSessionService {
       return { ok: true, surface, widget: linkedWidget ?? undefined, contextUser };
     }
 
-    const widget = await this.loadWidgetByKey(widgetKey ?? '', contextUser);
-    if (!widget) {
-      return { ok: false, errorCode: 'not_found', error: 'Unknown widget key.' };
-    }
+    const widget = target.Widget;
     const eligibility = EvaluateWidgetMint(
       { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
       origin,
@@ -995,17 +992,36 @@ export class WidgetSessionService {
     return result.Results?.[0]?.ID ?? undefined;
   }
 
-  /** Resolves a surface public key from `surfaceKey` or a `ts_…` `widgetKey`, else `null`. */
-  private extractSurfacePublicKey(widgetKey: string | undefined, surfaceKey: string | undefined): string | null {
-    const explicit = (surfaceKey ?? '').trim();
-    if (explicit) {
-      return explicit;
+  /**
+   * Resolves a caller-supplied guest key (`surfaceKey` or `widgetKey`) against the database so all
+   * downstream session minting, refresh, and privacy checks branch strictly on an authoritative
+   * database entity (`Kind: 'Widget' | 'Surface'`) rather than raw request string shape.
+   */
+  private async resolveGuestTarget(
+    input: { widgetKey?: string; surfaceKey?: string },
+    contextUser: UserInfo,
+  ): Promise<ResolvedGuestTarget | null> {
+    const rawSurfaceKey = typeof input.surfaceKey === 'string' ? input.surfaceKey.trim() : '';
+    if (rawSurfaceKey.length > 0) {
+      if (rawSurfaceKey.length > MAX_PUBLIC_KEY_LENGTH) {
+        return null;
+      }
+      const surface = await this.loadTourSurfaceByKey(rawSurfaceKey, contextUser);
+      return surface ? { Kind: 'Surface', Surface: surface } : null;
     }
-    const wk = (widgetKey ?? '').trim();
-    if (wk.startsWith(TOUR_SURFACE_KEY_PREFIX)) {
-      return wk;
+
+    const rawWidgetKey = typeof input.widgetKey === 'string' ? input.widgetKey.trim() : '';
+    if (rawWidgetKey.length === 0 || rawWidgetKey.length > MAX_PUBLIC_KEY_LENGTH) {
+      return null;
     }
-    return null;
+
+    const widget = await this.loadWidgetByKey(rawWidgetKey, contextUser);
+    if (widget) {
+      return { Kind: 'Widget', Widget: widget };
+    }
+
+    const surface = await this.loadTourSurfaceByKey(rawWidgetKey, contextUser);
+    return surface ? { Kind: 'Surface', Surface: surface } : null;
   }
 
   /**
@@ -1014,16 +1030,11 @@ export class WidgetSessionService {
    * widget capabilities and tour telemetry share the same JWT, `sessionId`, and `visitorKey`.
    */
   private async mintOrRefreshTourSurfaceSession(
-    surfacePublicKey: string,
+    surface: MJTourSurfaceEntity,
     input: MintGuestSessionInput,
     contextUser: UserInfo,
     isRefresh: boolean,
   ): Promise<MintGuestSessionResult> {
-    const surface = await this.loadTourSurfaceByKey(surfacePublicKey, contextUser);
-    if (!surface) {
-      return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown tour surface key.' }, input, undefined);
-    }
-
     const eligibility = EvaluateTourSurfaceMint(
       { Status: surface.Status, AllowedOrigins: surface.AllowedOrigins, AuthStrategy: surface.AuthStrategy },
       input.origin,

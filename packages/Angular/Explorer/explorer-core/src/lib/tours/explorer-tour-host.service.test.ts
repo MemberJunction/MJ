@@ -4,8 +4,10 @@ import type {
   ITourAnchorDomBridge,
   TourDefinition,
   TourResolvedAnchorInfo,
+  TourRunRecord,
   TourStepDefinition,
 } from '@memberjunction/tours-runtime';
+import type { TourPendingOffer } from '@memberjunction/ng-tours';
 
 interface MockAgentRecord {
   ID: string;
@@ -66,7 +68,7 @@ const mocks = vi.hoisted(() => {
     Config: vi.fn(async () => undefined),
     GetTours: vi.fn(async (): Promise<TourDefinition[]> => []),
     GetTourByKey: vi.fn(async (): Promise<TourDefinition | null> => null),
-    GetRuns: vi.fn(async () => []),
+    GetRuns: vi.fn<() => Promise<TourRunRecord[]>>(async () => []),
     RecordEvents: vi.fn(async () => undefined),
   };
 
@@ -185,6 +187,9 @@ describe('ExplorerTourHost — Wave 2 Sage & DemonstrateStep', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.mockTourEngine.GetTours.mockResolvedValue([]);
+    mocks.mockTourEngine.GetTourByKey.mockResolvedValue(null);
+    mocks.mockTourEngine.GetRuns.mockResolvedValue([]);
     active$.next(false);
     mocks.agents.splice(0, mocks.agents.length,
       { ID: 'agent-other', Name: 'Analyst', Status: 'Active' },
@@ -344,6 +349,199 @@ describe('ExplorerTourHost — Wave 2 Sage & DemonstrateStep', () => {
     const stopped = await host.RequestVoiceGuide(false);
     expect(stopped).toBe(true);
     expect(mocks.endRealtimeSession).toHaveBeenCalledWith('explicit');
+    host.ngOnDestroy();
+  });
+
+  it('emits PendingOffer$ on FirstVisit to Home, launches with Trigger on AcceptPendingOffer, and suppresses repeats on DismissPendingOffer', async () => {
+    const homeFirstVisitTour: TourDefinition = {
+      ID: 'tour-home-1',
+      TourKey: 'home.welcome',
+      Name: 'Home Welcome Tour',
+      Description: 'Explore your Home workspace.',
+      EstimatedMinutes: 2,
+      ApplicationName: 'Home',
+      CurrentVersionID: 'ver-home-1',
+      Status: 'Active',
+      DefaultGuideMode: 'Visual',
+      RunInAuthenticatedHosts: true,
+      AllowAgentActions: false,
+      Steps: [
+        {
+          StepKey: 'welcome',
+          Sequence: 1,
+          StepType: 'Modal',
+          Title: 'Welcome Home',
+          Body: 'Start here.',
+          Placement: 'center',
+          Mode: 'Show',
+          OnMissing: 'Center',
+          IsOptional: false,
+          Configuration: {},
+          Completion: { Checks: [{ Type: 'NextButton' }] },
+        },
+      ],
+      Paths: [],
+      Triggers: [
+        {
+          ID: 'trig-home-1',
+          TriggerType: 'FirstVisit',
+          Delivery: 'Offer',
+          Status: 'Active',
+          Configuration: { ApplicationName: 'Home' },
+        },
+      ],
+    };
+
+    mocks.mockTourEngine.GetTours.mockResolvedValue([homeFirstVisitTour]);
+    mocks.mockTourEngine.GetTourByKey.mockResolvedValue(homeFirstVisitTour);
+    mocks.mockTourEngine.GetRuns.mockResolvedValue([]);
+
+    const host = new ExplorerTourHost();
+    const seenOffers: Array<TourPendingOffer | null> = [];
+    const sub = host.PendingOffer$.subscribe((offer) => seenOffers.push(offer));
+
+    await host.EvaluateProactiveTriggers();
+
+    const latestOffer = seenOffers[seenOffers.length - 1];
+    expect(latestOffer).toEqual({
+      TourKey: 'home.welcome',
+      Title: 'Home Welcome Tour',
+      Description: 'Explore your Home workspace.',
+      EstimatedMinutes: 2,
+      StepCount: 1,
+      Delivery: 'Offer',
+    });
+
+    // Accepting clears PendingOffer$ and launches with LaunchSource = 'Trigger'
+    const session = await host.AcceptPendingOffer('home.welcome');
+    expect(session).not.toBeNull();
+    expect(session?.GetRunRecord().LaunchSource).toBe('Trigger');
+    expect(seenOffers[seenOffers.length - 1]).toBeNull();
+
+    await host.StopActiveTour('done');
+
+    // Dismissing an offer clears it and suppresses repeat offers in the same session
+    host.DismissPendingOffer('home.welcome');
+    await host.EvaluateProactiveTriggers();
+    expect(seenOffers[seenOffers.length - 1]).toBeNull();
+
+    sub.unsubscribe();
+    host.ngOnDestroy();
+  });
+
+  it('GetAllToursByApplication groups eligible tours by app (active app, Core Workspace, alphabetical) with completion badges', async () => {
+    mocks.tokenServices.set(ApplicationManager, {
+      ActiveApp: activeApp$.asObservable(),
+      GetAllApps: () => [
+        { ID: 'app-home', Name: 'Home' },
+        { ID: 'app-admin', Name: 'Admin' },
+        { ID: 'app-sales', Name: 'Sales' },
+      ],
+      GetAppById: (id: string) =>
+        [
+          { ID: 'app-home', Name: 'Home' },
+          { ID: 'app-admin', Name: 'Admin' },
+          { ID: 'app-sales', Name: 'Sales' },
+        ].find((a) => a.ID === id),
+      GetAppByName: (name: string) =>
+        [
+          { ID: 'app-home', Name: 'Home' },
+          { ID: 'app-admin', Name: 'Admin' },
+          { ID: 'app-sales', Name: 'Sales' },
+        ].find((a) => a.Name === name),
+      GetActiveApp: () => ({ ID: 'app-home', Name: 'Home' }),
+    });
+
+    const makeTour = (tourKey: string, name: string, appName?: string): TourDefinition => ({
+      ID: `id-${tourKey}`,
+      TourKey: tourKey,
+      Name: name,
+      ApplicationName: appName ?? null,
+      CurrentVersionID: `ver-${tourKey}`,
+      Status: 'Active',
+      DefaultGuideMode: 'Visual',
+      RunInAuthenticatedHosts: true,
+      AllowAgentActions: false,
+      Steps: [
+        {
+          StepKey: 's1',
+          Sequence: 1,
+          StepType: 'Modal',
+          Title: 'Step 1',
+          Body: 'Body',
+          Placement: 'center',
+          Mode: 'Show',
+          OnMissing: 'Center',
+          IsOptional: false,
+          Configuration: {},
+          Completion: { Checks: [{ Type: 'NextButton' }] },
+        },
+      ],
+      Paths: [],
+    });
+
+    const tours: TourDefinition[] = [
+      makeTour('sales.deals', 'Sales Pipeline'),
+      makeTour('home.start', 'Home Basics', 'Home'),
+      makeTour('core.omnibar', 'Workspace Omnibar'),
+      makeTour('admin.roles', 'Role Setup', 'Admin'),
+    ];
+    // Give sales.deals a StartLocation.ApplicationName instead of ApplicationName
+    tours[0].StartLocation = { ApplicationName: 'Sales' };
+
+    mocks.mockTourEngine.GetTours.mockResolvedValue(tours);
+    mocks.mockTourEngine.GetRuns.mockResolvedValue([
+      {
+        RunID: 'run-1',
+        TourID: 'id-home.start',
+        TourKey: 'home.start',
+        TourVersionID: 'ver-home.start',
+        Status: 'Completed',
+        LaunchSource: 'Launcher',
+        GuideMode: 'Visual',
+        DirectorType: 'Visual',
+        CurrentStepKey: null,
+        StartedAt: '2026-11-24T09:58:00.000Z',
+        CompletedAt: '2026-11-24T10:00:00.000Z',
+        GoalMetAt: '2026-11-24T10:00:00.000Z',
+        PathTaken: ['s1'],
+        Steps: [],
+        IsHoldout: false,
+      },
+      {
+        RunID: 'run-2',
+        TourID: 'id-sales.deals',
+        TourKey: 'sales.deals',
+        TourVersionID: 'ver-sales.deals',
+        Status: 'In Progress',
+        LaunchSource: 'Launcher',
+        GuideMode: 'Visual',
+        DirectorType: 'Visual',
+        CurrentStepKey: 's1',
+        StartedAt: '2026-11-24T10:05:00.000Z',
+        PathTaken: ['s1'],
+        Steps: [],
+        IsHoldout: false,
+      },
+    ]);
+
+    const host = new ExplorerTourHost();
+    const groups = await host.GetAllToursByApplication();
+
+    expect(groups.map((g) => g.ApplicationName)).toEqual([
+      'Home',
+      'Core Workspace',
+      'Admin',
+      'Sales',
+    ]);
+    expect(groups[0].Tours[0]).toMatchObject({
+      Completed: true,
+      InProgress: false,
+      CompletedAt: '2026-11-24T10:00:00.000Z',
+    });
+    expect(groups[1].Tours[0]).toMatchObject({ Completed: false, InProgress: false });
+    expect(groups[3].Tours[0]).toMatchObject({ Completed: false, InProgress: true });
+
     host.ngOnDestroy();
   });
 });

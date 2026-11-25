@@ -22,7 +22,7 @@ import { GroupByUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/
 import { ApplicationManager, BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { LoadTourChannel, RealtimeSessionService } from '@memberjunction/ng-conversations';
 import { NavigationService, ResourceLoadedEvent } from '@memberjunction/ng-shared';
-import type { MJTourHostComponent } from '@memberjunction/ng-tours';
+import type { MJTourHostComponent, TourPendingOffer } from '@memberjunction/ng-tours';
 import {
   ITourAnchor,
   ITourAnchorDomBridge,
@@ -47,6 +47,7 @@ import {
   TourSessionView,
   TourSignals,
   TourStepDefinition,
+  TourTriggerCoordinator,
   TourVisibleAnchorInfo,
 } from '@memberjunction/tours-runtime';
 
@@ -121,6 +122,20 @@ export interface ExplorerLearningPathSummary {
 }
 
 /**
+ * Eligible tours grouped by owning application with per-user completion / progress
+ * state, powering the global "All Apps" catalog tab inside the Tours & Help launcher.
+ */
+export interface ExplorerAppTourGroup {
+  ApplicationName: string;
+  Tours: Array<{
+    Tour: TourDefinition;
+    Completed: boolean;
+    InProgress: boolean;
+    CompletedAt?: string;
+  }>;
+}
+
+/**
  * MJ Explorer host adapter implementing `ITourHost` (`@memberjunction/tours-runtime`).
  *
  * Bridges:
@@ -158,9 +173,11 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
   private signalSub: Subscription | null = null;
 
   private readonly eligibilityEvaluator = new TourEligibilityEvaluator();
+  private readonly triggerCoordinator = new TourTriggerCoordinator();
   private readonly entityEventsSubject = new Subject<TourEntityEventPayload>();
   private readonly activeSessionSubject = new BehaviorSubject<TourSession | null>(null);
   private readonly activeSessionViewSubject = new BehaviorSubject<TourSessionView | null>(null);
+  private readonly pendingOfferSubject = new BehaviorSubject<TourPendingOffer | null>(null);
 
   public readonly Capabilities: TourHostCapabilities = {
     Navigation: 'MJ App',
@@ -174,6 +191,7 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
   public readonly Location$: Observable<TourLocation>;
   public readonly ActiveSession$: Observable<TourSession | null> = this.activeSessionSubject.asObservable();
   public readonly ActiveSessionView$: Observable<TourSessionView | null> = this.activeSessionViewSubject.asObservable();
+  public readonly PendingOffer$: Observable<TourPendingOffer | null> = this.pendingOfferSubject.asObservable();
   public readonly VoiceGuideActive$: Observable<boolean>;
 
   constructor() {
@@ -208,6 +226,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     this.locationSub = this.Location$.subscribe((loc) => {
       this.currentLocationSnapshot = loc;
       void this.pushAgentContextSnapshot();
+      if (loc.ApplicationName || loc.NavItemKey || loc.EntityName) {
+        void this.EvaluateProactiveTriggers();
+      }
     });
 
     this.subscribeGlobalEntityEvents();
@@ -231,7 +252,12 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
           TourOverride: tourOverride,
           SimulatedRoles: simulatedRoles,
         });
+        return;
       }
+      void this.EvaluateProactiveTriggers({
+        SignalKey: evt.SignalKey,
+        SignalPayload: evt.Payload,
+      });
     });
   }
 
@@ -267,6 +293,13 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
       this.toolkit = null;
       if (this.agentBridge) {
         void this.ensureToolkitAndAttachBridge();
+      }
+      if (
+        this.currentLocationSnapshot.ApplicationName ||
+        this.currentLocationSnapshot.NavItemKey ||
+        this.currentLocationSnapshot.EntityName
+      ) {
+        void this.EvaluateProactiveTriggers();
       }
     }
   }
@@ -506,6 +539,88 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     }
   }
 
+  /**
+   * Evaluates proactive triggers against eligible tours for the current Explorer location,
+   * signal event, or entity event, publishing `PendingOffer$` or auto-starting `'Auto'` matches.
+   */
+  public async EvaluateProactiveTriggers(extra?: {
+    SignalKey?: string;
+    SignalPayload?: Record<string, unknown>;
+    EntityEvent?: TourEntityEventPayload;
+  }): Promise<void> {
+    if (this.Principal.Kind !== 'MJUser' || this.isTourInProgress()) {
+      return;
+    }
+
+    const engine = this.tourEngine;
+    await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
+
+    if (this.isTourInProgress()) {
+      return;
+    }
+
+    const location = this.GetCurrentLocation();
+    const [tours, runs] = await Promise.all([
+      engine.GetTours(location),
+      engine.GetRuns(),
+    ]);
+    const prefs = this.GetPreferences();
+
+    const match = this.triggerCoordinator.EvaluateForContext({
+      Tours: tours,
+      Host: this,
+      Location: location,
+      Principal: this.Principal,
+      Runs: runs,
+      Preferences: prefs,
+      ActiveSessionStatus: this.activeSessionViewSubject.getValue()?.Status ?? null,
+      SignalKey: extra?.SignalKey,
+      SignalPayload: extra?.SignalPayload,
+      EntityEvent: extra?.EntityEvent,
+    });
+
+    if (!match) {
+      return;
+    }
+
+    this.triggerCoordinator.RecordOfferShown(match.Tour.TourKey);
+
+    if (match.Delivery === 'Auto') {
+      await this.StartTour(match.Tour.TourKey, { LaunchSource: 'Trigger' });
+      return;
+    }
+
+    this.pendingOfferSubject.next({
+      TourKey: match.Tour.TourKey,
+      Title: match.Tour.Name,
+      Description: match.Tour.Description,
+      EstimatedMinutes: match.Tour.EstimatedMinutes,
+      StepCount: match.Tour.Steps.length,
+      Delivery: match.Delivery,
+    });
+  }
+
+  /** Accepts the pending proactive tour offer, clearing the card and starting the tour. */
+  public async AcceptPendingOffer(tourKey?: string): Promise<TourSession | null> {
+    const current = this.pendingOfferSubject.getValue();
+    const targetKey = tourKey ?? current?.TourKey;
+    this.pendingOfferSubject.next(null);
+    if (!targetKey) {
+      return null;
+    }
+    return this.StartTour(targetKey, { LaunchSource: 'Trigger' });
+  }
+
+  /** Dismisses the pending proactive tour offer and records session dismissal suppression. */
+  public DismissPendingOffer(tourKey?: string): void {
+    const current = this.pendingOfferSubject.getValue();
+    const targetKey = tourKey ?? current?.TourKey;
+    if (targetKey) {
+      this.triggerCoordinator.DismissOffer(targetKey);
+    }
+    this.pendingOfferSubject.next(null);
+  }
+
   /** Expands the embedded Sage voice bar back into the full realtime session overlay. */
   public ExpandVoiceOverlay(): void {
     this.realtimeSession?.SetMinimized(false);
@@ -609,6 +724,7 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
       return;
     }
 
+    this.pendingOfferSubject.next(null);
     this.activeSessionViewSubject.next(session.SessionView);
     if (session.SessionView.Status === 'In Progress' && this.realtimeSession && this.isRealtimeActive) {
       this.realtimeSession.SetMinimized(true);
@@ -672,6 +788,7 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     }
 
     const prefs = this.GetPreferences();
+    this.pendingOfferSubject.next(null);
     const preferredMode: TourSessionGuideMode =
       options.Mode ??
       (tour.DefaultGuideMode === 'Chat' || tour.DefaultGuideMode === 'Voice' || tour.DefaultGuideMode === 'Visual'
@@ -800,6 +917,65 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     const engine = this.tourEngine;
     await engine.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
     return engine.GetRuns();
+  }
+
+  /**
+   * Returns all eligible active tours grouped by application name (active app first,
+   * then `'Core Workspace'`, then alphabetical), annotated with `Completed` / `InProgress`.
+   */
+  public async GetAllToursByApplication(): Promise<ExplorerAppTourGroup[]> {
+    const [eligible, runs] = await Promise.all([
+      this.GetEligibleTours(false),
+      this.GetRuns(),
+    ]);
+
+    const completedAtByTourKey = new Map<string, string>();
+    const inProgressKeys = new Set<string>();
+    for (const run of runs) {
+      if (run.Status === 'Completed') {
+        const existingAt = completedAtByTourKey.get(run.TourKey);
+        const nextAt = run.CompletedAt ?? '';
+        if (!existingAt || nextAt > existingAt) {
+          completedAtByTourKey.set(run.TourKey, nextAt);
+        }
+      } else if (run.Status === 'In Progress') {
+        inProgressKeys.add(run.TourKey);
+      }
+    }
+
+    const groupsMap = new Map<string, ExplorerAppTourGroup['Tours']>();
+    for (const { Tour } of eligible) {
+      const appName = Tour.ApplicationName || Tour.StartLocation?.ApplicationName || 'Core Workspace';
+      const completed = completedAtByTourKey.has(Tour.TourKey);
+      const completedAtRaw = completedAtByTourKey.get(Tour.TourKey);
+      const inProgress = !completed && inProgressKeys.has(Tour.TourKey);
+
+      const list = groupsMap.get(appName) ?? [];
+      list.push({
+        Tour,
+        Completed: completed,
+        InProgress: inProgress,
+        CompletedAt: completedAtRaw ? completedAtRaw : undefined,
+      });
+      groupsMap.set(appName, list);
+    }
+
+    const activeAppName = (this.currentLocationSnapshot.ApplicationName ?? '').trim().toLowerCase();
+    return Array.from(groupsMap.entries())
+      .map(([ApplicationName, Tours]) => ({ ApplicationName, Tours }))
+      .sort((a, b) => {
+        const aIsActive = activeAppName.length > 0 && a.ApplicationName.toLowerCase() === activeAppName;
+        const bIsActive = activeAppName.length > 0 && b.ApplicationName.toLowerCase() === activeAppName;
+        if (aIsActive !== bIsActive) {
+          return aIsActive ? -1 : 1;
+        }
+        const aIsCore = a.ApplicationName === 'Core Workspace';
+        const bIsCore = b.ApplicationName === 'Core Workspace';
+        if (aIsCore !== bIsCore) {
+          return aIsCore ? -1 : 1;
+        }
+        return a.ApplicationName.localeCompare(b.ApplicationName);
+      });
   }
 
   /**
@@ -950,6 +1126,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
 
   /** Persists per-user tour preferences via `UserInfoEngine` (debounced). */
   public SavePreferences(prefs: TourPreferences): void {
+    if (!prefs.OffersEnabled) {
+      this.pendingOfferSubject.next(null);
+    }
     this.userInfoEngine.SetSettingDebounced(
       TOUR_PREFERENCES_SETTING_KEY,
       JSON.stringify(prefs),
@@ -1046,12 +1225,16 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
         return;
       }
       const recordData = payload.baseEntity.GetAll();
-      this.entityEventsSubject.next({
+      const entityEvent: TourEntityEventPayload = {
         EntityName: payload.baseEntity.EntityInfo.Name,
         EventType: payload.type,
         SaveSubType: payload.saveSubType,
         Record: recordData,
-      });
+      };
+      this.entityEventsSubject.next(entityEvent);
+      if ((payload.type === 'save' || payload.type === 'delete') && !this.isTourInProgress()) {
+        void this.EvaluateProactiveTriggers({ EntityEvent: entityEvent });
+      }
     });
   }
 }

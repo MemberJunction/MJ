@@ -10,10 +10,12 @@ import type {
 import axe from 'axe-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnchorRegistry } from '../anchors/anchor-registry';
+import { MJTourHostComponent } from '../host/mj-tour-host.component';
 import { TourSpotlightOverlayComponent } from '../overlay/tour-spotlight-overlay.component';
 import { OverlayTourPresenterComponent } from '../presenters/overlay-tour-presenter.component';
 import { TourVoiceDockComponent, type TourVoiceBarContext } from '../presenters/tour-voice-dock.component';
 import { ActionStepRenderer } from './action-step-renderer.component';
+import { FormatSafeTourMarkdown } from './base-step-renderer';
 import { BeaconStepRenderer } from './beacon-step-renderer.component';
 import { ChoiceStepRenderer } from './choice-step-renderer.component';
 import { MediaStepRenderer } from './chunks/media-step-renderer.component';
@@ -528,5 +530,68 @@ describe('Guided Tour Step Renderers & OverlayPresenter (WCAG 2.2 AA)', () => {
     const secondD = pathEl.getAttribute('d') ?? '';
     expect(secondD).not.toBe(firstD);
     expect(secondD).toContain('M828,12');
+  });
+
+  it('FormatSafeTourMarkdown renders inline formatting/links cleanly and stays linear on pathological ReDoS inputs', () => {
+    const formatted = FormatSafeTourMarkdown(
+      'Click **Save** or *Cancel*, press `⌘K`, see [Docs](https://memberjunction.org).\n\nSecond <script>alert(1)</script> line.\nNext.',
+    );
+    expect(formatted).toContain('<strong>Save</strong>');
+    expect(formatted).toContain('<em>Cancel</em>');
+    expect(formatted).toContain('<code>⌘K</code>');
+    expect(formatted).toContain('<a href="https://memberjunction.org" target="_blank" rel="noopener noreferrer">Docs</a>');
+    expect(formatted).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(formatted).toContain('<br>');
+
+    const start = performance.now();
+    const evil1 = FormatSafeTourMarkdown('['.repeat(50_000));
+    const evil2 = FormatSafeTourMarkdown('[\\](http://'.repeat(10_000));
+    const elapsedMs = performance.now() - start;
+
+    expect(evil1.length).toBeGreaterThan(50_000);
+    expect(evil2.length).toBeGreaterThan(50_000);
+    expect(elapsedMs).toBeLessThan(50);
+  });
+
+  it('MJTourHostComponent renders non-modal PendingOffer toast, passes axe-core, and emits OfferAccepted/OfferDismissed', async () => {
+    const fixture = TestBed.createComponent(MJTourHostComponent);
+    fixture.componentRef.setInput('PendingOffer', {
+      TourKey: 'core.welcome',
+      Title: 'Explore Dashboard Tour',
+      Description: 'Learn key shortcuts in under two minutes.',
+      EstimatedMinutes: 2,
+      StepCount: 4,
+      Delivery: 'Offer',
+    });
+    fixture.detectChanges();
+
+    const toast = fixture.nativeElement.querySelector('.mjt-offer-toast') as HTMLElement;
+    expect(toast).not.toBeNull();
+    expect(toast.getAttribute('role')).toBe('region');
+    expect(toast.textContent).toContain('Explore Dashboard Tour');
+    expect(toast.textContent).toContain('~2 min');
+
+    const accepted = vi.fn();
+    const dismissed = vi.fn();
+    fixture.componentInstance.OfferAccepted.subscribe(accepted);
+    fixture.componentInstance.OfferDismissed.subscribe(dismissed);
+
+    const results = await axe.run(toast, {
+      rules: {
+        'color-contrast': { enabled: false },
+      },
+    });
+    expect(results.violations).toEqual([]);
+
+    const buttons = toast.querySelectorAll('.mjt-offer-actions button') as NodeListOf<HTMLButtonElement>;
+    buttons[0].click();
+    expect(accepted).toHaveBeenCalledWith('core.welcome');
+
+    buttons[1].click();
+    expect(dismissed).toHaveBeenCalledWith('core.welcome');
+
+    const closeBtn = toast.querySelector('.mjt-close-btn') as HTMLButtonElement;
+    closeBtn.click();
+    expect(dismissed).toHaveBeenCalledTimes(2);
   });
 });

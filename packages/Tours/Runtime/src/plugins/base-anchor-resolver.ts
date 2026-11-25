@@ -13,6 +13,11 @@ import type {
     TourValidationResult,
 } from '../types';
 import type { TourAnchorPlan } from './plugin-types';
+import {
+    ExtractDoubleBraceTokens,
+    InterpolateDoubleBraceString,
+    StripContextPrefix,
+} from './template-utils';
 
 /**
  * Interpolates `{{Context...}}` template placeholders in an anchor descriptor
@@ -26,9 +31,9 @@ export function InterpolateAnchorTemplate(
         if (!val || !val.includes('{{')) {
             return val;
         }
-        return val.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_match, rawPath: string) => {
-            const path = rawPath.trim().replace(/^Context\./i, '');
-            const value = readNestedPath(context, path) ?? readNestedPath(context, rawPath.trim());
+        return InterpolateDoubleBraceString(val, (rawPath) => {
+            const path = StripContextPrefix(rawPath);
+            const value = readNestedPath(context, path) ?? readNestedPath(context, rawPath);
             return value == null ? '' : String(value);
         });
     };
@@ -99,10 +104,7 @@ export function FindUnresolvedTemplateVariables(anchor: ITourAnchor): string[] {
         if (!val) {
             continue;
         }
-        const matches = val.matchAll(/\{\{\s*([^}]+)\s*\}\}/g);
-        for (const m of matches) {
-            missing.push(m[1].trim());
-        }
+        missing.push(...ExtractDoubleBraceTokens(val));
     }
     return missing;
 }

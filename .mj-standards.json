@@ -111,7 +111,17 @@
         "allowedPrefixes": [
           "core.",
           "admin.",
-          "builder."
+          "builder.",
+          "ai.",
+          "kh.",
+          "testing.",
+          "ps.",
+          "video.",
+          "lists.",
+          "actions.",
+          "workflows.",
+          "scheduling.",
+          "comm."
         ]
       }
     }

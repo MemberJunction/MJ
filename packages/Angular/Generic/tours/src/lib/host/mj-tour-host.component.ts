@@ -20,6 +20,7 @@ import {
 } from '@angular/core';
 import { GetGlobalObjectStore, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import {
   InlineTourSource,
   MemoryProgressStore,
@@ -62,6 +63,18 @@ EnsureStandardTourPresentersRegistered();
 const TOUR_REALTIME_BRIDGE_KEY = '___MJ_TOUR_REALTIME_BRIDGE';
 
 /**
+ * Non-modal proactive tour offer descriptor rendered by `<mj-tour-host>` when no tour is active.
+ */
+export interface TourPendingOffer {
+  TourKey: string;
+  Title: string;
+  Description?: string;
+  EstimatedMinutes?: number;
+  StepCount?: number;
+  Delivery: 'Offer' | 'Beacon' | 'Notification';
+}
+
+/**
  * Root Guided Tours player host (`<mj-tour-host>`).
  * Connects a host adapter (`MJ_TOUR_HOST` or `WebTourHost`), a definition source &
  * progress store (`TourEngine`/provider, `SurfaceTourSource`, or `InlineTourSource`),
@@ -70,12 +83,69 @@ const TOUR_REALTIME_BRIDGE_KEY = '___MJ_TOUR_REALTIME_BRIDGE';
 @Component({
   selector: 'mj-tour-host',
   standalone: true,
-  imports: [TourGlobalStylesComponent],
+  imports: [TourGlobalStylesComponent, MJButtonDirective],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <mj-tour-global-styles />
     <ng-container #presenterHost></ng-container>
+    @if (PendingOffer; as offer) {
+      @if (!currentView()) {
+        <aside class="mjt-offer-toast" role="region" aria-label="Suggested guided tour">
+          <div class="mjt-offer-header">
+            <div class="mjt-offer-eyebrow-row">
+              <span class="mjt-step-badge-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+                </svg>
+              </span>
+              <div class="mjt-offer-meta">
+                <span class="mjt-progress">GUIDED TOUR</span>
+                @if (offer.EstimatedMinutes) {
+                  <span class="mjt-duration-pill">~{{ offer.EstimatedMinutes }} min</span>
+                }
+              </div>
+            </div>
+            <button
+              type="button"
+              class="mjt-close-btn"
+              aria-label="Dismiss suggested tour"
+              (click)="OfferDismissed.emit(offer.TourKey)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+          <h2 class="mjt-offer-title">{{ offer.Title }}</h2>
+          @if (offer.Description) {
+            <p class="mjt-offer-desc">{{ offer.Description }}</p>
+          }
+          <div class="mjt-offer-actions">
+            <button
+              type="button"
+              mjButton
+              Variant="primary"
+              Size="sm"
+              (click)="OfferAccepted.emit(offer.TourKey)"
+            >
+              Start tour
+            </button>
+            <button
+              type="button"
+              mjButton
+              Variant="flat"
+              Size="sm"
+              (click)="OfferDismissed.emit(offer.TourKey)"
+            >
+              Not now
+            </button>
+          </div>
+        </aside>
+      }
+    }
   `,
 })
 export class MJTourHostComponent
@@ -110,11 +180,15 @@ export class MJTourHostComponent
   @Input() public VoiceGuideAvailable = false;
   /** Whether Sage Voice Guide is currently active for the session. */
   @Input() public VoiceGuideActive = false;
+  /** Optional proactive non-modal tour offer displayed when no tour is running. */
+  @Input() public PendingOffer: TourPendingOffer | null = null;
 
   @Output() public TourEvent = new EventEmitter<TourSessionEventArgs>();
   @Output() public SessionChanged = new EventEmitter<TourSessionView | null>();
   @Output() public VoiceGuideRequested = new EventEmitter<boolean>();
   @Output() public DemonstrateRequested = new EventEmitter<{ ConfirmedMutation?: boolean }>();
+  @Output() public OfferAccepted = new EventEmitter<string>();
+  @Output() public OfferDismissed = new EventEmitter<string>();
 
   protected readonly currentView = signal<TourSessionView | null>(null);
 

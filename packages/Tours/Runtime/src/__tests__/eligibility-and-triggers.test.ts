@@ -1,6 +1,14 @@
 import { MJGlobal } from '@memberjunction/global';
 import { describe, expect, it } from 'vitest';
-import { BaseTourTrigger, MergeTourOverrides, RegisterStandardTourPlugins, TourEligibilityEvaluator } from '../index';
+import {
+    BaseTourTrigger,
+    FindUnresolvedTemplateVariables,
+    InterpolateAnchorTemplate,
+    MergeTourOverrides,
+    RegisterStandardTourPlugins,
+    TourEligibilityEvaluator,
+    TourTriggerCoordinator,
+} from '../index';
 
 RegisterStandardTourPlugins();
 import type { TourDefinition, TourOverrideDefinition, TourTriggerDefinition } from '../types';
@@ -397,5 +405,168 @@ describe('Eligibility Policies & Triggers', () => {
         });
         expect(permRes.Eligible).toBe(false);
         expect(permRes.PolicyName).toBe('PermissionPolicy');
+    });
+
+    it('handles pathological {{...}} template strings in linear O(n) time (<50ms)', () => {
+        const pathological1 = '{{{{' + '\t'.repeat(50_000);
+        const pathological2 = '{{{{\t'.repeat(10_000);
+
+        const t0 = performance.now();
+        const res1 = InterpolateAnchorTemplate(
+            { Strategy: 'Registered', Key: pathological1 },
+            { Record: { EntityName: 'Deals' } },
+        );
+        const res2 = InterpolateAnchorTemplate(
+            { Strategy: 'Registered', Key: pathological2 },
+            { Record: { EntityName: 'Deals' } },
+        );
+        const toks1 = FindUnresolvedTemplateVariables({ Strategy: 'Registered', Key: pathological1 });
+        const toks2 = FindUnresolvedTemplateVariables({ Strategy: 'Registered', Key: pathological2 });
+        const elapsedMs = performance.now() - t0;
+
+        expect(res1.Key).toBe(pathological1);
+        expect(res2.Key).toBe(pathological2);
+        expect(toks1).toEqual([]);
+        expect(toks2).toEqual([]);
+        expect(elapsedMs).toBeLessThan(50);
+
+        // Nested opening braces still resolve inner token cleanly
+        const nested = InterpolateAnchorTemplate(
+            { Strategy: 'FormField', Entity: '{{{{Context.Record.EntityName}}', Field: 'Amount' },
+            { Record: { EntityName: 'Deals' } },
+        );
+        expect(nested.Entity).toBe('{{Deals');
+    });
+
+    it('FirstVisitTrigger matches Configuration.Application case-insensitively', () => {
+        const host = new MockTourHost();
+        const tour = makeOfferableTour();
+        const firstVisit = MJGlobal.Instance.ClassFactory.CreateInstance<BaseTourTrigger>(
+            BaseTourTrigger,
+            'FirstVisit',
+        )!;
+
+        const trigger: TourTriggerDefinition = {
+            TriggerType: 'FirstVisit',
+            Delivery: 'Offer',
+            Status: 'Active',
+            Configuration: { Application: 'Home' },
+        };
+
+        expect(
+            firstVisit.Evaluate({
+                Tour: tour,
+                Trigger: trigger,
+                Host: host,
+                Location: { ApplicationName: 'home' },
+                Principal: host.Principal,
+                Runs: [],
+            }).Matched,
+        ).toBe(true);
+
+        expect(
+            firstVisit.Evaluate({
+                Tour: tour,
+                Trigger: trigger,
+                Host: host,
+                Location: { ApplicationName: 'Sales' },
+                Principal: host.Principal,
+                Runs: [],
+            }).Matched,
+        ).toBe(false);
+    });
+
+    it('TourTriggerCoordinator enforces OffersEnabled, MaxOffersPerSession, DismissOffer, and ActiveSessionStatus', () => {
+        const host = new MockTourHost({ InitialLocation: { ApplicationName: 'Home' } });
+        const tour = makeOfferableTour({
+            TourKey: 'core.welcome',
+            Triggers: [
+                {
+                    TriggerType: 'FirstVisit',
+                    Delivery: 'Offer',
+                    Status: 'Active',
+                    Configuration: { Application: 'Home' },
+                },
+            ],
+        });
+
+        const prefs = {
+            OffersEnabled: true,
+            PreferredGuideMode: 'Visual' as const,
+            ShowBeacons: true,
+        };
+
+        const coordinator = new TourTriggerCoordinator({
+            MaxOffersPerSession: 1,
+            MinOfferIntervalMs: 120_000,
+        });
+
+        // Blocked while another session is In Progress
+        expect(
+            coordinator.EvaluateForContext({
+                Tours: [tour],
+                Host: host,
+                Location: { ApplicationName: 'Home' },
+                Principal: host.Principal,
+                Runs: [],
+                Preferences: prefs,
+                ActiveSessionStatus: 'In Progress',
+            }),
+        ).toBeNull();
+
+        // Blocked when OffersEnabled is false
+        expect(
+            coordinator.EvaluateForContext({
+                Tours: [tour],
+                Host: host,
+                Location: { ApplicationName: 'Home' },
+                Principal: host.Principal,
+                Runs: [],
+                Preferences: { ...prefs, OffersEnabled: false },
+            }),
+        ).toBeNull();
+
+        // Matches when enabled & within budget
+        const tStart = new Date('2026-11-25T10:00:00Z');
+        const match = coordinator.EvaluateForContext({
+            Tours: [tour],
+            Host: host,
+            Location: { ApplicationName: 'Home' },
+            Principal: host.Principal,
+            Runs: [],
+            Preferences: prefs,
+            Now: tStart,
+        });
+        expect(match).not.toBeNull();
+        expect(match?.Tour.TourKey).toBe('core.welcome');
+        expect(match?.Delivery).toBe('Offer');
+
+        // Enforces MaxOffersPerSession after RecordOfferShown
+        coordinator.RecordOfferShown('core.welcome', tStart);
+        expect(
+            coordinator.EvaluateForContext({
+                Tours: [tour],
+                Host: host,
+                Location: { ApplicationName: 'Home' },
+                Principal: host.Principal,
+                Runs: [],
+                Preferences: prefs,
+                Now: new Date('2026-11-25T10:05:00Z'),
+            }),
+        ).toBeNull();
+
+        // ResetSessionBudget restores budget, then DismissOffer blocks dismissed tour
+        coordinator.ResetSessionBudget();
+        coordinator.DismissOffer('core.welcome');
+        expect(
+            coordinator.EvaluateForContext({
+                Tours: [tour],
+                Host: host,
+                Location: { ApplicationName: 'Home' },
+                Principal: host.Principal,
+                Runs: [],
+                Preferences: prefs,
+            }),
+        ).toBeNull();
     });
 });

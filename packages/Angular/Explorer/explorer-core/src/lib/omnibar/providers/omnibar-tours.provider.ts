@@ -1,7 +1,8 @@
 import { RegisterClass } from '@memberjunction/global';
 import type { MentionSuggestion, ComposerSuggestionRequest } from '@memberjunction/ng-composer';
 import { TourSignals } from '@memberjunction/tours-runtime';
-import { OmnibarProvider, OMNIBAR_NAV_KEY, OmnibarNavPayload } from '../omnibar-provider';
+import { OmnibarProvider, GetOmnibarNavPayload, OMNIBAR_NAV_KEY, OmnibarNavPayload } from '../omnibar-provider';
+import { OmnibarSemanticIndexService } from '../omnibar-semantic-index.service';
 
 const HOW_DO_I_PATTERN = /^(?:how\s+do\s+i|how\s+to)\b\s*/i;
 
@@ -50,6 +51,7 @@ export class OmnibarToursProvider extends OmnibarProvider {
         ]);
 
         const suggestions: MentionSuggestion[] = [];
+        const seenTourTargets = new Set<string>();
 
         const scoredTours = eligible
             .map(({ Tour }) => {
@@ -76,6 +78,7 @@ export class OmnibarToursProvider extends OmnibarProvider {
             if (suggestions.length >= request.MaxResults) break;
             const nav: OmnibarNavPayload = { kind: 'tour', tourKey: Tour.TourKey };
             const minutes = Tour.EstimatedMinutes ? ` · ~${Tour.EstimatedMinutes} min` : '';
+            seenTourTargets.add(`${Tour.TourKey}::`);
             suggestions.push({
                 type: 'tour',
                 id: `tour:${Tour.TourKey}`,
@@ -85,6 +88,28 @@ export class OmnibarToursProvider extends OmnibarProvider {
                 icon: 'fa-solid fa-route',
                 data: { [OMNIBAR_NAV_KEY]: nav, group: 'Guided Tours' },
             });
+        }
+
+        if (OmnibarSemanticIndexService.Instance.IsReady && suggestions.length < request.MaxResults) {
+            const semanticResult = await OmnibarSemanticIndexService.Instance.Query(Needle, {
+                FilterKinds: ['tour'],
+                MaxResults: request.MaxResults,
+            }).catch(() => null);
+            if (semanticResult) {
+                for (const sem of semanticResult.Suggestions) {
+                    if (suggestions.length >= request.MaxResults) break;
+                    const nav = GetOmnibarNavPayload(sem);
+                    if (!nav || nav.kind !== 'tour') {
+                        continue;
+                    }
+                    const dedupeKey = `${nav.tourKey}::${nav.startAtStepKey ?? ''}`;
+                    if (seenTourTargets.has(dedupeKey)) {
+                        continue;
+                    }
+                    seenTourTargets.add(dedupeKey);
+                    suggestions.push(sem);
+                }
+            }
         }
 
         for (const lp of learningPaths) {

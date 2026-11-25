@@ -14,7 +14,7 @@
 
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
-import { DashboardEngine, UserViewEngine } from '@memberjunction/core-entities';
+import { DashboardEngine, TourEngine, UserViewEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SimpleVectorService, type VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import { EdgeAIWorkerHost } from '@memberjunction/ng-conversations';
@@ -25,7 +25,7 @@ import { OMNIBAR_NAV_KEY, type OmnibarNavPayload } from './omnibar-provider';
 import { CanOpenInDashboardTab } from './omnibar-dashboard-matches';
 
 /** Semantic metadata categories indexed locally in the Omnibar. */
-export type OmnibarMetadataKind = 'entity' | 'view' | 'dashboard' | 'app' | 'nav' | 'agent';
+export type OmnibarMetadataKind = 'entity' | 'view' | 'dashboard' | 'app' | 'nav' | 'agent' | 'tour';
 
 /** One browser-resident metadata item indexed in {@link OmnibarSemanticIndexService}. */
 export interface OmnibarSemanticEntry {
@@ -70,6 +70,9 @@ export const OMNIBAR_SEMANTIC_QUERY_TIMEOUT_MS = 50;
 
 /** Batch size when embedding local metadata items inside the Web Worker. */
 const INDEX_EMBED_BATCH_SIZE = 32;
+
+/** Maximum character length for guided tour step preview descriptions in the Omnibar. */
+const TOUR_STEP_DESCRIPTION_MAX_LENGTH = 120;
 
 /**
  * Singleton local semantic vector index (`float32` `SimpleVectorService` + shared
@@ -260,6 +263,56 @@ export class OmnibarSemanticIndexService extends BaseSingleton<OmnibarSemanticIn
                     Nav: { kind: 'agent', agentName },
                     SearchText: `${agentName} AI agent: ${desc}`.trim(),
                 });
+            }
+        } catch {
+            // fail-soft
+        }
+
+        // 6. Guided Tours & Steps (cached TourEngine)
+        try {
+            const tourEngine = sources.Provider
+                ? (TourEngine.GetProviderInstance<TourEngine>(sources.Provider, TourEngine) as TourEngine)
+                : TourEngine.Instance;
+            if (tourEngine.Loaded) {
+                const tours = await tourEngine.GetTours({});
+                for (const tour of tours) {
+                    if (tour.Status !== 'Active') {
+                        continue;
+                    }
+                    const tourDescription = [
+                        tour.ApplicationName,
+                        tour.Description || 'Guided tour',
+                        tour.EstimatedMinutes ? `~${tour.EstimatedMinutes} min` : '',
+                    ]
+                        .filter(Boolean)
+                        .join(' · ');
+                    entries.push({
+                        Key: `tour:${tour.TourKey}`,
+                        Kind: 'tour',
+                        Group: 'Guided Tours',
+                        Title: tour.Name,
+                        Description: tourDescription,
+                        Icon: 'fa-solid fa-route',
+                        Nav: { kind: 'tour', tourKey: tour.TourKey },
+                        SearchText: `${tour.Name} (${tour.TourKey}) guided tour ${tour.ApplicationName ?? ''}: ${tour.Description ?? ''} ${tour.Steps.map((s) => s.Title).join('; ')}`.trim(),
+                    });
+
+                    for (const step of tour.Steps) {
+                        if (!step.Title || !step.Body) {
+                            continue;
+                        }
+                        entries.push({
+                            Key: `tour-step:${tour.TourKey}:${step.StepKey}`,
+                            Kind: 'tour',
+                            Group: 'Guided Tour Steps',
+                            Title: `${tour.Name} → ${step.Title}`,
+                            Description: step.Body.slice(0, TOUR_STEP_DESCRIPTION_MAX_LENGTH),
+                            Icon: 'fa-solid fa-location-crosshairs',
+                            Nav: { kind: 'tour', tourKey: tour.TourKey, startAtStepKey: step.StepKey },
+                            SearchText: `${tour.Name} step ${step.Title}: ${step.Body} ${step.GuideNotes ?? ''}`.trim(),
+                        });
+                    }
+                }
             }
         } catch {
             // fail-soft

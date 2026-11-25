@@ -26,6 +26,7 @@ export * from './stores';
 // Session & Agent Toolkit
 export * from './tour-session';
 export * from './agent-toolkit';
+export * from './trigger-coordinator';
 
 // Plugin Base Classes & Standard Library
 export * from './plugins/plugin-types';

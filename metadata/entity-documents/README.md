@@ -21,6 +21,8 @@ stack — no API key, no per-token cost, runs via Transformers.js:
 | `Actions Search` | `MJ: Actions` | `templates/mj-actions-search.njk` |
 | `AI Prompts Search` | `MJ: AI Prompts` | `templates/mj-ai-prompts-search.njk` |
 | `AI Models Search` | `MJ: AI Models` | `templates/mj-ai-models-search.njk` |
+| `Tours Search` | `MJ: Tours` | `templates/mj-tours-search.njk` |
+| `Tour Steps Search` | `MJ: Tour Steps` | `templates/mj-tour-steps-search.njk` |
 
 The seeded **`Entity Vector Sync - Daily`** scheduled job (in
 [`../scheduled-jobs/`](../scheduled-jobs/)) runs `Vectorize Entity` with

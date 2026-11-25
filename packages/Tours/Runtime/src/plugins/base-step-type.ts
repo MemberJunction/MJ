@@ -19,6 +19,7 @@ import type {
     TourStepAgentBrief,
     TourStepContext,
 } from './plugin-types';
+import { InterpolateDoubleBraceString, StripContextPrefix } from './template-utils';
 
 /**
  * Logic half of a Guided Tour step type (L0 pure TypeScript, DOM-free).
@@ -149,8 +150,8 @@ export abstract class BaseTourStepType<
 }
 
 function interpolatePrepareValue(template: string, context: Record<string, unknown>): string {
-    return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_match, rawPath: string) => {
-        const path = rawPath.trim().replace(/^Context\./, '');
+    return InterpolateDoubleBraceString(template, (rawPath) => {
+        const path = StripContextPrefix(rawPath);
         const parts = path.split('.');
         let current: unknown = context;
         for (const part of parts) {

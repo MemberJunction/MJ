@@ -472,6 +472,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
                 void this.tourHost?.StartTour(nav.tourKey, {
                     Mode: nav.guideMode as TourSessionGuideMode | undefined,
                     LaunchSource: nav.learningPathKey ? 'Learning Path' : 'Omnibar',
+                    StartAtStepKey: nav.startAtStepKey,
                 });
                 break;
         }

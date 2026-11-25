@@ -497,6 +497,7 @@ export interface TourTriggerDefinition {
     Configuration?: Record<string, unknown>;
     Delivery: TourTriggerDelivery;
     CooldownDays?: number;
+    Priority?: number;
     Status: 'Active' | 'Disabled';
 }
 

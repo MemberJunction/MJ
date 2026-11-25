@@ -53,6 +53,7 @@ import { FindDashboardTabForUrl, OpenDashboardForUrl, ParseAppDashboardUrl } fro
 import { ApplyDeepLinkToRestoredWorkspace } from './deep-link-workspace';
 import {
   DEFAULT_TOUR_PREFERENCES,
+  ExplorerAppTourGroup,
   ExplorerLearningPathSummary,
   ExplorerTourHost,
 } from '../tours/explorer-tour-host.service';
@@ -62,7 +63,7 @@ import {
   TourSessionGuideMode,
   TourSessionView,
 } from '@memberjunction/tours-runtime';
-import type { MJTourHostComponent } from '@memberjunction/ng-tours';
+import type { MJTourHostComponent, TourPendingOffer } from '@memberjunction/ng-tours';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -859,11 +860,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   public ToursLoading = false;
   public ActiveTourView: TourSessionView | null = null;
   public SuggestedTours: Array<{ Tour: TourDefinition; RecommendedPrerequisites?: string[] }> = [];
+  public AllAppTourGroups: ExplorerAppTourGroup[] = [];
+  public ToursPopoverTab: 'screen' | 'all' | 'paths' = 'screen';
   public LauncherLearningPaths: ExplorerLearningPathSummary[] = [];
   public TourPrefs: TourPreferences = { ...DEFAULT_TOUR_PREFERENCES };
   public readonly TourGuideModeOptions: TourSessionGuideMode[] = ['Visual', 'Chat', 'Voice'];
   public TourVoiceGuideAvailable = false;
   public TourVoiceGuideActive = false;
+  public PendingTourOffer: TourPendingOffer | null = null;
 
   public get TourVoiceAgentName(): string {
     return this.tourHost?.TourVoiceAgentName ?? 'Sage';
@@ -1058,6 +1062,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         }),
         this.tourHost.VoiceGuideActive$.pipe(takeUntil(this.destroy$)).subscribe((active) => {
           this.TourVoiceGuideActive = active;
+          this.cdr.markForCheck();
+        }),
+        this.tourHost.PendingOffer$.pipe(takeUntil(this.destroy$)).subscribe((offer) => {
+          this.PendingTourOffer = offer;
           this.cdr.markForCheck();
         }),
         this.tourHost.Location$.pipe(takeUntil(this.destroy$)).subscribe(() => {
@@ -4241,6 +4249,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.UserMenuVisible = false;
     this.ToursMenuOpen = !this.ToursMenuOpen;
     if (this.ToursMenuOpen) {
+      this.ToursPopoverTab = 'screen';
       void this.RefreshToursLauncher();
     }
     this.cdr.markForCheck();
@@ -4253,6 +4262,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
   }
 
+  public SetToursPopoverTab(tab: 'screen' | 'all' | 'paths'): void {
+    this.ToursPopoverTab = tab;
+    this.cdr.markForCheck();
+  }
+
   public async RefreshToursLauncher(): Promise<void> {
     if (!this.tourHost) {
       return;
@@ -4261,14 +4275,20 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.TourPrefs = this.tourHost.GetPreferences();
     this.cdr.markForCheck();
     try {
-      const [suggested, paths] = await Promise.all([
+      const [suggested, allGroups, paths] = await Promise.all([
         this.tourHost.GetEligibleTours(true),
+        this.tourHost.GetAllToursByApplication(),
         this.tourHost.GetLearningPathSummaries(),
       ]);
       this.SuggestedTours = suggested.slice(0, 6);
+      this.AllAppTourGroups = allGroups;
       this.LauncherLearningPaths = paths.slice(0, 4);
+      if (this.SuggestedTours.length === 0 && this.AllAppTourGroups.length > 0 && this.ToursPopoverTab === 'screen') {
+        this.ToursPopoverTab = 'all';
+      }
     } catch {
       this.SuggestedTours = [];
+      this.AllAppTourGroups = [];
       this.LauncherLearningPaths = [];
     } finally {
       this.ToursLoading = false;
@@ -4330,6 +4350,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   public OnExpandTourVoiceOverlay(): void {
     this.tourHost?.ExpandVoiceOverlay();
+  }
+
+  public OnTourOfferAccepted(tourKey: string): void {
+    void this.tourHost?.AcceptPendingOffer(tourKey);
+  }
+
+  public OnTourOfferDismissed(tourKey: string): void {
+    this.tourHost?.DismissPendingOffer(tourKey);
   }
 
   showNotifications(): void {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope

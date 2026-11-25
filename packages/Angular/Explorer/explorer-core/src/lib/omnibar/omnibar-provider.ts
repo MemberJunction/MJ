@@ -22,7 +22,7 @@ export type OmnibarNavPayload =
     | { kind: 'file'; fileName: string; rawMetadata?: string }
     | { kind: 'dashboard'; dashboardId: string; dashboardName: string }
     | { kind: 'view'; viewId: string; viewName: string }
-    | { kind: 'tour'; tourKey: string; guideMode?: string; learningPathKey?: string };
+    | { kind: 'tour'; tourKey: string; guideMode?: string; learningPathKey?: string; startAtStepKey?: string };
 
 /** Key under which the nav payload rides in `MentionSuggestion.data`. */
 export const OMNIBAR_NAV_KEY = 'nav';

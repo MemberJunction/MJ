@@ -213,7 +213,20 @@ Downstream OpenApps (`mj-bizapps-common`, `mj-bizapps-sales`, `mj-bizapps-contra
 
 ---
 
-## 9. CI Verification
+## 9. Global App Discovery & Dual-Layer Semantic Vector Search
+
+1. **First-Visit Proactive Offers & Global "All Apps" Catalog**:
+   - `ExplorerTourHost` runs `TourTriggerCoordinator` (`@memberjunction/tours-runtime`) on application/navigation transitions, surfacing non-blocking bottom-right `.mjt-offer-toast` prompts for `FirstVisit` triggers while enforcing `OffersEnabled` and session interruption budgets.
+   - The Explorer header **Tours & Help** popover exposes **For This Screen**, **All Apps**, and **Paths** tabs (`ExplorerTourHost.GetAllToursByApplication()`), grouping every eligible active tour by application with `Completed` / `In Progress` badges so users can replay or explore any tour anytime.
+2. **Client-Side `< 15 ms` WASM Vector Search (`OmnibarSemanticIndexService`)**:
+   - Indexes both whole tours (`tour:<TourKey>`) and individual steps (`tour-step:<TourKey>:<StepKey>`) into Explorer's `float32` `SimpleVectorService` over the shared `bge-small-en-v1.5` WASM Web Worker.
+   - Natural-language queries in `Cmd+K` or `?` match whole tours or deep-link straight to the relevant step via `StartTour(tourKey, { StartAtStepKey })`.
+3. **Server-Side `MJ: Entity Documents` Embeddings (`Tours Search` & `Tour Steps Search`)**:
+   - Seeded in `metadata/entity-documents/.entity-documents.json` using the in-process `Simple Vector Service Provider` + `gte-small (Local)` model (`Entity Vector Sync - Daily` job — zero API keys), powering `Provider.SearchEntity`, `SearchEngine` hybrid RRF, Knowledge Hub, and server-side Sage agent runs.
+
+---
+
+## 10. CI Verification
 
 1. **`tour-anchors` standards check** (`.mj-standards.json`, severity `error`): validates `allowedPrefixes` (`core.`, `admin.`, `builder.` in core MJ), verifies every literal `Registered` anchor key against HTML templates or `core-anchor-manifest.json`, validates semantic `FormField`/`FormSection` entity/field names against generated entities, and flags raw `Selector` usage.
    ```bash

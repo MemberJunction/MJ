@@ -895,8 +895,75 @@
   width: 100%;
 }
 
+/* Non-modal proactive tour offer toast */
+:where(.mjt-offer-toast) {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: var(--mj-z-tour-popover, 1040);
+  inline-size: min(23rem, calc(100vw - 2rem));
+  padding: 14px 16px;
+  border-radius: var(--mj-radius-xl, 16px);
+  background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-border-default);
+  box-shadow: var(--mj-shadow-xl, 0 16px 36px rgba(0, 0, 0, 0.18));
+  display: grid;
+  gap: 8px;
+  animation: mjt-card-enter 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:where(.mjt-offer-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+:where(.mjt-offer-eyebrow-row) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+:where(.mjt-offer-meta) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+:where(.mjt-offer-title) {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--mj-text-primary);
+}
+
+:where(.mjt-offer-desc) {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--mj-text-secondary);
+}
+
+:where(.mjt-offer-actions) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+:where(.mjt-offer-toast :focus-visible) {
+  outline: var(--mj-ring-width, 2px) solid var(--mj-focus-ring-color, var(--mj-brand-primary));
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :where(.mjt-dialog),
+  :where(.mjt-offer-toast),
   :where(.mjt-spotlight-path),
   :where(.mjt-spotlight-halo),
   :where(.mjt-spotlight-ring),

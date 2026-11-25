@@ -42,8 +42,18 @@ function matchUrlPattern(
     return new RegExp(`^${escaped}$`).test(url);
 }
 
+function readConfiguredAppName(config: Record<string, unknown>): string | undefined {
+    if (typeof config['ApplicationName'] === 'string') {
+        return config['ApplicationName'];
+    }
+    if (typeof config['Application'] === 'string') {
+        return config['Application'];
+    }
+    return undefined;
+}
+
 function locationMatchesConfig(config: Record<string, unknown>, loc: TourLocation): boolean {
-    const appName = typeof config['ApplicationName'] === 'string' ? config['ApplicationName'] : undefined;
+    const appName = readConfiguredAppName(config);
     const navItemKey = typeof config['NavItemKey'] === 'string' ? config['NavItemKey'] : undefined;
     const driverClass = typeof config['DriverClass'] === 'string' ? config['DriverClass'] : undefined;
     const urlPattern = typeof config['UrlPattern'] === 'string' ? config['UrlPattern'] : undefined;
@@ -52,7 +62,7 @@ function locationMatchesConfig(config: Record<string, unknown>, loc: TourLocatio
             ? config['UrlMatchMode']
             : 'glob';
 
-    if (appName && loc.ApplicationName !== appName) return false;
+    if (appName && appName.toLowerCase() !== (loc.ApplicationName ?? '').toLowerCase()) return false;
     if (navItemKey && loc.NavItemKey !== navItemKey) return false;
     if (driverClass && loc.DriverClass !== driverClass) return false;
     if (urlPattern) {
@@ -77,7 +87,7 @@ export class FirstVisitTrigger extends BaseTourTrigger {
 
         const config = ctx.Trigger.Configuration ?? {};
         const hasExplicitLocationRule = Boolean(
-            config['ApplicationName'] ||
+            readConfiguredAppName(config) ||
                 config['NavItemKey'] ||
                 config['DriverClass'] ||
                 config['UrlPattern'],
@@ -175,7 +185,7 @@ export class AppUpgradedTrigger extends BaseTourTrigger {
         }
         const config = ctx.Trigger.Configuration ?? {};
         const appName =
-            (typeof config['ApplicationName'] === 'string' ? config['ApplicationName'] : undefined) ??
+            readConfiguredAppName(config) ??
             ctx.Tour.ApplicationName ??
             undefined;
         const targetVersion =

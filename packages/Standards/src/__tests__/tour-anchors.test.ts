@@ -310,4 +310,31 @@ describe('TourAnchorsCheck', () => {
         expect(result.Violations[0].Severity).toBe('warn');
         expect(result.Violations[0].Message).toContain('unexcused');
     });
+
+    it('handles trailing slashes in Roots and skips tsconfig.*.json files inside metadata/tours', async () => {
+        writeTour('tsconfig.tour.json', { compilerOptions: { strict: true } });
+        writeTemplate('packages/App/el.html', `<div data-mj-tour-anchor="core.ok"></div>`);
+        writeTour('valid.json', {
+            fields: { TourKey: 'core.ok-tour' },
+            relatedEntities: {
+                'MJ: Tour Steps': [
+                    {
+                        fields: {
+                            StepKey: 's1',
+                            StepTypeID: '@lookup:MJ: Tour Step Types.Name=Spotlight',
+                            Anchor: { Strategy: 'Registered', Key: 'core.ok' },
+                        },
+                    },
+                ],
+            },
+        });
+
+        const result = await TourAnchorsCheck.Run({
+            RepoRoot: repo,
+            Roots: ['metadata///', 'packages///'],
+            Options: { ...TourAnchorsCheck.DefaultOptions, allowedPrefixes: ['core.'] },
+        });
+        expect(result.Violations).toEqual([]);
+        expect(result.Notes?.[0]).toContain('1 tour metadata file(s) scanned');
+    });
 });

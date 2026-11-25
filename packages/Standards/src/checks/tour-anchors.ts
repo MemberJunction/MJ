@@ -125,6 +125,19 @@ function isTemplateVar(value: string): boolean {
     return value.includes('{{') && value.includes('}}');
 }
 
+function trimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    return end === value.length ? value : value.slice(0, end);
+}
+
+function isTsConfigFileName(baseName: string): boolean {
+    const lower = baseName.toLowerCase();
+    return lower === 'tsconfig.json' || (lower.startsWith('tsconfig.') && lower.endsWith('.json'));
+}
+
 function readStringOptionArray(options: Readonly<Record<string, unknown>>, key: string): string[] | undefined {
     const raw = options[key];
     if (!Array.isArray(raw)) return undefined;
@@ -180,7 +193,7 @@ function findTourJsonFiles(repoRoot: string, roots: readonly string[]): string[]
     }
     for (const root of roots) {
         const abs = join(repoRoot, root);
-        const normalized = root.replace(/\\/g, '/').replace(/\/+$/, '');
+        const normalized = trimTrailingSlashes(root.replaceAll('\\', '/'));
         if (normalized === 'tours' || normalized.endsWith('/tours')) {
             if (existsSync(abs)) tourDirs.add(abs);
         } else if (
@@ -196,12 +209,13 @@ function findTourJsonFiles(repoRoot: string, roots: readonly string[]): string[]
     const files = new Set<string>();
     for (const dir of tourDirs) {
         for (const file of findFilesWithExtensions(dir, ['.json'])) {
-            const base = file.split(/[/\\]/).pop() ?? '';
+            const slashIdx = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'));
+            const base = slashIdx >= 0 ? file.slice(slashIdx + 1) : file;
             if (
                 base === '.mj-sync.json' ||
                 base === '.mj-folder.json' ||
                 base === 'package.json' ||
-                /^tsconfig(\..+)?\.json$/i.test(base)
+                isTsConfigFileName(base)
             ) {
                 continue;
             }
@@ -340,7 +354,7 @@ function collectRepoSourceData(
     const packagesDir = join(repoRoot, 'packages');
     if (existsSync(packagesDir)) scanDirs.add(packagesDir);
     for (const root of roots) {
-        const normalized = root.replace(/\\/g, '/').replace(/\/+$/, '');
+        const normalized = trimTrailingSlashes(root.replaceAll('\\', '/'));
         if (normalized === 'metadata' || normalized.startsWith('metadata/')) continue;
         const abs = join(repoRoot, root);
         if (existsSync(abs)) scanDirs.add(abs);
@@ -436,9 +450,17 @@ function extractStepTypeName(fields: Record<string, unknown>): string | null {
     }
     const stepTypeId = fields['StepTypeID'];
     if (typeof stepTypeId === 'string') {
-        const match = /^@lookup:MJ:\s*Tour Step Types\.Name=(.+)$/i.exec(stepTypeId.trim());
-        if (match && match[1].trim().length > 0) {
-            return match[1].trim();
+        const trimmed = stepTypeId.trim();
+        const prefix = '@lookup:mj:';
+        if (trimmed.slice(0, prefix.length).toLowerCase() === prefix) {
+            const rest = trimmed.slice(prefix.length).trim();
+            const marker = 'tour step types.name=';
+            if (rest.slice(0, marker.length).toLowerCase() === marker) {
+                const name = rest.slice(marker.length).trim();
+                if (name.length > 0) {
+                    return name;
+                }
+            }
         }
     }
     return null;

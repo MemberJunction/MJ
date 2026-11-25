@@ -1535,4 +1535,35 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
     background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
 }
+.tours-tab-pills {
+    align-self: flex-start;
+    width: 100%;
+    display: flex;
+}
+.tours-tab-pills .tours-mode-pill {
+    flex: 1;
+    padding: var(--mj-space-1) var(--mj-space-2);
+    text-align: center;
+}
+.tours-item-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mj-space-2);
+}
+.tours-status-badge {
+    flex-shrink: 0;
+    padding: 1px var(--mj-space-1-5);
+    border-radius: var(--mj-radius-full);
+    font-size: var(--mj-text-xs);
+    font-weight: var(--mj-font-semibold);
+}
+.tours-status-badge.is-completed {
+    background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
+}
+.tours-status-badge.is-in-progress {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+}
 

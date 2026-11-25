@@ -225,56 +225,131 @@
                   <span>Finding tours for this screen…</span>
                 </div>
               } @else {
-                <div class="tours-section">
-                  <div class="tours-section-title">Tours for this screen</div>
-                  @if (SuggestedTours.length === 0) {
-                    <div class="tours-empty-hint">No contextual tours match this screen right now.</div>
-                  } @else {
-                    <div class="tours-item-list">
-                      @for (entry of SuggestedTours; track entry.Tour.TourKey) {
-                        <button type="button" class="tours-item-row" (click)="StartLauncherTour(entry.Tour.TourKey)">
-                          <span class="tours-item-icon"><i class="fa-solid fa-compass" aria-hidden="true"></i></span>
-                          <span class="tours-item-copy">
-                            <span class="tours-item-name">{{ entry.Tour.Name }}</span>
-                            @if (entry.Tour.Description) {
-                              <span class="tours-item-desc">{{ entry.Tour.Description }}</span>
-                            }
-                            <span class="tours-item-meta">
-                              {{ entry.Tour.Steps.length }} steps
-                              @if (entry.Tour.EstimatedMinutes) {
-                                · ~{{ entry.Tour.EstimatedMinutes }} min
-                              }
-                            </span>
-                          </span>
-                          <i class="fa-solid fa-chevron-right tours-item-arrow" aria-hidden="true"></i>
-                        </button>
-                      }
-                    </div>
-                  }
+                <div class="tours-mode-pills tours-tab-pills" role="tablist" aria-label="Tour views">
+                  <button
+                    type="button"
+                    role="tab"
+                    class="tours-mode-pill"
+                    [class.active]="ToursPopoverTab === 'screen'"
+                    [attr.aria-selected]="ToursPopoverTab === 'screen'"
+                    (click)="SetToursPopoverTab('screen')">
+                    For This Screen
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="tours-mode-pill"
+                    [class.active]="ToursPopoverTab === 'all'"
+                    [attr.aria-selected]="ToursPopoverTab === 'all'"
+                    (click)="SetToursPopoverTab('all')">
+                    All Apps
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="tours-mode-pill"
+                    [class.active]="ToursPopoverTab === 'paths'"
+                    [attr.aria-selected]="ToursPopoverTab === 'paths'"
+                    (click)="SetToursPopoverTab('paths')">
+                    Paths
+                  </button>
                 </div>
 
-                @if (LauncherLearningPaths.length > 0) {
-                  <div class="tours-section">
-                    <div class="tours-section-title">Learning Paths</div>
-                    <div class="tours-path-list">
-                      @for (lp of LauncherLearningPaths; track lp.Path.ID) {
-                        <div class="tours-path-row">
-                          <div class="tours-path-head">
-                            <span class="tours-path-name">{{ lp.Path.Name }}</span>
-                            <span class="tours-path-pct">{{ lp.CompletedCount }}/{{ lp.TotalCount }}</span>
-                          </div>
-                          <div class="tours-path-bar" role="progressbar" [attr.aria-valuenow]="lp.PercentComplete" aria-valuemin="0" aria-valuemax="100">
-                            <div class="tours-path-bar-fill" [style.width.%]="lp.PercentComplete"></div>
-                          </div>
-                          @if (lp.NextTourKey) {
-                            <button type="button" class="tours-path-next" (click)="StartLauncherTour(lp.NextTourKey)">
-                              <i class="fa-solid fa-play" aria-hidden="true"></i> Next: {{ lp.NextTourName }}
+                @switch (ToursPopoverTab) {
+                  @case ('screen') {
+                    <div class="tours-section">
+                      <div class="tours-section-title">Tours for this screen</div>
+                      @if (SuggestedTours.length === 0) {
+                        <div class="tours-empty-hint">No contextual tours match this screen right now.</div>
+                      } @else {
+                        <div class="tours-item-list">
+                          @for (entry of SuggestedTours; track entry.Tour.TourKey) {
+                            <button type="button" class="tours-item-row" (click)="StartLauncherTour(entry.Tour.TourKey)">
+                              <span class="tours-item-icon"><i class="fa-solid fa-compass" aria-hidden="true"></i></span>
+                              <span class="tours-item-copy">
+                                <span class="tours-item-name">{{ entry.Tour.Name }}</span>
+                                @if (entry.Tour.Description) {
+                                  <span class="tours-item-desc">{{ entry.Tour.Description }}</span>
+                                }
+                                <span class="tours-item-meta">
+                                  {{ entry.Tour.Steps.length }} steps
+                                  @if (entry.Tour.EstimatedMinutes) {
+                                    · ~{{ entry.Tour.EstimatedMinutes }} min
+                                  }
+                                </span>
+                              </span>
+                              <i class="fa-solid fa-chevron-right tours-item-arrow" aria-hidden="true"></i>
                             </button>
                           }
                         </div>
                       }
                     </div>
-                  </div>
+                  }
+                  @case ('all') {
+                    @if (AllAppTourGroups.length === 0) {
+                      <div class="tours-empty-hint">No active tours are available for your workspace right now.</div>
+                    } @else {
+                      @for (group of AllAppTourGroups; track group.ApplicationName) {
+                        <div class="tours-section">
+                          <div class="tours-section-title tours-app-group-heading">{{ group.ApplicationName }}</div>
+                          <div class="tours-item-list">
+                            @for (item of group.Tours; track item.Tour.TourKey) {
+                              <button type="button" class="tours-item-row" (click)="StartLauncherTour(item.Tour.TourKey)">
+                                <span class="tours-item-icon"><i class="fa-solid fa-route" aria-hidden="true"></i></span>
+                                <span class="tours-item-copy">
+                                  <span class="tours-item-name-row">
+                                    <span class="tours-item-name">{{ item.Tour.Name }}</span>
+                                    @if (item.Completed) {
+                                      <span class="tours-status-badge is-completed">✓ Completed</span>
+                                    } @else if (item.InProgress) {
+                                      <span class="tours-status-badge is-in-progress">In Progress</span>
+                                    }
+                                  </span>
+                                  @if (item.Tour.Description) {
+                                    <span class="tours-item-desc">{{ item.Tour.Description }}</span>
+                                  }
+                                  <span class="tours-item-meta">
+                                    {{ item.Tour.Steps.length }} steps
+                                    @if (item.Tour.EstimatedMinutes) {
+                                      · ~{{ item.Tour.EstimatedMinutes }} min
+                                    }
+                                  </span>
+                                </span>
+                                <i class="fa-solid fa-chevron-right tours-item-arrow" aria-hidden="true"></i>
+                              </button>
+                            }
+                          </div>
+                        </div>
+                      }
+                    }
+                  }
+                  @case ('paths') {
+                    <div class="tours-section">
+                      <div class="tours-section-title">Learning Paths</div>
+                      @if (LauncherLearningPaths.length === 0) {
+                        <div class="tours-empty-hint">No active learning paths are assigned right now.</div>
+                      } @else {
+                        <div class="tours-path-list">
+                          @for (lp of LauncherLearningPaths; track lp.Path.ID) {
+                            <div class="tours-path-row">
+                              <div class="tours-path-head">
+                                <span class="tours-path-name">{{ lp.Path.Name }}</span>
+                                <span class="tours-path-pct">{{ lp.CompletedCount }}/{{ lp.TotalCount }}</span>
+                              </div>
+                              <div class="tours-path-bar" role="progressbar" [attr.aria-valuenow]="lp.PercentComplete" aria-valuemin="0" aria-valuemax="100">
+                                <div class="tours-path-bar-fill" [style.width.%]="lp.PercentComplete"></div>
+                              </div>
+                              @if (lp.NextTourKey) {
+                                <button type="button" class="tours-path-next" (click)="StartLauncherTour(lp.NextTourKey)">
+                                  <i class="fa-solid fa-play" aria-hidden="true"></i> Next: {{ lp.NextTourName }}
+                                </button>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
                 }
               }
             </div>
@@ -651,6 +726,9 @@
   [VoiceBarTemplate]="tourSageBar"
   [VoiceGuideAvailable]="TourVoiceGuideAvailable"
   [VoiceGuideActive]="TourVoiceGuideActive"
+  [PendingOffer]="PendingTourOffer"
   (VoiceGuideRequested)="OnTourVoiceGuideRequested($event)"
+  (OfferAccepted)="OnTourOfferAccepted($event)"
+  (OfferDismissed)="OnTourOfferDismissed($event)"
   (SessionChanged)="OnTourHostSessionChanged()">
 </mj-tour-host>
